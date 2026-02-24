@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: licitasaas-db
+    restart: always
+    environment:
+      POSTGRES_USER: licitasaas
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-licitasaaspassword}
+      POSTGRES_DB: licitasaas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U licitasaas" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    container_name: licitasaas-app
+    restart: always
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://licitasaas:${POSTGRES_PASSWORD:-licitasaaspassword}@db:5432/licitasaas?schema=public
+      JWT_SECRET: ${JWT_SECRET:-troque-por-uma-chave-segura-em-producao}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      STORAGE_TYPE: LOCAL
+    volumes:
+      - uploads_data:/app/server/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  uploads_data:

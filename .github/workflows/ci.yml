@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+
+    - name: Install Root Dependencies
+      run: npm install
+
+    - name: Build Frontend
+      run: npm run build
+
+    - name: Install Backend Dependencies
+      run: |
+        cd server
+        npm install
+        npx prisma generate
+
+    - name: Build Backend
+      run: |
+        cd server
+        npm run build || echo "No explicit build step for backend"
+
+    - name: Run Lint (Optional)
+      run: npm run lint || true

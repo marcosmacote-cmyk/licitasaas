@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id               String           @id @default(uuid())
+  rootCnpj         String           @unique
+  razaoSocial      String
+  createdAt        DateTime         @default(now())
+  biddingProcesses BiddingProcess[]
+  companies        CompanyProfile[]
+  documents        Document[]
+  users            User[]
+  globalConfig     GlobalConfig?
+}
+
+model User {
+  id           String  @id @default(uuid())
+  tenantId     String
+  name         String
+  email        String  @unique
+  passwordHash String
+  role         String  @default("Analista")
+  isActive     Boolean @default(true)
+  tenant       Tenant  @relation(fields: [tenantId], references: [id])
+}
+
+model CompanyProfile {
+  id               String              @id @default(uuid())
+  tenantId         String
+  isHeadquarters   Boolean             @default(false)
+  cnpj             String              @unique
+  razaoSocial      String
+  qualification    String?             // New field for company and representative qualification
+  technicalQualification String?        // Technical responsible (CREA/CAU) qualification
+  contactName      String?
+  contactEmail     String?
+  contactPhone     String?
+  biddingProcesses BiddingProcess[]
+  credentials      CompanyCredential[]
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  documents        Document[]
+}
+
+model BiddingProcess {
+  id               String          @id @default(uuid())
+  tenantId         String
+  companyProfileId String?
+  title            String
+  summary          String?
+  portal           String
+  modality         String
+  status           String          @default("Captado")
+  risk             String?
+  estimatedValue   Float           @default(0.0)
+  sessionDate      DateTime
+  link             String?
+  observations     String?         @default("[]")
+  reminderDate     DateTime?
+  reminderStatus   String?         @default("pending")
+  reminderType     String?         @default("once")
+  reminderDays     String?         @default("[]")
+  aiAnalysis       AiAnalysis?
+  company          CompanyProfile? @relation(fields: [companyProfileId], references: [id])
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+}
+
+model AiAnalysis {
+  id                        String         @id @default(uuid())
+  biddingProcessId          String         @unique
+  requiredDocuments         String
+  biddingItems              String?
+  pricingConsiderations     String?
+  irregularitiesFlags       String
+  fullSummary               String?
+  deadlines                 String?
+  penalties                 String?
+  qualificationRequirements String?
+  chatHistory               String?        @default("[]")
+  sourceFileNames           String?        @default("[]")
+  analyzedAt                DateTime       @default(now())
+  biddingProcess            BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id               String         @id @default(uuid())
+  tenantId         String
+  companyProfileId String?
+  docType          String
+  fileUrl          String
+  uploadDate       DateTime       @default(now())
+  expirationDate   DateTime
+  status           String         @default("Válido")
+  autoRenew        Boolean        @default(false)
+  docGroup         String         @default("Outros")
+  issuerLink       String?
+  fileName         String         @default("Documento")
+  alertDays        Int?           @default(15)
+  company          CompanyProfile? @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+}
+
+model GlobalConfig {
+  id        String   @id @default(uuid())
+  tenantId  String   @unique
+  config    String   @default("{}") // JSON string for various settings
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model CompanyCredential {
+  id               String         @id @default(uuid())
+  companyProfileId String
+  platform         String
+  url              String?
+  login            String
+  password         String
+  notes            String?
+  createdAt        DateTime       @default(now())
+  company          CompanyProfile @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
+}
