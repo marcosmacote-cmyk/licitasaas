@@ -16,7 +16,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const storage_1 = require("./storage");
 // Resolve server root (handles both ts-node and compiled dist/)
 const SERVER_ROOT = __dirname.endsWith('dist') ? path_1.default.resolve(__dirname, '..') : __dirname;
-dotenv_1.default.config({ path: path_1.default.join(SERVER_ROOT, '.env') });
+// Load .env only if it exists (don't override Railway/Docker env vars)
+dotenv_1.default.config({ path: path_1.default.join(SERVER_ROOT, '.env'), override: false });
 const app = (0, express_1.default)();
 const prisma = new client_1.PrismaClient();
 const PORT = process.env.PORT || 3001;
@@ -70,10 +71,13 @@ const uploadDir = path_1.default.join(SERVER_ROOT, 'uploads');
 if (!fs_1.default.existsSync(uploadDir)) {
     fs_1.default.mkdirSync(uploadDir, { recursive: true });
 }
-// Gemini Setup
+// Gemini Setup (lazy - don't crash if key missing)
 const apiKey = process.env.GEMINI_API_KEY || '';
 console.log('Gemini API Key present:', !!apiKey);
-const genAI = new genai_1.GoogleGenAI({ apiKey });
+let genAI = null;
+if (apiKey) {
+    genAI = new genai_1.GoogleGenAI({ apiKey });
+}
 // Serve uploaded files statically
 app.use('/uploads', express_1.default.static(uploadDir));
 // Configure Multer storage to use Memory (for cloud readiness)
@@ -421,6 +425,9 @@ REGRAS:
 - NÃO inclua título, cabeçalho, destinatário, local/data ou assinatura.
 - Use de 2 a 5 itens numerados.
 - Texto limpo, sem markdown, sem negrito (**).`;
+        if (!genAI) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
+        }
         const result = await callGeminiWithRetry(genAI.models, {
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],

@@ -17,7 +17,8 @@ import { storageService } from './storage';
 // Resolve server root (handles both ts-node and compiled dist/)
 const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') : __dirname;
 
-dotenv.config({ path: path.join(SERVER_ROOT, '.env') });
+// Load .env only if it exists (don't override Railway/Docker env vars)
+dotenv.config({ path: path.join(SERVER_ROOT, '.env'), override: false });
 
 const app = express();
 const prisma = new PrismaClient();
@@ -83,10 +84,13 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Gemini Setup
+// Gemini Setup (lazy - don't crash if key missing)
 const apiKey = process.env.GEMINI_API_KEY || '';
 console.log('Gemini API Key present:', !!apiKey);
-const genAI = new GoogleGenAI({ apiKey });
+let genAI: GoogleGenAI | null = null;
+if (apiKey) {
+    genAI = new GoogleGenAI({ apiKey });
+}
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(uploadDir));
@@ -458,6 +462,10 @@ REGRAS:
 - NÃO inclua título, cabeçalho, destinatário, local/data ou assinatura.
 - Use de 2 a 5 itens numerados.
 - Texto limpo, sem markdown, sem negrito (**).`;
+
+        if (!genAI) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
+        }
 
         const result = await callGeminiWithRetry(genAI.models, {
             model: 'gemini-2.5-flash',
