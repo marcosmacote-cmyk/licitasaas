@@ -1,49 +1,43 @@
-# ── Stage 1: Build Frontend ──
-FROM node:20-alpine AS frontend-build
+# ── Stage 1: Build Everything ──
+FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Build Frontend
 COPY package.json package-lock.json* ./
-RUN npm ci
-
+RUN npm install --ignore-scripts
 COPY . .
-ARG VITE_API_URL=""
-ENV VITE_API_URL=$VITE_API_URL
+ENV NODE_OPTIONS="--max-old-space-size=512"
 RUN npm run build
 
-# ── Stage 2: Build Backend ──
-FROM node:20-alpine AS backend-build
+# Build Backend
 WORKDIR /app/server
-
 COPY server/package.json server/package-lock.json* ./
-RUN npm ci
-
-COPY server/ .
+RUN npm install
 RUN npx prisma generate && npx tsc
 
-# ── Stage 3: Production ──
-FROM node:20-alpine AS production
-WORKDIR /app
+# ── Stage 2: Production ──
+FROM node:20-alpine
+WORKDIR /app/server
 
-# Install production deps for backend
-COPY server/package.json server/package-lock.json* ./server/
-RUN cd server && npm ci --omit=dev && npx prisma generate
+# Install production deps
+COPY server/package.json server/package-lock.json* ./
+RUN npm install --omit=dev && npx prisma generate
 
 # Copy compiled backend
-COPY --from=backend-build /app/server/dist ./server/dist
-COPY server/prisma ./server/prisma
+COPY --from=builder /app/server/dist ./dist
+COPY --from=builder /app/server/prisma ./prisma
 
-# Copy built frontend
-COPY --from=frontend-build /app/dist ./server/public
+# Copy Prisma client
+COPY --from=builder /app/server/node_modules/.prisma ./node_modules/.prisma
 
-# Copy Prisma client (needed at runtime)
-COPY --from=backend-build /app/server/node_modules/.prisma ./server/node_modules/.prisma
+# Copy built frontend into public/
+COPY --from=builder /app/dist ./public
 
 # Create uploads directory
-RUN mkdir -p ./server/uploads
+RUN mkdir -p uploads
 
 ENV NODE_ENV=production
 ENV PORT=3001
 EXPOSE 3001
 
-WORKDIR /app/server
 CMD ["node", "dist/index.js"]

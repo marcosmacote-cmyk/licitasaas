@@ -1,269 +1,204 @@
-# 🚀 Guia de Deploy para Iniciantes — LicitaSaaS
+# 🚀 Deploy LicitaSaaS — Guia 100% Visual (Sem Terminal)
 
-> Este guia é para quem nunca fez deploy antes. Cada passo está explicado com detalhes.
-> Tempo estimado: ~30 minutos.
-
----
-
-## 📋 O que você vai precisar
-
-- [x] Uma conta no **GitHub** (grátis) → [github.com](https://github.com)
-- [x] Uma conta no **Railway** (grátis até US$ 5/mês) → [railway.app](https://railway.app)
-- [x] Sua **chave da API Gemini** (você já tem, está no projeto)
-- [x] O **Terminal** do seu Mac (você já usa)
+> Este guia usa APENAS o navegador. Não precisa instalar nada.
+> Tempo estimado: ~25 minutos.
 
 ---
 
-## PARTE 1: Subir o código para o GitHub
+## PARTE 1: Criar conta no GitHub (se ainda não tem)
 
-### Passo 1.1 — Instalar o GitHub CLI
+1. Abra o navegador e acesse: **https://github.com**
+2. Clique em **"Sign up"**
+3. Siga os passos: email, senha, nome de usuário
+4. Confirme seu email
 
-Abra o **Terminal** e cole este comando:
-
-```bash
-brew install gh
-```
-
-> ⏳ Aguarde uns 2 minutos até instalar completamente.
-> Se aparecer "Already installed", tudo bem, já está instalado.
-
-### Passo 1.2 — Fazer login no GitHub pelo Terminal
-
-```bash
-gh auth login
-```
-
-Vai aparecer uma série de perguntas. Responda assim:
-
-```
-? What account do you want to log into?  →  GitHub.com
-? What is your preferred protocol?       →  HTTPS
-? Authenticate Git with your GitHub credentials?  →  Yes
-? How would you like to authenticate?    →  Login with a web browser
-```
-
-Vai aparecer um **código de 8 dígitos**. O navegador vai abrir automaticamente.
-Cole o código lá e clique **"Authorize"**.
-
-### Passo 1.3 — Criar o repositório e enviar o código
-
-Cole este comando no Terminal (tudo junto, uma linha de cada vez):
-
-```bash
-cd /Users/marcosgomes/.gemini/antigravity/playground/magnetic-cluster
-```
-
-Depois:
-
-```bash
-gh repo create licitasaas --private --push --source=.
-```
-
-> ✅ Se aparecer algo como "Created repository marcosgomes/licitasaas on GitHub"
-> e "Pushed commits to...", **funcionou!**
+> Se já tem conta, pule para a Parte 2.
 
 ---
 
-## PARTE 2: Criar o servidor no Railway
+## PARTE 2: Subir o código para o GitHub
 
-### Passo 2.1 — Criar conta no Railway
+### Passo 2.1 — Criar repositório vazio
 
-1. Abra no navegador: **[railway.app](https://railway.app)**
-2. Clique em **"Login"** (canto superior direito)
-3. Escolha **"Login with GitHub"**
-4. Autorize o acesso
+1. Acesse: **https://github.com/new**
+2. Preencha:
+   - **Repository name**: `licitasaas`
+   - **Description**: `Sistema de Gestão de Licitações`
+   - Marque: **🔘 Private** (repositório privado)
+   - ❌ NÃO marque "Add a README file"
+   - ❌ NÃO marque "Add .gitignore"
+3. Clique **"Create repository"**
+4. Vai aparecer uma página com instruções. **Copie a URL** que aparece, algo como:
+   ```
+   https://github.com/SEU_USUARIO/licitasaas.git
+   ```
 
-### Passo 2.2 — Criar um novo projeto
+### Passo 2.2 — Enviar o código (eu faço por você)
 
-1. No painel do Railway, clique no botão **"+ New Project"**
+**Me diga a URL do repositório** que apareceu no passo anterior 
+e eu executo os comandos para enviar o código.
+
+O que vou executar é basicamente:
+```
+git remote add origin https://github.com/SEU_USUARIO/licitasaas.git
+git push -u origin main
+```
+
+> Vai pedir seu **usuário e senha do GitHub** (ou um token).
+> Se pedir token, siga o Passo 2.3 abaixo.
+
+### Passo 2.3 — Criar Token de Acesso (se necessário)
+
+Se o Git pedir senha e não aceitar, você precisa de um "token":
+
+1. Acesse: **https://github.com/settings/tokens/new**
+2. Preencha:
+   - **Note**: `deploy licitasaas`
+   - **Expiration**: `90 days`
+   - Marque: ☑️ `repo` (acesso total a repos privados)
+3. Clique **"Generate token"**
+4. **COPIE O TOKEN** (começa com `ghp_...`)
+5. Quando o Git pedir senha, cole esse token no lugar da senha
+
+---
+
+## PARTE 3: Criar servidor no Railway
+
+### Passo 3.1 — Criar conta
+
+1. Abra: **https://railway.app**
+2. Clique **"Login"** → **"Login with GitHub"**
+3. Autorize o acesso
+
+### Passo 3.2 — Criar projeto
+
+1. Clique **"+ New Project"**
 2. Escolha **"Deploy from GitHub repo"**
-3. Se pedir permissão para acessar seus repositórios, clique **"Configure GitHub App"** e autorize
-4. Selecione **"licitasaas"** na lista
+3. Se pedir permissão, clique **"Configure GitHub App"** → autorize todos os repos
+4. Selecione **"licitasaas"**
 5. Clique **"Deploy Now"**
 
-> ⚠️ O deploy vai **falhar** na primeira vez. Isso é normal!
-> Precisamos configurar o banco de dados e as variáveis primeiro.
+> ⚠️ Vai falhar na primeira vez. Normal! Falta configurar.
 
-### Passo 2.3 — Adicionar o Banco de Dados (PostgreSQL)
+### Passo 3.3 — Adicionar banco de dados
 
-1. No painel do seu projeto Railway, clique no botão **"+ New"** (canto superior direito)
-2. Selecione **"Database"**
-3. Selecione **"Add PostgreSQL"**
-4. O banco será criado automaticamente em ~30 segundos
+1. No painel, clique **"+ New"** (botão roxo no canto)
+2. Clique **"Database"**
+3. Clique **"Add PostgreSQL"**
+4. Aguarde ~30 segundos
 
-### Passo 2.4 — Copiar a URL do banco
+### Passo 3.4 — Copiar URL do banco
 
-1. Clique no serviço **"Postgres"** que acabou de aparecer
-2. Vá na aba **"Variables"**
-3. Procure a variável **`DATABASE_URL`**
-4. Clique nela para copiar o valor (algo como `postgresql://postgres:abc123@...`)
-
-> 📋 Deixe esse valor copiado, vamos usar no próximo passo.
+1. Clique no card **"Postgres"** que apareceu
+2. Vá na aba **"Variables"**  
+3. Encontre `DATABASE_URL` e clique para copiar
+4. Guarde esse valor!
 
 ---
 
-## PARTE 3: Configurar as Variáveis de Ambiente
+## PARTE 4: Configurar variáveis
 
-### Passo 3.1 — Gerar uma chave de segurança
+### Passo 4.1 — Adicionar variáveis ao app
 
-No seu Terminal (no Mac), cole este comando:
+1. Clique no outro card (o da **aplicação**, não o Postgres)
+2. Vá na aba **"Variables"**
+3. Adicione cada variável clicando **"+ New Variable"**:
 
-```bash
-openssl rand -hex 32
+```
+DATABASE_URL = (cole a URL do Passo 3.4)
+JWT_SECRET = mude-esta-chave-para-algo-secreto-e-longo-2026
+GEMINI_API_KEY = AIzaSyD2XWaBY7BOf6qatd8BFkQ_xY3iy29I_nQ
+NODE_ENV = production
+PORT = 3001
+STORAGE_TYPE = LOCAL
 ```
 
-> 📋 Vai aparecer uma sequência aleatória tipo `a1b2c3d4e5f6...`. Copie e guarde essa sequência.
-> Essa é sua **JWT_SECRET** — a chave que protege o login dos usuários.
+> 💡 Para o JWT_SECRET, invente uma frase longa qualquer, como:
+> `minha-empresa-licitasaas-chave-super-secreta-2026-xyz`
 
-### Passo 3.2 — Adicionar as variáveis no Railway
+### Passo 4.2 — Gerar URL de acesso
 
-1. No Railway, clique no serviço da sua **aplicação** (não no Postgres)
-   - É o serviço que mostra o nome "licitasaas" ou similar
-2. Vá na aba **"Variables"**
-3. Clique em **"+ New Variable"** e adicione cada uma:
-
-| Nome da Variável | Valor | Explicação |
-|:---|:---|:---|
-| `DATABASE_URL` | *(cole a URL do Passo 2.4)* | Conexão com o banco de dados |
-| `JWT_SECRET` | *(cole a chave do Passo 3.1)* | Protege o login |
-| `GEMINI_API_KEY` | `AIzaSyD2XWaBY7BOf6qatd8BFkQ_xY3iy29I_nQ` | API da inteligência artificial |
-| `NODE_ENV` | `production` | Diz ao sistema que é produção |
-| `PORT` | `3001` | Porta do servidor |
-| `STORAGE_TYPE` | `LOCAL` | Onde salvar os PDFs |
-
-> 💡 **Dica**: Para cada variável, clique "New Variable", digite o nome à esquerda
-> e o valor à direita. Depois clique qualquer lugar fora para salvar.
-
-### Passo 3.3 — Configurar a porta de acesso
-
-1. Ainda no serviço da aplicação, vá na aba **"Settings"**
+1. No card da aplicação, vá em **"Settings"**
 2. Role até **"Networking"**
-3. Clique em **"Generate Domain"**
-4. O Railway vai gerar uma URL tipo `licitasaas-production.up.railway.app`
+3. Clique **"Generate Domain"**
+4. Anote a URL gerada (ex: `licitasaas-production.up.railway.app`)
 
-> ✅ **Anote essa URL!** É o endereço que você e sua equipe vão usar para acessar o sistema.
+### Passo 4.3 — Configurar o Builder
 
----
+1. Ainda em **"Settings"**
+2. Em **"Build"**, certifique-se que **"Dockerfile"** está selecionado
+3. O caminho deve ser: `Dockerfile`
 
-## PARTE 4: Fazer o Deploy funcionar
-
-### Passo 4.1 — Configurar o build
-
-1. Na aba **"Settings"** do serviço da aplicação
-2. Em **"Build"**, verifique se **"Dockerfile"** está selecionado como builder
-   - Se não estiver, mude para **"Dockerfile"**
-3. O caminho do Dockerfile deve ser: `Dockerfile`
-
-### Passo 4.2 — Redesployar
+### Passo 4.4 — Redesployar
 
 1. Vá na aba **"Deployments"**
-2. Clique nos **três pontinhos (⋯)** do último deploy
+2. Clique nos **3 pontinhos (⋯)** do último deploy
 3. Clique **"Redeploy"**
-
-> ⏳ Aguarde uns 3-5 minutos. Você verá o progresso na tela.
-> Quando aparecer **"Active"** em verde, o sistema está no ar! 🎉
+4. Aguarde 3-5 minutos até aparecer **"Active"** ✅
 
 ---
 
-## PARTE 5: Configurar o Banco e Criar seu Usuário
+## PARTE 5: Configurar banco e criar usuário
 
-### Passo 5.1 — Rodar a migração do banco
+### Passo 5.1 — Abrir terminal remoto
 
-1. No serviço da aplicação, vá na aba **"Settings"**
-2. Clique em **"Open Shell"** (ou vá na aba Deployments → clique no deploy ativo → clique "Shell")
-3. No terminal que abrir, digite:
+1. No card da aplicação
+2. Aba **"Deployments"** → clique no deploy que está **"Active"**
+3. Procure e clique em **"Shell"** ou **"Open Shell"**
+4. Um terminal preto vai abrir dentro do Railway
+
+### Passo 5.2 — Preparar o banco
+
+No terminal do Railway, cole:
 
 ```bash
 cd /app/server && npx prisma db push
 ```
 
-> ✅ Deve aparecer "Your database is now in sync" — o banco está pronto!
+> ✅ Deve aparecer "Your database is now in sync"
 
-### Passo 5.2 — Criar o primeiro usuário (Admin)
+### Passo 5.3 — Criar seu usuário admin
 
-Ainda no mesmo terminal do Railway, cole este comando **inteiro** (copie tudo de uma vez):
+Cole este comando no terminal do Railway (troque email e senha):
 
 ```bash
 node -e "
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcryptjs');
-const p = new PrismaClient();
-(async () => {
-  const t = await p.tenant.create({ data: { name: 'Minha Empresa' } });
-  await p.user.create({ data: {
-    tenantId: t.id,
-    name: 'Marcos Gomes',
-    role: 'Admin',
-    email: 'marcos@minhaempresa.com',
-    passwordHash: await bcrypt.hash('MinhaSenh@123', 10)
-  }});
-  console.log('Usuario criado com sucesso!');
-  console.log('Email: marcos@minhaempresa.com');
-  console.log('Senha: MinhaSenh@123');
-  await p.\$disconnect();
+const{PrismaClient}=require('@prisma/client');
+const bcrypt=require('bcryptjs');
+const p=new PrismaClient();
+(async()=>{
+const t=await p.tenant.create({data:{name:'Minha Empresa'}});
+await p.user.create({data:{
+tenantId:t.id,name:'Admin',role:'Admin',
+email:'SEU_EMAIL_AQUI@email.com',
+passwordHash:await bcrypt.hash('SUA_SENHA_AQUI',10)
+}});
+console.log('Pronto! Use: SEU_EMAIL_AQUI@email.com');
+await p.\$disconnect();
 })();
 "
 ```
 
-> ⚠️ **IMPORTANTE**: Troque `marcos@minhaempresa.com` pelo seu email real
-> e `MinhaSenh@123` por uma senha forte que você vai lembrar.
+> ⚠️ **ANTES de colar**: troque `SEU_EMAIL_AQUI@email.com` pelo seu email 
+> e `SUA_SENHA_AQUI` por uma senha que você vai lembrar.
 
 ---
 
-## PARTE 6: Acessar o Sistema! 🎉
+## PARTE 6: Usar o sistema! 🎉
 
-1. Abra a URL que o Railway gerou (Passo 3.3) no navegador:
-   - Exemplo: `https://licitasaas-production.up.railway.app`
-2. Faça login com o email e senha que você criou no Passo 5.2
-3. **Pronto! Você está usando o sistema em produção!**
-
-### Compartilhar com a equipe:
-Basta enviar a URL para seus colegas. Para criar mais usuários, eles podem se registrar 
-ou você pode repetir o Passo 5.2 com os dados deles.
+1. Abra no navegador: **sua URL do Railway** (ex: `https://licitasaas-production.up.railway.app`)
+2. Faça login com o email e senha que você criou
+3. **Pronto!** Compartilhe essa URL com sua equipe!
 
 ---
 
-## 🔧 Manutenção Futura
+## 🔄 Como atualizar no futuro
 
-### Como atualizar o sistema
-Quando fizermos melhorias no código, basta rodar no Terminal do Mac:
-
-```bash
-cd /Users/marcosgomes/.gemini/antigravity/playground/magnetic-cluster
-git add -A
-git commit -m "descrição da atualização"
-git push
-```
-
-> O Railway detecta o push e faz o deploy automaticamente! 🚀
-
-### Ver logs (se algo der errado)
-1. Vá no Railway → seu projeto → serviço da aplicação
-2. Aba **"Deployments"** → clique no deploy ativo
-3. Aba **"Logs"** — mostra tudo que o servidor está fazendo
-
-### Custo
-- **Railway**: Grátis para os primeiros US$ 5 de uso (~500 horas/mês)
-  - Depois: ~US$ 5-10/mês para uso contínuo
-- **Gemini API**: Grátis até 15 requisições/minuto (mais que suficiente)
+Quando fizermos melhorias, eu executo os comandos de push para você.
+O Railway detecta e atualiza automaticamente.
 
 ---
 
-## ❓ Problemas Comuns
+## ❓ Se algo der errado
 
-### "Build failed" (Erro no build)
-→ Verifique se todas as variáveis de ambiente foram adicionadas (Passo 3.2)
-
-### "Cannot connect to database"
-→ Verifique se a `DATABASE_URL` está correta e o serviço PostgreSQL está rodando
-
-### "Login não funciona"
-→ Verifique se executou o Passo 5.1 (migração) e Passo 5.2 (criar usuário)
-
-### "Página em branco"
-→ Verifique se `NODE_ENV` está como `production` e redesplye (Passo 4.2)
-
----
-
-> 💡 **Dica final**: Salve este arquivo! Sempre que precisar, consulte-o.
-> Se tiver dúvidas em qualquer passo, me pergunte!
+Me diga exatamente o que aparece na tela e eu te ajudo a resolver!
