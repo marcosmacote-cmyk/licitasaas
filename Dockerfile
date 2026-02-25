@@ -1,37 +1,19 @@
-# ── Stage 1: Build Everything ──
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Build Frontend
-COPY package.json package-lock.json* ./
-RUN npm install --ignore-scripts
-COPY . .
-ENV NODE_OPTIONS="--max-old-space-size=512"
-RUN npm run build
-
-# Build Backend
-WORKDIR /app/server
-COPY server/package.json server/package-lock.json* ./
-RUN npm install
-RUN npx prisma generate && npx tsc
-
-# ── Stage 2: Production ──
 FROM node:20-alpine
 WORKDIR /app/server
 
-# Install production deps
+# Copy backend package and install production deps
 COPY server/package.json server/package-lock.json* ./
-RUN npm install --omit=dev && npx prisma generate
+RUN npm install --omit=dev
 
-# Copy compiled backend
-COPY --from=builder /app/server/dist ./dist
-COPY --from=builder /app/server/prisma ./prisma
+# Generate Prisma client
+COPY server/prisma ./prisma
+RUN npx prisma generate
 
-# Copy Prisma client
-COPY --from=builder /app/server/node_modules/.prisma ./node_modules/.prisma
+# Copy pre-built backend
+COPY server/dist ./dist
 
-# Copy built frontend into public/
-COPY --from=builder /app/dist ./public
+# Copy pre-built frontend
+COPY server/public ./public
 
 # Create uploads directory
 RUN mkdir -p uploads
