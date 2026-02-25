@@ -468,9 +468,9 @@ REGRAS:
         }
 
         const result = await callGeminiWithRetry(genAI.models, {
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: { temperature: 0.4, maxOutputTokens: 3072 }
+            config: { temperature: 0.7, maxOutputTokens: 4096 }
         });
 
         let text = (result.text || '').trim();
@@ -668,7 +668,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req: an
 
 
 // Helper for Gemini with retry (for 503/429 errors) + model fallback
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest'];
+const GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-1.5-pro'];
 
 async function callGeminiWithRetry(model: any, options: any, maxRetries = 4) {
     let lastError;
@@ -810,23 +810,19 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         // 4. Call Gemini with Multi-modal Support (with retry)
         const startTime = Date.now();
         const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.0-flash',
+            model: 'gemini-1.5-flash',
             contents: [
                 {
                     role: 'user',
                     parts: [
-                        { text: "Analise os documentos em anexo (PDFs) e retorne exclusivamente o JSON seguindo as instruções do sistema." },
-                        ...pdfParts
+                        ...pdfParts,
+                        { text: `Analise as informações extraídas do edital acima e gere um relatório de qualificação e riscos. Use o system prompt para guiar o formato JSON de saída.` }
                     ]
                 }
             ],
             config: {
-                systemInstruction,
-                responseMimeType: "application/json",
-                temperature: 0.1,
-                topP: 0.8,
-                topK: 40,
-                maxOutputTokens: 65536,
+                temperature: 0.45,
+                maxOutputTokens: 16384
             }
         });
         const duration = (Date.now() - startTime) / 1000;
@@ -872,8 +868,10 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
             userMessage = 'O serviço de IA está temporariamente sobrecarregado. Tente novamente em alguns segundos.';
         } else if (error?.message?.includes('429')) {
             userMessage = 'Limite de requisições da IA atingido. Aguarde um momento e tente novamente.';
-        } else if (error?.message?.includes('API key')) {
-            userMessage = 'Chave da API do Gemini inválida ou ausente. Verifique a configuração.';
+        } else if (error?.message?.includes('API key') || error?.message?.includes('403')) {
+            userMessage = 'Chave da API do Gemini inválida ou sem permissão. Verifique a configuração no Railway.';
+        } else if (error?.message?.includes('not found') || error?.message?.includes('model')) {
+            userMessage = 'Modelo de IA não encontrado ou indisponível nesta região.';
         }
         res.status(500).json({ error: userMessage });
     }
@@ -1096,8 +1094,8 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
             });
         }
 
-        const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
+        const chatResult = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-1.5-flash',
             contents: historyWithContext,
             config: {
                 systemInstruction,
@@ -1106,7 +1104,7 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
             }
         });
 
-        res.json({ text: response.text });
+        res.json({ text: chatResult.text });
     } catch (error: any) {
         console.error("AI Chat Error:", error?.message || error);
         res.status(500).json({ error: 'Failed to answer via AI chat' });
