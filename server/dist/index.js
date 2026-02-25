@@ -745,12 +745,13 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
                     role: 'user',
                     parts: [
                         ...pdfParts,
-                        { text: `Analise as informações extraídas do edital acima e gere um relatório de qualificação e riscos. Use o system prompt para guiar o formato JSON de saída.` }
+                        { text: `Analise este edital de licitação e retorne EXCLUSIVAMENTE o objeto JSON especificado nas instruções do sistema. NÃO adicione texto antes ou depois. NÃO use crases markdown.` }
                     ]
                 }
             ],
             config: {
-                temperature: 0.45,
+                systemInstruction,
+                temperature: 0.1,
                 maxOutputTokens: 16384
             }
         });
@@ -810,7 +811,13 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         }
         try {
             const finalPayload = JSON.parse(cleanedJson);
-            console.log(`[AI] Successfully parsed JSON. Sending response.`);
+            console.log(`[AI] Successfully parsed JSON. Top-level keys: ${Object.keys(finalPayload).join(', ')}`);
+            if (finalPayload.process) {
+                console.log(`[AI] process keys: ${Object.keys(finalPayload.process).join(', ')}`);
+            }
+            if (finalPayload.analysis) {
+                console.log(`[AI] analysis keys: ${Object.keys(finalPayload.analysis).join(', ')}`);
+            }
             res.json(finalPayload);
         }
         catch (parseError) {
