@@ -1,12 +1,18 @@
 FROM node:20-alpine
 WORKDIR /app/server
 
-# Copy package files AND prisma schema (needed for postinstall)
+# Install openssl 1.1 compatibility and other dependencies
+RUN apk add --no-cache openssl
+
+# Copy package files AND prisma schema
 COPY server/package.json server/package-lock.json* ./
 COPY server/prisma ./prisma
 
-# Install production deps (postinstall runs prisma generate)
+# Install production deps
 RUN npm install --omit=dev
+
+# Generate Prisma client for alpine (linux-musl)
+RUN npx prisma generate
 
 # Copy pre-built backend
 COPY server/dist ./dist
