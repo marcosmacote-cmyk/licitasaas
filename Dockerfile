@@ -1,7 +1,7 @@
 FROM node:20-alpine
 WORKDIR /app/server
 
-# Install openssl 1.1 compatibility and other dependencies
+# Install openssl 1.1 compatibility
 RUN apk add --no-cache openssl
 
 # Copy package files AND prisma schema
@@ -11,7 +11,7 @@ COPY server/prisma ./prisma
 # Install production deps
 RUN npm install --omit=dev
 
-# Generate Prisma client for alpine (linux-musl)
+# Generate Prisma client
 RUN npx prisma generate
 
 # Copy pre-built backend
@@ -27,4 +27,5 @@ ENV NODE_ENV=production
 ENV PORT=3001
 EXPOSE 3001
 
-CMD ["node", "dist/index.js"]
+# O segredo está aqui: Garante as tabelas (db push) antes de ligar o servidor
+CMD ["sh", "-c", "npx prisma db push && node dist/index.js"]
