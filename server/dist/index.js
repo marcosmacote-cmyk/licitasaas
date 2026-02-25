@@ -429,7 +429,7 @@ REGRAS:
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
         }
         const result = await callGeminiWithRetry(genAI.models, {
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { temperature: 0.7, maxOutputTokens: 4096 }
         });
@@ -610,7 +610,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
     }
 });
 // Helper for Gemini with retry (for 503/429 errors) + model fallback
-const GEMINI_MODELS = ['gemini-2.0-flash'];
+const GEMINI_MODELS = ['gemini-2.5-flash'];
 async function callGeminiWithRetry(model, options, maxRetries = 4) {
     let lastError;
     for (const modelName of GEMINI_MODELS) {
@@ -739,7 +739,7 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         // 4. Call Gemini with Multi-modal Support (with retry)
         const startTime = Date.now();
         const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: [
                 {
                     role: 'user',
@@ -987,7 +987,7 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
             });
         }
         const chatResult = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             contents: historyWithContext,
             config: {
                 systemInstruction,
