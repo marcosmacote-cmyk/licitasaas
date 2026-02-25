@@ -836,14 +836,37 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
 
         console.log(`[AI] Raw response length: ${rawText.length} `);
 
-        // Clean potentially prefixed markdown (though responseMimeType usually prevents this)
-        let cleanedJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        // ---- Robust JSON extraction and repair ----
+        // 1. Clean markdown wrappers
+        let cleanedJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
 
+        // 2. Extract the outermost { ... }
         const firstBrace = cleanedJson.indexOf('{');
-        const lastBrace = cleanedJson.lastIndexOf('}');
+        let lastBrace = cleanedJson.lastIndexOf('}');
+        if (firstBrace === -1) throw new Error("A IA não retornou um JSON válido (sem '{'). Texto recebido: " + cleanedJson.substring(0, 200));
+        cleanedJson = firstBrace !== -1 && lastBrace !== -1
+            ? cleanedJson.substring(firstBrace, lastBrace + 1)
+            : cleanedJson.substring(firstBrace);
 
-        if (firstBrace !== -1 && lastBrace !== -1) {
-            cleanedJson = cleanedJson.substring(firstBrace, lastBrace + 1);
+        // 3. Repair common Gemini issues
+        //    a) Control characters (newlines inside strings)
+        cleanedJson = cleanedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
+        //    b) Trailing commas before } or ]
+        cleanedJson = cleanedJson.replace(/,\s*([}\]])/g, '$1');
+        //    c) If truncated (no closing brace), try to close it
+        if (cleanedJson.lastIndexOf('}') < cleanedJson.length - 5) {
+            // count unclosed braces/brackets
+            let depth = 0, inString = false, escape = false;
+            for (const c of cleanedJson) {
+                if (escape) { escape = false; continue; }
+                if (c === '\\') { escape = true; continue; }
+                if (c === '"') { inString = !inString; continue; }
+                if (inString) continue;
+                if (c === '{' || c === '[') depth++;
+                if (c === '}' || c === ']') depth--;
+            }
+            // Close any unclosed structures (last resort)
+            while (depth > 0) { cleanedJson += '}'; depth--; }
         }
 
         try {
@@ -853,7 +876,7 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         } catch (parseError: any) {
             // Dump the raw string to file for debugging
             fs.writeFileSync(path.join(uploadDir, 'failed-json-dump.txt'), cleanedJson);
-            console.error("[AI] JSON PARSE ERROR. Dumped raw output to failed-json-dump.txt");
+            console.error("[AI] JSON PARSE ERROR after repair attempts. Dumped to failed-json-dump.txt");
             throw parseError; // Re-throw to be caught by outer catch
         }
 
