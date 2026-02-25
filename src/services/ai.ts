@@ -62,10 +62,15 @@ export const aiService = {
             }
 
             const aiData = await aiResponse.json();
+            console.log('[AI Service] Response keys:', Object.keys(aiData));
+
+            // Safe fallback in case the AI partially structured the response
+            const process = aiData.process || aiData;
+            const analysis = aiData.analysis || {};
 
             // Structure response mapped to the App's Interfaces
             const processData: Partial<BiddingProcess> = {
-                ...aiData.process,
+                ...process,
                 link: fileUrls.join(', '), // Multiple links separated by comma
                 status: 'Captado',
             };
@@ -73,13 +78,13 @@ export const aiService = {
             const analysisData: AiAnalysis = {
                 id: uuidv4(),
                 biddingProcessId: '', // Will be assigned upstream
-                requiredDocuments: JSON.stringify(aiData.analysis.requiredDocuments || []),
-                pricingConsiderations: aiData.analysis.pricingConsiderations,
-                irregularitiesFlags: JSON.stringify(aiData.analysis.irregularitiesFlags || []),
-                fullSummary: aiData.analysis.fullSummary,
-                deadlines: JSON.stringify(aiData.analysis.deadlines || []),
-                penalties: aiData.analysis.penalties,
-                qualificationRequirements: aiData.analysis.qualificationRequirements,
+                requiredDocuments: JSON.stringify(analysis.requiredDocuments || []),
+                pricingConsiderations: analysis.pricingConsiderations || '',
+                irregularitiesFlags: JSON.stringify(analysis.irregularitiesFlags || []),
+                fullSummary: analysis.fullSummary || '',
+                deadlines: JSON.stringify(analysis.deadlines || []),
+                penalties: analysis.penalties || '',
+                qualificationRequirements: analysis.qualificationRequirements || '',
                 sourceFileNames: JSON.stringify(fileNames), // Persist uploaded PDF names for chat context
                 analyzedAt: new Date().toISOString()
             };
