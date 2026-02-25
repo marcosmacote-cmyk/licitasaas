@@ -468,7 +468,7 @@ REGRAS:
         }
 
         const result = await callGeminiWithRetry(genAI.models, {
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.0-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { temperature: 0.7, maxOutputTokens: 4096 }
         });
@@ -668,7 +668,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req: an
 
 
 // Helper for Gemini with retry (for 503/429 errors) + model fallback
-const GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+const GEMINI_MODELS = ['gemini-2.0-flash'];
 
 async function callGeminiWithRetry(model: any, options: any, maxRetries = 4) {
     let lastError;
@@ -810,7 +810,7 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         // 4. Call Gemini with Multi-modal Support (with retry)
         const startTime = Date.now();
         const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.0-flash',
             contents: [
                 {
                     role: 'user',
@@ -858,22 +858,13 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         }
 
     } catch (error: any) {
-        console.error("AI Analysis Error:", error?.message || error);
-        const logMsg = `[${new Date().toISOString()}] AI Error: ${error?.message || String(error)}\nStack: ${error?.stack || 'No stack'}\n\n`;
+        console.error("AI Analysis Error (FULL):", JSON.stringify({ message: error?.message, status: error?.status, code: error?.code, stack: error?.stack?.substring(0, 500) }));
+        const logMsg = `[${new Date().toISOString()}] AI Error: ${error?.message || String(error)}\nStatus: ${error?.status}\nCode: ${error?.code}\nStack: ${error?.stack || 'No stack'}\n\n`;
         fs.appendFileSync(path.join(uploadDir, 'debug-analysis.log'), logMsg);
 
-        // Return more descriptive error to frontend
-        let userMessage = 'Falha ao analisar o PDF com IA.';
-        if (error?.message?.includes('503') || error?.message?.includes('high demand')) {
-            userMessage = 'O serviço de IA está temporariamente sobrecarregado. Tente novamente em alguns segundos.';
-        } else if (error?.message?.includes('429')) {
-            userMessage = 'Limite de requisições da IA atingido. Aguarde um momento e tente novamente.';
-        } else if (error?.message?.includes('API key') || error?.message?.includes('403')) {
-            userMessage = 'Chave da API do Gemini inválida ou sem permissão. Verifique a configuração no Railway.';
-        } else if (error?.message?.includes('not found') || error?.message?.includes('model')) {
-            userMessage = 'Modelo de IA não encontrado ou indisponível nesta região.';
-        }
-        res.status(500).json({ error: userMessage });
+        // Return the REAL error message for debugging
+        const realError = error?.message || String(error);
+        res.status(500).json({ error: `Erro na IA: ${realError}` });
     }
 });
 
@@ -1095,7 +1086,7 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
         }
 
         const chatResult = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.0-flash',
             contents: historyWithContext,
             config: {
                 systemInstruction,
