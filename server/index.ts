@@ -1118,7 +1118,7 @@ if (process.env.NODE_ENV === 'production') {
     const publicDir = path.join(SERVER_ROOT, 'public');
     app.use(express.static(publicDir));
     // SPA fallback: send index.html for any non-API route
-    app.get('(.*)', (req, res) => {
+    app.get('/:any*', (req, res) => {
         if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
             const publicDir = path.join(SERVER_ROOT, 'public');
             res.sendFile(path.join(publicDir, 'index.html'));
