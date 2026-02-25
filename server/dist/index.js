@@ -1031,8 +1031,41 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 // Start server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
+// Função de Auto-Setup para o primeiro acesso
+async function runAutoSetup() {
+    try {
+        const userCount = await prisma.user.count();
+        if (userCount === 0) {
+            console.log('🏗️ Iniciando configuração de primeiro acesso...');
+            // 1. Criar Tenant padrão
+            const tenant = await prisma.tenant.create({
+                data: {
+                    razaoSocial: 'LicitaSaaS Brasil',
+                    rootCnpj: '00000000'
+                }
+            });
+            // 2. Criar Usuário Admin
+            const salt = await bcryptjs_1.default.genSalt(10);
+            const passwordHash = await bcryptjs_1.default.hash('admin123', salt);
+            await prisma.user.create({
+                data: {
+                    email: 'admin@licitasaas.com',
+                    name: 'Administrador',
+                    passwordHash,
+                    role: 'ADMIN',
+                    tenantId: tenant.id
+                }
+            });
+            console.log('✅ Configuração concluída! Logue com: admin@licitasaas.com / admin123');
+        }
+    }
+    catch (error) {
+        console.error('❌ Erro no auto-setup:', error);
+    }
+}
+app.listen(PORT, async () => {
+    console.log(`Server is running on port ${PORT} (production)`);
+    await runAutoSetup();
 });
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);
