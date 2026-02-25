@@ -1,13 +1,12 @@
 FROM node:20-alpine
 WORKDIR /app/server
 
-# Copy backend package and install production deps
+# Copy package files AND prisma schema (needed for postinstall)
 COPY server/package.json server/package-lock.json* ./
-RUN npm install --omit=dev
-
-# Generate Prisma client
 COPY server/prisma ./prisma
-RUN npx prisma generate
+
+# Install production deps (postinstall runs prisma generate)
+RUN npm install --omit=dev
 
 # Copy pre-built backend
 COPY server/dist ./dist
