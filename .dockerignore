@@ -1,8 +1,6 @@
 node_modules
 server/node_modules
 server/uploads
-server/dist
-dist
 .git
 .gitignore
 *.log
