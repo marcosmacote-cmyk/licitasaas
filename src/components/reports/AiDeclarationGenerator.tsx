@@ -146,8 +146,9 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         setDeclarationType('');
         const b = biddings.find(x => x.id === biddingId);
         if (b) {
+            // Priority to modality and title (organ + number)
             updateLayout({
-                addresseeOrg: `${b.portal || ''}\n${b.modality || ''} nº ${b.title || ''}`
+                addresseeOrg: `${b.modality || ''} nº ${b.title || ''}`
             });
         }
     };
@@ -171,7 +172,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             updateLayout({
                 signatoryName: techName,
                 signatoryRole: 'Responsável Técnico',
-                footerText: c.technicalQualification
+                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}\n${c.qualification || ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
         } else {
             updateLayout({
@@ -180,7 +181,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                 signatoryCnpj: `CNPJ: ${c.cnpj}`,
                 signatoryName: c.contactName || '',
                 signatoryRole: 'Representante Legal',
-                footerText: c.qualification || ''
+                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}\n${c.qualification || ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
         }
     }, [issuerType, selectedCompanyId, companies, updateLayout]);
@@ -392,9 +393,13 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         y += 6;
 
         // ── Check if signature block fits on current page ──
-        const sigNeeded = 50;
-        if (y + sigNeeded > contentMaxY) {
+        // signatoryName + city/date + line + other details
+        const sigBlockHeight = 55;
+
+        if (y + sigBlockHeight > contentMaxY) {
             y = newPage();
+        } else {
+            y += 10; // Margin after text
         }
 
         // ── LOCATION & DATE ──
@@ -404,21 +409,10 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             doc.setTextColor(0);
             const dateLine = `${layout.signatureCity}${layout.signatureCity && layout.signatureDate ? ', ' : ''}${layout.signatureDate}.`;
             doc.text(dateLine, pw - m, y, { align: 'right' });
-            y += 18;
+            y += 15;
         }
 
         // ── SIGNATURE ──
-        // Stay at the bottom of the page if it fits
-        const sigBlockHeight = 45;
-        const targetSigY = contentMaxY - sigBlockHeight;
-
-        if (y > targetSigY) {
-            y = newPage();
-            y = contentMaxY - sigBlockHeight;
-        } else {
-            y = targetSigY; // Pin to bottom of current page
-        }
-
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.text('__________________________________________', pw / 2, y, { align: 'center' });

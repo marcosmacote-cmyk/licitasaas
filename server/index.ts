@@ -435,7 +435,7 @@ ${company.qualification || ''}`;
         }
 
         const prompt = `Você é um advogado especialista em licitações e profundo conhecedor da Lei Federal nº 14.133/2021. 
-Redija o corpo de uma declaração formal, com redação concisa, juridicamente correta e estritamente de acordo com a nova Lei de Licitações (14.133/2021).
+Redija o corpo de uma declaração formal, com redação concisa e estritamente de acordo com a nova Lei de Licitações (14.133/2021).
 
 TIPO: "${declarationType}"
 
@@ -443,26 +443,29 @@ ${issuerBlock}
 
 LICITAÇÃO:
 Objeto: ${bidding.title}
-Órgão: ${bidding.portal || ''}
-Modalidade: ${bidding.modality || ''}
+Fase: ${bidding.modality || ''}
 
-EDITAL (resumo):
-${(bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 2000)}
+ANÁLISE DO EDITAL E ANEXOS (Use como base prioritária para o modelo de texto):
+${(bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3000)}
 
-${customPrompt ? `INSTRUÇÃO DO USUÁRIO: ${customPrompt}` : ''}
+INSTRUÇÃO CRÍTICA: 
+1. PRIORIZE o conteúdo e a estrutura dos modelos de declarações encontrados no resumo do Edital acima. A declaração gerada DEVE ser fiel ao modelo exigido pelo órgão licitante, adaptando apenas o necessário para conformidade com a Lei 14.133/2021 se o edital for omisso.
+2. Seja OBJETIVO. Evite textos longos se o modelo for simples. 
+
+${customPrompt ? `INSTRUÇÃO ADICIONAL DO USUÁRIO: ${customPrompt}` : ''}
 
 FORMATO OBRIGATÓRIO:
 
 1) Parágrafo único de identificação e qualificação COMPLETA: ${isTechnical ? 'do profissional técnico (CREA/CAU, CPF, etc.) e vínculo com a empresa' : 'da empresa e de seu representante legal'}, finalizando com o termo: ", DECLARA, sob as penas da lei e para os fins previstos na Lei 14.133/2021, que:"
 
-2) Texto da declaração em formato de texto corrido ou tópicos objetivos, focando na objetividade e validade jurídica. Evite formalismos desnecessários, priorizando a clareza exigida pela Nova Lei de Licitações.
+2) Texto da declaração seguindo FIELMENTE o modelo do edital (se disponível no resumo), focando na objetividade e validade jurídica.
 
 3) Encerramento padrão: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
 
 REGRAS:
 - NÃO inclua título, cabeçalho, destinatário, local/data ou assinatura.
-- Redação moderna, limpa e técnica.
-- Texto sem markdown, sem negritos (**), sem caracteres especiais de formatação.`;
+- Redação técnica e limpa.
+- Sem markdown, sem negritos (**), sem caracteres especiais.`;
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
