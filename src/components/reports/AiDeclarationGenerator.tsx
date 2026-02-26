@@ -185,18 +185,22 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
 
         // Tentar extrair o Local (Cidade/UF) da qualificação
-        // Ex: "no município de Limoeiro do Norte/CE" ou "na cidade de Fortaleza-CE"
         let city = '';
-        const cityMatch = c.qualification?.match(/(?:no\s+município\s+de|na\s+cidade\s+de)\s+([^,.]+)/i);
+        const cityMatch = c.qualification?.match(/(?:no\s+município\s+de|na\s+cidade\s+de|em)\s+([^,.]+)/i);
         if (cityMatch && cityMatch[1]) {
             city = cityMatch[1].trim();
         } else {
-            // Fallback: tentar pegar do final do endereço extraído se tiver formato Cidade/UF
             const cityFallback = addr.match(/,\s*([^,]+-[A-Z]{2}|[^,]+\/[A-Z]{2})\s*$/);
             if (cityFallback) city = cityFallback[1].trim();
         }
 
-        // Tentar extrair nome completo do texto de qualificação (ex: representada por [Nome], [Nacionalidade])
+        // Tentar extrair o CPF
+        let cpf = '';
+        const cpfMatch = c.qualification?.match(/CPF\s*(?:\(MF\))?\s*sob\s*o\s*nº\s*([\d\.\-]+)/i) ||
+            c.qualification?.match(/CPF\s*nº[:\s]*([\d\.\-]+)/i);
+        if (cpfMatch) cpf = `CPF nº: ${cpfMatch[1].trim()}`;
+
+        // Tentar extrair nome completo do texto de qualificação
         let fullName = c.contactName || '';
         const nameMatch = c.qualification?.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,]+)/i);
         if (nameMatch && nameMatch[1]) {
@@ -212,6 +216,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             updateLayout({
                 signatoryName: techName,
                 signatoryRole: 'Responsável Técnico',
+                signatoryCpf: cpf,
                 signatureCity: city,
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
@@ -221,6 +226,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                 signatoryCompany: c.razaoSocial,
                 signatoryCnpj: `CNPJ: ${c.cnpj}`,
                 signatoryName: fullName,
+                signatoryCpf: cpf,
                 signatoryRole: 'Representante Legal',
                 signatureCity: city,
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
