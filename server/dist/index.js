@@ -398,9 +398,9 @@ ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}`;
         }
         const prompt = `Você é um advogado especialista em licitações e profundo conhecedor da Lei Federal nº 14.133/2021. 
-Redija o corpo de uma declaração formal, com redação concisa e estritamente de acordo com a nova Lei de Licitações (14.133/2021).
+Redija o corpo de uma declaração formal e um título conciso, com redação estritamente de acordo com a nova Lei de Licitações (14.133/2021).
 
-TIPO: "${declarationType}"
+TIPO ORIGINAL (PODE SER LONGO): "${declarationType}"
 
 ${issuerBlock}
 
@@ -412,22 +412,18 @@ ANÁLISE DO EDITAL E ANEXOS (Use como base prioritária para o modelo de texto):
 ${(bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3000)}
 
 INSTRUÇÃO CRÍTICA: 
-1. PRIORIZE o conteúdo e a estrutura dos modelos de declarações encontrados no resumo do Edital acima. A declaração gerada DEVE ser fiel ao modelo exigido pelo órgão licitante, adaptando apenas o necessário para conformidade com a Lei 14.133/2021 se o edital for omisso.
-2. Seja OBJETIVO. Evite textos longos se o modelo for simples. 
+1. TÍTULO: Se o "TIPO ORIGINAL" for muito longo (mais de 10 palavras), RESUMA-O em um título curto e formal (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO TÉCNICA").
+2. PRIORIZE o conteúdo e a estrutura dos modelos de declarações encontrados no resumo do Edital acima. A declaração gerada DEVE ser fiel ao modelo exigido pelo órgão licitante, adaptando apenas o necessário para conformidade com a Lei 14.133/2021 se o edital for omisso.
+3. Seja OBJETIVO.
 
 ${customPrompt ? `INSTRUÇÃO ADICIONAL DO USUÁRIO: ${customPrompt}` : ''}
 
-FORMATO OBRIGATÓRIO:
-
-1) Parágrafo único de identificação e qualificação COMPLETA: ${isTechnical ? 'do profissional técnico (CREA/CAU, CPF, etc.) e vínculo com a empresa' : 'da empresa e de seu representante legal'}, finalizando com o termo: ", DECLARA, sob as penas da lei e para os fins previstos na Lei 14.133/2021, que:"
-
-2) Texto da declaração seguindo FIELMENTE o modelo do edital (se disponível no resumo), focando na objetividade e validade jurídica.
-
-3) Encerramento padrão: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
-
-REGRAS:
-- NÃO inclua título, cabeçalho, destinatário, local/data ou assinatura.
-- Redação técnica e limpa.
+REGRAS DE FORMATAÇÃO:
+- Retorne APENAS um objeto JSON no formato: { "title": "Título Curto", "text": "Corpo da declaração..." }
+- NÃO inclua markdown (\`\`\`json), apenas o objeto puro.
+- No "text", use parágrafo único de identificação e qualificação COMPLETA: ${isTechnical ? 'do profissional técnico (CREA/CAU, CPF, etc.) e vínculo com a empresa' : 'da empresa e de seu representante legal'}, finalizando com o termo: ", DECLARA, sob as penas da lei e para os fins previstos na Lei 14.133/2021, que:"
+- Finalize o "text" com o encerramento padrão: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
+- NÃO inclua cabeçalho, destinatário, local/data ou assinatura no campo "text".
 - Sem markdown, sem negritos (**), sem caracteres especiais.`;
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
@@ -437,28 +433,22 @@ REGRAS:
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { temperature: 0.7, maxOutputTokens: 4096 }
         });
-        let text = (result.text || '').trim();
-        // Post-processing: clean up AI artifacts
-        const lines = text.split('\n');
-        const cleaned = [];
-        let started = false;
-        for (const line of lines) {
-            const t = line.trim();
-            if (!started && !t)
-                continue;
-            if (t.startsWith('#'))
-                continue;
-            // Skip title-like lines at the beginning
-            if (!started && /^DECLARA[ÇC][ÃA]O/i.test(t) && t.length < 120)
-                continue;
-            if (!started && t === t.toUpperCase() && !t.includes('.') && t.length > 3 && t.length < 100)
-                continue;
-            started = true;
-            cleaned.push(t.replace(/\*\*/g, ''));
+        let rawResponse = (result.text || '').trim();
+        // Extract JSON if it has markdown or extra text
+        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            return res.json({ text: rawResponse.replace(/\*\*/g, ''), title: declarationType.substring(0, 50) });
         }
-        text = cleaned.join('\n').trim();
-        console.log(`[Declaration] Generated ${text.length} chars for "${declarationType}"`);
-        res.json({ text });
+        try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            res.json({
+                text: parsed.text.replace(/\*\*/g, '').trim(),
+                title: parsed.title.replace(/\*\*/g, '').trim()
+            });
+        }
+        catch (e) {
+            res.json({ text: rawResponse.replace(/\*\*/g, ''), title: declarationType.substring(0, 50) });
+        }
     }
     catch (error) {
         console.error("Declaration generation error:", error);

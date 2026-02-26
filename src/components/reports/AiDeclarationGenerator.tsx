@@ -146,9 +146,16 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         setDeclarationType('');
         const b = biddings.find(x => x.id === biddingId);
         if (b) {
-            // Priority to modality and title (organ + number)
+            const mod = (b.modality || '').trim();
+            const tit = (b.title || '').trim();
+
+            // Evitar duplicação: se o título já contém a modalidade, extraímos apenas o número
+            // Ex: Modality="Pregão Eletrônico", Title="Pregão Eletrônico nº 004/26" -> Org="Pregão Eletrônico nº 004/26"
+            const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
+            const finalOrg = cleanTitle ? `${mod} nº ${cleanTitle}` : tit;
+
             updateLayout({
-                addresseeOrg: `${b.modality || ''} nº ${b.title || ''}`
+                addresseeOrg: finalOrg
             });
         }
     };
@@ -166,13 +173,15 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         const c = companies.find(x => x.id === selectedCompanyId);
         if (!c) return;
 
+        const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
+
         if (issuerType === 'technical' && c.technicalQualification) {
             const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
             const techName = techLines[0]?.split(',')[0]?.trim() || '';
             updateLayout({
                 signatoryName: techName,
                 signatoryRole: 'Responsável Técnico',
-                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}\n${c.qualification || ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
+                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
         } else {
             updateLayout({
@@ -181,7 +190,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                 signatoryCnpj: `CNPJ: ${c.cnpj}`,
                 signatoryName: c.contactName || '',
                 signatoryRole: 'Representante Legal',
-                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}\n${c.qualification || ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
+                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
         }
     }, [issuerType, selectedCompanyId, companies, updateLayout]);
@@ -229,6 +238,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             const data = await response.json();
             if (!response.ok) throw new Error(data.details || data.error || 'Falha ao gerar');
             setGeneratedText(data.text);
+            if (data.title) setDeclarationType(data.title.toUpperCase());
         } catch (error: any) {
             alert(`Erro ao gerar declaração: ${error.message}`);
         } finally {
