@@ -42,7 +42,7 @@ const DEFAULT_LAYOUT: Omit<LayoutConfig, 'id' | 'name'> = {
     headerText: '',
     footerText: '',
     signatureCity: '',
-    signatureDate: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
+    signatureDate: '', // Will be filled dynamically
     signatoryName: '',
     signatoryRole: '',
     signatoryCpf: '',
@@ -115,9 +115,18 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         setLayouts(prev => prev.map(l => l.id === currentLayoutId ? { ...l, ...patch } : l));
     }, [currentLayoutId]);
 
+    // Ensure date is always today on mount
+    useEffect(() => {
+        const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+        if (layout && !layout.signatureDate) {
+            updateLayout({ signatureDate: today });
+        }
+    }, [layout, updateLayout]);
+
     const handleCreateLayout = () => {
         const newId = `layout_${Date.now()}`;
-        const newLayout: LayoutConfig = { ...DEFAULT_LAYOUT, id: newId, name: 'Novo Layout' };
+        const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+        const newLayout: LayoutConfig = { ...DEFAULT_LAYOUT, id: newId, name: 'Novo Layout', signatureDate: today };
         setLayouts(prev => [...prev, newLayout]);
         setCurrentLayoutId(newId);
         setLayoutName('Novo Layout');
