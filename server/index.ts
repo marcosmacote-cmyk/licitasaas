@@ -412,22 +412,23 @@ app.post('/api/generate-declaration', authenticateToken, async (req: any, res) =
         }
 
         const isTechnical = issuerType === 'technical';
-        const techQual = company.technicalQualification || '';
-
         let issuerBlock = '';
-        if (isTechnical && techQual) {
-            issuerBlock = `EMITENTE: O PROFISSIONAL TÉCNICO abaixo qualificado, prestando declaração com anuência e responsabilidade técnica.
 
-DADOS DO PROFISSIONAL TÉCNICO (usar no corpo como declarante):
-${techQual}
+        if (isTechnical) {
+            const techQual = company.technicalQualification || '';
+            issuerBlock = `EMITENTE: PROFISSIONAL TÉCNICO (Responsável Técnico)
+
+DADOS DO PROFISSIONAL TÉCNICO:
+${techQual || 'Dados cadastrados na qualificação técnica da empresa.'}
 
 DADOS DA EMPRESA VINCULADA:
 ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}
 
-INSTRUÇÃO ESPECIAL: O texto deve ser escrito na PRIMEIRA PESSOA do profissional técnico. Exemplo: "[Nome], [qualificação CREA/CAU], responsável técnico junto à empresa [Razão Social], DECLARA..."`;
+INSTRUÇÃO ESPECIAL (RT): A declaração DEVE ser redigida na PRIMEIRA PESSOA do profissional técnico. Ele é o declarante principal.
+Exemplo: "Eu, [Nome], [Nacionalidade], [Estado Civil], [Engenheiro Civil], inscrito no CREA sob nº [Nº], CPF nº [CPF], Responsável Técnico pela empresa [Razão Social], DECLARO..."`;
         } else {
-            issuerBlock = `EMITENTE: A EMPRESA, por seu representante legal.
+            issuerBlock = `EMITENTE: A EMPRESA (por seu representante legal)
 
 DADOS DA EMPRESA:
 ${company.razaoSocial} | CNPJ: ${company.cnpj}
@@ -456,13 +457,13 @@ INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
 
 ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}` : ''}
 
-REGRAS DE FORMATAÇÃO:
-- Retorne APENAS um objeto JSON no formato: { "title": "Título Resumido", "text": "Corpo da declaração..." }
-- NÃO inclua markdown (\`\`\`json), apenas o objeto puro.
-- O campo "text" deve começar diretamente com a qualificação unificada: "${isTechnical ? 'O profissional...' : 'A empresa...'}, representada por seu representante legal infra-assinado, DECLARA..."
-- Finalize o "text" com o fecho: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
-- NÃO inclua cabeçalhos, destinatários, datas ou assinaturas no corpo.
-- Texto limpo, sem markdown ou caracteres especiais.`;
+6. REGRAS CRÍTICAS DE SAÍDA (FORMATO JSON):
+- Sua resposta DEVE conter APENAS o objeto JSON puro.
+- NUNCA use blocos de código markdown (como \`\`\`json ou \`\`\`).
+- FORMATO OBRIGATÓRIO: { "title": "...", "text": "..." }
+- O campo "text" deve começar DIRETAMENTE com a qualificação unificada: "${isTechnical ? '[Nome], [nacionalidade], [CREA/CAU], etc, DECLARA...' : 'A empresa [Razão Social], CNPJ [CNPJ], DECLARA...'}"
+- Finalize o corpo com o fecho padrão.
+- Texto LIMPO, sem negritos (**), sem aspas extras, sem quebras de linha desnecessárias dentro do JSON.`;
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
