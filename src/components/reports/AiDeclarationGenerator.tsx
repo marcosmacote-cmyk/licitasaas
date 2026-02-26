@@ -88,7 +88,15 @@ function extractDeclarationTypes(rawReq: any): string[] {
             const text = typeof d === 'string' ? d : (d.description || '');
             if (!text) return;
             const lower = text.toLowerCase();
-            if (lower.includes('declaraç') || lower.includes('declarac') || lower.includes('declare')) {
+            if (
+                lower.includes('declaraç') ||
+                lower.includes('declarac') ||
+                lower.includes('declare') ||
+                lower.includes('indicação do pessoal técnico') ||
+                lower.includes('indicacao do pessoal tecnico') ||
+                lower.includes('equipe técnica') ||
+                lower.includes('equipe tecnica')
+            ) {
                 declarations.push(text);
             }
         });
