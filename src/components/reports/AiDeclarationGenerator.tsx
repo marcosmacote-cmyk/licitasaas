@@ -190,9 +190,9 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
         const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
 
-        // Tentar extrair o Local (Cidade/UF) - Regex mais flexível
+        // Tentar extrair o Local (Cidade/UF) - Regex mais abrangente
         let city = '';
-        const cityMatch = c.qualification?.match(/(?:no\s+município\s+de|na\s+cidade\s+de|em|domiciliada\s+em|residente\s+em)\s+([^,.]+)/i);
+        const cityMatch = c.qualification?.match(/(?:no\s+município\s+de|na\s+cidade\s+de|em|domiciliada\s+em|residente\s+em|sediada\s+em)\s+([^,.]+)/i);
         if (cityMatch && cityMatch[1]) {
             city = cityMatch[1].trim();
         } else {
@@ -200,11 +200,12 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             if (cityFallback) city = cityFallback[1].trim();
         }
 
-        // Tentar extrair o CPF - Regex mais flexível para capturar apenas o número
+        // Tentar extrair o CPF - Regex agressivo
         let cpf = '';
         const cpfRawMatch = c.qualification?.match(/(?:CPF|CPF\s*\(MF\))\s*(?:sob\s*o\s*nº|nº)?[:\s]*([\d\.\-]+)/i);
-        if (cpfRawMatch) {
-            cpf = `CPF nº: ${cpfRawMatch[1].trim()}`;
+        if (cpfRawMatch && cpfRawMatch[1]) {
+            cpf = cpfRawMatch[1].trim();
+            if (!cpf.startsWith('CPF')) cpf = `CPF nº: ${cpf}`;
         }
 
         // Tentar extrair nome completo
