@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
-import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2 } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile } from '../../types';
@@ -11,6 +11,8 @@ interface Props {
 }
 
 interface LayoutConfig {
+    id: string;
+    name: string;
     headerImage: string | null;
     footerImage: string | null;
     headerImageWidth: number;
@@ -30,7 +32,7 @@ interface LayoutConfig {
     addresseeOrg: string;
 }
 
-const DEFAULT_LAYOUT: LayoutConfig = {
+const DEFAULT_LAYOUT: Omit<LayoutConfig, 'id' | 'name'> = {
     headerImage: null,
     footerImage: null,
     headerImageWidth: 40,
@@ -50,18 +52,25 @@ const DEFAULT_LAYOUT: LayoutConfig = {
     addresseeOrg: '',
 };
 
-const STORAGE_KEY = 'declaration_layout_config';
+const STORAGE_KEY = 'declaration_layouts';
 
-function loadLayoutConfig(): LayoutConfig {
+function loadLayouts(): LayoutConfig[] {
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return { ...DEFAULT_LAYOUT, ...JSON.parse(saved) };
+        if (saved) return JSON.parse(saved);
+
+        // Migrate old single config
+        const old = localStorage.getItem('declaration_layout_config');
+        if (old) {
+            const oldParsed = JSON.parse(old);
+            return [{ ...DEFAULT_LAYOUT, ...oldParsed, id: 'default', name: 'Layout Principal' }];
+        }
     } catch { /* ignore */ }
-    return { ...DEFAULT_LAYOUT };
+    return [{ ...DEFAULT_LAYOUT, id: 'default', name: 'Layout Principal' } as LayoutConfig];
 }
 
-function saveLayoutConfig(config: LayoutConfig) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch { /* ignore */ }
+function saveLayouts(layouts: LayoutConfig[]) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts)); } catch { /* ignore */ }
 }
 
 function extractDeclarationTypes(rawReq: any): string[] {
@@ -94,11 +103,34 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
     const [generatedText, setGeneratedText] = useState('');
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [layoutSaved, setLayoutSaved] = useState(false);
-    const [layout, setLayout] = useState<LayoutConfig>(loadLayoutConfig);
+    const [layouts, setLayouts] = useState<LayoutConfig[]>(loadLayouts);
+    const [currentLayoutId, setCurrentLayoutId] = useState<string>(layouts[0]?.id || 'default');
+    const [layoutName, setLayoutName] = useState(layouts.find(l => l.id === currentLayoutId)?.name || 'Layout Principal');
+
+    const layout = useMemo(() =>
+        layouts.find(l => l.id === currentLayoutId) || layouts[0] || { ...DEFAULT_LAYOUT, id: 'default', name: 'Layout Principal' }
+        , [layouts, currentLayoutId]);
 
     const updateLayout = useCallback((patch: Partial<LayoutConfig>) => {
-        setLayout(prev => ({ ...prev, ...patch }));
-    }, []);
+        setLayouts(prev => prev.map(l => l.id === currentLayoutId ? { ...l, ...patch } : l));
+    }, [currentLayoutId]);
+
+    const handleCreateLayout = () => {
+        const newId = `layout_${Date.now()}`;
+        const newLayout: LayoutConfig = { ...DEFAULT_LAYOUT, id: newId, name: 'Novo Layout' };
+        setLayouts(prev => [...prev, newLayout]);
+        setCurrentLayoutId(newId);
+        setLayoutName('Novo Layout');
+    };
+
+    const handleDeleteLayout = () => {
+        if (layouts.length <= 1) return;
+        if (!confirm('Excluir este layout?')) return;
+        const remaining = layouts.filter(l => l.id !== currentLayoutId);
+        setLayouts(remaining);
+        setCurrentLayoutId(remaining[0].id);
+        setLayoutName(remaining[0].name);
+    };
 
     const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis || b.summary), [biddings]);
 
@@ -112,11 +144,10 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
     const handleBiddingChange = (biddingId: string) => {
         setSelectedBiddingId(biddingId);
         setDeclarationType('');
-        // Auto-populate addressee from bidding data
         const b = biddings.find(x => x.id === biddingId);
         if (b) {
             updateLayout({
-                addresseeOrg: `${b.portal || ''}\n${b.modality || ''}`
+                addresseeOrg: `${b.portal || ''}\n${b.modality || ''} nº ${b.title || ''}`
             });
         }
     };
@@ -128,22 +159,38 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         }
     }, [declarationTypesFromEdital]);
 
-    // Auto-populate company data on selection
-    const handleCompanyChange = (companyId: string) => {
-        setSelectedCompanyId(companyId);
-        const c = companies.find(x => x.id === companyId);
-        if (c) {
+    // Auto-populate company data on selection & issuer type change
+    useEffect(() => {
+        if (!selectedCompanyId) return;
+        const c = companies.find(x => x.id === selectedCompanyId);
+        if (!c) return;
+
+        if (issuerType === 'technical' && c.technicalQualification) {
+            const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
+            const techName = techLines[0]?.split(',')[0]?.trim() || '';
+            updateLayout({
+                signatoryName: techName,
+                signatoryRole: 'Responsável Técnico',
+                footerText: c.technicalQualification
+            });
+        } else {
             updateLayout({
                 headerText: `${c.razaoSocial}\nCNPJ: ${c.cnpj}`,
                 signatoryCompany: c.razaoSocial,
                 signatoryCnpj: `CNPJ: ${c.cnpj}`,
                 signatoryName: c.contactName || '',
+                signatoryRole: 'Representante Legal',
+                footerText: c.qualification || ''
             });
         }
+    }, [issuerType, selectedCompanyId, companies, updateLayout]);
+
+    const handleCompanyChange = (companyId: string) => {
+        setSelectedCompanyId(companyId);
     };
 
     const handleSaveLayout = () => {
-        saveLayoutConfig(layout);
+        saveLayouts(layouts);
         setLayoutSaved(true);
         setTimeout(() => setLayoutSaved(false), 2000);
     };
@@ -361,6 +408,17 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         }
 
         // ── SIGNATURE ──
+        // Stay at the bottom of the page if it fits
+        const sigBlockHeight = 45;
+        const targetSigY = contentMaxY - sigBlockHeight;
+
+        if (y > targetSigY) {
+            y = newPage();
+            y = contentMaxY - sigBlockHeight;
+        } else {
+            y = targetSigY; // Pin to bottom of current page
+        }
+
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.text('__________________________________________', pw / 2, y, { align: 'center' });
@@ -473,10 +531,37 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Settings2 size={14} /> Layout & Assinatura
                         </h4>
-                        <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 10px', gap: '4px' }} onClick={handleSaveLayout}>
-                            {layoutSaved ? <CheckCircle2 size={12} color="#10b981" /> : <Save size={12} />}
-                            {layoutSaved ? 'Salvo!' : 'Salvar'}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: '4px' }} onClick={handleSaveLayout}>
+                                {layoutSaved ? <CheckCircle2 size={12} color="#10b981" /> : <Save size={12} />}
+                                {layoutSaved ? 'Salvo!' : 'Salvar'}
+                            </button>
+                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: '4px' }} onClick={handleCreateLayout}>
+                                <Plus size={12} /> Novo
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Layout Selector */}
+                    <div style={{ marginBottom: '16px', display: 'flex', gap: '6px' }}>
+                        <select style={{ ...inputStyle, flex: 1, fontSize: '0.8rem' }} value={currentLayoutId} onChange={(e) => {
+                            const found = layouts.find(l => l.id === e.target.value);
+                            setCurrentLayoutId(e.target.value);
+                            if (found) setLayoutName(found.name);
+                        }}>
+                            {layouts.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                        <button className="icon-btn" style={{ color: 'var(--color-danger)', opacity: layouts.length > 1 ? 1 : 0.3 }} onClick={handleDeleteLayout} disabled={layouts.length <= 1}>
+                            <Trash2 size={14} />
                         </button>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={smallLabel}>Nome do Layout</label>
+                        <input style={smallInput} value={layoutName} onChange={(e) => {
+                            setLayoutName(e.target.value);
+                            updateLayout({ name: e.target.value });
+                        }} placeholder="Ex: Layout Empresa A" />
                     </div>
 
                     {/* Addressee */}

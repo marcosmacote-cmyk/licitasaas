@@ -434,7 +434,8 @@ ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}`;
         }
 
-        const prompt = `Você é um advogado especialista em licitações. Redija o corpo de uma declaração formal.
+        const prompt = `Você é um advogado especialista em licitações e profundo conhecedor da Lei Federal nº 14.133/2021. 
+Redija o corpo de uma declaração formal, com redação concisa, juridicamente correta e estritamente de acordo com a nova Lei de Licitações (14.133/2021).
 
 TIPO: "${declarationType}"
 
@@ -452,16 +453,16 @@ ${customPrompt ? `INSTRUÇÃO DO USUÁRIO: ${customPrompt}` : ''}
 
 FORMATO OBRIGATÓRIO:
 
-1) UM ÚNICO parágrafo de identificação ${isTechnical ? 'do profissional técnico com sua qualificação completa (CREA/CAU, CPF, etc.) e vínculo com a empresa' : 'da empresa com qualificação COMPLETA do representante legal'}, terminando com ", DECLARAR, para os devidos fins e sob as penas da lei, que:"
+1) Parágrafo único de identificação e qualificação COMPLETA: ${isTechnical ? 'do profissional técnico (CREA/CAU, CPF, etc.) e vínculo com a empresa' : 'da empresa e de seu representante legal'}, finalizando com o termo: ", DECLARA, sob as penas da lei e para os fins previstos na Lei 14.133/2021, que:"
 
-2) Lista numerada (1., 2., 3., etc.) com os itens declarados — concisos e diretos.
+2) Texto da declaração em formato de texto corrido ou tópicos objetivos, focando na objetividade e validade jurídica. Evite formalismos desnecessários, priorizando a clareza exigida pela Nova Lei de Licitações.
 
-3) Encerre com: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
+3) Encerramento padrão: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
 
 REGRAS:
 - NÃO inclua título, cabeçalho, destinatário, local/data ou assinatura.
-- Use de 2 a 5 itens numerados.
-- Texto limpo, sem markdown, sem negrito (**).`;
+- Redação moderna, limpa e técnica.
+- Texto sem markdown, sem negritos (**), sem caracteres especiais de formatação.`;
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
