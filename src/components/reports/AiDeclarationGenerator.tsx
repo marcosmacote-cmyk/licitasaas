@@ -57,12 +57,16 @@ const STORAGE_KEY = 'declaration_layouts';
 function loadLayouts(): LayoutConfig[] {
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
 
         // Migrate old single config
         const old = localStorage.getItem('declaration_layout_config');
         if (old) {
             const oldParsed = JSON.parse(old);
+            localStorage.removeItem('declaration_layout_config');
             return [{ ...DEFAULT_LAYOUT, ...oldParsed, id: 'default', name: 'Layout Principal' }];
         }
     } catch { /* ignore */ }
@@ -114,6 +118,11 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
     const updateLayout = useCallback((patch: Partial<LayoutConfig>) => {
         setLayouts(prev => prev.map(l => l.id === currentLayoutId ? { ...l, ...patch } : l));
     }, [currentLayoutId]);
+
+    // Auto-save layouts
+    useEffect(() => {
+        saveLayouts(layouts);
+    }, [layouts]);
 
     // Ensure date is always today on mount
     useEffect(() => {
@@ -189,31 +198,37 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         if (!c) return;
 
         const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
+        const qual = (c.qualification || '').trim();
 
-        // Tentar extrair o Local (Cidade/UF) - Regex mais abrangente
+        // 1. Extração robusta do Local (Cidade/UF)
         let city = '';
-        const cityMatch = c.qualification?.match(/(?:no\s+município\s+de|na\s+cidade\s+de|em|domiciliada\s+em|residente\s+em|sediada\s+em)\s+([^,.]+)/i);
-        if (cityMatch && cityMatch[1]) {
-            city = cityMatch[1].trim();
+        // Padrão comum: ", Cidade/UF," ou ", Cidade - UF,"
+        const cityMatch = qual.match(/,\s*([^,.(0-9\-]{3,30})\s*[/|-]\s*([A-Z]{2})(?=\s*,|\s+CEP|\s+inscrita|\s*neste|$)/i);
+        if (cityMatch) {
+            city = `${cityMatch[1].trim()}/${cityMatch[2].trim()}`;
         } else {
-            const cityFallback = addr.match(/,\s*([^,]+-[A-Z]{2}|[^,]+\/[A-Z]{2})\s*$/);
+            // Fallback Cidade/UF no fim do addr
+            const cityFallback = addr.match(/,\s*([^,.(0-9\-]{3,25}(?:\/|-)[A-Z]{2})\s*$/);
             if (cityFallback) city = cityFallback[1].trim();
+            else {
+                const munMatch = qual.match(/(?:município\s+de|cidade\s+de)\s+([^,.(0-9]{3,30})/i);
+                if (munMatch) city = munMatch[1].trim();
+            }
         }
 
-        // Tentar extrair o CPF - Regex agressivo
+        // 2. Extração robusta do CPF
         let cpf = '';
-        const cpfRawMatch = c.qualification?.match(/(?:CPF|CPF\s*\(MF\))\s*(?:sob\s*o\s*nº|nº)?[:\s]*([\d\.\-]+)/i);
-        if (cpfRawMatch && cpfRawMatch[1]) {
-            cpf = cpfRawMatch[1].trim();
-            if (!cpf.startsWith('CPF')) cpf = `CPF nº: ${cpf}`;
+        const cpfMatch = qual.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+        if (cpfMatch) {
+            cpf = `CPF nº: ${cpfMatch[0]}`;
         }
 
-        // Tentar extrair nome completo
+        // 3. Nome completo
         let fullName = c.contactName || '';
-        const nameMatch = c.qualification?.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,]+)/i);
+        const nameMatch = qual.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,.(0-9]{3,60})(?=\s*,\s*|,\s*brasileir|,\s*solteir|$)/i);
         if (nameMatch && nameMatch[1]) {
             const detectedName = nameMatch[1].trim();
-            if (detectedName.split(' ').length > fullName.split(' ').length) {
+            if (detectedName.split(' ').length > (fullName.split(' ').length || 0)) {
                 fullName = detectedName;
             }
         }
@@ -221,11 +236,15 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         if (issuerType === 'technical' && c.technicalQualification) {
             const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
             const techName = techLines[0]?.split(',')[0]?.trim() || fullName;
+            // CPF e Local do Técnico
+            const techCpfMatch = c.technicalQualification.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+            const techCityMatch = c.technicalQualification.match(/(?:município\s+de|cidade\s+de|em)\s+([^,.]+)/i);
+
             updateLayout({
                 signatoryName: techName,
                 signatoryRole: 'Responsável Técnico',
-                signatoryCpf: cpf,
-                signatureCity: city,
+                signatoryCpf: techCpfMatch ? `CPF nº: ${techCpfMatch[0]}` : '',
+                signatureCity: techCityMatch ? techCityMatch[1].trim() : city,
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
         } else {
