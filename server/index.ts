@@ -455,7 +455,7 @@ INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
 3. TÍTULO: Gere um título técnico e resumido. NUNCA inclua citações de artigos de lei, incisos ou parágrafos no TÍTULO (Ex: NÃO use "Art. 63" ou "Lei 14.133" no título). O título deve ser puramente descritivo (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO DE TRABALHO INFANTIL").
 4. NOMES COMPLETOS: No corpo do texto, NUNCA abrevie nomes de pessoas ou da empresa. Transcreva exatamente como fornecido na qualificação.
 
-5. DECLARAÇÃO DE EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", redija uma declaração formal confirmando a disponibilidade de profissionais qualificados para o objeto, mencionando que a equipe técnica possui a qualificação necessária conforme exigido no edital.
+5. DECLARAÇÃO DE EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", a declaração DEVE citar nominalmente o Responsável Técnico fornecido nos dados (se houver). Além disso, deve incluir um espaço ou parágrafo padronizado (Ex: [INDICAR DEMAIS MEMBROS DA EQUIPE SE HOUVER]) para que o usuário possa complementar com outros profissionais no editor de texto. A declaração deve assegurar que todos possuem a qualificação técnica exigida.
 
 ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}` : ''}
 
