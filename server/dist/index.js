@@ -397,34 +397,35 @@ DADOS DA EMPRESA:
 ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}`;
         }
-        const prompt = `Você é um advogado especialista em licitações e profundo conhecedor da Lei Federal nº 14.133/2021. 
-Redija o corpo de uma declaração formal e um título conciso, com redação estritamente de acordo com a nova Lei de Licitações (14.133/2021).
+        const prompt = `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas, com enfoque na Lei nº 14.133/2021.
+Sua tarefa é redigir uma declaração com RIGOR JURÍDICO MÁXIMO e absoluta fidelidade aos requisitos do edital.
 
-TIPO ORIGINAL (PODE SER LONGO): "${declarationType}"
+TIPO ORIGINAL: "${declarationType}"
 
 ${issuerBlock}
 
 LICITAÇÃO:
 Objeto: ${bidding.title}
-Fase: ${bidding.modality || ''}
+Modalidade/Nº: ${bidding.modality || ''}
 
-ANÁLISE DO EDITAL E ANEXOS (Use como base prioritária para o modelo de texto):
-${(bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3000)}
+RESUMO ESTRUTURADO DO EDITAL (Base compulsória):
+${(bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
 
-INSTRUÇÃO CRÍTICA: 
-1. TÍTULO: Se o "TIPO ORIGINAL" for muito longo (mais de 10 palavras), RESUMA-O em um título curto e formal (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO TÉCNICA").
-2. PRIORIZE o conteúdo e a estrutura dos modelos de declarações encontrados no resumo do Edital acima. A declaração gerada DEVE ser fiel ao modelo exigido pelo órgão licitante, adaptando apenas o necessário para conformidade com a Lei 14.133/2021 se o edital for omisso.
-3. Seja OBJETIVO.
+INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
+1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário para conferir validade perante a Lei 14.133/2021.
+2. PRECISÃO TÉCNICA: Utilize terminologia jurídica moderna da nova Lei de Licitações. Evite termos arcaicos, mas mantenha a sobriedade e a autoridade de um documento oficial.
+3. TÍTULO: Gere um título técnico e resumido (ex: "DECLARAÇÃO DE CUMPRIMENTO AO ART. 63 DA LEI 14.133/21").
+4. NOMES COMPLETOS: No corpo do texto, NUNCA abrevie nomes de pessoas ou da empresa. Transcreva exatamente como fornecido na qualificação.
 
-${customPrompt ? `INSTRUÇÃO ADICIONAL DO USUÁRIO: ${customPrompt}` : ''}
+${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}` : ''}
 
 REGRAS DE FORMATAÇÃO:
-- Retorne APENAS um objeto JSON no formato: { "title": "Título Curto", "text": "Corpo da declaração..." }
+- Retorne APENAS um objeto JSON no formato: { "title": "Título Resumido", "text": "Corpo da declaração..." }
 - NÃO inclua markdown (\`\`\`json), apenas o objeto puro.
-- No "text", use parágrafo único de identificação e qualificação COMPLETA: ${isTechnical ? 'do profissional técnico (CREA/CAU, CPF, etc.) e vínculo com a empresa' : 'da empresa e de seu representante legal'}, finalizando com o termo: ", DECLARA, sob as penas da lei e para os fins previstos na Lei 14.133/2021, que:"
-- Finalize o "text" com o encerramento padrão: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
-- NÃO inclua cabeçalho, destinatário, local/data ou assinatura no campo "text".
-- Sem markdown, sem negritos (**), sem caracteres especiais.`;
+- O campo "text" deve começar diretamente com a qualificação unificada: "${isTechnical ? 'O profissional...' : 'A empresa...'}, representada por seu representante legal infra-assinado, DECLARA..."
+- Finalize o "text" com o fecho: "Por ser expressão da verdade, firma-se a presente declaração para que produza seus efeitos legais."
+- NÃO inclua cabeçalhos, destinatários, datas ou assinaturas no corpo.
+- Texto limpo, sem markdown ou caracteres especiais.`;
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
         }

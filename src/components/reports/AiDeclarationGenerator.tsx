@@ -175,9 +175,19 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
         const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
 
+        // Tentar extrair nome completo do texto de qualificação (ex: representada por [Nome], [Nacionalidade])
+        let fullName = c.contactName || '';
+        const nameMatch = c.qualification?.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,]+)/i);
+        if (nameMatch && nameMatch[1]) {
+            const detectedName = nameMatch[1].trim();
+            if (detectedName.split(' ').length > fullName.split(' ').length) {
+                fullName = detectedName;
+            }
+        }
+
         if (issuerType === 'technical' && c.technicalQualification) {
             const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
-            const techName = techLines[0]?.split(',')[0]?.trim() || '';
+            const techName = techLines[0]?.split(',')[0]?.trim() || fullName;
             updateLayout({
                 signatoryName: techName,
                 signatoryRole: 'Responsável Técnico',
@@ -188,7 +198,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                 headerText: `${c.razaoSocial}\nCNPJ: ${c.cnpj}`,
                 signatoryCompany: c.razaoSocial,
                 signatoryCnpj: `CNPJ: ${c.cnpj}`,
-                signatoryName: c.contactName || '',
+                signatoryName: fullName,
                 signatoryRole: 'Representante Legal',
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
