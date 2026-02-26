@@ -432,7 +432,10 @@ Exemplo: "Eu, [Nome], [Nacionalidade], [Estado Civil], [Engenheiro Civil], inscr
 
 DADOS DA EMPRESA:
 ${company.razaoSocial} | CNPJ: ${company.cnpj}
-${company.qualification || ''}`;
+${company.qualification || ''}
+
+DADOS DO RESPONSÁVEL TÉCNICO VINCULADO:
+${company.technicalQualification || 'Nenhum profissional técnico cadastrado no sistema.'}`;
         }
 
         const prompt = `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas, com enfoque na Lei nº 14.133/2021.
@@ -455,7 +458,7 @@ INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
 3. TÍTULO: Gere um título técnico e resumido. NUNCA inclua citações de artigos de lei, incisos ou parágrafos no TÍTULO (Ex: NÃO use "Art. 63" ou "Lei 14.133" no título). O título deve ser puramente descritivo (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO DE TRABALHO INFANTIL").
 4. NOMES COMPLETOS: No corpo do texto, NUNCA abrevie nomes de pessoas ou da empresa. Transcreva exatamente como fornecido na qualificação.
 
-5. DECLARAÇÃO DE EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", a declaração DEVE citar nominalmente o Responsável Técnico fornecido nos dados (se houver). Além disso, deve incluir um espaço ou parágrafo padronizado (Ex: [INDICAR DEMAIS MEMBROS DA EQUIPE SE HOUVER]) para que o usuário possa complementar com outros profissionais no editor de texto. A declaração deve assegurar que todos possuem a qualificação técnica exigida.
+5. DECLARAÇÃO DE EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", a declaração DEVE citar nominalmente os dados do "RESPONSÁVEL TÉCNICO VINCULADO" fornecidos acima. NÃO utilize placeholders (Ex: [NOME]) se os dados estiverem disponíveis no contexto. Utilize espaços extras apenas para membros ADICIONAIS além do RT principal.
 
 ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}` : ''}
 
