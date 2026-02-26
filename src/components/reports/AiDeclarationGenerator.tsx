@@ -134,11 +134,17 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
     const handleDeleteLayout = () => {
         if (layouts.length <= 1) return;
-        if (!confirm('Excluir este layout?')) return;
+        if (!confirm('Excluir este layout permanentemente?')) return;
         const remaining = layouts.filter(l => l.id !== currentLayoutId);
         setLayouts(remaining);
+        saveLayouts(remaining); // Sync to storage
         setCurrentLayoutId(remaining[0].id);
         setLayoutName(remaining[0].name);
+    };
+
+    const handleResetLayout = () => {
+        if (!confirm('Limpar todos os campos deste layout?')) return;
+        updateLayout({ ...DEFAULT_LAYOUT, name: layoutName });
     };
 
     const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis || b.summary), [biddings]);
@@ -184,9 +190,9 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
         const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
 
-        // Tentar extrair o Local (Cidade/UF) da qualificação
+        // Tentar extrair o Local (Cidade/UF) - Regex mais flexível
         let city = '';
-        const cityMatch = c.qualification?.match(/(?:no\s+município\s+de|na\s+cidade\s+de|em)\s+([^,.]+)/i);
+        const cityMatch = c.qualification?.match(/(?:no\s+município\s+de|na\s+cidade\s+de|em|domiciliada\s+em|residente\s+em)\s+([^,.]+)/i);
         if (cityMatch && cityMatch[1]) {
             city = cityMatch[1].trim();
         } else {
@@ -194,13 +200,14 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             if (cityFallback) city = cityFallback[1].trim();
         }
 
-        // Tentar extrair o CPF
+        // Tentar extrair o CPF - Regex mais flexível para capturar apenas o número
         let cpf = '';
-        const cpfMatch = c.qualification?.match(/CPF\s*(?:\(MF\))?\s*sob\s*o\s*nº\s*([\d\.\-]+)/i) ||
-            c.qualification?.match(/CPF\s*nº[:\s]*([\d\.\-]+)/i);
-        if (cpfMatch) cpf = `CPF nº: ${cpfMatch[1].trim()}`;
+        const cpfRawMatch = c.qualification?.match(/(?:CPF|CPF\s*\(MF\))\s*(?:sob\s*o\s*nº|nº)?[:\s]*([\d\.\-]+)/i);
+        if (cpfRawMatch) {
+            cpf = `CPF nº: ${cpfRawMatch[1].trim()}`;
+        }
 
-        // Tentar extrair nome completo do texto de qualificação
+        // Tentar extrair nome completo
         let fullName = c.contactName || '';
         const nameMatch = c.qualification?.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,]+)/i);
         if (nameMatch && nameMatch[1]) {
@@ -581,6 +588,9 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                             </button>
                             <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: '4px' }} onClick={handleCreateLayout}>
                                 <Plus size={12} /> Novo
+                            </button>
+                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: '4px', color: 'var(--color-danger)' }} onClick={handleResetLayout}>
+                                <X size={12} /> Limpar
                             </button>
                         </div>
                     </div>
