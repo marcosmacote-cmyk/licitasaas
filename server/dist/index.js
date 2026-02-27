@@ -1081,8 +1081,15 @@ if (process.env.NODE_ENV === 'production') {
             const publicDir = path_1.default.join(SERVER_ROOT, 'public');
             res.sendFile(path_1.default.join(publicDir, 'index.html'));
         }
+        else if (req.path.startsWith('/uploads')) {
+            res.status(404).json({
+                error: 'Arquivo não encontrado',
+                message: 'O documento solicitado não existe fisicamente no servidor. Como o sistema está no Railway sem volumes persistentes, arquivos são apagados a cada nova atualização/redeploy.',
+                path: req.path
+            });
+        }
         else {
-            res.status(404).json({ error: 'Ruta não encontrada' });
+            res.status(404).json({ error: 'Rota não encontrada', path: req.path });
         }
     });
 }
@@ -1120,7 +1127,8 @@ async function runAutoSetup() {
     }
 }
 app.listen(PORT, async () => {
-    console.log(`Server is running on port ${PORT} (production)`);
+    console.log(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
+    console.log(`Upload directory: ${uploadDir}`);
     await runAutoSetup();
 });
 // Keep event loop alive (required in this environment)
