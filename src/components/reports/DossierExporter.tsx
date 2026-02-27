@@ -153,31 +153,55 @@ export function DossierExporter({ biddings, companies }: Props) {
         try {
             setIsExporting(true);
             const zip = new JSZip();
-            const folderName = `Dossie_${selectedBidding?.title?.substring(0, 30).replace(/[^a-z0-9]/gi, '_')} `;
-            const folder = zip.folder(folderName);
 
-            if (!folder) throw new Error("Could not create ZIP folder");
+            // Refined folder name without trailing spaces or problematic chars
+            const safeBiddingTitle = (selectedBidding?.title || 'Dossie').substring(0, 30).replace(/[^a-z0-9]/gi, '_');
+            const folderName = `Dossie_${safeBiddingTitle}`;
+
+            let filesAdded = 0;
 
             for (const doc of finalExportDocs) {
                 try {
-                    // Fetch the file as a blob
-                    const response = await fetch(`${API_BASE_URL}${doc.url}`);
-                    if (!response.ok) throw new Error(`HTTP error fetching ${doc.url} `);
-                    const blob = await response.blob();
+                    // Ensure URL is correctly formatted
+                    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+                    const docUrl = doc.url.startsWith('/') ? doc.url : `/${doc.url}`;
+                    const fullUrl = `${baseUrl}${docUrl}`;
 
-                    // Add it to the zip file
-                    folder.file(doc.fileName, blob);
+                    console.log(`Fetching file: ${fullUrl}`);
+
+                    const response = await fetch(fullUrl);
+                    if (!response.ok) {
+                        console.warn(`Failed to fetch ${fullUrl}: ${response.statusText}`);
+                        continue;
+                    }
+
+                    const blob = await response.blob();
+                    if (blob.size === 0) {
+                        console.warn(`File is empty: ${doc.fileName}`);
+                        continue;
+                    }
+
+                    // Use a safe file name
+                    const safeFileName = doc.fileName.replace(/[^a-z0-9.-]/gi, '_');
+
+                    // Add directly to root or a folder
+                    zip.file(`${folderName}/${safeFileName}`, blob);
+                    filesAdded++;
                 } catch (err) {
-                    console.error(`Failed to fetch inside zip logic for ${doc.fileName}`, err);
+                    console.error(`Error adding file ${doc.fileName} to ZIP:`, err);
                 }
+            }
+
+            if (filesAdded === 0) {
+                throw new Error("Nenhum arquivo pôde ser baixado com sucesso.");
             }
 
             const content = await zip.generateAsync({ type: 'blob' });
             saveAs(content, `${folderName}.zip`);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Export error", error);
-            alert("Erro ao exportar o pacote ZIP. Verifique se os arquivos estão acessíveis.");
+            alert(`Erro ao exportar o pacote ZIP: ${error.message || 'Erro desconhecido'}`);
         } finally {
             setIsExporting(false);
         }
