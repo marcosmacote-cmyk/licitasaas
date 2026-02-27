@@ -223,6 +223,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
         formData.append('issuerLink', docData.issuerLink || '');
         formData.append('expirationDate', docData.expirationDate || '');
         formData.append('status', docData.status || 'Válido');
+        formData.append('alertDays', String(docData.alertDays || 15));
 
         if (editingDocument && editingDocument.id) {
             try {
@@ -376,6 +377,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             const expDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
             formData.append('expirationDate', expDate);
             formData.append('status', 'Válido');
+            formData.append('alertDays', '15');
 
             const res = await fetch(`${API_BASE_URL}/api/documents`, {
                 method: 'POST',
