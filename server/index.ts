@@ -188,10 +188,12 @@ app.post('/api/tenants', async (req, res) => {
 // Companies
 app.get('/api/companies', authenticateToken, async (req: any, res) => {
     try {
+        console.log(`[API] Fetching companies for tenant: ${req.user.tenantId}`);
         const companies = await prisma.companyProfile.findMany({
             where: { tenantId: req.user.tenantId },
             include: { documents: true, credentials: true }
         });
+        console.log(`[API] Found ${companies.length} companies.`);
         res.json(companies);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch companies' });
