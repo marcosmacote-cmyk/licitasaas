@@ -30,7 +30,17 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
         allDocs.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
         setDocuments(allDocs);
     }, [companies]);
-    const [selectedCompanyId, setSelectedCompanyId] = useState<string>('1');
+    const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+
+    // Auto-select first company if none selected or selection invalid
+    useEffect(() => {
+        if (companies.length > 0) {
+            const currentValid = companies.some(c => c.id === selectedCompanyId);
+            if (!selectedCompanyId || !currentValid) {
+                setSelectedCompanyId(companies[0].id);
+            }
+        }
+    }, [companies, selectedCompanyId]);
     const [searchTerm, setSearchTerm] = useState('');
 
     // Modal State
@@ -448,6 +458,11 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                             </div>
                         </div>
                     ))}
+                    {companies.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '32px 16px', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--color-border)' }}>
+                            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', margin: 0 }}>Nenhuma empresa cadastrada ainda.</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -678,7 +693,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                         Selecione uma empresa na barra lateral.
                     </div>
                 )}
-            </div>
+            </div >
 
             {
                 isCompanyModalOpen && (
@@ -712,30 +727,32 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 )
             }
 
-            {isAlertConfigOpen && (
-                <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }}>
-                    <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '24px' }}>
-                        <h3 style={{ marginBottom: '16px' }}>Configurar Alertas de Vencimento</h3>
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px' }}>Prazos de Alerta Padrão (Dias):</label>
-                            <input
-                                type="number"
-                                className="input-inner"
-                                value={defaultAlertDays}
-                                onChange={(e) => setDefaultAlertDays(parseInt(e.target.value))}
-                                style={{ width: '100%', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '4px' }}
-                            />
-                            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '8px' }}>
-                                Define quantos dias antes do vencimento o status do documento mudará para "Vencendo".
-                            </p>
-                        </div>
-                        <div className="flex-gap" style={{ justifyContent: 'flex-end' }}>
-                            <button className="btn btn-ghost" onClick={() => setIsAlertConfigOpen(false)}>Cancelar</button>
-                            <button className="btn btn-primary" onClick={() => handleSaveAlertConfig(defaultAlertDays)}>Salvar Configuração</button>
+            {
+                isAlertConfigOpen && (
+                    <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }}>
+                        <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '24px' }}>
+                            <h3 style={{ marginBottom: '16px' }}>Configurar Alertas de Vencimento</h3>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px' }}>Prazos de Alerta Padrão (Dias):</label>
+                                <input
+                                    type="number"
+                                    className="input-inner"
+                                    value={defaultAlertDays}
+                                    onChange={(e) => setDefaultAlertDays(parseInt(e.target.value))}
+                                    style={{ width: '100%', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '4px' }}
+                                />
+                                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '8px' }}>
+                                    Define quantos dias antes do vencimento o status do documento mudará para "Vencendo".
+                                </p>
+                            </div>
+                            <div className="flex-gap" style={{ justifyContent: 'flex-end' }}>
+                                <button className="btn btn-ghost" onClick={() => setIsAlertConfigOpen(false)}>Cancelar</button>
+                                <button className="btn btn-primary" onClick={() => handleSaveAlertConfig(defaultAlertDays)}>Salvar Configuração</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div >
     );
 }
