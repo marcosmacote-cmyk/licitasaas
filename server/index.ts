@@ -78,6 +78,45 @@ const authenticateToken = (req: any, res: any, next: any) => {
     });
 };
 
+/**
+ * Helper to fetch file buffer from multiple sources:
+ * 1. Storage Service (Supabase/Local)
+ * 2. Local File System Fallback
+ * 3. Database Blob Fallback (if applicable)
+ */
+async function getFileBufferSafe(fileNameOrUrl: string, tenantId?: string): Promise<Buffer | null> {
+    try {
+        // Try Storage Service first
+        return await storageService.getFileBuffer(fileNameOrUrl);
+    } catch (err) {
+        console.warn(`[Storage] StorageService failed for ${fileNameOrUrl}, trying fallbacks...`);
+
+        // 1. Local disk fallback (legacy or local mode)
+        const pureName = path.basename(fileNameOrUrl).split('?')[0];
+        const localPath = path.join(uploadDir, pureName);
+        if (fs.existsSync(localPath)) {
+            return fs.readFileSync(localPath);
+        }
+
+        // 2. Database fallback (recovering from blob if exists)
+        if (tenantId) {
+            const doc = await prisma.document.findFirst({
+                where: {
+                    OR: [
+                        { fileUrl: { contains: pureName } },
+                        { fileName: pureName }
+                    ],
+                    tenantId
+                }
+            });
+            if (doc && doc.fileContent) {
+                return Buffer.from(doc.fileContent);
+            }
+        }
+    }
+    return null;
+}
+
 // Setup uploads directory for Mock Bucket
 const uploadDir = path.join(SERVER_ROOT, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -833,9 +872,8 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
         const pdfParts: any[] = [];
 
         // 1. Prepare files for Gemini (and verify tenant ownership)
-        for (let fileName of fileNames) {
-            // Decode in case it's stored/sent with URI encoding
-            fileName = decodeURIComponent(fileName).split('?')[0];
+        for (let fileNameSource of fileNames) {
+            const fileName = decodeURIComponent(fileNameSource).split('?')[0];
 
             // Security: Verify if file belongs to tenant
             const doc = await prisma.document.findFirst({
@@ -845,34 +883,35 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
                 }
             });
 
-            const belongsToTenant = doc || fileName.startsWith(`${req.user.tenantId}_`);
+            const belongsToTenant = doc || fileName.startsWith(`${req.user.tenantId}_`) || fileName.includes(`${req.user.tenantId}/`);
 
             if (!belongsToTenant) {
                 console.warn(`[AI] Unauthorized access attempt to file: ${fileName} by tenant: ${req.user.tenantId}`);
                 continue;
             }
 
-            const filePath = path.join(uploadDir, fileName);
-            if (!fs.existsSync(filePath)) {
-                console.error(`[AI] File not found on disk: ${filePath}`);
-                continue;
+            const fileToFetch = doc ? doc.fileUrl : fileName;
+            const pdfBuffer = await getFileBufferSafe(fileToFetch, req.user.tenantId);
+
+            if (pdfBuffer) {
+                console.log(`[AI] Read file ${fileName} (${pdfBuffer.length} bytes)`);
+                pdfParts.push({
+                    inlineData: {
+                        data: pdfBuffer.toString('base64'),
+                        mimeType: 'application/pdf'
+                    }
+                });
+            } else {
+                console.error(`[AI] Could not find file anywhere: ${fileName}`);
             }
-
-            const pdfBuffer = fs.readFileSync(filePath);
-            console.log(`[AI] Read file ${fileName} (${pdfBuffer.length} bytes)`);
-
-            // Add as native PDF part for Gemini
-            pdfParts.push({
-                inlineData: {
-                    data: pdfBuffer.toString('base64'),
-                    mimeType: 'application/pdf'
-                }
-            });
         }
 
         if (pdfParts.length === 0) {
-            console.warn(`[AI] No valid files found for analysis.`);
-            return res.status(400).json({ error: 'Nenhum arquivo válido encontrado para análise.' });
+            console.warn(`[AI] No valid files found for analysis among: ${fileNames.join(', ')}`);
+            return res.status(400).json({
+                error: 'Nenhum arquivo válido encontrado para análise no servidor.',
+                details: `Foram processados ${fileNames.length} arquivos, mas nenhum pôde ser resgatado do armazenamento. Verifique se o bucket do Supabase está correto.`
+            });
         }
 
         // 2. Setup Gemini AI
@@ -1144,24 +1183,20 @@ Riscos e Irregularidades: ${analysis.irregularitiesFlags || '[]'}
                 continue;
             }
 
-            const filePath = path.join(uploadDir, fileName);
-            const exists = fs.existsSync(filePath);
-            traceLog(`Checking disk at: "${filePath}" - EXISTS: ${exists}`);
+            const fileToFetch = doc ? doc.fileUrl : fileName;
+            const pdfBuffer = await getFileBufferSafe(fileToFetch, req.user.tenantId);
 
-            if (!exists) {
-                traceLog(`ERROR: Not found on disk.`);
-                continue;
+            if (pdfBuffer) {
+                traceLog(`LOADED: ${fileName} (${pdfBuffer.length} bytes)`);
+                pdfParts.push({
+                    inlineData: {
+                        data: pdfBuffer.toString('base64'),
+                        mimeType: 'application/pdf'
+                    }
+                });
+            } else {
+                traceLog(`ERROR: Could not find file anywhere: ${fileName}`);
             }
-
-            const pdfBuffer = fs.readFileSync(filePath);
-            traceLog(`LOADED: ${fileName} (${pdfBuffer.length} bytes)`);
-
-            pdfParts.push({
-                inlineData: {
-                    data: pdfBuffer.toString('base64'),
-                    mimeType: 'application/pdf'
-                }
-            });
         }
 
         if (pdfParts.length === 0 && !analysisContext) {
