@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Download, CheckCircle2, FileArchive, Loader2 } from 'lucide-react';
+import { Download, CheckCircle2, FileArchive, Loader2, ExternalLink } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { API_BASE_URL } from '../../config';
@@ -191,24 +191,25 @@ export function DossierExporter({ biddings, companies }: Props) {
                     }
 
                     if (!response || !response.ok) {
-                        throw new Error(`Inacessível: ${doc.fileName}`);
+                        throw new Error(`Servidor retornou ${response?.status || 'erro'} ao buscar o arquivo.`);
                     }
 
                     const blob = await response.blob();
-                    if (blob.size === 0) throw new Error("Vazio");
+                    if (blob.size === 0) throw new Error("O arquivo parece estar vazio no servidor.");
 
-                    const safeFileName = (doc.fileName || 'arquivo').replace(/[^a-z0-9.-]/gi, '_');
+                    // Filter out any invalid characters for ZIP filenames
+                    const safeFileName = (doc.fileName || 'arquivo').replace(/[/\\?%*:|"<>]/g, '-').trim();
                     zip.file(`${folderName}/${safeFileName}`, blob);
                     filesAddedCount++;
                 } catch (err: any) {
                     console.error(`Error adding file ${doc.fileName} to ZIP:`, err);
-                    failures.push(`${doc.fileName}: ${err.message}`);
+                    failures.push(`${doc.fileName} (${err.message})`);
                 }
             }
 
             if (filesAddedCount === 0) {
-                const errorDetails = failures.length > 0 ? `\n\nDetalhes:\n${failures.slice(0, 3).join('\n')}` : '';
-                throw new Error("Nenhum arquivo pôde ser capturado. Verifique se você consegue visualizar os arquivos individualmente." + errorDetails);
+                const errorDetails = failures.length > 0 ? `\n\nFalhas:\n• ${failures.join('\n• ')}` : '';
+                throw new Error("Nenhum arquivo pôde ser capturado. Isso geralmente ocorre se os arquivos foram excluídos ou se o servidor está inacessível." + errorDetails);
             }
 
             if (failures.length > 0) {
@@ -398,10 +399,14 @@ export function DossierExporter({ biddings, companies }: Props) {
                                                                     {docs.map(doc => (
                                                                         <div key={doc.docId} style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-success)', color: 'var(--color-success)', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                             <CheckCircle2 size={12} />
-                                                                            {doc.fileName}
+                                                                            <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.fileName}</span>
+                                                                            <a href={`${API_BASE_URL}${doc.url}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center' }} title="Visualizar Arquivo">
+                                                                                <ExternalLink size={12} />
+                                                                            </a>
                                                                             <button
                                                                                 onClick={() => toggleMatch(req, doc.docId)}
                                                                                 style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: '0 2px', fontWeight: 'bold' }}
+                                                                                title="Remover Vinculo"
                                                                             >
                                                                                 ×
                                                                             </button>
@@ -426,6 +431,9 @@ export function DossierExporter({ biddings, companies }: Props) {
                                                                                 <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                                     {d.docType} ({d.fileName})
                                                                                 </span>
+                                                                                <a href={`${API_BASE_URL}${d.fileUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', padding: '2px' }} onClick={(e) => e.stopPropagation()} title="Visualizar Arquivo">
+                                                                                    <ExternalLink size={14} />
+                                                                                </a>
                                                                             </label>
                                                                         );
                                                                     })}

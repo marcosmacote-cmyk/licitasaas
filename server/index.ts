@@ -103,6 +103,27 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'LicitaSaaS API is running' });
 });
 
+// Diagnostic route to check if files actually exist on disk
+app.get('/api/debug-uploads', (req, res) => {
+    try {
+        const fs = require('fs');
+        if (!fs.existsSync(uploadDir)) {
+            return res.json({ error: 'Upload directory does not exist', path: uploadDir });
+        }
+        const files = fs.readdirSync(uploadDir);
+        res.json({
+            count: files.length,
+            path: uploadDir,
+            files: files.slice(0, 50), // Limit to first 50
+            node_env: process.env.NODE_ENV,
+            cwd: process.cwd(),
+            server_root: SERVER_ROOT
+        });
+    } catch (e: any) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
 // Tenants (Seed support or manual creation)
 app.post('/api/tenants', async (req, res) => {
     try {
