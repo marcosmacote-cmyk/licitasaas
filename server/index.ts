@@ -141,14 +141,16 @@ app.get('/api/debug-db', async (req, res) => {
             companies: await prisma.companyProfile.count(),
             documents: await prisma.document.count(),
             users: await prisma.user.count(),
-            biddings: await prisma.biddingProcess.count()
+            biddings: await prisma.biddingProcess.count(),
+            credentials: await prisma.companyCredential.count()
         };
         const users = await prisma.user.findMany({
             select: { id: true, email: true, tenantId: true }
         });
         const tenants = await prisma.tenant.findMany();
         const companies = await prisma.companyProfile.findMany();
-        res.json({ counts, users, tenants, companies });
+        const credentials = await prisma.companyCredential.findMany();
+        res.json({ counts, users, tenants, companies, credentials });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }
