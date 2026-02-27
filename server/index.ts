@@ -206,6 +206,7 @@ app.get('/api/debug-uploads', (req, res) => {
         res.json({
             count: files.length,
             path: uploadDir,
+            version: '1.0.5-supabase-fix',
             storageType: process.env.STORAGE_TYPE || 'LOCAL',
             supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY),
             node_env: process.env.NODE_ENV,

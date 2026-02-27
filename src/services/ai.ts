@@ -28,7 +28,8 @@ export const aiService = {
                     const uploadData = await uploadResponse.json();
                     fileUrls.push(uploadData.fileUrl);
 
-                    const fileName = uploadData.fileUrl.split('/').pop() || '';
+                    // Use storageName (full path in bucket) if available, otherwise fallback to filename from URL
+                    const fileName = uploadData.storageName || uploadData.fileUrl.split('/').pop() || '';
                     if (fileName) {
                         fileNames.push(fileName);
                     }
