@@ -170,7 +170,27 @@ app.get('/api/companies', authenticateToken, async (req, res) => {
         console.log(`[API] Fetching companies for tenant: ${req.user.tenantId}`);
         const companies = await prisma.companyProfile.findMany({
             where: { tenantId: req.user.tenantId },
-            include: { documents: true, credentials: true }
+            include: {
+                documents: {
+                    select: {
+                        id: true,
+                        tenantId: true,
+                        companyProfileId: true,
+                        docType: true,
+                        fileUrl: true,
+                        uploadDate: true,
+                        expirationDate: true,
+                        status: true,
+                        autoRenew: true,
+                        docGroup: true,
+                        issuerLink: true,
+                        fileName: true,
+                        alertDays: true
+                        // Exclude fileContent here to avoid OOM
+                    }
+                },
+                credentials: true
+            }
         });
         console.log(`[API] Found ${companies.length} companies.`);
         res.json(companies);
@@ -646,7 +666,22 @@ app.post('/api/analysis', authenticateToken, async (req, res) => {
 app.get('/api/documents', authenticateToken, async (req, res) => {
     try {
         const documents = await prisma.document.findMany({
-            where: { tenantId: req.user.tenantId }
+            where: { tenantId: req.user.tenantId },
+            select: {
+                id: true,
+                tenantId: true,
+                companyProfileId: true,
+                docType: true,
+                fileUrl: true,
+                uploadDate: true,
+                expirationDate: true,
+                status: true,
+                autoRenew: true,
+                docGroup: true,
+                issuerLink: true,
+                fileName: true,
+                alertDays: true
+            }
         });
         res.json(documents);
     }
