@@ -1219,6 +1219,13 @@ async function runAutoSetup() {
                 }
             });
         }
+        else if (admin.tenantId !== tenant.id) {
+            console.log('🏗️ Atualizando Tenant do Administrador para o ID estável...');
+            await prisma.user.update({
+                where: { email: adminEmail },
+                data: { tenantId: tenant.id }
+            });
+        }
         // 🛠️ MÓDULO DE RECUPERAÇÃO DE DADOS (CURA)
         // Isso "adota" qualquer registro que tenha ficado órfão ou associado a um tenant antigo/deletado
         // Garante que o usuário consiga visualizar seus dados antigos após atualizações de versão.

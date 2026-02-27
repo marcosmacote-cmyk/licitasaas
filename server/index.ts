@@ -1311,6 +1311,12 @@ async function runAutoSetup() {
                     tenantId: tenant.id
                 }
             });
+        } else if (admin.tenantId !== tenant.id) {
+            console.log('🏗️ Atualizando Tenant do Administrador para o ID estável...');
+            await prisma.user.update({
+                where: { email: adminEmail },
+                data: { tenantId: tenant.id }
+            });
         }
 
         // 🛠️ MÓDULO DE RECUPERAÇÃO DE DADOS (CURA)
