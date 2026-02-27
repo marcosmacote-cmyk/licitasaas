@@ -17,6 +17,7 @@ export function DossierExporter({ biddings, companies }: Props) {
     const [dateFilter, setDateFilter] = useState<'all' | 'active' | 'expired'>('active');
     const [manualMatches, setManualMatches] = useState<Record<string, string[]>>({});
     const [additionalDocs, setAdditionalDocs] = useState<Set<string>>(new Set());
+    const [includeRequired, setIncludeRequired] = useState(true);
 
     const biddingsWithAnalysis = useMemo(() => {
         return biddings.filter(b => b.aiAnalysis);
@@ -109,7 +110,7 @@ export function DossierExporter({ biddings, companies }: Props) {
     }, [selectedBidding, selectedCompany, manualMatches]);
 
     const finalExportDocs = useMemo(() => {
-        if (!selectedCompany) return matchedDocs;
+        if (!selectedCompany) return includeRequired ? matchedDocs : [];
 
         const additional = Array.from(additionalDocs).map(id => {
             const doc = selectedCompany.documents?.find(d => d.id === id);
@@ -122,12 +123,12 @@ export function DossierExporter({ biddings, companies }: Props) {
             };
         }).filter(Boolean) as typeof matchedDocs;
 
-        // Deduplicate: If an additional doc is already in matchedDocs (by docId), ignore it
-        const matchedIds = new Set(matchedDocs.map(d => d.docId));
+        const base = includeRequired ? matchedDocs : [];
+        const matchedIds = new Set(base.map(d => d.docId));
         const filteredAdditional = additional.filter(d => !matchedIds.has(d.docId));
 
-        return [...matchedDocs, ...filteredAdditional];
-    }, [matchedDocs, additionalDocs, selectedCompany]);
+        return [...base, ...filteredAdditional];
+    }, [matchedDocs, additionalDocs, selectedCompany, includeRequired]);
 
     const toggleMatch = (requirement: string, docId: string) => {
         setManualMatches(prev => {
@@ -144,8 +145,8 @@ export function DossierExporter({ biddings, companies }: Props) {
     };
 
     const handleExportZip = async () => {
-        if (matchedDocs.length === 0) {
-            alert("Não há documentos associados para exportar.");
+        if (finalExportDocs.length === 0) {
+            alert("Não há documentos selecionados para exportar. Marque os arquivos do edital ou adicione arquivos avulsos.");
             return;
         }
 
@@ -272,16 +273,28 @@ export function DossierExporter({ biddings, companies }: Props) {
             <div>
                 {selectedBidding ? (
                     <div style={{ background: 'var(--color-bg-surface)', padding: '24px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                        <div className="flex-between" style={{ marginBottom: '24px' }}>
+                        <div className="flex-between" style={{ marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
                             <h3 style={{ margin: 0 }}>Pré-visualização do Dossiê</h3>
-                            <button
-                                className="btn btn-primary flex-gap"
-                                onClick={handleExportZip}
-                                disabled={isExporting || finalExportDocs.length === 0}
-                            >
-                                {isExporting ? <Loader2 size={18} className="spin" /> : <Download size={18} />}
-                                {isExporting ? 'Zipando...' : 'Baixar ZIP Consolidado'}
-                            </button>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', color: 'var(--color-text-secondary)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={includeRequired}
+                                        onChange={(e) => setIncludeRequired(e.target.checked)}
+                                    />
+                                    Incluir Documentos do Edital
+                                </label>
+
+                                <button
+                                    className="btn btn-primary flex-gap"
+                                    onClick={handleExportZip}
+                                    disabled={isExporting || finalExportDocs.length === 0}
+                                >
+                                    {isExporting ? <Loader2 size={18} className="spin" /> : <Download size={18} />}
+                                    {isExporting ? 'Zipando...' : 'Baixar ZIP Consolidado'}
+                                </button>
+                            </div>
                         </div>
 
                         <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
@@ -390,9 +403,28 @@ export function DossierExporter({ biddings, companies }: Props) {
                             {/* Manual Selection Section (Floating docs) */}
                             {selectedCompany && (
                                 <div style={{ marginTop: '40px', borderTop: '2px dashed var(--color-border)', paddingTop: '24px' }}>
-                                    <h4 style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                                        <Download size={18} /> Adicionar outros arquivos (fora das exigências)
-                                    </h4>
+                                    <div className="flex-between" style={{ marginBottom: '16px' }}>
+                                        <h4 style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                            <Download size={18} /> Adicionar outros arquivos (fora das exigências)
+                                        </h4>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button
+                                                onClick={() => {
+                                                    const allIds = selectedCompany.documents?.map(d => d.id) || [];
+                                                    setAdditionalDocs(new Set(allIds));
+                                                }}
+                                                style={{ fontSize: '0.7rem', padding: '4px 8px', background: 'none', border: '1px solid var(--color-border)', borderRadius: '4px', cursor: 'pointer' }}
+                                            >
+                                                Marcar Todos
+                                            </button>
+                                            <button
+                                                onClick={() => setAdditionalDocs(new Set())}
+                                                style={{ fontSize: '0.7rem', padding: '4px 8px', background: 'none', border: '1px solid var(--color-border)', borderRadius: '4px', cursor: 'pointer' }}
+                                            >
+                                                Limpar
+                                            </button>
+                                        </div>
+                                    </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                         {selectedCompany.documents?.map(doc => {
                                             const isAttachedToReq = matchedDocs.some(m => m.docId === doc.id);
