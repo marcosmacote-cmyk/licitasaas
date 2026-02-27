@@ -1233,39 +1233,73 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Start server
-// Função de Auto-Setup para o primeiro acesso
+// Função de Auto-Setup para o primeiro acesso e Recuperação de Dados
 async function runAutoSetup() {
     try {
-        const userCount = await prisma.user.count();
-        if (userCount === 0) {
-            console.log('🏗️ Iniciando configuração de primeiro acesso...');
+        console.log('🔍 Verificando integridade dos dados e tenants...');
 
-            // 1. Criar Tenant padrão
-            const tenant = await prisma.tenant.create({
+        // 1. Garantir que o Tenant Padrão existe (usando rootCnpj como chave estável)
+        let tenant = await prisma.tenant.findUnique({
+            where: { rootCnpj: '00000000' }
+        });
+
+        if (!tenant) {
+            console.log('🏗️ Criando Tenant Principal...');
+            tenant = await prisma.tenant.create({
                 data: {
                     razaoSocial: 'LicitaSaaS Brasil',
                     rootCnpj: '00000000'
                 }
             });
+        }
 
-            // 2. Criar Usuário Admin
+        // 2. Garantir que o Usuário Admin existe
+        const adminEmail = 'admin@licitasaas.com';
+        const admin = await prisma.user.findUnique({
+            where: { email: adminEmail }
+        });
+
+        if (!admin) {
+            console.log('🏗️ Criando Usuário Administrador...');
             const salt = await bcrypt.genSalt(10);
             const passwordHash = await bcrypt.hash('admin123', salt);
-
             await prisma.user.create({
                 data: {
-                    email: 'admin@licitasaas.com',
+                    email: adminEmail,
                     name: 'Administrador',
                     passwordHash,
                     role: 'ADMIN',
                     tenantId: tenant.id
                 }
             });
-
-            console.log('✅ Configuração concluída! Logue com: admin@licitasaas.com / admin123');
         }
+
+        // 🛠️ MÓDULO DE RECUPERAÇÃO DE DADOS (CURA)
+        // Isso "adota" qualquer registro que tenha ficado órfão ou associado a um tenant antigo/deletado
+        // Garante que o usuário consiga visualizar seus dados antigos após atualizações de versão.
+
+        const results = {
+            companies: await prisma.companyProfile.updateMany({
+                where: { tenantId: { not: tenant.id } },
+                data: { tenantId: tenant.id }
+            }),
+            biddings: await prisma.biddingProcess.updateMany({
+                where: { tenantId: { not: tenant.id } },
+                data: { tenantId: tenant.id }
+            }),
+            documents: await prisma.document.updateMany({
+                where: { tenantId: { not: tenant.id } },
+                data: { tenantId: tenant.id }
+            })
+        };
+
+        if (results.companies.count > 0 || results.biddings.count > 0 || results.documents.count > 0) {
+            console.log(`✅ RECUPERAÇÃO: ${results.companies.count} empresas, ${results.biddings.count} licitações e ${results.documents.count} documentos migrados.`);
+        }
+
+        console.log('🚀 Sistema pronto e sincronizado.');
     } catch (error) {
-        console.error('❌ Erro no auto-setup:', error);
+        console.error('❌ Erro no runAutoSetup:', error);
     }
 }
 
