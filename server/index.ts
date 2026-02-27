@@ -92,7 +92,37 @@ if (apiKey) {
     genAI = new GoogleGenAI({ apiKey });
 }
 
-// Serve uploaded files statically
+// Custom route for /uploads with database fallback for ephemeral storage recovery
+app.get('/uploads/:filename', async (req, res, next) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(uploadDir, filename);
+
+        // If file exists on disk (cache hit), serve it immediately
+        if (fs.existsSync(filePath)) {
+            return res.sendFile(filePath);
+        }
+
+        // Recovery mode: If file is missing on disk, search in Database
+        // We match by the end of the URL (filename)
+        const doc = await prisma.document.findFirst({
+            where: { fileUrl: { endsWith: filename } }
+        });
+
+        if (doc && doc.fileContent) {
+            console.log(`[Persistence] Recovering ${filename} from database to disk...`);
+            fs.writeFileSync(filePath, doc.fileContent);
+            return res.sendFile(filePath);
+        }
+
+        next();
+    } catch (error) {
+        console.error(`[Persistence] Error during file recovery:`, error);
+        next();
+    }
+});
+
+// Fallback static serving (still good for files that ARE there)
 app.use('/uploads', express.static(uploadDir));
 
 // Configure Multer storage to use Memory (for cloud readiness)
@@ -170,6 +200,7 @@ app.post('/api/documents', authenticateToken, upload.single('file'), async (req:
                 fileUrl,
                 expirationDate: new Date(expirationDate),
                 status,
+                fileContent: req.file.buffer, // Save to DB for persistence on ephemeral storage
                 alertDays: req.body.alertDays ? parseInt(req.body.alertDays) : 15
             }
         });
@@ -204,7 +235,11 @@ app.put('/api/documents/:id', authenticateToken, upload.single('file'), async (r
                 console.warn("Could not delete old file:", doc.fileUrl);
             }
             const { url: fileUrl } = await storageService.uploadFile(req.file, tenantId);
-            fileData = { fileUrl, fileName: req.file.originalname };
+            fileData = {
+                fileUrl,
+                fileName: req.file.originalname,
+                fileContent: req.file.buffer // Update DB persistence
+            };
         }
 
         const updatedDoc = await prisma.document.update({

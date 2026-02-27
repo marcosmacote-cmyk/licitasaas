@@ -101,6 +101,7 @@ model Document {
   docGroup         String         @default("Outros")
   issuerLink       String?
   fileName         String         @default("Documento")
+  fileContent      Bytes?
   alertDays        Int?           @default(15)
   company          CompanyProfile? @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
   tenant           Tenant         @relation(fields: [tenantId], references: [id])
