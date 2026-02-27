@@ -144,7 +144,8 @@ app.get('/api/debug-uploads', (req, res) => {
         res.json({
             count: files.length,
             path: uploadDir,
-            files: files.slice(0, 50), // Limit to first 50
+            storageType: process.env.STORAGE_TYPE || 'LOCAL',
+            supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY),
             node_env: process.env.NODE_ENV,
             cwd: process.cwd(),
             server_root: SERVER_ROOT

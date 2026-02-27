@@ -7,6 +7,7 @@ exports.storageService = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const uuid_1 = require("uuid");
+const supabase_js_1 = require("@supabase/supabase-js");
 class LocalStorageService {
     constructor() {
         const serverRoot = __dirname.endsWith('dist') ? path_1.default.resolve(__dirname, '..') : __dirname;
@@ -33,6 +34,42 @@ class LocalStorageService {
         }
     }
 }
+class SupabaseStorageService {
+    constructor() {
+        const url = process.env.SUPABASE_URL || '';
+        const key = process.env.SUPABASE_KEY || '';
+        this.bucketName = process.env.SUPABASE_BUCKET || 'documents';
+        this.supabase = (0, supabase_js_1.createClient)(url, key);
+    }
+    async uploadFile(file, tenantId) {
+        const prefix = tenantId ? `${tenantId}/` : ''; // Folder by tenant
+        const uniqueName = `${prefix}${(0, uuid_1.v4)()}${path_1.default.extname(file.originalname)}`;
+        const { data, error } = await this.supabase.storage
+            .from(this.bucketName)
+            .upload(uniqueName, file.buffer, {
+            contentType: file.mimetype,
+            upsert: true
+        });
+        if (error)
+            throw error;
+        const { data: { publicUrl } } = this.supabase.storage
+            .from(this.bucketName)
+            .getPublicUrl(uniqueName);
+        return {
+            url: publicUrl,
+            fileName: uniqueName
+        };
+    }
+    async deleteFile(fileUrl) {
+        // Extract path from public URL
+        // Example: https://xxx.supabase.co/storage/v1/object/public/documents/tenant/file.pdf
+        const parts = fileUrl.split(`${this.bucketName}/`);
+        if (parts.length > 1) {
+            const path = parts[1];
+            await this.supabase.storage.from(this.bucketName).remove([path]);
+        }
+    }
+}
 class S3StorageService {
     async uploadFile(file, tenantId) {
         // Mock implementation for S3 - In production, use @aws-sdk/client-s3
@@ -48,6 +85,6 @@ class S3StorageService {
     }
 }
 const STORAGE_TYPE = process.env.STORAGE_TYPE || 'LOCAL';
-exports.storageService = STORAGE_TYPE === 'S3'
-    ? new S3StorageService()
-    : new LocalStorageService();
+exports.storageService = STORAGE_TYPE === 'SUPABASE' ? new SupabaseStorageService() :
+    STORAGE_TYPE === 'S3' ? new S3StorageService() :
+        new LocalStorageService();

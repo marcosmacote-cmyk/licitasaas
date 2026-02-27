@@ -598,7 +598,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                         )}
                                                     </td>
                                                     <td style={tdStyle}>
-                                                        <a href={`${API_BASE_URL}${doc.fileUrl}`} target="_blank" rel="noopener noreferrer" className="flex-gap" style={{ color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'none' }}>
+                                                        <a
+                                                            href={doc.fileUrl.startsWith('http') ? doc.fileUrl : `${API_BASE_URL}${doc.fileUrl}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex-gap"
+                                                            style={{ color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'none' }}
+                                                        >
                                                             <FileText size={16} />
                                                             <span style={{ fontSize: '0.875rem', textDecoration: 'underline' }}>{doc.fileName}</span>
                                                         </a>
