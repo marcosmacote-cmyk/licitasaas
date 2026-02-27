@@ -33,6 +33,14 @@ class LocalStorageService {
             fs_1.default.unlinkSync(filePath);
         }
     }
+    async getFileBuffer(fileUrlOrName) {
+        const fileName = path_1.default.basename(fileUrlOrName);
+        const filePath = path_1.default.join(this.uploadDir, fileName);
+        if (!fs_1.default.existsSync(filePath)) {
+            throw new Error(`File not found: ${filePath}`);
+        }
+        return fs_1.default.readFileSync(filePath);
+    }
 }
 class SupabaseStorageService {
     constructor() {
@@ -69,6 +77,36 @@ class SupabaseStorageService {
             await this.supabase.storage.from(this.bucketName).remove([path]);
         }
     }
+    async getFileBuffer(fileUrlOrName) {
+        // If it's a full URL, extract the path
+        let filePath = fileUrlOrName;
+        if (fileUrlOrName.startsWith('http')) {
+            const parts = fileUrlOrName.split(`${this.bucketName}/`);
+            if (parts.length > 1) {
+                filePath = parts[1];
+            }
+        }
+        // Clean query parameters and decoding
+        filePath = decodeURIComponent(filePath).split('?')[0];
+        try {
+            console.log(`[Supabase Storage] Downloading path: "${filePath}" from bucket: "${this.bucketName}"`);
+            const { data, error } = await this.supabase.storage
+                .from(this.bucketName)
+                .download(filePath);
+            if (error) {
+                console.error(`[Supabase Storage] Error downloading ${filePath}:`, error);
+                throw error;
+            }
+            if (!data)
+                throw new Error("No data returned from Supabase storage");
+            const arrayBuffer = await data.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+        }
+        catch (err) {
+            console.error(`[Supabase Storage] Exception downloading ${filePath}:`, err);
+            throw err;
+        }
+    }
 }
 class S3StorageService {
     async uploadFile(file, tenantId) {
@@ -83,8 +121,13 @@ class S3StorageService {
     async deleteFile(fileUrl) {
         console.log(`[S3] Deleting file ${fileUrl}`);
     }
+    async getFileBuffer(_fileUrlOrName) {
+        throw new Error("Method not implemented.");
+    }
 }
 const STORAGE_TYPE = process.env.STORAGE_TYPE || 'LOCAL';
+console.log(`[Storage] Initializing storage system with type: ${STORAGE_TYPE}`);
 exports.storageService = STORAGE_TYPE === 'SUPABASE' ? new SupabaseStorageService() :
     STORAGE_TYPE === 'S3' ? new S3StorageService() :
         new LocalStorageService();
+console.log(`[Storage] Storage Service instance created: ${exports.storageService.constructor.name}`);
