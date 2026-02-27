@@ -162,16 +162,36 @@ export function DossierExporter({ biddings, companies }: Props) {
 
             for (const doc of finalExportDocs) {
                 try {
-                    // Ensure URL is correctly formatted
-                    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-                    const docUrl = doc.url.startsWith('/') ? doc.url : `/${doc.url}`;
-                    const fullUrl = `${baseUrl}${docUrl}`;
+                    let fullUrl = '';
 
-                    console.log(`Fetching file: ${fullUrl}`);
+                    if (doc.url.startsWith('http')) {
+                        fullUrl = doc.url;
+                    } else {
+                        // Normalize docUrl
+                        const docUrl = doc.url.startsWith('/') ? doc.url : `/${doc.url}`;
 
-                    const response = await fetch(fullUrl);
+                        // If API_BASE_URL is relative or empty, use relative path directly
+                        if (!API_BASE_URL || !API_BASE_URL.startsWith('http')) {
+                            fullUrl = docUrl;
+                        } else {
+                            const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+                            fullUrl = `${baseUrl}${docUrl}`;
+                        }
+                    }
+
+                    console.log(`Dossier Export - Attempting fetch: ${fullUrl}`);
+
+                    let response = await fetch(fullUrl);
+
+                    // Fallback to purely relative if absolute fails (common in Railway/Proxy setups)
+                    if (!response.ok && fullUrl.startsWith('http')) {
+                        const relativeUrl = doc.url.startsWith('/') ? doc.url : `/${doc.url}`;
+                        console.log(`Fallback fetch to relative: ${relativeUrl}`);
+                        response = await fetch(relativeUrl);
+                    }
+
                     if (!response.ok) {
-                        console.warn(`Failed to fetch ${fullUrl}: ${response.statusText}`);
+                        console.warn(`Failed to fetch ${doc.fileName} from any location.`);
                         continue;
                     }
 
