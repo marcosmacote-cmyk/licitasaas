@@ -133,6 +133,25 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'LicitaSaaS API is running' });
 });
 
+// Debug endpoint to check DB contents
+app.get('/api/debug-db', async (req, res) => {
+    try {
+        const counts = {
+            tenants: await prisma.tenant.count(),
+            companies: await prisma.companyProfile.count(),
+            documents: await prisma.document.count(),
+            users: await prisma.user.count(),
+            biddings: await prisma.biddingProcess.count()
+        };
+        const companies = await prisma.companyProfile.findMany({
+            include: { tenant: { select: { razaoSocial: true } } }
+        });
+        res.json({ counts, companies });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Diagnostic route to check if files actually exist on disk
 app.get('/api/debug-uploads', (req, res) => {
     try {

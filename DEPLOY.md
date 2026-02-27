@@ -167,14 +167,14 @@ const{PrismaClient}=require('@prisma/client');
 const bcrypt=require('bcryptjs');
 const p=new PrismaClient();
 (async()=>{
-const t=await p.tenant.create({data:{name:'Minha Empresa'}});
+const t=await p.tenant.create({data:{razaoSocial:'Minha Empresa', rootCnpj: '00000000'}});
 await p.user.create({data:{
 tenantId:t.id,name:'Admin',role:'Admin',
 email:'SEU_EMAIL_AQUI@email.com',
 passwordHash:await bcrypt.hash('SUA_SENHA_AQUI',10)
 }});
 console.log('Pronto! Use: SEU_EMAIL_AQUI@email.com');
-await p.\$disconnect();
+await p.$disconnect();
 })();
 "
 ```

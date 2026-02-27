@@ -38,25 +38,43 @@ function App() {
   }, []);
 
   const fetchCompanies = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/companies`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+
+      if (response.status === 401 || response.status === 403) {
+        handleLogout();
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         setCompanies(data);
       }
     } catch (err) {
       console.error('Failed to load companies', err);
-      setCompanies([]);
+      // Don't clear companies on network error to allow offline/slow loading
     }
   };
 
   const fetchBiddings = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/biddings`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+
+      if (response.status === 401 || response.status === 403) {
+        handleLogout();
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         setItems(data);
