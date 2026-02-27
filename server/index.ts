@@ -734,15 +734,16 @@ app.get('/api/documents', authenticateToken, async (req: any, res) => {
                 companyProfileId: true,
                 docType: true,
                 fileUrl: true,
-                uploadDate: true,
                 expirationDate: true,
                 status: true,
                 autoRenew: true,
                 docGroup: true,
                 issuerLink: true,
                 fileName: true,
-                alertDays: true
-            }
+                alertDays: true,
+                uploadDate: true
+            },
+            orderBy: { uploadDate: 'desc' }
         });
         res.json(documents);
     } catch (error) {
