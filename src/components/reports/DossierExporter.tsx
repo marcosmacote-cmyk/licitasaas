@@ -154,66 +154,65 @@ export function DossierExporter({ biddings, companies }: Props) {
             setIsExporting(true);
             const zip = new JSZip();
 
-            // Refined folder name without trailing spaces or problematic chars
             const safeBiddingTitle = (selectedBidding?.title || 'Dossie').substring(0, 30).replace(/[^a-z0-9]/gi, '_');
             const folderName = `Dossie_${safeBiddingTitle}`;
 
-            let filesAdded = 0;
+            let filesAddedCount = 0;
+            const failures: string[] = [];
 
             for (const doc of finalExportDocs) {
                 try {
-                    let fullUrl = '';
+                    let response: Response | null = null;
 
                     if (doc.url.startsWith('http')) {
-                        fullUrl = doc.url;
+                        console.log(`[ZIP Export] Fetching external: ${doc.url}`);
+                        response = await fetch(doc.url);
                     } else {
-                        // Normalize docUrl
                         const docUrl = doc.url.startsWith('/') ? doc.url : `/${doc.url}`;
+                        const possibleBases = [
+                            API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL,
+                            window.location.origin,
+                            ''
+                        ].filter(b => b !== undefined && b !== null);
 
-                        // If API_BASE_URL is relative or empty, use relative path directly
-                        if (!API_BASE_URL || !API_BASE_URL.startsWith('http')) {
-                            fullUrl = docUrl;
-                        } else {
-                            const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-                            fullUrl = `${baseUrl}${docUrl}`;
+                        for (const base of possibleBases) {
+                            try {
+                                const urlToTry = `${base}${docUrl}`;
+                                console.log(`[ZIP Export] Attempting: ${urlToTry}`);
+                                const res = await fetch(urlToTry);
+                                if (res.ok) {
+                                    response = res;
+                                    break;
+                                }
+                            } catch (e) {
+                                continue;
+                            }
                         }
                     }
 
-                    console.log(`Dossier Export - Attempting fetch: ${fullUrl}`);
-
-                    let response = await fetch(fullUrl);
-
-                    // Fallback to purely relative if absolute fails (common in Railway/Proxy setups)
-                    if (!response.ok && fullUrl.startsWith('http')) {
-                        const relativeUrl = doc.url.startsWith('/') ? doc.url : `/${doc.url}`;
-                        console.log(`Fallback fetch to relative: ${relativeUrl}`);
-                        response = await fetch(relativeUrl);
-                    }
-
-                    if (!response.ok) {
-                        console.warn(`Failed to fetch ${doc.fileName} from any location.`);
-                        continue;
+                    if (!response || !response.ok) {
+                        throw new Error(`Inacessível: ${doc.fileName}`);
                     }
 
                     const blob = await response.blob();
-                    if (blob.size === 0) {
-                        console.warn(`File is empty: ${doc.fileName}`);
-                        continue;
-                    }
+                    if (blob.size === 0) throw new Error("Vazio");
 
-                    // Use a safe file name
-                    const safeFileName = doc.fileName.replace(/[^a-z0-9.-]/gi, '_');
-
-                    // Add directly to root or a folder
+                    const safeFileName = (doc.fileName || 'arquivo').replace(/[^a-z0-9.-]/gi, '_');
                     zip.file(`${folderName}/${safeFileName}`, blob);
-                    filesAdded++;
-                } catch (err) {
+                    filesAddedCount++;
+                } catch (err: any) {
                     console.error(`Error adding file ${doc.fileName} to ZIP:`, err);
+                    failures.push(`${doc.fileName}: ${err.message}`);
                 }
             }
 
-            if (filesAdded === 0) {
-                throw new Error("Nenhum arquivo pôde ser baixado com sucesso.");
+            if (filesAddedCount === 0) {
+                const errorDetails = failures.length > 0 ? `\n\nDetalhes:\n${failures.slice(0, 3).join('\n')}` : '';
+                throw new Error("Nenhum arquivo pôde ser capturado. Verifique se você consegue visualizar os arquivos individualmente." + errorDetails);
+            }
+
+            if (failures.length > 0) {
+                alert(`Aviso: ${failures.length} arquivo(s) falharam, mas o ZIP foi gerado com ${filesAddedCount} documento(s).`);
             }
 
             const content = await zip.generateAsync({ type: 'blob' });
@@ -221,7 +220,7 @@ export function DossierExporter({ biddings, companies }: Props) {
 
         } catch (error: any) {
             console.error("Export error", error);
-            alert(`Erro ao exportar o pacote ZIP: ${error.message || 'Erro desconhecido'}`);
+            alert(`Erro ao exportar o pacote ZIP: ${error.message}`);
         } finally {
             setIsExporting(false);
         }
