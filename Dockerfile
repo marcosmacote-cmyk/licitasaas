@@ -1,31 +1,41 @@
-FROM node:20-alpine
-WORKDIR /app/server
+FROM node:20-alpine AS builder
 
-# Install openssl 1.1 compatibility
+WORKDIR /app
+
+# Install build dependencies
 RUN apk add --no-cache openssl
 
-# Copy package files AND prisma schema
+# Build Backend
+WORKDIR /app/backend
 COPY server/package.json server/package-lock.json* ./
 COPY server/prisma ./prisma
-
-# Install production deps
-RUN npm install --omit=dev
-
-# Generate Prisma client
+RUN npm install
+COPY server/ ./
 RUN npx prisma generate
+RUN npx tsc
 
-# Copy pre-built backend
-COPY server/dist ./dist
+# Build Frontend
+WORKDIR /app/frontend
+COPY package.json package-lock.json* ./
+RUN npm install
+COPY . .
+RUN npm run build
 
-# Copy pre-built frontend
-COPY server/public ./public
+# Final Stage
+FROM node:20-alpine
+WORKDIR /app/server
+RUN apk add --no-cache openssl
 
-# Create uploads directory
+COPY --from=builder /app/backend/package.json ./
+COPY --from=builder /app/backend/node_modules ./node_modules
+COPY --from=builder /app/backend/dist ./dist
+COPY --from=builder /app/backend/prisma ./prisma
+COPY --from=builder /app/frontend/dist ./public
+
 RUN mkdir -p uploads
 
 ENV NODE_ENV=production
 ENV PORT=3001
 EXPOSE 3001
 
-# O segredo está aqui: Garante as tabelas (db push) antes de ligar o servidor
 CMD ["sh", "-c", "npx prisma db push && node dist/index.js"]
