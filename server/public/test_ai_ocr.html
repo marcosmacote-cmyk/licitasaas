@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de OCR e IA - LicitaSaaS</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        h1 { color: var(--primary); margin-top: 0; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #1d4ed8; }
+        button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+        .progress { background-color: #e2e8f0; color: #64748b; }
+        .success { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .error { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        pre {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            max-height: 500px;
+        }
+        .result-section { margin-top: 30px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛠️ Módulo de Teste: IA & OCR</h1>
+        <p>Use esta ferramenta para testar se a IA consegue ler seus PDFs digitalizados (imagens) após as otimizações.</p>
+        
+        <div class="form-group">
+            <label for="token">Token de Acesso (JWT):</label>
+            <input type="text" id="token" placeholder="Cole o token do console do sistema ou localStorage">
+            <small>Dica: Abra o sistema normal, F12 -> Console -> localStorage.getItem('token')</small>
+        </div>
+
+        <div class="form-group">
+            <label for="file">Selecione o Edital (PDF Digitalizado):</label>
+            <input type="file" id="file" accept="application/pdf">
+        </div>
+
+        <button id="runBtn">🚀 Iniciar Análise de Edital</button>
+
+        <div id="status"></div>
+
+        <div id="result" class="result-section">
+            <h3>Resultado da Extração:</h3>
+            <pre id="jsonOutput"></pre>
+        </div>
+    </div>
+
+    <script>
+        const runBtn = document.getElementById('runBtn');
+        const fileInput = document.getElementById('file');
+        const tokenInput = document.getElementById('token');
+        const statusDiv = document.getElementById('status');
+        const resultSection = document.getElementById('result');
+        const jsonOutput = document.getElementById('jsonOutput');
+
+        // Auto-fill token if exists in localStorage (common case if testing locally)
+        const savedToken = localStorage.getItem('token');
+        if (savedToken) tokenInput.value = savedToken;
+
+        runBtn.onclick = async () => {
+            const file = fileInput.files[0];
+            const token = tokenInput.value;
+
+            if (!file || !token) {
+                alert('Por favor, selecione um arquivo e insira o token.');
+                return;
+            }
+
+            // Reset UI
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'progress';
+            statusDiv.innerHTML = '📤 Fazendo upload do arquivo...';
+            resultSection.style.display = 'none';
+            runBtn.disabled = true;
+
+            try {
+                // 1. Upload
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const uploadRes = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                if (!uploadRes.ok) throw new Error('Falha no upload do arquivo.');
+                const uploadData = await uploadRes.json();
+                const fileName = uploadData.storageName;
+
+                // 2. Analyze
+                statusDiv.innerHTML = '🤖 IA analisando edital (OCR em progresso)... Isso pode levar até 2 min para PDFs grandes.';
+                const analyzeRes = await fetch('/api/analyze-edital', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fileNames: [fileName] })
+                });
+
+                if (!analyzeRes.ok) {
+                    const err = await analyzeRes.json();
+                    throw new Error(err.error || 'Erro na análise da IA.');
+                }
+
+                const result = await analyzeRes.json();
+                
+                // Show Success
+                statusDiv.className = 'success';
+                statusDiv.innerHTML = '✅ Análise concluída com sucesso!';
+                resultSection.style.display = 'block';
+                jsonOutput.textContent = JSON.stringify(result, null, 2);
+
+            } catch (err) {
+                statusDiv.className = 'error';
+                statusDiv.innerHTML = '❌ Erro: ' + err.message;
+            } finally {
+                runBtn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>

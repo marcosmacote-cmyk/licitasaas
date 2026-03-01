@@ -9,8 +9,10 @@ import {
   Moon,
   Building2,
   PieChart,
-  Loader2
+  Loader2,
+  Search
 } from 'lucide-react';
+import { PncpPage } from './components/PncpPage';
 import { BiddingPage } from './components/BiddingPage';
 import { Dashboard } from './components/Dashboard';
 import { DocumentsPage } from './components/DocumentsPage';
@@ -22,7 +24,7 @@ import { API_BASE_URL } from './config';
 function App() {
   const [user, setUser] = useState<any>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bidding' | 'documents' | 'reports'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'bidding' | 'documents' | 'reports' | 'pncp'>('dashboard');
   const [items, setItems] = useState<BiddingProcess[]>([]);
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +144,10 @@ function App() {
             <Files size={20} />
             <span>Documentos</span>
           </a>
+          <a href="#" className={`nav-item ${activeTab === 'pncp' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('pncp'); }}>
+            <Search size={20} />
+            <span>Busca PNCP</span>
+          </a>
           <a href="#" className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('reports'); }}>
             <PieChart size={20} />
             <span>Relatórios</span>
@@ -197,6 +203,7 @@ function App() {
 
         {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
         {activeTab === 'reports' && <ReportsPage biddings={items} companies={companies} onRefresh={refreshData} />}
+        {activeTab === 'pncp' && <PncpPage companies={companies} />}
       </main>
     </div>
   );

@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const axios_1 = __importDefault(require("axios"));
+const https_1 = __importDefault(require("https"));
 const client_1 = require("@prisma/client");
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
@@ -26,12 +28,15 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // Auth
 app.post('/api/auth/login', async (req, res) => {
+    console.log("==> LOGIN HIT! Body:", req.body);
     try {
         const { email, password } = req.body;
+        console.log("Looking up user for email:", email);
         const user = await prisma.user.findUnique({
             where: { email },
             include: { tenant: true }
         });
+        console.log("Found user:", user?.id || 'No user found');
         if (!user || !(await bcryptjs_1.default.compare(password, user.passwordHash))) {
             return res.status(401).json({ error: 'Email ou senha inválidos' });
         }
@@ -113,7 +118,13 @@ const apiKey = process.env.GEMINI_API_KEY || '';
 console.log('Gemini API Key present:', !!apiKey);
 let genAI = null;
 if (apiKey) {
-    genAI = new genai_1.GoogleGenAI({ apiKey });
+    genAI = new genai_1.GoogleGenAI({
+        apiKey,
+        // Increased timeout for large scanned PDFs (3 minutes)
+        httpOptions: {
+            timeout: 180000
+        }
+    });
 }
 // Custom route for /uploads with database fallback for ephemeral storage recovery
 app.get('/uploads/:filename', async (req, res, next) => {
@@ -599,6 +610,128 @@ ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${c
         res.status(500).json({ error: 'Failed to generate declaration', details: error?.message || 'Erro desconhecido' });
     }
 });
+// PNCP Proxy and Saved Searches
+app.get('/api/pncp/searches', authenticateToken, async (req, res) => {
+    try {
+        const searches = await prisma.pncpSavedSearch.findMany({
+            where: { tenantId: req.user.tenantId },
+            include: { company: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(searches);
+    }
+    catch (error) {
+        console.error("Fetch saved searches error:", error);
+        res.status(500).json({ error: 'Failed to fetch saved searches' });
+    }
+});
+app.post('/api/pncp/searches', authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const search = await prisma.pncpSavedSearch.create({
+            data: { ...req.body, tenantId }
+        });
+        res.json(search);
+    }
+    catch (error) {
+        console.error("Create saved search error:", error);
+        res.status(500).json({ error: 'Failed to create saved search' });
+    }
+});
+app.delete('/api/pncp/searches/:id', authenticateToken, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const tenantId = req.user.tenantId;
+        await prisma.pncpSavedSearch.deleteMany({
+            where: { id, tenantId }
+        });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Delete saved search error:", error);
+        res.status(500).json({ error: 'Failed to delete saved search' });
+    }
+});
+app.post('/api/pncp/search', authenticateToken, async (req, res) => {
+    try {
+        const { keywords, status, uf, pagina = 1 } = req.body;
+        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=10&pagina=${pagina}`;
+        if (keywords) {
+            url += `&q=${encodeURIComponent(keywords)}`;
+        }
+        if (status && status !== 'todas') {
+            url += `&status=${status}`;
+        }
+        if (uf) {
+            url += `&ufs=${uf}`;
+        }
+        const agent = new https_1.default.Agent({
+            rejectUnauthorized: false
+        });
+        const response = await axios_1.default.get(url, {
+            headers: { 'Accept': 'application/json' },
+            httpsAgent: agent,
+            timeout: 10000
+        });
+        const data = response.data;
+        // Transform items to frontend expected format safely
+        const rawItems = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
+        const items = rawItems.map((item) => ({
+            id: item.id || item.numeroControlePNCP || Math.random().toString(),
+            orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || 'Órgão não informado',
+            orgao_cnpj: item.orgao_cnpj || item.orgaoEntidade?.cnpj || '',
+            ano: item.ano,
+            numero_sequencial: item.numero_sequencial,
+            titulo: item.title || item.titulo || item.identificador || 'Sem título',
+            objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
+            data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
+            data_abertura: item.data_fim_vigencia || item.data_inicio_vigencia || item.dataAberturaProposta || item.data_abertura || item.dataPublicacaoPncp || new Date().toISOString(),
+            valor_estimado: Number(item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado) || 0,
+            uf: item.uf || item.unidadeOrgao?.ufSigla || uf || '--',
+            municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '--',
+            link_sistema: (item.orgao_cnpj && item.ano && item.numero_sequencial)
+                ? `https://pncp.gov.br/app/editais/${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`
+                : (item.linkSistemaOrigem || item.link || ''),
+            status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
+        }));
+        // Sort items logically by closest opening session
+        const now = Date.now();
+        items.sort((a, b) => {
+            const dateA = new Date(a.data_abertura).getTime();
+            const dateB = new Date(b.data_abertura).getTime();
+            // Fix: avoid NaN and invalid dates breaking the sort loop
+            const absA = isNaN(dateA) ? Infinity : Math.abs(dateA - now);
+            const absB = isNaN(dateB) ? Infinity : Math.abs(dateB - now);
+            return absA - absB;
+        });
+        // Hydrate valor_estimado safely
+        const hydratedItems = await Promise.all(items.map(async (item) => {
+            if (!item.valor_estimado && item.orgao_cnpj && item.ano && item.numero_sequencial) {
+                try {
+                    const detailUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${item.orgao_cnpj}/compras/${item.ano}/${item.numero_sequencial}`;
+                    const detailRes = await axios_1.default.get(detailUrl, { httpsAgent: agent, timeout: 5000 });
+                    const detailData = detailRes.data;
+                    if (detailData && detailData.valorTotalEstimado) {
+                        item.valor_estimado = Number(detailData.valorTotalEstimado);
+                    }
+                }
+                catch (e) {
+                    // Safe mute
+                }
+            }
+            return item;
+        }));
+        const totalResults = typeof data.total === 'number' ? data.total : (rawItems.length || 0);
+        res.json({
+            items: hydratedItems,
+            total: totalResults
+        });
+    }
+    catch (error) {
+        console.error("PNCP search error:", error?.message || error);
+        res.status(502).json({ error: 'Falha ao comunicar com a API do PNCP', details: error?.message || 'Erro desconhecido' });
+    }
+});
 // Bidding Processes
 app.get('/api/biddings', authenticateToken, async (req, res) => {
     try {
@@ -764,7 +897,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
     }
 });
 // Helper for Gemini with retry (for 503/429 errors) + model fallback
-const GEMINI_MODELS = ['gemini-2.5-flash'];
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
 async function callGeminiWithRetry(model, options, maxRetries = 4) {
     let lastError;
     for (const modelName of GEMINI_MODELS) {
@@ -786,11 +919,17 @@ async function callGeminiWithRetry(model, options, maxRetries = 4) {
                     continue;
                 }
                 // Non-retryable error: break inner loop, try next model
-                console.error(`[Gemini] Non-retryable error on '${modelName}': ${error?.message}`);
+                const errorMsg = error?.message || String(error);
+                console.error(`[Gemini] Non-retryable error on '${modelName}': ${errorMsg}`);
                 break;
             }
         }
         console.warn(`[Gemini] All retries exhausted for model '${modelName}', trying next model...`);
+    }
+    const finalErrorMsg = lastError?.message || String(lastError);
+    if (finalErrorMsg.includes('leaked') || lastError?.status === 403) {
+        console.error("!!! CRITICAL: GEMINI API KEY IS LEAKED OR INVALID !!!", lastError);
+        throw new Error("A chave da API Gemini foi bloqueada por razões de segurança ou é inválida. Por favor, atualize a GEMINI_API_KEY no arquivo .env.");
     }
     throw lastError;
 }
@@ -861,6 +1000,11 @@ REGRAS CRÍTICAS:
 5. CRIE UMA ENTRADA PARA CADA DOCUMENTO. Se um item do edital (ex: 9.1) listar 5 documentos, retorne 5 objetos no array da categoria correspondente.
 6. Detalhe os itens licitados no campo 'biddingItems', extraindo as quantias e descrições técnicas do Termo de Referência.
 7. FUGA ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON.
+8. OTIMIZAÇÃO OCR: Este documento pode ser uma imagem digitalizada. Analise cuidadosamente a imagem de cada página. Se o texto estiver borrado ou for de difícil leitura, use o contexto jurídico para inferir o termo correto, mas priorize a fidelidade visual.
+9. TRUNCAMENTO: Se a resposta for ficar muito longa, resuma as partes descritivas ("summary", "biddingItems") para garantir que a lista de documentos ("requiredDocuments") seja entregue completa.
+10. EXATIDÃO EM SCANS: Em documentos digitalizados, ignore marcas d'água, carimbos ou logomarcas que possam obstruir o texto, focando exclusivamente na transcrição literal das exigências de habilitação.
+11. ESTRATÉGIA DE BUSCA: Analise o índice do documento (se houver) para localizar as seções de "HABILITAÇÃO", "QUALIFICAÇÃO TÉCNICA" e "TERMO DE REFERÊNCIA". Se o documento for um scan sem índice, percorra página por página procurando por palavras-chave como "Certidão", "Atestado", "Balanço", "Índice de Liquidez" e "Prazo".
+12. TRANSCRIÇÃO DE ITENS: Se houver tabelas de itens (lotes) no Termo de Referência, extraia os dados técnicos e quantidades mesmo que a imagem esteja com baixa resolução, usando a lógica do contexto do objeto da licitação.
 
 EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
 {
@@ -922,24 +1066,56 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         // ---- Robust JSON extraction and repair ----
         // 1. Clean markdown wrappers
         let cleanedJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        // 2. Extract the outermost { ... }
         const firstBrace = cleanedJson.indexOf('{');
-        let lastBrace = cleanedJson.lastIndexOf('}');
         if (firstBrace === -1)
             throw new Error("A IA não retornou um JSON válido (sem '{'). Texto recebido: " + cleanedJson.substring(0, 200));
-        cleanedJson = firstBrace !== -1 && lastBrace !== -1
-            ? cleanedJson.substring(firstBrace, lastBrace + 1)
-            : cleanedJson.substring(firstBrace);
-        // 3. Repair common Gemini issues
-        //    a) Control characters (newlines inside strings)
+        // Remove everything before the first brace
+        cleanedJson = cleanedJson.substring(firstBrace);
+        // Control characters
         cleanedJson = cleanedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
-        //    b) Trailing commas before } or ]
-        cleanedJson = cleanedJson.replace(/,\s*([}\]])/g, '$1');
-        //    c) If truncated (no closing brace), try to close it
-        if (cleanedJson.lastIndexOf('}') < cleanedJson.length - 5) {
-            // count unclosed braces/brackets
-            let depth = 0, inString = false, escape = false;
-            for (const c of cleanedJson) {
+        // Recovery: Check depth to see if it's truncated or has trailing garbage
+        let depth = 0, inString = false, escape = false;
+        let lastValidDepthZeroBrace = -1;
+        for (let i = 0; i < cleanedJson.length; i++) {
+            const c = cleanedJson[i];
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (c === '\\') {
+                escape = true;
+                continue;
+            }
+            if (c === '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString)
+                continue;
+            if (c === '{' || c === '[')
+                depth++;
+            if (c === '}' || c === ']') {
+                depth--;
+                if (depth === 0) {
+                    lastValidDepthZeroBrace = i;
+                }
+            }
+        }
+        if (depth === 0 && lastValidDepthZeroBrace !== -1) {
+            // It perfectly closes! Drop any trailing markdown garbage.
+            cleanedJson = cleanedJson.substring(0, lastValidDepthZeroBrace + 1);
+        }
+        else {
+            console.log("[AI] JSON seems truncated. Attempting recovery...");
+            // Re-run to build stack of missing structural characters
+            depth = 0;
+            inString = false;
+            escape = false;
+            let stack = [];
+            // Clean up trailing commas if any exist at the very end of the cut string
+            cleanedJson = cleanedJson.replace(/,$/, '').replace(/,\s+$/, '');
+            for (let i = 0; i < cleanedJson.length; i++) {
+                const c = cleanedJson[i];
                 if (escape) {
                     escape = false;
                     continue;
@@ -954,15 +1130,18 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
                 }
                 if (inString)
                     continue;
-                if (c === '{' || c === '[')
-                    depth++;
+                if (c === '{')
+                    stack.push('}');
+                if (c === '[')
+                    stack.push(']');
                 if (c === '}' || c === ']')
-                    depth--;
+                    stack.pop();
             }
-            // Close any unclosed structures (last resort)
-            while (depth > 0) {
-                cleanedJson += '}';
-                depth--;
+            if (inString) {
+                cleanedJson += '"';
+            }
+            while (stack.length > 0) {
+                cleanedJson += stack.pop();
             }
         }
         try {
@@ -1269,25 +1448,29 @@ async function runAutoSetup() {
                 data: { tenantId: tenant.id }
             });
         }
-        // 🛠️ MÓDULO DE RECUPERAÇÃO DE DADOS (CURA)
-        // Isso "adota" qualquer registro que tenha ficado órfão ou associado a um tenant antigo/deletado
-        // Garante que o usuário consiga visualizar seus dados antigos após atualizações de versão.
+        // 🛠️ MÓDULO DE RESTAURAÇÃO (CORREÇÃO DE DADOS MIGRADOS INDEVIDAMENTE)
+        // Como o antigo script roubou os dados para o tenant padrão, precisamos devolvê-los
+        // para o seu usuário (Marcos ou conta primária criada no painel).
+        const realUser = await prisma.user.findFirst({
+            where: { email: { not: 'admin@licitasaas.com' } }
+        });
+        const targetTenantId = realUser ? realUser.tenantId : tenant.id;
         const results = {
             companies: await prisma.companyProfile.updateMany({
-                where: { tenantId: { not: tenant.id } },
-                data: { tenantId: tenant.id }
+                where: { tenantId: tenant.id },
+                data: { tenantId: targetTenantId }
             }),
             biddings: await prisma.biddingProcess.updateMany({
-                where: { tenantId: { not: tenant.id } },
-                data: { tenantId: tenant.id }
+                where: { tenantId: tenant.id },
+                data: { tenantId: targetTenantId }
             }),
             documents: await prisma.document.updateMany({
-                where: { tenantId: { not: tenant.id } },
-                data: { tenantId: tenant.id }
+                where: { tenantId: tenant.id },
+                data: { tenantId: targetTenantId }
             })
         };
         if (results.companies.count > 0 || results.biddings.count > 0 || results.documents.count > 0) {
-            console.log(`✅ RECUPERAÇÃO: ${results.companies.count} empresas, ${results.biddings.count} licitações e ${results.documents.count} documentos migrados.`);
+            console.log(`✅ RESTAURAÇÃO: ${results.companies.count} empresas, ${results.biddings.count} licitações devolvidas ao seu painel principal!`);
         }
         console.log('🚀 Sistema pronto e sincronizado.');
     }

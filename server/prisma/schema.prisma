@@ -18,6 +18,7 @@ model Tenant {
   documents        Document[]
   users            User[]
   globalConfig     GlobalConfig?
+  pncpSearches     PncpSavedSearch[]
 }
 
 model User {
@@ -44,6 +45,7 @@ model CompanyProfile {
   contactPhone     String?
   biddingProcesses BiddingProcess[]
   credentials      CompanyCredential[]
+  pncpSearches     PncpSavedSearch[]
   tenant           Tenant              @relation(fields: [tenantId], references: [id])
   documents        Document[]
 }
@@ -124,4 +126,19 @@ model CompanyCredential {
   notes            String?
   createdAt        DateTime       @default(now())
   company          CompanyProfile @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
+}
+
+model PncpSavedSearch {
+  id               String   @id @default(uuid())
+  tenantId         String
+  companyProfileId String?
+  name             String
+  keywords         String?
+  status           String?  @default("aberta")
+  states           String?  // Stored as JSON string
+  regions          String?  // Stored as JSON string
+  createdAt        DateTime @default(now())
+  
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company          CompanyProfile? @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
 }

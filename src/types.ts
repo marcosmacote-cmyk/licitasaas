@@ -94,3 +94,37 @@ export interface CompanyCredential {
     notes?: string;
     createdAt?: string;
 }
+
+export interface PncpSavedSearch {
+    id: string;
+    name: string;
+    keywords?: string;
+    status?: string;
+    states?: string; // JSON array string
+    regions?: string; // JSON array string
+    companyProfileId?: string;
+    company?: CompanyProfile;
+}
+
+export interface PncpFilters {
+    keywords: string;
+    status: string;
+    states: string[];
+    regions: string[];
+}
+
+export interface PncpBiddingItem {
+    id: string;
+    orgao_nome: string;
+    orgao_cnpj: string;
+    titulo: string;
+    objeto: string;
+    data_publicacao: string;
+    data_abertura: string;
+    valor_estimado: number;
+    uf: string;
+    municipio: string;
+    link_sistema: string;
+    status: string;
+}
+

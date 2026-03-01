@@ -168,7 +168,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         setIsModalOpen(true);
     };
 
-    const handleSaveProcess = (process: Partial<BiddingProcess>) => {
+    const handleSaveProcess = (process: Partial<BiddingProcess>, aiData?: any) => {
         // If it possesses an ID, it is an update of an existing process.
         // Otherwise (like when pre-filled by AI), it's a new process creation.
         if (editingProcess && editingProcess.id) {
@@ -186,6 +186,25 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     throw new Error(errorObj.error || 'Server error');
                 }
                 setItems(prev => prev.map(p => p.id === editingProcess.id ? { ...p, ...process } as BiddingProcess : p));
+
+                const finalAnalysisPayload = aiData || pendingAnalysis;
+                if (finalAnalysisPayload) {
+                    const finalAnalysis = { ...finalAnalysisPayload, biddingProcessId: editingProcess.id };
+                    fetch(`${API_BASE_URL}/api/analysis`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify(finalAnalysis)
+                    }).then((res) => {
+                        if (res.ok) {
+                            setItems(prev => prev.map(p => p.id === editingProcess.id ? { ...p, aiAnalysis: finalAnalysis } : p));
+                        }
+                    }).catch(console.error);
+                    setPendingAnalysis(null);
+                }
+
             }).catch(e => {
                 console.error("Update error:", e);
                 alert("Erro ao atualizar a licitação no servidor.");
@@ -208,9 +227,10 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                 const newProcess = await res.json();
                 setItems(prev => [newProcess, ...prev]);
 
+                const finalAnalysisPayload = aiData || pendingAnalysis;
                 // If we have a pending AI analysis for this new process, save it
-                if (pendingAnalysis) {
-                    const finalAnalysis = { ...pendingAnalysis, biddingProcessId: newProcess.id };
+                if (finalAnalysisPayload) {
+                    const finalAnalysis = { ...finalAnalysisPayload, biddingProcessId: newProcess.id };
 
                     fetch(`${API_BASE_URL}/api/analysis`, {
                         method: 'POST',
@@ -524,6 +544,10 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                         setPendingAnalysis(null); // Clear pending analysis if user cancels creation
                     }}
                     onSave={handleSaveProcess}
+                    onRequestAiAnalysis={analyses.some((a: AiAnalysis) => a.biddingProcessId === editingProcess?.id) ? () => {
+                        setIsModalOpen(false);
+                        setViewingProcessForAnalysis(editingProcess as BiddingProcess);
+                    } : undefined}
                 />
             )}
 
