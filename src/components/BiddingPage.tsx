@@ -83,6 +83,12 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showCardConfig, setShowCardConfig] = useState(false);
 
+    // ===== CONFIGURAÇÕES DO PAINEL =====
+    const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+    const [visibleColumns, setVisibleColumns] = useState<string[]>([...COLUMNS]);
+    const [sortBy, setSortBy] = useState<'default' | 'date-asc' | 'date-desc' | 'value-desc' | 'value-asc' | 'risk'>('default');
+    const [defaultCompanyId, setDefaultCompanyId] = useState<string>('');
+
     // Opções dinâmicas para filtros
     const filterOptions = useMemo(() => ({
         companies: Array.from(new Set(items.map(i => i.companyProfileId).filter(Boolean))) as string[],
@@ -558,10 +564,130 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                         </button>
                     </div>
 
-                    <button className="btn btn-outline">
-                        <Settings size={16} />
-                        Configurar
-                    </button>
+                    <div style={{ position: 'relative' }}>
+                        <button
+                            className={`btn ${showSettingsPanel ? 'btn-primary' : 'btn-outline'}`}
+                            style={showSettingsPanel ? { backgroundColor: '#059669', borderColor: '#059669' } : {}}
+                            onClick={() => setShowSettingsPanel(!showSettingsPanel)}
+                        >
+                            <Settings size={16} />
+                            Configurar
+                        </button>
+
+                        {showSettingsPanel && (
+                            <div style={{
+                                position: 'absolute', top: '44px', right: 0, width: '340px',
+                                background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
+                                overflow: 'hidden'
+                            }}>
+                                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(16, 185, 129, 0.05))' }}>
+                                    <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>⚙️ Configurações</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '2px' }}>Personalize o painel de licitações</div>
+                                </div>
+                                <div style={{ maxHeight: '450px', overflowY: 'auto' }}>
+
+                                    {/* === SEÇÃO 1: Colunas do Kanban === */}
+                                    <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)' }}>
+                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>📋 Colunas do Kanban</h4>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Mostre/esconda fases do processo</div>
+                                        {(COLUMNS as string[]).map(col => (
+                                            <label key={col} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                                onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+                                                onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'transparent')}
+                                            >
+                                                <span style={{ color: 'var(--color-text-primary)' }}>{col}</span>
+                                                <div
+                                                    onClick={(e: React.MouseEvent) => {
+                                                        e.preventDefault();
+                                                        if (visibleColumns.includes(col)) {
+                                                            if (visibleColumns.length > 1) setVisibleColumns(visibleColumns.filter(c => c !== col));
+                                                        } else {
+                                                            setVisibleColumns([...visibleColumns, col]);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
+                                                        background: visibleColumns.includes(col) ? '#059669' : 'var(--color-border)',
+                                                    }}
+                                                >
+                                                    <div style={{
+                                                        position: 'absolute', top: '2px', left: visibleColumns.includes(col) ? '16px' : '2px',
+                                                        width: '14px', height: '14px', borderRadius: '50%', background: 'white',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s',
+                                                    }} />
+                                                </div>
+                                            </label>
+                                        ))}
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: '6px', textAlign: 'center' }}>
+                                            {visibleColumns.length} de {COLUMNS.length} visíveis
+                                        </div>
+                                    </div>
+
+                                    {/* === SEÇÃO 2: Ordenação Padrão === */}
+                                    <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)' }}>
+                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>📊 Ordenação dos Cards</h4>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Como os cards são ordenados dentro de cada coluna</div>
+                                        {[
+                                            { value: 'default', label: '📌 Ordem manual (padrão)', icon: '' },
+                                            { value: 'date-asc', label: '📅 Sessão mais próxima primeiro', icon: '' },
+                                            { value: 'date-desc', label: '📅 Sessão mais distante primeiro', icon: '' },
+                                            { value: 'value-desc', label: '💰 Maior valor primeiro', icon: '' },
+                                            { value: 'value-asc', label: '💰 Menor valor primeiro', icon: '' },
+                                            { value: 'risk', label: '⚠️ Maior risco primeiro', icon: '' },
+                                        ].map(opt => (
+                                            <label key={opt.value} style={{
+                                                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer',
+                                                borderRadius: '4px', fontSize: '0.8125rem',
+                                                background: sortBy === opt.value ? 'rgba(5, 150, 105, 0.08)' : 'transparent',
+                                                color: sortBy === opt.value ? '#059669' : 'var(--color-text-primary)',
+                                                fontWeight: sortBy === opt.value ? 600 : 400,
+                                            }}
+                                                onClick={() => setSortBy(opt.value as typeof sortBy)}
+                                                onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => { if (sortBy !== opt.value) e.currentTarget.style.background = 'var(--color-bg-surface-hover)'; }}
+                                                onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => { if (sortBy !== opt.value) e.currentTarget.style.background = 'transparent'; }}
+                                            >
+                                                <div style={{
+                                                    width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${sortBy === opt.value ? '#059669' : 'var(--color-border)'}`,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                                }}>
+                                                    {sortBy === opt.value && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#059669' }} />}
+                                                </div>
+                                                {opt.label}
+                                            </label>
+                                        ))}
+                                    </div>
+
+                                    {/* === SEÇÃO 3: Empresa Padrão === */}
+                                    <div style={{ padding: '14px 16px' }}>
+                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>🏢 Empresa Padrão</h4>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Pré-selecionada ao criar novo processo</div>
+                                        <select
+                                            value={defaultCompanyId}
+                                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDefaultCompanyId(e.target.value)}
+                                            style={{
+                                                width: '100%', padding: '8px 12px', fontSize: '0.8125rem',
+                                                border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                                                background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)',
+                                                cursor: 'pointer', outline: 'none',
+                                            }}
+                                        >
+                                            <option value="">Nenhuma (selecionar manualmente)</option>
+                                            {companies.map(c => (
+                                                <option key={c.id} value={c.id}>{c.razaoSocial}</option>
+                                            ))}
+                                        </select>
+                                        {defaultCompanyId && (
+                                            <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#059669', fontWeight: 500 }}>
+                                                ✅ {companies.find(c => c.id === defaultCompanyId)?.razaoSocial} será pré-selecionada
+                                            </div>
+                                        )}
+                                    </div>
+
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     <input
                         type="file"
@@ -776,6 +902,8 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     }}
                     onStatusChange={handleStatusChange}
                     cardFields={cardFields}
+                    visibleColumns={visibleColumns}
+                    sortBy={sortBy}
                 />
             ) : (
                 <BiddingTable

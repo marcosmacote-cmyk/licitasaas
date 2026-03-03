@@ -36,9 +36,11 @@ interface Props {
     onDeleteProcess: (id: string) => void;
     onStatusChange: (id: string, newStatus: BiddingStatus) => void;
     cardFields?: CardFieldConfig[];
+    visibleColumns?: string[];
+    sortBy?: string;
 }
 
-export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, cardFields }: Props) {
+export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, cardFields, visibleColumns, sortBy }: Props) {
     const [activeItem, setActiveItem] = useState<BiddingProcess | null>(null);
 
     const sensors = useSensors(
@@ -105,19 +107,34 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
             onDragEnd={handleDragEnd}
         >
             <div className="kanban-board">
-                {COLUMNS.map((col) => (
-                    <KanbanColumn
-                        key={col}
-                        title={col}
-                        items={items.filter(item => item.status === col)}
-                        onEditProcess={onEditProcess}
-                        onDeleteProcess={onDeleteProcess}
-                        analyses={analyses}
-                        companies={companies}
-                        onViewAnalysis={onViewAnalysis}
-                        cardFields={cardFields}
-                    />
-                ))}
+                {(visibleColumns && visibleColumns.length > 0 ? COLUMNS.filter(col => visibleColumns.includes(col)) : COLUMNS).map((col) => {
+                    let colItems = items.filter(item => item.status === col);
+                    // Apply sorting
+                    if (sortBy && sortBy !== 'default') {
+                        const riskOrder: Record<string, number> = { 'Crítico': 0, 'Alto': 1, 'Médio': 2, 'Baixo': 3, 'Bairro': 4 };
+                        colItems = [...colItems].sort((a, b) => {
+                            if (sortBy === 'date-asc') return new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime();
+                            if (sortBy === 'date-desc') return new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime();
+                            if (sortBy === 'value-desc') return b.estimatedValue - a.estimatedValue;
+                            if (sortBy === 'value-asc') return a.estimatedValue - b.estimatedValue;
+                            if (sortBy === 'risk') return (riskOrder[a.risk || ''] ?? 99) - (riskOrder[b.risk || ''] ?? 99);
+                            return 0;
+                        });
+                    }
+                    return (
+                        <KanbanColumn
+                            key={col}
+                            title={col}
+                            items={colItems}
+                            onEditProcess={onEditProcess}
+                            onDeleteProcess={onDeleteProcess}
+                            analyses={analyses}
+                            companies={companies}
+                            onViewAnalysis={onViewAnalysis}
+                            cardFields={cardFields}
+                        />
+                    );
+                })}
 
                 <DragOverlay>
                     {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} cardFields={cardFields} /> : null}
