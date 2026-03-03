@@ -815,8 +815,8 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             const valorEstimado = Number(rawVal) || 0;
 
             // Extract modalidade from API response
-            const modalidadeNome = item.modalidade_nome || item.modalidadeNome
-                || item.modalidadeLicitacaoNome || item.modalidade_licitacao_nome || '';
+            const modalidadeNome = item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidadeNome
+                || item.modalidadeLicitacaoNome || '';
 
             return {
                 id: item.id || item.numeroControlePNCP || Math.random().toString(),
@@ -853,7 +853,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         const hydratedItems = await Promise.all(items.map(async (item: any) => {
             if (item.orgao_cnpj && item.ano && item.numero_sequencial) {
                 try {
-                    const detailUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${item.orgao_cnpj}/compras/${item.ano}/${item.numero_sequencial}`;
+                    const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${item.orgao_cnpj}/compras/${item.ano}/${item.numero_sequencial}`;
                     const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 5000 } as any);
                     const d: any = detailRes.data;
                     if (d) {
