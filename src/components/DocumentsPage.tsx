@@ -59,8 +59,8 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
 
     // Alert Config State
     const [isAlertConfigOpen, setIsAlertConfigOpen] = useState(false);
-    const [defaultAlertDays, setDefaultAlertDays] = useState(15);
-    const [groupAlertDays, setGroupAlertDays] = useState<Record<string, number>>({});
+    const [defaultAlertDays, setDefaultAlertDays] = useState<number | ''>(15);
+    const [groupAlertDays, setGroupAlertDays] = useState<Record<string, number | ''>>({});
     const [applyToExisting, setApplyToExisting] = useState(false);
 
     const DOCUMENT_GROUPS = [
@@ -124,6 +124,12 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
     };
 
     const handleSaveAlertConfig = async () => {
+        const finalDefault = (typeof defaultAlertDays === 'number' && !isNaN(defaultAlertDays)) ? defaultAlertDays : 15;
+        const finalGroup: Record<string, number> = {};
+        for (const [k, v] of Object.entries(groupAlertDays)) {
+            finalGroup[k] = (typeof v === 'number' && !isNaN(v)) ? v : finalDefault;
+        }
+
         try {
             const res = await fetch(`${API_BASE_URL}/api/config/alerts`, {
                 method: 'POST',
@@ -131,7 +137,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify({ defaultAlertDays, groupAlertDays, applyToExisting })
+                body: JSON.stringify({ defaultAlertDays: finalDefault, groupAlertDays: finalGroup, applyToExisting })
             });
             if (res.ok) {
                 setIsAlertConfigOpen(false);
@@ -140,11 +146,17 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 } else {
                     alert("Configuração de alertas salva com sucesso!");
                 }
+            } else {
+                alert("Erro ao salvar configuração no servidor.");
             }
         } catch (err) {
             console.error("Failed to save alert config", err);
+            alert("Erro ao salvar configuração.");
         }
     };
+
+    const sanitizedDefault = typeof defaultAlertDays === 'number' && !isNaN(defaultAlertDays) ? defaultAlertDays : 15;
+    const sanitizedGroup = Object.fromEntries(Object.entries(groupAlertDays).map(([k, v]) => [k, typeof v === 'number' && !isNaN(v) ? v : sanitizedDefault]));
 
     const handleCreateCompany = () => {
         setEditingCompany(null);
@@ -734,8 +746,8 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                         companyProfileId={activeCompany.id}
                         onClose={() => setIsDocumentModalOpen(false)}
                         onSave={handleSaveDocument}
-                        groupAlertDays={groupAlertDays}
-                        defaultAlertDays={defaultAlertDays}
+                        groupAlertDays={sanitizedGroup}
+                        defaultAlertDays={sanitizedDefault}
                     />
                 )
             }
@@ -753,36 +765,36 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
 
             {
                 isAlertConfigOpen && (
-                    <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }}>
-                        <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
-                            <h3 style={{ marginBottom: '16px' }}>Configurar Alertas de Vencimento</h3>
+                    <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease-out', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}>
+                        <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '32px', maxHeight: '90vh', overflowY: 'auto', backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: '1.25rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', animation: 'slideUp 0.3s ease-out' }}>
+                            <h3 style={{ marginBottom: '8px', fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Configurar Alertas</h3>
+                            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', marginBottom: '24px' }}>
+                                Defina quantos dias de antecedência para os alertas de vencimento aparecerem no sistema.
+                            </p>
 
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 600 }}>Prazos de Alerta Padrão (Dias):</label>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Alerta Padrão (Dias)</label>
                                 <input
                                     type="number"
                                     className="input-inner"
                                     value={defaultAlertDays}
-                                    onChange={(e) => setDefaultAlertDays(parseInt(e.target.value) || 15)}
-                                    style={{ width: '100%', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '4px' }}
+                                    onChange={(e) => setDefaultAlertDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                                    style={{ width: '100%', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-base)', padding: '10px 14px', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', outline: 'none' }}
                                 />
-                                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '8px' }}>
-                                    Define quantos dias antes do vencimento o status do documento mudará para "Vencendo".
-                                </p>
                             </div>
 
-                            <div style={{ marginBottom: '20px', borderTop: '1px solid var(--color-border)', paddingTop: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 600 }}>Prazos por Categoria (Dias):</label>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ marginBottom: '24px', borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Alerta por Categoria (Opcional)</label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {DOCUMENT_GROUPS.map((group) => (
                                         <div key={group} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', flex: 1 }}>{group}</span>
+                                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)', flex: 1 }}>{group}</span>
                                             <input
                                                 type="number"
                                                 className="input-inner"
                                                 value={groupAlertDays[group] !== undefined ? groupAlertDays[group] : defaultAlertDays}
-                                                onChange={(e) => setGroupAlertDays(prev => ({ ...prev, [group]: parseInt(e.target.value) || defaultAlertDays }))}
-                                                style={{ width: '80px', border: '1px solid var(--color-border)', padding: '6px', borderRadius: '4px', textAlign: 'center' }}
+                                                onChange={(e) => setGroupAlertDays(prev => ({ ...prev, [group]: e.target.value === '' ? '' : parseInt(e.target.value, 10) }))}
+                                                style={{ width: '70px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-base)', padding: '6px 10px', borderRadius: 'var(--radius-md)', textAlign: 'center', color: 'var(--color-text-primary)', outline: 'none' }}
                                             />
                                         </div>
                                     ))}
