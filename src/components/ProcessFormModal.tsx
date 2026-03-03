@@ -252,7 +252,8 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
         onSave({
             ...formData,
             sessionDate: formData.sessionDate ? new Date(formData.sessionDate).toISOString() : new Date().toISOString(),
-            reminderDate: formData.reminderDate ? new Date(formData.reminderDate).toISOString() : undefined
+            reminderDate: formData.reminderDate ? new Date(formData.reminderDate).toISOString() : (null as any),
+            reminderStatus: formData.reminderDate ? 'pending' : (null as any)
         }, aiAnalysisData);
     };
 
