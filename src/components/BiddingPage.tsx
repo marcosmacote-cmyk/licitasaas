@@ -93,7 +93,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
     // ===== CONFIGURAÇÕES IA & TIME (Premium) =====
     const [aiLanguage, setAiLanguage] = useState<'pt-br' | 'en' | 'es'>('pt-br');
-    const [aiFocus, setAiFocus] = useState<'general' | 'it' | 'engineering' | 'services'>('general');
+    const [aiFocus, setAiFocus] = useState<'general' | 'it' | 'engineering' | 'services' | 'vehicles' | 'transportation' | 'lighting' | 'food' | 'events' | 'accounting' | 'clothing' | 'consulting'>('general');
     const [aiAutoAnalyze, setAiAutoAnalyze] = useState(false);
 
     const exportToCsv = () => {
@@ -781,6 +781,14 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                                                 <option value="it">T.I e Software</option>
                                                 <option value="engineering">Engenharia e Obras</option>
                                                 <option value="services">Serviços Terceirizados</option>
+                                                <option value="vehicles">Locação de Veículos e Máquinas Pesadas</option>
+                                                <option value="transportation">Transporte Escolar</option>
+                                                <option value="lighting">Iluminação Pública</option>
+                                                <option value="food">Gêneros Alimentícios</option>
+                                                <option value="events">Eventos e Estruturas</option>
+                                                <option value="accounting">Serviços Contábeis e Auditoria</option>
+                                                <option value="clothing">Fardamento e Confecção</option>
+                                                <option value="consulting">Assessoria e Consultoria</option>
                                             </select>
                                         </div>
 
