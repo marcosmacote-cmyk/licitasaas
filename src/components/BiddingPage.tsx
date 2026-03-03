@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { Settings, Plus, LayoutGrid, List, Bot, Loader2, Bell } from 'lucide-react';
+import { Settings, Plus, LayoutGrid, List, Bot, Loader2, Bell, Search, SlidersHorizontal, Filter, X } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -7,6 +7,7 @@ import { AiReportModal } from './AiReportModal';
 import { aiService } from '../services/ai';
 import { API_BASE_URL } from '../config';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../types';
+import { COLUMNS } from '../types';
 
 // export const INITIAL_DATA: BiddingProcess[] = [ ... ] (Removed for brevity, now fetched from API)
 
@@ -15,6 +16,45 @@ interface Props {
     setItems: React.Dispatch<React.SetStateAction<BiddingProcess[]>>;
     companies: CompanyProfile[];
 }
+
+// ===== SISTEMA DE FILTROS INTELIGENTES =====
+interface SmartFilters {
+    searchText: string;
+    companies: string[]; // companyProfileId[]
+    modalities: string[];
+    portals: string[];
+    statuses: string[];
+    risks: string[];
+}
+
+const EMPTY_FILTERS: SmartFilters = {
+    searchText: '',
+    companies: [],
+    modalities: [],
+    portals: [],
+    statuses: [],
+    risks: [],
+};
+
+// ===== CAMPOS CONFIGURÁVEIS NOS CARDS =====
+interface CardFieldConfig {
+    key: string;
+    label: string;
+    visible: boolean;
+}
+
+const INITIAL_CARD_FIELDS: CardFieldConfig[] = [
+    { key: 'portal', label: 'Portal / Plataforma', visible: true },
+    { key: 'modality', label: 'Modalidade', visible: true },
+    { key: 'title', label: 'Título / Processo', visible: true },
+    { key: 'company', label: 'Empresa', visible: true },
+    { key: 'value', label: 'Valor Estimado', visible: true },
+    { key: 'date', label: 'Data da Sessão', visible: true },
+    { key: 'risk', label: 'Tag de Risco IA', visible: true },
+    { key: 'summary', label: 'Objeto Resumido', visible: false },
+    { key: 'observations', label: 'Observações', visible: true },
+    { key: 'reminder', label: 'Lembrete', visible: true },
+];
 
 export function BiddingPage({ items, setItems, companies }: Props) {
     const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
@@ -36,6 +76,46 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     const analyses = useMemo(() => {
         return items.filter(i => i.aiAnalysis).map(i => i.aiAnalysis!);
     }, [items]);
+
+    // ===== NOVOS ESTADOS: Filtros + Config de Campos =====
+    const [filters, setFilters] = useState<SmartFilters>(EMPTY_FILTERS);
+    const [cardFields, setCardFields] = useState<CardFieldConfig[]>(INITIAL_CARD_FIELDS);
+    const [showFilterPanel, setShowFilterPanel] = useState(false);
+    const [showCardConfig, setShowCardConfig] = useState(false);
+
+    // Opções dinâmicas para filtros
+    const filterOptions = useMemo(() => ({
+        companies: Array.from(new Set(items.map(i => i.companyProfileId).filter(Boolean))) as string[],
+        modalities: Array.from(new Set(items.map(i => i.modality).filter(Boolean))) as string[],
+        portals: Array.from(new Set(items.map(i => i.portal).filter(Boolean))) as string[],
+        statuses: COLUMNS as string[],
+        risks: ['Baixo', 'Médio', 'Alto', 'Crítico'] as string[],
+    }), [items]);
+
+    // Filtragem inteligente
+    const filteredItems = useMemo(() => {
+        return items.filter(item => {
+            if (filters.searchText) {
+                const text = filters.searchText.toLowerCase();
+                const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
+                const match = item.title?.toLowerCase().includes(text) ||
+                    item.summary?.toLowerCase().includes(text) ||
+                    item.portal?.toLowerCase().includes(text) ||
+                    item.modality?.toLowerCase().includes(text) ||
+                    companyName.toLowerCase().includes(text);
+                if (!match) return false;
+            }
+            if (filters.companies.length > 0 && (!item.companyProfileId || !filters.companies.includes(item.companyProfileId))) return false;
+            if (filters.modalities.length > 0 && !filters.modalities.includes(item.modality)) return false;
+            if (filters.portals.length > 0 && !filters.portals.includes(item.portal)) return false;
+            if (filters.statuses.length > 0 && !filters.statuses.includes(item.status)) return false;
+            if (filters.risks.length > 0 && !filters.risks.includes(item.risk || '')) return false;
+            return true;
+        });
+    }, [items, filters, companies]);
+
+    const hasActiveFilters = filters.searchText !== '' || filters.companies.length > 0 || filters.modalities.length > 0 || filters.portals.length > 0 || filters.statuses.length > 0 || filters.risks.length > 0;
+    const activeFilterCount = [filters.companies.length > 0, filters.modalities.length > 0, filters.portals.length > 0, filters.statuses.length > 0, filters.risks.length > 0].filter(Boolean).length;
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -509,9 +589,182 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                 </div>
             </div>
 
+            {/* ===== BARRA DE FILTROS INTELIGENTES + CONFIG DE CAMPOS ===== */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                {/* Botão Filtros */}
+                <div style={{ position: 'relative' }}>
+                    <button
+                        className={`btn ${showFilterPanel || hasActiveFilters ? 'btn-primary' : 'btn-outline'}`}
+                        style={showFilterPanel || hasActiveFilters ? { backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)' } : {}}
+                        onClick={() => { setShowFilterPanel(!showFilterPanel); setShowCardConfig(false); }}
+                    >
+                        <Filter size={14} />
+                        Filtros
+                        {activeFilterCount > 0 && (
+                            <span style={{
+                                background: hasActiveFilters && !showFilterPanel ? 'rgba(255,255,255,0.3)' : 'var(--color-primary)',
+                                color: 'white',
+                                fontSize: '0.65rem',
+                                padding: '1px 6px',
+                                borderRadius: '999px',
+                                fontWeight: 700,
+                                marginLeft: '4px'
+                            }}>{activeFilterCount}</span>
+                        )}
+                    </button>
+
+                    {showFilterPanel && (
+                        <div style={{
+                            position: 'absolute', top: '44px', left: 0, width: '300px',
+                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>Filtros Inteligentes</span>
+                                {hasActiveFilters && <button onClick={() => setFilters(EMPTY_FILTERS)} style={{ fontSize: '0.75rem', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Limpar</button>}
+                            </div>
+                            <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+                                {/* Filtro Empresa */}
+                                <FilterSection title="🏢 Empresa">
+                                    {filterOptions.companies.map(compId => {
+                                        const comp = companies.find(c => c.id === compId);
+                                        return (
+                                            <FilterCheckbox key={compId} label={comp?.razaoSocial || 'Desconhecida'}
+                                                checked={filters.companies.includes(compId)}
+                                                onChange={() => setFilters({ ...filters, companies: filters.companies.includes(compId) ? filters.companies.filter(x => x !== compId) : [...filters.companies, compId] })} />
+                                        );
+                                    })}
+                                </FilterSection>
+                                {/* Filtro Modalidade */}
+                                <FilterSection title="📄 Modalidade">
+                                    {filterOptions.modalities.map(m => (
+                                        <FilterCheckbox key={m} label={m} checked={filters.modalities.includes(m)}
+                                            onChange={() => setFilters({ ...filters, modalities: filters.modalities.includes(m) ? filters.modalities.filter(x => x !== m) : [...filters.modalities, m] })} />
+                                    ))}
+                                </FilterSection>
+                                {/* Filtro Portal */}
+                                <FilterSection title="🌐 Portal">
+                                    {filterOptions.portals.map(p => (
+                                        <FilterCheckbox key={p} label={p} checked={filters.portals.includes(p)}
+                                            onChange={() => setFilters({ ...filters, portals: filters.portals.includes(p) ? filters.portals.filter(x => x !== p) : [...filters.portals, p] })} />
+                                    ))}
+                                </FilterSection>
+                                {/* Filtro Fase */}
+                                <FilterSection title="🔄 Fase / Status">
+                                    {filterOptions.statuses.map(s => (
+                                        <FilterCheckbox key={s} label={s} checked={filters.statuses.includes(s)}
+                                            onChange={() => setFilters({ ...filters, statuses: filters.statuses.includes(s) ? filters.statuses.filter(x => x !== s) : [...filters.statuses, s] })} />
+                                    ))}
+                                </FilterSection>
+                                {/* Filtro Risco */}
+                                <FilterSection title="⚠️ Risco IA">
+                                    {filterOptions.risks.map(r => (
+                                        <FilterCheckbox key={r} label={r} checked={filters.risks.includes(r)}
+                                            onChange={() => setFilters({ ...filters, risks: filters.risks.includes(r) ? filters.risks.filter(x => x !== r) : [...filters.risks, r] })} />
+                                    ))}
+                                </FilterSection>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Busca Textual */}
+                <div style={{ position: 'relative', flex: '1', maxWidth: '340px' }}>
+                    <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+                    <input
+                        type="text"
+                        value={filters.searchText}
+                        onChange={e => setFilters({ ...filters, searchText: e.target.value })}
+                        placeholder="Buscar por título, objeto, empresa..."
+                        style={{
+                            width: '100%', padding: '8px 32px 8px 34px', fontSize: '0.8125rem',
+                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                            background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)',
+                            outline: 'none'
+                        }}
+                    />
+                    {filters.searchText && (
+                        <button onClick={() => setFilters({ ...filters, searchText: '' })} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: '4px' }}>
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+
+                {/* Configuração de Campos */}
+                <div style={{ position: 'relative', marginLeft: 'auto' }}>
+                    <button
+                        className={`btn ${showCardConfig ? 'btn-primary' : 'btn-outline'}`}
+                        style={showCardConfig ? { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' } : {}}
+                        onClick={() => { setShowCardConfig(!showCardConfig); setShowFilterPanel(false); }}
+                    >
+                        <SlidersHorizontal size={14} />
+                        Campos
+                    </button>
+
+                    {showCardConfig && (
+                        <div style={{
+                            position: 'absolute', top: '44px', right: 0, width: '260px',
+                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(99, 102, 241, 0.05))' }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>Campos Visíveis</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Escolha o que aparece nos cards</div>
+                            </div>
+                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                {cardFields.map(field => (
+                                    <label key={field.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                    >
+                                        <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}>{field.label}</span>
+                                        <div
+                                            onClick={e => { e.preventDefault(); setCardFields(cardFields.map(f => f.key === field.key ? { ...f, visible: !f.visible } : f)); }}
+                                            style={{
+                                                width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
+                                                background: field.visible ? '#8b5cf6' : 'var(--color-border)',
+                                            }}
+                                        >
+                                            <div style={{
+                                                position: 'absolute', top: '2px', left: field.visible ? '16px' : '2px',
+                                                width: '14px', height: '14px', borderRadius: '50%', background: 'white',
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s',
+                                            }} />
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                            <div style={{ padding: '8px 16px', borderTop: '1px solid var(--color-border)', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                                {cardFields.filter(f => f.visible).length} de {cardFields.length} visíveis
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Contagem */}
+                {hasActiveFilters && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{filteredItems.length} de {items.length}</span>
+                )}
+            </div>
+
+            {/* Chips de Filtros Ativos */}
+            {hasActiveFilters && (
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px', alignItems: 'center' }}>
+                    {filters.searchText && <FilterChip label={`"${filters.searchText}"`} onRemove={() => setFilters({ ...filters, searchText: '' })} />}
+                    {filters.companies.map(compId => { const name = companies.find(c => c.id === compId)?.razaoSocial || compId; return <FilterChip key={compId} label={`🏢 ${name}`} color="#3b82f6" onRemove={() => setFilters({ ...filters, companies: filters.companies.filter(x => x !== compId) })} />; })}
+                    {filters.modalities.map(m => <FilterChip key={m} label={m} color="#8b5cf6" onRemove={() => setFilters({ ...filters, modalities: filters.modalities.filter(x => x !== m) })} />)}
+                    {filters.portals.map(p => <FilterChip key={p} label={`🌐 ${p}`} color="#10b981" onRemove={() => setFilters({ ...filters, portals: filters.portals.filter(x => x !== p) })} />)}
+                    {filters.statuses.map(s => <FilterChip key={s} label={s} color="#f59e0b" onRemove={() => setFilters({ ...filters, statuses: filters.statuses.filter(x => x !== s) })} />)}
+                    {filters.risks.map(r => <FilterChip key={r} label={`⚠️ ${r}`} color="#ef4444" onRemove={() => setFilters({ ...filters, risks: filters.risks.filter(x => x !== r) })} />)}
+                    <button onClick={() => setFilters(EMPTY_FILTERS)} style={{ fontSize: '0.75rem', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Limpar tudo</button>
+                </div>
+            )}
+
             {viewMode === 'kanban' ? (
                 <KanbanBoard
-                    items={items}
+                    items={filteredItems}
                     setItems={setItems}
                     onEditProcess={handleEdit}
                     onDeleteProcess={handleDeleteProcess}
@@ -525,7 +778,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                 />
             ) : (
                 <BiddingTable
-                    items={items}
+                    items={filteredItems}
                     companies={companies}
                     onEditProcess={handleEdit}
                     analyses={analyses}
@@ -560,5 +813,43 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                 />
             )}
         </div>
+    );
+}
+
+// ===== COMPONENTES AUXILIARES DE FILTRO =====
+function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
+            <h4 style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{title}</h4>
+            {children}
+        </div>
+    );
+}
+
+function FilterCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
+    return (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+            <input type="checkbox" checked={checked} onChange={onChange}
+                style={{ width: '14px', height: '14px', accentColor: '#10b981', cursor: 'pointer' }} />
+            <span>{label}</span>
+        </label>
+    );
+}
+
+function FilterChip({ label, color = '#64748b', onRemove }: { label: string; color?: string; onRemove: () => void }) {
+    return (
+        <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            padding: '3px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 500,
+            background: `${color}18`, color: color, border: `1px solid ${color}30`,
+        }}>
+            {label}
+            <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: color, padding: '1px', display: 'flex', alignItems: 'center' }}>
+                <X size={12} />
+            </button>
+        </span>
     );
 }
