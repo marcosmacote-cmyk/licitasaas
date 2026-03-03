@@ -142,7 +142,14 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             if (res.ok) {
                 setIsAlertConfigOpen(false);
                 if (applyToExisting) {
-                    window.location.reload();
+                    const resCompanies = await fetch(`${API_BASE_URL}/api/companies`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    if (resCompanies.ok) {
+                        const data = await resCompanies.json();
+                        setCompanies(data);
+                    }
+                    alert("Configuração de alertas salva com sucesso. Os prazos já foram aplicados aos documentos!");
                 } else {
                     alert("Configuração de alertas salva com sucesso!");
                 }
@@ -775,22 +782,24 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                         <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '32px', maxHeight: '90vh', overflowY: 'auto', backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: '1.25rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', animation: 'slideUp 0.3s ease-out' }}>
                             <h3 style={{ marginBottom: '8px', fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Configurar Alertas</h3>
                             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', marginBottom: '24px' }}>
-                                Defina quantos dias de antecedência para os alertas de vencimento aparecerem no sistema.
+                                A Regra Padrão é predominante para todos os documentos. Caso você defina prazos específicos por categoria, eles se tornarão a nova regra dominante sobre aquela categoria, revertendo a lógica.
                             </p>
 
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Alerta Padrão (Dias)</label>
+                            <div style={{ marginBottom: '20px', backgroundColor: 'var(--color-bg-base)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary)' }}>
+                                <label style={{ display: 'block', fontSize: '1rem', marginBottom: '8px', fontWeight: 600, color: 'var(--color-primary)' }}>Alerta Padrão Dominante (Dias)</label>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '12px' }}>Aplica-se a todos os documentos do sistema se não houver regra específica.</p>
                                 <input
                                     type="number"
                                     className="input-inner"
                                     value={defaultAlertDays}
                                     onChange={(e) => setDefaultAlertDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                                    style={{ width: '100%', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-base)', padding: '10px 14px', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', outline: 'none' }}
+                                    style={{ width: '100%', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-surface)', padding: '10px 14px', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', outline: 'none', fontWeight: 600, fontSize: '1.125rem' }}
                                 />
                             </div>
 
                             <div style={{ marginBottom: '24px', borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Alerta por Categoria (Opcional)</label>
+                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '4px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Alerta Específico por Categoria (Opcional)</label>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginBottom: '16px' }}>Ao informar um valor abaixo, ele se sobressai e ignora o padrão para aquela opção.</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {DOCUMENT_GROUPS.map((group) => (
                                         <div key={group} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
@@ -798,9 +807,21 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                             <input
                                                 type="number"
                                                 className="input-inner"
-                                                value={groupAlertDays[group] !== undefined ? groupAlertDays[group] : defaultAlertDays}
-                                                onChange={(e) => setGroupAlertDays(prev => ({ ...prev, [group]: e.target.value === '' ? '' : parseInt(e.target.value, 10) }))}
-                                                style={{ width: '70px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-base)', padding: '6px 10px', borderRadius: 'var(--radius-md)', textAlign: 'center', color: 'var(--color-text-primary)', outline: 'none' }}
+                                                placeholder={`${defaultAlertDays || 0} (Herdado)`}
+                                                value={groupAlertDays[group] !== undefined ? groupAlertDays[group] : ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setGroupAlertDays(prev => {
+                                                        const newGroup = { ...prev };
+                                                        if (val === '') {
+                                                            delete newGroup[group];
+                                                        } else {
+                                                            newGroup[group] = parseInt(val, 10);
+                                                        }
+                                                        return newGroup;
+                                                    });
+                                                }}
+                                                style={{ width: '120px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-base)', padding: '6px 10px', borderRadius: 'var(--radius-md)', textAlign: 'center', color: 'var(--color-text-primary)', outline: 'none' }}
                                             />
                                         </div>
                                     ))}
