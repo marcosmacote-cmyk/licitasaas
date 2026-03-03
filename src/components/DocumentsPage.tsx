@@ -147,13 +147,17 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     alert("Configuração de alertas salva com sucesso!");
                 }
             } else {
-                let errorData = { error: "Erro desconhecido do servidor" };
+                let errorData: any = null;
                 try { errorData = await res.json(); } catch (e) { }
-                alert(`Erro ao salvar configuração: ${errorData.error}`);
+                let errorMsg = "Erro desconhecido do servidor (resposta não-JSON)";
+                if (errorData) {
+                    errorMsg = errorData.error || errorData.message || (Object.keys(errorData).length > 0 ? JSON.stringify(errorData) : "Erro de resposta vazia do servidor");
+                }
+                alert(`Erro ao salvar configuração: ${errorMsg}`);
             }
         } catch (err: any) {
             console.error("Failed to save alert config", err);
-            alert(`Erro na requisição: ${err.message || 'Falha de rede.'}`);
+            alert(`Erro na requisição: ${err.message || String(err)}`);
         }
     };
 

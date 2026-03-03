@@ -535,6 +535,7 @@ app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
         });
 
         if (applyToExisting) {
+            console.log(`[Config Alerts] Updating documents for tenant ${req.user.tenantId}`);
             if (groupAlertDays && Object.keys(groupAlertDays).length > 0) {
                 for (const [group, days] of Object.entries(groupAlertDays)) {
                     await prisma.document.updateMany({
@@ -555,8 +556,15 @@ app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
                 data: { alertDays: Number(defaultAlertDays) }
             });
 
-            const allDocs = await prisma.document.findMany({ where: { tenantId: req.user.tenantId } });
-            let updateErrors = 0;
+            console.log(`[Config Alerts] Recalculating statuses...`);
+            const allDocs = await prisma.document.findMany({
+                where: { tenantId: req.user.tenantId },
+                select: { id: true, expirationDate: true, alertDays: true, status: true }
+            });
+
+            const toValido: string[] = [];
+            const toVencendo: string[] = [];
+            const toVencido: string[] = [];
 
             for (const doc of allDocs) {
                 let status = 'Válido';
@@ -568,21 +576,22 @@ app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
                 }
 
                 if (doc.status !== status) {
-                    try {
-                        await prisma.document.update({
-                            where: { id: doc.id },
-                            data: { status }
-                        });
-                    } catch (updateErr) {
-                        console.error(`Failed to update doc status for ${doc.id}:`, updateErr);
-                        updateErrors++;
-                    }
+                    if (status === 'Válido') toValido.push(doc.id);
+                    else if (status === 'Vencendo') toVencendo.push(doc.id);
+                    else if (status === 'Vencido') toVencido.push(doc.id);
                 }
             }
 
-            if (updateErrors > 0) {
-                console.warn(`[Config Alerts] ${updateErrors} documents failed to update their statuses.`);
+            if (toValido.length > 0) {
+                await prisma.document.updateMany({ where: { id: { in: toValido } }, data: { status: 'Válido' } });
             }
+            if (toVencendo.length > 0) {
+                await prisma.document.updateMany({ where: { id: { in: toVencendo } }, data: { status: 'Vencendo' } });
+            }
+            if (toVencido.length > 0) {
+                await prisma.document.updateMany({ where: { id: { in: toVencido } }, data: { status: 'Vencido' } });
+            }
+            console.log(`[Config Alerts] Finished bulk update. (Válido: ${toValido.length}, Vencendo: ${toVencendo.length}, Vencido: ${toVencido.length})`);
         }
 
         res.json({ success: true, config: JSON.parse(config.config) });
