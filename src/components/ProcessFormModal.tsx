@@ -460,42 +460,68 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             {/* Link / Upload + PDF Viewer + Credenciais */}
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={labelStyle}>Documentos do Edital / TR</label>
-                                <div style={{ display: 'flex', gap: '12px' }}>
-                                    <div style={{ ...inputContainerStyle, flex: 1 }}>
-                                        <Link size={18} color="var(--color-text-tertiary)" />
-                                        <input
-                                            type="text"
-                                            name="link"
-                                            style={inputInnerStyle}
-                                            placeholder="Link do portal de compras ou edital..."
-                                            value={formData.link || ''}
-                                            onChange={handleChange}
-                                        />
-                                        {formData.link && formData.link.startsWith('http') && (
-                                            <a href={formData.link} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, color: 'var(--color-primary)' }}>
-                                                <ExternalLink size={18} />
-                                            </a>
-                                        )}
-                                    </div>
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        style={{ display: 'none' }}
-                                        onChange={handleFileChange}
-                                        multiple
-                                        accept="application/pdf"
-                                    />
-                                    <button
-                                        type="button"
-                                        className="btn btn-outline"
-                                        onClick={handleFileUploadClick}
-                                        disabled={isUploading}
-                                        style={{ padding: '0 20px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                    >
-                                        {isUploading ? <Loader2 size={18} className="spinner" /> : <UploadCloud size={18} />}
-                                        Anexar PDF
-                                    </button>
-                                </div>
+
+                                {/* ── External Portal Link (PNCP / Other) ── */}
+                                {(() => {
+                                    const allParts = (formData.link || '').split(',').map(s => s.trim()).filter(s => s);
+                                    const externalLinks = allParts.filter(s => s.startsWith('http'));
+                                    const uploadPaths = allParts.filter(s => s.startsWith('/uploads/'));
+
+                                    return (
+                                        <>
+                                            {/* External link input */}
+                                            <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
+                                                <div style={{ ...inputContainerStyle, flex: 1 }}>
+                                                    <Globe size={18} color="var(--color-text-tertiary)" />
+                                                    <input
+                                                        type="text"
+                                                        style={inputInnerStyle}
+                                                        placeholder="Link do portal de compras (PNCP, ComprasNet, etc.)"
+                                                        value={externalLinks.join(', ')}
+                                                        onChange={(e) => {
+                                                            const newExternalLinks = e.target.value;
+                                                            const newLink = [newExternalLinks, ...uploadPaths].filter(s => s.trim()).join(', ');
+                                                            setFormData(prev => ({ ...prev, link: newLink }));
+                                                        }}
+                                                    />
+                                                    {externalLinks.length > 0 && externalLinks[0].startsWith('http') && (
+                                                        <a href={externalLinks[0]} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                                                            <ExternalLink size={16} /> Abrir
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Upload section */}
+                                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                                <div style={{ ...inputContainerStyle, flex: 1, background: 'var(--color-bg-body)', borderStyle: 'dashed' }}>
+                                                    <Link size={18} color="var(--color-text-tertiary)" />
+                                                    <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.85rem' }}>
+                                                        {uploadPaths.length > 0 ? `${uploadPaths.length} arquivo(s) anexado(s)` : 'Nenhum edital anexado'}
+                                                    </span>
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    ref={fileInputRef}
+                                                    style={{ display: 'none' }}
+                                                    onChange={handleFileChange}
+                                                    multiple
+                                                    accept="application/pdf"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline"
+                                                    onClick={handleFileUploadClick}
+                                                    disabled={isUploading}
+                                                    style={{ padding: '0 20px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                >
+                                                    {isUploading ? <Loader2 size={18} className="spinner" /> : <UploadCloud size={18} />}
+                                                    Anexar PDF
+                                                </button>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
 
                                 {/* ── Attached Files Chips + Viewer ── */}
                                 {formData.link && formData.link.includes('/uploads/') && (() => {

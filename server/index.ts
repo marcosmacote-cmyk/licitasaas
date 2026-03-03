@@ -796,26 +796,31 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
 
         const data = response.data as any;
 
-        // Transform items to frontend expected format safely
+        // Debug: log raw structure of first item to understand API format
         const rawItems = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
+        if (rawItems.length > 0) {
+            console.log('[PNCP] RAW first item keys:', Object.keys(rawItems[0]));
+            console.log('[PNCP] RAW first item sample:', JSON.stringify(rawItems[0]).substring(0, 500));
+        }
+
+        // First pass: extract what we can from search results
         const items = rawItems.map((item: any) => {
-            // Extract orgao_cnpj from multiple potential sources
-            const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || '';
-            const ano = item.ano || '';
-            const nSeq = item.numero_sequencial || item.sequencialCompra || '';
+            const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
+            const ano = item.ano || item.anoCompra || '';
+            const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
 
             // Extract value from all possible fields aggressively
             const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
-                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? 0;
+                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao ?? 0;
             const valorEstimado = Number(rawVal) || 0;
 
             // Extract modalidade from API response
             const modalidadeNome = item.modalidade_nome || item.modalidadeNome
-                || item.modalidadeLicitacaoNome || item.modalidade || '';
+                || item.modalidadeLicitacaoNome || item.modalidade_licitacao_nome || '';
 
             return {
                 id: item.id || item.numeroControlePNCP || Math.random().toString(),
-                orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || 'Órgão não informado',
+                orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || item.nomeOrgao || 'Órgão não informado',
                 orgao_cnpj: cnpj,
                 ano,
                 numero_sequencial: nSeq,
@@ -844,19 +849,24 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             return absA - absB;
         });
 
-        // Hydrate valor_estimado and modalidade from detail API when missing
+        // Hydrate ALL items from detail API (search results rarely include value/modalidade)
         const hydratedItems = await Promise.all(items.map(async (item: any) => {
-            if (item.orgao_cnpj && item.ano && item.numero_sequencial && (!item.valor_estimado || !item.modalidade_nome)) {
+            if (item.orgao_cnpj && item.ano && item.numero_sequencial) {
                 try {
                     const detailUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${item.orgao_cnpj}/compras/${item.ano}/${item.numero_sequencial}`;
                     const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 5000 } as any);
                     const d: any = detailRes.data;
                     if (d) {
-                        if (!item.valor_estimado && d.valorTotalEstimado) {
-                            item.valor_estimado = Number(d.valorTotalEstimado);
+                        if (!item.valor_estimado) {
+                            const v = Number(d.valorTotalEstimado ?? d.valorTotalHomologado ?? d.valorGlobal ?? 0);
+                            if (v > 0) item.valor_estimado = v;
                         }
-                        if (!item.modalidade_nome && (d.modalidadeNome || d.modalidadeLicitacaoNome)) {
-                            item.modalidade_nome = d.modalidadeNome || d.modalidadeLicitacaoNome;
+                        if (!item.modalidade_nome) {
+                            item.modalidade_nome = d.modalidadeNome || d.modalidadeLicitacaoNome || d.modalidade?.nome || '';
+                        }
+                        // Also hydrate data_abertura from detail if more precise
+                        if (d.dataAberturaProposta) {
+                            item.data_abertura = d.dataAberturaProposta;
                         }
                     }
                 } catch (e) {
