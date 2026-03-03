@@ -20,6 +20,12 @@ import { KanbanItem } from './KanbanCard';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../types';
 import { COLUMNS } from '../types';
 
+interface CardFieldConfig {
+    key: string;
+    label: string;
+    visible: boolean;
+}
+
 interface Props {
     items: BiddingProcess[];
     setItems: React.Dispatch<React.SetStateAction<BiddingProcess[]>>;
@@ -29,9 +35,10 @@ interface Props {
     onViewAnalysis: (analysis: AiAnalysis, process: BiddingProcess) => void;
     onDeleteProcess: (id: string) => void;
     onStatusChange: (id: string, newStatus: BiddingStatus) => void;
+    cardFields?: CardFieldConfig[];
 }
 
-export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange }: Props) {
+export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, cardFields }: Props) {
     const [activeItem, setActiveItem] = useState<BiddingProcess | null>(null);
 
     const sensors = useSensors(
@@ -108,11 +115,12 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
                         analyses={analyses}
                         companies={companies}
                         onViewAnalysis={onViewAnalysis}
+                        cardFields={cardFields}
                     />
                 ))}
 
                 <DragOverlay>
-                    {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} /> : null}
+                    {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} cardFields={cardFields} /> : null}
                 </DragOverlay>
             </div>
         </DndContext>

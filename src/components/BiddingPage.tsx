@@ -775,6 +775,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                         if (process) setViewingProcessForAnalysis(process);
                     }}
                     onStatusChange={handleStatusChange}
+                    cardFields={cardFields}
                 />
             ) : (
                 <BiddingTable

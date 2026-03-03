@@ -3,6 +3,12 @@ import { Calendar, DollarSign, Brain, Building2, Trash2, MessageSquare, Bell } f
 import { format } from 'date-fns';
 import type { BiddingProcess, CompanyProfile, ObservationLog } from '../types';
 
+interface CardFieldConfig {
+    key: string;
+    label: string;
+    visible: boolean;
+}
+
 interface Props {
     item: BiddingProcess;
     isOverlay?: boolean;
@@ -11,13 +17,20 @@ interface Props {
     onViewAnalysis?: () => void;
     onDoubleClick?: () => void;
     onDelete?: (id: string) => void;
+    cardFields?: CardFieldConfig[];
 }
 
-export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete }: Props) {
+export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, cardFields }: Props) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: item.id,
         data: item,
     });
+
+    // Helper: check if a field should be visible
+    const isVisible = (key: string) => {
+        if (!cardFields) return true; // Default: show everything if no config
+        return cardFields.find(f => f.key === key)?.visible ?? true;
+    };
 
     let portalColor = 'badge-blue';
     if (item.portal === 'PNCP') portalColor = 'badge-green';
@@ -44,16 +57,20 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
         >
             <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, flex: 1 }}>
-                    <span className={`badge ${portalColor}`} title={item.portal} style={{ maxWidth: '100%' }}>{item.portal}</span>
-                    <span className="badge badge-blue" title={item.modality} style={{ maxWidth: '100%' }}>{item.modality}</span>
+                    {isVisible('portal') && (
+                        <span className={`badge ${portalColor}`} title={item.portal} style={{ maxWidth: '100%' }}>{item.portal}</span>
+                    )}
+                    {isVisible('modality') && (
+                        <span className="badge badge-blue" title={item.modality} style={{ maxWidth: '100%' }}>{item.modality}</span>
+                    )}
                 </div>
                 <div className="flex-gap" style={{ flexShrink: 0, marginLeft: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {hasReminder && (
+                    {isVisible('reminder') && hasReminder && (
                         <div title="Lembrete Ativo">
                             <Bell size={14} color="var(--color-warning)" />
                         </div>
                     )}
-                    {observations.length > 0 && (
+                    {isVisible('observations') && observations.length > 0 && (
                         <div className="flex-gap" style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>
                             <MessageSquare size={14} />
                             <span>{observations.length}</span>
@@ -82,11 +99,19 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                 </div>
             </div>
 
-            <div className="kanban-card-title" title={item.title}>
-                {item.title}
-            </div>
+            {isVisible('title') && (
+                <div className="kanban-card-title" title={item.title}>
+                    {item.title}
+                </div>
+            )}
 
-            {item.companyProfileId && companies && (
+            {isVisible('summary') && item.summary && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '8px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {item.summary}
+                </div>
+            )}
+
+            {isVisible('company') && item.companyProfileId && companies && (
                 <div className="flex-gap kanban-card-company" style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginBottom: '8px', fontWeight: 500 }}>
                     <Building2 size={12} />
                     <span className="kanban-card-company">
@@ -95,15 +120,27 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                 </div>
             )}
 
+            {isVisible('risk') && item.risk && (
+                <div style={{ marginBottom: '8px' }}>
+                    <span className={`badge ${item.risk === 'Alto' || item.risk === 'Crítico' ? 'badge-red' : item.risk === 'Médio' ? 'badge-orange' : 'badge-green'}`} style={{ fontSize: '0.65rem' }}>
+                        ⚠️ {item.risk}
+                    </span>
+                </div>
+            )}
+
             <div className="flex-gap" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <div className="flex-gap">
-                    <DollarSign size={14} />
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.estimatedValue)}
-                </div>
-                <div className="flex-gap">
-                    <Calendar size={14} />
-                    Sessão: {format(new Date(item.sessionDate), 'dd/MM/yyyy HH:mm')}
-                </div>
+                {isVisible('value') && (
+                    <div className="flex-gap">
+                        <DollarSign size={14} />
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.estimatedValue)}
+                    </div>
+                )}
+                {isVisible('date') && (
+                    <div className="flex-gap">
+                        <Calendar size={14} />
+                        Sessão: {format(new Date(item.sessionDate), 'dd/MM/yyyy HH:mm')}
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -2,6 +2,12 @@ import { useDroppable } from '@dnd-kit/core';
 import { KanbanItem } from './KanbanCard';
 import type { BiddingProcess, AiAnalysis, CompanyProfile } from '../types';
 
+interface CardFieldConfig {
+    key: string;
+    label: string;
+    visible: boolean;
+}
+
 interface Props {
     title: string;
     items: BiddingProcess[];
@@ -10,9 +16,10 @@ interface Props {
     onDeleteProcess: (id: string) => void;
     analyses: AiAnalysis[];
     onViewAnalysis: (analysis: AiAnalysis, process: BiddingProcess) => void;
+    cardFields?: CardFieldConfig[];
 }
 
-export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteProcess, analyses, onViewAnalysis }: Props) {
+export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteProcess, analyses, onViewAnalysis, cardFields }: Props) {
     const { isOver, setNodeRef } = useDroppable({
         id: title, // title acts as ID
     });
@@ -41,6 +48,7 @@ export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteP
                             hasAnalysis={!!analysis}
                             onViewAnalysis={analysis ? () => onViewAnalysis(analysis, item) : undefined}
                             onDelete={() => onDeleteProcess(item.id)}
+                            cardFields={cardFields}
                         />
                     );
                 })}
