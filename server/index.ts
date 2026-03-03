@@ -827,7 +827,8 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                 titulo: item.title || item.titulo || item.identificador || 'Sem título',
                 objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
                 data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
-                data_abertura: item.data_fim_vigencia || item.data_inicio_vigencia || item.dataAberturaProposta || item.data_abertura || item.dataPublicacaoPncp || new Date().toISOString(),
+                data_abertura: item.dataAberturaProposta || item.data_inicio_vigencia || item.data_abertura || '',
+                data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
                 valor_estimado: valorEstimado,
                 uf: item.uf || item.unidadeOrgao?.ufSigla || uf || '--',
                 municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '--',
@@ -839,11 +840,11 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             };
         });
 
-        // Sort items logically by closest opening session
+        // Sort items by closest deadline (data_encerramento_proposta first, then data_abertura as fallback)
         const now = Date.now();
         items.sort((a: any, b: any) => {
-            const dateA = new Date(a.data_abertura).getTime();
-            const dateB = new Date(b.data_abertura).getTime();
+            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || '9999').getTime();
+            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || '9999').getTime();
             const absA = isNaN(dateA) ? Infinity : Math.abs(dateA - now);
             const absB = isNaN(dateB) ? Infinity : Math.abs(dateB - now);
             return absA - absB;
@@ -864,7 +865,10 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                         if (!item.modalidade_nome) {
                             item.modalidade_nome = d.modalidadeNome || d.modalidadeLicitacaoNome || d.modalidade?.nome || '';
                         }
-                        // Also hydrate data_abertura from detail if more precise
+                        // Hydrate dates from detail API
+                        if (d.dataEncerramentoProposta) {
+                            item.data_encerramento_proposta = d.dataEncerramentoProposta;
+                        }
                         if (d.dataAberturaProposta) {
                             item.data_abertura = d.dataAberturaProposta;
                         }

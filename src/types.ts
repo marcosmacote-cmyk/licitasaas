@@ -121,6 +121,7 @@ export interface PncpBiddingItem {
     objeto: string;
     data_publicacao: string;
     data_abertura: string;
+    data_encerramento_proposta: string;
     valor_estimado: number;
     uf: string;
     municipio: string;
