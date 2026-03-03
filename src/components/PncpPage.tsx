@@ -474,10 +474,9 @@ export function PncpPage({ companies }: Props) {
                     <thead>
                         <tr>
                             <th style={{ paddingLeft: '24px', width: '22%' }}>Órgão / Localidade</th>
-                            <th style={{ width: '30%' }}>Objeto</th>
+                            <th style={{ width: '35%' }}>Objeto</th>
                             <th>Modalidade</th>
-                            <th>Fim Propostas</th>
-                            <th>Sessão</th>
+                            <th>Prazo Limite</th>
                             <th>Valor Est.</th>
                             <th style={{ paddingRight: '24px' }}>Ações</th>
                         </tr>
@@ -485,14 +484,14 @@ export function PncpPage({ companies }: Props) {
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={7} style={{ textAlign: 'center', padding: '60px' }}>
+                                <td colSpan={6} style={{ textAlign: 'center', padding: '60px' }}>
                                     <Loader2 size={32} className="spinner" style={{ margin: '0 auto', color: 'var(--color-primary)' }} />
                                     <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>Consultando PNCP...</div>
                                 </td>
                             </tr>
                         ) : results.length === 0 ? (
                             <tr>
-                                <td colSpan={7} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
+                                <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
                                     <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                                     <div style={{ fontSize: '1rem', fontWeight: 500 }}>Nenhum edital encontrado</div>
                                     <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>Tente ajustar as palavras-chave ou filtros.</div>
@@ -531,7 +530,7 @@ export function PncpPage({ companies }: Props) {
                                             <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
                                         )}
                                     </td>
-                                    {/* Fim Propostas (deadline - most important) */}
+                                    {/* Prazo Limite (data fim de recebimento de propostas) */}
                                     <td style={{ whiteSpace: 'nowrap', verticalAlign: 'top', paddingTop: '16px' }}>
                                         {item.data_encerramento_proposta ? (
                                             <>
@@ -540,21 +539,6 @@ export function PncpPage({ companies }: Props) {
                                                 </div>
                                                 <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
                                                     {new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
-                                        )}
-                                    </td>
-                                    {/* Sessão Pública */}
-                                    <td style={{ whiteSpace: 'nowrap', verticalAlign: 'top', paddingTop: '16px' }}>
-                                        {item.data_abertura ? (
-                                            <>
-                                                <div style={{ fontWeight: 500, fontSize: '0.8125rem' }}>
-                                                    {new Date(item.data_abertura).toLocaleDateString('pt-BR')}
-                                                </div>
-                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
-                                                    {new Date(item.data_abertura).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </>
                                         ) : (
