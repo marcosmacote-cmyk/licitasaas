@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { Settings, Plus, LayoutGrid, List, Bot, Loader2, Bell, Search, SlidersHorizontal, Filter, X } from 'lucide-react';
+import { Settings, Plus, LayoutGrid, List, Bot, Loader2, Bell, Search, SlidersHorizontal, Filter, X, ChevronDown, Download } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -57,7 +57,9 @@ const INITIAL_CARD_FIELDS: CardFieldConfig[] = [
 ];
 
 export function BiddingPage({ items, setItems, companies }: Props) {
-    const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+    const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
+        return (localStorage.getItem('biddingViewMode') as 'kanban' | 'table') || 'kanban';
+    });
 
     const refreshData = async () => {
         try {
@@ -85,8 +87,21 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
     // ===== CONFIGURAÇÕES DO PAINEL =====
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
-    const [visibleColumns, setVisibleColumns] = useState<string[]>([...COLUMNS]);
-    const [sortBy, setSortBy] = useState<'default' | 'date-asc' | 'date-desc' | 'value-desc' | 'value-asc' | 'risk'>('default');
+    const [showExportMenu, setShowExportMenu] = useState(false);
+
+    const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+        const saved = localStorage.getItem('biddingVisibleColumns');
+        return saved ? JSON.parse(saved) : [...COLUMNS];
+    });
+    const [sortBy, setSortBy] = useState<'default' | 'date-asc' | 'date-desc' | 'value-desc' | 'value-asc' | 'risk'>(() => {
+        return (localStorage.getItem('biddingSortBy') as any) || 'default';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('biddingViewMode', viewMode);
+        localStorage.setItem('biddingVisibleColumns', JSON.stringify(visibleColumns));
+        localStorage.setItem('biddingSortBy', sortBy);
+    }, [viewMode, visibleColumns, sortBy]);
     const [defaultCompanyId, setDefaultCompanyId] = useState<string>('');
     const [compactMode, setCompactMode] = useState(false);
     const [highlightExpiring, setHighlightExpiring] = useState(true);
@@ -96,22 +111,52 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     const [aiFocus, setAiFocus] = useState<'general' | 'it' | 'engineering' | 'services' | 'vehicles' | 'transportation' | 'lighting' | 'food' | 'events' | 'accounting' | 'clothing' | 'consulting'>('general');
     const [aiAutoAnalyze, setAiAutoAnalyze] = useState(false);
 
-    const exportToCsv = () => {
+    const getExportData = () => {
         const headers = ['Título', 'Empresa', 'Data Sessão', 'Valor Estimado', 'Modalidade', 'Portal', 'Risco', 'Status'];
-        const csvContent = [
-            headers.join(','),
-            ...filteredItems.map(item => {
-                const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
-                return `"${(item.title || '').replace(/"/g, '""')}","${companyName.replace(/"/g, '""')}","${new Date(item.sessionDate).toLocaleDateString()}","${item.estimatedValue}","${item.modality}","${item.portal}","${item.risk || ''}","${item.status}"`;
-            })
-        ].join('\n');
+        const rows = filteredItems.map(item => {
+            const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
+            return [
+                (item.title || '').replace(/"/g, '""'),
+                companyName.replace(/"/g, '""'),
+                new Date(item.sessionDate).toLocaleDateString(),
+                item.estimatedValue || '0',
+                item.modality || '',
+                item.portal || '',
+                item.risk || '',
+                item.status || ''
+            ];
+        });
+        return { headers, rows };
+    };
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const exportToCsv = () => {
+        const { headers, rows } = getExportData();
+        const csvContent = [headers.join(','), ...rows.map(r => `"${r.join('","')}"`)].join('\n');
+        downloadFile(csvContent, 'licitacoes.csv', 'text/csv;charset=utf-8;');
+        setShowExportMenu(false);
+    };
+
+    const exportToExcel = () => {
+        const { headers, rows } = getExportData();
+        // Excel recognizes CSV with semicolon and UTF-8 BOM perfectly
+        const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => `"${r.join('";"')}"`)].join('\n');
+        downloadFile(csvContent, 'licitacoes.csv', 'text/csv;charset=utf-8;');
+        setShowExportMenu(false);
+    };
+
+    const exportToPdf = () => {
+        // Simple print view simulation for PDF since jsPDF might require heavier setup here
+        window.print();
+        setShowExportMenu(false);
+    };
+
+    const downloadFile = (content: string, fileName: string, type: string) => {
+        const blob = new Blob([content], { type });
         const link = document.createElement('a');
         if (link.download !== undefined) {
             const url = URL.createObjectURL(blob);
             link.setAttribute('href', url);
-            link.setAttribute('download', 'licitacoes.csv');
+            link.setAttribute('download', fileName);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
@@ -622,9 +667,51 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                         </button>
                     </div>
 
-                    <button className="btn btn-outline" onClick={exportToCsv} title="Exportar dados filtrados como CSV">
-                        📥 CSV
-                    </button>
+                    <div style={{ position: 'relative' }}>
+                        <button
+                            className={`btn ${showExportMenu ? 'btn-primary' : 'btn-outline'}`}
+                            onClick={() => setShowExportMenu(!showExportMenu)}
+                        >
+                            <Download size={16} />
+                            Exportar
+                            <ChevronDown size={14} style={{ marginLeft: 4, transform: showExportMenu ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+                        </button>
+                        {showExportMenu && (
+                            <div style={{
+                                position: 'absolute', top: '44px', right: 0, width: '180px',
+                                background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
+                                overflow: 'hidden'
+                            }}>
+                                <div style={{ padding: '6px' }}>
+                                    <button
+                                        onClick={exportToCsv}
+                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', color: 'var(--color-text-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
+                                        onMouseEnter={(e: any) => e.currentTarget.style.backgroundColor = 'var(--color-bg-base)'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        📥 Arquivo CSV
+                                    </button>
+                                    <button
+                                        onClick={exportToExcel}
+                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', color: 'var(--color-text-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
+                                        onMouseEnter={(e: any) => e.currentTarget.style.backgroundColor = 'var(--color-bg-base)'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        📊 Planilha Excel
+                                    </button>
+                                    <button
+                                        onClick={exportToPdf}
+                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', color: 'var(--color-text-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
+                                        onMouseEnter={(e: any) => e.currentTarget.style.backgroundColor = 'var(--color-bg-base)'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        📄 Documento PDF
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     <div style={{ position: 'relative' }}>
                         <button
