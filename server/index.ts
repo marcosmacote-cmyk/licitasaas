@@ -525,8 +525,8 @@ app.get('/api/config/alerts', authenticateToken, async (req: any, res) => {
 
 app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
     try {
-        const { defaultAlertDays } = req.body;
-        const configStr = JSON.stringify({ defaultAlertDays });
+        const { defaultAlertDays, groupAlertDays, applyToExisting } = req.body;
+        const configStr = JSON.stringify({ defaultAlertDays, groupAlertDays });
 
         const config = await prisma.globalConfig.upsert({
             where: { tenantId: req.user.tenantId },
@@ -534,8 +534,42 @@ app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
             update: { config: configStr }
         });
 
+        if (applyToExisting) {
+            if (groupAlertDays && Object.keys(groupAlertDays).length > 0) {
+                for (const [group, days] of Object.entries(groupAlertDays)) {
+                    await prisma.document.updateMany({
+                        where: { tenantId: req.user.tenantId, docGroup: group },
+                        data: { alertDays: Number(days) }
+                    });
+                }
+            }
+            const groupsToExclude = groupAlertDays ? Object.keys(groupAlertDays) : [];
+            await prisma.document.updateMany({
+                where: { tenantId: req.user.tenantId, docGroup: { notIn: groupsToExclude } },
+                data: { alertDays: Number(defaultAlertDays) }
+            });
+
+            const allDocs = await prisma.document.findMany({ where: { tenantId: req.user.tenantId } });
+            for (const doc of allDocs) {
+                let status = 'Válido';
+                if (doc.expirationDate) {
+                    const diffTime = new Date(doc.expirationDate).getTime() - new Date().getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays < 0) status = 'Vencido';
+                    else if (diffDays <= (doc.alertDays || Number(defaultAlertDays))) status = 'Vencendo';
+                }
+                if (doc.status !== status) {
+                    await prisma.document.update({
+                        where: { id: doc.id },
+                        data: { status }
+                    });
+                }
+            }
+        }
+
         res.json({ success: true, config: JSON.parse(config.config) });
     } catch (error) {
+        console.error("Config save error:", error);
         res.status(500).json({ error: 'Failed to update config' });
     }
 });

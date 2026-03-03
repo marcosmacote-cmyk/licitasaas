@@ -7,6 +7,8 @@ interface Props {
     companyProfileId: string;
     onClose: () => void;
     onSave: (doc: Partial<CompanyDocument>, file?: File) => void;
+    groupAlertDays?: Record<string, number>;
+    defaultAlertDays?: number;
 }
 
 const DOCUMENT_GROUPS = [
@@ -17,14 +19,17 @@ const DOCUMENT_GROUPS = [
     { id: 'Outros', icon: <HelpCircle size={18} />, color: '#64748b' },
 ];
 
-export function DocumentFormModal({ initialData, companyProfileId, onClose, onSave }: Props) {
+export function DocumentFormModal({ initialData, companyProfileId, onClose, onSave, groupAlertDays, defaultAlertDays }: Props) {
+    const defaultGroup = 'Outros';
+    const initialAlert = groupAlertDays?.[defaultGroup] ?? defaultAlertDays ?? 15;
+
     const [formData, setFormData] = useState<Partial<CompanyDocument>>({
         companyProfileId,
         docType: '',
         expirationDate: '',
-        docGroup: 'Outros',
+        docGroup: defaultGroup,
         issuerLink: '',
-        alertDays: 15,
+        alertDays: initialAlert,
     });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -46,11 +51,19 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                 ...initialData,
                 issuerLink: initialData.issuerLink || '',
                 docGroup: initialData.docGroup || 'Outros',
-                alertDays: initialData.alertDays || 15
+                alertDays: initialData.alertDays || groupAlertDays?.[initialData.docGroup || 'Outros'] || defaultAlertDays || 15
             });
             setDateInput(extractDateString(initialData.expirationDate));
         }
     }, [initialData]);
+
+    // Auto update alertDays when group changes, if it's a new document
+    useEffect(() => {
+        if (!initialData && formData.docGroup) {
+            const groupDefault = groupAlertDays?.[formData.docGroup] ?? defaultAlertDays ?? 15;
+            setFormData(prev => ({ ...prev, alertDays: groupDefault }));
+        }
+    }, [formData.docGroup, initialData, groupAlertDays, defaultAlertDays]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

@@ -60,6 +60,16 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
     // Alert Config State
     const [isAlertConfigOpen, setIsAlertConfigOpen] = useState(false);
     const [defaultAlertDays, setDefaultAlertDays] = useState(15);
+    const [groupAlertDays, setGroupAlertDays] = useState<Record<string, number>>({});
+    const [applyToExisting, setApplyToExisting] = useState(false);
+
+    const DOCUMENT_GROUPS = [
+        'Habilitação Jurídica',
+        'Regularidade Fiscal, Social e Trabalhista',
+        'Qualificação Técnica',
+        'Qualificação Econômica Financeira',
+        'Outros'
+    ];
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -70,6 +80,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 if (res.ok) {
                     const data = await res.json();
                     setDefaultAlertDays(data.defaultAlertDays || 15);
+                    setGroupAlertDays(data.groupAlertDays || {});
                 }
             } catch (err) {
                 console.error("Failed to fetch alert config", err);
@@ -112,7 +123,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
         }
     };
 
-    const handleSaveAlertConfig = async (days: number) => {
+    const handleSaveAlertConfig = async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/config/alerts`, {
                 method: 'POST',
@@ -120,11 +131,15 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify({ defaultAlertDays: days })
+                body: JSON.stringify({ defaultAlertDays, groupAlertDays, applyToExisting })
             });
             if (res.ok) {
-                setDefaultAlertDays(days);
                 setIsAlertConfigOpen(false);
+                if (applyToExisting) {
+                    window.location.reload();
+                } else {
+                    alert("Configuração de alertas salva com sucesso!");
+                }
             }
         } catch (err) {
             console.error("Failed to save alert config", err);
@@ -233,7 +248,8 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
         formData.append('issuerLink', docData.issuerLink || '');
         formData.append('expirationDate', docData.expirationDate || '');
         formData.append('status', docData.status || 'Válido');
-        formData.append('alertDays', String(docData.alertDays || 15));
+        const defaultAlertForGroup = groupAlertDays[docData.docGroup || 'Outros'] || defaultAlertDays;
+        formData.append('alertDays', String(docData.alertDays || defaultAlertForGroup));
 
         if (editingDocument && editingDocument.id) {
             try {
@@ -718,6 +734,8 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                         companyProfileId={activeCompany.id}
                         onClose={() => setIsDocumentModalOpen(false)}
                         onSave={handleSaveDocument}
+                        groupAlertDays={groupAlertDays}
+                        defaultAlertDays={defaultAlertDays}
                     />
                 )
             }
@@ -736,24 +754,57 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             {
                 isAlertConfigOpen && (
                     <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }}>
-                        <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '24px' }}>
+                        <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
                             <h3 style={{ marginBottom: '16px' }}>Configurar Alertas de Vencimento</h3>
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px' }}>Prazos de Alerta Padrão (Dias):</label>
+
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 600 }}>Prazos de Alerta Padrão (Dias):</label>
                                 <input
                                     type="number"
                                     className="input-inner"
                                     value={defaultAlertDays}
-                                    onChange={(e) => setDefaultAlertDays(parseInt(e.target.value))}
+                                    onChange={(e) => setDefaultAlertDays(parseInt(e.target.value) || 15)}
                                     style={{ width: '100%', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '4px' }}
                                 />
                                 <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '8px' }}>
                                     Define quantos dias antes do vencimento o status do documento mudará para "Vencendo".
                                 </p>
                             </div>
+
+                            <div style={{ marginBottom: '20px', borderTop: '1px solid var(--color-border)', paddingTop: '16px' }}>
+                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 600 }}>Prazos por Categoria (Dias):</label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {DOCUMENT_GROUPS.map((group) => (
+                                        <div key={group} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', flex: 1 }}>{group}</span>
+                                            <input
+                                                type="number"
+                                                className="input-inner"
+                                                value={groupAlertDays[group] !== undefined ? groupAlertDays[group] : defaultAlertDays}
+                                                onChange={(e) => setGroupAlertDays(prev => ({ ...prev, [group]: parseInt(e.target.value) || defaultAlertDays }))}
+                                                style={{ width: '80px', border: '1px solid var(--color-border)', padding: '6px', borderRadius: '4px', textAlign: 'center' }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--color-bg-base)', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-light)' }}>
+                                <input
+                                    type="checkbox"
+                                    id="applyToExistingDocs"
+                                    checked={applyToExisting}
+                                    onChange={(e) => setApplyToExisting(e.target.checked)}
+                                    style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
+                                />
+                                <label htmlFor="applyToExistingDocs" style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500 }}>
+                                    Aplicar estes novos prazos a todos os documentos existentes nesta empresa
+                                </label>
+                            </div>
+
                             <div className="flex-gap" style={{ justifyContent: 'flex-end' }}>
                                 <button className="btn btn-ghost" onClick={() => setIsAlertConfigOpen(false)}>Cancelar</button>
-                                <button className="btn btn-primary" onClick={() => handleSaveAlertConfig(defaultAlertDays)}>Salvar Configuração</button>
+                                <button className="btn btn-primary" onClick={handleSaveAlertConfig}>Salvar Configuração</button>
                             </div>
                         </div>
                     </div>
