@@ -1,5 +1,9 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { Settings, Plus, LayoutGrid, List, Bot, Loader2, Bell, Search, SlidersHorizontal, Filter, X, ChevronDown, Download } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -97,13 +101,18 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         return (localStorage.getItem('biddingSortBy') as any) || 'default';
     });
 
+    const [defaultCompanyId, setDefaultCompanyId] = useState<string>('');
+    const [compactMode, setCompactMode] = useState<boolean>(() => {
+        return localStorage.getItem('biddingCompactMode') === 'true';
+    });
+
     useEffect(() => {
         localStorage.setItem('biddingViewMode', viewMode);
         localStorage.setItem('biddingVisibleColumns', JSON.stringify(visibleColumns));
         localStorage.setItem('biddingSortBy', sortBy);
-    }, [viewMode, visibleColumns, sortBy]);
-    const [defaultCompanyId, setDefaultCompanyId] = useState<string>('');
-    const [compactMode, setCompactMode] = useState(false);
+        localStorage.setItem('biddingCompactMode', String(compactMode));
+    }, [viewMode, visibleColumns, sortBy, compactMode]);
+
     const [highlightExpiring, setHighlightExpiring] = useState(true);
 
     // ===== CONFIGURAÇÕES IA & TIME (Premium) =====
@@ -138,15 +147,38 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
     const exportToExcel = () => {
         const { headers, rows } = getExportData();
-        // Excel recognizes CSV with semicolon and UTF-8 BOM perfectly
-        const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => `"${r.join('";"')}"`)].join('\n');
-        downloadFile(csvContent, 'licitacoes.csv', 'text/csv;charset=utf-8;');
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Licitações");
+        XLSX.writeFile(wb, `relatorio_licitacoes_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
         setShowExportMenu(false);
     };
 
     const exportToPdf = () => {
-        // Simple print view simulation for PDF since jsPDF might require heavier setup here
-        window.print();
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const { headers, rows } = getExportData();
+
+        doc.setFontSize(18);
+        doc.text('Relatório de Processos Licitatórios', 14, 22);
+
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 30);
+
+        let filterText = 'Filtros Ativos: ' + (hasActiveFilters ? `${activeFilterCount} aplicados` : 'Nenhum');
+        doc.text(filterText, 14, 35);
+
+        autoTable(doc, {
+            head: [headers],
+            body: rows,
+            startY: 45,
+            theme: 'striped',
+            headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: { 0: { cellWidth: 'auto' } }
+        });
+
+        doc.save(`relatorio_licitacoes_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
         setShowExportMenu(false);
     };
 
