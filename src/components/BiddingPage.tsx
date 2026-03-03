@@ -238,6 +238,13 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         setActiveNotification(null);
     };
 
+    // Notification API Permission Request
+    useEffect(() => {
+        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+    }, []);
+
     // Reminder Check Logic
     useEffect(() => {
         const checkReminders = () => {
@@ -257,7 +264,15 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     }
 
                     if (now >= reminderTime) {
-                        // Trigger notification
+                        // Trigger background notification if permitted
+                        if ("Notification" in window && Notification.permission === "granted") {
+                            new Notification(`Lembrete: ${item.title}`, {
+                                body: `Sua licitação está agendada para ${new Date(item.reminderDate!).toLocaleString('pt-BR')}`,
+                                icon: 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png'
+                            });
+                        }
+
+                        // Trigger visual notification
                         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
                         audio.loop = true;
                         audio.play().catch(e => console.error("Audio play failed:", e));
@@ -453,48 +468,53 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     top: 0,
                     left: 0,
                     right: 0,
+                    bottom: 0,
                     zIndex: 9999,
-                    padding: '0 20px',
-                    animation: 'slideDown 0.4s ease-out'
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0, 0, 0, 0.6)',
+                    backdropFilter: 'blur(8px)',
+                    animation: 'fadeIn 0.3s ease-out'
                 }}>
                     <div style={{
-                        maxWidth: '720px',
-                        margin: '16px auto',
-                        padding: '20px 24px',
-                        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
-                        backdropFilter: 'blur(20px)',
-                        borderRadius: '1rem',
-                        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+                        width: '100%',
+                        maxWidth: '500px',
+                        padding: '32px',
+                        background: 'linear-gradient(145deg, rgba(30, 41, 59, 1), rgba(15, 23, 42, 1))',
+                        borderRadius: '1.5rem',
+                        boxShadow: '0 0 80px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
                         color: 'white',
-                        border: '1px solid rgba(245, 158, 11, 0.3)'
+                        border: '2px solid rgba(245, 158, 11, 0.5)',
+                        animation: 'scaleUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                     }}>
                         {/* Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px', marginBottom: '32px' }}>
                             <div style={{
                                 background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                                borderRadius: '12px',
-                                padding: '10px',
-                                animation: 'pulse 1s infinite',
-                                boxShadow: '0 0 20px rgba(245, 158, 11, 0.4)'
+                                borderRadius: '50%',
+                                padding: '16px',
+                                animation: 'pulseRing 2s infinite',
+                                boxShadow: '0 0 30px rgba(245, 158, 11, 0.6)'
                             }}>
-                                <Bell size={22} color="white" />
+                                <Bell size={40} color="white" />
                             </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '2px' }}>
-                                    🔔 LEMBRETE {activeNotification.item.reminderType === 'weekdays' ? 'RECORRENTE' : ''}
+                            <div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#f87171', marginBottom: '8px' }}>
+                                    Lembrete {activeNotification.item.reminderType === 'weekdays' ? 'Recorrente' : ''}
                                 </div>
-                                <div style={{ fontSize: '0.9375rem', fontWeight: 500, color: '#fbbf24', lineHeight: 1.4 }}>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fcd34d', lineHeight: 1.3, marginBottom: '12px' }}>
                                     {activeNotification.item.title}
                                 </div>
-                            </div>
-                            <div style={{ textAlign: 'right', fontSize: '0.8125rem', color: '#94a3b8' }}>
-                                <div>{new Date(activeNotification.item.reminderDate!).toLocaleString('pt-BR')}</div>
+                                <div style={{ fontSize: '1rem', color: '#cbd5e1', background: 'rgba(0,0,0,0.3)', padding: '8px 16px', borderRadius: '20px', display: 'inline-block' }}>
+                                    ⏰ {new Date(activeNotification.item.reminderDate!).toLocaleString('pt-BR')}
+                                </div>
                                 {activeNotification.item.reminderType === 'weekdays' && (() => {
                                     try {
                                         const days: number[] = JSON.parse(activeNotification.item.reminderDays || '[]');
                                         const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                                        return <div style={{ marginTop: '2px', color: '#f59e0b', fontSize: '0.75rem' }}>
-                                            {days.map(d => labels[d]).join(', ')}
+                                        return <div style={{ marginTop: '12px', color: '#fbbf24', fontSize: '0.875rem', fontWeight: 600 }}>
+                                            Repete às: {days.map(d => labels[d]).join(', ')}
                                         </div>;
                                     } catch { return null; }
                                 })()}
@@ -502,69 +522,77 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                         </div>
 
                         {/* Action Buttons */}
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <button
                                 onClick={() => handleReminderAction('ok')}
                                 style={{
-                                    flex: 1,
-                                    padding: '10px 0',
-                                    borderRadius: '10px',
+                                    width: '100%',
+                                    padding: '14px',
+                                    borderRadius: '12px',
                                     border: 'none',
                                     background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
                                     color: 'white',
                                     fontWeight: 700,
-                                    fontSize: '0.8125rem',
+                                    fontSize: '1rem',
                                     cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
-                                    transition: 'transform 0.1s',
+                                    boxShadow: '0 4px 15px rgba(37, 99, 235, 0.4)',
+                                    transition: 'all 0.2s',
                                 }}
-                                onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-                                onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                                onMouseEnter={(e: any) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                                onMouseLeave={(e: any) => (e.currentTarget.style.transform = 'translateY(0)')}
                             >
-                                ✅ {activeNotification.item.reminderType === 'weekdays' ? 'OK (agenda próximo dia)' : 'OK'}
+                                ✅ {activeNotification.item.reminderType === 'weekdays' ? 'Ciente (Agendar próximo)' : 'Estou Ciente'}
                             </button>
-                            <button
-                                onClick={() => handleReminderAction('tomorrow')}
-                                style={{
-                                    flex: 1,
-                                    padding: '10px 0',
-                                    borderRadius: '10px',
-                                    border: 'none',
-                                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                                    color: 'white',
-                                    fontWeight: 700,
-                                    fontSize: '0.8125rem',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-                                    transition: 'transform 0.1s',
-                                }}
-                                onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-                                onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                            >
-                                📅 Repetir Amanhã
-                            </button>
-                            <button
-                                onClick={() => handleReminderAction('dismiss')}
-                                style={{
-                                    flex: 'none',
-                                    padding: '10px 20px',
-                                    borderRadius: '10px',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    color: '#fca5a5',
-                                    fontWeight: 600,
-                                    fontSize: '0.8125rem',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s',
-                                }}
-                            >
-                                🔕 Desativar
-                            </button>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={() => handleReminderAction('tomorrow')}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        borderRadius: '12px',
+                                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                                        background: 'rgba(245, 158, 11, 0.1)',
+                                        color: '#fcd34d',
+                                        fontWeight: 600,
+                                        fontSize: '0.9rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                    }}
+                                    onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)')}
+                                    onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)')}
+                                >
+                                    📅 Adiar Amanhã
+                                </button>
+                                <button
+                                    onClick={() => handleReminderAction('dismiss')}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        borderRadius: '12px',
+                                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                                        background: 'rgba(239, 68, 68, 0.1)',
+                                        color: '#fca5a5',
+                                        fontWeight: 600,
+                                        fontSize: '0.9rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                    }}
+                                    onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)')}
+                                    onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)')}
+                                >
+                                    🔕 Desativar Alarme
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <style>{`
-                        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-                        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+                        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                        @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+                        @keyframes pulseRing { 
+                            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); } 
+                            70% { box-shadow: 0 0 0 20px rgba(245, 158, 11, 0); } 
+                            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } 
+                        }
                     `}</style>
                 </div>
             )}
