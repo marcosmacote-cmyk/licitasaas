@@ -91,6 +91,11 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     const [compactMode, setCompactMode] = useState(false);
     const [highlightExpiring, setHighlightExpiring] = useState(true);
 
+    // ===== CONFIGURAÇÕES IA & TIME (Premium) =====
+    const [aiLanguage, setAiLanguage] = useState<'pt-br' | 'en' | 'es'>('pt-br');
+    const [aiFocus, setAiFocus] = useState<'general' | 'it' | 'engineering' | 'services'>('general');
+    const [aiAutoAnalyze, setAiAutoAnalyze] = useState(false);
+
     const exportToCsv = () => {
         const headers = ['Título', 'Empresa', 'Data Sessão', 'Valor Estimado', 'Modalidade', 'Portal', 'Risco', 'Status'];
         const csvContent = [
@@ -743,6 +748,78 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                                                 ✅ {companies.find(c => c.id === defaultCompanyId)?.razaoSocial} será pré-selecionada
                                             </div>
                                         )}
+                                    </div>
+
+                                    {/* === SEÇÃO 5: Preferências da IA === */}
+                                    <div style={{ padding: '14px 16px', borderTop: '1px solid var(--color-border)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                            <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🤖 Preferências da IA</h4>
+                                            <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-brand-hover)', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>PREMIUM</span>
+                                        </div>
+
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Idioma do Relatório</div>
+                                            <select
+                                                value={aiLanguage}
+                                                onChange={(e: any) => setAiLanguage(e.target.value)}
+                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)' }}
+                                            >
+                                                <option value="pt-br">Português (BR)</option>
+                                                <option value="en">Inglês</option>
+                                                <option value="es">Espanhol</option>
+                                            </select>
+                                        </div>
+
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Foco de Análise</div>
+                                            <select
+                                                value={aiFocus}
+                                                onChange={(e: any) => setAiFocus(e.target.value)}
+                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)' }}
+                                            >
+                                                <option value="general">Geral (Padrão)</option>
+                                                <option value="it">T.I e Software</option>
+                                                <option value="engineering">Engenharia e Obras</option>
+                                                <option value="services">Serviços Terceirizados</option>
+                                            </select>
+                                        </div>
+
+                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                            onMouseEnter={(e: any) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+                                            onMouseLeave={(e: any) => (e.currentTarget.style.background = 'transparent')}
+                                        >
+                                            <div>
+                                                <span style={{ color: 'var(--color-text-primary)', display: 'block' }}>Auto-Análise de PDF</span>
+                                                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Extrair dados ao fazer upload</span>
+                                            </div>
+                                            <div
+                                                onClick={(e: any) => { e.preventDefault(); setAiAutoAnalyze(!aiAutoAnalyze); }}
+                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: aiAutoAnalyze ? '#059669' : 'var(--color-border)' }}
+                                            >
+                                                <div style={{ position: 'absolute', top: '2px', left: aiAutoAnalyze ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {/* === SEÇÃO 6: Equipe e Permissões === */}
+                                    <div style={{ padding: '14px 16px', borderTop: '1px solid var(--color-border)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                            <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>👥 Equipe e Permissões</h4>
+                                            <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-brand-hover)', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>PREMIUM</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '12px' }}>
+                                            Compartilhe o Kanban com seu time, defina permissões de leitura/edição e acompanhe a auditoria de acessos.
+                                        </div>
+                                        <button
+                                            className="btn btn-outline"
+                                            style={{ width: '100%', fontSize: '0.8125rem', padding: '6px' }}
+                                            onClick={(e: any) => {
+                                                e.stopPropagation();
+                                                alert("O recurso de gestão de Equipe estará disponível em breve no plano Premium!");
+                                            }}
+                                        >
+                                            + Convidar Membro
+                                        </button>
                                     </div>
 
                                 </div>
