@@ -38,9 +38,11 @@ interface Props {
     cardFields?: CardFieldConfig[];
     visibleColumns?: string[];
     sortBy?: string;
+    compactMode?: boolean;
+    highlightExpiring?: boolean;
 }
 
-export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, cardFields, visibleColumns, sortBy }: Props) {
+export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, cardFields, visibleColumns, sortBy, compactMode, highlightExpiring }: Props) {
     const [activeItem, setActiveItem] = useState<BiddingProcess | null>(null);
 
     const sensors = useSensors(
@@ -132,12 +134,14 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
                             companies={companies}
                             onViewAnalysis={onViewAnalysis}
                             cardFields={cardFields}
+                            compactMode={compactMode}
+                            highlightExpiring={highlightExpiring}
                         />
                     );
                 })}
 
                 <DragOverlay>
-                    {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} cardFields={cardFields} /> : null}
+                    {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} cardFields={cardFields} compactMode={compactMode} highlightExpiring={highlightExpiring} /> : null}
                 </DragOverlay>
             </div>
         </DndContext>

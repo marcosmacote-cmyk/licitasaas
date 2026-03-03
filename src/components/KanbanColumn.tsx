@@ -17,9 +17,11 @@ interface Props {
     analyses: AiAnalysis[];
     onViewAnalysis: (analysis: AiAnalysis, process: BiddingProcess) => void;
     cardFields?: CardFieldConfig[];
+    compactMode?: boolean;
+    highlightExpiring?: boolean;
 }
 
-export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteProcess, analyses, onViewAnalysis, cardFields }: Props) {
+export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteProcess, analyses, onViewAnalysis, cardFields, compactMode, highlightExpiring }: Props) {
     const { isOver, setNodeRef } = useDroppable({
         id: title, // title acts as ID
     });
@@ -49,6 +51,8 @@ export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteP
                             onViewAnalysis={analysis ? () => onViewAnalysis(analysis, item) : undefined}
                             onDelete={() => onDeleteProcess(item.id)}
                             cardFields={cardFields}
+                            compactMode={compactMode}
+                            highlightExpiring={highlightExpiring}
                         />
                     );
                 })}

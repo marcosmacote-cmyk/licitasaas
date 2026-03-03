@@ -18,9 +18,11 @@ interface Props {
     onDoubleClick?: () => void;
     onDelete?: (id: string) => void;
     cardFields?: CardFieldConfig[];
+    compactMode?: boolean;
+    highlightExpiring?: boolean;
 }
 
-export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, cardFields }: Props) {
+export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, cardFields, compactMode, highlightExpiring }: Props) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: item.id,
         data: item,
@@ -36,11 +38,27 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
     if (item.portal === 'PNCP') portalColor = 'badge-green';
     if (item.portal === 'BLL') portalColor = 'badge-orange';
 
+    const now = new Date();
+    const sessionDate = new Date(item.sessionDate);
+    const hoursToSession = (sessionDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    let expiringStyle = {};
+    if (highlightExpiring && hoursToSession > 0) {
+        if (hoursToSession <= 24) {
+            expiringStyle = { border: '2px solid var(--color-danger)', boxShadow: '0 0 8px rgba(239, 68, 68, 0.3)' };
+        } else if (hoursToSession <= 48) {
+            expiringStyle = { border: '2px solid var(--color-warning)', boxShadow: '0 0 8px rgba(245, 158, 11, 0.3)' };
+        }
+    }
+
     const style = {
         opacity: isDragging ? 0.5 : 1,
         cursor: isDragging ? 'grabbing' : 'grab',
         boxShadow: isOverlay ? 'var(--shadow-lg)' : undefined,
         zIndex: isOverlay ? 999 : undefined,
+        padding: compactMode ? '10px' : undefined,
+        gap: compactMode ? '8px' : undefined,
+        ...expiringStyle,
     };
 
     const observations: ObservationLog[] = JSON.parse(item.observations || '[]');
@@ -100,12 +118,12 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
             </div>
 
             {isVisible('title') && (
-                <div className="kanban-card-title" title={item.title}>
+                <div className="kanban-card-title" title={item.title} style={{ fontSize: compactMode ? '0.8125rem' : undefined, marginBottom: compactMode ? '4px' : undefined }}>
                     {item.title}
                 </div>
             )}
 
-            {isVisible('summary') && item.summary && (
+            {!compactMode && isVisible('summary') && item.summary && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '8px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {item.summary}
                 </div>

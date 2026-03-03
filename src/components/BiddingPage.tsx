@@ -88,6 +88,31 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     const [visibleColumns, setVisibleColumns] = useState<string[]>([...COLUMNS]);
     const [sortBy, setSortBy] = useState<'default' | 'date-asc' | 'date-desc' | 'value-desc' | 'value-asc' | 'risk'>('default');
     const [defaultCompanyId, setDefaultCompanyId] = useState<string>('');
+    const [compactMode, setCompactMode] = useState(false);
+    const [highlightExpiring, setHighlightExpiring] = useState(true);
+
+    const exportToCsv = () => {
+        const headers = ['Título', 'Empresa', 'Data Sessão', 'Valor Estimado', 'Modalidade', 'Portal', 'Risco', 'Status'];
+        const csvContent = [
+            headers.join(','),
+            ...filteredItems.map(item => {
+                const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
+                return `"${(item.title || '').replace(/"/g, '""')}","${companyName.replace(/"/g, '""')}","${new Date(item.sessionDate).toLocaleDateString()}","${item.estimatedValue}","${item.modality}","${item.portal}","${item.risk || ''}","${item.status}"`;
+            })
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'licitacoes.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
 
     // Opções dinâmicas para filtros
     const filterOptions = useMemo(() => ({
@@ -564,6 +589,10 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                         </button>
                     </div>
 
+                    <button className="btn btn-outline" onClick={exportToCsv} title="Exportar dados filtrados como CSV">
+                        📥 CSV
+                    </button>
+
                     <div style={{ position: 'relative' }}>
                         <button
                             className={`btn ${showSettingsPanel ? 'btn-primary' : 'btn-outline'}`}
@@ -658,7 +687,39 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                                         ))}
                                     </div>
 
-                                    {/* === SEÇÃO 3: Empresa Padrão === */}
+                                    {/* === SEÇÃO 3: Aparência dos Cards === */}
+                                    <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)' }}>
+                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>🎨 Aparência dos Cards</h4>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Personalize o visual no Kanban</div>
+
+                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                            onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+                                            onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'transparent')}
+                                        >
+                                            <span style={{ color: 'var(--color-text-primary)' }}>Cards Compactos</span>
+                                            <div
+                                                onClick={(e: React.MouseEvent) => { e.preventDefault(); setCompactMode(!compactMode); }}
+                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: compactMode ? '#059669' : 'var(--color-border)' }}
+                                            >
+                                                <div style={{ position: 'absolute', top: '2px', left: compactMode ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+                                            </div>
+                                        </label>
+
+                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                            onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+                                            onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'transparent')}
+                                        >
+                                            <span style={{ color: 'var(--color-text-primary)' }}>Destaque em Vencimentos Próximos</span>
+                                            <div
+                                                onClick={(e: React.MouseEvent) => { e.preventDefault(); setHighlightExpiring(!highlightExpiring); }}
+                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: highlightExpiring ? '#059669' : 'var(--color-border)' }}
+                                            >
+                                                <div style={{ position: 'absolute', top: '2px', left: highlightExpiring ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {/* === SEÇÃO 4: Empresa Padrão === */}
                                     <div style={{ padding: '14px 16px' }}>
                                         <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>🏢 Empresa Padrão</h4>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Pré-selecionada ao criar novo processo</div>
@@ -904,6 +965,8 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     cardFields={cardFields}
                     visibleColumns={visibleColumns}
                     sortBy={sortBy}
+                    compactMode={compactMode}
+                    highlightExpiring={highlightExpiring}
                 />
             ) : (
                 <BiddingTable
