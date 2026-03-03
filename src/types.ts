@@ -124,6 +124,7 @@ export interface PncpBiddingItem {
     valor_estimado: number;
     uf: string;
     municipio: string;
+    modalidade_nome: string;
     link_sistema: string;
     status: string;
 }

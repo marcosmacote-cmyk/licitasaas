@@ -759,7 +759,7 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
 
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, status, uf, pagina = 1 } = req.body;
+        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim } = req.body;
 
         let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=10&pagina=${pagina}`;
         if (keywords) {
@@ -771,71 +771,96 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         if (uf) {
             url += `&ufs=${uf}`;
         }
+        if (modalidade && modalidade !== 'todas') {
+            url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
+        }
+        if (dataInicio) {
+            url += `&data_inicio=${dataInicio}`;
+        }
+        if (dataFim) {
+            url += `&data_fim=${dataFim}`;
+        }
 
         const agent = new https.Agent({
             rejectUnauthorized: false
         });
 
         const startTime = Date.now();
-        const startMem = process.memoryUsage().heapUsed;
-
         console.log(`[PNCP] START GET ${url}`);
-        console.log(`[PNCP] Memory before: ${Math.round(startMem / 1024 / 1024)}MB`);
 
         const response = await axios.get(url, {
             headers: { 'Accept': 'application/json' },
             httpsAgent: agent,
-            timeout: 10000
+            timeout: 15000
         } as any);
 
         const data = response.data as any;
 
         // Transform items to frontend expected format safely
         const rawItems = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-        const items = rawItems.map((item: any) => ({
-            id: item.id || item.numeroControlePNCP || Math.random().toString(),
-            orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || 'Órgão não informado',
-            orgao_cnpj: item.orgao_cnpj || item.orgaoEntidade?.cnpj || '',
-            ano: item.ano,
-            numero_sequencial: item.numero_sequencial,
-            titulo: item.title || item.titulo || item.identificador || 'Sem título',
-            objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
-            data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
-            data_abertura: item.data_fim_vigencia || item.data_inicio_vigencia || item.dataAberturaProposta || item.data_abertura || item.dataPublicacaoPncp || new Date().toISOString(),
-            valor_estimado: Number(item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado) || 0,
-            uf: item.uf || item.unidadeOrgao?.ufSigla || uf || '--',
-            municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '--',
-            link_sistema: (item.orgao_cnpj && item.ano && item.numero_sequencial)
-                ? `https://pncp.gov.br/app/editais/${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`
-                : (item.linkSistemaOrigem || item.link || ''),
-            status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
-        }));
+        const items = rawItems.map((item: any) => {
+            // Extract orgao_cnpj from multiple potential sources
+            const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || '';
+            const ano = item.ano || '';
+            const nSeq = item.numero_sequencial || item.sequencialCompra || '';
+
+            // Extract value from all possible fields aggressively
+            const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
+                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? 0;
+            const valorEstimado = Number(rawVal) || 0;
+
+            // Extract modalidade from API response
+            const modalidadeNome = item.modalidade_nome || item.modalidadeNome
+                || item.modalidadeLicitacaoNome || item.modalidade || '';
+
+            return {
+                id: item.id || item.numeroControlePNCP || Math.random().toString(),
+                orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || 'Órgão não informado',
+                orgao_cnpj: cnpj,
+                ano,
+                numero_sequencial: nSeq,
+                titulo: item.title || item.titulo || item.identificador || 'Sem título',
+                objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
+                data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
+                data_abertura: item.data_fim_vigencia || item.data_inicio_vigencia || item.dataAberturaProposta || item.data_abertura || item.dataPublicacaoPncp || new Date().toISOString(),
+                valor_estimado: valorEstimado,
+                uf: item.uf || item.unidadeOrgao?.ufSigla || uf || '--',
+                municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '--',
+                modalidade_nome: modalidadeNome,
+                link_sistema: (cnpj && ano && nSeq)
+                    ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
+                    : (item.linkSistemaOrigem || item.link || ''),
+                status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
+            };
+        });
 
         // Sort items logically by closest opening session
         const now = Date.now();
         items.sort((a: any, b: any) => {
             const dateA = new Date(a.data_abertura).getTime();
             const dateB = new Date(b.data_abertura).getTime();
-
-            // Fix: avoid NaN and invalid dates breaking the sort loop
             const absA = isNaN(dateA) ? Infinity : Math.abs(dateA - now);
             const absB = isNaN(dateB) ? Infinity : Math.abs(dateB - now);
-
             return absA - absB;
         });
 
-        // Hydrate valor_estimado safely
+        // Hydrate valor_estimado and modalidade from detail API when missing
         const hydratedItems = await Promise.all(items.map(async (item: any) => {
-            if (!item.valor_estimado && item.orgao_cnpj && item.ano && item.numero_sequencial) {
+            if (item.orgao_cnpj && item.ano && item.numero_sequencial && (!item.valor_estimado || !item.modalidade_nome)) {
                 try {
                     const detailUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${item.orgao_cnpj}/compras/${item.ano}/${item.numero_sequencial}`;
                     const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 5000 } as any);
-                    const detailData: any = detailRes.data;
-                    if (detailData && detailData.valorTotalEstimado) {
-                        item.valor_estimado = Number(detailData.valorTotalEstimado);
+                    const d: any = detailRes.data;
+                    if (d) {
+                        if (!item.valor_estimado && d.valorTotalEstimado) {
+                            item.valor_estimado = Number(d.valorTotalEstimado);
+                        }
+                        if (!item.modalidade_nome && (d.modalidadeNome || d.modalidadeLicitacaoNome)) {
+                            item.modalidade_nome = d.modalidadeNome || d.modalidadeLicitacaoNome;
+                        }
                     }
                 } catch (e) {
-                    // Safe mute
+                    // Safe mute — detail endpoint can fail for some items
                 }
             }
             return item;
@@ -844,9 +869,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         const totalResults = typeof data.total === 'number' ? data.total : (rawItems.length || 0);
 
         const endTime = Date.now();
-        const endMem = process.memoryUsage().heapUsed;
-        console.log(`[PNCP] END GET (${endTime - startTime}ms) - Retrieved ${hydratedItems.length} items`);
-        console.log(`[PNCP] Memory delta: ${Math.round((endMem - startMem) / 1024 / 1024)}MB`);
+        console.log(`[PNCP] END GET (${endTime - startTime}ms) - Retrieved ${hydratedItems.length} items, total: ${totalResults}`);
 
         res.json({
             items: hydratedItems,
