@@ -75,7 +75,7 @@ export function PncpPage({ companies }: Props) {
         }
     };
 
-    const handleSearch = async (e?: React.FormEvent) => {
+    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string }) => {
         if (e) {
             e.preventDefault();
             setPage(1);
@@ -90,13 +90,13 @@ export function PncpPage({ companies }: Props) {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    keywords,
-                    status,
-                    uf: selectedUf,
+                    keywords: overrides?.keywords ?? keywords,
+                    status: overrides?.status ?? status,
+                    uf: overrides?.uf ?? selectedUf,
                     pagina: e ? 1 : page,
-                    modalidade,
-                    dataInicio: dataInicio || undefined,
-                    dataFim: dataFim || undefined,
+                    modalidade: overrides?.modalidade ?? modalidade,
+                    dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
+                    dataFim: (overrides?.dataFim ?? dataFim) || undefined,
                 })
             });
             if (res.ok) {
@@ -150,16 +150,29 @@ export function PncpPage({ companies }: Props) {
     };
 
     const loadSavedSearch = (search: PncpSavedSearch) => {
-        setKeywords(search.keywords || '');
-        setStatus(search.status || 'recebendo_proposta');
-        setSelectedSearchCompanyId(search.companyProfileId || '');
+        const searchKeywords = search.keywords || '';
+        const searchStatus = search.status || 'recebendo_proposta';
+        let searchUf = '';
         try {
             const parsedStates = JSON.parse(search.states || '[]');
-            setSelectedUf(parsedStates[0] || '');
+            searchUf = parsedStates[0] || '';
         } catch {
-            setSelectedUf('');
+            searchUf = '';
         }
-        setTimeout(() => handleSearch(), 100);
+
+        // Update form state for display
+        setKeywords(searchKeywords);
+        setStatus(searchStatus);
+        setSelectedSearchCompanyId(search.companyProfileId || '');
+        setSelectedUf(searchUf);
+        setPage(1);
+
+        // Execute search immediately with the saved values (bypass stale state)
+        handleSearch(undefined, {
+            keywords: searchKeywords,
+            status: searchStatus,
+            uf: searchUf,
+        });
     };
 
     useEffect(() => {
