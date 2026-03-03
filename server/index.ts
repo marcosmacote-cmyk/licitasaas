@@ -760,8 +760,10 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim } = req.body;
+        const pageSize = 10;
 
-        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=10&pagina=${pagina}`;
+        // Fetch a large batch from PNCP to enable global sorting (max 500)
+        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=500&pagina=1`;
         if (keywords) {
             url += `&q=${encodeURIComponent(keywords)}`;
         }
@@ -839,8 +841,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                 status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
             };
         });
-
-        // Sort items by closest deadline (data_encerramento_proposta first, then data_abertura as fallback)
+        // GLOBAL sort ALL items by closest deadline using search API dates
         const now = Date.now();
         items.sort((a: any, b: any) => {
             const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || '9999').getTime();
@@ -850,8 +851,13 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             return absA - absB;
         });
 
-        // Hydrate ALL items from detail API (search results rarely include value/modalidade)
-        const hydratedItems = await Promise.all(items.map(async (item: any) => {
+        // Paginate first, then hydrate ONLY the page items (fast!)
+        const totalResults = items.length;
+        const startIdx = (Number(pagina) - 1) * pageSize;
+        const pageItems = items.slice(startIdx, startIdx + pageSize);
+
+        // Hydrate only the 10 items on this page from detail API
+        const hydratedPageItems = await Promise.all(pageItems.map(async (item: any) => {
             if (item.orgao_cnpj && item.ano && item.numero_sequencial) {
                 try {
                     const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${item.orgao_cnpj}/compras/${item.ano}/${item.numero_sequencial}`;
@@ -880,13 +886,11 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             return item;
         }));
 
-        const totalResults = typeof data.total === 'number' ? data.total : (rawItems.length || 0);
-
         const endTime = Date.now();
-        console.log(`[PNCP] END GET (${endTime - startTime}ms) - Retrieved ${hydratedItems.length} items, total: ${totalResults}`);
+        console.log(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults}, Page ${pagina}: items ${startIdx}-${startIdx + hydratedPageItems.length}`);
 
         res.json({
-            items: hydratedItems,
+            items: hydratedPageItems,
             total: totalResults
         });
     } catch (error: any) {
