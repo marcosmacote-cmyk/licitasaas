@@ -147,11 +147,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     alert("Configuração de alertas salva com sucesso!");
                 }
             } else {
-                alert("Erro ao salvar configuração no servidor.");
+                let errorData = { error: "Erro desconhecido do servidor" };
+                try { errorData = await res.json(); } catch (e) { }
+                alert(`Erro ao salvar configuração: ${errorData.error}`);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to save alert config", err);
-            alert("Erro ao salvar configuração.");
+            alert(`Erro na requisição: ${err.message || 'Falha de rede.'}`);
         }
     };
 

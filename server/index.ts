@@ -543,13 +543,21 @@ app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
                     });
                 }
             }
+
             const groupsToExclude = groupAlertDays ? Object.keys(groupAlertDays) : [];
+            const excludeWhere: any = { tenantId: req.user.tenantId };
+            if (groupsToExclude.length > 0) {
+                excludeWhere.docGroup = { notIn: groupsToExclude };
+            }
+
             await prisma.document.updateMany({
-                where: { tenantId: req.user.tenantId, docGroup: { notIn: groupsToExclude } },
+                where: excludeWhere,
                 data: { alertDays: Number(defaultAlertDays) }
             });
 
             const allDocs = await prisma.document.findMany({ where: { tenantId: req.user.tenantId } });
+            let updateErrors = 0;
+
             for (const doc of allDocs) {
                 let status = 'Válido';
                 if (doc.expirationDate) {
@@ -558,19 +566,29 @@ app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
                     if (diffDays < 0) status = 'Vencido';
                     else if (diffDays <= (doc.alertDays || Number(defaultAlertDays))) status = 'Vencendo';
                 }
+
                 if (doc.status !== status) {
-                    await prisma.document.update({
-                        where: { id: doc.id },
-                        data: { status }
-                    });
+                    try {
+                        await prisma.document.update({
+                            where: { id: doc.id },
+                            data: { status }
+                        });
+                    } catch (updateErr) {
+                        console.error(`Failed to update doc status for ${doc.id}:`, updateErr);
+                        updateErrors++;
+                    }
                 }
+            }
+
+            if (updateErrors > 0) {
+                console.warn(`[Config Alerts] ${updateErrors} documents failed to update their statuses.`);
             }
         }
 
         res.json({ success: true, config: JSON.parse(config.config) });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Config save error:", error);
-        res.status(500).json({ error: 'Failed to update config' });
+        res.status(500).json({ error: error.message || 'Failed to update config' });
     }
 });
 
