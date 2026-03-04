@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Download, CheckCircle2, FileArchive, Loader2, ExternalLink, Search, ChevronDown, ChevronUp, XCircle, Sparkles, Shield, FileSearch, Briefcase, FileText, HelpCircle, AlertTriangle, Eye, Package } from 'lucide-react';
+import { CheckCircle2, FileArchive, Loader2, Search, ChevronDown, ChevronUp, XCircle, Sparkles, Shield, FileSearch, Briefcase, FileText, HelpCircle, AlertTriangle, Eye, Package } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { API_BASE_URL } from '../../config';
@@ -81,7 +81,7 @@ function findBestMatches(docs: CompanyDocument[], reqText: string, maxResults: n
 // RequirementCard component
 // ──────────────────────────────────────────────────────────────────────
 function RequirementCard({
-    idx,
+    idx: _idx,
     req,
     reqItem,
     selectedDocs,
@@ -745,12 +745,11 @@ export function DossierExporter({ biddings, companies }: Props) {
 }
 
 const labelStyle: React.CSSProperties = {
-    display: 'block',
+    display: 'flex',
     fontSize: '0.8125rem',
     fontWeight: 600,
     color: 'var(--color-text-secondary)',
     marginBottom: '8px',
-    display: 'flex',
     alignItems: 'center',
     gap: '6px',
 };
