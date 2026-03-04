@@ -1654,6 +1654,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
                     totalPrice: Math.round(totalPrice * 100) / 100,
                     referencePrice: item.referencePrice || null,
                     brand: item.brand || null,
+                    model: item.model || null,
                     sortOrder: item.sortOrder ?? i,
                 },
             });
@@ -1676,7 +1677,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
 // PUT update single item
 app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, res) => {
     try {
-        const { itemNumber, description, unit, quantity, multiplier, multiplierLabel, unitCost, referencePrice, brand } = req.body;
+        const { itemNumber, description, unit, quantity, multiplier, multiplierLabel, unitCost, referencePrice, brand, model } = req.body;
         const proposalId = req.params.id;
         const itemId = req.params.itemId;
 
@@ -1706,6 +1707,7 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
                 totalPrice: Math.round(totalPrice * 100) / 100,
                 referencePrice: referencePrice ?? null,
                 brand: brand ?? null,
+                model: model ?? null,
             },
         });
 

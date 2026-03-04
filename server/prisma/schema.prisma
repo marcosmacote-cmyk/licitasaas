@@ -159,6 +159,9 @@ model PriceProposal {
   totalValue        Float               @default(0)
   letterContent     String?
   companyLogo       String?
+  headerImage       String?
+  footerImage       String?
+  signatureMode     String              @default("LEGAL") // LEGAL, TECH, BOTH
   notes             String?
   validityDays      Int                 @default(60)
   createdAt         DateTime            @default(now())
@@ -184,6 +187,7 @@ model ProposalItem {
   totalPrice        Float               @default(0)
   referencePrice    Float?
   brand             String?
+  model             String?
   costComposition   String?
   sortOrder         Int                 @default(0)
 

@@ -146,6 +146,7 @@ export interface ProposalItem {
     totalPrice: number;
     referencePrice?: number;
     brand?: string;
+    model?: string;
     costComposition?: string;
     sortOrder: number;
 }
@@ -163,6 +164,9 @@ export interface PriceProposal {
     totalValue: number;
     letterContent?: string;
     companyLogo?: string;
+    headerImage?: string;
+    footerImage?: string;
+    signatureMode: 'LEGAL' | 'TECH' | 'BOTH';
     notes?: string;
     validityDays: number;
     createdAt: string;

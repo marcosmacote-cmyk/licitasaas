@@ -37,6 +37,11 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [letterContent, setLetterContent] = useState('');
     const [isLetterLoading, setIsLetterLoading] = useState(false);
 
+    // Config states
+    const [headerImage, setHeaderImage] = useState('');
+    const [footerImage, setFooterImage] = useState('');
+    const [signatureMode, setSignatureMode] = useState<'LEGAL' | 'TECH' | 'BOTH'>('LEGAL');
+
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -67,6 +72,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     setValidityDays(latest.validityDays || 60);
                     if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
                     setLetterContent(latest.letterContent || '');
+                    setHeaderImage(latest.headerImage || '');
+                    setFooterImage(latest.footerImage || '');
+                    setSignatureMode(latest.signatureMode || 'LEGAL');
                 }
             }
         } catch (e) {
@@ -253,7 +261,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         try {
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
-                body: JSON.stringify({ bdiPercentage: bdi, validityDays }),
+                body: JSON.stringify({ bdiPercentage: bdi, validityDays, headerImage, footerImage, signatureMode }),
             });
             // Reload to recalculate prices with new BDI
             await loadProposals();
@@ -268,6 +276,51 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const showSaveMsg = (msg: string) => {
         setSaveMessage(msg);
         setTimeout(() => setSaveMessage(''), 3000);
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            if (ev.target?.result) setter(ev.target.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // --- Export Excel ---
+    const handleExportExcel = () => {
+        if (!proposal || items.length === 0) return;
+        const totalItemsValue = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
+
+        // Use pt-BR numbers with comma for Excel
+        let csv = 'Item\tDescrição\tMarca\tModelo\tUnid\tQtd\tMultiplicador\tCusto Unit.\tPreço Unit.\tValor Total\t% Peso\n';
+        items.forEach((it, i) => {
+            const peso = totalItemsValue > 0 ? ((it.totalPrice || 0) / totalItemsValue) * 100 : 0;
+            const linha = [
+                it.itemNumber || String(i + 1),
+                `"${(it.description || '').replace(/"/g, '""')}"`,
+                `"${(it.brand || '').replace(/"/g, '""')}"`,
+                `"${(it.model || '').replace(/"/g, '""')}"`,
+                it.unit,
+                it.quantity,
+                it.multiplier,
+                it.unitCost.toFixed(2).replace('.', ','),
+                it.unitPrice.toFixed(2).replace('.', ','),
+                (it.totalPrice || 0).toFixed(2).replace('.', ','),
+                peso.toFixed(2).replace('.', ',') + '%'
+            ];
+            csv += linha.join('\t') + '\n';
+        });
+
+        // Totals row
+        csv += `\n\t\t\t\t\t\t\t\tTotal Global\t${totalItemsValue.toFixed(2).replace('.', ',')}\t100%\n`;
+
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Proposta_Precos_${selectedBiddingId.substring(0, 6)}.xls`;
+        link.click();
     };
 
     // --- AI Letter Generation ---
@@ -332,17 +385,22 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             return;
         }
 
-        // Generate the formatted tables for items
-        const itemsHtml = items.map((it, i) => `
+        const totalItemsValue = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
+        const itemsHtml = items.map((it, i) => {
+            const peso = totalItemsValue > 0 ? ((it.totalPrice || 0) / totalItemsValue) * 100 : 0;
+            return `
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 8px; text-align: center;">${it.itemNumber || i + 1}</td>
                 <td style="padding: 8px;">${it.description}</td>
+                <td style="padding: 8px; text-align: center;">${it.brand || '-'}</td>
+                <td style="padding: 8px; text-align: center;">${it.model || '-'}</td>
                 <td style="padding: 8px; text-align: center;">${it.unit}</td>
                 <td style="padding: 8px; text-align: center;">${fmtNum(it.quantity)}</td>
                 <td style="padding: 8px; text-align: right;">${fmt(it.unitPrice)}</td>
                 <td style="padding: 8px; text-align: right; font-weight: bold;">${fmt(it.totalPrice)}</td>
+                <td style="padding: 8px; text-align: right; font-size: 0.8em; color: #555;">${peso.toFixed(1)}%</td>
             </tr>
-        `).join('');
+        `}).join('');
 
         const html = `
             <!DOCTYPE html>
@@ -371,9 +429,11 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             <body>
                 <button onclick="window.print()" style="padding: 10px 20px; margin-bottom: 20px; font-weight: bold; cursor: pointer;">Imprimir / Salvar PDF</button>
                 
-                <div class="header">
-                    <h1>${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
-                    <p>CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
+                <div class="${headerImage ? 'header-custom' : 'header'}">
+                    ${headerImage ? `<img src="${headerImage}" alt="Cabeçalho" style="max-width: 100%; max-height: 150px; margin-bottom: 20px;" />` : `
+                        <h1>${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
+                        <p>CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
+                    `}
                 </div>
 
                 <div class="letter">
@@ -386,10 +446,13 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                         <tr>
                             <th style="text-align:center;">Lote/Item</th>
                             <th>Descrição detalhada</th>
+                            <th style="text-align:center;">Marca</th>
+                            <th style="text-align:center;">Modelo</th>
                             <th style="text-align:center;">Unid</th>
                             <th style="text-align:center;">Qtd</th>
                             <th style="text-align:right;">Valor Unit.</th>
                             <th style="text-align:right;">Valor Total</th>
+                            <th style="text-align:right;">% Peso</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -410,7 +473,27 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                     </tbody>
                 </table>
                 
+                <div style="margin-top: 60px; text-align: center; display: flex; justify-content: space-around;">
+                    ${(signatureMode === 'LEGAL' || signatureMode === 'BOTH') ? `
+                        <div style="flex: 1;">
+                            ___________________________________<br/>
+                            <strong>${company?.contactName || 'Representante Legal'}</strong><br/>
+                            ${company?.qualification || 'Representante Legal'}<br/>
+                            ${company?.razaoSocial || ''}
+                        </div>
+                    ` : ''}
+                    ${(signatureMode === 'TECH' || signatureMode === 'BOTH') ? `
+                        <div style="flex: 1;">
+                            ___________________________________<br/>
+                            <strong>Responsável Técnico</strong><br/>
+                            ${company?.technicalQualification || 'Engenheiro / RT'}<br/>
+                            ${company?.razaoSocial || ''}
+                        </div>
+                    ` : ''}
+                </div>
+                
                 <div class="footer">
+                    ${footerImage ? `<img src="${footerImage}" alt="Rodapé" style="max-width: 100%; max-height: 100px; margin-bottom: 10px;" /><br/>` : ''}
                     Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
                 </div>
             </body>
@@ -504,9 +587,27 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                             </select>
                         </div>
 
-                        {/* BDI */}
-                        <div style={{ display: 'flex', gap: '16px' }}>
-                            <div style={{ flex: 1 }}>
+                        {/* BDI & Configs */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                            <div>
+                                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                                    Assinatura
+                                </label>
+                                <select
+                                    value={signatureMode}
+                                    onChange={e => setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH')}
+                                    style={{
+                                        width: '100%', padding: '10px 12px', borderRadius: '10px',
+                                        border: '1px solid var(--color-border)', fontSize: '0.875rem',
+                                        background: 'var(--color-bg-base)',
+                                    }}
+                                >
+                                    <option value="LEGAL">Representante Legal</option>
+                                    <option value="TECH">Responsável Técnico</option>
+                                    <option value="BOTH">Ambos</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
                                     <Calculator size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
                                     BDI (%)
@@ -538,8 +639,22 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                             </div>
                         </div>
 
+                        {/* Imagens do Timbrado */}
+                        <div style={{ display: 'flex', gap: '16px', background: 'var(--color-bg-base)', padding: '12px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>🖼️ Imagem do Cabeçalho</label>
+                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', width: '100%' }} />
+                                {headerImage && <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>✓ Carregado</span>}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>🖼️ Imagem do Rodapé</label>
+                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', width: '100%' }} />
+                                {footerImage && <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>✓ Carregado</span>}
+                            </div>
+                        </div>
+
                         {/* Buttons */}
-                        <div style={{ display: 'flex', alignItems: 'end', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'end', gap: '10px', marginTop: '10px' }}>
                             {!proposal && (
                                 <button
                                     className="btn btn-primary"
@@ -625,6 +740,17 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                             ({proposals.length} versões)
                         </span>
                     )}
+                    <button
+                        onClick={handleExportExcel}
+                        style={{
+                            marginLeft: 'auto', padding: '6px 14px', borderRadius: '8px',
+                            background: '#15803d', color: 'white', border: 'none',
+                            fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '6px'
+                        }}
+                    >
+                        Exportar Excel
+                    </button>
                     {/* Botão Exportar PDF */}
                     <button
                         onClick={handlePrintProposal}
@@ -694,13 +820,16 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                             <thead>
                                 <tr style={{ background: 'var(--color-bg-surface-hover)', borderBottom: '2px solid var(--color-border)' }}>
                                     <th style={thStyle}>#</th>
-                                    <th style={{ ...thStyle, textAlign: 'left', minWidth: '250px' }}>Descrição</th>
+                                    <th style={{ ...thStyle, textAlign: 'left', minWidth: '200px' }}>Descrição</th>
+                                    <th style={thStyle}>Marca</th>
+                                    <th style={thStyle}>Modelo</th>
                                     <th style={thStyle}>Unid</th>
                                     <th style={thStyle}>Qtd</th>
                                     <th style={thStyle}>Multiplicador</th>
                                     <th style={thStyle}>Custo Unit.</th>
-                                    <th style={thStyle}>Preço Unit. (c/ BDI)</th>
+                                    <th style={thStyle}>Preço Unit.</th>
                                     <th style={thStyle}>Total</th>
+                                    <th style={thStyle}>% Peso</th>
                                     <th style={{ ...thStyle, width: '50px' }}>Ref.</th>
                                     <th style={{ ...thStyle, width: '60px' }}></th>
                                 </tr>
@@ -733,6 +862,26 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                                                         {item.description || '(sem descrição)'}
                                                     </span>
                                                 )}
+                                            </td>
+                                            <td style={tdCenterStyle}>
+                                                {isEditing ? (
+                                                    <input
+                                                        value={item.brand || ''}
+                                                        onChange={e => updateItem(item.id, 'brand', e.target.value)}
+                                                        style={{ ...inputStyle, width: '80px', textAlign: 'center' }}
+                                                        placeholder="Marca"
+                                                    />
+                                                ) : item.brand || '-'}
+                                            </td>
+                                            <td style={tdCenterStyle}>
+                                                {isEditing ? (
+                                                    <input
+                                                        value={item.model || ''}
+                                                        onChange={e => updateItem(item.id, 'model', e.target.value)}
+                                                        style={{ ...inputStyle, width: '100px', textAlign: 'center' }}
+                                                        placeholder="Modelo"
+                                                    />
+                                                ) : item.model || '-'}
                                             </td>
                                             <td style={tdCenterStyle}>
                                                 {isEditing ? (
@@ -799,6 +948,9 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                                             </td>
                                             <td style={{ ...tdCenterStyle, fontWeight: 700 }}>
                                                 {fmt(item.totalPrice)}
+                                            </td>
+                                            <td style={{ ...tdCenterStyle, fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                                                {total > 0 ? ((item.totalPrice / total) * 100).toFixed(1) + '%' : '0%'}
                                             </td>
                                             <td style={tdCenterStyle}>
                                                 {item.referencePrice ? (
