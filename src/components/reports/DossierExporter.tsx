@@ -24,46 +24,126 @@ function getGroupMeta(group: string) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Smart AI-like matching: fuzzy keyword-based scoring
+// Smart AI matching engine — synonym-aware, category-driven scoring
 // ──────────────────────────────────────────────────────────────────────
+
+// Normalize text: lowercase, remove accents, trim
+function norm(text: string): string {
+    return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+// Synonym dictionary: each entry maps a "canonical key" to terms that are semantically equivalent
+const SYNONYM_MAP: Record<string, string[]> = {
+    // Habilitação Jurídica
+    'contrato_social': ['contrato social', 'ato constitutivo', 'estatuto social', 'requerimento de empresario', 'registro comercial', 'certificado mei', 'constituicao'],
+    'procuracao': ['procuracao', 'substabelecimento', 'carta de preposto', 'credenciamento'],
+    'identidade': ['rg', 'documento de identidade', 'carteira de identidade', 'cedula de identidade', 'cnh', 'cpf', 'identidade do representante'],
+    'cnpj': ['cnpj', 'comprovante de inscricao', 'cartao cnpj'],
+    'alvara': ['alvara', 'licenca de funcionamento', 'licenca municipal'],
+
+    // Regularidade Fiscal
+    'cnd_federal': ['certidao conjunta', 'cnd federal', 'certidao negativa de debitos federais', 'receita federal', 'divida ativa da uniao', 'pgfn', 'tributos federais', 'cnd rfb'],
+    'cnd_estadual': ['certidao negativa estadual', 'fazenda estadual', 'tributos estaduais', 'debitos estaduais', 'sefaz', 'icms'],
+    'cnd_municipal': ['certidao negativa municipal', 'fazenda municipal', 'tributos municipais', 'debitos municipais', 'iss', 'issqn'],
+    'fgts': ['fgts', 'crf', 'certificado de regularidade', 'fundo de garantia', 'caixa economica'],
+    'inss': ['inss', 'previdencia', 'previdenciaria', 'seguridade social', 'contribuicoes previdenciarias'],
+    'cndt': ['cndt', 'certidao negativa de debitos trabalhistas', 'justica do trabalho', 'debitos trabalhistas', 'trabalhista'],
+    'simples_nacional': ['simples nacional', 'optante pelo simples', 'das', 'mei'],
+
+    // Qualificação Técnica
+    'atestado_tecnico': ['atestado de capacidade tecnica', 'atestado tecnico', 'acervo tecnico', 'certidao de acervo', 'cat', 'declaracao de capacidade'],
+    'registro_conselho': ['crea', 'cau', 'crq', 'crf', 'conselho de classe', 'registro profissional', 'crm', 'oab', 'crc'],
+    'responsavel_tecnico': ['responsavel tecnico', 'rt', 'art', 'rrt', 'anotacao de responsabilidade'],
+
+    // Qualificação Econômico-Financeira
+    'balanco': ['balanco patrimonial', 'balanco', 'demonstracoes contabeis', 'demonstracoes financeiras', 'dre', 'demonstracao de resultado'],
+    'certidao_falencia': ['certidao de falencia', 'recuperacao judicial', 'certidao negativa de falencia', 'concordata'],
+    'patrimonio_liquido': ['patrimonio liquido', 'capital social', 'indices contabeis', 'liquidez', 'solvencia'],
+    'garantia': ['garantia de proposta', 'caucao', 'seguro-garantia', 'fianca bancaria'],
+
+    // Declarações
+    'declaracao_menores': ['declaracao de que nao emprega menores', 'emprega menor', 'trabalho infantil', 'menores de 18', 'decreto 6481', 'menor aprendiz'],
+    'declaracao_impedimento': ['declaracao de que nao esta impedido', 'impedimento', 'inidoneo', 'inidoneidade', 'suspensao', 'proibicao de contratar'],
+    'declaracao_fatos': ['declaracao de fatos supervenientes', 'fatos impeditivos', 'superveniencia'],
+    'declaracao_me_epp': ['declaracao me', 'microempresa', 'epp', 'empresa de pequeno porte', 'lei complementar 123'],
+    'declaracao_parentesco': ['nepotismo', 'parentesco', 'vinculo familiar', 'declaracao de parentesco'],
+    'declaracao_visita': ['declaracao de vistoria', 'visita tecnica', 'declaracao de visita', 'vistoria', 'conhecimento do local'],
+};
+
+// Category detection: map requirement text to document group
+const CATEGORY_SIGNATURES: Record<string, string[]> = {
+    'Habilitação Jurídica': ['contrato social', 'ato constitutivo', 'estatuto', 'procuracao', 'registro comerci', 'alvara', 'cnpj', 'junta comercial', 'identidade', 'rg', 'cpf'],
+    'Regularidade Fiscal, Social e Trabalhista': ['fiscal', 'tribut', 'fgts', 'inss', 'cndt', 'trabalhi', 'certidao negativa', 'debito', 'fazenda', 'receita', 'municipal', 'estadual', 'federal', 'previdenc', 'crf', 'regularidade'],
+    'Qualificação Técnica': ['tecnic', 'atestado', 'acervo', 'crea', 'cau', 'responsavel tecn', 'capacidade tecn', 'art', 'rrt'],
+    'Qualificação Econômica Financeira': ['balanco', 'patrimonio', 'liquidez', 'economic', 'financeir', 'contab', 'falencia', 'recuperacao judicial', 'solvencia', 'capital social'],
+    'Declarações': ['declaracao', 'declaro', 'compromisso', 'menor', 'impediment', 'fatos', 'vistoria', 'visita', 'nepotism'],
+};
+
+function detectCategory(text: string): string | null {
+    const n = norm(text);
+    let bestGroup: string | null = null;
+    let bestScore = 0;
+    for (const [group, signatures] of Object.entries(CATEGORY_SIGNATURES)) {
+        const hits = signatures.filter(s => n.includes(s)).length;
+        if (hits > bestScore) { bestScore = hits; bestGroup = group; }
+    }
+    return bestScore > 0 ? bestGroup : null;
+}
+
 function scoreDocAgainstRequirement(doc: CompanyDocument, reqText: string): number {
-    const reqLower = reqText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const docTypeLower = (doc.docType || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const docNameLower = (doc.fileName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const docGroupLower = (doc.docGroup || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const reqNorm = norm(reqText);
+    const docTypeNorm = norm(doc.docType);
+    const docNameNorm = norm(doc.fileName);
+    const docGroupNorm = norm(doc.docGroup);
+    const combinedDoc = `${docTypeNorm} ${docNameNorm} ${docGroupNorm}`;
+
+    // 1. Perfect match (100)
+    if (docTypeNorm === reqNorm) return 100;
 
     let score = 0;
 
-    // Exact type match
-    if (docTypeLower === reqLower) return 100;
-
-    // Strong substring containment
-    if (docTypeLower.includes(reqLower) || reqLower.includes(docTypeLower)) score += 60;
-
-    // Keyword-level matching
-    const reqWords = reqLower.split(/\s+/).filter(w => w.length > 3);
-    const combinedDoc = `${docTypeLower} ${docNameLower} ${docGroupLower}`;
-
-    let matchedWords = 0;
-    for (const word of reqWords) {
-        if (combinedDoc.includes(word)) matchedWords++;
+    // 2. Synonym matching (up to 65 pts)
+    for (const synonyms of Object.values(SYNONYM_MAP)) {
+        const reqHitCount = synonyms.filter(s => reqNorm.includes(s)).length;
+        const docHitCount = synonyms.filter(s => combinedDoc.includes(s)).length;
+        if (reqHitCount > 0 && docHitCount > 0) {
+            // Both req and doc match the same synonym family
+            const familyScore = Math.min(65, 35 + (reqHitCount + docHitCount) * 10);
+            score = Math.max(score, familyScore);
+        }
     }
+
+    // 3. Strong substring containment (up to 55 pts)
+    if (docTypeNorm.length > 4 && reqNorm.length > 4) {
+        if (reqNorm.includes(docTypeNorm)) score = Math.max(score, 55);
+        if (docTypeNorm.includes(reqNorm)) score = Math.max(score, 55);
+    }
+
+    // 4. N-gram keyword matching (up to 35 pts additive)
+    const reqWords = reqNorm.split(/[\s,;.()/-]+/).filter(w => w.length > 2);
     if (reqWords.length > 0) {
-        score += Math.round((matchedWords / reqWords.length) * 40);
+        let matched = 0;
+        for (const word of reqWords) {
+            if (combinedDoc.includes(word)) matched++;
+        }
+        const ratio = matched / reqWords.length;
+        score += Math.round(ratio * 35);
     }
 
-    // Bonus for group-level relevance
-    const groupKeywords: Record<string, string[]> = {
-        'Habilitação Jurídica': ['contrato', 'social', 'ato constitutivo', 'estatuto', 'procuração', 'rg', 'cpf', 'cnpj', 'registro'],
-        'Regularidade Fiscal, Social e Trabalhista': ['fiscal', 'tribut', 'fgts', 'inss', 'trabalhis', 'cndt', 'certidão negativa', 'débito', 'fazenda', 'receita', 'municipal', 'estadual', 'federal'],
-        'Qualificação Técnica': ['técnic', 'atestado', 'acervo', 'crea', 'cau', 'responsável', 'capacidade'],
-        'Qualificação Econômica Financeira': ['balanço', 'patrimônio', 'liquidez', 'econômic', 'financeir', 'contábil', 'certidão', 'falência'],
-    };
+    // 5. Category alignment bonus (up to 20 pts)
+    const reqCategory = detectCategory(reqText);
+    if (reqCategory) {
+        const docCategory = doc.docGroup || '';
+        if (norm(docCategory) === norm(reqCategory)) {
+            score += 20;
+        } else if (detectCategory(doc.docType) === reqCategory) {
+            score += 15;
+        }
+    }
 
-    for (const [group, keywords] of Object.entries(groupKeywords)) {
-        const docInGroup = docGroupLower.includes(group.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-        const reqMatchesGroup = keywords.some(k => reqLower.includes(k));
-        if (docInGroup && reqMatchesGroup) score += 15;
+    // 6. Penalty for expired docs
+    if (doc.expirationDate && new Date(doc.expirationDate) < new Date()) {
+        score = Math.round(score * 0.7);
     }
 
     return Math.min(score, 100);
@@ -72,7 +152,7 @@ function scoreDocAgainstRequirement(doc: CompanyDocument, reqText: string): numb
 function findBestMatches(docs: CompanyDocument[], reqText: string, maxResults: number = 3): { doc: CompanyDocument; score: number }[] {
     const scored = docs.map(doc => ({ doc, score: scoreDocAgainstRequirement(doc, reqText) }));
     return scored
-        .filter(s => s.score >= 25)
+        .filter(s => s.score >= 20)
         .sort((a, b) => b.score - a.score)
         .slice(0, maxResults);
 }
@@ -353,7 +433,7 @@ export function DossierExporter({ biddings, companies }: Props) {
     const [manualMatches, setManualMatches] = useState<Record<string, string[]>>({});
     const [aiApplied, setAiApplied] = useState(false);
 
-    const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis), [biddings]);
+    const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis && b.status === 'Preparando Documentação'), [biddings]);
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
     const selectedCompany = companies.find(c => c.id === selectedCompanyId);
 
@@ -541,7 +621,7 @@ export function DossierExporter({ biddings, companies }: Props) {
             }}>
                 <div>
                     <label style={labelStyle}>
-                        <FileArchive size={14} style={{ verticalAlign: '-2px' }} /> Licitação (com Análise de IA)
+                        <FileArchive size={14} style={{ verticalAlign: '-2px' }} /> Licitação em Preparação
                     </label>
                     <select
                         className="select-input"
@@ -556,7 +636,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                     </select>
                     {biddingsWithAnalysis.length === 0 && (
                         <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px' }}>
-                            Apenas licitações com "Extração IA" aparecem aqui.
+                            Apenas licitações na coluna "Preparando Documentação" com Análise IA aparecem aqui.
                         </p>
                     )}
                 </div>
