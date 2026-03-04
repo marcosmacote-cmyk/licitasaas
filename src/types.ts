@@ -61,8 +61,12 @@ export interface CompanyProfile {
     qualification?: string;
     technicalQualification?: string;
     contactName?: string;
+    contactCpf?: string;
     contactEmail?: string;
     contactPhone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
     name?: string; // Alias for razaoSocial used in some components
     documents?: CompanyDocument[]; // Nested documents from backend
     credentials?: CompanyCredential[]; // Nested credentials from backend

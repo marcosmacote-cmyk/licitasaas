@@ -42,8 +42,12 @@ model CompanyProfile {
   qualification    String?             // New field for company and representative qualification
   technicalQualification String?        // Technical responsible (CREA/CAU) qualification
   contactName      String?
+  contactCpf       String?             // CPF do Sócio Administrador / Representante Legal
   contactEmail     String?
   contactPhone     String?
+  address          String?             // Endereço Completo
+  city             String?             // Cidade Sede
+  state            String?             // UF (sigla)
   biddingProcesses BiddingProcess[]
   credentials      CompanyCredential[]
   pncpSearches     PncpSavedSearch[]

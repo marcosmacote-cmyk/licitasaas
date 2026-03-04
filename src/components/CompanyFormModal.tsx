@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, Tag, Mail, Phone, Save, Info } from 'lucide-react';
+import { X, Building2, Tag, Mail, Phone, Save, Info, MapPin } from 'lucide-react';
 import type { CompanyProfile } from '../types';
 
 interface Props {
@@ -24,8 +24,8 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         // Only send editable fields, strip out id/tenantId/relations
-        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone } = formData;
-        onSave({ razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone });
+        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state } = formData;
+        onSave({ razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state });
     };
 
     return (
@@ -172,13 +172,24 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
                                     <div>
-                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Nome do Contato</label>
+                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Nome do Contato (Repr. Legal)</label>
                                         <div style={inputContainerStyle}>
                                             <input
                                                 style={inputInnerStyle}
-                                                placeholder="Nome"
+                                                placeholder="Nome Completo"
                                                 value={formData.contactName || ''}
                                                 onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>CPF do Repr. Legal</label>
+                                        <div style={inputContainerStyle}>
+                                            <input
+                                                style={inputInnerStyle}
+                                                placeholder="000.000.000-00"
+                                                value={formData.contactCpf || ''}
+                                                onChange={(e) => setFormData({ ...formData, contactCpf: e.target.value })}
                                             />
                                         </div>
                                     </div>
@@ -204,6 +215,54 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                                                 value={formData.contactPhone || ''}
                                                 onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
                                             />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Endereço */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <div style={{ padding: '24px', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
+                                    <MapPin size={16} />
+                                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Endereço da Sede</span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+                                    <div>
+                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Endereço Completo</label>
+                                        <div style={inputContainerStyle}>
+                                            <input
+                                                style={inputInnerStyle}
+                                                placeholder="Rua X, nº 123, Bairro Y"
+                                                value={formData.address || ''}
+                                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '12px' }}>
+                                        <div>
+                                            <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Cidade</label>
+                                            <div style={inputContainerStyle}>
+                                                <input
+                                                    style={inputInnerStyle}
+                                                    placeholder="Fortaleza"
+                                                    value={formData.city || ''}
+                                                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label style={{ ...labelStyle, fontSize: '0.75rem' }}>UF</label>
+                                            <div style={inputContainerStyle}>
+                                                <input
+                                                    style={inputInnerStyle}
+                                                    placeholder="CE"
+                                                    maxLength={2}
+                                                    value={formData.state || ''}
+                                                    onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
