@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
     Sparkles, Plus, Trash2, Save, FileText, Loader2,
     Calculator, DollarSign, Package, AlertTriangle, Edit3,
-    ChevronDown, ChevronUp, Brain, Briefcase
+    ChevronDown, ChevronUp, Brain, Briefcase, Printer
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
@@ -31,6 +31,11 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [showConfig, setShowConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
+
+    // New tab state
+    const [activeTab, setActiveTab] = useState<'items' | 'letter'>('items');
+    const [letterContent, setLetterContent] = useState('');
+    const [isLetterLoading, setIsLetterLoading] = useState(false);
 
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -61,6 +66,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     setBdi(latest.bdiPercentage || 0);
                     setValidityDays(latest.validityDays || 60);
                     if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
+                    setLetterContent(latest.letterContent || '');
                 }
             }
         } catch (e) {
@@ -264,6 +270,156 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         setTimeout(() => setSaveMessage(''), 3000);
     };
 
+    // --- AI Letter Generation ---
+    const handleGenerateLetter = async () => {
+        if (!proposal || !selectedBiddingId || !selectedCompanyId) return;
+        setIsLetterLoading(true);
+        try {
+            // Build summary of items for the prompt
+            const itemsSummary = items.map(it => `${it.quantity}x ${it.unit} - ${it.description} - Unit: ${fmt(it.unitPrice)} - Total: ${fmt(it.totalPrice)}`).join('\n');
+
+            const res = await fetch(`${API_BASE_URL}/api/proposals/ai-letter`, {
+                method: 'POST', headers,
+                body: JSON.stringify({
+                    biddingProcessId: selectedBiddingId,
+                    companyProfileId: selectedCompanyId,
+                    totalValue: total,
+                    validityDays,
+                    itemsSummary
+                }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setLetterContent(data.letterContent);
+                showSaveMsg('Carta proposta rascunhada pela IA!');
+            } else {
+                alert('Erro ao gerar carta pela IA.');
+            }
+        } catch (e) {
+            alert('Erro ao conectar com a IA.');
+        } finally {
+            setIsLetterLoading(false);
+        }
+    };
+
+    const handleSaveLetter = async () => {
+        if (!proposal) return;
+        setIsSaving(true);
+        try {
+            await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
+                method: 'PUT', headers,
+                body: JSON.stringify({ letterContent }),
+            });
+            showSaveMsg('Carta proposta salva!');
+            await loadProposals();
+        } catch (e) {
+            alert('Erro ao salvar carta.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handlePrintProposal = () => {
+        if (!proposal || !selectedBidding || !selectedCompanyId) {
+            alert('Carregue os dados da proposta primeiro.');
+            return;
+        }
+        const company = companies.find(c => c.id === selectedCompanyId);
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Por favor, permita pop-ups para gerar o PDF.');
+            return;
+        }
+
+        // Generate the formatted tables for items
+        const itemsHtml = items.map((it, i) => `
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 8px; text-align: center;">${it.itemNumber || i + 1}</td>
+                <td style="padding: 8px;">${it.description}</td>
+                <td style="padding: 8px; text-align: center;">${it.unit}</td>
+                <td style="padding: 8px; text-align: center;">${fmtNum(it.quantity)}</td>
+                <td style="padding: 8px; text-align: right;">${fmt(it.unitPrice)}</td>
+                <td style="padding: 8px; text-align: right; font-weight: bold;">${fmt(it.totalPrice)}</td>
+            </tr>
+        `).join('');
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Proposta Comercial - ${selectedBidding.title}</title>
+                <style>
+                    body { font-family: 'Arial', sans-serif; padding: 40px; color: #111; line-height: 1.5; font-size: 14px; }
+                    .header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 20px; margin-bottom: 30px; }
+                    .header h1 { margin: 0; font-size: 24px; color: #000; }
+                    .header p { margin: 5px 0; color: #444; }
+                    .letter { white-space: pre-wrap; margin-bottom: 40px; text-align: justify; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+                    th { border-bottom: 2px solid #222; padding: 10px 8px; text-align: left; background: #f9f9f9; }
+                    .totals { width: 300px; float: right; margin-top: 20px; }
+                    .totals tr th, .totals tr td { padding: 8px; text-align: right; border-bottom: 1px solid #ddd; }
+                    .totals tr.grand-total th, .totals tr.grand-total td { font-size: 18px; font-weight: bold; border-top: 2px solid #222; border-bottom: none; }
+                    .footer { margin-top: 100px; text-align: center; border-top: 1px solid #ddd; padding-top: 20px; font-size: 11px; color: #666; clear: both; }
+                    @media print {
+                        body { padding: 0; }
+                        button { display: none; }
+                        @page { margin: 2cm; }
+                    }
+                </style>
+            </head>
+            <body>
+                <button onclick="window.print()" style="padding: 10px 20px; margin-bottom: 20px; font-weight: bold; cursor: pointer;">Imprimir / Salvar PDF</button>
+                
+                <div class="header">
+                    <h1>${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
+                    <p>CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
+                </div>
+
+                <div class="letter">
+${letterContent || 'Nenhuma carta proposta redigida.'}
+                </div>
+
+                <h3>Planilha de Formação de Preços</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align:center;">Lote/Item</th>
+                            <th>Descrição detalhada</th>
+                            <th style="text-align:center;">Unid</th>
+                            <th style="text-align:center;">Qtd</th>
+                            <th style="text-align:right;">Valor Unit.</th>
+                            <th style="text-align:right;">Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <table class="totals">
+                    <tbody>
+                        <tr>
+                            <th>Valor Total Global</th>
+                            <td>${fmt(total)}</td>
+                        </tr>
+                        <tr>
+                            <th style="font-weight: normal; color: #555;">Validade da Proposta</th>
+                            <td style="font-weight: normal; color: #555;">${validityDays} dias</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="footer">
+                    Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
+                </div>
+            </body>
+            </html>
+        `;
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
+
     // Totals
     const subtotal = useMemo(() => items.reduce((sum, it) => sum + (it.quantity * (it.multiplier || 1) * it.unitCost), 0), [items]);
     const bdiValue = useMemo(() => subtotal * (bdi / 100), [subtotal, bdi]);
@@ -465,15 +621,59 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         — {proposal.status} — {items.length} item(ns) — Total: {fmt(total)}
                     </span>
                     {proposals.length > 1 && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
                             ({proposals.length} versões)
                         </span>
                     )}
+                    {/* Botão Exportar PDF */}
+                    <button
+                        onClick={handlePrintProposal}
+                        style={{
+                            marginLeft: 'auto', padding: '6px 14px', borderRadius: '8px',
+                            background: '#111', color: 'white', border: 'none',
+                            fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '6px'
+                        }}
+                    >
+                        <Printer size={14} /> Exportar / PDF
+                    </button>
                 </div>
             )}
 
-            {/* ── Items Table ── */}
-            {(proposal || items.length > 0) && (
+            {/* ── TABS ── */}
+            {proposal && (
+                <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--color-border)', marginBottom: '4px' }}>
+                    <button
+                        onClick={() => setActiveTab('items')}
+                        style={{
+                            padding: '10px 20px', background: 'none', border: 'none',
+                            borderBottom: activeTab === 'items' ? '3px solid var(--color-primary)' : '3px solid transparent',
+                            color: activeTab === 'items' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                            fontWeight: activeTab === 'items' ? 700 : 500,
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                            transform: 'translateY(2px)' // align borders
+                        }}
+                    >
+                        <Package size={16} /> Planilha de Preços
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('letter')}
+                        style={{
+                            padding: '10px 20px', background: 'none', border: 'none',
+                            borderBottom: activeTab === 'letter' ? '3px solid var(--color-primary)' : '3px solid transparent',
+                            color: activeTab === 'letter' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                            fontWeight: activeTab === 'letter' ? 700 : 500,
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                            transform: 'translateY(2px)'
+                        }}
+                    >
+                        <FileText size={16} /> Carta Proposta Redigida
+                    </button>
+                </div>
+            )}
+
+            {/* ── Items Tab ── */}
+            {activeTab === 'items' && (proposal || items.length > 0) && (
                 <div style={cardStyle}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -702,6 +902,56 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ── Letter Tab ── */}
+            {activeTab === 'letter' && (
+                <div style={cardStyle}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <FileText size={18} color="var(--color-primary)" /> Texto Principal da Carta
+                            </h3>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>Recomendamos pedir para a IA escrever o texto formal baseado no edital e nos itens.</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                className="btn btn-outline"
+                                onClick={handleSaveLetter}
+                                disabled={isSaving}
+                                style={{ padding: '8px 16px', borderRadius: '10px', fontSize: '0.85rem' }}
+                            >
+                                {isSaving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Salvar Rascunho
+                            </button>
+                            <button
+                                className="btn"
+                                onClick={handleGenerateLetter}
+                                disabled={isLetterLoading}
+                                style={{
+                                    padding: '8px 16px', borderRadius: '10px', fontSize: '0.85rem',
+                                    background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                                    color: 'white', border: 'none',
+                                    display: 'flex', alignItems: 'center', gap: '6px'
+                                }}
+                            >
+                                {isLetterLoading ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
+                                Gerar com IA
+                            </button>
+                        </div>
+                    </div>
+
+                    <textarea
+                        value={letterContent}
+                        onChange={e => setLetterContent(e.target.value)}
+                        placeholder="Nenhuma carta gerada ainda. Clique em 'Gerar com IA' ou digite seu texto."
+                        style={{
+                            width: '100%', minHeight: '400px', padding: '16px',
+                            borderRadius: '12px', border: '1px solid var(--color-border)',
+                            fontSize: '0.9rem', lineHeight: 1.6, background: 'var(--color-bg-base)',
+                            color: 'var(--color-text-primary)'
+                        }}
+                    />
                 </div>
             )}
 
