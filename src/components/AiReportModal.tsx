@@ -76,6 +76,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                 await axios.post(`${API_BASE_URL}/api/analysis`, {
                     biddingProcessId: process?.id,
                     ...analysisData,
+                    sourceFileNames: analysis.sourceFileNames,
                     chatHistory: JSON.stringify(updatedMessages)
                 }, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }

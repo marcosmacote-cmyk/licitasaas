@@ -1408,7 +1408,9 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
             }
         };
 
-        ['biddingItems', 'pricingConsiderations', 'fullSummary', 'penalties', 'qualificationRequirements', 'irregularitiesFlags'].forEach(stringifyIfObject);
+        ['biddingItems', 'pricingConsiderations', 'fullSummary', 'penalties', 'qualificationRequirements', 'irregularitiesFlags', 'sourceFileNames'].forEach(stringifyIfObject);
+
+        console.log(`[Analysis] Upserting analysis for process ${payload.biddingProcessId}. Payload summary length: ${payload.fullSummary?.length || 0}. Files: ${payload.sourceFileNames}`);
 
         const analysis = await prisma.aiAnalysis.upsert({
             where: {
@@ -1417,6 +1419,10 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
             create: payload,
             update: payload
         });
+
+        // Debug log to confirm what was actually saved
+        console.log(`[Analysis] SUCCESS for ${payload.biddingProcessId}. Saved sourceFiles: ${analysis.sourceFileNames?.substring(0, 100)}`);
+
         res.json(analysis);
     } catch (error) {
         console.error("Create analysis error:", error);
