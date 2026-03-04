@@ -667,157 +667,284 @@ export function DossierExporter({ biddings, companies }: Props) {
     const handleExportPdfReport = () => {
         if (!selectedBidding || !selectedCompany) return;
 
-        const doc = new jsPDF('p', 'mm', 'a4');
+        // Landscape A4 for better table fit
+        const doc = new jsPDF('l', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
         const now = new Date();
         const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-        // ─── Header ───
-        doc.setFillColor(37, 99, 235);
-        doc.rect(0, 0, pageWidth, 32, 'F');
-        doc.setFontSize(18);
+        const formatDate = (dateVal: string | undefined | null): string => {
+            if (!dateVal) return '-';
+            try {
+                const d = new Date(dateVal);
+                return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+            } catch { return '-'; }
+        };
+
+        const isExpired = (dateVal: string | undefined | null): boolean => {
+            if (!dateVal) return false;
+            try { return new Date(dateVal) < now; } catch { return false; }
+        };
+
+        // ─── Header Bar ───
+        doc.setFillColor(30, 58, 138);
+        doc.rect(0, 0, pageWidth, 28, 'F');
+        // Accent line
+        doc.setFillColor(59, 130, 246);
+        doc.rect(0, 28, pageWidth, 2, 'F');
+
+        doc.setFontSize(16);
         doc.setTextColor(255, 255, 255);
-        doc.text('Relatório de Conformidade Documental', 14, 15);
-        doc.setFontSize(9);
-        doc.text('Exportador de Dossiê — LicitaSaaS', 14, 22);
-        doc.text(`Gerado em: ${dateStr}`, 14, 28);
-
-        // ─── Bidding Info ───
-        let y = 42;
-        doc.setTextColor(30, 30, 30);
-        doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('Dados da Licitação', 14, y);
-        y += 7;
-        doc.setFontSize(9);
+        doc.text('RELATORIO DE CONFORMIDADE DOCUMENTAL', 14, 12);
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
+        doc.text('Exportador de Dossie  |  LicitaSaaS', 14, 18);
+        doc.text(`Data: ${dateStr}`, 14, 23);
 
-        const biddingInfo = [
-            ['Processo', selectedBidding.title || '-'],
+        // Readiness badge on header right side
+        const scoreText = `${Math.round(readinessScore)}%`;
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(scoreText, pageWidth - 14, 16, { align: 'right' });
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Indice de Prontidao', pageWidth - 14, 22, { align: 'right' });
+
+        // ─── Bidding Info (2-column layout) ───
+        let y = 36;
+        doc.setTextColor(30, 30, 30);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DADOS DA LICITACAO', 14, y);
+
+        // Horizontal line
+        doc.setDrawColor(220, 220, 220);
+        doc.line(14, y + 2, pageWidth - 14, y + 2);
+        y += 8;
+
+        doc.setFontSize(8);
+        const leftCol = [
+            ['Processo', (selectedBidding.title || '-').substring(0, 80)],
             ['Modalidade', selectedBidding.modality || '-'],
             ['Portal', selectedBidding.portal || '-'],
-            ['Empresa', selectedCompany.razaoSocial || '-'],
+        ];
+        const rightCol = [
+            ['Empresa', (selectedCompany.razaoSocial || '-').substring(0, 60)],
             ['CNPJ', selectedCompany.cnpj || '-'],
+            ['Filtro Docs', dateFilter === 'active' ? 'Apenas validos' : dateFilter === 'expired' ? 'Apenas vencidos' : 'Todos'],
         ];
 
-        biddingInfo.forEach(([label, value]) => {
+        leftCol.forEach(([label, value], i) => {
             doc.setFont('helvetica', 'bold');
-            doc.text(`${label}: `, 14, y);
-            const labelWidth = doc.getTextWidth(`${label}: `);
+            doc.text(`${label}:`, 14, y + i * 5);
             doc.setFont('helvetica', 'normal');
-            doc.text(String(value).substring(0, 100), 14 + labelWidth, y);
-            y += 5;
+            doc.text(String(value), 42, y + i * 5);
         });
 
-        // ─── Readiness Score ───
-        y += 4;
+        rightCol.forEach(([label, value], i) => {
+            const xStart = pageWidth / 2 + 10;
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${label}:`, xStart, y + i * 5);
+            doc.setFont('helvetica', 'normal');
+            doc.text(String(value), xStart + 25, y + i * 5);
+        });
+
+        y += 18;
+
+        // ─── Readiness Score Box ───
+        const boxWidth = pageWidth - 28;
         doc.setFillColor(240, 245, 255);
-        doc.roundedRect(14, y, pageWidth - 28, 18, 3, 3, 'F');
-        doc.setFontSize(11);
+        doc.roundedRect(14, y, boxWidth, 14, 2, 2, 'F');
+        doc.setDrawColor(37, 99, 235);
+        doc.roundedRect(14, y, boxWidth, 14, 2, 2, 'S');
+
+        // Progress bar
+        const barX = 20;
+        const barY = y + 4;
+        const barWidth = 60;
+        const barHeight = 5;
+        doc.setFillColor(226, 232, 240);
+        doc.roundedRect(barX, barY, barWidth, barHeight, 2, 2, 'F');
+        const fillWidth = Math.min((readinessScore / 100) * barWidth, barWidth);
+        if (readinessScore >= 70) doc.setFillColor(34, 197, 94);
+        else if (readinessScore >= 40) doc.setFillColor(245, 158, 11);
+        else doc.setFillColor(239, 68, 68);
+        if (fillWidth > 0) doc.roundedRect(barX, barY, fillWidth, barHeight, 2, 2, 'F');
+
+        // Score text
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(37, 99, 235);
-        doc.text(`Índice de Prontidão: ${Math.round(readinessScore)}%`, 20, y + 7);
-        doc.setFontSize(9);
+        doc.text(`${Math.round(readinessScore)}% Pronto`, barX + barWidth + 6, barY + 4);
+
+        // Stats
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        const statsX = barX + barWidth + 50;
         doc.setTextColor(34, 197, 94);
-        doc.text(`✓ ${satisfiedCount} vinculados`, 20, y + 13);
+        doc.text(`${satisfiedCount} vinculados`, statsX, barY + 4);
         doc.setTextColor(239, 68, 68);
-        doc.text(`✗ ${pendingCount} pendentes`, 70, y + 13);
+        doc.text(`${pendingCount} pendentes`, statsX + 35, barY + 4);
         if (ignoredCount > 0) {
             doc.setTextColor(148, 163, 184);
-            doc.text(`— ${ignoredCount} ignorados`, 120, y + 13);
+            doc.text(`${ignoredCount} ignorados`, statsX + 70, barY + 4);
         }
-        y += 24;
 
-        // ─── Table ───
-        doc.setFontSize(12);
+        y += 20;
+
+        // ─── Section Title ───
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 30, 30);
-        doc.text('Associação de Documentos às Exigências', 14, y);
-        y += 3;
+        doc.text('ASSOCIACAO DE DOCUMENTOS AS EXIGENCIAS', 14, y);
+        doc.setDrawColor(220, 220, 220);
+        doc.line(14, y + 2, pageWidth - 14, y + 2);
+        y += 5;
 
+        // ─── Table Data ───
         const tableData = requiredList.map((reqObj, idx) => {
             const reqText = reqObj.description;
             const manualIds = manualMatches[reqText] || [];
-            const isIgnored = manualIds.includes('IGNORAR');
+            const isIgnoredReq = manualIds.includes('IGNORAR');
 
-            if (isIgnored) {
+            if (isIgnoredReq) {
                 return [
-                    `${reqObj.item || (idx + 1)}`,
-                    reqText.substring(0, 120) + (reqText.length > 120 ? '...' : ''),
-                    '— Ignorado —',
-                    '⏭ N/A',
+                    reqObj.item || String(idx + 1),
+                    reqText,
+                    'N/A (Ignorado)',
+                    '-',
+                    '-',
+                    'N/A',
                 ];
             }
 
-            const matchedDocNames = manualIds
+            const matchedDocs = manualIds
                 .filter(id => id !== 'IGNORAR')
-                .map(id => {
-                    const d = companyDocs.find(doc => doc.id === id);
-                    return d ? `${d.docType} (${d.fileName})` : '';
-                })
-                .filter(Boolean)
-                .join('; ');
+                .map(id => companyDocs.find(d => d.id === id))
+                .filter(Boolean) as CompanyDocument[];
+
+            const docName = matchedDocs.length > 0
+                ? matchedDocs.map(d => d.docType || d.fileName).join('; ')
+                : '-';
+
+            const docFile = matchedDocs.length > 0
+                ? matchedDocs.map(d => d.fileName || '-').join('; ')
+                : '-';
+
+            const expDate = matchedDocs.length > 0
+                ? matchedDocs.map(d => formatDate(d.expirationDate)).join('; ')
+                : '-';
+
+            const status = matchedDocs.length > 0 ? 'VINCULADO' : 'PENDENTE';
 
             return [
-                `${reqObj.item || (idx + 1)}`,
-                reqText.substring(0, 120) + (reqText.length > 120 ? '...' : ''),
-                matchedDocNames || '— Sem vínculo —',
-                matchedDocNames ? '✅ Vinculado' : '❌ Pendente',
+                reqObj.item || String(idx + 1),
+                reqText,
+                docName,
+                docFile,
+                expDate,
+                status,
             ];
         });
 
         autoTable(doc, {
-            head: [['#', 'Exigência do Edital', 'Documento Vinculado', 'Status']],
+            head: [['#', 'Exigencia do Edital', 'Documento', 'Arquivo', 'Vencimento', 'Status']],
             body: tableData,
             startY: y,
             theme: 'grid',
             headStyles: {
-                fillColor: [37, 99, 235],
+                fillColor: [30, 58, 138],
                 textColor: 255,
-                fontSize: 8,
+                fontSize: 7,
                 fontStyle: 'bold',
-                cellPadding: 3,
+                cellPadding: 2.5,
+                halign: 'center',
             },
             bodyStyles: {
-                fontSize: 7,
-                cellPadding: 2.5,
+                fontSize: 6.5,
+                cellPadding: 2,
                 lineColor: [220, 220, 220],
+                textColor: [40, 40, 40],
+                overflow: 'linebreak',
             },
             columnStyles: {
-                0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
-                1: { cellWidth: 75 },
-                2: { cellWidth: 65 },
-                3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+                0: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+                1: { cellWidth: 80 },
+                2: { cellWidth: 55 },
+                3: { cellWidth: 55 },
+                4: { cellWidth: 24, halign: 'center' },
+                5: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
             },
             alternateRowStyles: {
                 fillColor: [248, 250, 252],
             },
             didParseCell: (data: any) => {
-                if (data.section === 'body' && data.column.index === 3) {
+                if (data.section !== 'body') return;
+
+                // Status column coloring
+                if (data.column.index === 5) {
                     const text = String(data.cell.raw);
-                    if (text.includes('Vinculado')) {
+                    if (text === 'VINCULADO') {
                         data.cell.styles.textColor = [34, 197, 94];
-                    } else if (text.includes('Pendente')) {
-                        data.cell.styles.textColor = [239, 68, 68];
+                        data.cell.styles.fillColor = [240, 253, 244];
+                    } else if (text === 'PENDENTE') {
+                        data.cell.styles.textColor = [220, 38, 38];
+                        data.cell.styles.fillColor = [254, 242, 242];
                     } else {
                         data.cell.styles.textColor = [148, 163, 184];
+                        data.cell.styles.fillColor = [248, 250, 252];
+                    }
+                }
+
+                // Expiration date coloring
+                if (data.column.index === 4) {
+                    const text = String(data.cell.raw);
+                    if (text !== '-') {
+                        // Check if any matched doc is expired
+                        const rowIdx = data.row.index;
+                        if (rowIdx < requiredList.length) {
+                            const reqText = requiredList[rowIdx]?.description;
+                            const ids = manualMatches[reqText] || [];
+                            const docs = ids.filter((id: string) => id !== 'IGNORAR').map((id: string) => companyDocs.find(d => d.id === id)).filter(Boolean);
+                            const hasExpired = docs.some((d: any) => isExpired(d?.expirationDate));
+                            if (hasExpired) {
+                                data.cell.styles.textColor = [220, 38, 38];
+                                data.cell.styles.fontStyle = 'bold';
+                            } else {
+                                data.cell.styles.textColor = [34, 197, 94];
+                            }
+                        }
                     }
                 }
             },
             margin: { left: 14, right: 14 },
         });
 
-        // ─── Footer ───
+        // ─── Footer on all pages ───
         const pageCount = doc.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
-            doc.setFontSize(7);
-            doc.setTextColor(150);
+
+            // Bottom line
+            doc.setDrawColor(30, 58, 138);
+            doc.setLineWidth(0.5);
+            doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
+
+            doc.setFontSize(6.5);
+            doc.setTextColor(120);
+            doc.setFont('helvetica', 'normal');
             doc.text(
-                `Página ${i} de ${pageCount} — Gerado automaticamente por LicitaSaaS`,
-                pageWidth / 2,
-                doc.internal.pageSize.getHeight() - 8,
-                { align: 'center' }
+                `Pagina ${i} de ${pageCount}`,
+                14,
+                pageHeight - 7,
+            );
+            doc.text(
+                'Gerado automaticamente por LicitaSaaS  |  Este documento nao substitui a conferencia manual',
+                pageWidth - 14,
+                pageHeight - 7,
+                { align: 'right' }
             );
         }
 
