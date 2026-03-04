@@ -900,6 +900,96 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ─── Robust JSON Parser (handles Gemini's tendency to append text after JSON) ───
+function robustJsonParse(rawText: string, label = 'AI'): any {
+    // Step 1: Clean markdown wrappers and control chars
+    let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const firstBrace = cleaned.indexOf('{');
+    if (firstBrace === -1) throw new Error('JSON inválido retornado pela IA (no opening brace)');
+    cleaned = cleaned.substring(firstBrace);
+    cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
+
+    // Step 2: Try direct parse first (fastest path)
+    try {
+        return JSON.parse(cleaned);
+    } catch (directErr) {
+        console.log(`[${label}] Direct JSON.parse failed: ${(directErr as Error).message}. Attempting repair...`);
+    }
+
+    // Step 3: Depth-tracked truncation — find where the outermost {} closes
+    let depth = 0, inString = false, escape = false;
+    let lastValidClose = -1;
+    for (let i = 0; i < cleaned.length; i++) {
+        const c = cleaned[i];
+        if (escape) { escape = false; continue; }
+        if (c === '\\') { escape = true; continue; }
+        if (c === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (c === '{' || c === '[') depth++;
+        if (c === '}' || c === ']') { depth--; if (depth === 0) lastValidClose = i; }
+    }
+
+    if (depth === 0 && lastValidClose !== -1) {
+        const truncated = cleaned.substring(0, lastValidClose + 1);
+        try {
+            const result = JSON.parse(truncated);
+            console.log(`[${label}] ✅ JSON parsed after depth-tracked truncation at position ${lastValidClose}`);
+            return result;
+        } catch (truncErr) {
+            console.log(`[${label}] Depth-tracked truncation failed: ${(truncErr as Error).message}`);
+        }
+    }
+
+    // Step 4: Error-position-based truncation — use the position from the JSON error
+    try {
+        const posMatch = (cleaned.match(/"[^"]*$/) || [null])[0];
+        // Try to find the last complete JSON by searching backwards for the last }
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (lastBrace > 0) {
+            let attempt = cleaned.substring(0, lastBrace + 1);
+            // Remove trailing comma before closing brace/bracket
+            attempt = attempt.replace(/,\s*([}\]])/, '$1');
+            try {
+                const result = JSON.parse(attempt);
+                console.log(`[${label}] ✅ JSON parsed after lastBrace truncation at position ${lastBrace}`);
+                return result;
+            } catch { /* continue */ }
+        }
+    } catch { /* continue */ }
+
+    // Step 5: Stack-based bracket repair — close unclosed structures
+    console.log(`[${label}] Attempting stack-based bracket repair...`);
+    let repaired = cleaned;
+    // Remove trailing commas
+    repaired = repaired.replace(/,\s*$/, '');
+    depth = 0; inString = false; escape = false;
+    let stack: string[] = [];
+    for (let i = 0; i < repaired.length; i++) {
+        const c = repaired[i];
+        if (escape) { escape = false; continue; }
+        if (c === '\\') { escape = true; continue; }
+        if (c === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (c === '{') stack.push('}');
+        if (c === '[') stack.push(']');
+        if (c === '}' || c === ']') stack.pop();
+    }
+    if (inString) repaired += '"';
+    while (stack.length > 0) repaired += stack.pop();
+
+    try {
+        const result = JSON.parse(repaired);
+        console.log(`[${label}] ✅ JSON parsed after stack-based repair (added ${stack.length} closers)`);
+        return result;
+    } catch (finalErr) {
+        console.error(`[${label}] ❌ ALL JSON repair strategies failed. Raw length: ${rawText.length}, Error: ${(finalErr as Error).message}`);
+        // Log first/last 200 chars for debugging
+        console.error(`[${label}] First 200 chars: ${cleaned.substring(0, 200)}`);
+        console.error(`[${label}] Last 200 chars: ${cleaned.substring(cleaned.length - 200)}`);
+        throw new Error(`Falha ao interpretar resposta da IA (JSON inválido após múltiplas tentativas de reparo)`);
+    }
+}
+
 // PNCP AI Analysis — analyzes a PNCP edital directly by fetching its PDF files
 app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
     try {
@@ -1179,46 +1269,8 @@ FORMATO DE SAÍDA JSON:
         const rawText = response.text;
         if (!rawText) throw new Error('A IA não retornou nenhum texto.');
 
-        // 5. Parse JSON (same robust parser as analyze-edital)
-        let cleanedJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const firstBrace = cleanedJson.indexOf('{');
-        if (firstBrace === -1) throw new Error('JSON inválido retornado pela IA');
-        cleanedJson = cleanedJson.substring(firstBrace);
-        cleanedJson = cleanedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
-
-        let depth = 0, inString = false, escape = false;
-        let lastValidDepthZeroBrace = -1;
-        for (let i = 0; i < cleanedJson.length; i++) {
-            const c = cleanedJson[i];
-            if (escape) { escape = false; continue; }
-            if (c === '\\') { escape = true; continue; }
-            if (c === '"') { inString = !inString; continue; }
-            if (inString) continue;
-            if (c === '{' || c === '[') depth++;
-            if (c === '}' || c === ']') { depth--; if (depth === 0) lastValidDepthZeroBrace = i; }
-        }
-
-        if (depth === 0 && lastValidDepthZeroBrace !== -1) {
-            cleanedJson = cleanedJson.substring(0, lastValidDepthZeroBrace + 1);
-        } else {
-            cleanedJson = cleanedJson.replace(/,$/, '').replace(/,\s+$/, '');
-            depth = 0; inString = false; escape = false;
-            let stack: string[] = [];
-            for (let i = 0; i < cleanedJson.length; i++) {
-                const c = cleanedJson[i];
-                if (escape) { escape = false; continue; }
-                if (c === '\\') { escape = true; continue; }
-                if (c === '"') { inString = !inString; continue; }
-                if (inString) continue;
-                if (c === '{') stack.push('}');
-                if (c === '[') stack.push(']');
-                if (c === '}' || c === ']') stack.pop();
-            }
-            if (inString) cleanedJson += '"';
-            while (stack.length > 0) cleanedJson += stack.pop();
-        }
-
-        const finalPayload = JSON.parse(cleanedJson);
+        // 5. Parse JSON with robust multi-strategy parser
+        const finalPayload = robustJsonParse(rawText, 'PNCP-AI');
 
         // Add source info
         finalPayload.pncpSource = {
@@ -1671,84 +1723,16 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         console.log(`[AI] Raw response length: ${rawText.length} `);
 
         // ---- Robust JSON extraction and repair ----
-        // 1. Clean markdown wrappers
-        let cleanedJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const finalPayload = robustJsonParse(rawText, 'AI-Edital');
 
-        const firstBrace = cleanedJson.indexOf('{');
-        if (firstBrace === -1) throw new Error("A IA não retornou um JSON válido (sem '{'). Texto recebido: " + cleanedJson.substring(0, 200));
-
-        // Remove everything before the first brace
-        cleanedJson = cleanedJson.substring(firstBrace);
-
-        // Control characters
-        cleanedJson = cleanedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
-
-        // Recovery: Check depth to see if it's truncated or has trailing garbage
-        let depth = 0, inString = false, escape = false;
-        let lastValidDepthZeroBrace = -1;
-
-        for (let i = 0; i < cleanedJson.length; i++) {
-            const c = cleanedJson[i];
-            if (escape) { escape = false; continue; }
-            if (c === '\\') { escape = true; continue; }
-            if (c === '"') { inString = !inString; continue; }
-            if (inString) continue;
-            if (c === '{' || c === '[') depth++;
-            if (c === '}' || c === ']') {
-                depth--;
-                if (depth === 0) {
-                    lastValidDepthZeroBrace = i;
-                }
-            }
+        console.log(`[AI] Successfully parsed JSON. Top-level keys: ${Object.keys(finalPayload).join(', ')}`);
+        if (finalPayload.process) {
+            console.log(`[AI] process keys: ${Object.keys(finalPayload.process).join(', ')}`);
         }
-
-        if (depth === 0 && lastValidDepthZeroBrace !== -1) {
-            // It perfectly closes! Drop any trailing markdown garbage.
-            cleanedJson = cleanedJson.substring(0, lastValidDepthZeroBrace + 1);
-        } else {
-            console.log("[AI] JSON seems truncated. Attempting recovery...");
-            // Re-run to build stack of missing structural characters
-            depth = 0; inString = false; escape = false;
-            let stack: string[] = [];
-
-            // Clean up trailing commas if any exist at the very end of the cut string
-            cleanedJson = cleanedJson.replace(/,$/, '').replace(/,\s+$/, '');
-
-            for (let i = 0; i < cleanedJson.length; i++) {
-                const c = cleanedJson[i];
-                if (escape) { escape = false; continue; }
-                if (c === '\\') { escape = true; continue; }
-                if (c === '"') { inString = !inString; continue; }
-                if (inString) continue;
-                if (c === '{') stack.push('}');
-                if (c === '[') stack.push(']');
-                if (c === '}' || c === ']') stack.pop();
-            }
-
-            if (inString) {
-                cleanedJson += '"';
-            }
-            while (stack.length > 0) {
-                cleanedJson += stack.pop();
-            }
+        if (finalPayload.analysis) {
+            console.log(`[AI] analysis keys: ${Object.keys(finalPayload.analysis).join(', ')}`);
         }
-
-        try {
-            const finalPayload = JSON.parse(cleanedJson);
-            console.log(`[AI] Successfully parsed JSON. Top-level keys: ${Object.keys(finalPayload).join(', ')}`);
-            if (finalPayload.process) {
-                console.log(`[AI] process keys: ${Object.keys(finalPayload.process).join(', ')}`);
-            }
-            if (finalPayload.analysis) {
-                console.log(`[AI] analysis keys: ${Object.keys(finalPayload.analysis).join(', ')}`);
-            }
-            res.json(finalPayload);
-        } catch (parseError: any) {
-            // Dump the raw string to file for debugging
-            fs.writeFileSync(path.join(uploadDir, 'failed-json-dump.txt'), cleanedJson);
-            console.error("[AI] JSON PARSE ERROR after repair attempts. Dumped to failed-json-dump.txt");
-            throw parseError; // Re-throw to be caught by outer catch
-        }
+        res.json(finalPayload);
 
     } catch (error: any) {
         console.error("AI Analysis Error (FULL):", JSON.stringify({ message: error?.message, status: error?.status, code: error?.code, stack: error?.stack?.substring(0, 500) }));
