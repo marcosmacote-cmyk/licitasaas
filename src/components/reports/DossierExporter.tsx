@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { CheckCircle2, FileArchive, Loader2, Search, ChevronDown, ChevronUp, XCircle, Sparkles, Shield, FileSearch, Briefcase, FileText, HelpCircle, AlertTriangle, Eye, Package } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -465,29 +465,59 @@ export function DossierExporter({ biddings, companies }: Props) {
         });
     }, [selectedCompany, dateFilter]);
 
-    // Auto-match with AI when both bidding and company are selected
+    // Track which combination we've already auto-matched for
+    const lastAutoMatchKey = useRef('');
+
+    // Single combined effect: reset + auto-match in one pass (eliminates race condition)
     useEffect(() => {
-        if (selectedBiddingId && selectedCompanyId && companyDocs.length > 0 && requiredList.length > 0 && !aiApplied) {
-            const autoMatches: Record<string, string[]> = {};
+        const comboKey = `${selectedBiddingId}::${selectedCompanyId}::${dateFilter}`;
 
-            requiredList.forEach(reqObj => {
-                const reqText = reqObj.description;
-                const bestMatches = findBestMatches(companyDocs, reqText, 1);
-                if (bestMatches.length > 0 && bestMatches[0].score >= 30) {
-                    autoMatches[reqText] = [bestMatches[0].doc.id];
-                }
-            });
+        // If the combination hasn't changed, don't re-run
+        if (lastAutoMatchKey.current === comboKey) return;
 
-            setManualMatches(autoMatches);
-            setAiApplied(true);
+        // Mark this combination as processed
+        lastAutoMatchKey.current = comboKey;
+
+        // If inputs are incomplete, just reset
+        if (!selectedBiddingId || !selectedCompanyId || companyDocs.length === 0 || requiredList.length === 0) {
+            setManualMatches({});
+            setAiApplied(false);
+            return;
         }
-    }, [selectedBiddingId, selectedCompanyId, companyDocs, requiredList, aiApplied]);
 
-    // Reset AI flag when inputs change
-    useEffect(() => {
-        setAiApplied(false);
-        setManualMatches({});
-    }, [selectedBiddingId, selectedCompanyId]);
+        // Run AI auto-matching
+        const autoMatches: Record<string, string[]> = {};
+        const usedDocIds = new Set<string>(); // prevent same doc from being assigned twice
+
+        console.log(`[Dossier AI] Matching ${requiredList.length} requirements against ${companyDocs.length} company docs`);
+
+        requiredList.forEach(reqObj => {
+            const reqText = reqObj.description;
+            if (!reqText) return;
+
+            const bestMatches = findBestMatches(companyDocs, reqText, 3);
+            // Pick the best unused match above threshold
+            for (const match of bestMatches) {
+                if (match.score >= 15 && !usedDocIds.has(match.doc.id)) {
+                    autoMatches[reqText] = [match.doc.id];
+                    usedDocIds.add(match.doc.id);
+                    console.log(`[Dossier AI] ✅ "${reqText.substring(0, 50)}..." → "${match.doc.docType}" (score: ${match.score})`);
+                    break;
+                }
+            }
+
+            if (!autoMatches[reqText]) {
+                const topScore = bestMatches.length > 0 ? bestMatches[0].score : 0;
+                console.log(`[Dossier AI] ❌ "${reqText.substring(0, 50)}..." → no match (top score: ${topScore})`);
+            }
+        });
+
+        const matchCount = Object.keys(autoMatches).length;
+        console.log(`[Dossier AI] Result: ${matchCount}/${requiredList.length} matched`);
+
+        setManualMatches(autoMatches);
+        setAiApplied(true);
+    }, [selectedBiddingId, selectedCompanyId, dateFilter, companyDocs, requiredList]);
 
     // Compute matched docs for export
     const { matchedDocs, readinessScore } = useMemo(() => {
