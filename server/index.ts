@@ -908,60 +908,98 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         }
 
         const agent = new https.Agent({ rejectUnauthorized: false });
+        const JSZip = require('jszip');
 
-        // 1. Fetch edital attachments from PNCP API
-        const arquivosUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}/arquivos`;
+        // 1. Fetch edital attachments from PNCP API (correct endpoint: /api/pncp/v1/)
+        const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}/arquivos`;
         console.log(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
 
         let arquivos: any[] = [];
         try {
             const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 10000 } as any);
             arquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
-        } catch (e) {
-            console.warn('[PNCP-AI] Failed to fetch attachments list, will try direct URL');
+            console.log(`[PNCP-AI] Found ${arquivos.length} attachments`);
+        } catch (e: any) {
+            console.warn(`[PNCP-AI] Failed to fetch attachments: ${e.message}`);
         }
 
-        // 2. Download PDF files
+        // 2. Sort to prioritize: Edital (tipoDocumentoId=2) > Termo de Referência (4) > Others
+        arquivos.sort((a: any, b: any) => {
+            const priority: Record<number, number> = { 2: 0, 4: 1 }; // Edital, TR
+            const pa = priority[a.tipoDocumentoId] ?? 99;
+            const pb = priority[b.tipoDocumentoId] ?? 99;
+            return pa - pb;
+        });
+
+        // 3. Download and process files (PDF or ZIP containing PDFs)
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
 
         for (const arq of arquivos) {
+            if (pdfParts.length >= 3) break; // Max 3 documents for Gemini
+
             const fileUrl = arq.url || arq.uri || '';
-            const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo.pdf';
-            if (!fileUrl) continue;
+            const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
+            if (!fileUrl || !arq.statusAtivo) continue;
 
             try {
-                console.log(`[PNCP-AI] Downloading: ${fileName} from ${fileUrl}`);
+                console.log(`[PNCP-AI] Downloading: "${fileName}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId}) from ${fileUrl}`);
                 const fileRes = await axios.get(fileUrl, {
                     httpsAgent: agent,
-                    timeout: 30000,
+                    timeout: 60000,
                     responseType: 'arraybuffer',
                     maxRedirects: 5
                 } as any);
 
                 const buffer = Buffer.from(fileRes.data as ArrayBuffer);
-                if (buffer.length > 0) {
-                    const mimeType = fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/pdf';
+                if (buffer.length === 0) continue;
+
+                // Check if it's a ZIP file (magic bytes: PK = 0x50 0x4B)
+                const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
+                // Check if it's a PDF file (magic bytes: %PDF)
+                const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+
+                if (isPdf) {
                     pdfParts.push({
-                        inlineData: {
-                            data: buffer.toString('base64'),
-                            mimeType
-                        }
+                        inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
                     });
                     downloadedFiles.push(fileName);
-                    console.log(`[PNCP-AI] Downloaded ${fileName} (${buffer.length} bytes)`);
+                    console.log(`[PNCP-AI] ✅ PDF: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                } else if (isZip) {
+                    console.log(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const zip = await JSZip.loadAsync(buffer);
+                        const zipEntries = Object.keys(zip.files).filter((name: string) =>
+                            name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
+                        );
+                        console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
+
+                        for (const entryName of zipEntries) {
+                            if (pdfParts.length >= 3) break;
+                            const pdfBuffer = await zip.files[entryName].async('nodebuffer');
+                            if (pdfBuffer.length > 0) {
+                                pdfParts.push({
+                                    inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                });
+                                downloadedFiles.push(`${fileName}/${entryName}`);
+                                console.log(`[PNCP-AI] ✅ Extracted: ${entryName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
+                    } catch (zipErr: any) {
+                        console.warn(`[PNCP-AI] Failed to extract ZIP ${fileName}: ${zipErr.message}`);
+                    }
+                } else {
+                    console.log(`[PNCP-AI] ⏭️ Skipped non-PDF/non-ZIP: ${fileName} (first bytes: ${buffer[0].toString(16)} ${buffer[1].toString(16)})`);
                 }
             } catch (dlErr: any) {
                 console.warn(`[PNCP-AI] Failed to download ${fileName}: ${dlErr.message}`);
             }
-            // Limit to 5 files to stay within Gemini context limits
-            if (pdfParts.length >= 5) break;
         }
 
         if (pdfParts.length === 0) {
             return res.status(400).json({
                 error: 'Nenhum arquivo PDF encontrado para este edital no PNCP.',
-                details: `Tentamos buscar arquivos de ${arquivosUrl} mas não encontramos PDFs baixáveis.`
+                details: `Encontramos ${arquivos.length} arquivo(s) mas nenhum era PDF ou ZIP com PDFs.`
             });
         }
 
