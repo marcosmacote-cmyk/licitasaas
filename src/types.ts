@@ -165,8 +165,11 @@ export interface PriceProposal {
     letterContent?: string;
     companyLogo?: string;
     headerImage?: string;
+    headerImageHeight?: number;
     footerImage?: string;
+    footerImageHeight?: number;
     signatureMode: 'LEGAL' | 'TECH' | 'BOTH';
+    signatureCity?: string;
     notes?: string;
     validityDays: number;
     createdAt: string;

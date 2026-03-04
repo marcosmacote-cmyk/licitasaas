@@ -41,6 +41,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [headerImage, setHeaderImage] = useState('');
     const [footerImage, setFooterImage] = useState('');
     const [signatureMode, setSignatureMode] = useState<'LEGAL' | 'TECH' | 'BOTH'>('LEGAL');
+    const [signatureCity, setSignatureCity] = useState('');
+    const [headerImageHeight, setHeaderImageHeight] = useState(150);
+    const [footerImageHeight, setFooterImageHeight] = useState(100);
 
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -75,6 +78,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     setHeaderImage(latest.headerImage || '');
                     setFooterImage(latest.footerImage || '');
                     setSignatureMode(latest.signatureMode || 'LEGAL');
+                    setSignatureCity(latest.signatureCity || '');
+                    setHeaderImageHeight(latest.headerImageHeight || 150);
+                    setFooterImageHeight(latest.footerImageHeight || 100);
                 }
             }
         } catch (e) {
@@ -261,7 +267,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         try {
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
-                body: JSON.stringify({ bdiPercentage: bdi, validityDays, headerImage, footerImage, signatureMode }),
+                body: JSON.stringify({ bdiPercentage: bdi, validityDays, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity }),
             });
             // Reload to recalculate prices with new BDI
             await loadProposals();
@@ -430,7 +436,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 <button onclick="window.print()" style="padding: 10px 20px; margin-bottom: 20px; font-weight: bold; cursor: pointer;">Imprimir / Salvar PDF</button>
                 
                 <div class="${headerImage ? 'header-custom' : 'header'}">
-                    ${headerImage ? `<img src="${headerImage}" alt="Cabeçalho" style="max-width: 100%; max-height: 150px; margin-bottom: 20px;" />` : `
+                    ${headerImage ? `<img src="${headerImage}" alt="Cabeçalho" style="max-width: 100%; max-height: ${headerImageHeight}px; margin-bottom: 20px;" />` : `
                         <h1>${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
                         <p>CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
                     `}
@@ -473,12 +479,23 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                     </tbody>
                 </table>
                 
-                <div style="margin-top: 60px; text-align: center; display: flex; justify-content: space-around;">
+                <div style="text-align: right; margin-bottom: 50px; font-size: 14px; margin-top: 50px;">
+                    ${signatureCity ? signatureCity + ', ' : ''}${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
+                </div>
+
+                <div style="text-align: center; display: flex; justify-content: space-around; clear: both; margin-top: 30px; page-break-inside: avoid;">
                     ${(signatureMode === 'LEGAL' || signatureMode === 'BOTH') ? `
                         <div style="flex: 1;">
                             ___________________________________<br/>
                             <strong>${company?.contactName || 'Representante Legal'}</strong><br/>
-                            ${company?.qualification || 'Representante Legal'}<br/>
+                            Representante Legal<br/>
+                            ${company?.razaoSocial || ''}
+                        </div>
+                    ` : ''}
+                    ${(signatureMode === 'TECH' || signatureMode === 'BOTH') ? `
+                        <div style="flex: 1;">
+                            ___________________________________<br/>
+                            <strong>Responsável Técnico</strong><br/>
                             ${company?.razaoSocial || ''}
                         </div>
                     ` : ''}
@@ -493,7 +510,7 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                 </div>
                 
                 <div class="footer">
-                    ${footerImage ? `<img src="${footerImage}" alt="Rodapé" style="max-width: 100%; max-height: 100px; margin-bottom: 10px;" /><br/>` : ''}
+                    ${footerImage ? `<img src="${footerImage}" alt="Rodapé" style="max-width: 100%; max-height: ${footerImageHeight}px; margin-bottom: 10px;" /><br/>` : ''}
                     Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
                 </div>
             </body>
@@ -639,18 +656,46 @@ ${letterContent || 'Nenhuma carta proposta redigida.'}
                             </div>
                         </div>
 
+                        {/* Assinatura Local e Data */}
+                        <div style={{ marginTop: '16px' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                                Cidade de Assinatura (Ex: Fortaleza/CE)
+                            </label>
+                            <input
+                                type="text"
+                                value={signatureCity}
+                                onChange={e => setSignatureCity(e.target.value)}
+                                placeholder="Cidade base para assinatura da proposta"
+                                style={{
+                                    width: '100%', padding: '10px 12px', borderRadius: '10px',
+                                    border: '1px solid var(--color-border)', fontSize: '0.875rem',
+                                }}
+                            />
+                        </div>
+
                         {/* Imagens do Timbrado */}
-                        <div style={{ display: 'flex', gap: '16px', background: 'var(--color-bg-base)', padding: '12px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
-                            <div style={{ flex: 1 }}>
-                                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>🖼️ Imagem do Cabeçalho</label>
-                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', width: '100%' }} />
-                                {headerImage && <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>✓ Carregado</span>}
+                        <div style={{ display: 'flex', gap: '16px', background: 'var(--color-bg-base)', padding: '12px', borderRadius: '10px', border: '1px solid var(--color-border)', marginTop: '16px', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', gap: '16px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>🖼️ Imagem do Cabeçalho</label>
+                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', width: '100%', marginBottom: '8px' }} />
+                                    {headerImage && <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>✓ Carregado</span>}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                                        <span style={{ fontSize: '0.75rem' }}>Altura Máx (px):</span>
+                                        <input type="number" value={headerImageHeight} onChange={e => setHeaderImageHeight(Number(e.target.value))} style={{ width: '80px', padding: '4px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+                                    </div>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>🖼️ Imagem do Rodapé</label>
+                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', width: '100%', marginBottom: '8px' }} />
+                                    {footerImage && <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>✓ Carregado</span>}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                                        <span style={{ fontSize: '0.75rem' }}>Altura Máx (px):</span>
+                                        <input type="number" value={footerImageHeight} onChange={e => setFooterImageHeight(Number(e.target.value))} style={{ width: '80px', padding: '4px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ flex: 1 }}>
-                                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>🖼️ Imagem do Rodapé</label>
-                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', width: '100%' }} />
-                                {footerImage && <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)' }}>✓ Carregado</span>}
-                            </div>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>A imagem será adicionada no topo e inferior do PDF, as alturas em px controlam a área que elas ocupam em relação a folha A4.</span>
                         </div>
 
                         {/* Buttons */}

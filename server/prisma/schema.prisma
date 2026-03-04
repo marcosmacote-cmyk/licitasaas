@@ -160,8 +160,11 @@ model PriceProposal {
   letterContent     String?
   companyLogo       String?
   headerImage       String?
+  headerImageHeight Int                 @default(150)
   footerImage       String?
+  footerImageHeight Int                 @default(100)
   signatureMode     String              @default("LEGAL") // LEGAL, TECH, BOTH
+  signatureCity     String?
   notes             String?
   validityDays      Int                 @default(60)
   createdAt         DateTime            @default(now())

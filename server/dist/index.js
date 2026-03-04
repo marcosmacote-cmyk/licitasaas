@@ -1491,7 +1491,7 @@ app.post('/api/proposals', authenticateToken, async (req, res) => {
 // PUT update proposal
 app.put('/api/proposals/:id', authenticateToken, async (req, res) => {
     try {
-        const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo } = req.body;
+        const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity } = req.body;
         const existing = await prisma.priceProposal.findFirst({
             where: { id: req.params.id, tenantId: req.user.tenantId },
         });
@@ -1508,6 +1508,12 @@ app.put('/api/proposals/:id', authenticateToken, async (req, res) => {
                 status: status ?? existing.status,
                 letterContent: letterContent !== undefined ? letterContent : existing.letterContent,
                 companyLogo: companyLogo !== undefined ? companyLogo : existing.companyLogo,
+                headerImage: headerImage !== undefined ? headerImage : existing.headerImage,
+                footerImage: footerImage !== undefined ? footerImage : existing.footerImage,
+                headerImageHeight: headerImageHeight ?? existing.headerImageHeight,
+                footerImageHeight: footerImageHeight ?? existing.footerImageHeight,
+                signatureMode: signatureMode ?? existing.signatureMode,
+                signatureCity: signatureCity !== undefined ? signatureCity : existing.signatureCity,
             },
             include: { items: { orderBy: { sortOrder: 'asc' } }, company: true },
         });
