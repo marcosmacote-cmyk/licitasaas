@@ -284,6 +284,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
                 penalties: analysisObj.penalties || '',
                 qualificationRequirements: analysisObj.qualificationRequirements || '',
                 biddingItems: analysisObj.biddingItems || '',
+                sourceFileNames: JSON.stringify(aiData.pncpSource?.downloadedFiles || []),
                 analyzedAt: new Date().toISOString()
             };
 

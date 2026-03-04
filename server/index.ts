@@ -821,8 +821,9 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             const modalidadeNome = item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidadeNome
                 || item.modalidadeLicitacaoNome || '';
 
+            const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : null) || item.id || Math.random().toString();
             return {
-                id: item.id || item.numeroControlePNCP || Math.random().toString(),
+                id: pncpId,
                 orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || item.nomeOrgao || 'Órgão não informado',
                 orgao_cnpj: cnpj,
                 ano,
@@ -1052,11 +1053,14 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                 const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
 
                 if (isPdf) {
+                    const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
+                    fs.writeFileSync(path.join(uploadDir, safeFileName), buffer);
+
                     pdfParts.push({
                         inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
                     });
-                    downloadedFiles.push(fileName);
-                    console.log(`[PNCP-AI] ✅ PDF: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                    downloadedFiles.push(safeFileName);
+                    console.log(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${safeFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
                 } else if (isZip) {
                     console.log(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
@@ -1070,11 +1074,14 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
                             if (pdfBuffer.length > 0) {
+                                const safeName = `pncp_${req.user.tenantId}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`;
+                                fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
+
                                 pdfParts.push({
                                     inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
                                 });
-                                downloadedFiles.push(`${fileName}/${entryName}`);
-                                console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                                downloadedFiles.push(safeName);
+                                console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${safeName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }
                     } catch (zipErr: any) {
@@ -1865,8 +1872,8 @@ Riscos e Irregularidades: ${analysis.irregularitiesFlags || '[]'}
                 }
             });
 
-            // 2. Does it start with tenantId prefix?
-            const hasPrefix = fileName.startsWith(`${req.user.tenantId}_`);
+            // 2. Does it have the tenantId prefix (standard or PNCP cache)?
+            const hasPrefix = fileName.startsWith(`${req.user.tenantId}_`) || fileName.startsWith(`pncp_${req.user.tenantId}_`);
 
             // 3. Is it explicitly linked in the bidding process we already authorized?
             const isExplicitlyLinked = biddingLinks.includes(fileName);

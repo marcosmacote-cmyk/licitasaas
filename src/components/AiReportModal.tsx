@@ -52,7 +52,15 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
         try {
             let fileNames: string[] = [];
-            if (process?.link) {
+            if (analysis?.sourceFileNames) {
+                try {
+                    fileNames = JSON.parse(analysis.sourceFileNames);
+                } catch (e) {
+                    console.error("Failed to parse sourceFileNames", e);
+                }
+            }
+
+            if (fileNames.length === 0 && process?.link) {
                 const urls = process?.link.split(',').map(u => u.trim());
                 fileNames = urls.map(url => url.split('/').pop() || '').filter(Boolean);
             }
