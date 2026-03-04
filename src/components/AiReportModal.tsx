@@ -100,6 +100,16 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
         }
     };
 
+    const renderTextValue = (val: any): string => {
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'string') return val;
+        try {
+            return JSON.stringify(val, null, 2);
+        } catch {
+            return String(val);
+        }
+    };
+
     // Simple Markdown renderer for AI chat messages
     const renderMarkdown = (text: string) => {
         const lines = text.split('\n');
@@ -398,7 +408,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 <div className="report-card">
                                     <h3 style={sectionHeaderStyle}><Sparkles size={18} /> Resumo Executivo</h3>
                                     <p style={{ color: '#334155', fontSize: '0.9375rem', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                        {process?.summary || analysis?.fullSummary || 'Resumo executivo não disponível para este edital.'}
+                                        {renderTextValue(process?.summary) || renderTextValue(analysis?.fullSummary) || 'Resumo executivo não disponível para este edital.'}
                                     </p>
                                 </div>
 
@@ -407,7 +417,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     <div className="report-card">
                                         <h3 style={sectionHeaderStyle}><Brain size={18} /> Parecer Técnico-Jurídico</h3>
                                         <p style={{ color: '#334155', fontSize: '0.9375rem', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                            {analysis?.fullSummary}
+                                            {renderTextValue(analysis?.fullSummary)}
                                         </p>
                                     </div>
                                 )}
@@ -417,8 +427,8 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     <div className="report-card">
                                         <h3 style={sectionHeaderStyle}><FileCheck size={18} /> Itens Licitados</h3>
                                         <div style={{ padding: '20px', backgroundColor: '#f1f5f9', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
-                                            <p style={{ color: '#475569', fontSize: '0.9375rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                                {analysis?.biddingItems}
+                                            <p style={{ color: '#475569', fontSize: '0.9375rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap', fontFamily: typeof analysis?.biddingItems !== 'string' ? 'monospace' : 'inherit' }}>
+                                                {renderTextValue(analysis?.biddingItems)}
                                             </p>
                                         </div>
                                     </div>
@@ -430,7 +440,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <h3 style={sectionHeaderStyle}><Award size={18} /> Qualificação Técnica Exigida</h3>
                                         <div style={{ padding: '20px', backgroundColor: '#fefce8', borderRadius: '1rem', border: '1px solid #fef08a' }}>
                                             <p style={{ color: '#713f12', fontSize: '0.9375rem', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                                {analysis?.qualificationRequirements}
+                                                {renderTextValue(analysis?.qualificationRequirements)}
                                             </p>
                                         </div>
                                     </div>
@@ -523,7 +533,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <DollarSign size={20} /> <span style={{ fontWeight: 700 }}>Financeiro</span>
                                     </div>
                                     <p style={{ margin: 0, fontSize: '0.9375rem', color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                        {analysis?.pricingConsiderations || 'Análise financeira não disponível para este edital.'}
+                                        {renderTextValue(analysis?.pricingConsiderations) || 'Análise financeira não disponível para este edital.'}
                                     </p>
                                 </div>
 
@@ -550,7 +560,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <ShieldAlert size={20} /> <span style={{ fontWeight: 700 }}>Penalidades</span>
                                     </div>
                                     <p style={{ margin: 0, fontSize: '0.875rem', color: '#7c2d12', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                        {analysis?.penalties || 'Penalidades não identificadas no edital.'}
+                                        {renderTextValue(analysis?.penalties) || 'Penalidades não identificadas no edital.'}
                                     </p>
                                 </div>
 
