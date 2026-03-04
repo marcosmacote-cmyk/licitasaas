@@ -1388,12 +1388,20 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
         if (typeof payload.requiredDocuments === 'object') {
             payload.requiredDocuments = JSON.stringify(payload.requiredDocuments);
         }
-        if (Array.isArray(payload.deadlines)) {
+        if (typeof payload.deadlines === 'object') {
             payload.deadlines = JSON.stringify(payload.deadlines);
         }
-        if (Array.isArray(payload.chatHistory)) {
+        if (typeof payload.chatHistory === 'object') {
             payload.chatHistory = JSON.stringify(payload.chatHistory);
         }
+
+        const stringifyIfObject = (field: string) => {
+            if (payload[field] && typeof payload[field] === 'object') {
+                payload[field] = JSON.stringify(payload[field]);
+            }
+        };
+
+        ['biddingItems', 'pricingConsiderations', 'fullSummary', 'penalties', 'qualificationRequirements', 'irregularitiesFlags'].forEach(stringifyIfObject);
 
         const analysis = await prisma.aiAnalysis.upsert({
             where: {
