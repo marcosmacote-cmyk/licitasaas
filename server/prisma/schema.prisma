@@ -177,6 +177,8 @@ model ProposalItem {
   description       String
   unit              String              @default("UN")
   quantity          Float               @default(0)
+  multiplier        Float               @default(1)
+  multiplierLabel   String?
   unitCost          Float               @default(0)
   unitPrice         Float               @default(0)
   totalPrice        Float               @default(0)

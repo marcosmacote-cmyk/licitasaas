@@ -1635,7 +1635,10 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
             const item = items[i];
             const bdi = existing.bdiPercentage || 0;
             const unitPrice = item.unitCost * (1 + bdi / 100);
-            const totalPrice = item.quantity * unitPrice;
+
+            // App-level default is 1 if not provided
+            const multiplier = item.multiplier ?? 1;
+            const totalPrice = item.quantity * multiplier * unitPrice;
 
             const dbItem = await prisma.proposalItem.create({
                 data: {
@@ -1644,6 +1647,8 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
                     description: item.description,
                     unit: item.unit || 'UN',
                     quantity: item.quantity || 0,
+                    multiplier: multiplier,
+                    multiplierLabel: item.multiplierLabel || null,
                     unitCost: item.unitCost || 0,
                     unitPrice: Math.round(unitPrice * 100) / 100,
                     totalPrice: Math.round(totalPrice * 100) / 100,
@@ -1671,7 +1676,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
 // PUT update single item
 app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, res) => {
     try {
-        const { itemNumber, description, unit, quantity, unitCost, referencePrice, brand } = req.body;
+        const { itemNumber, description, unit, quantity, multiplier, multiplierLabel, unitCost, referencePrice, brand } = req.body;
         const proposalId = req.params.id;
         const itemId = req.params.itemId;
 
@@ -1683,8 +1688,9 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
         const bdi = proposal.bdiPercentage || 0;
         const finalUnitCost = unitCost !== undefined ? unitCost : 0;
         const finalQuantity = quantity !== undefined ? quantity : 0;
+        const finalMultiplier = multiplier !== undefined ? multiplier : 1;
         const unitPrice = finalUnitCost * (1 + bdi / 100);
-        const totalPrice = finalQuantity * unitPrice;
+        const totalPrice = finalQuantity * finalMultiplier * unitPrice;
 
         const updated = await prisma.proposalItem.update({
             where: { id: itemId },
@@ -1693,6 +1699,8 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
                 description: description,
                 unit: unit,
                 quantity: finalQuantity,
+                multiplier: finalMultiplier,
+                multiplierLabel: multiplierLabel !== undefined ? multiplierLabel : null,
                 unitCost: finalUnitCost,
                 unitPrice: Math.round(unitPrice * 100) / 100,
                 totalPrice: Math.round(totalPrice * 100) / 100,
@@ -1778,9 +1786,10 @@ REGRAS:
 4. Mantenha descrições técnicas completas, não simplifique
 5. Se a unidade não estiver clara, use "UN"
 6. Se a quantidade não estiver clara, use 1
+7. MUITO IMPORTANTE: Procure ativamente por períodos ou múltiplos que devam ser multiplicados. Por exemplo, se a licitação é para o ano todo e os pagamentos são mensais (12 meses), a quantidade é X e o MULTIPLICADOR é 12. Retorne 'multiplier': 12 e 'multiplierLabel': 'Meses'. Caso contrário, retorne 1.
 
 Responda APENAS com um JSON array, sem markdown:
-[{"itemNumber":"1","description":"Descrição completa","unit":"UN","quantity":10,"referencePrice":100.50}]`;
+[{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
 
         console.log(`[AI Populate] Extracting items from bidding ${biddingProcessId}...`);
         const result = await callGeminiWithRetry(ai.models, {

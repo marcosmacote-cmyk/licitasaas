@@ -139,6 +139,8 @@ export interface ProposalItem {
     description: string;
     unit: string;
     quantity: number;
+    multiplier: number;
+    multiplierLabel?: string;
     unitCost: number;
     unitPrice: number;
     totalPrice: number;

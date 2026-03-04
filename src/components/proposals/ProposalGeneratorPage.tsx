@@ -163,6 +163,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             description: '',
             unit: 'UN',
             quantity: 1,
+            multiplier: 1,
             unitCost: 0,
             unitPrice: 0,
             totalPrice: 0,
@@ -179,8 +180,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             const updated = { ...it, [field]: value };
             // Recalculate prices
             const unitPrice = (updated.unitCost || 0) * (1 + bdi / 100);
+            const multiplier = updated.multiplier || 1;
             updated.unitPrice = Math.round(unitPrice * 100) / 100;
-            updated.totalPrice = Math.round((updated.quantity || 0) * unitPrice * 100) / 100;
+            updated.totalPrice = Math.round((updated.quantity || 0) * multiplier * unitPrice * 100) / 100;
             return updated;
         }));
     };
@@ -263,9 +265,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     };
 
     // Totals
-    const subtotal = useMemo(() => items.reduce((sum, it) => sum + (it.quantity * it.unitCost), 0), [items]);
+    const subtotal = useMemo(() => items.reduce((sum, it) => sum + (it.quantity * (it.multiplier || 1) * it.unitCost), 0), [items]);
     const bdiValue = useMemo(() => subtotal * (bdi / 100), [subtotal, bdi]);
-    const total = useMemo(() => items.reduce((sum, it) => sum + it.totalPrice, 0), [items]);
+    const total = useMemo(() => items.reduce((sum, it) => sum + (it.totalPrice || 0), 0), [items]);
 
     // Style consts
     const cardStyle: React.CSSProperties = {
@@ -495,6 +497,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     <th style={{ ...thStyle, textAlign: 'left', minWidth: '250px' }}>Descrição</th>
                                     <th style={thStyle}>Unid</th>
                                     <th style={thStyle}>Qtd</th>
+                                    <th style={thStyle}>Multiplicador</th>
                                     <th style={thStyle}>Custo Unit.</th>
                                     <th style={thStyle}>Preço Unit. (c/ BDI)</th>
                                     <th style={thStyle}>Total</th>
@@ -548,10 +551,37 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                                         type="number"
                                                         value={item.quantity}
                                                         onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                        style={{ ...inputStyle, width: '70px', textAlign: 'right' }}
+                                                        style={{ ...inputStyle, width: '60px', textAlign: 'right' }}
                                                         step="0.01"
                                                     />
                                                 ) : fmtNum(item.quantity)}
+                                            </td>
+                                            <td style={tdCenterStyle}>
+                                                {isEditing ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                                                        <input
+                                                            type="number"
+                                                            value={item.multiplier}
+                                                            onChange={e => updateItem(item.id, 'multiplier', parseFloat(e.target.value) || 1)}
+                                                            style={{ ...inputStyle, width: '50px', textAlign: 'center' }}
+                                                            title="Multiplicador (ex: 12 meses)"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={item.multiplierLabel || ''}
+                                                            onChange={e => updateItem(item.id, 'multiplierLabel', e.target.value)}
+                                                            placeholder="Rótulo (ex: Meses)"
+                                                            style={{ ...inputStyle, width: '70px', fontSize: '0.7rem' }}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    item.multiplier !== 1 ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                            <span>× {fmtNum(item.multiplier)}</span>
+                                                            {item.multiplierLabel && <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{item.multiplierLabel}</span>}
+                                                        </div>
+                                                    ) : '-'
+                                                )}
                                             </td>
                                             <td style={tdCenterStyle}>
                                                 {isEditing ? (
