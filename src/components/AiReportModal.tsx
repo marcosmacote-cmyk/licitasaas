@@ -231,7 +231,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
             }
         }
 
-        const categories = ["Habilitação Jurídica", "Regularidade Fiscal, Social e Trabalhista", "Qualificação Técnica", "Qualificação Econômica Financeira", "Outros", "Documentos Exigidos", "Processamento"];
+        const categories = ["Habilitação Jurídica", "Regularidade Fiscal, Social e Trabalhista", "Qualificação Técnica", "Qualificação Econômica Financeira", "Declarações e Outros", "Outros", "Documentos Exigidos", "Processamento"];
         const result: Record<string, { item: string; description: string; hasMatch: boolean }[]> = {};
 
         categories.forEach(cat => {
@@ -363,13 +363,39 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                             {/* Left Column: Core Analysis */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
-                                {/* Resumo Executivo */}
+                                {/* Key Metrics Bar */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    <div style={{ padding: '20px', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', borderRadius: '1rem', border: '1px solid #a7f3d0' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Valor Estimado</div>
+                                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#065f46' }}>
+                                            {process.estimatedValue ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(process.estimatedValue) : 'Não informado'}
+                                        </div>
+                                    </div>
+                                    <div style={{ padding: '20px', background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '1rem', border: '1px solid #93c5fd' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Sessão / Prazo</div>
+                                        <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e40af' }}>
+                                            {process.sessionDate ? new Date(process.sessionDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Não informado'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Resumo Executivo — uses process.summary (detailed executive summary from AI) */}
                                 <div className="report-card">
                                     <h3 style={sectionHeaderStyle}><Sparkles size={18} /> Resumo Executivo</h3>
-                                    <p style={{ color: '#334155', fontSize: '1rem', lineHeight: 1.7, margin: 0 }}>
-                                        {analysis.fullSummary}
+                                    <p style={{ color: '#334155', fontSize: '0.9375rem', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                        {process.summary || analysis.fullSummary || 'Resumo executivo não disponível para este edital.'}
                                     </p>
                                 </div>
+
+                                {/* Parecer Técnico-Jurídico — uses analysis.fullSummary */}
+                                {analysis.fullSummary && process.summary && analysis.fullSummary !== process.summary && (
+                                    <div className="report-card">
+                                        <h3 style={sectionHeaderStyle}><Brain size={18} /> Parecer Técnico-Jurídico</h3>
+                                        <p style={{ color: '#334155', fontSize: '0.9375rem', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                            {analysis.fullSummary}
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Detalhamento de Itens */}
                                 {analysis.biddingItems && (
@@ -378,6 +404,18 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <div style={{ padding: '20px', backgroundColor: '#f1f5f9', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
                                             <p style={{ color: '#475569', fontSize: '0.9375rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>
                                                 {analysis.biddingItems}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Qualificação Técnica Detalhada */}
+                                {analysis.qualificationRequirements && (
+                                    <div className="report-card">
+                                        <h3 style={sectionHeaderStyle}><Award size={18} /> Qualificação Técnica Exigida</h3>
+                                        <div style={{ padding: '20px', backgroundColor: '#fefce8', borderRadius: '1rem', border: '1px solid #fef08a' }}>
+                                            <p style={{ color: '#713f12', fontSize: '0.9375rem', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                                {analysis.qualificationRequirements}
                                             </p>
                                         </div>
                                     </div>
@@ -469,7 +507,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     <div style={{ color: '#166534', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                                         <DollarSign size={20} /> <span style={{ fontWeight: 700 }}>Financeiro</span>
                                     </div>
-                                    <p style={{ margin: 0, fontSize: '0.9375rem', color: '#374151', lineHeight: 1.6 }}>{analysis.pricingConsiderations}</p>
+                                    <p style={{ margin: 0, fontSize: '0.9375rem', color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                                        {analysis.pricingConsiderations || 'Análise financeira não disponível para este edital.'}
+                                    </p>
                                 </div>
 
                                 {/* Prazos */}
@@ -478,24 +518,26 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <Calendar size={20} /> <span style={{ fontWeight: 700 }}>Cronograma Crítico</span>
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                        {deadlineList.map((dl, i) => (
+                                        {deadlineList.length > 0 ? deadlineList.map((dl, i) => (
                                             <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                                                <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#3b82f6', marginTop: '8px' }} />
-                                                <span style={{ fontSize: '0.875rem', color: '#1e3a8a' }}>{dl}</span>
+                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3b82f6', marginTop: '7px', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.875rem', color: '#1e3a8a', lineHeight: 1.5 }}>{dl}</span>
                                             </div>
-                                        ))}
+                                        )) : (
+                                            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>Prazos não identificados no edital.</p>
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Penalidades */}
-                                {analysis.penalties && (
-                                    <div style={{ ...metricsCardStyle, background: 'linear-gradient(135deg, #fff 0%, #fff7ed 100%)', border: '1px solid #ffedd5' }}>
-                                        <div style={{ color: '#9a3412', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                                            <ShieldAlert size={20} /> <span style={{ fontWeight: 700 }}>Penalidades</span>
-                                        </div>
-                                        <p style={{ margin: 0, fontSize: '0.875rem', color: '#7c2d12', lineHeight: 1.6 }}>{analysis.penalties}</p>
+                                <div style={{ ...metricsCardStyle, background: 'linear-gradient(135deg, #fff 0%, #fff7ed 100%)', border: '1px solid #ffedd5' }}>
+                                    <div style={{ color: '#9a3412', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                        <ShieldAlert size={20} /> <span style={{ fontWeight: 700 }}>Penalidades</span>
                                     </div>
-                                )}
+                                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#7c2d12', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                                        {analysis.penalties || 'Penalidades não identificadas no edital.'}
+                                    </p>
+                                </div>
 
                                 {/* Risks / Red Flags */}
                                 <div style={{ ...metricsCardStyle, background: '#fef2f2', border: '1px solid #fee2e2' }}>
@@ -503,11 +545,13 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <AlertTriangle size={20} /> <span style={{ fontWeight: 700 }}>Riscos e Pontos de Atenção</span>
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        {flagList.map((flag, i) => (
+                                        {flagList.length > 0 ? flagList.map((flag, i) => (
                                             <div key={i} style={{ padding: '10px 12px', background: 'white', border: '1px solid #fecaca', borderRadius: '0.75rem', fontSize: '0.8125rem', color: '#b91c1c', fontWeight: 500 }}>
                                                 {flag}
                                             </div>
-                                        ))}
+                                        )) : (
+                                            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>Nenhum risco identificado.</p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
