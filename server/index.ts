@@ -1519,55 +1519,88 @@ app.post('/api/dossier/ai-match', authenticateToken, async (req: any, res) => {
 
         // Build compact document list
         const docListStr = documents.map((d: any, i: number) =>
-            `[${i}] ID="${d.id}" | Tipo="${d.docType}" | Arquivo="${d.fileName}" | Grupo="${d.docGroup}" | Vencimento="${d.expirationDate || 'N/A'}"`
+            `  DOC[${i}]: Tipo="${d.docType}" | Arquivo="${d.fileName}" | Grupo="${d.docGroup || 'N/A'}" | Vencimento="${d.expirationDate || 'Sem vencimento'}"`
         ).join('\n');
 
         // Build compact requirements list
         const reqListStr = requirements.map((r: string, i: number) =>
-            `[R${i}] "${r}"`
+            `  REQ[${i}]: "${r}"`
         ).join('\n');
 
-        const prompt = `Você é um especialista em licitações públicas brasileiras. Sua tarefa é associar os DOCUMENTOS de uma empresa aos REQUISITOS DE HABILITAÇÃO exigidos por um edital.
+        const prompt = `# TAREFA
+Você é um especialista sênior em licitações públicas brasileiras com 20 anos de experiência em habilitação documental. Sua tarefa é vincular DOCUMENTOS de uma empresa às EXIGÊNCIAS DE HABILITAÇÃO de um edital.
 
-REGRAS IMPORTANTES:
-1. Cada REQUISITO pode ser vinculado a 0 ou 1 documento. Nunca force uma vinculação quando não há documento compatível.
-2. Cada DOCUMENTO pode ser vinculado a no máximo 1 requisito (exclusividade).
-3. Priorize documentos válidos (não vencidos).
-4. Se um requisito se refere a uma situação que não se aplica (ex: "empresa estrangeira" mas a empresa é brasileira), NÃO vincule nenhum documento, coloque "SKIP".
-5. Use seu conhecimento sobre documentos de licitação para fazer correspondências semânticas corretas. Exemplos:
-   - "Prova de regularidade para com a Fazenda Federal" → CND Federal, Certidão Conjunta RFB/PGFN
-   - "Prova de regularidade relativa ao FGTS" → CRF, Certificado de Regularidade FGTS
-   - "CNDT" → Certidão Negativa de Débitos Trabalhistas
-   - "Registro comercial" → Registro na Junta Comercial (NÃO é CPF, CNH ou identidade)
-   - "Inscrição no cadastro de contribuintes" → Inscrição Estadual, Inscrição Municipal
+# PRINCÍPIOS FUNDAMENTAIS
+1. **MAXIMIZE as vinculações corretas.** Se existe um documento que pode atender uma exigência, VINCULE-O. Não deixe exigências simples sem vínculo.
+2. **Um mesmo documento PODE atender múltiplas exigências** quando faz sentido (ex: Contrato Social atende tanto "ato constitutivo" quanto "comprovação do ramo de atividade").
+3. **NÃO vincule quando claramente não há documento compatível** na lista.
+4. **Priorize documentos NÃO vencidos** sobre vencidos. Se só há documento vencido, ainda assim vincule (o usuário revisará).
 
-DOCUMENTOS DA EMPRESA:
+# TABELA DE EQUIVALÊNCIAS IMPORTANTES
+Use esta tabela como referência para fazer correspondências semânticas:
+
+| Exigência do Edital | Documentos que atendem |
+|---|---|
+| Ato constitutivo / Estatuto / Contrato social | Contrato Social, Estatuto, Ato Constitutivo, Requerimento de Empresário |
+| Registro comercial (empresário individual) | Contrato Social, Registro Junta Comercial, Requerimento Empresário (NÃO é CNH, RG ou CPF) |
+| Inscrição do ato constitutivo (sociedades civis) | Contrato Social, Estatuto Social, Ato Constitutivo |
+| Decreto de autorização (empresa estrangeira) | Somente para empresas estrangeiras — se não houver doc específico, docIndex=null |
+| Inscrição no CNPJ | Cartão CNPJ, Comprovante CNPJ |
+| Inscrição no cadastro de contribuintes estadual | Inscrição Estadual, Cadastro ICMS (NÃO é Carteira Administradora) |
+| Inscrição no cadastro de contribuintes municipal | Inscrição Municipal, Cadastro ISS, Alvará Municipal |
+| Regularidade Fazenda Federal / Tributos Federais | CND Federal, Certidão Conjunta RFB/PGFN, Certidão Negativa Federal |
+| Regularidade Fazenda Estadual | CND Estadual, Certidão Negativa Estadual, SEFAZ |
+| Regularidade Fazenda Municipal | CND Municipal, Certidão Negativa Municipal, ISS (NÃO é Inscrição Municipal) |
+| Regularidade FGTS | CRF, Certificado Regularidade FGTS, Comprovante FGTS |
+| Regularidade trabalhista / CNDT | CNDT, Certidão Negativa Débitos Trabalhistas |
+| Regularidade INSS / previdenciária | CND INSS, Certidão Previdenciária (geralmente embutida na Conjunta Federal) |
+| Certidão de falência / recuperação judicial | Certidão Negativa de Falência, Recuperação Judicial |
+| Balanço patrimonial | Balanço Patrimonial, Demonstrações Contábeis |
+| Atestado de capacidade técnica | Atestado Técnico, Certidão de Acervo, CAT |
+| Registro no CREA/CAU/conselho | Registro CREA, Registro CAU, Certidão conselho |
+| Declaração de não emprego de menores | Declaração de Menores, Declaração Lei 9.854 |
+| Declaração de impedimento | Declaração de Idoneidade, Declaração não impedido |
+| Declaração de visita/vistoria técnica | Declaração de Vistoria, Atestado de Visita |
+| Certidão/registro ARCE/agência reguladora | Registro Cadastral ARCE, Certificado Agência Reguladora |
+| Alvará de funcionamento | Alvará, Licença de Funcionamento |
+| Identidade do sócio/representante | RG, CNH, Documento de Identidade |
+| CPF do sócio/representante | CPF, pode estar no RG |
+| Procuração / credenciamento | Procuração, Carta de Preposto, Credenciamento |
+
+# REGRAS DE DECISÃO
+- Analise o SIGNIFICADO da exigência, não apenas palavras-chave
+- Considere o nome do arquivo (fileName) como pista complementar ao tipo (docType)
+- Se a exigência menciona "no caso de" uma situação específica (estrangeira, MEI, etc), vincule null se não houver doc correspondente
+- Se há múltiplos documentos candidatos para uma exigência, escolha o mais específico
+
+# DADOS
+
+DOCUMENTOS DA EMPRESA (${documents.length} documentos):
 ${docListStr}
 
-REQUISITOS DO EDITAL:
+EXIGÊNCIAS DO EDITAL (${requirements.length} exigências):
 ${reqListStr}
 
-Responda EXCLUSIVAMENTE com um JSON array. Cada elemento deve ter:
-- "reqIndex": número do requisito (R0, R1, ...)
-- "docIndex": número do documento vinculado (0, 1, ...) ou null se não houver correspondência
-- "reason": explicação curta (max 10 palavras)
+# FORMATO DE RESPOSTA
+Responda APENAS com um JSON array. Para CADA exigência REQ[i], inclua um objeto:
+{"r":0,"d":2,"m":"motivo curto"} — quando há match (r=reqIndex, d=docIndex, m=motivo)
+{"r":1,"d":null,"m":"sem documento compatível"} — quando não há match
 
-Exemplo de resposta:
-[{"reqIndex":0,"docIndex":2,"reason":"CND Federal atende fazenda federal"},{"reqIndex":1,"docIndex":null,"reason":"Não aplicável à empresa"},{"reqIndex":2,"docIndex":0,"reason":"Contrato social é ato constitutivo"}]
+IMPORTANTE: Inclua uma entrada para CADA exigência (R0 a R${requirements.length - 1}).
 
-Responda APENAS com o JSON array, sem markdown, sem explicação adicional.`;
+Responda somente com o JSON array, sem markdown, sem texto adicional:`;
 
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                temperature: 0.1,
-                maxOutputTokens: 4096,
+                temperature: 0.05,
+                maxOutputTokens: 8192,
             }
         });
 
         const responseText = result.text?.trim() || '';
-        console.log(`[Dossier AI Match] Raw response length: ${responseText.length}`);
+        console.log(`[Dossier AI Match] Raw response (first 500 chars): ${responseText.substring(0, 500)}`);
 
         // Parse JSON from response (handle markdown code blocks)
         let jsonStr = responseText;
@@ -1586,32 +1619,36 @@ Responda APENAS com o JSON array, sem markdown, sem explicação adicional.`;
 
         // Convert to { requirementText -> [docId] } map
         const matches: Record<string, string[]> = {};
-        const usedDocIndices = new Set<number>();
 
         for (const m of matchResults) {
-            const reqIdx = typeof m.reqIndex === 'number' ? m.reqIndex : parseInt(String(m.reqIndex).replace('R', ''));
+            // Support both {"reqIndex":0} and {"r":0} formats
+            const reqIdx = typeof m.r === 'number' ? m.r
+                : typeof m.reqIndex === 'number' ? m.reqIndex
+                    : parseInt(String(m.r ?? m.reqIndex ?? '').replace('R', ''));
+
             if (isNaN(reqIdx) || reqIdx < 0 || reqIdx >= requirements.length) continue;
 
             const reqText = requirements[reqIdx];
 
-            if (m.docIndex === null || m.docIndex === undefined || m.docIndex === 'SKIP') {
-                // No match or explicitly skipped
+            const docIdxRaw = m.d ?? m.docIndex;
+            if (docIdxRaw === null || docIdxRaw === undefined || docIdxRaw === 'SKIP' || docIdxRaw === -1) {
                 continue;
             }
 
-            const docIdx = typeof m.docIndex === 'number' ? m.docIndex : parseInt(m.docIndex);
+            const docIdx = typeof docIdxRaw === 'number' ? docIdxRaw : parseInt(docIdxRaw);
             if (isNaN(docIdx) || docIdx < 0 || docIdx >= documents.length) continue;
 
-            // Enforce exclusivity
-            if (usedDocIndices.has(docIdx)) continue;
-            usedDocIndices.add(docIdx);
-
             matches[reqText] = [documents[docIdx].id];
-            console.log(`[Dossier AI Match] ✅ R${reqIdx} → Doc[${docIdx}] "${documents[docIdx].docType}" | ${m.reason || ''}`);
+            const reason = m.m || m.reason || '';
+            console.log(`[Dossier AI Match] ✅ R${reqIdx} → DOC[${docIdx}] "${documents[docIdx].docType}" | ${reason}`);
         }
 
         const matchCount = Object.keys(matches).length;
-        console.log(`[Dossier AI Match] Result: ${matchCount}/${requirements.length} matched`);
+        const skipped = matchResults.filter((m: any) => {
+            const d = m.d ?? m.docIndex;
+            return d === null || d === undefined || d === 'SKIP' || d === -1;
+        }).length;
+        console.log(`[Dossier AI Match] Result: ${matchCount} matched, ${skipped} skipped, ${requirements.length - matchCount - skipped} unhandled`);
 
         res.json({ matches, matchCount, totalRequirements: requirements.length });
 
