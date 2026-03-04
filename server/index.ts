@@ -1494,6 +1494,134 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req: an
 });
 
 
+// ═══════════════════════════════════════════════════════════════════════
+// Dossier AI Matching — Gemini-powered document-to-requirement matching
+// ═══════════════════════════════════════════════════════════════════════
+app.post('/api/dossier/ai-match', authenticateToken, async (req: any, res) => {
+    try {
+        const { requirements, documents } = req.body;
+
+        if (!requirements || !Array.isArray(requirements) || requirements.length === 0) {
+            return res.status(400).json({ error: 'requirements array is required' });
+        }
+        if (!documents || !Array.isArray(documents) || documents.length === 0) {
+            return res.status(400).json({ error: 'documents array is required' });
+        }
+
+        console.log(`[Dossier AI Match] ${requirements.length} requirements × ${documents.length} docs for tenant ${req.user.tenantId}`);
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+
+        // Build compact document list
+        const docListStr = documents.map((d: any, i: number) =>
+            `[${i}] ID="${d.id}" | Tipo="${d.docType}" | Arquivo="${d.fileName}" | Grupo="${d.docGroup}" | Vencimento="${d.expirationDate || 'N/A'}"`
+        ).join('\n');
+
+        // Build compact requirements list
+        const reqListStr = requirements.map((r: string, i: number) =>
+            `[R${i}] "${r}"`
+        ).join('\n');
+
+        const prompt = `Você é um especialista em licitações públicas brasileiras. Sua tarefa é associar os DOCUMENTOS de uma empresa aos REQUISITOS DE HABILITAÇÃO exigidos por um edital.
+
+REGRAS IMPORTANTES:
+1. Cada REQUISITO pode ser vinculado a 0 ou 1 documento. Nunca force uma vinculação quando não há documento compatível.
+2. Cada DOCUMENTO pode ser vinculado a no máximo 1 requisito (exclusividade).
+3. Priorize documentos válidos (não vencidos).
+4. Se um requisito se refere a uma situação que não se aplica (ex: "empresa estrangeira" mas a empresa é brasileira), NÃO vincule nenhum documento, coloque "SKIP".
+5. Use seu conhecimento sobre documentos de licitação para fazer correspondências semânticas corretas. Exemplos:
+   - "Prova de regularidade para com a Fazenda Federal" → CND Federal, Certidão Conjunta RFB/PGFN
+   - "Prova de regularidade relativa ao FGTS" → CRF, Certificado de Regularidade FGTS
+   - "CNDT" → Certidão Negativa de Débitos Trabalhistas
+   - "Registro comercial" → Registro na Junta Comercial (NÃO é CPF, CNH ou identidade)
+   - "Inscrição no cadastro de contribuintes" → Inscrição Estadual, Inscrição Municipal
+
+DOCUMENTOS DA EMPRESA:
+${docListStr}
+
+REQUISITOS DO EDITAL:
+${reqListStr}
+
+Responda EXCLUSIVAMENTE com um JSON array. Cada elemento deve ter:
+- "reqIndex": número do requisito (R0, R1, ...)
+- "docIndex": número do documento vinculado (0, 1, ...) ou null se não houver correspondência
+- "reason": explicação curta (max 10 palavras)
+
+Exemplo de resposta:
+[{"reqIndex":0,"docIndex":2,"reason":"CND Federal atende fazenda federal"},{"reqIndex":1,"docIndex":null,"reason":"Não aplicável à empresa"},{"reqIndex":2,"docIndex":0,"reason":"Contrato social é ato constitutivo"}]
+
+Responda APENAS com o JSON array, sem markdown, sem explicação adicional.`;
+
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.1,
+                maxOutputTokens: 4096,
+            }
+        });
+
+        const responseText = result.text?.trim() || '';
+        console.log(`[Dossier AI Match] Raw response length: ${responseText.length}`);
+
+        // Parse JSON from response (handle markdown code blocks)
+        let jsonStr = responseText;
+        const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+            jsonStr = jsonMatch[0];
+        }
+
+        let matchResults: any[];
+        try {
+            matchResults = JSON.parse(jsonStr);
+        } catch (parseErr) {
+            console.error('[Dossier AI Match] Failed to parse JSON:', responseText.substring(0, 500));
+            return res.status(500).json({ error: 'AI returned invalid JSON', raw: responseText.substring(0, 200) });
+        }
+
+        // Convert to { requirementText -> [docId] } map
+        const matches: Record<string, string[]> = {};
+        const usedDocIndices = new Set<number>();
+
+        for (const m of matchResults) {
+            const reqIdx = typeof m.reqIndex === 'number' ? m.reqIndex : parseInt(String(m.reqIndex).replace('R', ''));
+            if (isNaN(reqIdx) || reqIdx < 0 || reqIdx >= requirements.length) continue;
+
+            const reqText = requirements[reqIdx];
+
+            if (m.docIndex === null || m.docIndex === undefined || m.docIndex === 'SKIP') {
+                // No match or explicitly skipped
+                continue;
+            }
+
+            const docIdx = typeof m.docIndex === 'number' ? m.docIndex : parseInt(m.docIndex);
+            if (isNaN(docIdx) || docIdx < 0 || docIdx >= documents.length) continue;
+
+            // Enforce exclusivity
+            if (usedDocIndices.has(docIdx)) continue;
+            usedDocIndices.add(docIdx);
+
+            matches[reqText] = [documents[docIdx].id];
+            console.log(`[Dossier AI Match] ✅ R${reqIdx} → Doc[${docIdx}] "${documents[docIdx].docType}" | ${m.reason || ''}`);
+        }
+
+        const matchCount = Object.keys(matches).length;
+        console.log(`[Dossier AI Match] Result: ${matchCount}/${requirements.length} matched`);
+
+        res.json({ matches, matchCount, totalRequirements: requirements.length });
+
+    } catch (error: any) {
+        console.error('[Dossier AI Match] Error:', error?.message || error);
+        res.status(500).json({ error: 'AI matching failed: ' + (error?.message || 'Unknown error') });
+    }
+});
+
+
 // Helper for Gemini with retry (for 503/429 errors) + model fallback
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
 

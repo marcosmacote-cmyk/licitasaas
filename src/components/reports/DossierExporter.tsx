@@ -465,10 +465,12 @@ export function DossierExporter({ biddings, companies }: Props) {
         });
     }, [selectedCompany, dateFilter]);
 
+    const [isAiLoading, setIsAiLoading] = useState(false);
+
     // Track which combination we've already auto-matched for
     const lastAutoMatchKey = useRef('');
 
-    // Single combined effect: reset + auto-match in one pass (eliminates race condition)
+    // Single combined effect: calls Gemini backend for AI matching, falls back to local
     useEffect(() => {
         const comboKey = `${selectedBiddingId}::${selectedCompanyId}::${dateFilter}`;
 
@@ -485,38 +487,67 @@ export function DossierExporter({ biddings, companies }: Props) {
             return;
         }
 
-        // Run AI auto-matching
-        const autoMatches: Record<string, string[]> = {};
-        const usedDocIds = new Set<string>(); // prevent same doc from being assigned twice
+        // Async function to call Gemini API
+        const runAiMatch = async () => {
+            setIsAiLoading(true);
+            try {
+                const reqTexts = requiredList.map(r => r.description).filter(Boolean);
+                const docPayload = companyDocs.map(d => ({
+                    id: d.id,
+                    docType: d.docType,
+                    fileName: d.fileName,
+                    docGroup: d.docGroup,
+                    expirationDate: d.expirationDate,
+                }));
 
-        console.log(`[Dossier AI] Matching ${requiredList.length} requirements against ${companyDocs.length} company docs`);
+                console.log(`[Dossier] Calling Gemini AI Match: ${reqTexts.length} reqs × ${docPayload.length} docs`);
 
-        requiredList.forEach(reqObj => {
-            const reqText = reqObj.description;
-            if (!reqText) return;
+                const response = await fetch(`${API_BASE_URL}/api/dossier/ai-match`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    },
+                    body: JSON.stringify({ requirements: reqTexts, documents: docPayload }),
+                });
 
-            const bestMatches = findBestMatches(companyDocs, reqText, 3);
-            // Pick the best unused match above threshold
-            for (const match of bestMatches) {
-                if (match.score >= 15 && !usedDocIds.has(match.doc.id)) {
-                    autoMatches[reqText] = [match.doc.id];
-                    usedDocIds.add(match.doc.id);
-                    console.log(`[Dossier AI] ✅ "${reqText.substring(0, 50)}..." → "${match.doc.docType}" (score: ${match.score})`);
-                    break;
+                if (!response.ok) {
+                    throw new Error(`API ${response.status}`);
                 }
+
+                const data = await response.json();
+                console.log(`[Dossier] Gemini matched ${data.matchCount}/${data.totalRequirements}`);
+
+                setManualMatches(data.matches || {});
+                setAiApplied(true);
+            } catch (error) {
+                console.error('[Dossier] Gemini AI matching failed, falling back to local:', error);
+
+                // Fallback: run local matching
+                const autoMatches: Record<string, string[]> = {};
+                const usedDocIds = new Set<string>();
+
+                requiredList.forEach(reqObj => {
+                    const reqText = reqObj.description;
+                    if (!reqText) return;
+                    const bestMatches = findBestMatches(companyDocs, reqText, 3);
+                    for (const match of bestMatches) {
+                        if (match.score >= 25 && !usedDocIds.has(match.doc.id)) {
+                            autoMatches[reqText] = [match.doc.id];
+                            usedDocIds.add(match.doc.id);
+                            break;
+                        }
+                    }
+                });
+
+                setManualMatches(autoMatches);
+                setAiApplied(true);
+            } finally {
+                setIsAiLoading(false);
             }
+        };
 
-            if (!autoMatches[reqText]) {
-                const topScore = bestMatches.length > 0 ? bestMatches[0].score : 0;
-                console.log(`[Dossier AI] ❌ "${reqText.substring(0, 50)}..." → no match (top score: ${topScore})`);
-            }
-        });
-
-        const matchCount = Object.keys(autoMatches).length;
-        console.log(`[Dossier AI] Result: ${matchCount}/${requiredList.length} matched`);
-
-        setManualMatches(autoMatches);
-        setAiApplied(true);
+        runAiMatch();
     }, [selectedBiddingId, selectedCompanyId, dateFilter, companyDocs, requiredList]);
 
     // Compute matched docs for export
@@ -774,20 +805,36 @@ export function DossierExporter({ biddings, companies }: Props) {
             )}
 
             {/* ── AI Badge ── */}
-            {selectedBidding && selectedCompany && aiApplied && (
+            {selectedBidding && selectedCompany && (isAiLoading || aiApplied) && (
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: '10px',
                     padding: '10px 18px', borderRadius: '10px',
-                    background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.06))',
-                    border: '1px solid rgba(139,92,246,0.2)',
+                    background: isAiLoading
+                        ? 'linear-gradient(135deg, rgba(245,158,11,0.06), rgba(139,92,246,0.06))'
+                        : 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.06))',
+                    border: `1px solid ${isAiLoading ? 'rgba(245,158,11,0.3)' : 'rgba(139,92,246,0.2)'}`,
                 }}>
-                    <Sparkles size={16} color="#8b5cf6" />
-                    <span style={{ fontSize: '0.8125rem', color: '#7c3aed', fontWeight: 600 }}>
-                        Correspondência Inteligente aplicada
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-                        — A IA pré-selecionou {satisfiedCount} documento(s) automaticamente. Revise e ajuste conforme necessário.
-                    </span>
+                    {isAiLoading ? (
+                        <>
+                            <Loader2 size={16} color="#f59e0b" className="spin" />
+                            <span style={{ fontSize: '0.8125rem', color: '#d97706', fontWeight: 600 }}>
+                                Gemini analisando correspondências...
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                                — A IA está avaliando {requiredList.length} exigências contra {companyDocs.length} documentos.
+                            </span>
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles size={16} color="#8b5cf6" />
+                            <span style={{ fontSize: '0.8125rem', color: '#7c3aed', fontWeight: 600 }}>
+                                Correspondência Inteligente (Gemini) aplicada
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                                — A IA pré-selecionou {satisfiedCount} documento(s) automaticamente. Revise e ajuste conforme necessário.
+                            </span>
+                        </>
+                    )}
                 </div>
             )}
 
