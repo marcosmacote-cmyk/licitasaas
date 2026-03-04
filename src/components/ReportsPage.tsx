@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { BarChart, FileArchive, Clock, FileText, Sparkles } from 'lucide-react';
+import { BarChart, FileArchive, Clock, FileText, Sparkles, DollarSign } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { PerformanceDashboard } from './reports/PerformanceDashboard';
 import { DossierExporter } from './reports/DossierExporter';
 import { DocumentExpirationList } from './reports/DocumentExpirationList';
 import { BiddingListExporter } from './reports/BiddingListExporter';
 import { AiDeclarationGenerator } from './reports/AiDeclarationGenerator';
+import { ProposalGeneratorPage } from './proposals/ProposalGeneratorPage';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -14,7 +15,7 @@ interface Props {
 }
 
 export function ReportsPage({ biddings, companies, onRefresh }: Props) {
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'exporter' | 'expiration' | 'biddingList' | 'declarations'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'proposal' | 'exporter' | 'expiration' | 'biddingList' | 'declarations'>('dashboard');
 
     return (
         <div className="page-container">
@@ -35,6 +36,16 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                     }}
                 >
                     <BarChart size={16} /> Dashboard de Performance
+                </button>
+                <button
+                    onClick={() => setActiveTab('proposal')}
+                    style={{
+                        ...tabStyle,
+                        color: activeTab === 'proposal' ? '#7c3aed' : 'var(--color-text-tertiary)',
+                        borderBottom: activeTab === 'proposal' ? '2px solid #7c3aed' : '2px solid transparent'
+                    }}
+                >
+                    <DollarSign size={16} /> Proposta de Preços
                 </button>
                 <button
                     onClick={() => setActiveTab('exporter')}
@@ -80,6 +91,7 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
 
             <div style={{ flex: 1 }}>
                 {activeTab === 'dashboard' && <PerformanceDashboard biddings={biddings} />}
+                {activeTab === 'proposal' && <ProposalGeneratorPage biddings={biddings} companies={companies} />}
                 {activeTab === 'exporter' && <DossierExporter biddings={biddings} companies={companies} />}
                 {activeTab === 'declarations' && <AiDeclarationGenerator biddings={biddings} companies={companies} onSave={onRefresh} />}
                 {activeTab === 'expiration' && <DocumentExpirationList companies={companies} />}

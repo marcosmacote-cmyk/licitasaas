@@ -132,3 +132,40 @@ export interface PncpBiddingItem {
     status: string;
 }
 
+export interface ProposalItem {
+    id: string;
+    proposalId: string;
+    itemNumber: string;
+    description: string;
+    unit: string;
+    quantity: number;
+    unitCost: number;
+    unitPrice: number;
+    totalPrice: number;
+    referencePrice?: number;
+    brand?: string;
+    costComposition?: string;
+    sortOrder: number;
+}
+
+export interface PriceProposal {
+    id: string;
+    tenantId: string;
+    biddingProcessId: string;
+    companyProfileId: string;
+    version: number;
+    status: string;
+    bdiPercentage: number;
+    taxPercentage: number;
+    socialCharges: number;
+    totalValue: number;
+    letterContent?: string;
+    companyLogo?: string;
+    notes?: string;
+    validityDays: number;
+    createdAt: string;
+    updatedAt: string;
+    items: ProposalItem[];
+    biddingProcess?: BiddingProcess;
+    company?: CompanyProfile;
+}

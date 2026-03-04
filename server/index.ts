@@ -1495,6 +1495,387 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req: an
 
 
 // ═══════════════════════════════════════════════════════════════════════
+// Price Proposal CRUD + AI Populate
+// ═══════════════════════════════════════════════════════════════════════
+
+// GET proposals for a bidding process
+app.get('/api/proposals/:biddingId', authenticateToken, async (req: any, res) => {
+    try {
+        const proposals = await prisma.priceProposal.findMany({
+            where: { biddingProcessId: req.params.biddingId, tenantId: req.user.tenantId },
+            include: { items: { orderBy: { sortOrder: 'asc' } }, company: true },
+            orderBy: { version: 'desc' },
+        });
+        res.json(proposals);
+    } catch (error: any) {
+        console.error('[Proposals] GET error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch proposals' });
+    }
+});
+
+// GET single proposal with items
+app.get('/api/proposals/detail/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const proposal = await prisma.priceProposal.findFirst({
+            where: { id: req.params.id, tenantId: req.user.tenantId },
+            include: { items: { orderBy: { sortOrder: 'asc' } }, company: true, biddingProcess: true },
+        });
+        if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+        res.json(proposal);
+    } catch (error: any) {
+        console.error('[Proposals] GET detail error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch proposal' });
+    }
+});
+
+// POST create proposal
+app.post('/api/proposals', authenticateToken, async (req: any, res) => {
+    try {
+        const { biddingProcessId, companyProfileId, bdiPercentage, taxPercentage, socialCharges, validityDays, notes } = req.body;
+
+        // Count existing versions
+        const existingCount = await prisma.priceProposal.count({
+            where: { biddingProcessId, tenantId: req.user.tenantId },
+        });
+
+        const proposal = await prisma.priceProposal.create({
+            data: {
+                tenantId: req.user.tenantId,
+                biddingProcessId,
+                companyProfileId,
+                version: existingCount + 1,
+                bdiPercentage: bdiPercentage || 0,
+                taxPercentage: taxPercentage || 0,
+                socialCharges: socialCharges || 0,
+                validityDays: validityDays || 60,
+                notes: notes || null,
+            },
+            include: { items: true, company: true },
+        });
+        console.log(`[Proposals] Created proposal ${proposal.id} v${proposal.version} for bidding ${biddingProcessId}`);
+        res.status(201).json(proposal);
+    } catch (error: any) {
+        console.error('[Proposals] POST error:', error.message);
+        res.status(500).json({ error: 'Failed to create proposal' });
+    }
+});
+
+// PUT update proposal
+app.put('/api/proposals/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo } = req.body;
+
+        const existing = await prisma.priceProposal.findFirst({
+            where: { id: req.params.id, tenantId: req.user.tenantId },
+        });
+        if (!existing) return res.status(404).json({ error: 'Proposal not found' });
+
+        const updated = await prisma.priceProposal.update({
+            where: { id: req.params.id },
+            data: {
+                bdiPercentage: bdiPercentage ?? existing.bdiPercentage,
+                taxPercentage: taxPercentage ?? existing.taxPercentage,
+                socialCharges: socialCharges ?? existing.socialCharges,
+                validityDays: validityDays ?? existing.validityDays,
+                notes: notes !== undefined ? notes : existing.notes,
+                status: status ?? existing.status,
+                letterContent: letterContent !== undefined ? letterContent : existing.letterContent,
+                companyLogo: companyLogo !== undefined ? companyLogo : existing.companyLogo,
+            },
+            include: { items: { orderBy: { sortOrder: 'asc' } }, company: true },
+        });
+
+        // Recalculate total
+        const totalValue = updated.items.reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0);
+        await prisma.priceProposal.update({ where: { id: req.params.id }, data: { totalValue } });
+        updated.totalValue = totalValue;
+
+        res.json(updated);
+    } catch (error: any) {
+        console.error('[Proposals] PUT error:', error.message);
+        res.status(500).json({ error: 'Failed to update proposal' });
+    }
+});
+
+// DELETE proposal
+app.delete('/api/proposals/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const existing = await prisma.priceProposal.findFirst({
+            where: { id: req.params.id, tenantId: req.user.tenantId },
+        });
+        if (!existing) return res.status(404).json({ error: 'Proposal not found' });
+
+        await prisma.priceProposal.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
+    } catch (error: any) {
+        console.error('[Proposals] DELETE error:', error.message);
+        res.status(500).json({ error: 'Failed to delete proposal' });
+    }
+});
+
+// POST add/replace items in bulk (used by AI populate and manual add)
+app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) => {
+    try {
+        const { items, replaceAll } = req.body;
+        const proposalId = req.params.id;
+
+        const existing = await prisma.priceProposal.findFirst({
+            where: { id: proposalId, tenantId: req.user.tenantId },
+        });
+        if (!existing) return res.status(404).json({ error: 'Proposal not found' });
+
+        // Optionally clear existing items
+        if (replaceAll) {
+            await prisma.proposalItem.deleteMany({ where: { proposalId } });
+        }
+
+        // Create items
+        const created = [];
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const bdi = existing.bdiPercentage || 0;
+            const unitPrice = item.unitCost * (1 + bdi / 100);
+            const totalPrice = item.quantity * unitPrice;
+
+            const dbItem = await prisma.proposalItem.create({
+                data: {
+                    proposalId,
+                    itemNumber: item.itemNumber || String(i + 1),
+                    description: item.description,
+                    unit: item.unit || 'UN',
+                    quantity: item.quantity || 0,
+                    unitCost: item.unitCost || 0,
+                    unitPrice: Math.round(unitPrice * 100) / 100,
+                    totalPrice: Math.round(totalPrice * 100) / 100,
+                    referencePrice: item.referencePrice || null,
+                    brand: item.brand || null,
+                    sortOrder: item.sortOrder ?? i,
+                },
+            });
+            created.push(dbItem);
+        }
+
+        // Recalculate total
+        const allItems = await prisma.proposalItem.findMany({ where: { proposalId } });
+        const totalValue = allItems.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0);
+        await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
+
+        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, total: R$ ${totalValue.toFixed(2)}`);
+        res.json({ items: created, totalValue });
+    } catch (error: any) {
+        console.error('[Proposals] POST items error:', error.message);
+        res.status(500).json({ error: 'Failed to add items' });
+    }
+});
+
+// PUT update single item
+app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, res) => {
+    try {
+        const { itemNumber, description, unit, quantity, unitCost, referencePrice, brand } = req.body;
+        const proposalId = req.params.id;
+        const itemId = req.params.itemId;
+
+        const proposal = await prisma.priceProposal.findFirst({
+            where: { id: proposalId, tenantId: req.user.tenantId },
+        });
+        if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+
+        const bdi = proposal.bdiPercentage || 0;
+        const finalUnitCost = unitCost !== undefined ? unitCost : 0;
+        const finalQuantity = quantity !== undefined ? quantity : 0;
+        const unitPrice = finalUnitCost * (1 + bdi / 100);
+        const totalPrice = finalQuantity * unitPrice;
+
+        const updated = await prisma.proposalItem.update({
+            where: { id: itemId },
+            data: {
+                itemNumber: itemNumber,
+                description: description,
+                unit: unit,
+                quantity: finalQuantity,
+                unitCost: finalUnitCost,
+                unitPrice: Math.round(unitPrice * 100) / 100,
+                totalPrice: Math.round(totalPrice * 100) / 100,
+                referencePrice: referencePrice ?? null,
+                brand: brand ?? null,
+            },
+        });
+
+        // Recalculate total
+        const allItems = await prisma.proposalItem.findMany({ where: { proposalId } });
+        const totalValue = allItems.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0);
+        await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
+
+        res.json({ item: updated, totalValue });
+    } catch (error: any) {
+        console.error('[Proposals] PUT item error:', error.message);
+        res.status(500).json({ error: 'Failed to update item' });
+    }
+});
+
+// DELETE single item
+app.delete('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, res) => {
+    try {
+        const proposalId = req.params.id;
+
+        const proposal = await prisma.priceProposal.findFirst({
+            where: { id: proposalId, tenantId: req.user.tenantId },
+        });
+        if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+
+        await prisma.proposalItem.delete({ where: { id: req.params.itemId } });
+
+        // Recalculate total
+        const allItems = await prisma.proposalItem.findMany({ where: { proposalId } });
+        const totalValue = allItems.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0);
+        await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
+
+        res.json({ success: true, totalValue });
+    } catch (error: any) {
+        console.error('[Proposals] DELETE item error:', error.message);
+        res.status(500).json({ error: 'Failed to delete item' });
+    }
+});
+
+// POST AI Populate — extract items from AI analysis
+app.post('/api/proposals/ai-populate', authenticateToken, async (req: any, res) => {
+    try {
+        const { biddingProcessId } = req.body;
+
+        // Get bidding with AI analysis
+        const bidding = await prisma.biddingProcess.findFirst({
+            where: { id: biddingProcessId, tenantId: req.user.tenantId },
+            include: { aiAnalysis: true },
+        });
+
+        if (!bidding) return res.status(404).json({ error: 'Bidding process not found' });
+        if (!bidding.aiAnalysis) return res.status(400).json({ error: 'No AI analysis found for this bidding. Run the AI analysis first.' });
+
+        const biddingItems = bidding.aiAnalysis.biddingItems || '';
+        const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
+
+        if (!biddingItems || biddingItems.trim().length < 10) {
+            return res.status(400).json({ error: 'AI analysis has no bidding items to extract.' });
+        }
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+
+        const ai = new GoogleGenAI({ apiKey });
+
+        const prompt = `Você é um especialista em licitações brasileiras. Analise os ITENS LICITADOS abaixo e extraia uma lista estruturada para uma proposta de preços.
+
+ITENS DO EDITAL:
+${biddingItems}
+
+INFORMAÇÕES DE PREÇO:
+${pricingInfo}
+
+REGRAS:
+1. Extraia CADA item/lote individualmente
+2. Identifique: número do item, descrição completa, unidade de medida (UN, KG, M², HORA, MÊS, KM, LITRO, DIÁRIA, etc.), quantidade
+3. Se houver valor de referência/estimado, inclua
+4. Mantenha descrições técnicas completas, não simplifique
+5. Se a unidade não estiver clara, use "UN"
+6. Se a quantidade não estiver clara, use 1
+
+Responda APENAS com um JSON array, sem markdown:
+[{"itemNumber":"1","description":"Descrição completa","unit":"UN","quantity":10,"referencePrice":100.50}]`;
+
+        console.log(`[AI Populate] Extracting items from bidding ${biddingProcessId}...`);
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { temperature: 0.05, maxOutputTokens: 8192 },
+        });
+
+        const responseText = result.text?.trim() || '';
+        console.log(`[AI Populate] Response (first 300): ${responseText.substring(0, 300)}`);
+
+        let jsonStr = responseText;
+        const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) jsonStr = jsonMatch[0];
+
+        let items: any[];
+        try {
+            items = JSON.parse(jsonStr);
+        } catch {
+            console.error('[AI Populate] Failed to parse JSON');
+            return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) });
+        }
+
+        console.log(`[AI Populate] Extracted ${items.length} items from edital`);
+        res.json({ items, totalItems: items.length });
+    } catch (error: any) {
+        console.error('[AI Populate] Error:', error.message);
+        res.status(500).json({ error: 'AI populate failed: ' + (error.message || 'Unknown') });
+    }
+});
+
+// POST AI Letter — generate proposal letter
+app.post('/api/proposals/ai-letter', authenticateToken, async (req: any, res) => {
+    try {
+        const { biddingProcessId, companyProfileId, totalValue, validityDays, itemsSummary } = req.body;
+
+        const bidding = await prisma.biddingProcess.findFirst({
+            where: { id: biddingProcessId, tenantId: req.user.tenantId },
+        });
+        const company = await prisma.companyProfile.findFirst({
+            where: { id: companyProfileId, tenantId: req.user.tenantId },
+        });
+
+        if (!bidding || !company) return res.status(404).json({ error: 'Bidding or company not found' });
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+
+        const ai = new GoogleGenAI({ apiKey });
+
+        const prompt = `Gere uma CARTA PROPOSTA formal para licitacao publica brasileira.
+
+DADOS:
+- Licitacao: ${bidding.title}
+- Modalidade: ${bidding.modality}
+- Orgao: Conforme edital
+- Empresa: ${company.razaoSocial}
+- CNPJ: ${company.cnpj}
+- Contato: ${company.contactName || 'Representante Legal'}
+- Email: ${company.contactEmail || '-'}
+- Telefone: ${company.contactPhone || '-'}
+- Valor Total da Proposta: R$ ${totalValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+- Validade da Proposta: ${validityDays || 60} dias
+- Resumo dos Itens: ${itemsSummary || 'Conforme planilha de precos em anexo'}
+
+INSTRUCOES:
+1. Use formato formal de carta comercial
+2. Enderece ao Pregoeiro/Comissao de Licitacao
+3. Inclua: referencia ao processo, objeto resumido, valor total (numerico e por extenso)
+4. Declare que nos precos estao inclusos todos custos diretos e indiretos
+5. Informe prazo de validade da proposta
+6. Inclua espaco para dados bancarios [PREENCHER]
+7. Finalize com local, data e assinatura
+8. Use linguagem juridica formal
+9. NAO use caracteres especiais nem emojis
+10. Retorne APENAS o texto da carta, sem markdown
+
+IMPORTANTE: Escreva o valor por extenso corretamente em portugues.`;
+
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { temperature: 0.2, maxOutputTokens: 4096 },
+        });
+
+        const letterContent = result.text?.trim() || '';
+        console.log(`[AI Letter] Generated letter (${letterContent.length} chars) for bidding ${biddingProcessId}`);
+        res.json({ letterContent });
+    } catch (error: any) {
+        console.error('[AI Letter] Error:', error.message);
+        res.status(500).json({ error: 'Letter generation failed: ' + (error.message || 'Unknown') });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 // Dossier AI Matching — Gemini-powered document-to-requirement matching
 // ═══════════════════════════════════════════════════════════════════════
 app.post('/api/dossier/ai-match', authenticateToken, async (req: any, res) => {

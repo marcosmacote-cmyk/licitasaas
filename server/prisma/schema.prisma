@@ -19,6 +19,7 @@ model Tenant {
   users            User[]
   globalConfig     GlobalConfig?
   pncpSearches     PncpSavedSearch[]
+  proposals        PriceProposal[]
 }
 
 model User {
@@ -46,6 +47,7 @@ model CompanyProfile {
   biddingProcesses BiddingProcess[]
   credentials      CompanyCredential[]
   pncpSearches     PncpSavedSearch[]
+  proposals        PriceProposal[]
   tenant           Tenant              @relation(fields: [tenantId], references: [id])
   documents        Document[]
 }
@@ -69,6 +71,7 @@ model BiddingProcess {
   reminderType     String?         @default("once")
   reminderDays     String?         @default("[]")
   aiAnalysis       AiAnalysis?
+  proposals        PriceProposal[]
   company          CompanyProfile? @relation(fields: [companyProfileId], references: [id])
   tenant           Tenant          @relation(fields: [tenantId], references: [id])
 }
@@ -141,4 +144,46 @@ model PncpSavedSearch {
   
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   company          CompanyProfile? @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
+}
+
+model PriceProposal {
+  id                String              @id @default(uuid())
+  tenantId          String
+  biddingProcessId  String
+  companyProfileId  String
+  version           Int                 @default(1)
+  status            String              @default("Rascunho")
+  bdiPercentage     Float               @default(0)
+  taxPercentage     Float               @default(0)
+  socialCharges     Float               @default(0)
+  totalValue        Float               @default(0)
+  letterContent     String?
+  companyLogo       String?
+  notes             String?
+  validityDays      Int                 @default(60)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  items             ProposalItem[]
+  biddingProcess    BiddingProcess      @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
+  company           CompanyProfile      @relation(fields: [companyProfileId], references: [id])
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
+}
+
+model ProposalItem {
+  id                String              @id @default(uuid())
+  proposalId        String
+  itemNumber        String
+  description       String
+  unit              String              @default("UN")
+  quantity          Float               @default(0)
+  unitCost          Float               @default(0)
+  unitPrice         Float               @default(0)
+  totalPrice        Float               @default(0)
+  referencePrice    Float?
+  brand             String?
+  costComposition   String?
+  sortOrder         Int                 @default(0)
+
+  proposal          PriceProposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 }
