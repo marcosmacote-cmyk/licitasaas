@@ -13,6 +13,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import { storageService } from './storage';
+import { createExtractorFromData } from 'node-unrar-js';
 
 // Resolve server root (handles both ts-node and compiled dist/)
 const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') : __dirname;
@@ -931,12 +932,13 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             return pa - pb;
         });
 
-        // 3. Download and process files (PDF or ZIP containing PDFs)
+        // 3. Download and process files (PDF, ZIP, or RAR containing PDFs)
+        const MAX_PDF_PARTS = 5; // Increased from 3 to handle complex editals
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
 
         for (const arq of arquivos) {
-            if (pdfParts.length >= 3) break; // Max 3 documents for Gemini
+            if (pdfParts.length >= MAX_PDF_PARTS) break;
 
             const fileUrl = arq.url || arq.uri || '';
             const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
@@ -946,7 +948,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                 console.log(`[PNCP-AI] Downloading: "${fileName}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId}) from ${fileUrl}`);
                 const fileRes = await axios.get(fileUrl, {
                     httpsAgent: agent,
-                    timeout: 60000,
+                    timeout: 90000,
                     responseType: 'arraybuffer',
                     maxRedirects: 5
                 } as any);
@@ -954,10 +956,10 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                 const buffer = Buffer.from(fileRes.data as ArrayBuffer);
                 if (buffer.length === 0) continue;
 
-                // Check if it's a ZIP file (magic bytes: PK = 0x50 0x4B)
-                const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
-                // Check if it's a PDF file (magic bytes: %PDF)
-                const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+                // Detect file type by magic bytes
+                const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // %PDF
+                const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B; // PK
+                const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
 
                 if (isPdf) {
                     pdfParts.push({
@@ -975,21 +977,48 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                         console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
 
                         for (const entryName of zipEntries) {
-                            if (pdfParts.length >= 3) break;
+                            if (pdfParts.length >= MAX_PDF_PARTS) break;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
                             if (pdfBuffer.length > 0) {
                                 pdfParts.push({
                                     inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
                                 });
                                 downloadedFiles.push(`${fileName}/${entryName}`);
-                                console.log(`[PNCP-AI] ✅ Extracted: ${entryName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                                console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }
                     } catch (zipErr: any) {
                         console.warn(`[PNCP-AI] Failed to extract ZIP ${fileName}: ${zipErr.message}`);
                     }
+                } else if (isRar) {
+                    console.log(`[PNCP-AI] 📦 RAR detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const extractor = await createExtractorFromData({ data: new Uint8Array(buffer).buffer });
+                        const extracted = extractor.extract({});
+                        const files = [...extracted.files];
+                        const pdfFiles = files.filter(f =>
+                            f.fileHeader.name.toLowerCase().endsWith('.pdf') &&
+                            !f.fileHeader.flags.directory &&
+                            f.extraction
+                        );
+                        console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+
+                        for (const rarFile of pdfFiles) {
+                            if (pdfParts.length >= MAX_PDF_PARTS) break;
+                            if (rarFile.extraction && rarFile.extraction.length > 0) {
+                                const pdfBuffer = Buffer.from(rarFile.extraction);
+                                pdfParts.push({
+                                    inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                });
+                                downloadedFiles.push(`${fileName}/${rarFile.fileHeader.name}`);
+                                console.log(`[PNCP-AI] ✅ Extracted from RAR: ${rarFile.fileHeader.name} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
+                    } catch (rarErr: any) {
+                        console.warn(`[PNCP-AI] Failed to extract RAR ${fileName}: ${rarErr.message}`);
+                    }
                 } else {
-                    console.log(`[PNCP-AI] ⏭️ Skipped non-PDF/non-ZIP: ${fileName} (first bytes: ${buffer[0].toString(16)} ${buffer[1].toString(16)})`);
+                    console.log(`[PNCP-AI] ⏭️ Skipped non-PDF/non-ZIP/non-RAR: ${fileName} (first bytes: ${buffer[0].toString(16)} ${buffer[1].toString(16)})`);
                 }
             } catch (dlErr: any) {
                 console.warn(`[PNCP-AI] Failed to download ${fileName}: ${dlErr.message}`);
@@ -1010,36 +1039,98 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         }
         const ai = new GoogleGenAI({ apiKey });
 
-        // 4. Use enhanced analysis prompt with strict no-summarization for Qualificação Técnica
+        // 4. Use enhanced analysis prompt with strict precision for financial data, deadlines, OCR, and Qualificação Técnica
         const systemInstruction = `
-Você é um consultor jurídico sênior especializado em licitações públicas brasileiras (Lei 14.133/2021).
-SUA MISSÃO É extrair CADA documento exigido de forma INDIVIDUAL e LITERAL.
+Você é um consultor jurídico sênior e analista financeiro especializado em licitações públicas brasileiras (Lei 14.133/2021 e Lei 8.666/1993).
+SUA MISSÃO É realizar uma ANÁLISE PROFUNDA, PRECISA E EXAUSTIVA do edital, com atenção especial a:
+- Resumo executivo detalhado e profissional
+- Dados financeiros EXATOS (valores, garantias, reajustes)
+- Prazos com datas e horários PRECISOS
+- Documentos de habilitação com referência EXATA ao item do edital
+- Qualificação técnica SEM QUALQUER RESUMO
 
-REGRAS CRÍTICAS:
-1. Responda APENAS com um objeto JSON válido. Não adicione crases Markdown ou textos antes/depois.
-2. Não invente dados. Se não encontrar, retorne string vazia.
-3. O campo 'risk' deve ser: "Baixo", "Médio", "Alto" ou "Crítico".
-4. Nos documentos exigidos, COLOQUE A REFERÊNCIA EXATA do item do edital no 'item' e o nome no 'description'.
-5. CRIE UMA ENTRADA PARA CADA DOCUMENTO. Se um item lista 5 documentos, retorne 5 objetos.
-6. FUGA ASPAS DUPLAS INTERNAS: use aspas simples dentro dos valores de texto.
-7. OTIMIZAÇÃO OCR: analise cuidadosamente imagens digitalizadas.
+=== REGRAS CRÍTICAS ===
+1. Responda APENAS com um objeto JSON válido. NUNCA adicione crases Markdown, textos explicativos, ou qualquer conteúdo antes ou depois do JSON.
+2. NUNCA invente dados. Se uma informação não estiver no documento, retorne string vazia ou array vazio.
+3. O campo 'risk' deve ser obrigatoriamente: "Baixo", "Médio", "Alto" ou "Crítico".
+4. FUJA DE ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON. Use aspas simples.
 
-REGRAS ESPECIAIS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR):
-8. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
-9. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
-10. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
-11. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
-12. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
-13. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
-14. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
-15. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica do edital — sem qualquer resumo.
+=== REGRAS PARA OCR E DOCUMENTOS DIGITALIZADOS ===
+5. ATENÇÃO MÁXIMA A PDFs DE IMAGEM: Alguns documentos são PDFs escaneados (imagens). Você DEVE ler cuidadosamente cada página como imagem, realizando OCR visual.
+6. Em documentos digitalizados, ignore marcas d'água, carimbos, logomarcas e numeração de páginas.
+7. Se a qualidade do scan for baixa, esforce-se ao máximo para interpretar o texto. Indique no fullSummary se houve dificuldade de leitura.
+8. ESTRATÉGIA DE BUSCA: Analise o índice/sumário do documento (se houver) para localizar rapidamente as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA, TERMO DE REFERÊNCIA e CLÁUSULAS FINANCEIRAS.
+
+=== REGRAS PARA RESUMO EXECUTIVO (summary) ===
+9. O campo 'summary' deve ser um RESUMO EXECUTIVO PROFISSIONAL com no mínimo 300 palavras, contendo:
+   a) OBJETO DETALHADO: Descrição completa e precisa do que está sendo licitado (não apenas o título).
+   b) ESCOPO DOS SERVIÇOS/FORNECIMENTO: Detalhamento do que será executado/fornecido.
+   c) LOCAL DE EXECUÇÃO: Onde os serviços serão prestados ou onde os bens serão entregues.
+   d) PRAZO DE VIGÊNCIA/EXECUÇÃO: Duração do contrato ou prazo de entrega.
+   e) CONDIÇÕES ESPECIAIS: Requisitos particulares deste edital.
+   f) CRITÉRIO DE JULGAMENTO: Menor preço, técnica e preço, maior desconto, etc.
+
+=== REGRAS PARA DADOS FINANCEIROS (PRECISÃO OBRIGATÓRIA) ===
+10. O campo 'estimatedValue' DEVE conter o valor EXATO em formato numérico (sem formatação). Se houver valor total estimado e valor por lote, use o valor TOTAL.
+11. O campo 'pricingConsiderations' deve conter uma ANÁLISE FINANCEIRA DETALHADA incluindo:
+    a) Valor total estimado da contratação e como foi composto (média de cotações, tabela SINAPI, etc.).
+    b) Critério de aceitabilidade de preços (preço máximo, valor de referência).
+    c) Condições de pagamento (prazo, forma, nota fiscal requerida).
+    d) Existência de garantia contratual e percentual exigido.
+    e) Critérios de reajuste/reequilíbrio econômico-financeiro.
+    f) Existe BDI (Bonificação e Despesas Indiretas)? Taxa exigida?
+    g) Dotação orçamentária mencionada.
+    h) Desconto ofertado sobre tabela (se aplicável).
+
+=== REGRAS PARA PRAZOS (deadlines) — PRECISÃO TOTAL ===
+12. O campo 'deadlines' deve ser um ARRAY com CADA prazo importante EXATAMENTE como consta no edital:
+    a) Data e hora de ABERTURA DA SESSÃO PÚBLICA (obrigatório se existir)
+    b) Prazo para IMPUGNAÇÃO do edital (com data limite calculada)
+    c) Prazo para ESCLARECIMENTOS (com data limite)
+    d) Prazo de ENTREGA DE PROPOSTAS (data/hora início e fim)
+    e) Prazo de VIGÊNCIA CONTRATUAL
+    f) Prazo de ENTREGA DOS BENS ou EXECUÇÃO DOS SERVIÇOS
+    g) Prazo para assinatura do contrato após homologação
+    h) Quaisquer outros prazos mencionados no edital
+    FORMATO: "DD/MM/AAAA HH:MM - Descrição completa do prazo" (use 24h)
+
+=== REGRAS PARA DOCUMENTOS EXIGIDOS (requiredDocuments) ===
+13. COLOQUE A REFERÊNCIA EXATA do item do edital no campo 'item' (Ex: "6.1.1.a", "9.2.3").
+14. CRIE UMA ENTRADA SEPARADA PARA CADA DOCUMENTO. Se um item lista 5 documentos, retorne 5 objetos.
+15. A 'description' deve conter o NOME COMPLETO do documento como descrito no edital, incluindo detalhes de validade se mencionados.
+
+=== REGRAS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR) ===
+16. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
+17. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
+18. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
+19. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
+20. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
+21. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
+22. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
+23. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica do edital — sem qualquer resumo.
+
+=== REGRAS PARA ITENS LICITADOS (biddingItems) ===
+24. Se houver tabelas de itens (lotes), extraia TODOS os itens com: número do item/lote, descrição técnica completa, unidade de medida, quantidade e valor unitário estimado (se disponível).
+25. NÃO limite a 3 itens. Se o edital tiver 50 itens, transcreva todos.
+
+=== REGRAS PARA PARECER (fullSummary) ===
+26. O campo 'fullSummary' deve conter um PARECER TÉCNICO-JURÍDICO de no mínimo 400 palavras, incluindo:
+    a) Análise da viabilidade de participação.
+    b) Pontos de atenção jurídica e riscos.
+    c) Análise das exigências de habilitação (se são proporcionais).
+    d) Análise das condições contratuais.
+    e) Recomendações estratégicas para o licitante.
+    f) Avaliação do regime de execução.
+
+=== REGRAS PARA PENALIDADES (penalties) ===
+27. Extrair TODAS as penalidades com valores/percentuais EXATOS: multas (% sobre valor contratual), advertências, suspensão (prazo), impedimento (prazo), declaração de inidoneidade.
 
 FORMATO DE SAÍDA JSON:
 {
   "process": {
-    "title": "Número e órgão emissor (Ex: Pregão Eletrônico 01/2026 - Prefeitura de X)",
-    "summary": "Resumo detalhado do objeto com base no Termo de Referência",
-    "modality": "Modalidade da licitação",
+    "title": "Número EXATO e órgão emissor (Ex: Pregão Eletrônico nº 01/2026 - Prefeitura Municipal de Fortaleza/CE)",
+    "summary": "RESUMO EXECUTIVO detalhado com mínimo 300 palavras contendo: objeto, escopo, local de execução, prazo de vigência, condições especiais e critério de julgamento",
+    "modality": "Modalidade EXATA (Pregão Eletrônico, Concorrência Eletrônica, Dispensa, RDC, etc.)",
     "portal": "PNCP",
     "estimatedValue": 100000.50,
     "sessionDate": "2026-03-15T09:00:00Z",
@@ -1047,23 +1138,23 @@ FORMATO DE SAÍDA JSON:
   },
   "analysis": {
     "requiredDocuments": {
-       "Habilitação Jurídica": [ { "item": "9.1.1", "description": "Certidão A" } ],
-       "Regularidade Fiscal, Social e Trabalhista": [ { "item": "9.2.1", "description": "Doc X" } ],
-       "Qualificação Técnica": [ { "item": "9.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, incluindo quantidades mínimas, especificações e parcelas de maior relevância" } ],
-       "Qualificação Econômica Financeira": [ { "item": "9.4.1", "description": "Balanço Z" } ],
-       "Outros": [ { "item": "9.5.1", "description": "Declaração W" } ]
+       "Habilitação Jurídica": [ { "item": "6.1.1", "description": "Nome EXATO e completo do documento conforme edital" } ],
+       "Regularidade Fiscal, Social e Trabalhista": [ { "item": "6.2.1", "description": "Certidão Conjunta de Débitos Relativos a Tributos Federais e à Dívida Ativa da União" } ],
+       "Qualificação Técnica": [ { "item": "6.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, incluindo quantidades mínimas, especificações e parcelas de maior relevância" } ],
+       "Qualificação Econômica Financeira": [ { "item": "6.4.1", "description": "Balanço patrimonial e demonstrações contábeis do último exercício social com índice de LG >= 1,0" } ],
+       "Declarações e Outros": [ { "item": "6.5.1", "description": "Declaração de inexistência de fato superveniente impeditivo" } ]
     },
-    "biddingItems": "Detalhamento extensivo de todos os itens/lotes licitados com quantidades e especificações técnicas",
-    "pricingConsiderations": "Análise sobre formação de preços, critérios de aceitabilidade e julgamento",
-    "irregularitiesFlags": [ "Pontos de atenção e riscos identificados" ],
-    "fullSummary": "Parecer profissional completo sobre a licitação",
-    "deadlines": [ "DD/MM/AAAA HH:MM - Descrição do prazo" ],
-    "penalties": "Detalhamento das penalidades previstas",
+    "biddingItems": "Detalhamento extensivo de TODOS os itens/lotes licitados com: número do item, descrição técnica completa, unidade, quantidade e valor unitário estimado",
+    "pricingConsiderations": "ANÁLISE FINANCEIRA DETALHADA: valor total, composição de preço, critério de aceitabilidade, condições de pagamento, garantia contratual, reajuste, BDI, dotação orçamentária",
+    "irregularitiesFlags": [ "Pontos de atenção, riscos e possíveis irregularidades identificados no edital" ],
+    "fullSummary": "PARECER TÉCNICO-JURÍDICO de mínimo 400 palavras com: análise de viabilidade, pontos jurídicos, proporcionalidade das exigências, condições contratuais, recomendações estratégicas",
+    "deadlines": [ "DD/MM/AAAA HH:MM - Descrição completa do prazo (abertura, impugnação, esclarecimento, propostas, vigência, entrega, etc.)" ],
+    "penalties": "Detalhamento COMPLETO das penalidades com valores/percentuais EXATOS: multas, advertências, suspensão, impedimento, inidoneidade",
     "qualificationRequirements": "TRANSCRIÇÃO COMPLETA E LITERAL de TODA a seção de Qualificação Técnica, incluindo cada atestado exigido com quantidades mínimas, parcelas de maior relevância, profissionais exigidos com registros em conselhos, CATs, e quaisquer requisitos técnicos. NÃO RESUMA."
   }
 }`;
 
-        console.log(`[PNCP-AI] Calling Gemini with ${pdfParts.length} PDF parts...`);
+        console.log(`[PNCP-AI] Calling Gemini with ${pdfParts.length} PDF parts (files: ${downloadedFiles.join(', ')})...`);
         const startTime = Date.now();
 
         const response = await callGeminiWithRetry(ai.models, {
@@ -1072,13 +1163,13 @@ FORMATO DE SAÍDA JSON:
                 role: 'user',
                 parts: [
                     ...pdfParts,
-                    { text: 'Analise este edital de licitação e retorne EXCLUSIVAMENTE o objeto JSON especificado. NÃO adicione texto antes ou depois.' }
+                    { text: `Analise este(s) edital(is) de licitação com MÁXIMA PROFUNDIDADE e PRECISÃO. Os documentos podem ser PDFs nativos ou PDFs de imagem (escaneados/digitalizados) — em caso de imagens, realize OCR visual cuidadoso.\n\nRETORNE EXCLUSIVAMENTE o objeto JSON especificado nas instruções do sistema. NÃO adicione texto explicativo antes ou depois do JSON.\n\nATENÇÃO ESPECIAL:\n1. Extraia TODOS os prazos com datas e horários EXATOS\n2. Extraia o valor estimado EXATO (numérico)\n3. Detalhe CADA documento de habilitação com referência do item do edital\n4. O resumo executivo deve ter no mínimo 300 palavras\n5. O parecer (fullSummary) deve ter no mínimo 400 palavras\n6. Extraia TODAS as penalidades com percentuais exatos\n7. NÃO resuma a Qualificação Técnica — transcreva literalmente` }
                 ]
             }],
             config: {
                 systemInstruction,
                 temperature: 0.1,
-                maxOutputTokens: 16384
+                maxOutputTokens: 32768
             }
         });
 
@@ -1431,61 +1522,118 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
         }
         const ai = new GoogleGenAI({ apiKey });
 
-        // 3. System Prompt & Strict JSON Schema Definition (Enhanced)
+        // 3. System Prompt & Strict JSON Schema Definition (Enhanced with precision rules)
         const systemInstruction = `
-Você é um consultor jurídico sênior especializado em licitações públicas brasileiras (Lei 14.133/2021).
-SUA MISSÃO É extrair INDIVIDUALmente cada documento exigido.
+Você é um consultor jurídico sênior e analista financeiro especializado em licitações públicas brasileiras (Lei 14.133/2021 e Lei 8.666/1993).
+SUA MISSÃO É realizar uma ANÁLISE PROFUNDA, PRECISA E EXAUSTIVA do edital, com atenção especial a:
+- Resumo executivo detalhado e profissional
+- Dados financeiros EXATOS (valores, garantias, reajustes)
+- Prazos com datas e horários PRECISOS
+- Documentos de habilitação com referência EXATA ao item do edital
+- Qualificação técnica SEM QUALQUER RESUMO
+
 NÃO AGRUPE documentos em uma única string. Se o edital pede "Certidão Federal, Estadual e Municipal", você deve criar TRÊS entradas separadas no JSON.
 
-REGRAS CRÍTICAS:
-1. Responda APENAS com um objeto JSON válido. Não adicione crases Markdown ou textos antes/depois.
-2. Não invente dados. Se não encontrar, retorne string vazia.
+=== REGRAS CRÍTICAS ===
+1. Responda APENAS com um objeto JSON válido. NUNCA adicione crases Markdown, textos explicativos, ou qualquer conteúdo antes ou depois do JSON.
+2. NUNCA invente dados. Se uma informação não estiver no documento, retorne string vazia ou array vazio.
 3. O campo 'risk' deve ser obrigatoriamente: "Baixo", "Médio", "Alto" ou "Crítico".
-4. Nos documentos exigidos ('requiredDocuments'), COLOQUE A REFERÊNCIA EXATA do item do edital (Ex: "9.1.5") no campo 'item', e o nome do documento no campo 'description' (Ex: "Certidão Negativa Estadual").
-5. CRIE UMA ENTRADA PARA CADA DOCUMENTO. Se um item do edital (ex: 9.1) listar 5 documentos, retorne 5 objetos no array da categoria correspondente.
-6. Detalhe os itens licitados no campo 'biddingItems', extraindo as quantias e descrições técnicas do Termo de Referência.
-7. FUGA ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON.
-8. OTIMIZAÇÃO OCR: Este documento pode ser uma imagem digitalizada. Analise cuidadosamente a imagem de cada página.
-9. EXATIDÃO EM SCANS: Em documentos digitalizados, ignore marcas d'água, carimbos ou logomarcas.
-10. ESTRATÉGIA DE BUSCA: Analise o índice do documento (se houver) para localizar as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA e TERMO DE REFERÊNCIA.
-11. TRANSCRIÇÃO DE ITENS: Se houver tabelas de itens (lotes) no TR, extraia os dados técnicos e quantidades.
+4. FUJA DE ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON. Use aspas simples.
 
-REGRAS ESPECIAIS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR):
-12. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
-13. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
-14. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
-15. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
-16. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
-17. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
-18. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
-19. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica — sem qualquer resumo.
-20. Se a resposta ficar longa, resuma "summary" e "biddingItems" mas NUNCA resuma a Qualificação Técnica.
+=== REGRAS PARA OCR E DOCUMENTOS DIGITALIZADOS ===
+5. ATENÇÃO MÁXIMA A PDFs DE IMAGEM: Alguns documentos são PDFs escaneados (imagens/fotografias de páginas). Você DEVE ler cuidadosamente cada página como imagem, realizando OCR visual.
+6. Em documentos digitalizados, ignore marcas d'água, carimbos, logomarcas e numeração de páginas.
+7. Se a qualidade do scan for baixa, esforce-se ao máximo para interpretar o texto. Indique no fullSummary se houve dificuldade de leitura.
+8. ESTRATÉGIA DE BUSCA: Analise o índice/sumário do documento (se houver) para localizar rapidamente as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA, TERMO DE REFERÊNCIA e CLÁUSULAS FINANCEIRAS.
+
+=== REGRAS PARA RESUMO EXECUTIVO (summary) ===
+9. O campo 'summary' deve ser um RESUMO EXECUTIVO PROFISSIONAL com no mínimo 300 palavras, contendo:
+   a) OBJETO DETALHADO: Descrição completa e precisa do que está sendo licitado (não apenas o título).
+   b) ESCOPO DOS SERVIÇOS/FORNECIMENTO: Detalhamento do que será executado/fornecido.
+   c) LOCAL DE EXECUÇÃO: Onde os serviços serão prestados ou onde os bens serão entregues.
+   d) PRAZO DE VIGÊNCIA/EXECUÇÃO: Duração do contrato ou prazo de entrega.
+   e) CONDIÇÕES ESPECIAIS: Requisitos particulares deste edital.
+   f) CRITÉRIO DE JULGAMENTO: Menor preço, técnica e preço, maior desconto, etc.
+
+=== REGRAS PARA DADOS FINANCEIROS (PRECISÃO OBRIGATÓRIA) ===
+10. O campo 'estimatedValue' DEVE conter o valor EXATO em formato numérico (sem formatação). Se houver valor total estimado e valor por lote, use o valor TOTAL.
+11. O campo 'pricingConsiderations' deve conter uma ANÁLISE FINANCEIRA DETALHADA incluindo:
+    a) Valor total estimado da contratação e como foi composto (média de cotações, tabela SINAPI, etc.).
+    b) Critério de aceitabilidade de preços (preço máximo, valor de referência).
+    c) Condições de pagamento (prazo, forma, nota fiscal requerida).
+    d) Existência de garantia contratual e percentual exigido.
+    e) Critérios de reajuste/reequilíbrio econômico-financeiro.
+    f) Existe BDI (Bonificação e Despesas Indiretas)? Taxa exigida?
+    g) Dotação orçamentária mencionada.
+    h) Desconto ofertado sobre tabela (se aplicável).
+
+=== REGRAS PARA PRAZOS (deadlines) — PRECISÃO TOTAL ===
+12. O campo 'deadlines' deve ser um ARRAY com CADA prazo importante EXATAMENTE como consta no edital:
+    a) Data e hora de ABERTURA DA SESSÃO PÚBLICA (obrigatório se existir)
+    b) Prazo para IMPUGNAÇÃO do edital (com data limite calculada)
+    c) Prazo para ESCLARECIMENTOS (com data limite)
+    d) Prazo de ENTREGA DE PROPOSTAS (data/hora início e fim)
+    e) Prazo de VIGÊNCIA CONTRATUAL
+    f) Prazo de ENTREGA DOS BENS ou EXECUÇÃO DOS SERVIÇOS
+    g) Prazo para assinatura do contrato após homologação
+    h) Quaisquer outros prazos mencionados no edital
+    FORMATO: "DD/MM/AAAA HH:MM - Descrição completa do prazo" (use 24h)
+
+=== REGRAS PARA DOCUMENTOS EXIGIDOS (requiredDocuments) ===
+13. COLOQUE A REFERÊNCIA EXATA do item do edital no campo 'item' (Ex: "6.1.1.a", "9.2.3").
+14. CRIE UMA ENTRADA SEPARADA PARA CADA DOCUMENTO. Se um item lista 5 documentos, retorne 5 objetos.
+15. A 'description' deve conter o NOME COMPLETO do documento como descrito no edital, incluindo detalhes de validade se mencionados.
+16. Detalhe os itens licitados no campo 'biddingItems', extraindo as quantias e descrições técnicas do Termo de Referência.
+17. TRANSCRIÇÃO DE ITENS: Se houver tabelas de itens (lotes) no TR, extraia TODOS os dados técnicos e quantidades.
+
+=== REGRAS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR) ===
+18. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
+19. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
+20. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
+21. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
+22. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
+23. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
+24. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
+25. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica — sem qualquer resumo.
+26. Se a resposta ficar longa, resuma "biddingItems" mas NUNCA resuma a Qualificação Técnica nem o resumo executivo.
+
+=== REGRAS PARA PARECER (fullSummary) ===
+27. O campo 'fullSummary' deve conter um PARECER TÉCNICO-JURÍDICO de no mínimo 400 palavras, incluindo:
+    a) Análise da viabilidade de participação.
+    b) Pontos de atenção jurídica e riscos.
+    c) Análise das exigências de habilitação (se são proporcionais).
+    d) Análise das condições contratuais.
+    e) Recomendações estratégicas para o licitante.
+    f) Avaliação do regime de execução.
+
+=== REGRAS PARA PENALIDADES (penalties) ===
+28. Extrair TODAS as penalidades com valores/percentuais EXATOS: multas (% sobre valor contratual), advertências, suspensão (prazo), impedimento (prazo), declaração de inidoneidade.
 
 EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
 {
   "process": {
-    "title": "Extraia o número e órgão emissor (Ex: Pregão Eletrônico 01/2026 - Ministério da Saúde)",
-    "summary": "Resuma detalhadamente o que está sendo comprado com base no TR",
-    "modality": "Pregão Eletrônico, Concorrência, Dispensa, etc",
-    "portal": "Nome do Portal compras gov br, PNCP, etc",
+    "title": "Número EXATO e órgão emissor (Ex: Pregão Eletrônico nº 01/2026 - Prefeitura Municipal de Fortaleza/CE)",
+    "summary": "RESUMO EXECUTIVO detalhado com mínimo 300 palavras contendo: objeto, escopo, local de execução, prazo de vigência, condições especiais e critério de julgamento",
+    "modality": "Modalidade EXATA (Pregão Eletrônico, Concorrência Eletrônica, Dispensa, RDC, etc.)",
+    "portal": "Nome do Portal (Compras.gov.br, PNCP, BEC, Licitanet, etc.)",
     "estimatedValue": 100000.50,
     "sessionDate": "2026-03-15T09:00:00Z",
     "risk": "Baixo"
   },
   "analysis": {
     "requiredDocuments": {
-       "Habilitação Jurídica": [ { "item": "9.1.1", "description": "Certidão A" }, { "item": "9.1.1", "description": "Certidão B" } ],
-       "Regularidade Fiscal, Social e Trabalhista": [ { "item": "9.2.1", "description": "Documento X" } ],
-       "Qualificação Técnica": [ { "item": "9.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, com quantidades mínimas, especificações e parcelas de maior relevância" } ],
-       "Qualificação Econômica Financeira": [ { "item": "9.4.1", "description": "Balanço Z" } ],
-       "Outros": [ { "item": "9.5.1", "description": "Declaração W" } ]
+       "Habilitação Jurídica": [ { "item": "6.1.1", "description": "Nome EXATO e completo do documento conforme edital" } ],
+       "Regularidade Fiscal, Social e Trabalhista": [ { "item": "6.2.1", "description": "Certidão Conjunta de Débitos Relativos a Tributos Federais e à Dívida Ativa da União" } ],
+       "Qualificação Técnica": [ { "item": "6.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, incluindo quantidades mínimas, especificações e parcelas de maior relevância" } ],
+       "Qualificação Econômica Financeira": [ { "item": "6.4.1", "description": "Balanço patrimonial e demonstrações contábeis do último exercício social com índice de LG >= 1,0" } ],
+       "Declarações e Outros": [ { "item": "6.5.1", "description": "Declaração de inexistência de fato superveniente impeditivo" } ]
     },
-    "biddingItems": "Detalhe extensivo dos itens sendo licitados",
-    "pricingConsiderations": "Análise sobre formação de preços",
-    "irregularitiesFlags": [ "Pontos de atenção e riscos" ],
-    "fullSummary": "Parecer opinativo profissional",
-    "deadlines": [ "DD/MM/AAAA - Prazo" ],
-    "penalties": "Detalhamento das penalidades",
+    "biddingItems": "Detalhamento extensivo de TODOS os itens/lotes licitados com: número do item, descrição técnica completa, unidade, quantidade e valor unitário estimado",
+    "pricingConsiderations": "ANÁLISE FINANCEIRA DETALHADA: valor total, composição de preço, critério de aceitabilidade, condições de pagamento, garantia contratual, reajuste, BDI, dotação orçamentária",
+    "irregularitiesFlags": [ "Pontos de atenção, riscos e possíveis irregularidades identificados no edital" ],
+    "fullSummary": "PARECER TÉCNICO-JURÍDICO de mínimo 400 palavras com: análise de viabilidade, pontos jurídicos, proporcionalidade das exigências, condições contratuais, recomendações estratégicas",
+    "deadlines": [ "DD/MM/AAAA HH:MM - Descrição completa do prazo (abertura, impugnação, esclarecimento, propostas, vigência, entrega, etc.)" ],
+    "penalties": "Detalhamento COMPLETO das penalidades com valores/percentuais EXATOS: multas, advertências, suspensão, impedimento, inidoneidade",
     "qualificationRequirements": "TRANSCRIÇÃO COMPLETA E LITERAL de TODA a seção de Qualificação Técnica, incluindo cada atestado com quantidades, parcelas de maior relevância, profissionais exigidos, CATs, e todos os requisitos técnicos. NÃO RESUMA."
   }
 }
@@ -1501,14 +1649,14 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
                     role: 'user',
                     parts: [
                         ...pdfParts,
-                        { text: `Analise este edital de licitação e retorne EXCLUSIVAMENTE o objeto JSON especificado nas instruções do sistema. NÃO adicione texto antes ou depois. NÃO use crases markdown.` }
+                        { text: `Analise este(s) edital(is) de licitação com MÁXIMA PROFUNDIDADE e PRECISÃO. Os documentos podem ser PDFs nativos ou PDFs de imagem (escaneados/digitalizados) — em caso de imagens, realize OCR visual cuidadoso.\n\nRETORNE EXCLUSIVAMENTE o objeto JSON especificado nas instruções do sistema. NÃO adicione texto explicativo antes ou depois do JSON.\n\nATENÇÃO ESPECIAL:\n1. Extraia TODOS os prazos com datas e horários EXATOS\n2. Extraia o valor estimado EXATO (numérico)\n3. Detalhe CADA documento de habilitação com referência do item do edital\n4. O resumo executivo deve ter no mínimo 300 palavras\n5. O parecer (fullSummary) deve ter no mínimo 400 palavras\n6. Extraia TODAS as penalidades com percentuais exatos\n7. NÃO resuma a Qualificação Técnica — transcreva literalmente` }
                     ]
                 }
             ],
             config: {
                 systemInstruction,
                 temperature: 0.1,
-                maxOutputTokens: 16384
+                maxOutputTokens: 32768
             }
         });
         const duration = (Date.now() - startTime) / 1000;
