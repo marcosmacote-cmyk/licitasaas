@@ -203,7 +203,7 @@ function App() {
 
         {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
         {activeTab === 'reports' && <ReportsPage biddings={items} companies={companies} onRefresh={refreshData} />}
-        {activeTab === 'pncp' && <PncpPage companies={companies} />}
+        {activeTab === 'pncp' && <PncpPage companies={companies} onRefresh={refreshData} />}
       </main>
     </div>
   );

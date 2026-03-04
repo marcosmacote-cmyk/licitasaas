@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
     companies: CompanyProfile[];
+    onRefresh?: () => Promise<void>;
 }
 
 const UFS = [
@@ -37,7 +38,7 @@ const STATUS_OPTIONS = [
     { value: 'todas', label: '📋 Todas' },
 ];
 
-export function PncpPage({ companies }: Props) {
+export function PncpPage({ companies, onRefresh }: Props) {
     const [savedSearches, setSavedSearches] = useState<PncpSavedSearch[]>([]);
     const [results, setResults] = useState<PncpBiddingItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -345,6 +346,8 @@ export function PncpPage({ companies }: Props) {
                 setPendingAiAnalysis(null);
                 setPncpAnalysis(null);
                 setAnalyzedPncpItem(null);
+                // Refresh global data so Licitações tab shows the new card
+                if (onRefresh) await onRefresh();
             } else {
                 throw new Error("Erro ao importar.");
             }

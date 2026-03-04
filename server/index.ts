@@ -1010,28 +1010,35 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         }
         const ai = new GoogleGenAI({ apiKey });
 
-        // 4. Use the same analysis prompt as the main analyze-edital endpoint
+        // 4. Use enhanced analysis prompt with strict no-summarization for Qualificação Técnica
         const systemInstruction = `
 Você é um consultor jurídico sênior especializado em licitações públicas brasileiras (Lei 14.133/2021).
-SUA MISSÃO É extrair INDIVIDUALmente cada documento exigido.
-NÃO AGRUPE documentos em uma única string.
+SUA MISSÃO É extrair CADA documento exigido de forma INDIVIDUAL e LITERAL.
 
 REGRAS CRÍTICAS:
 1. Responda APENAS com um objeto JSON válido. Não adicione crases Markdown ou textos antes/depois.
 2. Não invente dados. Se não encontrar, retorne string vazia.
 3. O campo 'risk' deve ser: "Baixo", "Médio", "Alto" ou "Crítico".
 4. Nos documentos exigidos, COLOQUE A REFERÊNCIA EXATA do item do edital no 'item' e o nome no 'description'.
-5. CRIE UMA ENTRADA PARA CADA DOCUMENTO.
-6. Detalhe os itens licitados em 'biddingItems'.
-7. FUGA ASPAS DUPLAS INTERNAS.
-8. OTIMIZAÇÃO OCR: analise cuidadosamente imagens digitalizadas.
-9. TRUNCAMENTO: resuma partes descritivas para garantir lista completa de documentos.
+5. CRIE UMA ENTRADA PARA CADA DOCUMENTO. Se um item lista 5 documentos, retorne 5 objetos.
+6. FUGA ASPAS DUPLAS INTERNAS: use aspas simples dentro dos valores de texto.
+7. OTIMIZAÇÃO OCR: analise cuidadosamente imagens digitalizadas.
+
+REGRAS ESPECIAIS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR):
+8. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
+9. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
+10. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
+11. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
+12. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
+13. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
+14. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
+15. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica do edital — sem qualquer resumo.
 
 FORMATO DE SAÍDA JSON:
 {
   "process": {
-    "title": "Número e órgão emissor",
-    "summary": "Resumo detalhado do objeto",
+    "title": "Número e órgão emissor (Ex: Pregão Eletrônico 01/2026 - Prefeitura de X)",
+    "summary": "Resumo detalhado do objeto com base no Termo de Referência",
     "modality": "Modalidade da licitação",
     "portal": "PNCP",
     "estimatedValue": 100000.50,
@@ -1042,17 +1049,17 @@ FORMATO DE SAÍDA JSON:
     "requiredDocuments": {
        "Habilitação Jurídica": [ { "item": "9.1.1", "description": "Certidão A" } ],
        "Regularidade Fiscal, Social e Trabalhista": [ { "item": "9.2.1", "description": "Doc X" } ],
-       "Qualificação Técnica": [ { "item": "9.3.1", "description": "Atestado Y" } ],
+       "Qualificação Técnica": [ { "item": "9.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, incluindo quantidades mínimas, especificações e parcelas de maior relevância" } ],
        "Qualificação Econômica Financeira": [ { "item": "9.4.1", "description": "Balanço Z" } ],
        "Outros": [ { "item": "9.5.1", "description": "Declaração W" } ]
     },
-    "biddingItems": "Detalhamento dos itens...",
-    "pricingConsiderations": "Resumo sobre formação de preços...",
-    "irregularitiesFlags": [ "Risco 1...", "Risco 2..." ],
-    "fullSummary": "Parecer profissional completo...",
-    "deadlines": [ "Data - Prazo 1", "Data - Prazo 2" ],
-    "penalties": "Resumo das penalidades...",
-    "qualificationRequirements": "Resumo da Qualificação Técnica..."
+    "biddingItems": "Detalhamento extensivo de todos os itens/lotes licitados com quantidades e especificações técnicas",
+    "pricingConsiderations": "Análise sobre formação de preços, critérios de aceitabilidade e julgamento",
+    "irregularitiesFlags": [ "Pontos de atenção e riscos identificados" ],
+    "fullSummary": "Parecer profissional completo sobre a licitação",
+    "deadlines": [ "DD/MM/AAAA HH:MM - Descrição do prazo" ],
+    "penalties": "Detalhamento das penalidades previstas",
+    "qualificationRequirements": "TRANSCRIÇÃO COMPLETA E LITERAL de TODA a seção de Qualificação Técnica, incluindo cada atestado exigido com quantidades mínimas, parcelas de maior relevância, profissionais exigidos com registros em conselhos, CATs, e quaisquer requisitos técnicos. NÃO RESUMA."
   }
 }`;
 
@@ -1438,11 +1445,21 @@ REGRAS CRÍTICAS:
 5. CRIE UMA ENTRADA PARA CADA DOCUMENTO. Se um item do edital (ex: 9.1) listar 5 documentos, retorne 5 objetos no array da categoria correspondente.
 6. Detalhe os itens licitados no campo 'biddingItems', extraindo as quantias e descrições técnicas do Termo de Referência.
 7. FUGA ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON.
-8. OTIMIZAÇÃO OCR: Este documento pode ser uma imagem digitalizada. Analise cuidadosamente a imagem de cada página. Se o texto estiver borrado ou for de difícil leitura, use o contexto jurídico para inferir o termo correto, mas priorize a fidelidade visual.
-9. TRUNCAMENTO: Se a resposta for ficar muito longa, resuma as partes descritivas ("summary", "biddingItems") para garantir que a lista de documentos ("requiredDocuments") seja entregue completa.
-10. EXATIDÃO EM SCANS: Em documentos digitalizados, ignore marcas d'água, carimbos ou logomarcas que possam obstruir o texto, focando exclusivamente na transcrição literal das exigências de habilitação.
-11. ESTRATÉGIA DE BUSCA: Analise o índice do documento (se houver) para localizar as seções de "HABILITAÇÃO", "QUALIFICAÇÃO TÉCNICA" e "TERMO DE REFERÊNCIA". Se o documento for um scan sem índice, percorra página por página procurando por palavras-chave como "Certidão", "Atestado", "Balanço", "Índice de Liquidez" e "Prazo".
-12. TRANSCRIÇÃO DE ITENS: Se houver tabelas de itens (lotes) no Termo de Referência, extraia os dados técnicos e quantidades mesmo que a imagem esteja com baixa resolução, usando a lógica do contexto do objeto da licitação.
+8. OTIMIZAÇÃO OCR: Este documento pode ser uma imagem digitalizada. Analise cuidadosamente a imagem de cada página.
+9. EXATIDÃO EM SCANS: Em documentos digitalizados, ignore marcas d'água, carimbos ou logomarcas.
+10. ESTRATÉGIA DE BUSCA: Analise o índice do documento (se houver) para localizar as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA e TERMO DE REFERÊNCIA.
+11. TRANSCRIÇÃO DE ITENS: Se houver tabelas de itens (lotes) no TR, extraia os dados técnicos e quantidades.
+
+REGRAS ESPECIAIS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR):
+12. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
+13. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
+14. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
+15. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
+16. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
+17. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
+18. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
+19. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica — sem qualquer resumo.
+20. Se a resposta ficar longa, resuma "summary" e "biddingItems" mas NUNCA resuma a Qualificação Técnica.
 
 EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
 {
@@ -1459,17 +1476,17 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
     "requiredDocuments": {
        "Habilitação Jurídica": [ { "item": "9.1.1", "description": "Certidão A" }, { "item": "9.1.1", "description": "Certidão B" } ],
        "Regularidade Fiscal, Social e Trabalhista": [ { "item": "9.2.1", "description": "Documento X" } ],
-       "Qualificação Técnica": [ { "item": "9.3.1", "description": "Atestado Y" } ],
+       "Qualificação Técnica": [ { "item": "9.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, com quantidades mínimas, especificações e parcelas de maior relevância" } ],
        "Qualificação Econômica Financeira": [ { "item": "9.4.1", "description": "Balanço Z" } ],
        "Outros": [ { "item": "9.5.1", "description": "Declaração W" } ]
     },
-    "biddingItems": "Detalhe extensivo de todos os itens sendo licitados...",
-    "pricingConsiderations": "Resumo em uma string sobre formação de preços...",
-    "irregularitiesFlags": [ "Array de strings..." ],
-    "fullSummary": "Parecer opinativo profissional...",
-    "deadlines": [ "Ex: 10/10/2026 - Prazo final para impugnação" ],
-    "penalties": "Resumo das penalidades...",
-    "qualificationRequirements": "Resumo da Qualificação Técnica..."
+    "biddingItems": "Detalhe extensivo dos itens sendo licitados",
+    "pricingConsiderations": "Análise sobre formação de preços",
+    "irregularitiesFlags": [ "Pontos de atenção e riscos" ],
+    "fullSummary": "Parecer opinativo profissional",
+    "deadlines": [ "DD/MM/AAAA - Prazo" ],
+    "penalties": "Detalhamento das penalidades",
+    "qualificationRequirements": "TRANSCRIÇÃO COMPLETA E LITERAL de TODA a seção de Qualificação Técnica, incluindo cada atestado com quantidades, parcelas de maior relevância, profissionais exigidos, CATs, e todos os requisitos técnicos. NÃO RESUMA."
   }
 }
 `;
