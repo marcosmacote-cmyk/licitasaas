@@ -62,6 +62,8 @@ export function PncpPage({ companies }: Props) {
     const [analyzingItemId, setAnalyzingItemId] = useState<string | null>(null);
     const [pncpAnalysis, setPncpAnalysis] = useState<{ process: Partial<BiddingProcess>; analysis: AiAnalysis } | null>(null);
     const [viewingAnalysisProcess, setViewingAnalysisProcess] = useState<BiddingProcess | null>(null);
+    const [analyzedPncpItem, setAnalyzedPncpItem] = useState<PncpBiddingItem | null>(null);
+    const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
 
     useEffect(() => {
         fetchSavedSearches();
@@ -244,6 +246,7 @@ export function PncpPage({ companies }: Props) {
     const handlePncpAiAnalyze = async (item: PncpBiddingItem) => {
         if (analyzingItemId) return; // prevent double-click
         setAnalyzingItemId(item.id);
+        setAnalyzedPncpItem(item);
         try {
             const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE_URL}/api/pncp/analyze`, {
@@ -325,18 +328,23 @@ export function PncpPage({ companies }: Props) {
 
             if (res.ok) {
                 const savedProcess = await res.json();
-                if (aiData) {
+                // Save AI analysis if provided (either from form or from PNCP analysis)
+                const analysisToSave = aiData || pendingAiAnalysis;
+                if (analysisToSave) {
                     await fetch(`${API_BASE_URL}/api/analysis`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ ...aiData, biddingProcessId: savedProcess.id })
+                        body: JSON.stringify({ ...analysisToSave, biddingProcessId: savedProcess.id })
                     });
                 }
-                alert("Licitação importada com sucesso para o Funil!");
+                alert("Licitação importada com sucesso para o Funil!" + (analysisToSave ? " (com análise IA)" : ""));
                 setEditingProcess(null);
+                setPendingAiAnalysis(null);
+                setPncpAnalysis(null);
+                setAnalyzedPncpItem(null);
             } else {
                 throw new Error("Erro ao importar.");
             }
@@ -770,32 +778,13 @@ export function PncpPage({ companies }: Props) {
                 <ProcessFormModal
                     initialData={editingProcess as BiddingProcess}
                     companies={companies}
-                    onClose={() => setEditingProcess(null)}
+                    onClose={() => {
+                        setEditingProcess(null);
+                        setPendingAiAnalysis(null);
+                    }}
                     onSave={(data, aiData) => {
                         handleSaveProcess(data, aiData);
                     }}
-                    onRequestAiAnalysis={pncpAnalysis ? () => {
-                        setEditingProcess(null);
-                        if (pncpAnalysis) {
-                            const fakeProcess: BiddingProcess = {
-                                id: `pncp-temp`,
-                                title: (editingProcess as any)?.title || '',
-                                summary: (editingProcess as any)?.summary || '',
-                                portal: 'PNCP',
-                                modality: (editingProcess as any)?.modality || '',
-                                status: 'Captado',
-                                estimatedValue: (editingProcess as any)?.estimatedValue || 0,
-                                sessionDate: (editingProcess as any)?.sessionDate || new Date().toISOString(),
-                                link: (editingProcess as any)?.link || '',
-                                risk: (editingProcess as any)?.risk || 'Médio',
-                                companyProfileId: (editingProcess as any)?.companyProfileId || '',
-                                createdAt: new Date().toISOString(),
-                                updatedAt: new Date().toISOString(),
-                                observations: '[]'
-                            } as BiddingProcess;
-                            setViewingAnalysisProcess(fakeProcess);
-                        }
-                    } : undefined}
                 />
             )}
 
@@ -807,8 +796,27 @@ export function PncpPage({ companies }: Props) {
                     onClose={() => {
                         setViewingAnalysisProcess(null);
                         setPncpAnalysis(null);
+                        setAnalyzedPncpItem(null);
                     }}
                     onUpdate={() => { }}
+                    onImport={() => {
+                        // Close report modal
+                        setViewingAnalysisProcess(null);
+                        // Store the AI analysis for saving with the process
+                        setPendingAiAnalysis(pncpAnalysis.analysis);
+                        // Open form pre-filled with AI + PNCP data
+                        if (analyzedPncpItem) {
+                            handleImportToFunnel(analyzedPncpItem, pncpAnalysis);
+                        } else {
+                            // Fallback: use AI process data directly  
+                            setEditingProcess({
+                                ...pncpAnalysis.process,
+                                portal: 'PNCP',
+                                status: 'Captado',
+                                companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
+                            });
+                        }
+                    }}
                 />
             )}
         </div>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Brain, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, Award, FileX, CheckCircle2, ChevronRight, Sparkles } from 'lucide-react';
+import { Brain, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, Award, FileX, CheckCircle2, ChevronRight, Sparkles, Plus } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess, CompanyDocument } from '../types';
 import { API_BASE_URL } from '../config';
 import { aiService } from '../services/ai';
@@ -10,6 +10,7 @@ interface Props {
     process: BiddingProcess;
     onClose: () => void;
     onUpdate: () => void;
+    onImport?: () => void;
 }
 
 interface ChatMessage {
@@ -18,7 +19,7 @@ interface ChatMessage {
     text: string;
 }
 
-export function AiReportModal({ analysis, process, onClose, onUpdate }: Props) {
+export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }: Props) {
     const [activeTab, setActiveTab] = useState<'report' | 'chat'>('report');
     const [messages, setMessages] = useState<ChatMessage[]>(() => {
         try {
@@ -620,9 +621,35 @@ export function AiReportModal({ analysis, process, onClose, onUpdate }: Props) {
                         <span>•</span>
                         <span>{new Date(analysis.analyzedAt).toLocaleString('pt-BR')}</span>
                     </div>
-                    <button className="btn btn-outline" onClick={onClose} style={{ borderRadius: '12px', padding: '10px 24px' }}>
-                        Fechar Painel
-                    </button>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        {onImport && (
+                            <button
+                                onClick={onImport}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px 24px',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                                    color: 'white',
+                                    fontWeight: 700,
+                                    fontSize: '0.875rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.35)',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.45)'; }}
+                                onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.35)'; }}
+                            >
+                                <Plus size={16} /> Importar para o Funil
+                            </button>
+                        )}
+                        <button className="btn btn-outline" onClick={onClose} style={{ borderRadius: '12px', padding: '10px 24px' }}>
+                            Fechar Painel
+                        </button>
+                    </div>
                 </div>
             </div>
 
