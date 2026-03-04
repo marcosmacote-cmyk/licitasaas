@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { CheckCircle2, FileArchive, Loader2, Search, ChevronDown, ChevronUp, XCircle, Sparkles, Shield, FileSearch, Briefcase, FileText, HelpCircle, AlertTriangle, Eye, Package } from 'lucide-react';
+import { CheckCircle2, FileArchive, Loader2, Search, ChevronDown, ChevronUp, XCircle, Sparkles, Shield, FileSearch, Briefcase, FileText, HelpCircle, AlertTriangle, Eye, Package, ClipboardList } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, CompanyDocument } from '../../types';
 
@@ -662,6 +664,167 @@ export function DossierExporter({ biddings, companies }: Props) {
         }
     };
 
+    const handleExportPdfReport = () => {
+        if (!selectedBidding || !selectedCompany) return;
+
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const now = new Date();
+        const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+        // ─── Header ───
+        doc.setFillColor(37, 99, 235);
+        doc.rect(0, 0, pageWidth, 32, 'F');
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.text('Relatório de Conformidade Documental', 14, 15);
+        doc.setFontSize(9);
+        doc.text('Exportador de Dossiê — LicitaSaaS', 14, 22);
+        doc.text(`Gerado em: ${dateStr}`, 14, 28);
+
+        // ─── Bidding Info ───
+        let y = 42;
+        doc.setTextColor(30, 30, 30);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Dados da Licitação', 14, y);
+        y += 7;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+
+        const biddingInfo = [
+            ['Processo', selectedBidding.title || '-'],
+            ['Modalidade', selectedBidding.modality || '-'],
+            ['Portal', selectedBidding.portal || '-'],
+            ['Empresa', selectedCompany.razaoSocial || '-'],
+            ['CNPJ', selectedCompany.cnpj || '-'],
+        ];
+
+        biddingInfo.forEach(([label, value]) => {
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${label}: `, 14, y);
+            const labelWidth = doc.getTextWidth(`${label}: `);
+            doc.setFont('helvetica', 'normal');
+            doc.text(String(value).substring(0, 100), 14 + labelWidth, y);
+            y += 5;
+        });
+
+        // ─── Readiness Score ───
+        y += 4;
+        doc.setFillColor(240, 245, 255);
+        doc.roundedRect(14, y, pageWidth - 28, 18, 3, 3, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(37, 99, 235);
+        doc.text(`Índice de Prontidão: ${Math.round(readinessScore)}%`, 20, y + 7);
+        doc.setFontSize(9);
+        doc.setTextColor(34, 197, 94);
+        doc.text(`✓ ${satisfiedCount} vinculados`, 20, y + 13);
+        doc.setTextColor(239, 68, 68);
+        doc.text(`✗ ${pendingCount} pendentes`, 70, y + 13);
+        if (ignoredCount > 0) {
+            doc.setTextColor(148, 163, 184);
+            doc.text(`— ${ignoredCount} ignorados`, 120, y + 13);
+        }
+        y += 24;
+
+        // ─── Table ───
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 30, 30);
+        doc.text('Associação de Documentos às Exigências', 14, y);
+        y += 3;
+
+        const tableData = requiredList.map((reqObj, idx) => {
+            const reqText = reqObj.description;
+            const manualIds = manualMatches[reqText] || [];
+            const isIgnored = manualIds.includes('IGNORAR');
+
+            if (isIgnored) {
+                return [
+                    `${reqObj.item || (idx + 1)}`,
+                    reqText.substring(0, 120) + (reqText.length > 120 ? '...' : ''),
+                    '— Ignorado —',
+                    '⏭ N/A',
+                ];
+            }
+
+            const matchedDocNames = manualIds
+                .filter(id => id !== 'IGNORAR')
+                .map(id => {
+                    const d = companyDocs.find(doc => doc.id === id);
+                    return d ? `${d.docType} (${d.fileName})` : '';
+                })
+                .filter(Boolean)
+                .join('; ');
+
+            return [
+                `${reqObj.item || (idx + 1)}`,
+                reqText.substring(0, 120) + (reqText.length > 120 ? '...' : ''),
+                matchedDocNames || '— Sem vínculo —',
+                matchedDocNames ? '✅ Vinculado' : '❌ Pendente',
+            ];
+        });
+
+        autoTable(doc, {
+            head: [['#', 'Exigência do Edital', 'Documento Vinculado', 'Status']],
+            body: tableData,
+            startY: y,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [37, 99, 235],
+                textColor: 255,
+                fontSize: 8,
+                fontStyle: 'bold',
+                cellPadding: 3,
+            },
+            bodyStyles: {
+                fontSize: 7,
+                cellPadding: 2.5,
+                lineColor: [220, 220, 220],
+            },
+            columnStyles: {
+                0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+                1: { cellWidth: 75 },
+                2: { cellWidth: 65 },
+                3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+            },
+            alternateRowStyles: {
+                fillColor: [248, 250, 252],
+            },
+            didParseCell: (data: any) => {
+                if (data.section === 'body' && data.column.index === 3) {
+                    const text = String(data.cell.raw);
+                    if (text.includes('Vinculado')) {
+                        data.cell.styles.textColor = [34, 197, 94];
+                    } else if (text.includes('Pendente')) {
+                        data.cell.styles.textColor = [239, 68, 68];
+                    } else {
+                        data.cell.styles.textColor = [148, 163, 184];
+                    }
+                }
+            },
+            margin: { left: 14, right: 14 },
+        });
+
+        // ─── Footer ───
+        const pageCount = doc.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7);
+            doc.setTextColor(150);
+            doc.text(
+                `Página ${i} de ${pageCount} — Gerado automaticamente por LicitaSaaS`,
+                pageWidth / 2,
+                doc.internal.pageSize.getHeight() - 8,
+                { align: 'center' }
+            );
+        }
+
+        const safeName = (selectedBidding.title || 'Processo').substring(0, 30).replace(/[^a-z0-9]/gi, '_');
+        doc.save(`Relatorio_Conformidade_${safeName}_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}.pdf`);
+    };
+
     const satisfiedCount = requiredList.filter(r => {
         const ids = manualMatches[r.description];
         return ids && ids.length > 0 && !ids.includes('IGNORAR');
@@ -787,20 +950,39 @@ export function DossierExporter({ biddings, companies }: Props) {
                         </div>
                     </div>
 
-                    <button
-                        className="btn btn-primary"
-                        onClick={handleExportZip}
-                        disabled={isExporting || matchedDocs.length === 0}
-                        style={{
-                            padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px',
-                            background: matchedDocs.length > 0 ? 'linear-gradient(135deg, var(--color-primary), #4f46e5)' : undefined,
-                            borderRadius: '12px', fontWeight: 700, fontSize: '0.875rem',
-                            boxShadow: matchedDocs.length > 0 ? '0 4px 12px rgba(37,99,235,0.25)' : undefined,
-                        }}
-                    >
-                        {isExporting ? <Loader2 size={18} className="spin" /> : <Package size={18} />}
-                        {isExporting ? 'Gerando ZIP...' : `Exportar Dossiê (${matchedDocs.length} doc${matchedDocs.length !== 1 ? 's' : ''})`}
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <button
+                            className="btn btn-outline"
+                            onClick={handleExportPdfReport}
+                            disabled={requiredList.length === 0}
+                            style={{
+                                padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px',
+                                borderRadius: '12px', fontWeight: 600, fontSize: '0.8125rem',
+                                border: '1px solid rgba(139,92,246,0.3)',
+                                color: '#7c3aed',
+                                background: 'rgba(139,92,246,0.05)',
+                            }}
+                            title="Exportar relatório PDF de conformidade documental"
+                        >
+                            <ClipboardList size={16} />
+                            Relatório PDF
+                        </button>
+
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleExportZip}
+                            disabled={isExporting || matchedDocs.length === 0}
+                            style={{
+                                padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px',
+                                background: matchedDocs.length > 0 ? 'linear-gradient(135deg, var(--color-primary), #4f46e5)' : undefined,
+                                borderRadius: '12px', fontWeight: 700, fontSize: '0.875rem',
+                                boxShadow: matchedDocs.length > 0 ? '0 4px 12px rgba(37,99,235,0.25)' : undefined,
+                            }}
+                        >
+                            {isExporting ? <Loader2 size={18} className="spin" /> : <Package size={18} />}
+                            {isExporting ? 'Gerando ZIP...' : `Exportar Dossiê (${matchedDocs.length} doc${matchedDocs.length !== 1 ? 's' : ''})`}
+                        </button>
+                    </div>
                 </div>
             )}
 
