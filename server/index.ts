@@ -939,7 +939,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                     maxRedirects: 5
                 } as any);
 
-                const buffer = Buffer.from(fileRes.data);
+                const buffer = Buffer.from(fileRes.data as ArrayBuffer);
                 if (buffer.length > 0) {
                     const mimeType = fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/pdf';
                     pdfParts.push({
