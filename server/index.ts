@@ -1259,7 +1259,8 @@ FORMATO DE SAÍDA JSON:
             config: {
                 systemInstruction,
                 temperature: 0.1,
-                maxOutputTokens: 32768
+                maxOutputTokens: 32768,
+                responseMimeType: 'application/json'
             }
         });
 
@@ -1708,7 +1709,8 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
             config: {
                 systemInstruction,
                 temperature: 0.1,
-                maxOutputTokens: 32768
+                maxOutputTokens: 32768,
+                responseMimeType: 'application/json'
             }
         });
         const duration = (Date.now() - startTime) / 1000;
