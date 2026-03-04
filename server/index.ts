@@ -27,7 +27,8 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Auth
 app.post('/api/auth/login', async (req, res) => {
@@ -1836,6 +1837,7 @@ app.post('/api/proposals/ai-letter', authenticateToken, async (req: any, res) =>
 
         const bidding = await prisma.biddingProcess.findFirst({
             where: { id: biddingProcessId, tenantId: req.user.tenantId },
+            include: { aiAnalysis: true }
         });
         const company = await prisma.companyProfile.findFirst({
             where: { id: companyProfileId, tenantId: req.user.tenantId },
@@ -1848,9 +1850,10 @@ app.post('/api/proposals/ai-letter', authenticateToken, async (req: any, res) =>
 
         const ai = new GoogleGenAI({ apiKey });
 
-        const prompt = `Gere uma CARTA PROPOSTA formal para licitacao publica brasileira.
+        const prompt = `Gere uma CARTA PROPOSTA formal para licitacao publica brasileira baseada estritamente na Lei 14.133/2021.
+Você deve adequar sua carta ao OBJETO e às EXIGÊNCIAS detalhadas abaixo, priorizando o Modelo de Carta Proposta do edital (caso esteja no Resumo do Edital).
 
-DADOS:
+DADOS DA LICITAÇÃO E EMPRESA:
 - Licitacao: ${bidding.title}
 - Modalidade: ${bidding.modality}
 - Orgao: Conforme edital
@@ -1863,19 +1866,21 @@ DADOS:
 - Validade da Proposta: ${validityDays || 60} dias
 - Resumo dos Itens: ${itemsSummary || 'Conforme planilha de precos em anexo'}
 
-INSTRUCOES:
-1. Use formato formal de carta comercial
-2. Enderece ao Pregoeiro/Comissao de Licitacao
-3. Inclua: referencia ao processo, objeto resumido, valor total (numerico e por extenso)
-4. Declare que nos precos estao inclusos todos custos diretos e indiretos
-5. Informe prazo de validade da proposta
-6. Inclua espaco para dados bancarios [PREENCHER]
-7. Finalize com local, data e assinatura
-8. Use linguagem juridica formal
-9. NAO use caracteres especiais nem emojis
-10. Retorne APENAS o texto da carta, sem markdown
+RESUMO DO EDITAL (Se baseie nestas informações para o conteúdo da carta, especialmente o Termo de Referência):
+${bidding.aiAnalysis?.fullSummary || 'Não disponível'}
 
-IMPORTANTE: Escreva o valor por extenso corretamente em portugues.`;
+INSTRUÇÕES (CRÍTICAS):
+1. Use formato formal de carta comercial.
+2. Enderece ao Pregoeiro/Comissao de Licitacao.
+3. Inclua: referência explícita ao processo, objeto claro, valor total numérico e por extenso EXATOS.
+4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
+5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
+6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
+7. ATENÇÃO: NUNCA crie um campo de assinatura, nem data ou local no final do documento. Eu irei anexar isso fisicamente depois. Termine o documento em "Atenciosamente," ou similar e PRONTO. Não inclua linhas de assinatura "____________________".
+8. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
+9. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML). 
+
+IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura.`;
 
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
