@@ -20,6 +20,7 @@ import { ReportsPage } from './components/ReportsPage';
 import { LoginPage } from './components/LoginPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -123,89 +124,91 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <Building2 size={24} />
-          <span>LicitaSaaS</span>
-        </div>
-        <nav className="sidebar-nav">
-          <a href="#" className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('dashboard'); }}>
-            <LayoutDashboard size={20} />
-            <span>Dashboard</span>
-          </a>
-
-          <a href="#" className={`nav-item ${activeTab === 'bidding' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('bidding'); }}>
-            <Briefcase size={20} />
-            <span>Licitações</span>
-          </a>
-          <a href="#" className={`nav-item ${activeTab === 'documents' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('documents'); }}>
-            <Files size={20} />
-            <span>Documentos</span>
-          </a>
-          <a href="#" className={`nav-item ${activeTab === 'pncp' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('pncp'); }}>
-            <Search size={20} />
-            <span>Busca PNCP</span>
-          </a>
-          <a href="#" className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('reports'); }}>
-            <PieChart size={20} />
-            <span>Relatórios</span>
-          </a>
-          <div style={{ flex: 1 }}></div>
-          <a href="#" className="nav-item">
-            <Settings size={20} />
-            <span>Configurações</span>
-          </a>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        {/* Header */}
-        <header className="header">
-          <div className="flex-gap" style={{ width: '300px' }}>
+    <ErrorBoundary>
+      <div className="app-container">
+        {/* Sidebar */}
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <Building2 size={24} />
+            <span>LicitaSaaS</span>
           </div>
+          <nav className="sidebar-nav">
+            <a href="#" className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('dashboard'); }}>
+              <LayoutDashboard size={20} />
+              <span>Dashboard</span>
+            </a>
 
-          <div className="flex-gap">
-            <button className="icon-btn" onClick={toggleTheme} title="Alternar Tema">
-              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-            </button>
-            <button className="icon-btn" style={{ position: 'relative' }}>
-              <Bell size={20} />
-              <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, background: 'var(--color-danger)', borderRadius: '50%' }}></span>
-            </button>
-            <div className="flex-gap" style={{ marginLeft: 16 }}>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{user.name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{user.tenantName}</div>
-              </div>
-              <div
-                style={{ width: 32, height: 32, background: 'var(--color-primary)', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.875rem' }}
-                title={user.email}
-              >
-                {user.name.split(' ').map((n: string) => n[0]).join('')}
-              </div>
-              <button
-                className="btn btn-ghost"
-                style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                onClick={handleLogout}
-              >
-                Sair
-              </button>
+            <a href="#" className={`nav-item ${activeTab === 'bidding' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('bidding'); }}>
+              <Briefcase size={20} />
+              <span>Licitações</span>
+            </a>
+            <a href="#" className={`nav-item ${activeTab === 'documents' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('documents'); }}>
+              <Files size={20} />
+              <span>Documentos</span>
+            </a>
+            <a href="#" className={`nav-item ${activeTab === 'pncp' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('pncp'); }}>
+              <Search size={20} />
+              <span>Busca PNCP</span>
+            </a>
+            <a href="#" className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('reports'); }}>
+              <PieChart size={20} />
+              <span>Relatórios</span>
+            </a>
+            <div style={{ flex: 1 }}></div>
+            <a href="#" className="nav-item">
+              <Settings size={20} />
+              <span>Configurações</span>
+            </a>
+          </nav>
+        </aside>
+
+        {/* Main Content */}
+        <main className="main-content">
+          {/* Header */}
+          <header className="header">
+            <div className="flex-gap" style={{ width: '300px' }}>
             </div>
-          </div>
-        </header>
 
-        {/* Page Content */}
-        {activeTab === 'dashboard' && <Dashboard items={items} />}
-        {activeTab === 'documents' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
+            <div className="flex-gap">
+              <button className="icon-btn" onClick={toggleTheme} title="Alternar Tema">
+                {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+              </button>
+              <button className="icon-btn" style={{ position: 'relative' }}>
+                <Bell size={20} />
+                <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, background: 'var(--color-danger)', borderRadius: '50%' }}></span>
+              </button>
+              <div className="flex-gap" style={{ marginLeft: 16 }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{user.name}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{user.tenantName}</div>
+                </div>
+                <div
+                  style={{ width: 32, height: 32, background: 'var(--color-primary)', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.875rem' }}
+                  title={user.email}
+                >
+                  {user.name.split(' ').map((n: string) => n[0]).join('')}
+                </div>
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                  onClick={handleLogout}
+                >
+                  Sair
+                </button>
+              </div>
+            </div>
+          </header>
 
-        {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
-        {activeTab === 'reports' && <ReportsPage biddings={items} companies={companies} onRefresh={refreshData} />}
-        {activeTab === 'pncp' && <PncpPage companies={companies} onRefresh={refreshData} />}
-      </main>
-    </div>
+          {/* Page Content */}
+          {activeTab === 'dashboard' && <Dashboard items={items} />}
+          {activeTab === 'documents' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
+
+          {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
+          {activeTab === 'reports' && <ReportsPage biddings={items} companies={companies} onRefresh={refreshData} />}
+          {activeTab === 'pncp' && <PncpPage companies={companies} onRefresh={refreshData} />}
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 }
 
