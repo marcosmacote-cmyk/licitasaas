@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2 } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain } from 'lucide-react';
 import { API_BASE_URL } from '../config';
-import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess } from '../types';
+import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
+import { AiReportModal } from './AiReportModal';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
     companies: CompanyProfile[];
@@ -55,6 +57,11 @@ export function PncpPage({ companies }: Props) {
 
     // Modal state
     const [editingProcess, setEditingProcess] = useState<Partial<BiddingProcess> | null>(null);
+
+    // AI Analysis state
+    const [analyzingItemId, setAnalyzingItemId] = useState<string | null>(null);
+    const [pncpAnalysis, setPncpAnalysis] = useState<{ process: Partial<BiddingProcess>; analysis: AiAnalysis } | null>(null);
+    const [viewingAnalysisProcess, setViewingAnalysisProcess] = useState<BiddingProcess | null>(null);
 
     useEffect(() => {
         fetchSavedSearches();
@@ -209,24 +216,99 @@ export function PncpPage({ companies }: Props) {
         setPage(1);
     };
 
-    const handleImportToFunnel = (item: PncpBiddingItem) => {
-        setEditingProcess({
-            title: item.titulo,
-            summary: item.objeto,
+    const handleImportToFunnel = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
+        const processData: Partial<BiddingProcess> = {
+            title: aiData?.process?.title || item.titulo,
+            summary: aiData?.process?.summary || item.objeto,
             portal: "PNCP",
-            modality: item.modalidade_nome || "Não Informado (PNCP)",
+            modality: aiData?.process?.modality || item.modalidade_nome || "Não Informado (PNCP)",
             status: "Captado",
-            estimatedValue: item.valor_estimado || 0,
-            sessionDate: item.data_abertura ? new Date(item.data_abertura).toISOString() : new Date().toISOString(),
+            estimatedValue: aiData?.process?.estimatedValue || item.valor_estimado || 0,
+            sessionDate: item.data_encerramento_proposta
+                ? new Date(item.data_encerramento_proposta).toISOString()
+                : (item.data_abertura ? new Date(item.data_abertura).toISOString() : new Date().toISOString()),
             link: item.link_sistema,
+            risk: aiData?.process?.risk || 'Médio',
             companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
             observations: JSON.stringify([{
                 id: crypto.randomUUID?.() || Date.now().toString(),
-                text: `Importado do PNCP | Órgão: ${item.orgao_nome} | ${item.municipio}-${item.uf}`,
+                text: `Importado do PNCP | Órgão: ${item.orgao_nome} | ${item.municipio}-${item.uf}${item.data_encerramento_proposta ? ' | Prazo Limite: ' + new Date(item.data_encerramento_proposta).toLocaleString('pt-BR') : ''}`,
                 createdAt: new Date().toISOString(),
                 author: 'Sistema'
             }])
-        });
+        };
+        setEditingProcess(processData);
+    };
+
+    // AI Analysis for PNCP items (fetches PDFs directly from PNCP)
+    const handlePncpAiAnalyze = async (item: PncpBiddingItem) => {
+        if (analyzingItemId) return; // prevent double-click
+        setAnalyzingItemId(item.id);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/api/pncp/analyze`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    orgao_cnpj: item.orgao_cnpj,
+                    ano: item.ano,
+                    numero_sequencial: item.numero_sequencial,
+                    link_sistema: item.link_sistema
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || 'Falha na análise IA');
+            }
+
+            const aiData = await response.json();
+            const processObj = aiData.process || {};
+            const analysisObj = aiData.analysis || {};
+
+            const analysisData: AiAnalysis = {
+                id: uuidv4(),
+                biddingProcessId: '',
+                requiredDocuments: JSON.stringify(analysisObj.requiredDocuments || []),
+                pricingConsiderations: analysisObj.pricingConsiderations || '',
+                irregularitiesFlags: JSON.stringify(analysisObj.irregularitiesFlags || []),
+                fullSummary: analysisObj.fullSummary || '',
+                deadlines: JSON.stringify(analysisObj.deadlines || []),
+                penalties: analysisObj.penalties || '',
+                qualificationRequirements: analysisObj.qualificationRequirements || '',
+                biddingItems: analysisObj.biddingItems || '',
+                analyzedAt: new Date().toISOString()
+            };
+
+            const fakeProcess: BiddingProcess = {
+                id: `pncp-${item.id}`,
+                title: processObj.title || item.titulo,
+                summary: processObj.summary || item.objeto,
+                portal: 'PNCP',
+                modality: processObj.modality || item.modalidade_nome || '',
+                status: 'Captado',
+                estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
+                sessionDate: item.data_encerramento_proposta || item.data_abertura || new Date().toISOString(),
+                link: item.link_sistema,
+                risk: processObj.risk || 'Médio',
+                companyProfileId: selectedSearchCompanyId || '',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                observations: '[]'
+            } as BiddingProcess;
+
+            setPncpAnalysis({ process: processObj, analysis: analysisData });
+            setViewingAnalysisProcess(fakeProcess);
+
+        } catch (error: any) {
+            console.error('PNCP AI Analysis error:', error);
+            alert(`Erro na análise IA: ${error.message}`);
+        } finally {
+            setAnalyzingItemId(null);
+        }
     };
 
     const handleSaveProcess = async (data: Partial<BiddingProcess>, aiData?: any) => {
@@ -564,6 +646,32 @@ export function PncpPage({ companies }: Props) {
                                             >
                                                 <Plus size={14} /> Importar
                                             </button>
+                                            <button
+                                                className="btn"
+                                                style={{
+                                                    padding: '7px 12px',
+                                                    fontSize: '0.75rem',
+                                                    borderRadius: '8px',
+                                                    gap: '4px',
+                                                    whiteSpace: 'nowrap',
+                                                    background: analyzingItemId === item.id ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    cursor: analyzingItemId ? 'not-allowed' : 'pointer',
+                                                    opacity: (analyzingItemId && analyzingItemId !== item.id) ? 0.5 : 1,
+                                                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onClick={() => handlePncpAiAnalyze(item)}
+                                                disabled={!!analyzingItemId}
+                                                title="Analisar edital com IA (busca PDFs do PNCP automaticamente)"
+                                            >
+                                                {analyzingItemId === item.id ? (
+                                                    <><Loader2 size={14} className="spinner" /> Analisando...</>
+                                                ) : (
+                                                    <><Brain size={14} /> IA</>
+                                                )}
+                                            </button>
                                             <a
                                                 href={item.link_sistema}
                                                 target="_blank"
@@ -663,7 +771,44 @@ export function PncpPage({ companies }: Props) {
                     initialData={editingProcess as BiddingProcess}
                     companies={companies}
                     onClose={() => setEditingProcess(null)}
-                    onSave={handleSaveProcess}
+                    onSave={(data, aiData) => {
+                        handleSaveProcess(data, aiData);
+                    }}
+                    onRequestAiAnalysis={pncpAnalysis ? () => {
+                        setEditingProcess(null);
+                        if (pncpAnalysis) {
+                            const fakeProcess: BiddingProcess = {
+                                id: `pncp-temp`,
+                                title: (editingProcess as any)?.title || '',
+                                summary: (editingProcess as any)?.summary || '',
+                                portal: 'PNCP',
+                                modality: (editingProcess as any)?.modality || '',
+                                status: 'Captado',
+                                estimatedValue: (editingProcess as any)?.estimatedValue || 0,
+                                sessionDate: (editingProcess as any)?.sessionDate || new Date().toISOString(),
+                                link: (editingProcess as any)?.link || '',
+                                risk: (editingProcess as any)?.risk || 'Médio',
+                                companyProfileId: (editingProcess as any)?.companyProfileId || '',
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString(),
+                                observations: '[]'
+                            } as BiddingProcess;
+                            setViewingAnalysisProcess(fakeProcess);
+                        }
+                    } : undefined}
+                />
+            )}
+
+            {/* AI Report Modal for PNCP Analysis */}
+            {viewingAnalysisProcess && pncpAnalysis && (
+                <AiReportModal
+                    analysis={pncpAnalysis.analysis}
+                    process={viewingAnalysisProcess}
+                    onClose={() => {
+                        setViewingAnalysisProcess(null);
+                        setPncpAnalysis(null);
+                    }}
+                    onUpdate={() => { }}
                 />
             )}
         </div>

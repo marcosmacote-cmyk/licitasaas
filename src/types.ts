@@ -117,6 +117,8 @@ export interface PncpBiddingItem {
     id: string;
     orgao_nome: string;
     orgao_cnpj: string;
+    ano: string;
+    numero_sequencial: string;
     titulo: string;
     objeto: string;
     data_publicacao: string;

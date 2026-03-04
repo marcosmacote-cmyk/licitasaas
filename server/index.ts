@@ -899,6 +899,207 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     }
 });
 
+// PNCP AI Analysis — analyzes a PNCP edital directly by fetching its PDF files
+app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
+    try {
+        const { orgao_cnpj, ano, numero_sequencial, link_sistema } = req.body;
+        if (!orgao_cnpj || !ano || !numero_sequencial) {
+            return res.status(400).json({ error: 'orgao_cnpj, ano e numero_sequencial são obrigatórios' });
+        }
+
+        const agent = new https.Agent({ rejectUnauthorized: false });
+
+        // 1. Fetch edital attachments from PNCP API
+        const arquivosUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}/arquivos`;
+        console.log(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
+
+        let arquivos: any[] = [];
+        try {
+            const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 10000 } as any);
+            arquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
+        } catch (e) {
+            console.warn('[PNCP-AI] Failed to fetch attachments list, will try direct URL');
+        }
+
+        // 2. Download PDF files
+        const pdfParts: any[] = [];
+        const downloadedFiles: string[] = [];
+
+        for (const arq of arquivos) {
+            const fileUrl = arq.url || arq.uri || '';
+            const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo.pdf';
+            if (!fileUrl) continue;
+
+            try {
+                console.log(`[PNCP-AI] Downloading: ${fileName} from ${fileUrl}`);
+                const fileRes = await axios.get(fileUrl, {
+                    httpsAgent: agent,
+                    timeout: 30000,
+                    responseType: 'arraybuffer',
+                    maxRedirects: 5
+                } as any);
+
+                const buffer = Buffer.from(fileRes.data);
+                if (buffer.length > 0) {
+                    const mimeType = fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/pdf';
+                    pdfParts.push({
+                        inlineData: {
+                            data: buffer.toString('base64'),
+                            mimeType
+                        }
+                    });
+                    downloadedFiles.push(fileName);
+                    console.log(`[PNCP-AI] Downloaded ${fileName} (${buffer.length} bytes)`);
+                }
+            } catch (dlErr: any) {
+                console.warn(`[PNCP-AI] Failed to download ${fileName}: ${dlErr.message}`);
+            }
+            // Limit to 5 files to stay within Gemini context limits
+            if (pdfParts.length >= 5) break;
+        }
+
+        if (pdfParts.length === 0) {
+            return res.status(400).json({
+                error: 'Nenhum arquivo PDF encontrado para este edital no PNCP.',
+                details: `Tentamos buscar arquivos de ${arquivosUrl} mas não encontramos PDFs baixáveis.`
+            });
+        }
+
+        // 3. Setup Gemini AI
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
+        }
+        const ai = new GoogleGenAI({ apiKey });
+
+        // 4. Use the same analysis prompt as the main analyze-edital endpoint
+        const systemInstruction = `
+Você é um consultor jurídico sênior especializado em licitações públicas brasileiras (Lei 14.133/2021).
+SUA MISSÃO É extrair INDIVIDUALmente cada documento exigido.
+NÃO AGRUPE documentos em uma única string.
+
+REGRAS CRÍTICAS:
+1. Responda APENAS com um objeto JSON válido. Não adicione crases Markdown ou textos antes/depois.
+2. Não invente dados. Se não encontrar, retorne string vazia.
+3. O campo 'risk' deve ser: "Baixo", "Médio", "Alto" ou "Crítico".
+4. Nos documentos exigidos, COLOQUE A REFERÊNCIA EXATA do item do edital no 'item' e o nome no 'description'.
+5. CRIE UMA ENTRADA PARA CADA DOCUMENTO.
+6. Detalhe os itens licitados em 'biddingItems'.
+7. FUGA ASPAS DUPLAS INTERNAS.
+8. OTIMIZAÇÃO OCR: analise cuidadosamente imagens digitalizadas.
+9. TRUNCAMENTO: resuma partes descritivas para garantir lista completa de documentos.
+
+FORMATO DE SAÍDA JSON:
+{
+  "process": {
+    "title": "Número e órgão emissor",
+    "summary": "Resumo detalhado do objeto",
+    "modality": "Modalidade da licitação",
+    "portal": "PNCP",
+    "estimatedValue": 100000.50,
+    "sessionDate": "2026-03-15T09:00:00Z",
+    "risk": "Baixo"
+  },
+  "analysis": {
+    "requiredDocuments": {
+       "Habilitação Jurídica": [ { "item": "9.1.1", "description": "Certidão A" } ],
+       "Regularidade Fiscal, Social e Trabalhista": [ { "item": "9.2.1", "description": "Doc X" } ],
+       "Qualificação Técnica": [ { "item": "9.3.1", "description": "Atestado Y" } ],
+       "Qualificação Econômica Financeira": [ { "item": "9.4.1", "description": "Balanço Z" } ],
+       "Outros": [ { "item": "9.5.1", "description": "Declaração W" } ]
+    },
+    "biddingItems": "Detalhamento dos itens...",
+    "pricingConsiderations": "Resumo sobre formação de preços...",
+    "irregularitiesFlags": [ "Risco 1...", "Risco 2..." ],
+    "fullSummary": "Parecer profissional completo...",
+    "deadlines": [ "Data - Prazo 1", "Data - Prazo 2" ],
+    "penalties": "Resumo das penalidades...",
+    "qualificationRequirements": "Resumo da Qualificação Técnica..."
+  }
+}`;
+
+        console.log(`[PNCP-AI] Calling Gemini with ${pdfParts.length} PDF parts...`);
+        const startTime = Date.now();
+
+        const response = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: [{
+                role: 'user',
+                parts: [
+                    ...pdfParts,
+                    { text: 'Analise este edital de licitação e retorne EXCLUSIVAMENTE o objeto JSON especificado. NÃO adicione texto antes ou depois.' }
+                ]
+            }],
+            config: {
+                systemInstruction,
+                temperature: 0.1,
+                maxOutputTokens: 16384
+            }
+        });
+
+        const duration = (Date.now() - startTime) / 1000;
+        console.log(`[PNCP-AI] Gemini responded in ${duration.toFixed(1)}s`);
+
+        const rawText = response.text;
+        if (!rawText) throw new Error('A IA não retornou nenhum texto.');
+
+        // 5. Parse JSON (same robust parser as analyze-edital)
+        let cleanedJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const firstBrace = cleanedJson.indexOf('{');
+        if (firstBrace === -1) throw new Error('JSON inválido retornado pela IA');
+        cleanedJson = cleanedJson.substring(firstBrace);
+        cleanedJson = cleanedJson.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
+
+        let depth = 0, inString = false, escape = false;
+        let lastValidDepthZeroBrace = -1;
+        for (let i = 0; i < cleanedJson.length; i++) {
+            const c = cleanedJson[i];
+            if (escape) { escape = false; continue; }
+            if (c === '\\') { escape = true; continue; }
+            if (c === '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c === '{' || c === '[') depth++;
+            if (c === '}' || c === ']') { depth--; if (depth === 0) lastValidDepthZeroBrace = i; }
+        }
+
+        if (depth === 0 && lastValidDepthZeroBrace !== -1) {
+            cleanedJson = cleanedJson.substring(0, lastValidDepthZeroBrace + 1);
+        } else {
+            cleanedJson = cleanedJson.replace(/,$/, '').replace(/,\s+$/, '');
+            depth = 0; inString = false; escape = false;
+            let stack: string[] = [];
+            for (let i = 0; i < cleanedJson.length; i++) {
+                const c = cleanedJson[i];
+                if (escape) { escape = false; continue; }
+                if (c === '\\') { escape = true; continue; }
+                if (c === '"') { inString = !inString; continue; }
+                if (inString) continue;
+                if (c === '{') stack.push('}');
+                if (c === '[') stack.push(']');
+                if (c === '}' || c === ']') stack.pop();
+            }
+            if (inString) cleanedJson += '"';
+            while (stack.length > 0) cleanedJson += stack.pop();
+        }
+
+        const finalPayload = JSON.parse(cleanedJson);
+
+        // Add source info
+        finalPayload.pncpSource = {
+            link_sistema,
+            downloadedFiles,
+            analyzedAt: new Date().toISOString()
+        };
+
+        console.log(`[PNCP-AI] SUCCESS — process keys: ${Object.keys(finalPayload.process || {}).join(', ')}`);
+        res.json(finalPayload);
+
+    } catch (error: any) {
+        console.error('[PNCP-AI] Error:', error?.message || error);
+        res.status(500).json({ error: `Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}` });
+    }
+});
+
 // Bidding Processes
 app.get('/api/biddings', authenticateToken, async (req: any, res) => {
     try {
