@@ -23,9 +23,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
     const [activeTab, setActiveTab] = useState<'report' | 'chat'>('report');
     const [messages, setMessages] = useState<ChatMessage[]>(() => {
         try {
-            return typeof analysis.chatHistory === 'string'
-                ? JSON.parse(analysis.chatHistory)
-                : (analysis.chatHistory || []);
+            return typeof analysis?.chatHistory === 'string'
+                ? JSON.parse(analysis?.chatHistory)
+                : (analysis?.chatHistory || []);
         } catch (e) {
             console.error("Failed to parse chat history:", e);
             return [];
@@ -52,12 +52,12 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
         try {
             let fileNames: string[] = [];
-            if (process.link) {
-                const urls = process.link.split(',').map(u => u.trim());
+            if (process?.link) {
+                const urls = process?.link.split(',').map(u => u.trim());
                 fileNames = urls.map(url => url.split('/').pop() || '').filter(Boolean);
             }
             const currentMessagesForAI = [...messages, userMsg].map(m => ({ role: m.role, text: m.text }));
-            const replyText = await aiService.chatWithEdital(fileNames, currentMessagesForAI, process.id);
+            const replyText = await aiService.chatWithEdital(fileNames, currentMessagesForAI, process?.id);
 
             const modelMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'model', text: replyText };
             const updatedMessages = [...messages, userMsg, modelMsg];
@@ -66,7 +66,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
             try {
                 const { biddingProcessId: _bId, ...analysisData } = analysis as any;
                 await axios.post(`${API_BASE_URL}/api/analysis`, {
-                    biddingProcessId: process.id,
+                    biddingProcessId: process?.id,
                     ...analysisData,
                     chatHistory: JSON.stringify(updatedMessages)
                 }, {
@@ -197,35 +197,35 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
         return elements;
     };
 
-    const flagList = parseArray(analysis.irregularitiesFlags);
-    const deadlineList = parseArray(analysis.deadlines || []);
+    const flagList = parseArray(analysis?.irregularitiesFlags);
+    const deadlineList = parseArray(analysis?.deadlines || []);
 
     const [companyDocs, setCompanyDocs] = useState<CompanyDocument[]>([]);
     const [isLoadingDocs, setIsLoadingDocs] = useState(false);
 
     useEffect(() => {
-        if (process.companyProfileId) {
+        if (process?.companyProfileId) {
             setIsLoadingDocs(true);
             fetch(`${API_BASE_URL}/api/documents`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             })
                 .then(res => res.json())
                 .then((data: CompanyDocument[]) => {
-                    const tiedDocs = data.filter(d => d.companyProfileId === process.companyProfileId);
+                    const tiedDocs = data.filter(d => d.companyProfileId === process?.companyProfileId);
                     setCompanyDocs(tiedDocs);
                 })
                 .catch(err => console.error("Failed to fetch company docs:", err))
                 .finally(() => setIsLoadingDocs(false));
         }
-    }, [process.companyProfileId]);
+    }, [process?.companyProfileId]);
 
     const categorizedDocs = useMemo(() => {
         let rawData: any = {};
         try {
-            if (analysis.requiredDocuments) {
-                rawData = typeof analysis.requiredDocuments === 'string'
-                    ? JSON.parse(analysis.requiredDocuments)
-                    : analysis.requiredDocuments;
+            if (analysis?.requiredDocuments) {
+                rawData = typeof analysis?.requiredDocuments === 'string'
+                    ? JSON.parse(analysis?.requiredDocuments)
+                    : analysis?.requiredDocuments;
             }
 
             if (!rawData) {
@@ -239,8 +239,8 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
         } catch (e) {
             console.error("Failed to parse requiredDocuments", e);
             // Fallback for plain text
-            if (typeof analysis.requiredDocuments === 'string' && analysis.requiredDocuments.trim()) {
-                rawData = { "Processamento": [{ item: 'Info', description: analysis.requiredDocuments }] };
+            if (typeof analysis?.requiredDocuments === 'string' && analysis?.requiredDocuments.trim()) {
+                rawData = { "Processamento": [{ item: 'Info', description: analysis?.requiredDocuments }] };
             } else {
                 rawData = {};
             }
@@ -270,7 +270,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
             });
         });
         return result;
-    }, [analysis.requiredDocuments, companyDocs]);
+    }, [analysis?.requiredDocuments, companyDocs]);
 
     const allDocsList = useMemo(() => Object.values(categorizedDocs).flat(), [categorizedDocs]);
     const readinessScore = allDocsList.length > 0
@@ -324,7 +324,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     Análise Estratégica <span style={{ color: '#93c5fd' }}>IA</span>
                                 </h2>
                                 <p style={{ color: '#94a3b8', fontSize: '0.9375rem', marginTop: '4px' }}>
-                                    Processando: <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{process.title}</span>
+                                    Processando: <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{process?.title}</span>
                                 </p>
                             </div>
                         </div>
@@ -383,54 +383,54 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     <div style={{ padding: '20px', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', borderRadius: '1rem', border: '1px solid #a7f3d0' }}>
                                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Valor Estimado</div>
                                         <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#065f46' }}>
-                                            {process.estimatedValue ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(process.estimatedValue) : 'Não informado'}
+                                            {process?.estimatedValue ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(process?.estimatedValue) : 'Não informado'}
                                         </div>
                                     </div>
                                     <div style={{ padding: '20px', background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '1rem', border: '1px solid #93c5fd' }}>
                                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Sessão / Prazo</div>
                                         <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e40af' }}>
-                                            {process.sessionDate ? new Date(process.sessionDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Não informado'}
+                                            {process?.sessionDate ? new Date(process?.sessionDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Não informado'}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Resumo Executivo — uses process.summary (detailed executive summary from AI) */}
+                                {/* Resumo Executivo — uses process?.summary (detailed executive summary from AI) */}
                                 <div className="report-card">
                                     <h3 style={sectionHeaderStyle}><Sparkles size={18} /> Resumo Executivo</h3>
                                     <p style={{ color: '#334155', fontSize: '0.9375rem', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                        {process.summary || analysis.fullSummary || 'Resumo executivo não disponível para este edital.'}
+                                        {process?.summary || analysis?.fullSummary || 'Resumo executivo não disponível para este edital.'}
                                     </p>
                                 </div>
 
-                                {/* Parecer Técnico-Jurídico — uses analysis.fullSummary */}
-                                {analysis.fullSummary && process.summary && analysis.fullSummary !== process.summary && (
+                                {/* Parecer Técnico-Jurídico — uses analysis?.fullSummary */}
+                                {analysis?.fullSummary && process?.summary && analysis?.fullSummary !== process?.summary && (
                                     <div className="report-card">
                                         <h3 style={sectionHeaderStyle}><Brain size={18} /> Parecer Técnico-Jurídico</h3>
                                         <p style={{ color: '#334155', fontSize: '0.9375rem', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                            {analysis.fullSummary}
+                                            {analysis?.fullSummary}
                                         </p>
                                     </div>
                                 )}
 
                                 {/* Detalhamento de Itens */}
-                                {analysis.biddingItems && (
+                                {analysis?.biddingItems && (
                                     <div className="report-card">
                                         <h3 style={sectionHeaderStyle}><FileCheck size={18} /> Itens Licitados</h3>
                                         <div style={{ padding: '20px', backgroundColor: '#f1f5f9', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
                                             <p style={{ color: '#475569', fontSize: '0.9375rem', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                                {analysis.biddingItems}
+                                                {analysis?.biddingItems}
                                             </p>
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Qualificação Técnica Detalhada */}
-                                {analysis.qualificationRequirements && (
+                                {analysis?.qualificationRequirements && (
                                     <div className="report-card">
                                         <h3 style={sectionHeaderStyle}><Award size={18} /> Qualificação Técnica Exigida</h3>
                                         <div style={{ padding: '20px', backgroundColor: '#fefce8', borderRadius: '1rem', border: '1px solid #fef08a' }}>
                                             <p style={{ color: '#713f12', fontSize: '0.9375rem', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                                {analysis.qualificationRequirements}
+                                                {analysis?.qualificationRequirements}
                                             </p>
                                         </div>
                                     </div>
@@ -440,7 +440,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 <div className="report-card">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                                         <h3 style={{ ...sectionHeaderStyle, marginBottom: 0 }}><Award size={18} /> Habilitação Requerida</h3>
-                                        {process.companyProfileId && !isLoadingDocs && (
+                                        {process?.companyProfileId && !isLoadingDocs && (
                                             <div style={{
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -523,7 +523,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <DollarSign size={20} /> <span style={{ fontWeight: 700 }}>Financeiro</span>
                                     </div>
                                     <p style={{ margin: 0, fontSize: '0.9375rem', color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                        {analysis.pricingConsiderations || 'Análise financeira não disponível para este edital.'}
+                                        {analysis?.pricingConsiderations || 'Análise financeira não disponível para este edital.'}
                                     </p>
                                 </div>
 
@@ -550,7 +550,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         <ShieldAlert size={20} /> <span style={{ fontWeight: 700 }}>Penalidades</span>
                                     </div>
                                     <p style={{ margin: 0, fontSize: '0.875rem', color: '#7c2d12', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                        {analysis.penalties || 'Penalidades não identificadas no edital.'}
+                                        {analysis?.penalties || 'Penalidades não identificadas no edital.'}
                                     </p>
                                 </div>
 
@@ -676,9 +676,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                     alignItems: 'center'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', fontSize: '0.75rem' }}>
-                        <span style={{ fontWeight: 600 }}>ID ANÁLISE: {analysis.id.slice(0, 8)}</span>
+                        <span style={{ fontWeight: 600 }}>ID ANÁLISE: {analysis?.id.slice(0, 8)}</span>
                         <span>•</span>
-                        <span>{new Date(analysis.analyzedAt).toLocaleString('pt-BR')}</span>
+                        <span>{new Date(analysis?.analyzedAt).toLocaleString('pt-BR')}</span>
                     </div>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                         {onImport && (
