@@ -88,9 +88,16 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
         }
     };
 
-    const parseArray = (data: string | string[]): string[] => {
+    const parseArray = (data: any): string[] => {
+        if (!data) return [];
         if (Array.isArray(data)) return data;
-        try { return JSON.parse(data) as string[]; } catch { return []; }
+        try {
+            const parsed = JSON.parse(data);
+            if (Array.isArray(parsed)) return parsed;
+            return typeof parsed === 'string' ? [parsed] : [];
+        } catch {
+            return typeof data === 'string' ? [data] : [];
+        }
     };
 
     // Simple Markdown renderer for AI chat messages
@@ -215,9 +222,15 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
     const categorizedDocs = useMemo(() => {
         let rawData: any = {};
         try {
-            rawData = typeof analysis.requiredDocuments === 'string'
-                ? JSON.parse(analysis.requiredDocuments)
-                : analysis.requiredDocuments;
+            if (analysis.requiredDocuments) {
+                rawData = typeof analysis.requiredDocuments === 'string'
+                    ? JSON.parse(analysis.requiredDocuments)
+                    : analysis.requiredDocuments;
+            }
+
+            if (!rawData) {
+                rawData = {};
+            }
 
             // If it's an array, it's the old flat format. Convert to a single category.
             if (Array.isArray(rawData)) {
@@ -228,6 +241,8 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
             // Fallback for plain text
             if (typeof analysis.requiredDocuments === 'string' && analysis.requiredDocuments.trim()) {
                 rawData = { "Processamento": [{ item: 'Info', description: analysis.requiredDocuments }] };
+            } else {
+                rawData = {};
             }
         }
 
