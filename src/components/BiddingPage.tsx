@@ -125,11 +125,12 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     const [aiAutoAnalyze, setAiAutoAnalyze] = useState(false);
 
     const getExportData = () => {
-        const headers = ['Título', 'Empresa', 'Data Sessão', 'Valor Estimado', 'Modalidade', 'Portal', 'Risco', 'Status'];
+        const headers = ['Título', 'Objeto Resumido', 'Empresa', 'Data Sessão', 'Valor Estimado', 'Modalidade', 'Portal', 'Risco', 'Status'];
         const rows = filteredItems.map(item => {
             const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
             return [
                 (item.title || '').replace(/"/g, '""'),
+                (item.summary || '').replace(/"/g, '""'),
                 companyName.replace(/"/g, '""'),
                 new Date(item.sessionDate).toLocaleDateString(),
                 item.estimatedValue || '0',
