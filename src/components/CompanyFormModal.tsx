@@ -35,14 +35,19 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
             justifyContent: 'center',
             backgroundColor: 'rgba(15, 23, 42, 0.6)',
             backdropFilter: 'blur(4px)',
-            animation: 'fadeIn 0.2s ease-out'
+            animation: 'fadeIn 0.2s ease-out',
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 1000,
+            padding: '20px'
         }}>
             <div className="modal-content" style={{
                 maxWidth: '600px',
                 width: '100%',
+                maxHeight: '90vh',
                 borderRadius: '1.5rem',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                overflow: 'hidden',
+                overflowY: 'auto',
                 backgroundColor: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border)',
                 animation: 'slideUp 0.3s ease-out'
