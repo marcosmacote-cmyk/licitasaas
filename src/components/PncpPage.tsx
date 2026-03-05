@@ -61,6 +61,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
     const [modalidade, setModalidade] = useState('todas');
     const [esfera, setEsfera] = useState('todas');
     const [orgao, setOrgao] = useState('');
+    const [cnpjsLista, setCnpjsLista] = useState('');
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
     const [page, setPage] = useState(1);
@@ -116,7 +117,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
         }
     };
 
-    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string }) => {
+    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; cnpjsLista?: string }) => {
         if (e) {
             e.preventDefault();
             setPage(1);
@@ -140,6 +141,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
                     dataFim: (overrides?.dataFim ?? dataFim) || undefined,
                     esfera: overrides?.esfera ?? esfera,
                     orgao: overrides?.orgao ?? orgao,
+                    cnpjsLista: overrides?.cnpjsLista ?? cnpjsLista,
                 })
             });
             if (res.ok) {
@@ -216,7 +218,8 @@ export function PncpPage({ companies, onRefresh }: Props) {
             status: searchStatus,
             uf: searchUf,
             esfera: 'todas',
-            orgao: ''
+            orgao: '',
+            cnpjsLista: ''
         });
     };
 
@@ -249,6 +252,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
         setModalidade('todas');
         setEsfera('todas');
         setOrgao('');
+        setCnpjsLista('');
         setDataInicio('');
         setDataFim('');
         setResults([]);
@@ -399,6 +403,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
         modalidade !== 'todas',
         esfera !== 'todas',
         orgao !== '',
+        cnpjsLista.trim() !== '',
         dataInicio !== '',
         dataFim !== '',
         selectedSearchCompanyId !== ''
@@ -587,6 +592,26 @@ export function PncpPage({ companies, onRefresh }: Props) {
                                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Órgão (Nome ou CNPJ)</label>
                                 <input type="text" placeholder="Ex: Comando da Marinha" value={orgao} onChange={(e) => setOrgao(e.target.value)} style={selectStyle} />
                             </div>
+
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Lista de CNPJs (Busca Múltipla Rápida)</label>
+                                <textarea
+                                    placeholder="Cole aqui a lista de CNPJs que deseja buscar, separados por vírgula, espaço ou quebra de linha..."
+                                    value={cnpjsLista}
+                                    onChange={(e) => setCnpjsLista(e.target.value)}
+                                    style={{
+                                        ...selectStyle,
+                                        minHeight: '60px',
+                                        resize: 'vertical',
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.8125rem'
+                                    }}
+                                />
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                                    Aceita formatação bruta (ex: 00.000.000/0001-91, 11111111000199).
+                                </div>
+                            </div>
+
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Publicado a partir de</label>

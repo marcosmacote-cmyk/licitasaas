@@ -765,71 +765,84 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
 
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao } = req.body;
+        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, cnpjsLista } = req.body;
         const pageSize = 10;
 
-        // Fetch a large batch from PNCP to enable global sorting (max 500)
-        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=500&pagina=1`;
-
-        let queryParams = [];
+        let queryParams: string[] = [];
         if (keywords) queryParams.push(keywords);
 
-        if (orgao) {
-            const onlyNumbers = orgao.replace(/\D/g, '');
-            if (onlyNumbers.length === 14) {
-                url += `&cnpj=${onlyNumbers}`;
+        const buildBaseUrl = (qItems: string[], overrideCnpj?: string) => {
+            let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 100 : 500}&pagina=1`;
+            if (overrideCnpj) {
+                url += `&cnpj=${overrideCnpj}`;
+            }
+            if (qItems.length > 0) {
+                url += `&q=${encodeURIComponent(qItems.join(' '))}`;
+            }
+            if (status && status !== 'todas') url += `&status=${status}`;
+            if (uf) url += `&ufs=${uf}`; // Allow comma-separated UFs
+            if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
+            if (dataInicio) url += `&data_inicio=${dataInicio}`;
+            if (dataFim) url += `&data_fim=${dataFim}`;
+            if (esfera && esfera !== 'todas') url += `&esferas=${esfera}`;
+            return url;
+        };
+
+        let urlsToFetch: string[] = [];
+        let extractedCnpjs: string[] = [];
+
+        if (cnpjsLista) {
+            const rawTokens = cnpjsLista.split(/[\s,;]+/);
+            extractedCnpjs = rawTokens.map((t: string) => t.replace(/\D/g, '')).filter((t: string) => t.length === 14);
+            extractedCnpjs = [...new Set(extractedCnpjs)]; // Remove duplicates
+        }
+
+        if (extractedCnpjs.length > 0) {
+            // Limit to 30 concurrent CNPJs to avoid IP/Rate limiting issues
+            const limitedCnpjs = extractedCnpjs.slice(0, 30);
+            urlsToFetch = limitedCnpjs.map(cnpj => buildBaseUrl(queryParams, cnpj));
+        } else {
+            if (orgao) {
+                const onlyNumbers = orgao.replace(/\D/g, '');
+                if (onlyNumbers.length === 14) {
+                    urlsToFetch = [buildBaseUrl(queryParams, onlyNumbers)];
+                } else {
+                    queryParams.push(orgao);
+                    urlsToFetch = [buildBaseUrl(queryParams)];
+                }
             } else {
-                queryParams.push(orgao); // Append to generic search
+                urlsToFetch = [buildBaseUrl(queryParams)];
             }
         }
 
-        if (queryParams.length > 0) {
-            url += `&q=${encodeURIComponent(queryParams.join(' '))}`;
-        }
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        const startTime = Date.now();
+        console.log(`[PNCP] START GET ${urlsToFetch.length} url(s)`);
 
-        if (status && status !== 'todas') {
-            url += `&status=${status}`;
-        }
-        if (uf) {
-            url += `&ufs=${uf}`; // Allow comma-separated UFs e.g. PR,SC,RS
-        }
-        if (modalidade && modalidade !== 'todas') {
-            url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-        }
-        if (dataInicio) {
-            url += `&data_inicio=${dataInicio}`;
-        }
-        if (dataFim) {
-            url += `&data_fim=${dataFim}`;
-        }
-        if (esfera && esfera !== 'todas') {
-            url += `&esferas=${esfera}`;
-        }
+        // Execute all requests concurrently
+        const responses = await Promise.allSettled(
+            urlsToFetch.map(u => axios.get(u, {
+                headers: { 'Accept': 'application/json' },
+                httpsAgent: agent,
+                timeout: 15000
+            } as any))
+        );
 
-        const agent = new https.Agent({
-            rejectUnauthorized: false
+        let rawItems: any[] = [];
+        responses.forEach((res) => {
+            if (res.status === 'fulfilled') {
+                const data = res.value.data as any;
+                const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
+                rawItems = rawItems.concat(items);
+            } else {
+                console.error('[PNCP] Request failed:', res.reason?.message);
+            }
         });
 
-        const startTime = Date.now();
-        console.log(`[PNCP] START GET ${url}`);
-
-        const response = await axios.get(url, {
-            headers: { 'Accept': 'application/json' },
-            httpsAgent: agent,
-            timeout: 15000
-        } as any);
-
-        const data = response.data as any;
-
-        // Debug: log raw structure of first item to understand API format
-        const rawItems = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-        if (rawItems.length > 0) {
-            console.log('[PNCP] RAW first item keys:', Object.keys(rawItems[0]));
-            console.log('[PNCP] RAW first item sample:', JSON.stringify(rawItems[0]).substring(0, 500));
-        }
-
         // First pass: extract what we can from search results
-        const items = rawItems.map((item: any) => {
+        // Also ensure no duplicate results based on PNCP ID just in case
+        const seenIds = new Set<string>();
+        const items = rawItems.filter(item => item != null).map((item: any) => {
             const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
             const ano = item.ano || item.anoCompra || '';
             const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
@@ -864,6 +877,10 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                     : (item.linkSistemaOrigem || item.link || ''),
                 status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
             };
+        }).filter(item => {
+            if (seenIds.has(item.id)) return false;
+            seenIds.add(item.id);
+            return true;
         });
         // GLOBAL sort ALL items by closest deadline using search API dates
         const now = Date.now();
