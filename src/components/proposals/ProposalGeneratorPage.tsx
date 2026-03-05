@@ -43,6 +43,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [signatureMode, setSignatureMode] = useState<'LEGAL' | 'TECH' | 'BOTH'>('LEGAL');
     const [headerImageHeight, setHeaderImageHeight] = useState(150);
     const [footerImageHeight, setFooterImageHeight] = useState(100);
+    const [printLandscape, setPrintLandscape] = useState(false);
 
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -420,9 +421,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             ? `${locParts}, ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}`
             : new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-        // Calculate margins for fixed header/footer
-        const topMargin = headerImage ? (headerImageHeight + 30) : 0;
-        const bottomMargin = footerImage ? (footerImageHeight + 30) : 0;
+        // Calculate margins for fixed header/footer — tight to edges
+        const topMargin = headerImage ? (headerImageHeight + 10) : 0;
+        const bottomMargin = footerImage ? (footerImageHeight + 20) : 0;
 
         const html = `
             <!DOCTYPE html>
@@ -431,41 +432,41 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 <meta charset="UTF-8">
                 <title>Proposta Comercial - ${selectedBidding.title}</title>
                 <style>
-                    body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.6; font-size: 14px; margin: 0; padding: 40px; padding-top: ${topMargin > 0 ? topMargin + 40 : 40}px; padding-bottom: ${bottomMargin > 0 ? bottomMargin + 40 : 40}px; }
+                    body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.5; font-size: 13px; margin: 0; padding: 15px 20px; padding-top: ${topMargin > 0 ? topMargin + 15 : 15}px; padding-bottom: ${bottomMargin > 0 ? bottomMargin + 15 : 15}px; }
                     
-                    /* Fixed header/footer for ALL pages */
-                    .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 10px 40px; border-bottom: 1px solid #ccc; }
-                    .fixed-header img { max-width: 100%; height: auto; }
-                    .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 10px 40px; border-top: 1px solid #ddd; }
-                    .fixed-footer img { max-width: 100%; height: auto; }
-                    .fixed-footer .gen-info { font-size: 10px; color: #888; margin-top: 4px; }
+                    /* Fixed header/footer for ALL pages — flush to edges */
+                    .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
+                    .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+                    .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
+                    .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+                    .fixed-footer .gen-info { font-size: 9px; color: #999; margin-top: 2px; }
                     
-                    .text-header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 20px; margin-bottom: 30px; }
-                    .text-header h1 { margin: 0; font-size: 22px; color: #000; }
-                    .text-header p { margin: 5px 0; color: #444; font-size: 13px; }
-                    .letter { white-space: pre-wrap; margin-bottom: 40px; text-align: justify; }
+                    .text-header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 15px; }
+                    .text-header h1 { margin: 0; font-size: 20px; color: #000; }
+                    .text-header p { margin: 3px 0; color: #444; font-size: 12px; }
+                    .letter { white-space: pre-wrap; margin-bottom: 25px; text-align: justify; font-size: 13px; line-height: 1.5; }
                     .letter strong { font-weight: bold; }
-                    table.items { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
-                    table.items th { border-bottom: 2px solid #222; padding: 10px 8px; text-align: left; background: #f9f9f9; }
-                    table.items td { padding: 8px; border-bottom: 1px solid #ddd; }
-                    .totals { width: 340px; float: right; margin-top: 20px; }
-                    .totals tr th, .totals tr td { padding: 8px; text-align: right; border-bottom: 1px solid #ddd; }
-                    .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 60px; }
-                    .signature-block .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; }
+                    table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 11px; }
+                    table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 11px; }
+                    table.items td { padding: 5px 4px; border-bottom: 1px solid #ddd; font-size: 11px; }
+                    .totals { width: 300px; float: right; margin-top: 10px; }
+                    .totals tr th, .totals tr td { padding: 6px; text-align: right; border-bottom: 1px solid #ddd; font-size: 12px; }
+                    .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
+                    .signature-block .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 12px; }
                     
                     .no-print { }
                     
                     @media print {
                         .no-print { display: none !important; }
-                        body { padding: 0; padding-top: ${topMargin}px; padding-bottom: ${bottomMargin}px; }
-                        .fixed-header { padding: 10px 0; }
-                        .fixed-footer { padding: 8px 0; }
-                        @page { margin: 1.5cm 2cm; }
+                        body { padding: 0; padding-top: ${topMargin}px; padding-bottom: ${bottomMargin}px; font-size: 12px; }
+                        .fixed-header { padding: 0; }
+                        .fixed-footer { padding: 0; }
+                        @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: 0.8cm 1cm; }
                     }
                 </style>
             </head>
             <body>
-                <button class="no-print" onclick="window.print()" style="padding: 10px 20px; margin-bottom: 20px; font-weight: bold; cursor: pointer; border-radius: 6px; background: #2563eb; color: #fff; border: none;">🖨️ Imprimir / Salvar PDF</button>
+                <button class="no-print" onclick="window.print()" style="padding: 10px 20px; margin-bottom: 15px; font-weight: bold; cursor: pointer; border-radius: 6px; background: #2563eb; color: #fff; border: none; font-size: 13px;">🖨️ Imprimir / Salvar PDF</button>
                 
                 ${headerImage ? `
                 <div class="fixed-header">
@@ -491,19 +492,19 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 ${cleanLetter}
                 </div>
 
-                <h3>Planilha de Formação de Preços</h3>
+                <h3 style="font-size: 14px; margin-bottom: 10px;">Planilha de Formação de Preços</h3>
                 <table class="items">
                     <thead>
                         <tr>
-                            <th style="text-align:center;">Lote/Item</th>
+                            <th style="text-align:center; width: 60px;">Lote/Item</th>
                             <th>Descrição detalhada</th>
-                            <th style="text-align:center;">Marca</th>
-                            <th style="text-align:center;">Modelo</th>
-                            <th style="text-align:center;">Unid</th>
-                            <th style="text-align:center;">Qtd</th>
-                            <th style="text-align:right;">Valor Unit.</th>
-                            <th style="text-align:right;">Valor Total</th>
-                            <th style="text-align:right;">% Peso</th>
+                            <th style="text-align:center; width: 55px;">Marca</th>
+                            <th style="text-align:center; width: 55px;">Modelo</th>
+                            <th style="text-align:center; width: 35px;">Unid</th>
+                            <th style="text-align:center; width: 45px;">Qtd</th>
+                            <th style="text-align:right; width: 75px;">Valor Unit.</th>
+                            <th style="text-align:right; width: 85px;">Valor Total</th>
+                            <th style="text-align:right; width: 40px;">% Peso</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -524,14 +525,14 @@ ${cleanLetter}
                     </tbody>
                 </table>
                 
-                <div style="text-align: right; margin-top: 50px; margin-bottom: 40px; font-size: 14px; clear: both;">
+                <div style="text-align: right; margin-top: 35px; margin-bottom: 30px; font-size: 13px; clear: both;">
                     ${localData}
                 </div>
 
                 <div class="signature-block">
                     ${(signatureMode === 'LEGAL' || signatureMode === 'BOTH') ? `
                         <div class="sig-item">
-                            <div style="margin-bottom: 60px;"></div>
+                            <div style="margin-bottom: 50px;"></div>
                             ___________________________________<br/>
                             <strong>${company?.contactName || 'Representante Legal'}</strong><br/>
                             ${company?.contactCpf ? 'CPF: ' + company.contactCpf + '<br/>' : ''}
@@ -542,7 +543,7 @@ ${cleanLetter}
                     ` : ''}
                     ${(signatureMode === 'TECH' || signatureMode === 'BOTH') ? `
                         <div class="sig-item">
-                            <div style="margin-bottom: 60px;"></div>
+                            <div style="margin-bottom: 50px;"></div>
                             ___________________________________<br/>
                             <strong>Responsável Técnico</strong><br/>
                             ${company?.razaoSocial || ''}<br/>
@@ -552,7 +553,7 @@ ${cleanLetter}
                 </div>
                 
                 ${!footerImage ? `
-                <div style="margin-top: 80px; text-align: center; border-top: 1px solid #ddd; padding-top: 20px; font-size: 11px; color: #666; clear: both;">
+                <div style="margin-top: 60px; text-align: center; border-top: 1px solid #ddd; padding-top: 15px; font-size: 10px; color: #888; clear: both;">
                     Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
                 </div>
                 ` : ''}
@@ -734,6 +735,30 @@ ${cleanLetter}
                                 </div>
                             </div>
                             <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: '8px', display: 'block' }}>As imagens aparecerão no topo e inferior do PDF exportado. O Local/Data será preenchido automaticamente com a cidade da empresa sede.</span>
+                        </div>
+
+                        {/* Orientação de Impressão */}
+                        <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <label style={{
+                                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                                padding: '8px 14px', borderRadius: '8px',
+                                backgroundColor: printLandscape ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                                border: printLandscape ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                transition: 'all 0.2s ease'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={printLandscape}
+                                    onChange={(e) => setPrintLandscape(e.target.checked)}
+                                    style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
+                                />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: printLandscape ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
+                                    🔄 Imprimir em Paisagem (horizontal)
+                                </span>
+                            </label>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                                Recomendado para planilhas com muitas colunas.
+                            </span>
                         </div>
 
                         {/* Buttons */}
