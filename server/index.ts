@@ -409,7 +409,7 @@ app.put('/api/companies/:id', authenticateToken, async (req: any, res) => {
         const updatedCompany = await prisma.companyProfile.update({
             where: { id },
             data: safeData,
-            include: { credentials: true, documents: true }
+            include: { credentials: true, documents: { select: { id: true, tenantId: true, companyProfileId: true, docType: true, fileUrl: true, uploadDate: true, expirationDate: true, status: true, autoRenew: true, docGroup: true, issuerLink: true, fileName: true, alertDays: true } } }
         });
         res.json(updatedCompany);
     } catch (error: any) {
