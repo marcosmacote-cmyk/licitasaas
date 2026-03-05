@@ -139,6 +139,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 },
                 body: JSON.stringify({ defaultAlertDays: finalDefault, groupAlertDays: finalGroup, applyToExisting })
             });
+
+            if (res.status === 401 || res.status === 403) {
+                alert('Sua sessão expirou. Recarregando a página para novo login...');
+                window.location.reload();
+                return;
+            }
+
             if (res.ok) {
                 setIsAlertConfigOpen(false);
                 if (applyToExisting) {
@@ -188,6 +195,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Recarregando a página... ');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) throw new Error("Delete failed");
                 setCompanies((prev: CompanyProfile[]) => prev.filter((c: CompanyProfile) => c.id !== companyId));
                 setDocuments((prev: CompanyDocument[]) => prev.filter((d: CompanyDocument) => d.companyProfileId !== companyId));
@@ -212,6 +226,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     },
                     body: JSON.stringify(companyData)
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Recarregue a página para um novo login.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) throw new Error("Failed to update company");
                 const updatedCompany = await res.json();
                 setCompanies((prev: CompanyProfile[]) => prev.map((c: CompanyProfile) => c.id === editingCompany.id ? updatedCompany : c));
@@ -225,6 +246,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     },
                     body: JSON.stringify(companyData)
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Recarregue a página para um novo login.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) throw new Error("Failed to create company");
                 const newCompany = await res.json();
                 setCompanies((prev: CompanyProfile[]) => [...prev, newCompany]);
@@ -254,6 +282,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Faça login novamente.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (res.ok) {
                     setDocuments(prev => prev.filter(d => d.id !== docId));
                 }
@@ -283,6 +318,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: formData
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Faça login novamente.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) throw new Error("Failed to update document");
                 const updatedDoc = await res.json();
                 setDocuments(prev => prev.map(d => d.id === editingDocument.id ? updatedDoc : d));
@@ -313,6 +355,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: formData
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Faça login novamente.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
                     throw new Error(errorData.details || errorData.error || "Upload failed");
@@ -357,6 +406,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     },
                     body: JSON.stringify(credData)
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Faça login novamente.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) throw new Error("Failed to update credential");
                 const updatedCred = await res.json();
 
@@ -375,6 +431,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     },
                     body: JSON.stringify({ ...credData, companyProfileId: selectedCompanyId })
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Faça login novamente.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) throw new Error("Failed to create credential");
                 const newCred = await res.json();
 
@@ -398,6 +461,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
+
+                if (res.status === 401 || res.status === 403) {
+                    alert('Sua sessão expirou. Faça login novamente.');
+                    window.location.reload();
+                    return;
+                }
+
                 if (!res.ok) throw new Error("Failed to delete credential");
 
                 setCompanies(prev => prev.map(c =>
@@ -435,6 +505,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: formData
             });
+
+            if (res.status === 401 || res.status === 403) {
+                alert('Sua sessão expirou. Faça login novamente.');
+                window.location.reload();
+                return;
+            }
+
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
                 throw new Error(errorData.details || errorData.error || "Fast upload failed");
