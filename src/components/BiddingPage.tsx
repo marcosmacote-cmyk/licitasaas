@@ -163,6 +163,15 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         const doc = new jsPDF('l', 'mm', 'a4');
         const { headers, rows } = getExportData();
 
+        // Limita o tamanho do texto do "Objeto Resumido" para o PDF para não quebrar o layout
+        const pdfRows = rows.map(row => {
+            const r = [...row];
+            if (typeof r[1] === 'string' && r[1].length > 250) {
+                r[1] = r[1].substring(0, 247) + '...';
+            }
+            return r;
+        });
+
         doc.setFontSize(18);
         doc.text('Relatório de Processos Licitatórios', 14, 22);
 
@@ -175,12 +184,20 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
         autoTable(doc, {
             head: [headers],
-            body: rows,
+            body: pdfRows,
             startY: 45,
             theme: 'striped',
             headStyles: { fillColor: [37, 99, 235], textColor: 255 },
             styles: { fontSize: 8, cellPadding: 3 },
-            columnStyles: { 0: { cellWidth: 'auto' } }
+            columnStyles: {
+                0: { cellWidth: 40 },
+                1: { cellWidth: 65, halign: 'justify' as any },
+                2: { cellWidth: 35 },
+                3: { cellWidth: 20 },
+                4: { cellWidth: 20 },
+                5: { cellWidth: 25 },
+                6: { cellWidth: 25 },
+            }
         });
 
         doc.save(`relatorio_licitacoes_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
