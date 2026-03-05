@@ -391,7 +391,7 @@ app.put('/api/companies/:id', authenticateToken, async (req: any, res) => {
         }
 
         // Only allow updating editable fields — strip out id, tenantId, relations
-        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone } = req.body;
+        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state } = req.body;
         const safeData: any = {};
         if (razaoSocial !== undefined) safeData.razaoSocial = razaoSocial;
         if (cnpj !== undefined) safeData.cnpj = cnpj;
@@ -401,6 +401,10 @@ app.put('/api/companies/:id', authenticateToken, async (req: any, res) => {
         if (contactName !== undefined) safeData.contactName = contactName;
         if (contactEmail !== undefined) safeData.contactEmail = contactEmail;
         if (contactPhone !== undefined) safeData.contactPhone = contactPhone;
+        if (contactCpf !== undefined) safeData.contactCpf = contactCpf;
+        if (address !== undefined) safeData.address = address;
+        if (city !== undefined) safeData.city = city;
+        if (state !== undefined) safeData.state = state;
 
         const updatedCompany = await prisma.companyProfile.update({
             where: { id },
@@ -1878,10 +1882,11 @@ INSTRUÇÕES (CRÍTICAS):
 6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
 7. ATENÇÃO CRÍTICA: NUNCA crie um campo de assinatura no final. NUNCA inclua Local e Data (ex: "Cidade, XX de XXXX de XXXX") no corpo da carta. Eu irei anexar Local, Data e Assinatura fisicamente depois da planilha de preços. Termine o documento em "Atenciosamente," e PARE. Não inclua linhas de assinatura "____________________", nem Local/Data de espécie alguma.
 8. NÃO repita no topo da carta o cabeçalho da empresa (razão social, CNPJ, endereço, email, telefone) pois isso já consta no timbrado fixo do documento. Comece endereçando diretamente a Comissão/Pregoeiro.
-9. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
-10. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML nem asteriscos). 
+9. NUNCA LISTE OS ITENS OU PRODUTOS NA CARTA. Não crie listas de materiais ou serviços. Os itens já estarão dispostos na planilha de preços que acompanha a carta. Cite apenas o objeto da licitação de forma resumida no primeiro parágrafo.
+10. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
+11. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML nem asteriscos). 
 
-IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura, Local ou Data.`;
+IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura, Local ou Data, nem listas de itens.`;
 
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',

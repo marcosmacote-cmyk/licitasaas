@@ -396,7 +396,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             return `
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 8px; text-align: center;">${it.itemNumber || i + 1}</td>
-                <td style="padding: 8px;">${it.description}</td>
+                <td style="padding: 8px; text-align: justify; hyphens: auto;">${it.description}</td>
                 <td style="padding: 8px; text-align: center;">${it.brand || '-'}</td>
                 <td style="padding: 8px; text-align: center;">${it.model || '-'}</td>
                 <td style="padding: 8px; text-align: center;">${it.unit}</td>
@@ -421,9 +421,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             ? `${locParts}, ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}`
             : new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-        // Calculate margins for fixed header/footer — tight to edges
-        const topMargin = headerImage ? (headerImageHeight + 10) : 0;
-        const bottomMargin = footerImage ? (footerImageHeight + 20) : 0;
+        // Calculate margins for fixed header/footer — safer padding to edges to prevent overlapping with text
+        const topMargin = headerImage ? (headerImageHeight + 35) : 0;
+        const bottomMargin = footerImage ? (footerImageHeight + 45) : 0;
 
         const html = `
             <!DOCTYPE html>
@@ -432,7 +432,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 <meta charset="UTF-8">
                 <title>Proposta Comercial - ${selectedBidding.title}</title>
                 <style>
-                    body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.5; font-size: 13px; margin: 0; padding: 15px 20px; padding-top: ${topMargin > 0 ? topMargin + 15 : 15}px; padding-bottom: ${bottomMargin > 0 ? bottomMargin + 15 : 15}px; }
+                    body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.5; font-size: 13px; margin: 0; padding: 15px 20px; padding-top: ${topMargin > 0 ? topMargin + 20 : 15}px; padding-bottom: ${bottomMargin > 0 ? bottomMargin + 20 : 15}px; }
                     
                     /* Fixed header/footer for ALL pages — flush to edges */
                     .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
