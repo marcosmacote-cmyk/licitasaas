@@ -1876,11 +1876,12 @@ INSTRUÇÕES (CRÍTICAS):
 4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
 5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
 6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
-7. ATENÇÃO: NUNCA crie um campo de assinatura, nem data ou local no final do documento. Eu irei anexar isso fisicamente depois. Termine o documento em "Atenciosamente," ou similar e PRONTO. Não inclua linhas de assinatura "____________________".
-8. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
-9. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML). 
+7. ATENÇÃO CRÍTICA: NUNCA crie um campo de assinatura no final. NUNCA inclua Local e Data (ex: "Cidade, XX de XXXX de XXXX") no corpo da carta. Eu irei anexar Local, Data e Assinatura fisicamente depois da planilha de preços. Termine o documento em "Atenciosamente," e PARE. Não inclua linhas de assinatura "____________________", nem Local/Data de espécie alguma.
+8. NÃO repita no topo da carta o cabeçalho da empresa (razão social, CNPJ, endereço, email, telefone) pois isso já consta no timbrado fixo do documento. Comece endereçando diretamente a Comissão/Pregoeiro.
+9. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
+10. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML nem asteriscos). 
 
-IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura.`;
+IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura, Local ou Data.`;
 
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',

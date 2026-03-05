@@ -41,7 +41,6 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [headerImage, setHeaderImage] = useState('');
     const [footerImage, setFooterImage] = useState('');
     const [signatureMode, setSignatureMode] = useState<'LEGAL' | 'TECH' | 'BOTH'>('LEGAL');
-    const [signatureCity, setSignatureCity] = useState('');
     const [headerImageHeight, setHeaderImageHeight] = useState(150);
     const [footerImageHeight, setFooterImageHeight] = useState(100);
 
@@ -78,7 +77,6 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     setHeaderImage(latest.headerImage || '');
                     setFooterImage(latest.footerImage || '');
                     setSignatureMode(latest.signatureMode || 'LEGAL');
-                    setSignatureCity(latest.signatureCity || '');
                     setHeaderImageHeight(latest.headerImageHeight || 150);
                     setFooterImageHeight(latest.footerImageHeight || 100);
                 }
@@ -267,7 +265,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         try {
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
-                body: JSON.stringify({ bdiPercentage: bdi, validityDays, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity }),
+                body: JSON.stringify({ bdiPercentage: bdi, validityDays, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode }),
             });
             // Reload to recalculate prices with new BDI
             await loadProposals();
@@ -422,50 +420,79 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             ? `${locParts}, ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}`
             : new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
+        // Calculate margins for fixed header/footer
+        const topMargin = headerImage ? (headerImageHeight + 30) : 0;
+        const bottomMargin = footerImage ? (footerImageHeight + 30) : 0;
+
         const html = `
             <!DOCTYPE html>
             <html>
             <head>
+                <meta charset="UTF-8">
                 <title>Proposta Comercial - ${selectedBidding.title}</title>
                 <style>
-                    body { font-family: 'Arial', sans-serif; padding: 40px; color: #111; line-height: 1.6; font-size: 14px; }
-                    .header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 20px; margin-bottom: 30px; }
-                    .header h1 { margin: 0; font-size: 22px; color: #000; }
-                    .header p { margin: 5px 0; color: #444; font-size: 13px; }
-                    .header-custom { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
+                    body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.6; font-size: 14px; margin: 0; padding: 40px; padding-top: ${topMargin > 0 ? topMargin + 40 : 40}px; padding-bottom: ${bottomMargin > 0 ? bottomMargin + 40 : 40}px; }
+                    
+                    /* Fixed header/footer for ALL pages */
+                    .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 10px 40px; border-bottom: 1px solid #ccc; }
+                    .fixed-header img { max-width: 100%; height: auto; }
+                    .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 10px 40px; border-top: 1px solid #ddd; }
+                    .fixed-footer img { max-width: 100%; height: auto; }
+                    .fixed-footer .gen-info { font-size: 10px; color: #888; margin-top: 4px; }
+                    
+                    .text-header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 20px; margin-bottom: 30px; }
+                    .text-header h1 { margin: 0; font-size: 22px; color: #000; }
+                    .text-header p { margin: 5px 0; color: #444; font-size: 13px; }
                     .letter { white-space: pre-wrap; margin-bottom: 40px; text-align: justify; }
                     .letter strong { font-weight: bold; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
-                    th { border-bottom: 2px solid #222; padding: 10px 8px; text-align: left; background: #f9f9f9; }
+                    table.items { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+                    table.items th { border-bottom: 2px solid #222; padding: 10px 8px; text-align: left; background: #f9f9f9; }
+                    table.items td { padding: 8px; border-bottom: 1px solid #ddd; }
                     .totals { width: 340px; float: right; margin-top: 20px; }
                     .totals tr th, .totals tr td { padding: 8px; text-align: right; border-bottom: 1px solid #ddd; }
-                    .totals tr.grand-total th, .totals tr.grand-total td { font-size: 18px; font-weight: bold; border-top: 2px solid #222; border-bottom: none; }
                     .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 60px; }
                     .signature-block .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; }
-                    .footer { margin-top: 80px; text-align: center; border-top: 1px solid #ddd; padding-top: 20px; font-size: 11px; color: #666; clear: both; }
+                    
+                    .no-print { }
+                    
                     @media print {
-                        body { padding: 0; }
-                        button { display: none; }
-                        @page { margin: 2cm; }
+                        .no-print { display: none !important; }
+                        body { padding: 0; padding-top: ${topMargin}px; padding-bottom: ${bottomMargin}px; }
+                        .fixed-header { padding: 10px 0; }
+                        .fixed-footer { padding: 8px 0; }
+                        @page { margin: 1.5cm 2cm; }
                     }
                 </style>
             </head>
             <body>
-                <button onclick="window.print()" style="padding: 10px 20px; margin-bottom: 20px; font-weight: bold; cursor: pointer;">Imprimir / Salvar PDF</button>
+                <button class="no-print" onclick="window.print()" style="padding: 10px 20px; margin-bottom: 20px; font-weight: bold; cursor: pointer; border-radius: 6px; background: #2563eb; color: #fff; border: none;">🖨️ Imprimir / Salvar PDF</button>
                 
-                <div class="${headerImage ? 'header-custom' : 'header'}">
-                    ${headerImage ? `<img src="${headerImage}" alt="Cabeçalho" style="max-width: 100%; max-height: ${headerImageHeight}px;" />` : `
-                        <h1>${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
-                        <p>CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
-                    `}
+                ${headerImage ? `
+                <div class="fixed-header">
+                    <img src="${headerImage}" alt="Cabeçalho" style="max-height: ${headerImageHeight}px;" />
                 </div>
+                ` : ''}
+                
+                ${footerImage ? `
+                <div class="fixed-footer">
+                    <img src="${footerImage}" alt="Rodapé" style="max-height: ${footerImageHeight}px;" />
+                    <div class="gen-info">Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.</div>
+                </div>
+                ` : ''}
+                
+                ${!headerImage ? `
+                <div class="text-header">
+                    <h1>${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
+                    <p>CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
+                </div>
+                ` : ''}
 
                 <div class="letter">
 ${cleanLetter}
                 </div>
 
                 <h3>Planilha de Formação de Preços</h3>
-                <table>
+                <table class="items">
                     <thead>
                         <tr>
                             <th style="text-align:center;">Lote/Item</th>
@@ -524,10 +551,11 @@ ${cleanLetter}
                     ` : ''}
                 </div>
                 
-                <div class="footer">
-                    ${footerImage ? `<img src="${footerImage}" alt="Rodapé" style="max-width: 100%; max-height: ${footerImageHeight}px; margin-bottom: 10px;" /><br/>` : ''}
+                ${!footerImage ? `
+                <div style="margin-top: 80px; text-align: center; border-top: 1px solid #ddd; padding-top: 20px; font-size: 11px; color: #666; clear: both;">
                     Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
                 </div>
+                ` : ''}
             </body>
             </html>
         `;
