@@ -415,15 +415,41 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             .replace(/^## (.+)$/gm, '<h3>$1</h3>')
             .replace(/^# (.+)$/gm, '<h2>$1</h2>');
 
-        // Build auto local/data from company profile
-        const locParts = [company?.city, company?.state].filter(Boolean).join('/');
+        // Build auto local/data from company profile, with fallback to parsing qualification text
+        let derivedCity = company?.city || '';
+        let derivedState = company?.state || '';
+        let derivedContactName = company?.contactName || '';
+        let derivedCpf = company?.contactCpf || '';
+
+        if (company?.qualification) {
+            const qual = company.qualification;
+
+            // City fallback
+            if (!derivedCity) {
+                const cityMatch = qual.match(/,\s*([^,.(0-9\-]{3,30})\s*[/|-]\s*([A-Z]{2})(?=\s*,|\s+CEP|\s+inscrita|\s*neste|$)/i);
+                if (cityMatch) {
+                    derivedCity = cityMatch[1].trim();
+                    derivedState = cityMatch[2].trim();
+                }
+            }
+
+            // CPF fallback
+            if (!derivedCpf) {
+                const cpfMatch = qual.match(/[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}/);
+                if (cpfMatch && cpfMatch[0].length <= 14) {
+                    derivedCpf = cpfMatch[0];
+                }
+            }
+        }
+
+        const locParts = [derivedCity, derivedState].filter(Boolean).join('/');
         const localData = locParts
             ? `${locParts}, ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}`
             : new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-        // Calculate margins for fixed header/footer — safer padding to edges to prevent overlapping with text
-        const topMargin = headerImage ? (headerImageHeight + 35) : 0;
-        const bottomMargin = footerImage ? (footerImageHeight + 45) : 0;
+        // Calculate margins to reserve space in thead/tfoot on every page
+        const topMargin = headerImage ? (headerImageHeight + 20) : 0;
+        const bottomMargin = footerImage ? (footerImageHeight + 30) : 0;
 
         const html = `
             <!DOCTYPE html>
@@ -432,14 +458,17 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 <meta charset="UTF-8">
                 <title>Proposta Comercial - ${selectedBidding.title}</title>
                 <style>
-                    body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.5; font-size: 13px; margin: 0; padding: 15px 20px; padding-top: ${topMargin > 0 ? topMargin + 20 : 15}px; padding-bottom: ${bottomMargin > 0 ? bottomMargin + 20 : 15}px; }
+                    body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.5; font-size: 13px; margin: 0; padding: 0; }
                     
-                    /* Fixed header/footer for ALL pages — flush to edges */
+                    /* Fixed elements rendering over everything but ignoring boundaries */
                     .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
                     .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
                     .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
                     .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
                     .fixed-footer .gen-info { font-size: 9px; color: #999; margin-top: 2px; }
+                    
+                    /* Document content container */
+                    .content-wrapper { padding: 15px 20px; }
                     
                     .text-header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 15px; }
                     .text-header h1 { margin: 0; font-size: 20px; color: #000; }
@@ -454,19 +483,24 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
                     .signature-block .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 12px; }
                     
+                    /* Print trick: Repeat thead and tfoot with invisible spacer blocks to prevent body from intruding into fixed zones */
+                    table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
+                    table.print-wrapper > thead > tr > td { height: ${topMargin > 0 ? topMargin : 0}px; border: none; padding: 0; }
+                    table.print-wrapper > tfoot > tr > td { height: ${bottomMargin > 0 ? bottomMargin : 0}px; border: none; padding: 0; }
+                    table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
+                    
                     .no-print { }
                     
                     @media print {
                         .no-print { display: none !important; }
-                        body { padding: 0; padding-top: ${topMargin}px; padding-bottom: ${bottomMargin}px; font-size: 12px; }
-                        .fixed-header { padding: 0; }
-                        .fixed-footer { padding: 0; }
+                        body { font-size: 12px; }
+                        .content-wrapper { padding: 0; }
                         @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: 0.8cm 1cm; }
                     }
                 </style>
             </head>
             <body>
-                <button class="no-print" onclick="window.print()" style="padding: 10px 20px; margin-bottom: 15px; font-weight: bold; cursor: pointer; border-radius: 6px; background: #2563eb; color: #fff; border: none; font-size: 13px;">🖨️ Imprimir / Salvar PDF</button>
+                <button class="no-print" onclick="window.print()" style="padding: 10px 20px; margin-left: 20px; margin-top: 20px; font-weight: bold; cursor: pointer; border-radius: 6px; background: #2563eb; color: #fff; border: none; font-size: 13px;">🖨️ Imprimir / Salvar PDF</button>
                 
                 ${headerImage ? `
                 <div class="fixed-header">
@@ -480,6 +514,12 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     <div class="gen-info">Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.</div>
                 </div>
                 ` : ''}
+
+                <table class="print-wrapper">
+                    <thead><tr><td></td></tr></thead>
+                    <tfoot><tr><td></td></tr></tfoot>
+                    <tbody><tr><td>
+                        <div class="content-wrapper">
                 
                 ${!headerImage ? `
                 <div class="text-header">
@@ -534,8 +574,8 @@ ${cleanLetter}
                         <div class="sig-item">
                             <div style="margin-bottom: 50px;"></div>
                             ___________________________________<br/>
-                            <strong>${company?.contactName || 'Representante Legal'}</strong><br/>
-                            ${company?.contactCpf ? 'CPF: ' + company.contactCpf + '<br/>' : ''}
+                            <strong>${derivedContactName || 'Representante Legal'}</strong><br/>
+                            ${derivedCpf ? 'CPF: ' + derivedCpf + '<br/>' : ''}
                             Representante Legal<br/>
                             ${company?.razaoSocial || ''}<br/>
                             ${company?.cnpj ? 'CNPJ: ' + company.cnpj : ''}
@@ -557,6 +597,10 @@ ${cleanLetter}
                     Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
                 </div>
                 ` : ''}
+                
+                        </div>
+                    </td></tr></tbody>
+                </table>
             </body>
             </html>
         `;
