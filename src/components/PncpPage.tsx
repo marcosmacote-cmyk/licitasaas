@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -15,6 +15,14 @@ const UFS = [
     'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
     'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN',
     'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'
+];
+
+const ESFERAS = [
+    { value: 'todas', label: 'Todas as Esferas' },
+    { value: 'F', label: 'Federal' },
+    { value: 'E', label: 'Estadual' },
+    { value: 'M', label: 'Municipal' },
+    { value: 'D', label: 'Distrital' },
 ];
 
 const MODALIDADES = [
@@ -48,9 +56,11 @@ export function PncpPage({ companies, onRefresh }: Props) {
     // Form state
     const [keywords, setKeywords] = useState('');
     const [status, setStatus] = useState('recebendo_proposta');
-    const [selectedUf, setSelectedUf] = useState('CE');
+    const [selectedUf, setSelectedUf] = useState('');
     const [selectedSearchCompanyId, setSelectedSearchCompanyId] = useState('');
     const [modalidade, setModalidade] = useState('todas');
+    const [esfera, setEsfera] = useState('todas');
+    const [orgao, setOrgao] = useState('');
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
     const [page, setPage] = useState(1);
@@ -65,6 +75,27 @@ export function PncpPage({ companies, onRefresh }: Props) {
     const [viewingAnalysisProcess, setViewingAnalysisProcess] = useState<BiddingProcess | null>(null);
     const [analyzedPncpItem, setAnalyzedPncpItem] = useState<PncpBiddingItem | null>(null);
     const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
+
+    // Favoritos State
+    const [favoritos, setFavoritos] = useState<PncpBiddingItem[]>(() => {
+        const saved = localStorage.getItem('pncp_favoritos');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [showFavoritosTab, setShowFavoritosTab] = useState(false);
+
+    useEffect(() => {
+        localStorage.setItem('pncp_favoritos', JSON.stringify(favoritos));
+    }, [favoritos]);
+
+    const toggleFavorito = (item: PncpBiddingItem) => {
+        setFavoritos(prev => {
+            const isFav = prev.some(f => f.id === item.id);
+            if (isFav) return prev.filter(f => f.id !== item.id);
+            return [...prev, item];
+        });
+    };
+
+    const displayItems = showFavoritosTab ? favoritos : results;
 
     useEffect(() => {
         fetchSavedSearches();
@@ -85,7 +116,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
         }
     };
 
-    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string }) => {
+    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string }) => {
         if (e) {
             e.preventDefault();
             setPage(1);
@@ -107,6 +138,8 @@ export function PncpPage({ companies, onRefresh }: Props) {
                     modalidade: overrides?.modalidade ?? modalidade,
                     dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
                     dataFim: (overrides?.dataFim ?? dataFim) || undefined,
+                    esfera: overrides?.esfera ?? esfera,
+                    orgao: overrides?.orgao ?? orgao,
                 })
             });
             if (res.ok) {
@@ -182,6 +215,8 @@ export function PncpPage({ companies, onRefresh }: Props) {
             keywords: searchKeywords,
             status: searchStatus,
             uf: searchUf,
+            esfera: 'todas',
+            orgao: ''
         });
     };
 
@@ -209,9 +244,11 @@ export function PncpPage({ companies, onRefresh }: Props) {
     const clearSearch = () => {
         setKeywords('');
         setStatus('recebendo_proposta');
-        setSelectedUf('CE');
+        setSelectedUf('');
         setSelectedSearchCompanyId('');
         setModalidade('todas');
+        setEsfera('todas');
+        setOrgao('');
         setDataInicio('');
         setDataFim('');
         setResults([]);
@@ -360,6 +397,8 @@ export function PncpPage({ companies, onRefresh }: Props) {
 
     const activeFilterCount = [
         modalidade !== 'todas',
+        esfera !== 'todas',
+        orgao !== '',
         dataInicio !== '',
         dataFim !== '',
         selectedSearchCompanyId !== ''
@@ -460,8 +499,17 @@ export function PncpPage({ companies, onRefresh }: Props) {
                         <div style={{ minWidth: '120px' }}>
                             <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Estado (UF)</label>
                             <select value={selectedUf} onChange={(e) => setSelectedUf(e.target.value)} style={selectStyle}>
-                                <option value="">Brasil (Todas)</option>
-                                {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                                <option value="">Brasil (Todas as UFs)</option>
+                                <optgroup label="Agrupamento por Região">
+                                    <option value="AC,AP,AM,PA,RO,RR,TO">Região Norte</option>
+                                    <option value="AL,BA,CE,MA,PB,PE,PI,RN,SE">Região Nordeste</option>
+                                    <option value="DF,GO,MT,MS">Região Centro-Oeste</option>
+                                    <option value="ES,MG,RJ,SP">Região Sudeste</option>
+                                    <option value="PR,RS,SC">Região Sul</option>
+                                </optgroup>
+                                <optgroup label="Estados Específicos">
+                                    {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                                </optgroup>
                             </select>
                         </div>
 
@@ -529,6 +577,18 @@ export function PncpPage({ companies, onRefresh }: Props) {
                             </div>
 
                             <div>
+                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Esfera de Governo</label>
+                                <select value={esfera} onChange={(e) => setEsfera(e.target.value)} style={selectStyle}>
+                                    {ESFERAS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Órgão (Nome ou CNPJ)</label>
+                                <input type="text" placeholder="Ex: Comando da Marinha" value={orgao} onChange={(e) => setOrgao(e.target.value)} style={selectStyle} />
+                            </div>
+
+                            <div>
                                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Publicado a partir de</label>
                                 <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} style={selectStyle} />
                             </div>
@@ -550,17 +610,40 @@ export function PncpPage({ companies, onRefresh }: Props) {
                 </form>
             </div>
 
-            {/* Results Summary */}
-            {results.length > 0 && (
-                <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    marginBottom: '12px', padding: '0 4px'
-                }}>
-                    <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                        {totalResults > 0 ? `${totalResults} resultados encontrados` : `${results.length} resultados`}
-                    </span>
+            {/* Results Summary and Tabs */}
+            <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                marginBottom: '16px', padding: '0 4px', borderBottom: '1px solid var(--color-border)', paddingBottom: '0'
+            }}>
+                <div style={{ display: 'flex', gap: '24px' }}>
+                    <button
+                        onClick={() => setShowFavoritosTab(false)}
+                        style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            fontSize: '0.875rem', fontWeight: !showFavoritosTab ? 600 : 500,
+                            color: !showFavoritosTab ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                            borderBottom: !showFavoritosTab ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            paddingBottom: '12px', transition: 'all 0.2s', margin: 0
+                        }}
+                    >
+                        Resultados da Busca {results.length > 0 && `(${totalResults || results.length})`}
+                    </button>
+                    <button
+                        onClick={() => setShowFavoritosTab(true)}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            fontSize: '0.875rem', fontWeight: showFavoritosTab ? 600 : 500,
+                            color: showFavoritosTab ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+                            borderBottom: showFavoritosTab ? '2px solid var(--color-warning)' : '2px solid transparent',
+                            paddingBottom: '12px', transition: 'all 0.2s', margin: 0
+                        }}
+                    >
+                        <Star size={16} fill={showFavoritosTab ? "currentColor" : "none"} color={showFavoritosTab ? "currentColor" : "currentColor"} />
+                        Favoritos {favoritos.length > 0 && `(${favoritos.length})`}
+                    </button>
                 </div>
-            )}
+            </div>
 
             {/* Results Table */}
             <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
@@ -583,127 +666,138 @@ export function PncpPage({ companies, onRefresh }: Props) {
                                     <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>Consultando PNCP...</div>
                                 </td>
                             </tr>
-                        ) : results.length === 0 ? (
+                        ) : displayItems.length === 0 ? (
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
-                                    <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>Nenhum edital encontrado</div>
-                                    <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>Tente ajustar as palavras-chave ou filtros.</div>
+                                    {showFavoritosTab ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} /> : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
+                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>{showFavoritosTab ? 'Nenhum edital nos favoritos' : 'Nenhum edital encontrado'}</div>
+                                    <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>{showFavoritosTab ? 'Clique na estrela para favoritar resultados.' : 'Tente ajustar as palavras-chave ou filtros.'}</div>
                                 </td>
                             </tr>
                         ) : (
-                            results.map((item) => (
-                                <tr key={item.id} style={{ transition: 'background 0.15s' }}
-                                    onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
-                                    onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
-                                >
-                                    <td style={{ paddingLeft: '24px', verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
-                                        <div style={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: '1.4' }}>{item.orgao_nome}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                                            📍 {item.municipio} - {item.uf}
-                                        </div>
-                                    </td>
-                                    <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
-                                        <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '4px', lineHeight: '1.3' }}>{item.titulo}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: '1.4' }}>
-                                            {item.objeto}
-                                        </div>
-                                    </td>
-                                    <td style={{ verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap' }}>
-                                        {item.modalidade_nome ? (
-                                            <span style={{
-                                                display: 'inline-block',
-                                                padding: '3px 10px',
-                                                borderRadius: '6px',
-                                                background: 'rgba(37, 99, 235, 0.1)',
-                                                color: 'var(--color-primary)',
-                                                fontSize: '0.75rem',
-                                                fontWeight: 600,
-                                            }}>{item.modalidade_nome}</span>
-                                        ) : (
-                                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
-                                        )}
-                                    </td>
-                                    {/* Prazo Limite (data fim de recebimento de propostas) */}
-                                    <td style={{ whiteSpace: 'nowrap', verticalAlign: 'top', paddingTop: '16px' }}>
-                                        {item.data_encerramento_proposta ? (
-                                            <>
-                                                <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: new Date(item.data_encerramento_proposta) > new Date() ? 'var(--color-danger)' : 'var(--color-text-secondary)' }}>
-                                                    {new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR')}
-                                                </div>
-                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
-                                                    {new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
-                                        )}
-                                    </td>
-                                    <td style={{ fontWeight: 700, verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap' }}>
-                                        {item.valor_estimado ? (
-                                            <span style={{ color: 'var(--color-success)' }}>
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor_estimado)}
-                                            </span>
-                                        ) : (
-                                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>N/D</span>
-                                        )}
-                                    </td>
-                                    <td style={{ paddingRight: '24px', verticalAlign: 'top', paddingTop: '14px' }}>
-                                        <div style={{ display: 'flex', gap: '6px' }}>
-                                            <button
-                                                className="btn btn-primary"
-                                                style={{ padding: '7px 12px', fontSize: '0.75rem', borderRadius: '8px', gap: '4px', whiteSpace: 'nowrap' }}
-                                                onClick={() => handleImportToFunnel(item)}
-                                                title="Importar para o Funil de Licitações"
-                                            >
-                                                <Plus size={14} /> Importar
-                                            </button>
-                                            <button
-                                                className="btn"
-                                                style={{
-                                                    padding: '7px 12px',
+                            displayItems.map((item) => {
+                                const isFavorito = favoritos.some(f => f.id === item.id);
+                                return (
+                                    <tr key={item.id} style={{ transition: 'background 0.15s' }}
+                                        onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        <td style={{ paddingLeft: '24px', verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: '1.4' }}>{item.orgao_nome}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                                                📍 {item.municipio} - {item.uf}
+                                            </div>
+                                        </td>
+                                        <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '4px', lineHeight: '1.3' }}>{item.titulo}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: '1.4' }}>
+                                                {item.objeto}
+                                            </div>
+                                        </td>
+                                        <td style={{ verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap' }}>
+                                            {item.modalidade_nome ? (
+                                                <span style={{
+                                                    display: 'inline-block',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '6px',
+                                                    background: 'rgba(37, 99, 235, 0.1)',
+                                                    color: 'var(--color-primary)',
                                                     fontSize: '0.75rem',
-                                                    borderRadius: '8px',
-                                                    gap: '4px',
-                                                    whiteSpace: 'nowrap',
-                                                    background: analyzingItemId === item.id ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    cursor: analyzingItemId ? 'not-allowed' : 'pointer',
-                                                    opacity: (analyzingItemId && analyzingItemId !== item.id) ? 0.5 : 1,
-                                                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                                onClick={() => handlePncpAiAnalyze(item)}
-                                                disabled={!!analyzingItemId}
-                                                title="Analisar edital com IA (busca PDFs do PNCP automaticamente)"
-                                            >
-                                                {analyzingItemId === item.id ? (
-                                                    <><Loader2 size={14} className="spinner" /> Analisando...</>
-                                                ) : (
-                                                    <><Brain size={14} /> IA</>
-                                                )}
-                                            </button>
-                                            <a
-                                                href={item.link_sistema}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="btn btn-ghost"
-                                                style={{ padding: '7px', borderRadius: '8px' }}
-                                                title="Abrir no PNCP"
-                                            >
-                                                <ExternalLink size={15} />
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
+                                                    fontWeight: 600,
+                                                }}>{item.modalidade_nome}</span>
+                                            ) : (
+                                                <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
+                                            )}
+                                        </td>
+                                        {/* Prazo Limite (data fim de recebimento de propostas) */}
+                                        <td style={{ whiteSpace: 'nowrap', verticalAlign: 'top', paddingTop: '16px' }}>
+                                            {item.data_encerramento_proposta ? (
+                                                <>
+                                                    <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: new Date(item.data_encerramento_proposta) > new Date() ? 'var(--color-danger)' : 'var(--color-text-secondary)' }}>
+                                                        {new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR')}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
+                                                        {new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
+                                            )}
+                                        </td>
+                                        <td style={{ fontWeight: 700, verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap' }}>
+                                            {item.valor_estimado ? (
+                                                <span style={{ color: 'var(--color-success)' }}>
+                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor_estimado)}
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>N/D</span>
+                                            )}
+                                        </td>
+                                        <td style={{ paddingRight: '24px', verticalAlign: 'top', paddingTop: '14px' }}>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button
+                                                    className="btn btn-ghost"
+                                                    onClick={() => toggleFavorito(item)}
+                                                    style={{ padding: '7px', borderRadius: '8px', color: isFavorito ? 'var(--color-warning)' : 'var(--color-text-tertiary)', background: isFavorito ? 'rgba(245, 158, 11, 0.1)' : 'transparent' }}
+                                                    title={isFavorito ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
+                                                >
+                                                    <Star size={15} fill={isFavorito ? "currentColor" : "none"} />
+                                                </button>
+                                                <button
+                                                    className="btn btn-primary"
+                                                    style={{ padding: '7px 12px', fontSize: '0.75rem', borderRadius: '8px', gap: '4px', whiteSpace: 'nowrap' }}
+                                                    onClick={() => handleImportToFunnel(item)}
+                                                    title="Importar para o Funil de Licitações"
+                                                >
+                                                    <Plus size={14} /> Importar
+                                                </button>
+                                                <button
+                                                    className="btn"
+                                                    style={{
+                                                        padding: '7px 12px',
+                                                        fontSize: '0.75rem',
+                                                        borderRadius: '8px',
+                                                        gap: '4px',
+                                                        whiteSpace: 'nowrap',
+                                                        background: analyzingItemId === item.id ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        cursor: analyzingItemId ? 'not-allowed' : 'pointer',
+                                                        opacity: (analyzingItemId && analyzingItemId !== item.id) ? 0.5 : 1,
+                                                        boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                    onClick={() => handlePncpAiAnalyze(item)}
+                                                    disabled={!!analyzingItemId}
+                                                    title="Analisar edital com IA (busca PDFs do PNCP automaticamente)"
+                                                >
+                                                    {analyzingItemId === item.id ? (
+                                                        <><Loader2 size={14} className="spinner" /> Analisando...</>
+                                                    ) : (
+                                                        <><Brain size={14} /> IA</>
+                                                    )}
+                                                </button>
+                                                <a
+                                                    href={item.link_sistema}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="btn btn-ghost"
+                                                    style={{ padding: '7px', borderRadius: '8px' }}
+                                                    title="Abrir no PNCP"
+                                                >
+                                                    <ExternalLink size={15} />
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })
                         )}
                     </tbody>
                 </table>
 
                 {/* Pagination Controls */}
-                {results.length > 0 && totalResults > 0 && (() => {
+                {!showFavoritosTab && displayItems.length > 0 && totalResults > 0 && (() => {
                     const totalPages = Math.ceil(totalResults / 10);
                     const renderPageNumbers = () => {
                         const pages = [];

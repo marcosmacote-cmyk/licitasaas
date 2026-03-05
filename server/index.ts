@@ -765,19 +765,33 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
 
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim } = req.body;
+        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao } = req.body;
         const pageSize = 10;
 
         // Fetch a large batch from PNCP to enable global sorting (max 500)
         let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=500&pagina=1`;
-        if (keywords) {
-            url += `&q=${encodeURIComponent(keywords)}`;
+
+        let queryParams = [];
+        if (keywords) queryParams.push(keywords);
+
+        if (orgao) {
+            const onlyNumbers = orgao.replace(/\D/g, '');
+            if (onlyNumbers.length === 14) {
+                url += `&cnpj=${onlyNumbers}`;
+            } else {
+                queryParams.push(orgao); // Append to generic search
+            }
         }
+
+        if (queryParams.length > 0) {
+            url += `&q=${encodeURIComponent(queryParams.join(' '))}`;
+        }
+
         if (status && status !== 'todas') {
             url += `&status=${status}`;
         }
         if (uf) {
-            url += `&ufs=${uf}`;
+            url += `&ufs=${uf}`; // Allow comma-separated UFs e.g. PR,SC,RS
         }
         if (modalidade && modalidade !== 'todas') {
             url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
@@ -787,6 +801,9 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         }
         if (dataFim) {
             url += `&data_fim=${dataFim}`;
+        }
+        if (esfera && esfera !== 'todas') {
+            url += `&esferas=${esfera}`;
         }
 
         const agent = new https.Agent({
