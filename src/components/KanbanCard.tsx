@@ -123,8 +123,8 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                 </div>
             )}
 
-            {!compactMode && isVisible('summary') && item.summary && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '8px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {isVisible('summary') && item.summary && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '8px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'pre-wrap' }}>
                     {item.summary}
                 </div>
             )}

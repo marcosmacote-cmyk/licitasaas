@@ -85,7 +85,10 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
     // ===== NOVOS ESTADOS: Filtros + Config de Campos =====
     const [filters, setFilters] = useState<SmartFilters>(EMPTY_FILTERS);
-    const [cardFields, setCardFields] = useState<CardFieldConfig[]>(INITIAL_CARD_FIELDS);
+    const [cardFields, setCardFields] = useState<CardFieldConfig[]>(() => {
+        const saved = localStorage.getItem('biddingCardFields');
+        return saved ? JSON.parse(saved) : INITIAL_CARD_FIELDS;
+    });
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showCardConfig, setShowCardConfig] = useState(false);
 
@@ -111,7 +114,8 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         localStorage.setItem('biddingVisibleColumns', JSON.stringify(visibleColumns));
         localStorage.setItem('biddingSortBy', sortBy);
         localStorage.setItem('biddingCompactMode', String(compactMode));
-    }, [viewMode, visibleColumns, sortBy, compactMode]);
+        localStorage.setItem('biddingCardFields', JSON.stringify(cardFields));
+    }, [viewMode, visibleColumns, sortBy, compactMode, cardFields]);
 
     const [highlightExpiring, setHighlightExpiring] = useState(true);
 
@@ -1137,10 +1141,10 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                                     <label key={field.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
                                         onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
                                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                        onClick={e => { e.preventDefault(); setCardFields(cardFields.map(f => f.key === field.key ? { ...f, visible: !f.visible } : f)); }}
                                     >
                                         <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}>{field.label}</span>
                                         <div
-                                            onClick={e => { e.preventDefault(); setCardFields(cardFields.map(f => f.key === field.key ? { ...f, visible: !f.visible } : f)); }}
                                             style={{
                                                 width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
                                                 background: field.visible ? '#8b5cf6' : 'var(--color-border)',
