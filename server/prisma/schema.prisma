@@ -48,6 +48,10 @@ model CompanyProfile {
   address          String?             // Endereço Completo
   city             String?             // Cidade Sede
   state            String?             // UF (sigla)
+  defaultProposalHeader   String?      // Base64 image
+  defaultProposalFooter   String?      // Base64 image
+  defaultProposalHeaderHeight Int?      @default(80)
+  defaultProposalFooterHeight Int?      @default(60)
   biddingProcesses BiddingProcess[]
   credentials      CompanyCredential[]
   pncpSearches     PncpSavedSearch[]

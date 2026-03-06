@@ -70,6 +70,10 @@ export interface CompanyProfile {
     name?: string; // Alias for razaoSocial used in some components
     documents?: CompanyDocument[]; // Nested documents from backend
     credentials?: CompanyCredential[]; // Nested credentials from backend
+    defaultProposalHeader?: string;
+    defaultProposalFooter?: string;
+    defaultProposalHeaderHeight?: number;
+    defaultProposalFooterHeight?: number;
 }
 
 export type DocumentStatus = 'Válido' | 'Vencendo' | 'Vencido' | 'Alerta' | 'Crítico';

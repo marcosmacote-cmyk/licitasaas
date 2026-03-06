@@ -49,6 +49,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [signatureMode, setSignatureMode] = useState<'LEGAL' | 'TECH' | 'BOTH'>('LEGAL');
     const [headerImageHeight, setHeaderImageHeight] = useState(150);
     const [footerImageHeight, setFooterImageHeight] = useState(100);
+    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [printLandscape, setPrintLandscape] = useState(false);
 
     const token = localStorage.getItem('token');
@@ -60,6 +61,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         , [biddings]);
 
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
+    const selectedCompany = companies.find(c => c.id === selectedCompanyId);
 
     // Load proposals when bidding changes
     useEffect(() => {
@@ -110,6 +112,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     companyProfileId: selectedCompanyId,
                     bdiPercentage: bdi,
                     validityDays,
+                    headerImage: selectedCompany?.defaultProposalHeader || '',
+                    footerImage: selectedCompany?.defaultProposalFooter || '',
+                    headerImageHeight: selectedCompany?.defaultProposalHeaderHeight || 80,
+                    footerImageHeight: selectedCompany?.defaultProposalFooterHeight || 60,
                 }),
             });
             if (res.ok) {
@@ -117,6 +123,13 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 setProposal(data);
                 setItems(data.items || []);
                 setProposals(prev => [data, ...prev]);
+                // Set images from company default if present
+                if (selectedCompany) {
+                    setHeaderImage(selectedCompany.defaultProposalHeader || '');
+                    setFooterImage(selectedCompany.defaultProposalFooter || '');
+                    setHeaderImageHeight(selectedCompany.defaultProposalHeaderHeight || 80);
+                    setFooterImageHeight(selectedCompany.defaultProposalFooterHeight || 60);
+                }
                 showSaveMsg('Proposta criada com sucesso!');
             }
         } catch (e) {
@@ -251,6 +264,29 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             alert('Erro ao salvar os itens.');
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleSaveCompanyTemplate = async () => {
+        if (!selectedCompanyId) return;
+        setIsSavingTemplate(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/companies/${selectedCompanyId}/proposal-template`, {
+                method: 'PUT', headers,
+                body: JSON.stringify({
+                    headerImage,
+                    footerImage,
+                    headerHeight: headerImageHeight,
+                    footerHeight: footerImageHeight
+                })
+            });
+            if (res.ok) {
+                showSaveMsg('Template padrão da empresa salvo!');
+            }
+        } catch (e) {
+            alert('Erro ao salvar template da empresa.');
+        } finally {
+            setIsSavingTemplate(false);
         }
     };
 
@@ -1092,6 +1128,22 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     </div>
                                 )}
                             </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid rgba(37, 99, 235, 0.1)', paddingTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={handleSaveCompanyTemplate}
+                                disabled={isSavingTemplate || !selectedCompanyId}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600,
+                                    background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
+                                    color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                {isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+                                Salvar como Padrão da Empresa
+                            </button>
                         </div>
                     </div>
 

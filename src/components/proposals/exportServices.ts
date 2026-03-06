@@ -86,7 +86,18 @@ export function generateProposalPdf(
 
     const finalTotal = totalItemsValue; // Discount is already in unit prices
 
-    const cleanLetter = (letterContent || 'Nenhuma carta proposta redigida.')
+    let letterHtml = (letterContent || 'Nenhuma carta proposta redigida.');
+    const qualificationText = company?.qualification || '';
+
+    // Integrated qualification context
+    if (letterHtml.includes('[IDENTIFICACAO]')) {
+        letterHtml = letterHtml.replace('[IDENTIFICACAO]', qualificationText);
+    } else if (qualificationText) {
+        // Fallback: if tag not present, prepend to first paragraph
+        letterHtml = qualificationText + '\n\n' + letterHtml;
+    }
+
+    const cleanLetter = letterHtml
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
         .replace(/^### (.+)$/gm, '<h4>$1</h4>')
@@ -124,20 +135,8 @@ export function generateProposalPdf(
         ? `${locParts}, ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}`
         : new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-    // Better integrated qualification layout
-    const companyHeaderHtml = company?.qualification ? `
-        <div style="margin-bottom: 30px; padding: 15px; border: 1px solid #eee; background-color: #fcfcfc; border-radius: 5px; text-align: justify; font-size: 13px; line-height: 1.6;">
-            ${company.qualification}
-        </div>
-    ` : `
-        <div style="margin-bottom: 20px; text-align: center; border-bottom: 2px solid #222; padding-bottom: 12px;">
-            <h1 style="margin: 0; font-size: 20px;">${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
-            <p style="margin: 3px 0; color: #444; font-size: 12px;">CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
-        </div>
-    `;
-
-    const topMargin = headerImage ? (headerImageHeight + 20) : 0;
-    const bottomMargin = footerImage ? (footerImageHeight + 30) : 0;
+    const topMargin = headerImage ? (headerImageHeight + 20) : 100; // default for text header
+    const bottomMargin = footerImage ? (footerImageHeight + 30) : 80;
 
     const html = `
         <!DOCTYPE html>
@@ -151,7 +150,7 @@ export function generateProposalPdf(
                 .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
                 .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
                 .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-                .fixed-footer .gen-info { font-size: 9px; color: #999; margin-top: 2px; }
+                .fixed-footer .gen-info { font-size: 8px; color: #999; margin-top: 2px; }
                 .content-wrapper { padding: 15px 20px; }
                 .letter { white-space: pre-wrap; margin-bottom: 25px; text-align: justify; font-size: 13px; line-height: 1.5; }
                 table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 11px; }
@@ -162,8 +161,8 @@ export function generateProposalPdf(
                 .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
                 .signature-block .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 12px; }
                 table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
-                table.print-wrapper > thead > tr > td { height: ${topMargin > 0 ? topMargin : 0}px; border: none; padding: 0; }
-                table.print-wrapper > tfoot > tr > td { height: ${bottomMargin > 0 ? bottomMargin : 0}px; border: none; padding: 0; }
+                table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
+                table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
                 table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
                 @media print {
                     body { font-size: 12px; }
@@ -178,22 +177,36 @@ export function generateProposalPdf(
                     setTimeout(() => { window.print(); }, 500);
                 };
             </script>
-            ${headerImage ? `
-            <div class="fixed-header"><img src="${headerImage}" alt="Cabeçalho" style="max-height: ${headerImageHeight}px;" /></div>
-            ` : ''}
-            ${footerImage ? `
+            
+            <div class="fixed-header">
+                ${headerImage ? `
+                    <img src="${headerImage}" alt="Cabeçalho" style="max-height: ${headerImageHeight}px;" />
+                ` : `
+                    <div style="border-bottom: 2px solid #222; padding: 20px 0; margin: 0 40px;">
+                        <h1 style="margin: 0; font-size: 20px;">${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
+                        <p style="margin: 5px 0; font-weight: bold;">CNPJ: ${company?.cnpj || '-'}</p>
+                    </div>
+                `}
+            </div>
+
             <div class="fixed-footer">
-                <img src="${footerImage}" alt="Rodapé" style="max-height: ${footerImageHeight}px;" />
+                ${footerImage ? `
+                    <img src="${footerImage}" alt="Rodapé" style="max-height: ${footerImageHeight}px;" />
+                ` : `
+                    <div style="border-top: 1px solid #ddd; padding: 10px 0; font-size: 10px; color: #444; margin: 0 40px;">
+                        ${company?.address || 'Endereço não informado'}<br/>
+                        ${company?.contactEmail || ''} ${company?.contactPhone ? ' | Tel: ' + company.contactPhone : ''}
+                    </div>
+                `}
                 <div class="gen-info">Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.</div>
             </div>
-            ` : ''}
+
             <table class="print-wrapper">
                 <thead><tr><td></td></tr></thead>
                 <tfoot><tr><td></td></tr></tfoot>
                 <tbody><tr><td>
                     <div class="content-wrapper">
-            ${companyHeaderHtml}
-
+            
             <div class="letter">${cleanLetter}</div>
 
             <h3 style="font-size: 14px; margin-bottom: 10px;">Planilha de Formação de Preços</h3>
@@ -217,7 +230,7 @@ export function generateProposalPdf(
             <table class="totals">
                 <tbody>
                     <tr><th style="font-size: 1.2em;">TOTAL GLOBAL</th><td style="font-size: 1.2em; font-weight: bold;">${fmt(finalTotal)}</td></tr>
-                    ${discountPercentage > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Aplicado</th><td style="font-weight: normal; color: #555;">${fmtNum(discountPercentage)}%</td></tr>` : ''}
+                    ${discountPercentage > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Apresentado</th><td style="font-weight: normal; color: #555;">${fmtNum(discountPercentage)}%</td></tr>` : ''}
                     <tr><th style="font-weight: normal; color: #555;">Validade da Proposta</th><td style="font-weight: normal; color: #555;">${validityDays} dias</td></tr>
                     <tr><th style="font-weight: normal; color: #555;">Modo Cálculo</th><td style="font-weight: normal; color: #555;">${roundingMode === 'ROUND' ? 'Arredondado' : 'Truncado'}</td></tr>
                 </tbody>
@@ -250,12 +263,6 @@ export function generateProposalPdf(
                     </div>
                 ` : ''}
             </div>
-            
-            ${!footerImage ? `
-            <div style="margin-top: 60px; text-align: center; border-top: 1px solid #ddd; padding-top: 15px; font-size: 10px; color: #888; clear: both;">
-                Documento gerado pelo LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}.
-            </div>
-            ` : ''}
             
                     </div>
                 </td></tr></tbody>

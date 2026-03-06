@@ -245,6 +245,28 @@ app.post('/api/tenants', async (req, res) => {
 });
 
 // Companies
+// PUT Company Proposal Template — save default header/footer
+app.put('/api/companies/:id/proposal-template', authenticateToken, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { headerImage, footerImage, headerHeight, footerHeight } = req.body;
+
+        await prisma.companyProfile.update({
+            where: { id, tenantId: req.user.tenantId },
+            data: {
+                defaultProposalHeader: headerImage,
+                defaultProposalFooter: footerImage,
+                defaultProposalHeaderHeight: headerHeight,
+                defaultProposalFooterHeight: footerHeight
+            }
+        });
+
+        res.json({ message: 'Template padrão salvo com sucesso!' });
+    } catch (error: any) {
+        res.status(500).json({ error: 'Erro ao salvar template: ' + error.message });
+    }
+});
+
 app.get('/api/companies', authenticateToken, async (req: any, res) => {
     try {
         console.log(`[API] Fetching companies for tenant: ${req.user.tenantId}`);
@@ -1812,10 +1834,9 @@ INSTRUÇÕES TÉCNICAS:
 4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
 5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
 6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
-15. ATENÇÃO: NUNCA inclua Local e Data no corpo da carta. NUNCA inclua campos de assinatura (linhas). NÃO inclua cordialidades finais como "Atenciosamente" (será incluído automaticamente no fechamento do documento). Termine o texto diretamente.
-8. NÃO repita o cabeçalho completo da empresa (razão social, CNPJ em excesso) no topo, apenas o endereçamento.
-9. NUNCA LISTE OS ITENS NA CARTA. Cite apenas o objeto de forma resumida.
-10. Retorne APENAS o texto da carta, sem markdown.`;
+16. CRÍTICO: NÃO escreva a qualificação da empresa. Em vez disso, insira exatamente a tag [IDENTIFICACAO] na posição onde a qualificação deve entrar (geralmente após a Referência do processo e antes do corpo principal). O sistema substituirá essa tag pela qualificação completa do cadastro.
+17. Exemplo de estrutura: "Ao Agente... Referência... [IDENTIFICACAO] vem por meio desta apresentar...".
+18. Retorne APENAS o texto da carta, sem markdown.`;
 
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
