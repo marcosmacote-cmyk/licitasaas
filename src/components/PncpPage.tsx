@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2 } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from '../config';
 import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -122,6 +124,56 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
         const interval = setInterval(checkExpired, 60000); // 1 minuto
         return () => clearInterval(interval);
     }, []);
+
+    const exportFavoritesToPdf = () => {
+        if (favoritos.length === 0) {
+            alert("Não há licitações favoritadas.");
+            return;
+        }
+
+        const doc = new jsPDF('l', 'mm', 'a4');
+        doc.setFontSize(16);
+        doc.text("Relatório de Licitações Favoritas (PNCP)", 14, 20);
+
+        doc.setFontSize(10);
+        doc.text(`Data da Exportação: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
+
+        const tableColumn = ["Órgão", "Mod. / N°", "Objeto", "Abertura / Encerramento", "Val. Est. (R$)", "Município", "Link PNCP"];
+        const tableRows: any[][] = [];
+
+        favoritos.forEach(item => {
+            const rowData = [
+                item.orgao_nome,
+                `${item.modalidade_nome}\n${item.ano}/${item.numero_sequencial}`,
+                item.objeto.length > 90 ? item.objeto.substring(0, 87) + '...' : item.objeto,
+                `${item.data_abertura ? new Date(item.data_abertura).toLocaleDateString('pt-BR') : '-'} até\n${item.data_encerramento_proposta ? new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR') : '-'}`,
+                item.valor_estimado ? item.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-',
+                item.municipio ? `${item.municipio}-${item.uf}` : item.uf,
+                ''
+            ];
+            tableRows.push(rowData);
+        });
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 35,
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [37, 99, 235] },
+            columnStyles: { 2: { cellWidth: 70 }, 6: { cellWidth: 35 } },
+            didDrawCell: (data) => {
+                if (data.section === 'body' && data.column.index === 6) {
+                    const item = favoritos[data.row.index];
+                    if (item && item.link_sistema) {
+                        doc.setTextColor(37, 99, 235);
+                        doc.textWithLink("Acessar no PNCP", data.cell.x + 2, data.cell.y + 5, { url: item.link_sistema });
+                    }
+                }
+            }
+        });
+
+        doc.save(`licitacoes-favoritas-${new Date().toISOString().split('T')[0]}.pdf`);
+    };
 
     useEffect(() => {
         fetchSavedSearches();
@@ -330,10 +382,36 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             }
         }
 
+        let bestPortalName = "PNCP";
+        if (companies.length > 0) {
+            const allCreds = companies.flatMap(c => c.credentials || []);
+            const link = (item.link_sistema || '').toLowerCase();
+            const match = allCreds.find(c => {
+                const cu = (c.url || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+                return cu && link.includes(cu.split('/')[0]); // simple domain check
+            });
+
+            if (match) {
+                bestPortalName = match.platform;
+            } else if (link.includes('comprasnet') || link.includes('gov.br/compras')) {
+                bestPortalName = "ComprasNet";
+            } else if (link.includes('bll.org')) {
+                bestPortalName = "BLL";
+            } else if (link.includes('bnccompras') || link.includes('bnc.org.br')) {
+                bestPortalName = "BNC";
+            } else if (link.includes('licitacoes-e')) {
+                bestPortalName = "Licitações-e (BB)";
+            } else if (link.includes('portaldecompraspublicas')) {
+                bestPortalName = "Portal de Compras Públicas";
+            } else if (link.includes('bec.sp')) {
+                bestPortalName = "BEC/SP";
+            }
+        }
+
         const processData: Partial<BiddingProcess> = {
             title: aiData?.process?.title || item.titulo,
             summary: aiData?.process?.summary || item.objeto,
-            portal: "PNCP",
+            portal: aiData?.process?.portal || bestPortalName,
             modality: aiData?.process?.modality || item.modalidade_nome || "Não Informado (PNCP)",
             status: "Captado",
             estimatedValue: aiData?.process?.estimatedValue || item.valor_estimado || 0,
@@ -492,10 +570,25 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     return (
         <div className="page-container" style={{ paddingBottom: '32px' }}>
             {/* Page Header */}
-            <div className="page-header" style={{ marginBottom: '24px' }}>
+            <div className="page-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
                     <h1 className="page-title">Busca PNCP</h1>
                     <p className="page-subtitle">Pesquise editais diretamente no Portal Nacional de Contratações Públicas.</p>
+                </div>
+                {/* ── Dashboard Indicators ── */}
+                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><BarChart2 size={12} /> Descobertos</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>{totalResults.toLocaleString('pt-BR')}</div>
+                    </div>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Bookmark size={12} /> No Funil</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-primary)' }}>{items?.length || 0}</div>
+                    </div>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Star size={12} /> Favoritos</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-warning)' }}>{favoritos.length}</div>
+                    </div>
                 </div>
             </div>
 
@@ -737,6 +830,18 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         Favoritos {favoritos.length > 0 && `(${favoritos.length})`}
                     </button>
                 </div>
+            </div>
+
+            {/* Results Table Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px', marginTop: '32px' }}>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+                    {showFavoritosTab ? 'Licitações Favoritadas' : 'Resultados da Pesquisa'}
+                </h3>
+                {showFavoritosTab && favoritos.length > 0 && (
+                    <button className="btn btn-primary" onClick={exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}>
+                        <Download size={16} /> Exportar Relatório PDF
+                    </button>
+                )}
             </div>
 
             {/* Results Table */}
