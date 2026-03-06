@@ -828,32 +828,36 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // Limit concurrent requests to 100 to avoid node memory/worker exhaustion & PNCP IP bans on huge matrices
-        urlsToFetch = urlsToFetch.slice(0, 100);
+        // Limit max generated combinations to 1000 to avoid complete application DOS (extreme user input).
+        urlsToFetch = urlsToFetch.slice(0, 1000);
 
         const agent = new https.Agent({ rejectUnauthorized: false });
         const startTime = Date.now();
-        console.log(`[PNCP] START GET ${urlsToFetch.length} url(s)`);
-
-        // Execute all requests concurrently
-        const responses = await Promise.allSettled(
-            urlsToFetch.map(u => axios.get(u, {
-                headers: { 'Accept': 'application/json' },
-                httpsAgent: agent,
-                timeout: 15000
-            } as any))
-        );
+        console.log(`[PNCP] START GET ${urlsToFetch.length} url(s) in batches...`);
 
         let rawItems: any[] = [];
-        responses.forEach((res) => {
-            if (res.status === 'fulfilled') {
-                const data = res.value.data as any;
-                const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-                rawItems = rawItems.concat(items);
-            } else {
-                console.error('[PNCP] Request failed:', res.reason?.message);
-            }
-        });
+        const chunkSize = 60;
+
+        for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
+            const chunk = urlsToFetch.slice(i, i + chunkSize);
+            const responses = await Promise.allSettled(
+                chunk.map(u => axios.get(u, {
+                    headers: { 'Accept': 'application/json' },
+                    httpsAgent: agent,
+                    timeout: 25000
+                } as any))
+            );
+
+            responses.forEach((res) => {
+                if (res.status === 'fulfilled') {
+                    const data = res.value.data as any;
+                    const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
+                    rawItems = rawItems.concat(items);
+                } else {
+                    console.error('[PNCP] Request failed:', res.reason?.message);
+                }
+            });
+        }
 
         // First pass: extract what we can from search results
         // Also ensure no duplicate results based on PNCP ID just in case
