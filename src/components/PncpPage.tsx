@@ -61,7 +61,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
     const [modalidade, setModalidade] = useState('todas');
     const [esfera, setEsfera] = useState('todas');
     const [orgao, setOrgao] = useState('');
-    const [cnpjsLista, setCnpjsLista] = useState('');
+    const [orgaosLista, setOrgaosLista] = useState('');
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
     const [page, setPage] = useState(1);
@@ -117,7 +117,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
         }
     };
 
-    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; cnpjsLista?: string }) => {
+    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string }) => {
         if (e) {
             e.preventDefault();
             setPage(1);
@@ -141,7 +141,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
                     dataFim: (overrides?.dataFim ?? dataFim) || undefined,
                     esfera: overrides?.esfera ?? esfera,
                     orgao: overrides?.orgao ?? orgao,
-                    cnpjsLista: overrides?.cnpjsLista ?? cnpjsLista,
+                    orgaosLista: overrides?.orgaosLista ?? orgaosLista,
                 })
             });
             if (res.ok) {
@@ -177,7 +177,15 @@ export function PncpPage({ companies, onRefresh }: Props) {
                     keywords,
                     status,
                     companyProfileId: selectedSearchCompanyId,
-                    states: JSON.stringify(selectedUf ? [selectedUf] : [])
+                    states: JSON.stringify({
+                        uf: selectedUf,
+                        modalidade,
+                        esfera,
+                        orgao,
+                        orgaosLista,
+                        dataInicio,
+                        dataFim
+                    })
                 })
             });
 
@@ -197,29 +205,53 @@ export function PncpPage({ companies, onRefresh }: Props) {
     const loadSavedSearch = (search: PncpSavedSearch) => {
         const searchKeywords = search.keywords || '';
         const searchStatus = search.status || 'recebendo_proposta';
-        let searchUf = '';
+
+        let customState = {
+            uf: '',
+            modalidade: 'todas',
+            esfera: 'todas',
+            orgao: '',
+            orgaosLista: '',
+            dataInicio: '',
+            dataFim: ''
+        };
+
         try {
-            const parsedStates = JSON.parse(search.states || '[]');
-            searchUf = parsedStates[0] || '';
+            const parsedStates = JSON.parse(search.states || '{}');
+            if (Array.isArray(parsedStates)) {
+                // Backward compatibility for old saved searches that just stored [uf]
+                customState.uf = parsedStates[0] || '';
+            } else if (typeof parsedStates === 'object' && parsedStates !== null) {
+                customState = { ...customState, ...parsedStates };
+            }
         } catch {
-            searchUf = '';
+            // retain defaults
         }
 
         // Update form state for display
         setKeywords(searchKeywords);
         setStatus(searchStatus);
         setSelectedSearchCompanyId(search.companyProfileId || '');
-        setSelectedUf(searchUf);
+        setSelectedUf(customState.uf);
+        setModalidade(customState.modalidade);
+        setEsfera(customState.esfera);
+        setOrgao(customState.orgao);
+        setOrgaosLista(customState.orgaosLista);
+        setDataInicio(customState.dataInicio);
+        setDataFim(customState.dataFim);
         setPage(1);
 
         // Execute search immediately with the saved values (bypass stale state)
         handleSearch(undefined, {
             keywords: searchKeywords,
             status: searchStatus,
-            uf: searchUf,
-            esfera: 'todas',
-            orgao: '',
-            cnpjsLista: ''
+            uf: customState.uf,
+            modalidade: customState.modalidade,
+            esfera: customState.esfera,
+            orgao: customState.orgao,
+            orgaosLista: customState.orgaosLista,
+            dataInicio: customState.dataInicio,
+            dataFim: customState.dataFim
         });
     };
 
@@ -252,7 +284,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
         setModalidade('todas');
         setEsfera('todas');
         setOrgao('');
-        setCnpjsLista('');
+        setOrgaosLista('');
         setDataInicio('');
         setDataFim('');
         setResults([]);
@@ -403,7 +435,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
         modalidade !== 'todas',
         esfera !== 'todas',
         orgao !== '',
-        cnpjsLista.trim() !== '',
+        orgaosLista.trim() !== '',
         dataInicio !== '',
         dataFim !== '',
         selectedSearchCompanyId !== ''
@@ -594,11 +626,11 @@ export function PncpPage({ companies, onRefresh }: Props) {
                             </div>
 
                             <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Lista de CNPJs (Busca Múltipla Rápida)</label>
+                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)</label>
                                 <textarea
-                                    placeholder="Cole aqui a lista de CNPJs que deseja buscar, separados por vírgula, espaço ou quebra de linha..."
-                                    value={cnpjsLista}
-                                    onChange={(e) => setCnpjsLista(e.target.value)}
+                                    placeholder="Cole aqui a lista de nomes de prefeituras/órgãos ou seus CNPJs que deseja buscar de uma vez, separados por vírgula ou quebra de linha... (Vai cruzar tudo numa lista só de uma vez!)"
+                                    value={orgaosLista}
+                                    onChange={(e) => setOrgaosLista(e.target.value)}
                                     style={{
                                         ...selectStyle,
                                         minHeight: '60px',
@@ -608,7 +640,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
                                     }}
                                 />
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                                    Aceita formatação bruta (ex: 00.000.000/0001-91, 11111111000199).
+                                    Pode misturar exato (CNPJ com ou sem pontuação) ou nomes aproximados (ex: Prefeitura Municipal de Limoeiro do Norte).
                                 </div>
                             </div>
 

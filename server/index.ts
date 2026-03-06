@@ -765,7 +765,7 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
 
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, cnpjsLista } = req.body;
+        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista } = req.body;
         const pageSize = 10;
 
         let queryParams: string[] = [];
@@ -789,18 +789,27 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         };
 
         let urlsToFetch: string[] = [];
-        let extractedCnpjs: string[] = [];
+        let extractedNames: string[] = [];
 
-        if (cnpjsLista) {
-            const rawTokens = cnpjsLista.split(/[\s,;]+/);
-            extractedCnpjs = rawTokens.map((t: string) => t.replace(/\D/g, '')).filter((t: string) => t.length === 14);
-            extractedCnpjs = [...new Set(extractedCnpjs)]; // Remove duplicates
+        if (orgaosLista) {
+            // Split by comma, semicolon or line break to allow names like "Limoeiro do Norte"
+            extractedNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+            extractedNames = [...new Set(extractedNames)]; // Remove duplicates
         }
 
-        if (extractedCnpjs.length > 0) {
-            // Limit to 30 concurrent CNPJs to avoid IP/Rate limiting issues
-            const limitedCnpjs = extractedCnpjs.slice(0, 30);
-            urlsToFetch = limitedCnpjs.map(cnpj => buildBaseUrl(queryParams, cnpj));
+        if (extractedNames.length > 0) {
+            // Limit to 10 concurrent items to avoid PNCP rate limiting/timeouts on large text searches
+            const limitedNames = extractedNames.slice(0, 10);
+            urlsToFetch = limitedNames.map(name => {
+                const onlyNumbers = name.replace(/\D/g, '');
+                if (onlyNumbers.length === 14) {
+                    return buildBaseUrl(queryParams, onlyNumbers);
+                } else {
+                    let localParams = [...queryParams];
+                    localParams.push(name);
+                    return buildBaseUrl(localParams);
+                }
+            });
         } else {
             if (orgao) {
                 const onlyNumbers = orgao.replace(/\D/g, '');
