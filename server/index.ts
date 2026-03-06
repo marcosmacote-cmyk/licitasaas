@@ -794,7 +794,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                 url += `&cnpj=${overrideCnpj}`;
             }
             if (qItems.length > 0) {
-                url += `&q=${encodeURIComponent(qItems.join(' '))}`;
+                url += `&q=${encodeURIComponent(qItems.join(' AND '))}`;
             }
             if (status && status !== 'todas') url += `&status=${status}`;
             if (uf) url += `&ufs=${uf}`; // Allow comma-separated UFs
