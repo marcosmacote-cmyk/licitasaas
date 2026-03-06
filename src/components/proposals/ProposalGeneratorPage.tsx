@@ -7,6 +7,7 @@ import {
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
 import { calculateItem, calculateTotals } from './engine';
+import type { RoundingMode } from './engine';
 import { exportExcelProposal, generateProposalPdf } from './exportServices';
 
 interface Props {
@@ -27,6 +28,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [items, setItems] = useState<ProposalItem[]>([]);
     const [bdi, setBdi] = useState(0);
     const [discount, setDiscount] = useState(0);
+    const [roundingMode, setRoundingMode] = useState<RoundingMode>('ROUND');
     const [validityDays, setValidityDays] = useState(60);
     const [isLoading, setIsLoading] = useState(false);
     const [isAiLoading, setIsAiLoading] = useState(false);
@@ -54,7 +56,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
     // Filter biddings with AI analysis
     const availableBiddings = useMemo(() =>
-        biddings.filter(b => b.aiAnalysis)
+        biddings.filter(b => b.status === "Preparando Documentação")
         , [biddings]);
 
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
@@ -77,6 +79,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     setItems(latest.items || []);
                     setBdi(latest.bdiPercentage || 0);
                     setDiscount(latest.taxPercentage || 0);
+                    setRoundingMode(latest.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
                     setValidityDays(latest.validityDays || 60);
                     if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
                     setLetterContent(latest.letterContent || '');
@@ -138,7 +141,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     if (proposal) {
                         const itemsToSave = data.items.map((it: any) => {
                             const rawItem = { ...it, unitCost: it.referencePrice || 0, multiplier: 1, quantity: it.quantity || 1 };
-                            const calc = calculateItem(rawItem, bdi);
+                            const calc = calculateItem(rawItem, bdi, discount, roundingMode);
                             return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
                         });
                         const saveRes = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
@@ -160,7 +163,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 if (latestData[0]) {
                                     const itemsToSave = data.items.map((it: any) => {
                                         const rawItem = { ...it, unitCost: it.referencePrice || 0, multiplier: 1, quantity: it.quantity || 1 };
-                                        const calc = calculateItem(rawItem, bdi);
+                                        const calc = calculateItem(rawItem, bdi, discount, roundingMode);
                                         return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
                                     });
                                     await fetch(`${API_BASE_URL}/api/proposals/${latestData[0].id}/items`, {
@@ -211,12 +214,25 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         setItems(prev => prev.map(it => {
             if (it.id !== itemId) return it;
             const updated = { ...it, [field]: value };
-            const calc = calculateItem(updated, bdi);
+            const calc = calculateItem(updated, bdi, discount, roundingMode);
             updated.unitPrice = calc.unitPrice;
             updated.totalPrice = calc.totalPrice;
             return updated;
         }));
     };
+
+    const handleRecalculateAll = () => {
+        const updatedItems = items.map(it => {
+            const calc = calculateItem(it, bdi, discount, roundingMode);
+            return { ...it, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
+        });
+        setItems(updatedItems);
+    };
+
+    // Effect to recalculate when configs change (local only)
+    useEffect(() => {
+        if (proposal) handleRecalculateAll();
+    }, [bdi, discount, roundingMode]);
 
     const handleSaveAllItems = async () => {
         if (!proposal) return;
@@ -267,6 +283,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 body: JSON.stringify({
                     bdiPercentage: bdi,
                     taxPercentage: discount, // Using taxPercentage for discount
+                    socialCharges: roundingMode === 'TRUNCATE' ? 1 : 0, // Using socialCharges for rounding mode
                     validityDays,
                     headerImage,
                     footerImage,
@@ -375,13 +392,14 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             footerImageHeight,
             signatureMode,
             printLandscape,
-            discount
+            discount,
+            roundingMode
         );
     };
 
-    // Totals
-    const totalsCalculated = useMemo(() => calculateTotals(items, bdi, discount), [items, bdi, discount]);
-    const { subtotal, bdiValue, discountValue, total } = totalsCalculated;
+    // Totals - Sum items
+    const totalsCalculated = useMemo(() => calculateTotals(items), [items]);
+    const { subtotal, total } = totalsCalculated;
 
     // Style consts
     const cardStyle: React.CSSProperties = {
@@ -486,7 +504,6 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             </span>
                         </div>
 
-                        {/* Buttons */}
                         <div style={{ display: 'flex', alignItems: 'end', gap: '10px', marginTop: '10px' }}>
                             {!proposal && (
                                 <button
@@ -500,29 +517,24 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 </button>
                             )}
                             {proposal && (
-                                <button
-                                    className="btn btn-outline"
-                                    onClick={handleSaveConfig}
-                                    disabled={isSaving}
-                                    style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: 600 }}
-                                >
-                                    <Save size={16} /> Salvar Config
-                                </button>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        className="btn btn-outline"
+                                        onClick={handleSaveConfig}
+                                        disabled={isSaving}
+                                        style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: 600 }}
+                                    >
+                                        <Save size={16} /> Salvar Proposta em Dossiê
+                                    </button>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handlePrintProposal}
+                                        style={{ padding: '10px 24px', borderRadius: '10px', fontWeight: 700, background: '#111' }}
+                                    >
+                                        <Printer size={16} /> Exportar PDF
+                                    </button>
+                                </div>
                             )}
-                            <button
-                                className="btn"
-                                onClick={handleAiPopulate}
-                                disabled={isAiLoading || !selectedBiddingId}
-                                style={{
-                                    padding: '10px 20px', borderRadius: '10px', fontWeight: 600,
-                                    background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
-                                    color: 'white', border: 'none',
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                }}
-                            >
-                                {isAiLoading ? <Loader2 size={16} className="spin" /> : <Brain size={16} />}
-                                {isAiLoading ? 'IA Extraindo...' : 'Preencher com IA'}
-                            </button>
                         </div>
                     </div>
                 )}
@@ -584,18 +596,6 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     >
                         Exportar Excel
                     </button>
-                    {/* Botão Exportar PDF */}
-                    <button
-                        onClick={handlePrintProposal}
-                        style={{
-                            marginLeft: 'auto', padding: '6px 14px', borderRadius: '8px',
-                            background: '#111', color: 'white', border: 'none',
-                            fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '6px'
-                        }}
-                    >
-                        <Printer size={14} /> Exportar / PDF
-                    </button>
                 </div>
             )}
 
@@ -639,6 +639,26 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             Itens da Proposta ({items.length})
                         </h3>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {/* Rounding Mode Toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-base)', padding: '2px', borderRadius: '8px', border: '1px solid var(--color-border)', marginRight: '4px' }}>
+                                <button
+                                    onClick={() => setRoundingMode('ROUND')}
+                                    style={{
+                                        padding: '4px 8px', fontSize: '0.7rem', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                        background: roundingMode === 'ROUND' ? 'var(--color-primary)' : 'transparent',
+                                        color: roundingMode === 'ROUND' ? 'white' : 'var(--color-text-secondary)',
+                                        fontWeight: 600
+                                    }}>Arredondar</button>
+                                <button
+                                    onClick={() => setRoundingMode('TRUNCATE')}
+                                    style={{
+                                        padding: '4px 8px', fontSize: '0.7rem', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                        background: roundingMode === 'TRUNCATE' ? 'var(--color-primary)' : 'transparent',
+                                        color: roundingMode === 'TRUNCATE' ? 'white' : 'var(--color-text-secondary)',
+                                        fontWeight: 600
+                                    }}>Truncar</button>
+                            </div>
+
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--color-bg-base)', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--color-border)', marginRight: '8px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>BDI:</span>
@@ -646,24 +666,39 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                         type="number"
                                         value={bdi}
                                         onChange={e => setBdi(parseFloat(e.target.value) || 0)}
-                                        onBlur={handleSaveConfig}
                                         style={{ ...inputStyle, width: '55px', height: '28px' }}
                                     />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                                 <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }}></div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Ajuste/Desc:</span>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Desconto:</span>
                                     <input
                                         type="number"
                                         value={discount}
                                         onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
-                                        onBlur={handleSaveConfig}
                                         style={{ ...inputStyle, width: '55px', height: '28px' }}
                                     />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                             </div>
+
+                            {/* Renamed and Moved AI Button */}
+                            <button
+                                className="btn"
+                                onClick={handleAiPopulate}
+                                disabled={isAiLoading}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600,
+                                    background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                                    color: 'white', border: 'none',
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                }}
+                            >
+                                {isAiLoading ? <Loader2 size={14} className="spin" /> : <Brain size={14} />}
+                                Orçamento IA
+                            </button>
+
                             {isBulkEditing ? (
                                 <button
                                     className="btn btn-primary"
@@ -671,15 +706,16 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     disabled={isSaving}
                                     style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px', background: '#22c55e', color: 'white', border: 'none' }}
                                 >
-                                    {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Tudo
+                                    {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
                                 </button>
                             ) : (
                                 <button
-                                    className="btn btn-outline"
-                                    onClick={() => setIsBulkEditing(true)}
-                                    style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px' }}
+                                    className="btn btn-primary"
+                                    onClick={handleSaveAllItems}
+                                    disabled={isSaving}
+                                    style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px', background: '#22c55e', color: 'white', border: 'none' }}
                                 >
-                                    <Edit3 size={14} /> Editar Tudo
+                                    {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
                                 </button>
                             )}
                             <button
@@ -687,7 +723,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 onClick={handleAddItem}
                                 style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px' }}
                             >
-                                <Plus size={14} /> Adicionar Item
+                                <Plus size={14} /> Novo Item
                             </button>
                         </div>
                     </div>
@@ -907,15 +943,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     <span style={{ fontWeight: 500 }}>{fmt(subtotal)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
-                                    <span style={{ color: 'var(--color-text-secondary)' }}>Subtotal (Custo + BDI)</span>
-                                    <span style={{ fontWeight: 500 }}>{fmt(subtotal + bdiValue)}</span>
+                                    <span style={{ color: 'var(--color-text-secondary)' }}>Status Arredondamento</span>
+                                    <span style={{ fontWeight: 500 }}>{roundingMode === 'ROUND' ? 'Arredondar' : 'Truncar'}</span>
                                 </div>
-                                {discountValue > 0 && (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px', color: '#dc2626' }}>
-                                        <span style={{ color: 'var(--color-text-secondary)' }}>Desconto/Ajuste ({fmtNum(discount)}%)</span>
-                                        <span style={{ fontWeight: 500 }}>- {fmt(discountValue)}</span>
-                                    </div>
-                                )}
                                 <div style={{
                                     display: 'flex', justifyContent: 'space-between',
                                     borderTop: '2px solid var(--color-border)', paddingTop: '8px', marginTop: '4px',

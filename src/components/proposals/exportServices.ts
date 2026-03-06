@@ -1,16 +1,18 @@
 import * as XLSX from 'xlsx';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
+import type { RoundingMode } from './engine';
 
-export function exportExcelProposal(biddingId: string, items: ProposalItem[], bdiPercentage: number) {
+export function exportExcelProposal(biddingId: string, items: ProposalItem[], bdiPercentage: number, discountPercentage: number = 0, roundingMode: RoundingMode = 'ROUND') {
     if (items.length === 0) return;
 
-    // Build it row by row.
     const ws = XLSX.utils.aoa_to_sheet([
         ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Multiplicador', 'Custo Unit.', 'Preço Unit.', 'Valor Total', '% Peso']
     ]);
 
     items.forEach((it, i) => {
         const rowIdx = i + 2;
+        // Formula in Excel for unitPrice: Cost * (1 + BDI/100) * (1 - DISC/100)
+        const roundFormula = roundingMode === 'ROUND' ? 'ROUND' : 'TRUNC';
         const row = [
             it.itemNumber || String(i + 1),
             it.description,
@@ -20,20 +22,20 @@ export function exportExcelProposal(biddingId: string, items: ProposalItem[], bd
             it.quantity,
             it.multiplier,
             it.unitCost,
-            { f: `H${rowIdx} * (1 + $M$1/100)` },
-            { f: `F${rowIdx} * G${rowIdx} * I${rowIdx}` },
+            { f: `${roundFormula}(H${rowIdx} * (1 + $M$1/100) * (1 - $O$1/100), 2)` },
+            { f: `ROUND(F${rowIdx} * G${rowIdx} * I${rowIdx}, 2)` },
             { f: `J${rowIdx} / $J$${items.length + 2}` }
         ];
         XLSX.utils.sheet_add_aoa(ws, [row], { origin: -1 });
     });
 
-    // Add Totals
     const totalRowIdx = items.length + 2;
     XLSX.utils.sheet_add_aoa(ws, [[null, null, null, null, null, null, null, null, 'TOTAL GLOBAL', { f: `SUM(J2:J${totalRowIdx - 1})` }, '100%']], { origin: -1 });
 
-    // Add BDI Helper in M1
     ws['M1'] = { v: bdiPercentage, t: 'n' };
     ws['L1'] = { v: 'BDI (%)' };
+    ws['O1'] = { v: discountPercentage, t: 'n' };
+    ws['N1'] = { v: 'Desc (%)' };
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Proposta');
@@ -56,7 +58,8 @@ export function generateProposalPdf(
     footerImageHeight: number,
     signatureMode: 'LEGAL' | 'TECH' | 'BOTH',
     printLandscape: boolean,
-    discountPercentage: number = 0
+    discountPercentage: number = 0,
+    roundingMode: RoundingMode = 'ROUND'
 ) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -81,8 +84,7 @@ export function generateProposalPdf(
         </tr>
     `}).join('');
 
-    const discountValue = totalItemsValue * (discountPercentage / 100);
-    const finalTotal = totalItemsValue - discountValue;
+    const finalTotal = totalItemsValue; // Discount is already in unit prices
 
     const cleanLetter = (letterContent || 'Nenhuma carta proposta redigida.')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -113,7 +115,6 @@ export function generateProposalPdf(
         }
     }
 
-    // Fix repetition: if city contains state abbreviation, don't repeat it
     if (derivedCity.toUpperCase().endsWith('/' + (derivedState || '').toUpperCase())) {
         derivedState = '';
     }
@@ -123,9 +124,9 @@ export function generateProposalPdf(
         ? `${locParts}, ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}`
         : new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
-    // Identification from qualification as requested
+    // Better integrated qualification layout
     const companyHeaderHtml = company?.qualification ? `
-        <div style="margin-bottom: 20px; text-align: justify; font-size: 13px;">
+        <div style="margin-bottom: 30px; padding: 15px; border: 1px solid #eee; background-color: #fcfcfc; border-radius: 5px; text-align: justify; font-size: 13px; line-height: 1.6;">
             ${company.qualification}
         </div>
     ` : `
@@ -152,9 +153,6 @@ export function generateProposalPdf(
                 .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
                 .fixed-footer .gen-info { font-size: 9px; color: #999; margin-top: 2px; }
                 .content-wrapper { padding: 15px 20px; }
-                .text-header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 15px; }
-                .text-header h1 { margin: 0; font-size: 20px; color: #000; }
-                .text-header p { margin: 3px 0; color: #444; font-size: 12px; }
                 .letter { white-space: pre-wrap; margin-bottom: 25px; text-align: justify; font-size: 13px; line-height: 1.5; }
                 table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 11px; }
                 table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 11px; }
@@ -167,9 +165,7 @@ export function generateProposalPdf(
                 table.print-wrapper > thead > tr > td { height: ${topMargin > 0 ? topMargin : 0}px; border: none; padding: 0; }
                 table.print-wrapper > tfoot > tr > td { height: ${bottomMargin > 0 ? bottomMargin : 0}px; border: none; padding: 0; }
                 table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
-                .no-print { }
                 @media print {
-                    .no-print { display: none !important; }
                     body { font-size: 12px; }
                     .content-wrapper { padding: 0; }
                     @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: 0.8cm 1cm; }
@@ -177,10 +173,8 @@ export function generateProposalPdf(
             </style>
         </head>
         <body>
-            <!-- No manual button, print auto -->
             <script>
                 window.onload = function() {
-                    // Slight delay to ensure images load if cached, though browser print handles it usually
                     setTimeout(() => { window.print(); }, 500);
                 };
             </script>
@@ -198,12 +192,7 @@ export function generateProposalPdf(
                 <tfoot><tr><td></td></tr></tfoot>
                 <tbody><tr><td>
                     <div class="content-wrapper">
-            ${!headerImage ? companyHeaderHtml : ''}
-            
-            ${headerImage ? companyHeaderHtml : ''} 
-            <!-- Se tem header de imagem, a identificação textual vem logo abaixo ou integrada. 
-                 User disse "O Primeiro texto aonde identifca a empresa deve sempre ser puxada da qualificacão". 
-                 Vou colocar sempre o TXT de qualificação após o header de imagem se existir. -->
+            ${companyHeaderHtml}
 
             <div class="letter">${cleanLetter}</div>
 
@@ -211,15 +200,15 @@ export function generateProposalPdf(
             <table class="items">
                 <thead>
                     <tr>
-                        <th style="text-align:center; width: 60px;">Lote/Item</th>
+                        <th style="text-align:center; width: 60px;">Item</th>
                         <th>Descrição detalhada</th>
                         <th style="text-align:center; width: 55px;">Marca</th>
                         <th style="text-align:center; width: 55px;">Modelo</th>
                         <th style="text-align:center; width: 35px;">Unid</th>
                         <th style="text-align:center; width: 45px;">Qtd</th>
-                        <th style="text-align:right; width: 75px;">Valor Unit.</th>
-                        <th style="text-align:right; width: 85px;">Valor Total</th>
-                        <th style="text-align:right; width: 40px;">% Peso</th>
+                        <th style="text-align:right; width: 75px;">Unitário</th>
+                        <th style="text-align:right; width: 85px;">Total</th>
+                        <th style="text-align:right; width: 40px;">%</th>
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>
@@ -227,10 +216,10 @@ export function generateProposalPdf(
 
             <table class="totals">
                 <tbody>
-                    <tr><th>Subtotal (Itens)</th><td>${fmt(totalItemsValue)}</td></tr>
-                    ${discountValue > 0 ? `<tr><th style="color: #dc2626;">Ajuste / Desconto (${fmtNum(discountPercentage)}%)</th><td style="color: #dc2626;">- ${fmt(discountValue)}</td></tr>` : ''}
                     <tr><th style="font-size: 1.2em;">TOTAL GLOBAL</th><td style="font-size: 1.2em; font-weight: bold;">${fmt(finalTotal)}</td></tr>
+                    ${discountPercentage > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Aplicado</th><td style="font-weight: normal; color: #555;">${fmtNum(discountPercentage)}%</td></tr>` : ''}
                     <tr><th style="font-weight: normal; color: #555;">Validade da Proposta</th><td style="font-weight: normal; color: #555;">${validityDays} dias</td></tr>
+                    <tr><th style="font-weight: normal; color: #555;">Modo Cálculo</th><td style="font-weight: normal; color: #555;">${roundingMode === 'ROUND' ? 'Arredondado' : 'Truncado'}</td></tr>
                 </tbody>
             </table>
             

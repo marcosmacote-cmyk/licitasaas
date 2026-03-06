@@ -1,17 +1,36 @@
 import type { ProposalItem } from '../../types';
 
-export function calculateItem(item: Partial<ProposalItem>, bdiPercentage: number) {
+export type RoundingMode = 'ROUND' | 'TRUNCATE';
+
+export function calculateItem(
+    item: Partial<ProposalItem>,
+    bdiPercentage: number,
+    discountPercentage: number = 0,
+    roundingMode: RoundingMode = 'ROUND'
+) {
     const quantity = item.quantity || 0;
     const unitCost = item.unitCost || 0;
     const multiplier = item.multiplier || 1;
 
-    // Calcula unitPrice incluindo BDI
-    const rawUnitPrice = unitCost * (1 + bdiPercentage / 100);
-    const unitPrice = Math.round(rawUnitPrice * 100) / 100;
+    // Unit Price including BDI and then applying Discount
+    // Formula: Price = Cost * (1 + BDI/100) * (1 - Discount/100)
+    const rawUnitPrice = unitCost * (1 + bdiPercentage / 100) * (1 - discountPercentage / 100);
 
-    // Calcula totalPrice
+    let unitPrice: number;
+    if (roundingMode === 'ROUND') {
+        unitPrice = Math.round(rawUnitPrice * 100) / 100;
+    } else {
+        unitPrice = Math.floor(rawUnitPrice * 100) / 100; // Truncate to 2 decimals
+    }
+
+    // Total Price based on the calculated unitPrice
     const rawTotalPrice = quantity * multiplier * unitPrice;
-    const totalPrice = Math.round(rawTotalPrice * 100) / 100;
+    let totalPrice: number;
+    if (roundingMode === 'ROUND') {
+        totalPrice = Math.round(rawTotalPrice * 100) / 100;
+    } else {
+        totalPrice = Math.floor(rawTotalPrice * 100) / 100;
+    }
 
     return {
         unitPrice,
@@ -19,17 +38,13 @@ export function calculateItem(item: Partial<ProposalItem>, bdiPercentage: number
     };
 }
 
-export function calculateTotals(items: ProposalItem[], bdiPercentage: number, discountPercentage: number = 0) {
+export function calculateTotals(items: ProposalItem[]) {
+    // With discount applied to unit nodes, the total is just the sum of items
+    const total = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
     const subtotal = items.reduce((sum, it) => sum + ((it.quantity || 0) * (it.multiplier || 1) * (it.unitCost || 0)), 0);
-    const bdiValue = subtotal * (bdiPercentage / 100);
-    const totalWithoutDiscount = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
-    const discountValue = totalWithoutDiscount * (discountPercentage / 100);
-    const total = totalWithoutDiscount - discountValue;
 
     return {
         subtotal,
-        bdiValue,
-        discountValue,
         total
     };
 }
