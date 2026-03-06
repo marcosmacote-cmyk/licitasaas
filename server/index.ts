@@ -2453,7 +2453,7 @@ async function fetchPdfPartsForProcess(biddingProcessId: string | null, fileName
                 tenantId: tenantId
             }
         });
-        const hasPrefix = fileName.startsWith(`${tenantId}_`) || fileName.startsWith(`pncp_${tenantId}_`);
+        const hasPrefix = fileName.startsWith(tenantId) || fileName.startsWith(`pncp_${tenantId}`);
         const isExplicitlyLinked = biddingLinks.includes(fileName);
         if (!(!!doc || hasPrefix || isExplicitlyLinked)) continue;
 
