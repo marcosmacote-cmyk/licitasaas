@@ -176,7 +176,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
                     name,
                     keywords,
                     status,
-                    companyProfileId: selectedSearchCompanyId,
+                    companyProfileId: selectedSearchCompanyId || undefined,
                     states: JSON.stringify({
                         uf: selectedUf,
                         modalidade,

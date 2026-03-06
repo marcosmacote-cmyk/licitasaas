@@ -768,23 +768,15 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista } = req.body;
         const pageSize = 10;
 
-        let queryParams: string[] = [];
+        let kwList: string[] = [];
         if (keywords) {
             if (keywords.includes(',')) {
-                // Multi-keyword logic: break by comma, trim, strip outer quotes, and wrap with double quotes if space exists, then join with OR
-                const kwList = keywords.split(',')
+                kwList = keywords.split(',')
                     .map((k: string) => k.trim().replace(/^"|"$/g, ''))
-                    .filter((k: string) => k.length > 0);
-
-                if (kwList.length > 0) {
-                    const mapped = kwList.map((k: string) => {
-                        return k.includes(' ') ? `"${k}"` : k;
-                    });
-                    const groupedKeywords = `(${mapped.join(' OR ')})`;
-                    queryParams.push(groupedKeywords);
-                }
+                    .filter((k: string) => k.length > 0)
+                    .map((k: string) => k.includes(' ') ? `"${k}"` : k);
             } else {
-                queryParams.push(keywords);
+                kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
             }
         }
 
@@ -805,43 +797,39 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             return url;
         };
 
-        let urlsToFetch: string[] = [];
         let extractedNames: string[] = [];
-
         if (orgaosLista) {
-            // Split by comma, semicolon or line break to allow names like "Limoeiro do Norte"
-            extractedNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+            extractedNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
             extractedNames = [...new Set(extractedNames)]; // Remove duplicates
         }
 
-        if (extractedNames.length > 0) {
-            // Limit to 50 concurrent items (chunk sizes)
-            const limitedNames = extractedNames.slice(0, 50);
-            urlsToFetch = limitedNames.map(name => {
-                const onlyNumbers = name.replace(/\D/g, '');
-                if (onlyNumbers.length === 14) {
-                    return buildBaseUrl(queryParams, onlyNumbers);
-                } else {
-                    let localParams = [...queryParams];
-                    // Wrap in quotes if it has spaces so PNCP searches for the exact phrase
-                    const exactName = name.includes(' ') ? `"${name}"` : name;
-                    localParams.push(exactName);
-                    return buildBaseUrl(localParams);
+        let urlsToFetch: string[] = [];
+        const keywordsToIterate = kwList.length > 0 ? kwList : [null];
+        const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
+
+        for (const kw of keywordsToIterate) {
+            for (const org of orgaosToIterate) {
+                let localParams: string[] = [];
+                let overrideCnpj: string | undefined = undefined;
+
+                if (kw) localParams.push(kw);
+
+                if (org) {
+                    const onlyNumbers = org.replace(/\D/g, '');
+                    if (onlyNumbers.length === 14) {
+                        overrideCnpj = onlyNumbers;
+                    } else {
+                        const exactOrgName = org.includes(' ') && !org.startsWith('"') ? `"${org}"` : org;
+                        localParams.push(exactOrgName);
+                    }
                 }
-            });
-        } else {
-            if (orgao) {
-                const onlyNumbers = orgao.replace(/\D/g, '');
-                if (onlyNumbers.length === 14) {
-                    urlsToFetch = [buildBaseUrl(queryParams, onlyNumbers)];
-                } else {
-                    queryParams.push(orgao);
-                    urlsToFetch = [buildBaseUrl(queryParams)];
-                }
-            } else {
-                urlsToFetch = [buildBaseUrl(queryParams)];
+
+                urlsToFetch.push(buildBaseUrl(localParams, overrideCnpj));
             }
         }
+
+        // Limit concurrent requests to 100 to avoid node memory/worker exhaustion & PNCP IP bans on huge matrices
+        urlsToFetch = urlsToFetch.slice(0, 100);
 
         const agent = new https.Agent({ rejectUnauthorized: false });
         const startTime = Date.now();
