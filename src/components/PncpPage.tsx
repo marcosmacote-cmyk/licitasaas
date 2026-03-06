@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -96,7 +96,11 @@ export function PncpPage({ companies, onRefresh }: Props) {
         });
     };
 
-    const displayItems = showFavoritosTab ? favoritos : results;
+    const displayItems = showFavoritosTab ? [...favoritos].sort((a, b) => {
+        const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
+        const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
+        return dateA.getTime() - dateB.getTime();
+    }) : results;
 
     useEffect(() => {
         fetchSavedSearches();
@@ -800,6 +804,16 @@ export function PncpPage({ companies, onRefresh }: Props) {
                                                 >
                                                     <Star size={15} fill={isFavorito ? "currentColor" : "none"} />
                                                 </button>
+                                                {isFavorito && (
+                                                    <button
+                                                        className="btn btn-ghost"
+                                                        onClick={() => toggleFavorito(item)}
+                                                        style={{ padding: '7px', borderRadius: '8px', color: 'var(--color-danger)', background: 'rgba(239, 68, 68, 0.05)' }}
+                                                        title="Excluir dos Favoritos"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                )}
                                                 <button
                                                     className="btn btn-primary"
                                                     style={{ padding: '7px 12px', fontSize: '0.75rem', borderRadius: '8px', gap: '4px', whiteSpace: 'nowrap' }}
