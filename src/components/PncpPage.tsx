@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2 } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -102,6 +102,26 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
         const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
         return dateA.getTime() - dateB.getTime();
     }) : results;
+
+    useEffect(() => {
+        const checkExpired = () => {
+            const now = new Date();
+            setFavoritos(prev => {
+                const filtered = prev.filter(f => {
+                    if (!f.data_encerramento_proposta && !f.data_abertura) return true;
+                    // Se a data e hora do termino for menor que o momento atual, retira dos favoritos (pois já encerrou)
+                    const sessao = new Date(f.data_encerramento_proposta || f.data_abertura || Date.now());
+                    return sessao.getTime() >= now.getTime();
+                });
+                if (filtered.length !== prev.length) return filtered;
+                return prev;
+            });
+        };
+
+        checkExpired(); // primeira checagem assim que monta
+        const interval = setInterval(checkExpired, 60000); // 1 minuto
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         fetchSavedSearches();
@@ -751,6 +771,8 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         ) : (
                             displayItems.map((item) => {
                                 const isFavorito = favoritos.some(f => f.id === item.id);
+                                const isOnKanban = items.some(p => p.link && p.link === item.link_sistema);
+
                                 return (
                                     <tr key={item.id} style={{ transition: 'background 0.15s' }}
                                         onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
@@ -763,7 +785,27 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                             </div>
                                         </td>
                                         <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
-                                            <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '4px', lineHeight: '1.3' }}>{item.titulo}</div>
+                                            <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '4px', lineHeight: '1.3' }}>
+                                                {item.titulo}
+                                                {showFavoritosTab && isOnKanban && (
+                                                    <span style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        marginLeft: '8px',
+                                                        padding: '3px 8px',
+                                                        background: 'rgba(16, 185, 129, 0.1)',
+                                                        color: 'var(--color-success)',
+                                                        borderRadius: '12px',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 700,
+                                                        verticalAlign: 'middle'
+                                                    }} title="Esta licitação já foi captada para o Kanban.">
+                                                        <CheckCircle2 size={12} />
+                                                        Salvo no Kanban
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: '1.4' }}>
                                                 {item.objeto}
                                             </div>
