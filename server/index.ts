@@ -1032,11 +1032,23 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
                     fs.writeFileSync(path.join(uploadDir, safeFileName), buffer);
 
+                    let storageFileName = safeFileName;
+                    try {
+                        const up = await storageService.uploadFile({
+                            originalname: safeFileName,
+                            buffer: buffer,
+                            mimetype: 'application/pdf'
+                        } as any, req.user.tenantId);
+                        storageFileName = up.fileName;
+                    } catch (e) {
+                        console.error(`[PNCP-AI] Erro upload PDF Storage:`, e);
+                    }
+
                     pdfParts.push({
                         inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
                     });
-                    downloadedFiles.push(safeFileName);
-                    console.log(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${safeFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                    downloadedFiles.push(storageFileName);
+                    console.log(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${storageFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
                 } else if (isZip) {
                     console.log(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
@@ -1053,11 +1065,23 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                                 const safeName = `pncp_${req.user.tenantId}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
 
+                                let storageFileName = safeName;
+                                try {
+                                    const up = await storageService.uploadFile({
+                                        originalname: safeName,
+                                        buffer: pdfBuffer,
+                                        mimetype: 'application/pdf'
+                                    } as any, req.user.tenantId);
+                                    storageFileName = up.fileName;
+                                } catch (e) {
+                                    console.error(`[PNCP-AI] Erro upload ZIP-PDF Storage:`, e);
+                                }
+
                                 pdfParts.push({
                                     inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
                                 });
-                                downloadedFiles.push(safeName);
-                                console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${safeName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                                downloadedFiles.push(storageFileName);
+                                console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${storageFileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }
                     } catch (zipErr: any) {
@@ -1080,10 +1104,26 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
                             if (rarFile.extraction && rarFile.extraction.length > 0) {
                                 const pdfBuffer = Buffer.from(rarFile.extraction);
+
+                                const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
+                                fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
+
+                                let storageFileName = safeName;
+                                try {
+                                    const up = await storageService.uploadFile({
+                                        originalname: safeName,
+                                        buffer: pdfBuffer,
+                                        mimetype: 'application/pdf'
+                                    } as any, req.user.tenantId);
+                                    storageFileName = up.fileName;
+                                } catch (e) {
+                                    console.error(`[PNCP-AI] Erro upload RAR-PDF Storage:`, e);
+                                }
+
                                 pdfParts.push({
                                     inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
                                 });
-                                downloadedFiles.push(`${fileName}/${rarFile.fileHeader.name}`);
+                                downloadedFiles.push(storageFileName);
                                 console.log(`[PNCP-AI] ✅ Extracted from RAR: ${rarFile.fileHeader.name} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }

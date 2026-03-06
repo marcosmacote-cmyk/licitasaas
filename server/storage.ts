@@ -115,15 +115,21 @@ class SupabaseStorageService implements StorageService {
                 .download(filePath);
 
             if (error) {
-                console.error(`[Supabase Storage] Error downloading ${filePath}:`, error);
+                // If it's a 400 or 404, it might just mean the file isn't there (old PNCP bug).
+                if ((error as any).statusCode === 400 || (error as any).statusCode === 404 || error.message?.includes('400')) {
+                    console.warn(`[Supabase Storage] Not found or invalid path: ${filePath}`);
+                } else {
+                    console.error(`[Supabase Storage] Error downloading ${filePath}:`, error.message || error);
+                }
                 throw error;
             }
             if (!data) throw new Error("No data returned from Supabase storage");
 
             const arrayBuffer = await data.arrayBuffer();
             return Buffer.from(arrayBuffer);
-        } catch (err) {
-            console.error(`[Supabase Storage] Exception downloading ${filePath}:`, err);
+        } catch (err: any) {
+            // Simplify exception log
+            console.warn(`[Supabase Storage] Exception downloading ${filePath}: ${err.message || 'Unknown error'}`);
             throw err;
         }
     }
