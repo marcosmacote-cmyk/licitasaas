@@ -138,15 +138,23 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
         doc.setFontSize(10);
         doc.text(`Data da Exportação: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
 
-        const tableColumn = ["Órgão", "Mod. / N°", "Objeto", "Abertura / Encerramento", "Val. Est. (R$)", "Município", "Link PNCP"];
+        const tableColumn = ["Órgão", "Mod. / N°", "Objeto", "Prazo Limite", "Val. Est. (R$)", "Município", "Link PNCP"];
         const tableRows: any[][] = [];
 
-        favoritos.forEach(item => {
+        const sortedFavoritos = [...favoritos].sort((a, b) => {
+            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
+            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
+            return dateA.getTime() - dateB.getTime();
+        });
+
+        sortedFavoritos.forEach(item => {
             const rowData = [
                 item.orgao_nome,
                 `${item.modalidade_nome}\n${item.ano}/${item.numero_sequencial}`,
                 item.objeto.length > 90 ? item.objeto.substring(0, 87) + '...' : item.objeto,
-                `${item.data_abertura ? new Date(item.data_abertura).toLocaleDateString('pt-BR') : '-'} até\n${item.data_encerramento_proposta ? new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR') : '-'}`,
+                item.data_encerramento_proposta
+                    ? `${new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR')} às ${new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                    : '-',
                 item.valor_estimado ? item.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-',
                 item.municipio ? `${item.municipio}-${item.uf}` : item.uf,
                 ''
@@ -163,7 +171,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             columnStyles: { 2: { cellWidth: 70 }, 6: { cellWidth: 35 } },
             didDrawCell: (data) => {
                 if (data.section === 'body' && data.column.index === 6) {
-                    const item = favoritos[data.row.index];
+                    const item = sortedFavoritos[data.row.index];
                     if (item && item.link_sistema) {
                         doc.setTextColor(37, 99, 235);
                         doc.textWithLink("Acessar no PNCP", data.cell.x + 2, data.cell.y + 5, { url: item.link_sistema });
