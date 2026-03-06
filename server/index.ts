@@ -798,15 +798,17 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         }
 
         if (extractedNames.length > 0) {
-            // Limit to 10 concurrent items to avoid PNCP rate limiting/timeouts on large text searches
-            const limitedNames = extractedNames.slice(0, 10);
+            // Limit to 50 concurrent items (chunk sizes)
+            const limitedNames = extractedNames.slice(0, 50);
             urlsToFetch = limitedNames.map(name => {
                 const onlyNumbers = name.replace(/\D/g, '');
                 if (onlyNumbers.length === 14) {
                     return buildBaseUrl(queryParams, onlyNumbers);
                 } else {
                     let localParams = [...queryParams];
-                    localParams.push(name);
+                    // Wrap in quotes if it has spaces so PNCP searches for the exact phrase
+                    const exactName = name.includes(' ') ? `"${name}"` : name;
+                    localParams.push(exactName);
                     return buildBaseUrl(localParams);
                 }
             });
