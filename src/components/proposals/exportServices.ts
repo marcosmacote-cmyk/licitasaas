@@ -1,35 +1,43 @@
+import * as XLSX from 'xlsx';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
 
-export function exportExcelProposal(biddingId: string, items: ProposalItem[]) {
+export function exportExcelProposal(biddingId: string, items: ProposalItem[], bdiPercentage: number) {
     if (items.length === 0) return;
-    const totalItemsValue = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
 
-    let csv = 'Item\tDescrição\tMarca\tModelo\tUnid\tQtd\tMultiplicador\tCusto Unit.\tPreço Unit.\tValor Total\t% Peso\n';
+    // Build it row by row.
+    const ws = XLSX.utils.aoa_to_sheet([
+        ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Multiplicador', 'Custo Unit.', 'Preço Unit.', 'Valor Total', '% Peso']
+    ]);
+
     items.forEach((it, i) => {
-        const peso = totalItemsValue > 0 ? ((it.totalPrice || 0) / totalItemsValue) * 100 : 0;
-        const linha = [
+        const rowIdx = i + 2;
+        const row = [
             it.itemNumber || String(i + 1),
-            `"${(it.description || '').replace(/"/g, '""')}"`,
-            `"${(it.brand || '').replace(/"/g, '""')}"`,
-            `"${(it.model || '').replace(/"/g, '""')}"`,
+            it.description,
+            it.brand || '',
+            it.model || '',
             it.unit,
             it.quantity,
             it.multiplier,
-            it.unitCost.toFixed(2).replace('.', ','),
-            it.unitPrice.toFixed(2).replace('.', ','),
-            (it.totalPrice || 0).toFixed(2).replace('.', ','),
-            peso.toFixed(2).replace('.', ',') + '%'
+            it.unitCost,
+            { f: `H${rowIdx} * (1 + $M$1/100)` },
+            { f: `F${rowIdx} * G${rowIdx} * I${rowIdx}` },
+            { f: `J${rowIdx} / $J$${items.length + 2}` }
         ];
-        csv += linha.join('\t') + '\n';
+        XLSX.utils.sheet_add_aoa(ws, [row], { origin: -1 });
     });
 
-    csv += `\n\t\t\t\t\t\t\t\tTotal Global\t${totalItemsValue.toFixed(2).replace('.', ',')}\t100%\n`;
+    // Add Totals
+    const totalRowIdx = items.length + 2;
+    XLSX.utils.sheet_add_aoa(ws, [[null, null, null, null, null, null, null, null, 'TOTAL GLOBAL', { f: `SUM(J2:J${totalRowIdx - 1})` }, '100%']], { origin: -1 });
 
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Proposta_Precos_${biddingId.substring(0, 6)}.xls`;
-    link.click();
+    // Add BDI Helper in M1
+    ws['M1'] = { v: bdiPercentage, t: 'n' };
+    ws['L1'] = { v: 'BDI (%)' };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Proposta');
+    XLSX.writeFile(wb, `Proposta_Precos_${biddingId.substring(0, 6)}.xlsx`);
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -100,6 +108,11 @@ export function generateProposalPdf(
                 derivedCpf = cpfMatch[0];
             }
         }
+    }
+
+    // Fix repetition: if city contains state abbreviation, don't repeat it
+    if (derivedCity.toUpperCase().endsWith('/' + (derivedState || '').toUpperCase())) {
+        derivedState = '';
     }
 
     const locParts = [derivedCity, derivedState].filter(Boolean).join('/');

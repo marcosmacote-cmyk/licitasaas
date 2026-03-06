@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
     Sparkles, Plus, Trash2, Save, FileText, Loader2,
-    Calculator, DollarSign, Package, AlertTriangle, Edit3,
+    DollarSign, Package, AlertTriangle, Edit3,
     ChevronDown, ChevronUp, Brain, Briefcase, Printer
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
@@ -31,6 +31,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
+    const [isBulkEditing, setIsBulkEditing] = useState(false);
     const [showConfig, setShowConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
 
@@ -200,7 +201,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             sortOrder: items.length,
         };
         setItems(prev => [...prev, newItem]);
-        setEditingItemId(newItem.id);
+        setIsBulkEditing(true);
     };
 
     // Update item locally
@@ -215,37 +216,23 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         }));
     };
 
-    // Save item to server
-    const handleSaveItem = async (item: ProposalItem) => {
+    const handleSaveAllItems = async () => {
         if (!proposal) return;
         setIsSaving(true);
         try {
-            if (item.id.startsWith('temp-')) {
-                // Create
-                const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
-                    method: 'POST', headers,
-                    body: JSON.stringify({ items: [item], replaceAll: false }),
-                });
-                if (res.ok) {
-                    await loadProposals();
-                    showSaveMsg('Item salvo!');
-                }
-            } else {
-                // Update
-                const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items/${item.id}`, {
-                    method: 'PUT', headers,
-                    body: JSON.stringify(item),
-                });
-                if (res.ok) {
-                    await loadProposals();
-                    showSaveMsg('Item atualizado!');
-                }
+            const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
+                method: 'POST', headers,
+                body: JSON.stringify({ items, replaceAll: true }),
+            });
+            if (res.ok) {
+                await loadProposals();
+                showSaveMsg('Todos os itens foram salvos!');
+                setIsBulkEditing(false);
             }
         } catch (e) {
-            alert('Erro ao salvar item.');
+            alert('Erro ao salvar os itens.');
         } finally {
             setIsSaving(false);
-            setEditingItemId(null);
         }
     };
 
@@ -305,7 +292,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     // --- Export Excel ---
     const handleExportExcel = () => {
         if (!proposal || items.length === 0) return;
-        exportExcelProposal(selectedBiddingId, items);
+        exportExcelProposal(selectedBiddingId, items, bdi);
     };
 
     // --- AI Letter Generation ---
@@ -462,95 +449,6 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     <option key={c.id} value={c.id}>{c.razaoSocial} — {c.cnpj}</option>
                                 ))}
                             </select>
-                        </div>
-
-                        {/* BDI & Configs */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-                            <div>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                                    Assinatura
-                                </label>
-                                <select
-                                    value={signatureMode}
-                                    onChange={e => setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH')}
-                                    style={{
-                                        width: '100%', padding: '10px 12px', borderRadius: '10px',
-                                        border: '1px solid var(--color-border)', fontSize: '0.875rem',
-                                        background: 'var(--color-bg-base)',
-                                    }}
-                                >
-                                    <option value="LEGAL">Representante Legal</option>
-                                    <option value="TECH">Responsável Técnico</option>
-                                    <option value="BOTH">Ambos</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                                    <Calculator size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-                                    BDI (%)
-                                </label>
-                                <input
-                                    type="number"
-                                    value={bdi}
-                                    onChange={e => setBdi(parseFloat(e.target.value) || 0)}
-                                    step="0.01"
-                                    style={{
-                                        width: '100%', padding: '10px 12px', borderRadius: '10px',
-                                        border: '1px solid var(--color-border)', fontSize: '0.875rem',
-                                    }}
-                                />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                                    Validade (dias)
-                                </label>
-                                <input
-                                    type="number"
-                                    value={validityDays}
-                                    onChange={e => setValidityDays(parseInt(e.target.value) || 60)}
-                                    style={{
-                                        width: '100%', padding: '10px 12px', borderRadius: '10px',
-                                        border: '1px solid var(--color-border)', fontSize: '0.875rem',
-                                    }}
-                                />
-                            </div>
-                        </div>
-
-
-                        {/* Imagens do Timbrado */}
-                        <div style={{ background: 'var(--color-bg-base)', padding: '16px', borderRadius: '10px', border: '1px solid var(--color-border)', marginTop: '16px' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '12px' }}>🖼️ Imagens do Timbrado (Cabeçalho e Rodapé do PDF)</span>
-                            <div style={{ display: 'flex', gap: '20px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>Cabeçalho</label>
-                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', width: '100%', marginBottom: '8px' }} />
-                                    {headerImage && (
-                                        <div style={{ marginTop: '8px', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '6px', background: '#fff' }}>
-                                            <img src={headerImage} alt="Preview Cabeçalho" style={{ maxWidth: '100%', maxHeight: '80px', display: 'block', margin: '0 auto' }} />
-                                        </div>
-                                    )}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                                        <span style={{ fontSize: '0.75rem' }}>Altura (px):</span>
-                                        <input type="number" value={headerImageHeight} onChange={e => setHeaderImageHeight(Number(e.target.value))} style={{ width: '70px', padding: '4px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
-                                        {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
-                                    </div>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', display: 'block', marginBottom: '4px' }}>Rodapé</label>
-                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', width: '100%', marginBottom: '8px' }} />
-                                    {footerImage && (
-                                        <div style={{ marginTop: '8px', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '6px', background: '#fff' }}>
-                                            <img src={footerImage} alt="Preview Rodapé" style={{ maxWidth: '100%', maxHeight: '80px', display: 'block', margin: '0 auto' }} />
-                                        </div>
-                                    )}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                                        <span style={{ fontSize: '0.75rem' }}>Altura (px):</span>
-                                        <input type="number" value={footerImageHeight} onChange={e => setFooterImageHeight(Number(e.target.value))} style={{ width: '70px', padding: '4px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
-                                        {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
-                                    </div>
-                                </div>
-                            </div>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: '8px', display: 'block' }}>As imagens aparecerão no topo e inferior do PDF exportado. O Local/Data será preenchido automaticamente com a cidade da empresa sede.</span>
                         </div>
 
                         {/* Orientação de Impressão */}
@@ -727,16 +625,35 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 <div style={cardStyle}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Package size={18} color="var(--color-primary)" />
                             Itens da Proposta ({items.length})
                         </h3>
-                        <button
-                            className="btn btn-outline"
-                            onClick={handleAddItem}
-                            style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px' }}
-                        >
-                            <Plus size={14} /> Adicionar Item
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            {isBulkEditing ? (
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleSaveAllItems}
+                                    disabled={isSaving}
+                                    style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px', background: '#22c55e', color: 'white', border: 'none' }}
+                                >
+                                    {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Tudo
+                                </button>
+                            ) : (
+                                <button
+                                    className="btn btn-outline"
+                                    onClick={() => setIsBulkEditing(true)}
+                                    style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px' }}
+                                >
+                                    <Edit3 size={14} /> Editar Tudo
+                                </button>
+                            )}
+                            <button
+                                className="btn btn-outline"
+                                onClick={handleAddItem}
+                                style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px' }}
+                            >
+                                <Plus size={14} /> Adicionar Item
+                            </button>
+                        </div>
                     </div>
 
                     <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
@@ -760,7 +677,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             </thead>
                             <tbody>
                                 {items.map((item) => {
-                                    const isEditing = editingItemId === item.id;
+                                    const isEditing = isBulkEditing || editingItemId === item.id;
                                     const overRef = item.referencePrice && item.unitPrice > item.referencePrice;
 
                                     return (
@@ -891,17 +808,19 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                             <td style={tdCenterStyle}>
                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                     {isEditing ? (
-                                                        <button
-                                                            onClick={() => handleSaveItem(item)}
-                                                            disabled={isSaving}
-                                                            style={iconBtnStyle}
-                                                            title="Salvar"
-                                                        >
-                                                            {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} color="#22c55e" />}
-                                                        </button>
+                                                        !isBulkEditing && (
+                                                            <button
+                                                                onClick={() => handleSaveAllItems()}
+                                                                disabled={isSaving}
+                                                                style={iconBtnStyle}
+                                                                title="Salvar"
+                                                            >
+                                                                {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} color="#22c55e" />}
+                                                            </button>
+                                                        )
                                                     ) : (
                                                         <button
-                                                            onClick={() => setEditingItemId(item.id)}
+                                                            onClick={() => setIsBulkEditing(true)}
                                                             style={iconBtnStyle}
                                                             title="Editar"
                                                         >
@@ -1014,6 +933,85 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 {isLetterLoading ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
                                 Gerar com IA
                             </button>
+                        </div>
+                    </div>
+
+                    {/* Proposal Configs moved here */}
+                    <div style={{
+                        background: 'rgba(37, 99, 235, 0.03)',
+                        padding: '16px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(37, 99, 235, 0.1)',
+                        marginBottom: '16px',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '20px'
+                    }}>
+                        <div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>BDI (%)</label>
+                            <input
+                                type="number"
+                                value={bdi}
+                                onChange={e => setBdi(parseFloat(e.target.value) || 0)}
+                                step="0.01"
+                                style={inputStyle}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>Validade (dias)</label>
+                            <input
+                                type="number"
+                                value={validityDays}
+                                onChange={e => setValidityDays(parseInt(e.target.value) || 60)}
+                                style={inputStyle}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>Modelo de Assinatura</label>
+                            <select
+                                value={signatureMode}
+                                onChange={e => setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH')}
+                                style={{ ...inputStyle, padding: '6px 8px' }}
+                            >
+                                <option value="LEGAL">Representante Legal</option>
+                                <option value="TECH">Responsável Técnico</option>
+                                <option value="BOTH">Ambos</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Image Uploads UI */}
+                    <div style={{
+                        background: 'rgba(37, 99, 235, 0.03)',
+                        padding: '16px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(37, 99, 235, 0.1)',
+                        marginBottom: '16px',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '20px'
+                    }}>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Cabeçalho do PDF (Timbrado Topo)</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ fontSize: '0.7rem' }}>Alt:</span>
+                                    <input type="number" value={headerImageHeight} onChange={e => setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                </div>
+                                {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                            </div>
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Rodapé do PDF (Timbrado Base)</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ fontSize: '0.7rem' }}>Alt:</span>
+                                    <input type="number" value={footerImageHeight} onChange={e => setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                </div>
+                                {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                            </div>
                         </div>
                     </div>
 

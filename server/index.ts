@@ -1783,39 +1783,39 @@ app.post('/api/proposals/ai-letter', authenticateToken, async (req: any, res) =>
 
         const ai = new GoogleGenAI({ apiKey });
 
-        const prompt = `Gere uma CARTA PROPOSTA formal para licitacao publica brasileira baseada estritamente na Lei 14.133/2021.
-Você deve adequar sua carta ao OBJETO e às EXIGÊNCIAS detalhadas abaixo, priorizando o Modelo de Carta Proposta do edital (caso esteja no Resumo do Edital).
+        const prompt = `Gere uma CARTA PROPOSTA formal para licitação pública brasileira baseada estritamente na Lei 14.133/2021.
+Você deve adequar sua carta ao OBJETO e às EXIGÊNCIAS detalhadas abaixo.
+
+REGRA DE OURO (IMPORTANTE):
+1. PRIORIZE O MODELO DE CARTA PROPOSTA DO EDITAL (geralmente é um anexo do edital). Se o Resumo do Edital abaixo contiver um modelo ou exigências específicas de redação, siga-as fielmente.
+2. Se não existir um modelo claro, aplique as condições exigidas em itens específicos do edital (Resumo abaixo).
+3. Utilize SEMPRE o termo "Agente de Contratação". NUNCA utilize o termo "Comissão de Licitação" (não é mais usual na Nova Lei).
 
 DADOS DA LICITAÇÃO E EMPRESA:
-- Licitacao: ${bidding.title}
+- Licitação: ${bidding.title}
 - Modalidade: ${bidding.modality}
-- Orgao: Conforme edital
+- Órgão: Conforme edital
 - Empresa: ${company.razaoSocial}
 - CNPJ: ${company.cnpj}
 - Contato: ${company.contactName || 'Representante Legal'}
-- Email: ${company.contactEmail || '-'}
-- Telefone: ${company.contactPhone || '-'}
 - Valor Total da Proposta: R$ ${totalValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
 - Validade da Proposta: ${validityDays || 60} dias
-- Resumo dos Itens: ${itemsSummary || 'Conforme planilha de precos em anexo'}
+- Resumo dos Itens: ${itemsSummary || 'Conforme planilha de preços em anexo'}
 
-RESUMO DO EDITAL (Se baseie nestas informações para o conteúdo da carta, especialmente o Termo de Referência):
+RESUMO DO EDITAL (Use para extrair o modelo ou condições específicas):
 ${bidding.aiAnalysis?.fullSummary || 'Não disponível'}
 
-INSTRUÇÕES (CRÍTICAS):
+INSTRUÇÕES TÉCNICAS:
 1. Use formato formal de carta comercial.
-2. Enderece ao Pregoeiro/Comissao de Licitacao.
+2. Enderece ao Agente de Contratação / Pregoeiro.
 3. Inclua: referência explícita ao processo, objeto claro, valor total numérico e por extenso EXATOS.
 4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
 5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
 6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
-7. ATENÇÃO CRÍTICA: NUNCA crie um campo de assinatura no final. NUNCA inclua Local e Data (ex: "Cidade, XX de XXXX de XXXX") no corpo da carta. Eu irei anexar Local, Data e Assinatura fisicamente depois da planilha de preços. Termine o documento em "Atenciosamente," e PARE. Não inclua linhas de assinatura "____________________", nem Local/Data de espécie alguma.
-8. NÃO repita no topo da carta o cabeçalho da empresa (razão social, CNPJ, endereço, email, telefone) pois isso já consta no timbrado fixo do documento. Comece endereçando diretamente a Comissão/Pregoeiro.
-9. NUNCA LISTE OS ITENS OU PRODUTOS NA CARTA. Não crie listas de materiais ou serviços. Os itens já estarão dispostos na planilha de preços que acompanha a carta. Cite apenas o objeto da licitação de forma resumida no primeiro parágrafo.
-10. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
-11. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML nem asteriscos). 
-
-IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura, Local ou Data, nem listas de itens.`;
+7. ATENÇÃO: NUNCA inclua Local e Data no corpo da carta. NUNCA inclua campos de assinatura (linhas). Termine em "Atenciosamente,".
+8. NÃO repita o cabeçalho completo da empresa (razão social, CNPJ em excesso) no topo, apenas o endereçamento.
+9. NUNCA LISTE OS ITENS NA CARTA. Cite apenas o objeto de forma resumida.
+10. Retorne APENAS o texto da carta, sem markdown.`;
 
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
