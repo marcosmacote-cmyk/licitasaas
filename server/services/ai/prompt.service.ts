@@ -112,9 +112,9 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
     "qualificationRequirements": "TRANSCRIÇÃO COMPLETA E LITERAL de TODA a seção de Qualificação Técnica, incluindo cada atestado com quantidades, parcelas de maior relevância, profissionais exigidos, CATs, e todos os requisitos técnicos. NÃO RESUMA."
   }
 }
-\`;
+`;
 
-export const USER_ANALYSIS_INSTRUCTION = \`Analise este(s) edital(is) de licitação com MÁXIMA PROFUNDIDADE e PRECISÃO. Os documentos podem ser PDFs nativos ou PDFs de imagem (escaneados/digitalizados) — em caso de imagens, realize OCR visual cuidadoso.
+export const USER_ANALYSIS_INSTRUCTION = `Analise este(s) edital(is) de licitação com MÁXIMA PROFUNDIDADE e PRECISÃO. Os documentos podem ser PDFs nativos ou PDFs de imagem (escaneados/digitalizados) — em caso de imagens, realize OCR visual cuidadoso.
 
 RETORNE EXCLUSIVAMENTE o objeto JSON especificado nas instruções do sistema. NÃO adicione texto explicativo antes ou depois do JSON.
 
@@ -125,4 +125,4 @@ ATENÇÃO ESPECIAL:
 4. O resumo executivo deve ter no mínimo 300 palavras
 5. O parecer (fullSummary) deve ter no mínimo 400 palavras
 6. Extraia TODAS as penalidades com percentuais exatos
-7. NÃO resuma a Qualificação Técnica — transcreva literalmente\`;
+7. NÃO resuma a Qualificação Técnica — transcreva literalmente`;

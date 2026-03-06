@@ -1,6 +1,7 @@
 import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION } from "./services/ai/prompt.service";
+import { fallbackToOpenAi } from "./services/ai/openai.service";
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -1114,24 +1115,35 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         const systemInstruction = ANALYZE_EDITAL_SYSTEM_PROMPT;
 
         console.log(`[PNCP-AI] Calling Gemini with ${pdfParts.length} PDF parts (files: ${downloadedFiles.join(', ')})...`);
+        let response: any;
         const startTime = Date.now();
 
-        const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [{
-                role: 'user',
-                parts: [
-                    ...pdfParts,
-                    { text: USER_ANALYSIS_INSTRUCTION }
-                ]
-            }],
-            config: {
-                systemInstruction,
-                temperature: 0.1,
-                maxOutputTokens: 32768,
-                responseMimeType: 'application/json'
+        try {
+            response = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{
+                    role: 'user',
+                    parts: [
+                        ...pdfParts,
+                        { text: USER_ANALYSIS_INSTRUCTION }
+                    ]
+                }],
+                config: {
+                    systemInstruction,
+                    temperature: 0.1,
+                    maxOutputTokens: 32768,
+                    responseMimeType: 'application/json'
+                }
+            });
+        } catch (geminiError: any) {
+            console.warn(`[PNCP-AI] Gemini falhou miseravelmente: ${geminiError.message}. Tentando OpenAI gpt-4o-mini Fallback...`);
+            try {
+                response = await fallbackToOpenAi(pdfParts, systemInstruction, USER_ANALYSIS_INSTRUCTION);
+            } catch (openAiError: any) {
+                console.error(`[PNCP-AI] O Fallback via OpenAI também falhou: ${openAiError.message}`);
+                throw new Error(`Ambas IAs falharam. Gemini: ${geminiError.message} | OpenAI: ${openAiError.message}`);
             }
-        });
+        }
 
         const duration = (Date.now() - startTime) / 1000;
         console.log(`[PNCP-AI] Gemini responded in ${duration.toFixed(1)}s`);
@@ -1993,26 +2005,37 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
         const systemInstruction = ANALYZE_EDITAL_SYSTEM_PROMPT;
 
         console.log(`[AI] Calling Gemini API(${pdfParts.length} PDF parts)...`);
-        // 4. Call Gemini with Multi-modal Support (with retry)
+        let response: any;
         const startTime = Date.now();
-        const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        ...pdfParts,
-                        { text: USER_ANALYSIS_INSTRUCTION }
-                    ]
+
+        try {
+            response = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            ...pdfParts,
+                            { text: USER_ANALYSIS_INSTRUCTION }
+                        ]
+                    }
+                ],
+                config: {
+                    systemInstruction,
+                    temperature: 0.1,
+                    maxOutputTokens: 32768,
+                    responseMimeType: 'application/json'
                 }
-            ],
-            config: {
-                systemInstruction,
-                temperature: 0.1,
-                maxOutputTokens: 32768,
-                responseMimeType: 'application/json'
+            });
+        } catch (geminiError: any) {
+            console.warn(`[AI] Gemini falhou: ${geminiError.message}. Realizando Fallback automático para OpenAI (gpt-4o-mini)...`);
+            try {
+                response = await fallbackToOpenAi(pdfParts, systemInstruction, USER_ANALYSIS_INSTRUCTION);
+            } catch (openAiError: any) {
+                console.error(`[AI] Fallback via OpenAI também falhou: ${openAiError.message}`);
+                throw new Error(`As duas IAs falharam. Gemini: ${geminiError.message} | OpenAI: ${openAiError.message}`);
             }
-        });
+        }
         const duration = (Date.now() - startTime) / 1000;
         console.log(`[AI] Gemini responded in ${duration.toFixed(1)} s`);
 
