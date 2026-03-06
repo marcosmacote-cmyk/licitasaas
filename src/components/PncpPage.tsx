@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 interface Props {
     companies: CompanyProfile[];
     onRefresh?: () => Promise<void>;
+    items?: BiddingProcess[];
 }
 
 const UFS = [
@@ -46,7 +47,7 @@ const STATUS_OPTIONS = [
     { value: 'todas', label: '📋 Todas' },
 ];
 
-export function PncpPage({ companies, onRefresh }: Props) {
+export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     const [savedSearches, setSavedSearches] = useState<PncpSavedSearch[]>([]);
     const [results, setResults] = useState<PncpBiddingItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -297,6 +298,18 @@ export function PncpPage({ companies, onRefresh }: Props) {
     };
 
     const handleImportToFunnel = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
+        // Verifica se a licitação já existe no Kanban checando o link_sistema
+        if (items) {
+            const existingProcess = items.find(p => p.link && p.link === item.link_sistema);
+            if (existingProcess) {
+                const isCaptado = existingProcess.status === 'Captado';
+                const locationStr = isCaptado ? 'na coluna "Captada"' : `na coluna "${existingProcess.status}"`;
+                if (!window.confirm(`⚠️ AVISO DE DUPLICIDADE\n\nEsta licitação aparentemente já está no seu funil (${locationStr}).\n\nTem certeza que deseja importar novamente e criar uma duplicidade?`)) {
+                    return;
+                }
+            }
+        }
+
         const processData: Partial<BiddingProcess> = {
             title: aiData?.process?.title || item.titulo,
             summary: aiData?.process?.summary || item.objeto,
