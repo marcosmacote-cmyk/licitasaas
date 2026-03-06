@@ -1,11 +1,13 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 model Tenant {
@@ -76,6 +78,7 @@ model BiddingProcess {
   reminderDays     String?         @default("[]")
   aiAnalysis       AiAnalysis?
   proposals        PriceProposal[]
+  chunks           DocumentChunk[]
   company          CompanyProfile? @relation(fields: [companyProfileId], references: [id])
   tenant           Tenant          @relation(fields: [tenantId], references: [id])
 }
@@ -199,4 +202,17 @@ model ProposalItem {
   sortOrder         Int                 @default(0)
 
   proposal          PriceProposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+}
+
+model DocumentChunk {
+  id               String         @id @default(uuid())
+  biddingProcessId String
+  content          String         @db.Text
+  metadata         Json?
+  embedding        Unsupported("vector(1536)")?
+  createdAt        DateTime       @default(now())
+
+  biddingProcess   BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
+
+  @@index([biddingProcessId])
 }

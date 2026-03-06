@@ -3,6 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const parser_service_1 = require("./services/ai/parser.service");
+const gemini_service_1 = require("./services/ai/gemini.service");
+const prompt_service_1 = require("./services/ai/prompt.service");
+const openai_service_1 = require("./services/ai/openai.service");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
@@ -359,7 +363,7 @@ app.put('/api/companies/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Company not found or unauthorized' });
         }
         // Only allow updating editable fields — strip out id, tenantId, relations
-        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone } = req.body;
+        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state } = req.body;
         const safeData = {};
         if (razaoSocial !== undefined)
             safeData.razaoSocial = razaoSocial;
@@ -377,10 +381,18 @@ app.put('/api/companies/:id', authenticateToken, async (req, res) => {
             safeData.contactEmail = contactEmail;
         if (contactPhone !== undefined)
             safeData.contactPhone = contactPhone;
+        if (contactCpf !== undefined)
+            safeData.contactCpf = contactCpf;
+        if (address !== undefined)
+            safeData.address = address;
+        if (city !== undefined)
+            safeData.city = city;
+        if (state !== undefined)
+            safeData.state = state;
         const updatedCompany = await prisma.companyProfile.update({
             where: { id },
             data: safeData,
-            include: { credentials: true, documents: true }
+            include: { credentials: true, documents: { select: { id: true, tenantId: true, companyProfileId: true, docType: true, fileUrl: true, uploadDate: true, expirationDate: true, status: true, autoRenew: true, docGroup: true, issuerLink: true, fileName: true, alertDays: true } } }
         });
         res.json(updatedCompany);
     }
@@ -643,7 +655,7 @@ ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${c
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
         }
-        const result = await callGeminiWithRetry(genAI.models, {
+        const result = await (0, gemini_service_1.callGeminiWithRetry)(genAI.models, {
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { temperature: 0.7, maxOutputTokens: 4096 }
@@ -714,47 +726,98 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req, res) => {
 });
 app.post('/api/pncp/search', authenticateToken, async (req, res) => {
     try {
-        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim } = req.body;
+        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista } = req.body;
         const pageSize = 10;
-        // Fetch a large batch from PNCP to enable global sorting (max 500)
-        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=500&pagina=1`;
+        let kwList = [];
         if (keywords) {
-            url += `&q=${encodeURIComponent(keywords)}`;
+            if (keywords.includes(',')) {
+                kwList = keywords.split(',')
+                    .map((k) => k.trim().replace(/^"|"$/g, ''))
+                    .filter((k) => k.length > 0)
+                    .map((k) => k.includes(' ') ? `"${k}"` : k);
+            }
+            else {
+                kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
+            }
         }
-        if (status && status !== 'todas') {
-            url += `&status=${status}`;
+        const buildBaseUrl = (qItems, overrideCnpj) => {
+            let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 100 : 500}&pagina=1`;
+            if (overrideCnpj) {
+                url += `&cnpj=${overrideCnpj}`;
+            }
+            if (qItems.length > 0) {
+                url += `&q=${encodeURIComponent(qItems.join(' AND '))}`;
+            }
+            if (status && status !== 'todas')
+                url += `&status=${status}`;
+            if (uf)
+                url += `&ufs=${uf}`; // Allow comma-separated UFs
+            if (modalidade && modalidade !== 'todas')
+                url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
+            if (dataInicio)
+                url += `&data_inicio=${dataInicio}`;
+            if (dataFim)
+                url += `&data_fim=${dataFim}`;
+            if (esfera && esfera !== 'todas')
+                url += `&esferas=${esfera}`;
+            return url;
+        };
+        let extractedNames = [];
+        if (orgaosLista) {
+            extractedNames = orgaosLista.split(/[\n,;]+/).map((s) => s.trim().replace(/^"|"$/g, '')).filter((s) => s.length > 0);
+            extractedNames = [...new Set(extractedNames)]; // Remove duplicates
         }
-        if (uf) {
-            url += `&ufs=${uf}`;
+        let urlsToFetch = [];
+        const keywordsToIterate = kwList.length > 0 ? kwList : [null];
+        const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
+        for (const kw of keywordsToIterate) {
+            for (const org of orgaosToIterate) {
+                let localParams = [];
+                let overrideCnpj = undefined;
+                if (kw)
+                    localParams.push(kw);
+                if (org) {
+                    const onlyNumbers = org.replace(/\D/g, '');
+                    if (onlyNumbers.length === 14) {
+                        overrideCnpj = onlyNumbers;
+                    }
+                    else {
+                        const exactOrgName = org.includes(' ') && !org.startsWith('"') ? `"${org}"` : org;
+                        localParams.push(exactOrgName);
+                    }
+                }
+                urlsToFetch.push(buildBaseUrl(localParams, overrideCnpj));
+            }
         }
-        if (modalidade && modalidade !== 'todas') {
-            url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-        }
-        if (dataInicio) {
-            url += `&data_inicio=${dataInicio}`;
-        }
-        if (dataFim) {
-            url += `&data_fim=${dataFim}`;
-        }
-        const agent = new https_1.default.Agent({
-            rejectUnauthorized: false
-        });
+        // Limit max generated combinations to 1000 to avoid complete application DOS (extreme user input).
+        urlsToFetch = urlsToFetch.slice(0, 1000);
+        const agent = new https_1.default.Agent({ rejectUnauthorized: false });
         const startTime = Date.now();
-        console.log(`[PNCP] START GET ${url}`);
-        const response = await axios_1.default.get(url, {
-            headers: { 'Accept': 'application/json' },
-            httpsAgent: agent,
-            timeout: 15000
-        });
-        const data = response.data;
-        // Debug: log raw structure of first item to understand API format
-        const rawItems = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-        if (rawItems.length > 0) {
-            console.log('[PNCP] RAW first item keys:', Object.keys(rawItems[0]));
-            console.log('[PNCP] RAW first item sample:', JSON.stringify(rawItems[0]).substring(0, 500));
+        console.log(`[PNCP] START GET ${urlsToFetch.length} url(s) in batches...`);
+        let rawItems = [];
+        const chunkSize = 60;
+        for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
+            const chunk = urlsToFetch.slice(i, i + chunkSize);
+            const responses = await Promise.allSettled(chunk.map(u => axios_1.default.get(u, {
+                headers: { 'Accept': 'application/json' },
+                httpsAgent: agent,
+                timeout: 25000
+            })));
+            responses.forEach((res) => {
+                if (res.status === 'fulfilled') {
+                    const data = res.value.data;
+                    const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
+                    rawItems = rawItems.concat(items);
+                }
+                else {
+                    console.error('[PNCP] Request failed:', res.reason?.message);
+                }
+            });
         }
         // First pass: extract what we can from search results
-        const items = rawItems.map((item) => {
+        // Also ensure no duplicate results based on PNCP ID just in case
+        const seenIds = new Set();
+        const items = rawItems.filter(item => item != null).map((item) => {
             const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
             const ano = item.ano || item.anoCompra || '';
             const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
@@ -786,6 +849,11 @@ app.post('/api/pncp/search', authenticateToken, async (req, res) => {
                     : (item.linkSistemaOrigem || item.link || ''),
                 status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
             };
+        }).filter(item => {
+            if (seenIds.has(item.id))
+                return false;
+            seenIds.add(item.id);
+            return true;
         });
         // GLOBAL sort ALL items by closest deadline using search API dates
         const now = Date.now();
@@ -843,127 +911,7 @@ app.post('/api/pncp/search', authenticateToken, async (req, res) => {
         res.status(502).json({ error: 'Falha ao comunicar com a API do PNCP', details: error?.message || 'Erro desconhecido' });
     }
 });
-// ─── Robust JSON Parser (handles Gemini's tendency to append text after JSON) ───
-function robustJsonParse(rawText, label = 'AI') {
-    // Step 1: Clean markdown wrappers and control chars
-    let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const firstBrace = cleaned.indexOf('{');
-    if (firstBrace === -1)
-        throw new Error('JSON inválido retornado pela IA (no opening brace)');
-    cleaned = cleaned.substring(firstBrace);
-    cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
-    // Step 2: Try direct parse first (fastest path)
-    try {
-        return JSON.parse(cleaned);
-    }
-    catch (directErr) {
-        console.log(`[${label}] Direct JSON.parse failed: ${directErr.message}. Attempting repair...`);
-    }
-    // Step 3: Depth-tracked truncation — find where the outermost {} closes
-    let depth = 0, inString = false, escape = false;
-    let lastValidClose = -1;
-    for (let i = 0; i < cleaned.length; i++) {
-        const c = cleaned[i];
-        if (escape) {
-            escape = false;
-            continue;
-        }
-        if (c === '\\') {
-            escape = true;
-            continue;
-        }
-        if (c === '"') {
-            inString = !inString;
-            continue;
-        }
-        if (inString)
-            continue;
-        if (c === '{' || c === '[')
-            depth++;
-        if (c === '}' || c === ']') {
-            depth--;
-            if (depth === 0)
-                lastValidClose = i;
-        }
-    }
-    if (depth === 0 && lastValidClose !== -1) {
-        const truncated = cleaned.substring(0, lastValidClose + 1);
-        try {
-            const result = JSON.parse(truncated);
-            console.log(`[${label}] ✅ JSON parsed after depth-tracked truncation at position ${lastValidClose}`);
-            return result;
-        }
-        catch (truncErr) {
-            console.log(`[${label}] Depth-tracked truncation failed: ${truncErr.message}`);
-        }
-    }
-    // Step 4: Error-position-based truncation — use the position from the JSON error
-    try {
-        const posMatch = (cleaned.match(/"[^"]*$/) || [null])[0];
-        // Try to find the last complete JSON by searching backwards for the last }
-        const lastBrace = cleaned.lastIndexOf('}');
-        if (lastBrace > 0) {
-            let attempt = cleaned.substring(0, lastBrace + 1);
-            // Remove trailing comma before closing brace/bracket
-            attempt = attempt.replace(/,\s*([}\]])/, '$1');
-            try {
-                const result = JSON.parse(attempt);
-                console.log(`[${label}] ✅ JSON parsed after lastBrace truncation at position ${lastBrace}`);
-                return result;
-            }
-            catch { /* continue */ }
-        }
-    }
-    catch { /* continue */ }
-    // Step 5: Stack-based bracket repair — close unclosed structures
-    console.log(`[${label}] Attempting stack-based bracket repair...`);
-    let repaired = cleaned;
-    // Remove trailing commas
-    repaired = repaired.replace(/,\s*$/, '');
-    depth = 0;
-    inString = false;
-    escape = false;
-    let stack = [];
-    for (let i = 0; i < repaired.length; i++) {
-        const c = repaired[i];
-        if (escape) {
-            escape = false;
-            continue;
-        }
-        if (c === '\\') {
-            escape = true;
-            continue;
-        }
-        if (c === '"') {
-            inString = !inString;
-            continue;
-        }
-        if (inString)
-            continue;
-        if (c === '{')
-            stack.push('}');
-        if (c === '[')
-            stack.push(']');
-        if (c === '}' || c === ']')
-            stack.pop();
-    }
-    if (inString)
-        repaired += '"';
-    while (stack.length > 0)
-        repaired += stack.pop();
-    try {
-        const result = JSON.parse(repaired);
-        console.log(`[${label}] ✅ JSON parsed after stack-based repair (added ${stack.length} closers)`);
-        return result;
-    }
-    catch (finalErr) {
-        console.error(`[${label}] ❌ ALL JSON repair strategies failed. Raw length: ${rawText.length}, Error: ${finalErr.message}`);
-        // Log first/last 200 chars for debugging
-        console.error(`[${label}] First 200 chars: ${cleaned.substring(0, 200)}`);
-        console.error(`[${label}] Last 200 chars: ${cleaned.substring(cleaned.length - 200)}`);
-        throw new Error(`Falha ao interpretar resposta da IA (JSON inválido após múltiplas tentativas de reparo)`);
-    }
-}
+// ─── AI Services Imports estão no topo do arquivo ───
 // PNCP AI Analysis — analyzes a PNCP edital directly by fetching its PDF files
 app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
     try {
@@ -1100,144 +1048,45 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         }
         const ai = new genai_1.GoogleGenAI({ apiKey });
         // 4. Use enhanced analysis prompt with strict precision for financial data, deadlines, OCR, and Qualificação Técnica
-        const systemInstruction = `
-Você é um consultor jurídico sênior e analista financeiro especializado em licitações públicas brasileiras (Lei 14.133/2021 e Lei 8.666/1993).
-SUA MISSÃO É realizar uma ANÁLISE PROFUNDA, PRECISA E EXAUSTIVA do edital, com atenção especial a:
-- Resumo executivo detalhado e profissional
-- Dados financeiros EXATOS (valores, garantias, reajustes)
-- Prazos com datas e horários PRECISOS
-- Documentos de habilitação com referência EXATA ao item do edital
-- Qualificação técnica SEM QUALQUER RESUMO
-
-=== REGRAS CRÍTICAS ===
-1. Responda APENAS com um objeto JSON válido. NUNCA adicione crases Markdown, textos explicativos, ou qualquer conteúdo antes ou depois do JSON.
-2. NUNCA invente dados. Se uma informação não estiver no documento, retorne string vazia ou array vazio.
-3. O campo 'risk' deve ser obrigatoriamente: "Baixo", "Médio", "Alto" ou "Crítico".
-4. FUJA DE ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON. Use aspas simples.
-
-=== REGRAS PARA OCR E DOCUMENTOS DIGITALIZADOS ===
-5. ATENÇÃO MÁXIMA A PDFs DE IMAGEM: Alguns documentos são PDFs escaneados (imagens). Você DEVE ler cuidadosamente cada página como imagem, realizando OCR visual.
-6. Em documentos digitalizados, ignore marcas d'água, carimbos, logomarcas e numeração de páginas.
-7. Se a qualidade do scan for baixa, esforce-se ao máximo para interpretar o texto. Indique no fullSummary se houve dificuldade de leitura.
-8. ESTRATÉGIA DE BUSCA: Analise o índice/sumário do documento (se houver) para localizar rapidamente as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA, TERMO DE REFERÊNCIA e CLÁUSULAS FINANCEIRAS.
-
-=== REGRAS PARA RESUMO EXECUTIVO (summary) ===
-9. O campo 'summary' deve ser um RESUMO EXECUTIVO PROFISSIONAL com no mínimo 300 palavras, contendo:
-   a) OBJETO DETALHADO: Descrição completa e precisa do que está sendo licitado (não apenas o título).
-   b) ESCOPO DOS SERVIÇOS/FORNECIMENTO: Detalhamento do que será executado/fornecido.
-   c) LOCAL DE EXECUÇÃO: Onde os serviços serão prestados ou onde os bens serão entregues.
-   d) PRAZO DE VIGÊNCIA/EXECUÇÃO: Duração do contrato ou prazo de entrega.
-   e) CONDIÇÕES ESPECIAIS: Requisitos particulares deste edital.
-   f) CRITÉRIO DE JULGAMENTO: Menor preço, técnica e preço, maior desconto, etc.
-
-=== REGRAS PARA DADOS FINANCEIROS (PRECISÃO OBRIGATÓRIA) ===
-10. O campo 'estimatedValue' DEVE conter o valor EXATO em formato numérico (sem formatação). Se houver valor total estimado e valor por lote, use o valor TOTAL.
-11. O campo 'pricingConsiderations' deve conter uma ANÁLISE FINANCEIRA DETALHADA incluindo:
-    a) Valor total estimado da contratação e como foi composto (média de cotações, tabela SINAPI, etc.).
-    b) Critério de aceitabilidade de preços (preço máximo, valor de referência).
-    c) Condições de pagamento (prazo, forma, nota fiscal requerida).
-    d) Existência de garantia contratual e percentual exigido.
-    e) Critérios de reajuste/reequilíbrio econômico-financeiro.
-    f) Existe BDI (Bonificação e Despesas Indiretas)? Taxa exigida?
-    g) Dotação orçamentária mencionada.
-    h) Desconto ofertado sobre tabela (se aplicável).
-
-=== REGRAS PARA PRAZOS (deadlines) — PRECISÃO TOTAL ===
-12. O campo 'deadlines' deve ser um ARRAY com CADA prazo importante EXATAMENTE como consta no edital:
-    a) Data e hora de ABERTURA DA SESSÃO PÚBLICA (obrigatório se existir)
-    b) Prazo para IMPUGNAÇÃO do edital (com data limite calculada)
-    c) Prazo para ESCLARECIMENTOS (com data limite)
-    d) Prazo de ENTREGA DE PROPOSTAS (data/hora início e fim)
-    e) Prazo de VIGÊNCIA CONTRATUAL
-    f) Prazo de ENTREGA DOS BENS ou EXECUÇÃO DOS SERVIÇOS
-    g) Prazo para assinatura do contrato após homologação
-    h) Quaisquer outros prazos mencionados no edital
-    FORMATO: "DD/MM/AAAA HH:MM - Descrição completa do prazo" (use 24h)
-
-=== REGRAS PARA DOCUMENTOS EXIGIDOS (requiredDocuments) ===
-13. COLOQUE A REFERÊNCIA EXATA do item do edital no campo 'item' (Ex: "6.1.1.a", "9.2.3").
-14. CRIE UMA ENTRADA SEPARADA PARA CADA DOCUMENTO. Se um item lista 5 documentos, retorne 5 objetos.
-15. A 'description' deve conter o NOME COMPLETO do documento como descrito no edital, incluindo detalhes de validade se mencionados.
-
-=== REGRAS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR) ===
-16. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
-17. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
-18. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
-19. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
-20. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
-21. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
-22. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
-23. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica do edital — sem qualquer resumo.
-
-=== REGRAS PARA ITENS LICITADOS (biddingItems) ===
-24. Se houver tabelas de itens (lotes), extraia TODOS os itens com: número do item/lote, descrição técnica completa, unidade de medida, quantidade e valor unitário estimado (se disponível).
-25. NÃO limite a 3 itens. Se o edital tiver 50 itens, transcreva todos.
-
-=== REGRAS PARA PARECER (fullSummary) ===
-26. O campo 'fullSummary' deve conter um PARECER TÉCNICO-JURÍDICO de no mínimo 400 palavras, incluindo:
-    a) Análise da viabilidade de participação.
-    b) Pontos de atenção jurídica e riscos.
-    c) Análise das exigências de habilitação (se são proporcionais).
-    d) Análise das condições contratuais.
-    e) Recomendações estratégicas para o licitante.
-    f) Avaliação do regime de execução.
-
-=== REGRAS PARA PENALIDADES (penalties) ===
-27. Extrair TODAS as penalidades com valores/percentuais EXATOS: multas (% sobre valor contratual), advertências, suspensão (prazo), impedimento (prazo), declaração de inidoneidade.
-
-FORMATO DE SAÍDA JSON:
-{
-  "process": {
-    "title": "Número EXATO e órgão emissor (Ex: Pregão Eletrônico nº 01/2026 - Prefeitura Municipal de Fortaleza/CE)",
-    "summary": "RESUMO EXECUTIVO detalhado com mínimo 300 palavras contendo: objeto, escopo, local de execução, prazo de vigência, condições especiais e critério de julgamento",
-    "modality": "Modalidade EXATA (Pregão Eletrônico, Concorrência Eletrônica, Dispensa, RDC, etc.)",
-    "portal": "PNCP",
-    "estimatedValue": 100000.50,
-    "sessionDate": "2026-03-15T09:00:00Z",
-    "risk": "Baixo"
-  },
-  "analysis": {
-    "requiredDocuments": {
-       "Habilitação Jurídica": [ { "item": "6.1.1", "description": "Nome EXATO e completo do documento conforme edital" } ],
-       "Regularidade Fiscal, Social e Trabalhista": [ { "item": "6.2.1", "description": "Certidão Conjunta de Débitos Relativos a Tributos Federais e à Dívida Ativa da União" } ],
-       "Qualificação Técnica": [ { "item": "6.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, incluindo quantidades mínimas, especificações e parcelas de maior relevância" } ],
-       "Qualificação Econômica Financeira": [ { "item": "6.4.1", "description": "Balanço patrimonial e demonstrações contábeis do último exercício social com índice de LG >= 1,0" } ],
-       "Declarações e Outros": [ { "item": "6.5.1", "description": "Declaração de inexistência de fato superveniente impeditivo" } ]
-    },
-    "biddingItems": "Detalhamento extensivo de TODOS os itens/lotes licitados com: número do item, descrição técnica completa, unidade, quantidade e valor unitário estimado",
-    "pricingConsiderations": "ANÁLISE FINANCEIRA DETALHADA: valor total, composição de preço, critério de aceitabilidade, condições de pagamento, garantia contratual, reajuste, BDI, dotação orçamentária",
-    "irregularitiesFlags": [ "Pontos de atenção, riscos e possíveis irregularidades identificados no edital" ],
-    "fullSummary": "PARECER TÉCNICO-JURÍDICO de mínimo 400 palavras com: análise de viabilidade, pontos jurídicos, proporcionalidade das exigências, condições contratuais, recomendações estratégicas",
-    "deadlines": [ "DD/MM/AAAA HH:MM - Descrição completa do prazo (abertura, impugnação, esclarecimento, propostas, vigência, entrega, etc.)" ],
-    "penalties": "Detalhamento COMPLETO das penalidades com valores/percentuais EXATOS: multas, advertências, suspensão, impedimento, inidoneidade",
-    "qualificationRequirements": "TRANSCRIÇÃO COMPLETA E LITERAL de TODA a seção de Qualificação Técnica, incluindo cada atestado exigido com quantidades mínimas, parcelas de maior relevância, profissionais exigidos com registros em conselhos, CATs, e quaisquer requisitos técnicos. NÃO RESUMA."
-  }
-}`;
+        const systemInstruction = prompt_service_1.ANALYZE_EDITAL_SYSTEM_PROMPT;
         console.log(`[PNCP-AI] Calling Gemini with ${pdfParts.length} PDF parts (files: ${downloadedFiles.join(', ')})...`);
+        let response;
         const startTime = Date.now();
-        const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [{
-                    role: 'user',
-                    parts: [
-                        ...pdfParts,
-                        { text: `Analise este(s) edital(is) de licitação com MÁXIMA PROFUNDIDADE e PRECISÃO. Os documentos podem ser PDFs nativos ou PDFs de imagem (escaneados/digitalizados) — em caso de imagens, realize OCR visual cuidadoso.\n\nRETORNE EXCLUSIVAMENTE o objeto JSON especificado nas instruções do sistema. NÃO adicione texto explicativo antes ou depois do JSON.\n\nATENÇÃO ESPECIAL:\n1. Extraia TODOS os prazos com datas e horários EXATOS\n2. Extraia o valor estimado EXATO (numérico)\n3. Detalhe CADA documento de habilitação com referência do item do edital\n4. O resumo executivo deve ter no mínimo 300 palavras\n5. O parecer (fullSummary) deve ter no mínimo 400 palavras\n6. Extraia TODAS as penalidades com percentuais exatos\n7. NÃO resuma a Qualificação Técnica — transcreva literalmente` }
-                    ]
-                }],
-            config: {
-                systemInstruction,
-                temperature: 0.1,
-                maxOutputTokens: 32768,
-                responseMimeType: 'application/json'
+        try {
+            response = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{
+                        role: 'user',
+                        parts: [
+                            ...pdfParts,
+                            { text: prompt_service_1.USER_ANALYSIS_INSTRUCTION }
+                        ]
+                    }],
+                config: {
+                    systemInstruction,
+                    temperature: 0.1,
+                    maxOutputTokens: 32768,
+                    responseMimeType: 'application/json'
+                }
+            });
+        }
+        catch (geminiError) {
+            console.warn(`[PNCP-AI] Gemini falhou miseravelmente: ${geminiError.message}. Tentando OpenAI gpt-4o-mini Fallback...`);
+            try {
+                response = await (0, openai_service_1.fallbackToOpenAi)(pdfParts, systemInstruction, prompt_service_1.USER_ANALYSIS_INSTRUCTION);
             }
-        });
+            catch (openAiError) {
+                console.error(`[PNCP-AI] O Fallback via OpenAI também falhou: ${openAiError.message}`);
+                throw new Error(`Ambas IAs falharam. Gemini: ${geminiError.message} | OpenAI: ${openAiError.message}`);
+            }
+        }
         const duration = (Date.now() - startTime) / 1000;
         console.log(`[PNCP-AI] Gemini responded in ${duration.toFixed(1)}s`);
         const rawText = response.text;
         if (!rawText)
             throw new Error('A IA não retornou nenhum texto.');
         // 5. Parse JSON with robust multi-strategy parser
-        const finalPayload = robustJsonParse(rawText, 'PNCP-AI');
+        const finalPayload = (0, parser_service_1.robustJsonParse)(rawText, 'PNCP-AI');
         // Add source info
         finalPayload.pncpSource = {
             link_sistema,
@@ -1708,7 +1557,7 @@ REGRAS:
 Responda APENAS com um JSON array, sem markdown:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
         console.log(`[AI Populate] Extracting items from bidding ${biddingProcessId}...`);
-        const result = await callGeminiWithRetry(ai.models, {
+        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: { temperature: 0.05, maxOutputTokens: 8192 },
@@ -1778,12 +1627,14 @@ INSTRUÇÕES (CRÍTICAS):
 4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
 5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
 6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
-7. ATENÇÃO: NUNCA crie um campo de assinatura, nem data ou local no final do documento. Eu irei anexar isso fisicamente depois. Termine o documento em "Atenciosamente," ou similar e PRONTO. Não inclua linhas de assinatura "____________________".
-8. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
-9. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML). 
+7. ATENÇÃO CRÍTICA: NUNCA crie um campo de assinatura no final. NUNCA inclua Local e Data (ex: "Cidade, XX de XXXX de XXXX") no corpo da carta. Eu irei anexar Local, Data e Assinatura fisicamente depois da planilha de preços. Termine o documento em "Atenciosamente," e PARE. Não inclua linhas de assinatura "____________________", nem Local/Data de espécie alguma.
+8. NÃO repita no topo da carta o cabeçalho da empresa (razão social, CNPJ, endereço, email, telefone) pois isso já consta no timbrado fixo do documento. Comece endereçando diretamente a Comissão/Pregoeiro.
+9. NUNCA LISTE OS ITENS OU PRODUTOS NA CARTA. Não crie listas de materiais ou serviços. Os itens já estarão dispostos na planilha de preços que acompanha a carta. Cite apenas o objeto da licitação de forma resumida no primeiro parágrafo.
+10. Evite repetições óbvias, use linguagem jurídica formal, clara e coesa.
+11. Retorne APENAS o texto da carta, sem nenhum tipo de markdown (não coloque tags \`\`\` nem títulos HTML nem asteriscos). 
 
-IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura.`;
-        const result = await callGeminiWithRetry(ai.models, {
+IMPORTANTE: Escreva o valor por extenso de forma impecável. Não coloque campos de assinatura, Local ou Data, nem listas de itens.`;
+        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: { temperature: 0.2, maxOutputTokens: 4096 },
@@ -1881,7 +1732,7 @@ Responda APENAS com um JSON array. Para CADA exigência REQ[i], inclua um objeto
 IMPORTANTE: Inclua uma entrada para CADA exigência (R0 a R${requirements.length - 1}).
 
 Responda somente com o JSON array, sem markdown, sem texto adicional:`;
-        const result = await callGeminiWithRetry(ai.models, {
+        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
@@ -1939,43 +1790,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
         res.status(500).json({ error: 'AI matching failed: ' + (error?.message || 'Unknown error') });
     }
 });
-// Helper for Gemini with retry (for 503/429 errors) + model fallback
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
-async function callGeminiWithRetry(model, options, maxRetries = 4) {
-    let lastError;
-    for (const modelName of GEMINI_MODELS) {
-        const attemptOptions = { ...options, model: modelName };
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                console.log(`[Gemini] Trying model '${modelName}' (attempt ${i + 1}/${maxRetries})`);
-                return await model.generateContent(attemptOptions);
-            }
-            catch (error) {
-                lastError = error;
-                const isRetryable = error?.message?.includes('503') || error?.message?.includes('429') ||
-                    error?.status === 503 || error?.code === 503 ||
-                    error?.status === 429 || error?.code === 429;
-                if (isRetryable) {
-                    const delay = Math.min((i + 1) * 3000, 15000); // exponential backoff, max 15s
-                    console.warn(`[Gemini] ${error?.status || '503/429'} error on '${modelName}', retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    continue;
-                }
-                // Non-retryable error: break inner loop, try next model
-                const errorMsg = error?.message || String(error);
-                console.error(`[Gemini] Non-retryable error on '${modelName}': ${errorMsg}`);
-                break;
-            }
-        }
-        console.warn(`[Gemini] All retries exhausted for model '${modelName}', trying next model...`);
-    }
-    const finalErrorMsg = lastError?.message || String(lastError);
-    if (finalErrorMsg.includes('leaked') || lastError?.status === 403) {
-        console.error("!!! CRITICAL: GEMINI API KEY IS LEAKED OR INVALID !!!", lastError);
-        throw new Error("A chave da API Gemini foi bloqueada por razões de segurança ou é inválida. Por favor, atualize a GEMINI_API_KEY no arquivo .env.");
-    }
-    throw lastError;
-}
+// AI Services imports movidos para cima
 // AI Analysis Endpoint
 app.post('/api/analyze-edital', authenticateToken, async (req, res) => {
     try {
@@ -2030,142 +1845,40 @@ app.post('/api/analyze-edital', authenticateToken, async (req, res) => {
         }
         const ai = new genai_1.GoogleGenAI({ apiKey });
         // 3. System Prompt & Strict JSON Schema Definition (Enhanced with precision rules)
-        const systemInstruction = `
-Você é um consultor jurídico sênior e analista financeiro especializado em licitações públicas brasileiras (Lei 14.133/2021 e Lei 8.666/1993).
-SUA MISSÃO É realizar uma ANÁLISE PROFUNDA, PRECISA E EXAUSTIVA do edital, com atenção especial a:
-- Resumo executivo detalhado e profissional
-- Dados financeiros EXATOS (valores, garantias, reajustes)
-- Prazos com datas e horários PRECISOS
-- Documentos de habilitação com referência EXATA ao item do edital
-- Qualificação técnica SEM QUALQUER RESUMO
-
-NÃO AGRUPE documentos em uma única string. Se o edital pede "Certidão Federal, Estadual e Municipal", você deve criar TRÊS entradas separadas no JSON.
-
-=== REGRAS CRÍTICAS ===
-1. Responda APENAS com um objeto JSON válido. NUNCA adicione crases Markdown, textos explicativos, ou qualquer conteúdo antes ou depois do JSON.
-2. NUNCA invente dados. Se uma informação não estiver no documento, retorne string vazia ou array vazio.
-3. O campo 'risk' deve ser obrigatoriamente: "Baixo", "Médio", "Alto" ou "Crítico".
-4. FUJA DE ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON. Use aspas simples.
-
-=== REGRAS PARA OCR E DOCUMENTOS DIGITALIZADOS ===
-5. ATENÇÃO MÁXIMA A PDFs DE IMAGEM: Alguns documentos são PDFs escaneados (imagens/fotografias de páginas). Você DEVE ler cuidadosamente cada página como imagem, realizando OCR visual.
-6. Em documentos digitalizados, ignore marcas d'água, carimbos, logomarcas e numeração de páginas.
-7. Se a qualidade do scan for baixa, esforce-se ao máximo para interpretar o texto. Indique no fullSummary se houve dificuldade de leitura.
-8. ESTRATÉGIA DE BUSCA: Analise o índice/sumário do documento (se houver) para localizar rapidamente as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA, TERMO DE REFERÊNCIA e CLÁUSULAS FINANCEIRAS.
-
-=== REGRAS PARA RESUMO EXECUTIVO (summary) ===
-9. O campo 'summary' deve ser um RESUMO EXECUTIVO PROFISSIONAL com no mínimo 300 palavras, contendo:
-   a) OBJETO DETALHADO: Descrição completa e precisa do que está sendo licitado (não apenas o título).
-   b) ESCOPO DOS SERVIÇOS/FORNECIMENTO: Detalhamento do que será executado/fornecido.
-   c) LOCAL DE EXECUÇÃO: Onde os serviços serão prestados ou onde os bens serão entregues.
-   d) PRAZO DE VIGÊNCIA/EXECUÇÃO: Duração do contrato ou prazo de entrega.
-   e) CONDIÇÕES ESPECIAIS: Requisitos particulares deste edital.
-   f) CRITÉRIO DE JULGAMENTO: Menor preço, técnica e preço, maior desconto, etc.
-
-=== REGRAS PARA DADOS FINANCEIROS (PRECISÃO OBRIGATÓRIA) ===
-10. O campo 'estimatedValue' DEVE conter o valor EXATO em formato numérico (sem formatação). Se houver valor total estimado e valor por lote, use o valor TOTAL.
-11. O campo 'pricingConsiderations' deve conter uma ANÁLISE FINANCEIRA DETALHADA incluindo:
-    a) Valor total estimado da contratação e como foi composto (média de cotações, tabela SINAPI, etc.).
-    b) Critério de aceitabilidade de preços (preço máximo, valor de referência).
-    c) Condições de pagamento (prazo, forma, nota fiscal requerida).
-    d) Existência de garantia contratual e percentual exigido.
-    e) Critérios de reajuste/reequilíbrio econômico-financeiro.
-    f) Existe BDI (Bonificação e Despesas Indiretas)? Taxa exigida?
-    g) Dotação orçamentária mencionada.
-    h) Desconto ofertado sobre tabela (se aplicável).
-
-=== REGRAS PARA PRAZOS (deadlines) — PRECISÃO TOTAL ===
-12. O campo 'deadlines' deve ser um ARRAY com CADA prazo importante EXATAMENTE como consta no edital:
-    a) Data e hora de ABERTURA DA SESSÃO PÚBLICA (obrigatório se existir)
-    b) Prazo para IMPUGNAÇÃO do edital (com data limite calculada)
-    c) Prazo para ESCLARECIMENTOS (com data limite)
-    d) Prazo de ENTREGA DE PROPOSTAS (data/hora início e fim)
-    e) Prazo de VIGÊNCIA CONTRATUAL
-    f) Prazo de ENTREGA DOS BENS ou EXECUÇÃO DOS SERVIÇOS
-    g) Prazo para assinatura do contrato após homologação
-    h) Quaisquer outros prazos mencionados no edital
-    FORMATO: "DD/MM/AAAA HH:MM - Descrição completa do prazo" (use 24h)
-
-=== REGRAS PARA DOCUMENTOS EXIGIDOS (requiredDocuments) ===
-13. COLOQUE A REFERÊNCIA EXATA do item do edital no campo 'item' (Ex: "6.1.1.a", "9.2.3").
-14. CRIE UMA ENTRADA SEPARADA PARA CADA DOCUMENTO. Se um item lista 5 documentos, retorne 5 objetos.
-15. A 'description' deve conter o NOME COMPLETO do documento como descrito no edital, incluindo detalhes de validade se mencionados.
-16. Detalhe os itens licitados no campo 'biddingItems', extraindo as quantias e descrições técnicas do Termo de Referência.
-17. TRANSCRIÇÃO DE ITENS: Se houver tabelas de itens (lotes) no TR, extraia TODOS os dados técnicos e quantidades.
-
-=== REGRAS PARA QUALIFICAÇÃO TÉCNICA (ABSOLUTAMENTE PROIBIDO RESUMIR) ===
-18. TRANSCREVA LITERALMENTE cada exigência de Qualificação Técnica como consta no edital.
-19. NUNCA resuma, agrupe ou simplifique os atestados de capacidade técnica.
-20. Se o edital exige "atestado de capacidade técnica comprovando execução de serviço compatível com pavimentação asfáltica em área mínima de 5.000m²", transcreva EXATAMENTE isso — não resuma como "Atestado de capacidade técnica".
-21. Inclua TODAS as quantidades mínimas, percentuais, áreas, volumes e especificações técnicas mencionadas.
-22. Para cada profissional exigido (RT/engenheiro), detalhe: formação, registro no conselho (CREA/CAU), experiência mínima.
-23. Transcreva separadamente cada atestado exigido, com suas particularidades (tipo de serviço, quantidades, parcela de maior relevância).
-24. Se o edital menciona CAT (Certidão de Acervo Técnico), detalhe exatamente qual tipo de acervo é exigido.
-25. O campo 'qualificationRequirements' deve conter a transcrição COMPLETA e LITERAL de TODA a seção de Qualificação Técnica — sem qualquer resumo.
-26. Se a resposta ficar longa, resuma "biddingItems" mas NUNCA resuma a Qualificação Técnica nem o resumo executivo.
-
-=== REGRAS PARA PARECER (fullSummary) ===
-27. O campo 'fullSummary' deve conter um PARECER TÉCNICO-JURÍDICO de no mínimo 400 palavras, incluindo:
-    a) Análise da viabilidade de participação.
-    b) Pontos de atenção jurídica e riscos.
-    c) Análise das exigências de habilitação (se são proporcionais).
-    d) Análise das condições contratuais.
-    e) Recomendações estratégicas para o licitante.
-    f) Avaliação do regime de execução.
-
-=== REGRAS PARA PENALIDADES (penalties) ===
-28. Extrair TODAS as penalidades com valores/percentuais EXATOS: multas (% sobre valor contratual), advertências, suspensão (prazo), impedimento (prazo), declaração de inidoneidade.
-
-EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
-{
-  "process": {
-    "title": "Número EXATO e órgão emissor (Ex: Pregão Eletrônico nº 01/2026 - Prefeitura Municipal de Fortaleza/CE)",
-    "summary": "RESUMO EXECUTIVO detalhado com mínimo 300 palavras contendo: objeto, escopo, local de execução, prazo de vigência, condições especiais e critério de julgamento",
-    "modality": "Modalidade EXATA (Pregão Eletrônico, Concorrência Eletrônica, Dispensa, RDC, etc.)",
-    "portal": "Nome do Portal (Compras.gov.br, PNCP, BEC, Licitanet, etc.)",
-    "estimatedValue": 100000.50,
-    "sessionDate": "2026-03-15T09:00:00Z",
-    "risk": "Baixo"
-  },
-  "analysis": {
-    "requiredDocuments": {
-       "Habilitação Jurídica": [ { "item": "6.1.1", "description": "Nome EXATO e completo do documento conforme edital" } ],
-       "Regularidade Fiscal, Social e Trabalhista": [ { "item": "6.2.1", "description": "Certidão Conjunta de Débitos Relativos a Tributos Federais e à Dívida Ativa da União" } ],
-       "Qualificação Técnica": [ { "item": "6.3.1", "description": "TRANSCRIÇÃO LITERAL E COMPLETA da exigência, incluindo quantidades mínimas, especificações e parcelas de maior relevância" } ],
-       "Qualificação Econômica Financeira": [ { "item": "6.4.1", "description": "Balanço patrimonial e demonstrações contábeis do último exercício social com índice de LG >= 1,0" } ],
-       "Declarações e Outros": [ { "item": "6.5.1", "description": "Declaração de inexistência de fato superveniente impeditivo" } ]
-    },
-    "biddingItems": "Detalhamento extensivo de TODOS os itens/lotes licitados com: número do item, descrição técnica completa, unidade, quantidade e valor unitário estimado",
-    "pricingConsiderations": "ANÁLISE FINANCEIRA DETALHADA: valor total, composição de preço, critério de aceitabilidade, condições de pagamento, garantia contratual, reajuste, BDI, dotação orçamentária",
-    "irregularitiesFlags": [ "Pontos de atenção, riscos e possíveis irregularidades identificados no edital" ],
-    "fullSummary": "PARECER TÉCNICO-JURÍDICO de mínimo 400 palavras com: análise de viabilidade, pontos jurídicos, proporcionalidade das exigências, condições contratuais, recomendações estratégicas",
-    "deadlines": [ "DD/MM/AAAA HH:MM - Descrição completa do prazo (abertura, impugnação, esclarecimento, propostas, vigência, entrega, etc.)" ],
-    "penalties": "Detalhamento COMPLETO das penalidades com valores/percentuais EXATOS: multas, advertências, suspensão, impedimento, inidoneidade",
-    "qualificationRequirements": "TRANSCRIÇÃO COMPLETA E LITERAL de TODA a seção de Qualificação Técnica, incluindo cada atestado com quantidades, parcelas de maior relevância, profissionais exigidos, CATs, e todos os requisitos técnicos. NÃO RESUMA."
-  }
-}
-`;
+        const systemInstruction = prompt_service_1.ANALYZE_EDITAL_SYSTEM_PROMPT;
         console.log(`[AI] Calling Gemini API(${pdfParts.length} PDF parts)...`);
-        // 4. Call Gemini with Multi-modal Support (with retry)
+        let response;
         const startTime = Date.now();
-        const response = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        ...pdfParts,
-                        { text: `Analise este(s) edital(is) de licitação com MÁXIMA PROFUNDIDADE e PRECISÃO. Os documentos podem ser PDFs nativos ou PDFs de imagem (escaneados/digitalizados) — em caso de imagens, realize OCR visual cuidadoso.\n\nRETORNE EXCLUSIVAMENTE o objeto JSON especificado nas instruções do sistema. NÃO adicione texto explicativo antes ou depois do JSON.\n\nATENÇÃO ESPECIAL:\n1. Extraia TODOS os prazos com datas e horários EXATOS\n2. Extraia o valor estimado EXATO (numérico)\n3. Detalhe CADA documento de habilitação com referência do item do edital\n4. O resumo executivo deve ter no mínimo 300 palavras\n5. O parecer (fullSummary) deve ter no mínimo 400 palavras\n6. Extraia TODAS as penalidades com percentuais exatos\n7. NÃO resuma a Qualificação Técnica — transcreva literalmente` }
-                    ]
+        try {
+            response = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            ...pdfParts,
+                            { text: prompt_service_1.USER_ANALYSIS_INSTRUCTION }
+                        ]
+                    }
+                ],
+                config: {
+                    systemInstruction,
+                    temperature: 0.1,
+                    maxOutputTokens: 32768,
+                    responseMimeType: 'application/json'
                 }
-            ],
-            config: {
-                systemInstruction,
-                temperature: 0.1,
-                maxOutputTokens: 32768,
-                responseMimeType: 'application/json'
+            });
+        }
+        catch (geminiError) {
+            console.warn(`[AI] Gemini falhou: ${geminiError.message}. Realizando Fallback automático para OpenAI (gpt-4o-mini)...`);
+            try {
+                response = await (0, openai_service_1.fallbackToOpenAi)(pdfParts, systemInstruction, prompt_service_1.USER_ANALYSIS_INSTRUCTION);
             }
-        });
+            catch (openAiError) {
+                console.error(`[AI] Fallback via OpenAI também falhou: ${openAiError.message}`);
+                throw new Error(`As duas IAs falharam. Gemini: ${geminiError.message} | OpenAI: ${openAiError.message}`);
+            }
+        }
         const duration = (Date.now() - startTime) / 1000;
         console.log(`[AI] Gemini responded in ${duration.toFixed(1)} s`);
         const rawText = response.text;
@@ -2175,7 +1888,7 @@ EXTRAIA OS DADOS SEGUINDO ESTE FORMATO EXATO DE SAÍDA JSON:
         }
         console.log(`[AI] Raw response length: ${rawText.length} `);
         // ---- Robust JSON extraction and repair ----
-        const finalPayload = robustJsonParse(rawText, 'AI-Edital');
+        const finalPayload = (0, parser_service_1.robustJsonParse)(rawText, 'AI-Edital');
         console.log(`[AI] Successfully parsed JSON. Top-level keys: ${Object.keys(finalPayload).join(', ')}`);
         if (finalPayload.process) {
             console.log(`[AI] process keys: ${Object.keys(finalPayload.process).join(', ')}`);
@@ -2389,7 +2102,7 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
                 parts: [...pdfParts, { text: "Estes são os documentos para nossa conversa." }]
             });
         }
-        const chatResult = await callGeminiWithRetry(ai.models, {
+        const chatResult = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
             model: 'gemini-2.5-flash',
             contents: historyWithContext,
             config: {

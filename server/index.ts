@@ -2,6 +2,7 @@ import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION } from "./services/ai/prompt.service";
 import { fallbackToOpenAi } from "./services/ai/openai.service";
+import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -1297,6 +1298,25 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
         // Debug log to confirm what was actually saved
         console.log(`[Analysis] SUCCESS for ${payload.biddingProcessId}. Saved sourceFiles: ${analysis.sourceFileNames?.substring(0, 100)}`);
 
+        // Fire & Forget Indexing -> Vector Database para RAG
+        if (payload.biddingProcessId && payload.sourceFileNames) {
+            try {
+                const parsedFileNames = JSON.parse(payload.sourceFileNames);
+                if (Array.isArray(parsedFileNames) && parsedFileNames.length > 0) {
+                    console.log(`[Background RAG] Disparando indexação assíncrona para ${payload.biddingProcessId}...`);
+                    fetchPdfPartsForProcess(payload.biddingProcessId, parsedFileNames, req.user.tenantId)
+                        .then(pdfParts => {
+                            if (pdfParts && pdfParts.length > 0) {
+                                return indexDocumentChunks(payload.biddingProcessId, pdfParts);
+                            }
+                        })
+                        .catch(err => console.error(`[Background RAG] Erro interno: ${err.message}`));
+                }
+            } catch (e) {
+                console.warn(`[Background RAG] Não foi possível mapear sourceFileNames para o processo ${payload.biddingProcessId}`);
+            }
+        }
+
         res.json(analysis);
     } catch (error) {
         console.error("Create analysis error:", error);
@@ -2159,55 +2179,32 @@ Riscos e Irregularidades: ${analysis.irregularitiesFlags || '[]'}
             return res.status(400).json({ error: 'messages array is required' });
         }
 
+        // Busca Vetorial RAG
+        let ragContext = "";
+        try {
+            const queryText = messages[messages.length - 1]?.text;
+            if (queryText && biddingProcessId) {
+                const similarChunks = await searchSimilarChunks(biddingProcessId, queryText, 5);
+                if (similarChunks && similarChunks.length > 0) {
+                    ragContext = "\n\nTRECHOS DO EDITAL MAIS RELEVANTES PARA A PERGUNTA:\n" + similarChunks.map((c: any) => c.content).join("\n\n---\n\n");
+                    traceLog(`[RAG] Encontrados ${similarChunks.length} trechos vetorizados com sucesso para: "${queryText.substring(0, 30)}..."`);
+                    analysisContext += ragContext;
+                }
+            }
+        } catch (ragErr: any) {
+            traceLog(`[RAG] Erro ao buscar vetores: ${ragErr.message}`);
+        }
+
         const pdfParts: any[] = [];
         traceLog(`Final fileNames for Gemini: ${JSON.stringify(fileNames)}`);
 
-        // 1. Prepare files for Gemini (and verify tenant ownership)
-        const biddingLinks = biddingProcessId ? (await prisma.biddingProcess.findUnique({ where: { id: biddingProcessId } }))?.link || "" : "";
-
-        for (let fileName of fileNames) {
-            traceLog(`Processing segment: "${fileName}"`);
-            // Decode in case it's stored/sent with URI encoding
-            fileName = decodeURIComponent(fileName).split('?')[0];
-            traceLog(`Decoded name: "${fileName}"`);
-
-            // Security check candidates:
-            // 1. Is it registered in Document table for this tenant?
-            const doc = await prisma.document.findFirst({
-                where: {
-                    fileUrl: { contains: fileName },
-                    tenantId: req.user.tenantId
-                }
-            });
-
-            // 2. Does it have the tenantId prefix (standard or PNCP cache)?
-            const hasPrefix = fileName.startsWith(`${req.user.tenantId}_`) || fileName.startsWith(`pncp_${req.user.tenantId}_`);
-
-            // 3. Is it explicitly linked in the bidding process we already authorized?
-            const isExplicitlyLinked = biddingLinks.includes(fileName);
-
-            const belongsToTenant = !!doc || hasPrefix || isExplicitlyLinked;
-            traceLog(`Security Check: doc=${!!doc}, prefix=${hasPrefix}, linked=${isExplicitlyLinked} -> Result: ${belongsToTenant}`);
-
-            if (!belongsToTenant) {
-                traceLog(`REJECTED: Unauthorized or unmapped`);
-                continue;
-            }
-
-            const fileToFetch = doc ? doc.fileUrl : fileName;
-            const pdfBuffer = await getFileBufferSafe(fileToFetch, req.user.tenantId);
-
-            if (pdfBuffer) {
-                traceLog(`LOADED: ${fileName} (${pdfBuffer.length} bytes)`);
-                pdfParts.push({
-                    inlineData: {
-                        data: pdfBuffer.toString('base64'),
-                        mimeType: 'application/pdf'
-                    }
-                });
-            } else {
-                traceLog(`ERROR: Could not find file anywhere: ${fileName}`);
-            }
+        // DYNAMIC DECISION: Só enviamos o pesado PDF inteiro (multimodal) se o banco de vetor falhar ou não achar contexto.
+        if (!ragContext || ragContext.trim() === "") {
+            traceLog(`[RAG] Sem trechos vetorizados. Realizando fallback doloroso para envio completo do(s) PDF(s) para a IA...`);
+            const fetched = await fetchPdfPartsForProcess(biddingProcessId, fileNames || [], req.user.tenantId);
+            pdfParts.push(...fetched);
+        } else {
+            traceLog(`[RAG] Trechos fornecidos pela busca vetorial! Omitindo Buffer PDF da payload (Economia de tokens ativada 🚀).`);
         }
 
         if (pdfParts.length === 0 && !analysisContext) {
@@ -2401,6 +2398,32 @@ async function runAutoSetup() {
     } catch (error) {
         console.error('❌ Erro no runAutoSetup:', error);
     }
+}
+
+// Helpers
+async function fetchPdfPartsForProcess(biddingProcessId: string | null, fileNamesRaw: string[], tenantId: string): Promise<any[]> {
+    const pdfParts: any[] = [];
+    const biddingLinks = biddingProcessId ? (await prisma.biddingProcess.findUnique({ where: { id: biddingProcessId } }))?.link || "" : "";
+
+    for (let fileName of fileNamesRaw) {
+        fileName = decodeURIComponent(fileName).split('?')[0];
+        const doc = await prisma.document.findFirst({
+            where: {
+                fileUrl: { contains: fileName },
+                tenantId: tenantId
+            }
+        });
+        const hasPrefix = fileName.startsWith(`${tenantId}_`) || fileName.startsWith(`pncp_${tenantId}_`);
+        const isExplicitlyLinked = biddingLinks.includes(fileName);
+        if (!(!!doc || hasPrefix || isExplicitlyLinked)) continue;
+
+        const fileToFetch = doc ? doc.fileUrl : fileName;
+        const pdfBuffer = await getFileBufferSafe(fileToFetch, tenantId);
+        if (pdfBuffer) {
+            pdfParts.push({ inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } });
+        }
+    }
+    return pdfParts;
 }
 
 app.listen(PORT, async () => {
