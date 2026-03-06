@@ -514,7 +514,7 @@ export function PncpPage({ companies, onRefresh }: Props) {
                                 <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
                                 <input
                                     type="text"
-                                    placeholder="Ex: Serviços de TI, Equipamentos médicos..."
+                                    placeholder="Ex: Serviços de TI, Transporte Escolar (Use vírgulas para buscar vários ao mesmo tempo)"
                                     value={keywords}
                                     onChange={(e) => setKeywords(e.target.value)}
                                     style={{

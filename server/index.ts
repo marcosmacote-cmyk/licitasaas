@@ -769,7 +769,24 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         const pageSize = 10;
 
         let queryParams: string[] = [];
-        if (keywords) queryParams.push(keywords);
+        if (keywords) {
+            if (keywords.includes(',')) {
+                // Multi-keyword logic: break by comma, trim, strip outer quotes, and wrap with double quotes if space exists, then join with OR
+                const kwList = keywords.split(',')
+                    .map((k: string) => k.trim().replace(/^"|"$/g, ''))
+                    .filter((k: string) => k.length > 0);
+
+                if (kwList.length > 0) {
+                    const mapped = kwList.map((k: string) => {
+                        return k.includes(' ') ? `"${k}"` : k;
+                    });
+                    const groupedKeywords = `(${mapped.join(' OR ')})`;
+                    queryParams.push(groupedKeywords);
+                }
+            } else {
+                queryParams.push(keywords);
+            }
+        }
 
         const buildBaseUrl = (qItems: string[], overrideCnpj?: string) => {
             let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 100 : 500}&pagina=1`;
