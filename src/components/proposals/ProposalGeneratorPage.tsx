@@ -26,6 +26,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [proposals, setProposals] = useState<PriceProposal[]>([]);
     const [items, setItems] = useState<ProposalItem[]>([]);
     const [bdi, setBdi] = useState(0);
+    const [discount, setDiscount] = useState(0);
     const [validityDays, setValidityDays] = useState(60);
     const [isLoading, setIsLoading] = useState(false);
     const [isAiLoading, setIsAiLoading] = useState(false);
@@ -75,6 +76,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     setProposal(latest);
                     setItems(latest.items || []);
                     setBdi(latest.bdiPercentage || 0);
+                    setDiscount(latest.taxPercentage || 0);
                     setValidityDays(latest.validityDays || 60);
                     if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
                     setLetterContent(latest.letterContent || '');
@@ -262,7 +264,16 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         try {
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
-                body: JSON.stringify({ bdiPercentage: bdi, validityDays, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode }),
+                body: JSON.stringify({
+                    bdiPercentage: bdi,
+                    taxPercentage: discount, // Using taxPercentage for discount
+                    validityDays,
+                    headerImage,
+                    footerImage,
+                    headerImageHeight,
+                    footerImageHeight,
+                    signatureMode
+                }),
             });
             // Reload to recalculate prices with new BDI
             await loadProposals();
@@ -356,7 +367,6 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             selectedBidding,
             company,
             items,
-            total,
             validityDays,
             letterContent,
             headerImage,
@@ -364,13 +374,14 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             headerImageHeight,
             footerImageHeight,
             signatureMode,
-            printLandscape
+            printLandscape,
+            discount
         );
     };
 
     // Totals
-    const totalsCalculated = useMemo(() => calculateTotals(items, bdi), [items, bdi]);
-    const { subtotal, bdiValue, total } = totalsCalculated;
+    const totalsCalculated = useMemo(() => calculateTotals(items, bdi, discount), [items, bdi, discount]);
+    const { subtotal, bdiValue, discountValue, total } = totalsCalculated;
 
     // Style consts
     const cardStyle: React.CSSProperties = {
@@ -627,7 +638,32 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                             Itens da Proposta ({items.length})
                         </h3>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--color-bg-base)', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--color-border)', marginRight: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>BDI:</span>
+                                    <input
+                                        type="number"
+                                        value={bdi}
+                                        onChange={e => setBdi(parseFloat(e.target.value) || 0)}
+                                        onBlur={handleSaveConfig}
+                                        style={{ ...inputStyle, width: '55px', height: '28px' }}
+                                    />
+                                    <span style={{ fontSize: '0.75rem' }}>%</span>
+                                </div>
+                                <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }}></div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Ajuste/Desc:</span>
+                                    <input
+                                        type="number"
+                                        value={discount}
+                                        onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
+                                        onBlur={handleSaveConfig}
+                                        style={{ ...inputStyle, width: '55px', height: '28px' }}
+                                    />
+                                    <span style={{ fontSize: '0.75rem' }}>%</span>
+                                </div>
+                            </div>
                             {isBulkEditing ? (
                                 <button
                                     className="btn btn-primary"
@@ -871,15 +907,21 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     <span style={{ fontWeight: 500 }}>{fmt(subtotal)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
-                                    <span style={{ color: 'var(--color-text-secondary)' }}>BDI ({fmtNum(bdi)}%)</span>
-                                    <span style={{ fontWeight: 500 }}>{fmt(bdiValue)}</span>
+                                    <span style={{ color: 'var(--color-text-secondary)' }}>Subtotal (Custo + BDI)</span>
+                                    <span style={{ fontWeight: 500 }}>{fmt(subtotal + bdiValue)}</span>
                                 </div>
+                                {discountValue > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px', color: '#dc2626' }}>
+                                        <span style={{ color: 'var(--color-text-secondary)' }}>Desconto/Ajuste ({fmtNum(discount)}%)</span>
+                                        <span style={{ fontWeight: 500 }}>- {fmt(discountValue)}</span>
+                                    </div>
+                                )}
                                 <div style={{
                                     display: 'flex', justifyContent: 'space-between',
                                     borderTop: '2px solid var(--color-border)', paddingTop: '8px', marginTop: '4px',
                                     fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)',
                                 }}>
-                                    <span>TOTAL</span>
+                                    <span>TOTAL GLOBAL</span>
                                     <span>{fmt(total)}</span>
                                 </div>
                                 {selectedBidding && selectedBidding.estimatedValue > 0 && (
@@ -936,7 +978,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         </div>
                     </div>
 
-                    {/* Proposal Configs moved here */}
+                    {/* Proposal Configs */}
                     <div style={{
                         background: 'rgba(37, 99, 235, 0.03)',
                         padding: '16px',
@@ -944,25 +986,18 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         border: '1px solid rgba(37, 99, 235, 0.1)',
                         marginBottom: '16px',
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
                         gap: '20px'
                     }}>
                         <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>BDI (%)</label>
-                            <input
-                                type="number"
-                                value={bdi}
-                                onChange={e => setBdi(parseFloat(e.target.value) || 0)}
-                                step="0.01"
-                                style={inputStyle}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>Validade (dias)</label>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>Validade da Proposta (dias)</label>
                             <input
                                 type="number"
                                 value={validityDays}
-                                onChange={e => setValidityDays(parseInt(e.target.value) || 60)}
+                                onChange={e => {
+                                    setValidityDays(parseInt(e.target.value) || 60);
+                                }}
+                                onBlur={handleSaveConfig}
                                 style={inputStyle}
                             />
                         </div>
@@ -970,7 +1005,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>Modelo de Assinatura</label>
                             <select
                                 value={signatureMode}
-                                onChange={e => setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH')}
+                                onChange={e => {
+                                    setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH');
+                                    setTimeout(handleSaveConfig, 100);
+                                }}
                                 style={{ ...inputStyle, padding: '6px 8px' }}
                             >
                                 <option value="LEGAL">Representante Legal</option>
@@ -980,37 +1018,49 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         </div>
                     </div>
 
-                    {/* Image Uploads UI */}
+                    {/* Image Uploads UI with Previews */}
                     <div style={{
                         background: 'rgba(37, 99, 235, 0.03)',
                         padding: '16px',
                         borderRadius: '12px',
                         border: '1px solid rgba(37, 99, 235, 0.1)',
                         marginBottom: '16px',
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: '20px'
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '16px'
                     }}>
-                        <div>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Cabeçalho do PDF (Timbrado Topo)</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <span style={{ fontSize: '0.7rem' }}>Alt:</span>
-                                    <input type="number" value={headerImageHeight} onChange={e => setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                            <div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Cabeçalho (Timbrado Topo)</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span style={{ fontSize: '0.7rem' }}>Alt:</span>
+                                        <input type="number" value={headerImageHeight} onChange={e => setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                    </div>
+                                    {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
-                                {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                {headerImage && (
+                                    <div style={{ marginTop: '10px', border: '1px dashed #ccc', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'hidden', background: '#fff' }}>
+                                        <img src={headerImage} alt="Header Preview" style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'contain' }} />
+                                    </div>
+                                )}
                             </div>
-                        </div>
-                        <div>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Rodapé do PDF (Timbrado Base)</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <span style={{ fontSize: '0.7rem' }}>Alt:</span>
-                                    <input type="number" value={footerImageHeight} onChange={e => setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                            <div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Rodapé (Timbrado Base)</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span style={{ fontSize: '0.7rem' }}>Alt:</span>
+                                        <input type="number" value={footerImageHeight} onChange={e => setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                    </div>
+                                    {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
-                                {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                {footerImage && (
+                                    <div style={{ marginTop: '10px', border: '1px dashed #ccc', padding: '4px', borderRadius: '4px', maxHeight: '80px', overflow: 'hidden', background: '#fff' }}>
+                                        <img src={footerImage} alt="Footer Preview" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

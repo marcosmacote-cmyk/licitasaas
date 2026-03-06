@@ -19,14 +19,17 @@ export function calculateItem(item: Partial<ProposalItem>, bdiPercentage: number
     };
 }
 
-export function calculateTotals(items: ProposalItem[], bdiPercentage: number) {
+export function calculateTotals(items: ProposalItem[], bdiPercentage: number, discountPercentage: number = 0) {
     const subtotal = items.reduce((sum, it) => sum + ((it.quantity || 0) * (it.multiplier || 1) * (it.unitCost || 0)), 0);
     const bdiValue = subtotal * (bdiPercentage / 100);
-    const total = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
+    const totalWithoutDiscount = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
+    const discountValue = totalWithoutDiscount * (discountPercentage / 100);
+    const total = totalWithoutDiscount - discountValue;
 
     return {
         subtotal,
         bdiValue,
+        discountValue,
         total
     };
 }

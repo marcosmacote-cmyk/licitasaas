@@ -48,7 +48,6 @@ export function generateProposalPdf(
     bidding: BiddingProcess,
     company: CompanyProfile | undefined,
     items: ProposalItem[],
-    total: number,
     validityDays: number,
     letterContent: string,
     headerImage: string,
@@ -56,7 +55,8 @@ export function generateProposalPdf(
     headerImageHeight: number,
     footerImageHeight: number,
     signatureMode: 'LEGAL' | 'TECH' | 'BOTH',
-    printLandscape: boolean
+    printLandscape: boolean,
+    discountPercentage: number = 0
 ) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -80,6 +80,9 @@ export function generateProposalPdf(
             <td style="padding: 8px; text-align: right; font-size: 0.8em; color: #555;">${peso.toFixed(1)}%</td>
         </tr>
     `}).join('');
+
+    const discountValue = totalItemsValue * (discountPercentage / 100);
+    const finalTotal = totalItemsValue - discountValue;
 
     const cleanLetter = (letterContent || 'Nenhuma carta proposta redigida.')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -119,6 +122,18 @@ export function generateProposalPdf(
     const localData = locParts
         ? `${locParts}, ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}`
         : new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+
+    // Identification from qualification as requested
+    const companyHeaderHtml = company?.qualification ? `
+        <div style="margin-bottom: 20px; text-align: justify; font-size: 13px;">
+            ${company.qualification}
+        </div>
+    ` : `
+        <div style="margin-bottom: 20px; text-align: center; border-bottom: 2px solid #222; padding-bottom: 12px;">
+            <h1 style="margin: 0; font-size: 20px;">${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
+            <p style="margin: 3px 0; color: #444; font-size: 12px;">CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
+        </div>
+    `;
 
     const topMargin = headerImage ? (headerImageHeight + 20) : 0;
     const bottomMargin = footerImage ? (footerImageHeight + 30) : 0;
@@ -162,7 +177,13 @@ export function generateProposalPdf(
             </style>
         </head>
         <body>
-            <button class="no-print" onclick="window.print()" style="padding: 10px 20px; margin-left: 20px; margin-top: 20px; font-weight: bold; cursor: pointer; border-radius: 6px; background: #2563eb; color: #fff; border: none; font-size: 13px;">🖨️ Imprimir / Salvar PDF</button>
+            <!-- No manual button, print auto -->
+            <script>
+                window.onload = function() {
+                    // Slight delay to ensure images load if cached, though browser print handles it usually
+                    setTimeout(() => { window.print(); }, 500);
+                };
+            </script>
             ${headerImage ? `
             <div class="fixed-header"><img src="${headerImage}" alt="Cabeçalho" style="max-height: ${headerImageHeight}px;" /></div>
             ` : ''}
@@ -177,12 +198,12 @@ export function generateProposalPdf(
                 <tfoot><tr><td></td></tr></tfoot>
                 <tbody><tr><td>
                     <div class="content-wrapper">
-            ${!headerImage ? `
-            <div class="text-header">
-                <h1>${company?.razaoSocial || 'EMPRESA PROPONENTE'}</h1>
-                <p>CNPJ: ${company?.cnpj || 'Não informado'} | Proposta V${proposal.version}</p>
-            </div>
-            ` : ''}
+            ${!headerImage ? companyHeaderHtml : ''}
+            
+            ${headerImage ? companyHeaderHtml : ''} 
+            <!-- Se tem header de imagem, a identificação textual vem logo abaixo ou integrada. 
+                 User disse "O Primeiro texto aonde identifca a empresa deve sempre ser puxada da qualificacão". 
+                 Vou colocar sempre o TXT de qualificação após o header de imagem se existir. -->
 
             <div class="letter">${cleanLetter}</div>
 
@@ -206,12 +227,15 @@ export function generateProposalPdf(
 
             <table class="totals">
                 <tbody>
-                    <tr><th>Valor Total Global</th><td>${fmt(total)}</td></tr>
+                    <tr><th>Subtotal (Itens)</th><td>${fmt(totalItemsValue)}</td></tr>
+                    ${discountValue > 0 ? `<tr><th style="color: #dc2626;">Ajuste / Desconto (${fmtNum(discountPercentage)}%)</th><td style="color: #dc2626;">- ${fmt(discountValue)}</td></tr>` : ''}
+                    <tr><th style="font-size: 1.2em;">TOTAL GLOBAL</th><td style="font-size: 1.2em; font-weight: bold;">${fmt(finalTotal)}</td></tr>
                     <tr><th style="font-weight: normal; color: #555;">Validade da Proposta</th><td style="font-weight: normal; color: #555;">${validityDays} dias</td></tr>
                 </tbody>
             </table>
             
-            <div style="text-align: right; margin-top: 35px; margin-bottom: 30px; font-size: 13px; clear: both;">
+            <div style="clear: both; margin-top: 50px; text-align: left; font-size: 13px;">
+                Atenciosamente,<br/><br/>
                 ${localData}
             </div>
 

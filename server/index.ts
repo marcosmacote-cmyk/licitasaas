@@ -1812,7 +1812,7 @@ INSTRUÇÕES TÉCNICAS:
 4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
 5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
 6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
-7. ATENÇÃO: NUNCA inclua Local e Data no corpo da carta. NUNCA inclua campos de assinatura (linhas). Termine em "Atenciosamente,".
+15. ATENÇÃO: NUNCA inclua Local e Data no corpo da carta. NUNCA inclua campos de assinatura (linhas). NÃO inclua cordialidades finais como "Atenciosamente" (será incluído automaticamente no fechamento do documento). Termine o texto diretamente.
 8. NÃO repita o cabeçalho completo da empresa (razão social, CNPJ em excesso) no topo, apenas o endereçamento.
 9. NUNCA LISTE OS ITENS NA CARTA. Cite apenas o objeto de forma resumida.
 10. Retorne APENAS o texto da carta, sem markdown.`;
