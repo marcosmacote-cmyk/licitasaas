@@ -413,12 +413,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             alert('Carregue os dados da proposta primeiro.');
             return;
         }
-        const company = companies.find(c => c.id === selectedCompanyId);
 
         generateProposalPdf(
-            proposal,
             selectedBidding,
-            company,
+            selectedCompany, // Use already defined selectedCompany
             items,
             validityDays,
             letterContent,

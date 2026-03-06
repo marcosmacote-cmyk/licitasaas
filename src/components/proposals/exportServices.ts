@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
+import type { BiddingProcess, CompanyProfile, ProposalItem } from '../../types';
 import type { RoundingMode } from './engine';
 
 export function exportExcelProposal(biddingId: string, items: ProposalItem[], bdiPercentage: number, discountPercentage: number = 0, roundingMode: RoundingMode = 'ROUND') {
@@ -46,7 +46,6 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const fmtNum = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function generateProposalPdf(
-    proposal: PriceProposal,
     bidding: BiddingProcess,
     company: CompanyProfile | undefined,
     items: ProposalItem[],
