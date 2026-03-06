@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import OpenAI from "openai";
-import { v4 as uuidv4 } from "uuid";
 const pdfParse = require("pdf-parse");
 
 const prisma = new PrismaClient();
@@ -37,14 +36,14 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
     const openai = new OpenAI({ apiKey });
     const response = await openai.embeddings.create({
-        model: "text-embedding-3-small", // 1536 dimensões, extremamente barato e rápido
+        model: "text-embedding-3-small", // 1536 dimensões
         input: text,
     });
 
     return response.data[0].embedding;
 }
 
-// Extrai texto físico dos PDFs e indexa tudo no banco de dados via vetores
+// Extrai texto físico dos PDFs e indexa tudo no banco de dados
 export async function indexDocumentChunks(biddingProcessId: string, pdfParts: any[]) {
     try {
         console.log(`[RAG] Iniciando indexação para o processo: ${biddingProcessId}`);
@@ -64,7 +63,7 @@ export async function indexDocumentChunks(biddingProcessId: string, pdfParts: an
         }
 
         if (!fullExtractedText.trim()) {
-            console.warn(`[RAG] Nenhum texto legível encontrado nos PDFs para o processo ${biddingProcessId}. Tente PDFs com texto claro.`);
+            console.warn(`[RAG] Nenhum texto legível encontrado nos PDFs para o processo ${biddingProcessId}.`);
             return;
         }
 
@@ -77,24 +76,27 @@ export async function indexDocumentChunks(biddingProcessId: string, pdfParts: an
             where: { biddingProcessId }
         });
 
-        // 3. Gerar Embeddings e Inserir no Banco
-        // O Supabase nativo aceita arrays json [0.1, 0.2] ao invés do Unsafe Raw, mas o executeRawUnsafe converte com segurança.
-        for (let i = 0; i < chunks.length; i++) {
-            const textChunk = chunks[i];
-            if (!textChunk.trim()) continue;
+        // 3. Gerar Embeddings e Inserir no Banco 
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+            const batch = chunks.slice(i, i + BATCH_SIZE);
+            const batchPromises = batch.map(async (textChunk, batchIndex) => {
+                if (!textChunk.trim()) return null;
+                const embedding = await generateEmbedding(textChunk);
+                return {
+                    biddingProcessId,
+                    content: textChunk,
+                    metadata: { chunkIndex: i + batchIndex, contentLength: textChunk.length },
+                    embedding: embedding
+                };
+            });
 
-            const embedding = await generateEmbedding(textChunk);
-            const metadata = { chunkIndex: i, contentLength: textChunk.length };
-
-            await prisma.$executeRawUnsafe(
-                `INSERT INTO "DocumentChunk" ("id", "biddingProcessId", "content", "metadata", "embedding", "createdAt") 
-                 VALUES ($1, $2, $3, $4::jsonb, $5::vector, NOW())`,
-                uuidv4(),
-                biddingProcessId,
-                textChunk,
-                JSON.stringify(metadata),
-                `[${embedding.join(',')}]`
-            );
+            const resolvedBatch = (await Promise.all(batchPromises)).filter(Boolean) as any[];
+            if (resolvedBatch.length > 0) {
+                await prisma.documentChunk.createMany({
+                    data: resolvedBatch
+                });
+            }
         }
         console.log(`[RAG] Concluída a indexação de ${chunks.length} chunks com sucesso para o processo ${biddingProcessId}.`);
     } catch (error: any) {
@@ -102,26 +104,55 @@ export async function indexDocumentChunks(biddingProcessId: string, pdfParts: an
     }
 }
 
-// Busca os chunks mais semelhantes matematicamente à pergunta do usuário
+// Calcula a Similaridade de Cosseno (Cosine Similarity) entre dois vetores em memória
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+    }
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// Busca os chunks mais semelhantes matematicamente à pergunta do usuário usando cálculo em memória
 export async function searchSimilarChunks(biddingProcessId: string, query: string, topK: number = 7): Promise<any[]> {
     try {
         const queryEmbedding = await generateEmbedding(query);
 
-        // Uso da métrica de similaridade cosseno "1 - (embedding <=> query)" padrão no pgvector
-        const results = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, content, metadata, 1 - (embedding <=> $1::vector) as similarity
-             FROM "DocumentChunk"
-             WHERE "biddingProcessId" = $2
-             ORDER BY embedding <=> $1::vector
-             LIMIT $3`,
-            `[${queryEmbedding.join(',')}]`,
-            biddingProcessId,
-            topK
-        );
+        // Em vez de usar a extensão pgvector, trazemos os chunks (que são poucos por edital, ex: 100-300 registros) 
+        // e calculamos a distância cosceno localmente (Memory/JS). Esse approach salva de crashes no postgres Railway 
+        // e é incrivelmente rápido num array de 300 posições O(N).
+        const chunks = await prisma.documentChunk.findMany({
+            where: { biddingProcessId }
+        });
 
-        return results;
+        if (!chunks || chunks.length === 0) return [];
+
+        const scoredChunks = chunks.map(chunk => {
+            const chunkEmbedding = chunk.embedding as number[];
+            let similarity = 0;
+            if (Array.isArray(chunkEmbedding) && chunkEmbedding.length === queryEmbedding.length) {
+                similarity = cosineSimilarity(queryEmbedding, chunkEmbedding);
+            }
+            return {
+                id: chunk.id,
+                content: chunk.content,
+                metadata: chunk.metadata,
+                similarity
+            };
+        });
+
+        // Ordenar do mais similar (1) pro menos similar (-1)
+        scoredChunks.sort((a, b) => b.similarity - a.similarity);
+
+        // Retornar os TopK
+        return scoredChunks.slice(0, topK);
     } catch (error: any) {
-        console.error(`[RAG] Erro ao buscar similaridade: ${error.message}`);
+        console.error(`[RAG] Erro ao buscar similaridade em memória: ${error.message}`);
         return [];
     }
 }
