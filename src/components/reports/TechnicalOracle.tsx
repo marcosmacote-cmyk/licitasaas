@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react';
+import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info, Building2 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, TechnicalCertificate } from '../../types';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
@@ -25,13 +25,14 @@ interface AnalysisResult {
     analysis: AnalysisItem[];
 }
 
-export function TechnicalOracle({ biddings, onRefresh }: Props) {
+export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
     const [certificates, setCertificates] = useState<TechnicalCertificate[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCert, setSelectedCert] = useState<TechnicalCertificate | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
 
     // Selected bidding for comparison
     const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(null);
@@ -62,16 +63,23 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (!selectedCompanyId) {
+            setUploadError('Selecione uma empresa antes de enviar o arquivo.');
+            return;
+        }
+
         setIsUploading(true);
         setUploadError(null);
 
         const formData = new FormData();
         formData.append('file', file);
         formData.append('title', file.name);
+        formData.append('companyProfileId', selectedCompanyId);
 
         try {
             await axios.post(`${API_BASE_URL}/api/technical-certificates`, formData, getAuthHeaders());
             fetchCertificates();
+            setSelectedCompanyId(''); // Reset selection
             if (onRefresh) onRefresh();
         } catch (error: any) {
             setUploadError(error.response?.data?.error || 'Erro ao processar o atestado.');
@@ -141,10 +149,33 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                    <label className="btn btn-primary w-full" style={{ justifyContent: 'center', opacity: isUploading ? 0.7 : 1, cursor: isUploading ? 'not-allowed' : 'pointer' }}>
+                    <div style={{ marginBottom: '12px' }}>
+                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                            Vincular à Empresa:
+                        </label>
+                        <select
+                            className="form-control"
+                            style={{ width: '100%', fontSize: '0.85rem' }}
+                            value={selectedCompanyId}
+                            onChange={(e) => setSelectedCompanyId(e.target.value)}
+                        >
+                            <option value="">Selecione a empresa...</option>
+                            {companies.map(c => (
+                                <option key={c.id} value={c.id}>{c.razaoSocial}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <label className="btn btn-primary w-full" style={{ justifyContent: 'center', opacity: (isUploading || !selectedCompanyId) ? 0.7 : 1, cursor: (isUploading || !selectedCompanyId) ? 'not-allowed' : 'pointer' }}>
                         {isUploading ? 'Processando IA...' : 'Adicionar Novo Acervo'}
                         <Upload size={16} />
-                        <input type="file" hidden onChange={handleFileUpload} disabled={isUploading} accept=".pdf" />
+                        <input
+                            type="file"
+                            hidden
+                            onChange={handleFileUpload}
+                            disabled={isUploading || !selectedCompanyId}
+                            accept=".pdf"
+                        />
                     </label>
                     {uploadError && (
                         <div style={{ color: 'var(--color-danger)', fontSize: '0.8rem', marginTop: '8px', padding: '8px', border: '1px solid currentColor', borderRadius: '4px' }}>
@@ -206,7 +237,13 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
                                     </button>
                                 </div>
                                 <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{cert.title}</h4>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                                    <Building2 size={12} color="var(--color-text-tertiary)" />
+                                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
+                                        {cert.company?.razaoSocial || 'Empresa não vinculada'}
+                                    </p>
+                                </div>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.7rem', color: 'var(--color-text-tertiary)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {cert.issuer}
                                 </p>
                             </div>
