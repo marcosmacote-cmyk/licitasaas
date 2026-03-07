@@ -58,7 +58,8 @@ export function generateProposalPdf(
     signatureMode: 'LEGAL' | 'TECH' | 'BOTH',
     printLandscape: boolean,
     discountPercentage: number = 0,
-    roundingMode: RoundingMode = 'ROUND'
+    roundingMode: RoundingMode = 'ROUND',
+    exportType: 'FULL' | 'LETTER' | 'SPREADSHEET' = 'FULL'
 ) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -153,11 +154,11 @@ export function generateProposalPdf(
                 .fixed-footer .gen-info { font-size: 8px; color: #999; margin-top: 2px; }
                 .content-wrapper { padding: 15px 20px; }
                 .letter { white-space: pre-wrap; margin-bottom: 25px; text-align: justify; font-size: 13px; line-height: 1.5; }
-                table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 11px; }
-                table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 11px; }
-                table.items td { padding: 5px 4px; border-bottom: 1px solid #ddd; font-size: 11px; }
-                .totals { width: 300px; float: right; margin-top: 10px; }
-                .totals tr th, .totals tr td { padding: 6px; text-align: right; border-bottom: 1px solid #ddd; font-size: 12px; }
+                table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: fixed; }
+                table.items th { border-bottom: 2px solid #222; padding: 4px 2px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
+                table.items td { padding: 4px 2px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: hidden; }
+                .totals { width: 250px; float: right; margin-top: 10px; }
+                .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
                 .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
                 .signature-block .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 12px; }
                 table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
@@ -207,22 +208,23 @@ export function generateProposalPdf(
                 <tbody><tr><td>
                     <div class="content-wrapper">
             
-            <div class="letter">${cleanLetter}</div>
+            ${(exportType === 'FULL' || exportType === 'LETTER') ? `<div class="letter">${cleanLetter}</div>` : ''}
 
-            <h3 style="font-size: 14px; margin-bottom: 10px;">Planilha de Formação de Preços</h3>
+            ${(exportType === 'FULL' || exportType === 'SPREADSHEET') ? `
+            <h3 style="font-size: 14px; margin-bottom: 10px;">${exportType === 'SPREADSHEET' ? 'Planilha de Preços' : 'Planilha de Formação de Preços'}</h3>
             <table class="items">
                 <thead>
                     <tr>
-                        <th style="text-align:center; width: 45px;">Item</th>
-                        <th>Descrição detalhada</th>
-                        <th style="text-align:center; width: 60px;">Marca</th>
-                        <th style="text-align:center; width: 60px;">Modelo</th>
-                        <th style="text-align:center; width: 35px;">Unid</th>
-                        <th style="text-align:center; width: 45px;">Qtd</th>
-                        <th style="text-align:center; width: 35px;">Mult.</th>
-                        <th style="text-align:right; width: 80px;">Unitário</th>
-                        <th style="text-align:right; width: 90px;">Total</th>
-                        <th style="text-align:right; width: 40px;">%</th>
+                        <th style="text-align:center; width: 35px;">Item</th>
+                        <th style="width: auto;">Descrição detalhada</th>
+                        <th style="text-align:center; width: 55px;">Marca</th>
+                        <th style="text-align:center; width: 55px;">Modelo</th>
+                        <th style="text-align:center; width: 30px;">Unid</th>
+                        <th style="text-align:center; width: 40px;">Qtd</th>
+                        <th style="text-align:center; width: 30px;">Mult.</th>
+                        <th style="text-align:right; width: 70px;">Unitário</th>
+                        <th style="text-align:right; width: 80px;">Total</th>
+                        <th style="text-align:right; width: 35px;">%</th>
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>
@@ -230,12 +232,12 @@ export function generateProposalPdf(
 
             <table class="totals">
                 <tbody>
-                    <tr><th style="font-size: 1.2em;">TOTAL GLOBAL</th><td style="font-size: 1.2em; font-weight: bold;">${fmt(finalTotal)}</td></tr>
-                    ${discountPercentage > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Apresentado</th><td style="font-weight: normal; color: #555;">${fmtNum(discountPercentage)}%</td></tr>` : ''}
-                    <tr><th style="font-weight: normal; color: #555;">Validade da Proposta</th><td style="font-weight: normal; color: #555;">${validityDays} dias</td></tr>
-                    <tr><th style="font-weight: normal; color: #555;">Modo Cálculo</th><td style="font-weight: normal; color: #555;">${roundingMode === 'ROUND' ? 'Arredondado' : 'Truncado'}</td></tr>
+                    <tr><th style="font-size: 1.1em;">TOTAL GLOBAL</th><td style="font-size: 1.1em; font-weight: bold;">${fmt(finalTotal)}</td></tr>
+                    ${discountPercentage > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Linear</th><td style="font-weight: normal; color: #555;">${fmtNum(discountPercentage)}%</td></tr>` : ''}
+                    <tr><th style="font-weight: normal; color: #555;">Validade</th><td style="font-weight: normal; color: #555;">${validityDays} dias</td></tr>
                 </tbody>
             </table>
+            ` : ''}
             
             <div style="clear: both; margin-top: 50px;">
                 <div style="text-align: right; font-size: 13px;">${localData}</div>

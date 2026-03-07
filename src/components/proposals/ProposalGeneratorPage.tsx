@@ -412,7 +412,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         }
     };
 
-    const handlePrintProposal = () => {
+    const handlePrintProposal = (type: 'FULL' | 'LETTER' | 'SPREADSHEET' = 'FULL') => {
         if (!proposal || !selectedBidding || !selectedCompanyId) {
             alert('Carregue os dados da proposta primeiro.');
             return;
@@ -420,7 +420,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
         generateProposalPdf(
             selectedBidding,
-            selectedCompany, // Use already defined selectedCompany
+            selectedCompany,
             items,
             validityDays,
             letterContent,
@@ -431,7 +431,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             signatureMode,
             printLandscape,
             discount,
-            roundingMode
+            roundingMode,
+            type
         );
     };
 
@@ -559,13 +560,32 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                         </span>
                                     </label>
 
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={handlePrintProposal}
-                                        style={{ padding: '10px 24px', borderRadius: '10px', fontWeight: 700, background: '#111' }}
-                                    >
-                                        <Printer size={16} /> Exportar Proposta
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg-base)', padding: '2px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
+                                        <button
+                                            className="btn"
+                                            onClick={() => handlePrintProposal('LETTER')}
+                                            title="Exportar Apenas Carta"
+                                            style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
+                                        >
+                                            <FileText size={14} /> Carta
+                                        </button>
+                                        <button
+                                            className="btn"
+                                            onClick={() => handlePrintProposal('SPREADSHEET')}
+                                            title="Exportar Apenas Planilha"
+                                            style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
+                                        >
+                                            <Package size={14} /> Planilha
+                                        </button>
+                                        <div style={{ width: '1px', background: 'var(--color-border)', margin: '4px 2px' }}></div>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => handlePrintProposal('FULL')}
+                                            style={{ padding: '8px 16px', borderRadius: '8px', fontWeight: 700, background: '#111', fontSize: '0.8rem' }}
+                                        >
+                                            <Printer size={16} /> Exportar Completa
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
