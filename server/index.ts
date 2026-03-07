@@ -1607,10 +1607,11 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
             const bdi = existing.bdiPercentage || 0;
             const linearDisc = existing.taxPercentage || 0;
             const itemDisc = item.discountPercentage ?? 0;
+            const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
 
-            // Unit Price including BDI and then applying both Linear and Item Discount
-            // Formula: Price = Cost * (1 + BDI/100) * (1 - LinearDisc/100) * (1 - ItemDisc/100)
-            const unitPrice = item.unitCost * (1 + bdi / 100) * (1 - linearDisc / 100) * (1 - itemDisc / 100);
+            // Unit Price including BDI and then applying either Linear or Item Discount
+            // Formula: Price = Cost * (1 + BDI/100) * (1 - applicableDiscount/100)
+            const unitPrice = item.unitCost * (1 + bdi / 100) * (1 - applicableDiscount / 100);
 
             // App-level default is 1 if not provided
             const multiplier = item.multiplier ?? 1;
@@ -1666,12 +1667,13 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
         const bdi = proposal.bdiPercentage || 0;
         const linearDisc = proposal.taxPercentage || 0;
         const itemDisc = discountPercentage ?? 0;
+        const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
 
         const finalUnitCost = unitCost !== undefined ? unitCost : 0;
         const finalQuantity = quantity !== undefined ? quantity : 0;
         const finalMultiplier = multiplier !== undefined ? multiplier : 1;
 
-        const unitPrice = finalUnitCost * (1 + bdi / 100) * (1 - linearDisc / 100) * (1 - itemDisc / 100);
+        const unitPrice = finalUnitCost * (1 + bdi / 100) * (1 - applicableDiscount / 100);
         const totalPrice = finalQuantity * finalMultiplier * unitPrice;
 
         const updated = await prisma.proposalItem.update({

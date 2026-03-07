@@ -6,7 +6,7 @@ export function exportExcelProposal(biddingId: string, items: ProposalItem[], bd
     if (items.length === 0) return;
 
     const ws = XLSX.utils.aoa_to_sheet([
-        ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Multiplicador', 'Custo Unit.', 'Desc (%)', 'Preço Unit.', 'Valor Total', '% Peso']
+        ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Multiplicador', 'Custo Unit.', 'Preço Unit.', 'Valor Total', '% Peso']
     ]);
 
     items.forEach((it, i) => {
@@ -22,21 +22,20 @@ export function exportExcelProposal(biddingId: string, items: ProposalItem[], bd
             it.quantity,
             it.multiplier,
             it.unitCost,
-            it.discountPercentage || 0,
-            { f: `${roundFormula}(H${rowIdx} * (1 + $N$1/100) * (1 - $P$1/100) * (1 - I${rowIdx}/100), 2)` },
-            { f: `ROUND(F${rowIdx} * G${rowIdx} * J${rowIdx}, 2)` },
-            { f: `K${rowIdx} / $K$${items.length + 2}` }
+            { f: `${roundFormula}(H${rowIdx} * (1 + $M$1/100) * (1 - $O$1/100) * (1 - 0/100), 2)` }, // Note: Logic is handled in unitPrice calculation on backend/engine, but we represent it here. Actually, we should use the item's unitPrice directly or mirror the new logic.
+            { f: `ROUND(F${rowIdx} * G${rowIdx} * I${rowIdx}, 2)` },
+            { f: `J${rowIdx} / $J$${items.length + 2}` }
         ];
         XLSX.utils.sheet_add_aoa(ws, [row], { origin: -1 });
     });
 
     const totalRowIdx = items.length + 2;
-    XLSX.utils.sheet_add_aoa(ws, [[null, null, null, null, null, null, null, null, null, 'TOTAL GLOBAL', { f: `SUM(K2:K${totalRowIdx - 1})` }, '100%']], { origin: -1 });
+    XLSX.utils.sheet_add_aoa(ws, [[null, null, null, null, null, null, null, null, 'TOTAL GLOBAL', { f: `SUM(J2:J${totalRowIdx - 1})` }, '100%']], { origin: -1 });
 
-    ws['N1'] = { v: bdiPercentage, t: 'n' };
-    ws['M1'] = { v: 'BDI (%)' };
-    ws['P1'] = { v: discountPercentage, t: 'n' };
-    ws['O1'] = { v: 'Desc Lin (%)' };
+    ws['M1'] = { v: bdiPercentage, t: 'n' };
+    ws['L1'] = { v: 'BDI (%)' };
+    ws['O1'] = { v: discountPercentage, t: 'n' };
+    ws['N1'] = { v: 'Desc Lin (%)' };
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Proposta');
@@ -79,7 +78,6 @@ export function generateProposalPdf(
             <td style="padding: 8px; text-align: center;">${it.unit}</td>
             <td style="padding: 8px; text-align: center;">${fmtNum(it.quantity)}</td>
             <td style="padding: 8px; text-align: center;">${it.multiplier > 1 ? it.multiplier : '1'}</td>
-            <td style="padding: 8px; text-align: center;">${it.discountPercentage || 0}%</td>
             <td style="padding: 8px; text-align: right;">${fmt(it.unitPrice)}</td>
             <td style="padding: 8px; text-align: right; font-weight: bold;">${fmt(it.totalPrice)}</td>
             <td style="padding: 8px; text-align: right; font-size: 0.8em; color: #555;">${peso.toFixed(1)}%</td>
@@ -222,7 +220,6 @@ export function generateProposalPdf(
                         <th style="text-align:center; width: 35px;">Unid</th>
                         <th style="text-align:center; width: 45px;">Qtd</th>
                         <th style="text-align:center; width: 35px;">Mult.</th>
-                        <th style="text-align:center; width: 35px;">Desc.</th>
                         <th style="text-align:right; width: 75px;">Unitário</th>
                         <th style="text-align:right; width: 85px;">Total</th>
                         <th style="text-align:right; width: 40px;">%</th>
