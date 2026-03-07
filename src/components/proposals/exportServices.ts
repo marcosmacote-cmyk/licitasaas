@@ -58,7 +58,6 @@ export function generateProposalPdf(
     signatureMode: 'LEGAL' | 'TECH' | 'BOTH',
     printLandscape: boolean,
     discountPercentage: number = 0,
-    roundingMode: RoundingMode = 'ROUND',
     exportType: 'FULL' | 'LETTER' | 'SPREADSHEET' = 'FULL'
 ) {
     const printWindow = window.open('', '_blank');

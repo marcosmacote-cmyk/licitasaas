@@ -431,7 +431,6 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             signatureMode,
             printLandscape,
             discount,
-            roundingMode,
             type
         );
     };
