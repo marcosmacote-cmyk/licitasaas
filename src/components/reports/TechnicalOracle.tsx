@@ -150,9 +150,6 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
         biddings.filter(b => b.status === 'Preparando Documentação' && (b.aiAnalysis || b.summary))
         , [biddings]);
 
-    const selectedCertsSummary = useMemo(() =>
-        certificates.filter(c => selectedCertIds.has(c.id))
-        , [certificates, selectedCertIds]);
 
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px', height: 'calc(100vh - 250px)' }}>
@@ -241,7 +238,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                         <input
                                             type="checkbox"
                                             checked={selectedCertIds.has(cert.id)}
-                                            onChange={(e) => { }} // Controlled via onClick handle
+                                            onChange={() => { }} // Controlled via onClick handle
                                             onClick={(e) => toggleCertSelection(cert.id, e)}
                                             style={{ cursor: 'pointer', width: '16px', height: '16px' }}
                                         />
