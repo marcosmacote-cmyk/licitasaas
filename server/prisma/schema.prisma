@@ -20,6 +20,7 @@ model Tenant {
   globalConfig     GlobalConfig?
   pncpSearches     PncpSavedSearch[]
   proposals        PriceProposal[]
+  technicalCertificates TechnicalCertificate[]
 }
 
 model User {
@@ -59,6 +60,7 @@ model CompanyProfile {
   proposals        PriceProposal[]
   tenant           Tenant              @relation(fields: [tenantId], references: [id])
   documents        Document[]
+  technicalCertificates TechnicalCertificate[]
 }
 
 model BiddingProcess {
@@ -219,4 +221,35 @@ model DocumentChunk {
   biddingProcess   BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
 
   @@index([biddingProcessId])
+}
+
+model TechnicalCertificate {
+  id               String   @id @default(uuid())
+  tenantId         String
+  companyProfileId String?
+  title            String
+  type             String   @default("Atestado") // Atestado, CAT, Acervo
+  fileUrl          String
+  fileName         String
+  issuer           String?  // Contratante
+  issueDate        DateTime?
+  object           String?  @db.Text
+  extractedData    Json?    // AI extraction meta
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  experiences      CertificateExperience[]
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  company          CompanyProfile? @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
+}
+
+model CertificateExperience {
+  id                     String  @id @default(uuid())
+  technicalCertificateId String
+  description            String  @db.Text // Descrição do serviço/item
+  quantity               Float?
+  unit                   String?
+  category               String? // Categoria técnica (ex: Obras, TI)
+  
+  certificate            TechnicalCertificate @relation(fields: [technicalCertificateId], references: [id], onDelete: Cascade)
 }
