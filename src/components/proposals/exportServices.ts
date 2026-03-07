@@ -71,16 +71,16 @@ export function generateProposalPdf(
         const peso = totalItemsValue > 0 ? ((it.totalPrice || 0) / totalItemsValue) * 100 : 0;
         return `
         <tr style="border-bottom: 1px solid #ddd;">
-            <td style="padding: 8px; text-align: center;">${it.itemNumber || i + 1}</td>
-            <td style="padding: 8px; text-align: justify; hyphens: auto;">${it.description}</td>
-            <td style="padding: 8px; text-align: center;">${it.brand || '-'}</td>
-            <td style="padding: 8px; text-align: center;">${it.model || '-'}</td>
-            <td style="padding: 8px; text-align: center;">${it.unit}</td>
-            <td style="padding: 8px; text-align: center;">${fmtNum(it.quantity)}</td>
-            <td style="padding: 8px; text-align: center;">${it.multiplier > 1 ? it.multiplier : '1'}</td>
-            <td style="padding: 8px; text-align: right;">${fmt(it.unitPrice)}</td>
-            <td style="padding: 8px; text-align: right; font-weight: bold;">${fmt(it.totalPrice)}</td>
-            <td style="padding: 8px; text-align: right; font-size: 0.8em; color: #555;">${peso.toFixed(1)}%</td>
+            <td style="padding: 4px 6px; text-align: center;">${it.itemNumber || i + 1}</td>
+            <td style="padding: 4px 6px; text-align: justify; hyphens: auto;">${it.description}</td>
+            <td style="padding: 4px 6px; text-align: center;">${it.brand || '-'}</td>
+            <td style="padding: 4px 6px; text-align: center;">${it.model || '-'}</td>
+            <td style="padding: 4px 6px; text-align: center; white-space: nowrap;">${it.unit}</td>
+            <td style="padding: 4px 6px; text-align: center; white-space: nowrap;">${fmtNum(it.quantity)}</td>
+            <td style="padding: 4px 6px; text-align: center;">${it.multiplier > 1 ? it.multiplier : '1'}</td>
+            <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">${fmt(it.unitPrice)}</td>
+            <td style="padding: 4px 6px; text-align: right; font-weight: bold; white-space: nowrap;">${fmt(it.totalPrice)}</td>
+            <td style="padding: 4px 6px; text-align: right; font-size: 0.8em; color: #555;">${peso.toFixed(1)}%</td>
         </tr>
     `}).join('');
 
@@ -154,8 +154,8 @@ export function generateProposalPdf(
                 .content-wrapper { padding: 15px 20px; }
                 .letter { white-space: pre-wrap; margin-bottom: 25px; text-align: justify; font-size: 13px; line-height: 1.5; }
                 table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: fixed; }
-                table.items th { border-bottom: 2px solid #222; padding: 4px 2px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
-                table.items td { padding: 4px 2px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: hidden; }
+                table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
+                table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; font-weight: normal; }
                 .totals { width: 250px; float: right; margin-top: 10px; }
                 .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
                 .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
@@ -214,16 +214,16 @@ export function generateProposalPdf(
             <table class="items">
                 <thead>
                     <tr>
-                        <th style="text-align:center; width: 35px;">Item</th>
+                        <th style="text-align:center; width: 68px;">Item</th>
                         <th style="width: auto;">Descrição detalhada</th>
-                        <th style="text-align:center; width: 55px;">Marca</th>
-                        <th style="text-align:center; width: 55px;">Modelo</th>
-                        <th style="text-align:center; width: 30px;">Unid</th>
-                        <th style="text-align:center; width: 40px;">Qtd</th>
-                        <th style="text-align:center; width: 30px;">Mult.</th>
-                        <th style="text-align:right; width: 70px;">Unitário</th>
-                        <th style="text-align:right; width: 80px;">Total</th>
-                        <th style="text-align:right; width: 35px;">%</th>
+                        <th style="text-align:center; width: 65px;">Marca</th>
+                        <th style="text-align:center; width: 65px;">Modelo</th>
+                        <th style="text-align:center; width: 38px;">Unid</th>
+                        <th style="text-align:center; width: 55px;">Qtd</th>
+                        <th style="text-align:center; width: 35px;">Mult.</th>
+                        <th style="text-align:right; width: 85px;">Unitário</th>
+                        <th style="text-align:right; width: 95px;">Total</th>
+                        <th style="text-align:right; width: 42px;">%</th>
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>

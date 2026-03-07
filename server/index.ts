@@ -1857,10 +1857,11 @@ INSTRUÇÕES TÉCNICAS:
 5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
 6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
 16. CRÍTICO: NÃO escreva a qualificação da empresa. Em vez disso, insira exatamente a tag [IDENTIFICACAO] na posição onde a qualificação deve entrar (geralmente após a Referência do processo e antes do corpo principal). O sistema substituirá essa tag pela qualificação completa do cadastro.
-17. CRÍTICO: NÃO inclua Local e Data ao final da carta. O local e a data já são inseridos automaticamente pelo sistema na exportação do relatório.
-18. CRÍTICO: NÃO inclua a relação detalhada de itens licitados (tabelas ou listas com quantidades e valores unitários) no corpo da carta. Refira-se apenas ao Objeto de forma resumida e mencione que os detalhes de preços constam na planilha em anexo.
-19. Exemplo de estrutura: "Ao Agente... Referência... [IDENTIFICACAO] vem por meio desta apresentar...".
-20. Retorne APENAS o texto da carta, sem markdown.`;
+17. CRÍTICO: NÃO inclua Local, Data, "Atenciosamente" ou qualquer campo de assinatura ao final da carta. O sistema já adiciona esses elementos automaticamente na exportação do relatório.
+18. CRÍTICO: O OBJETO da licitação deve ser extraído e transcrito NA ÍNTEGRA, conforme consta no documento original. NÃO o resuma, para que a proposta tenha validade jurídica.
+19. CRÍTICO: NÃO utilize placeholders ou colchetes como "[INSERIR NÚMERO DO PROCESSO]". Se o dado (ex: nº do processo administrativo) estiver presente no "Resumo do Edital" abaixo, utilize-o. Se não estiver, omita o termo completamente em vez de deixar instruções entre colchetes.
+20. Exemplo de estrutura: "Ao Agente de Contratação... Ref: Edital nº... [IDENTIFICACAO] vem perante V. Sª apresentar a proposta para o Objeto: [TRANSCRIÇÃO ÍNTEGRA DO OBJETO]... Valor Global: R$ [VALOR] ([EXTENSO])..."
+21. Retorne APENAS o texto do corpo da carta, sem markdown.`;
 
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
