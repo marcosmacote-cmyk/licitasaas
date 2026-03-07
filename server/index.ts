@@ -500,6 +500,67 @@ app.delete('/api/technical-certificates/:id', authenticateToken, async (req: any
     }
 });
 
+app.post('/api/technical-certificates/compare', authenticateToken, async (req: any, res) => {
+    try {
+        const { biddingProcessId, technicalCertificateId } = req.body;
+        const tenantId = req.user.tenantId;
+
+        const bidding = await prisma.biddingProcess.findUnique({
+            where: { id: biddingProcessId, tenantId },
+            include: { aiAnalysis: true }
+        });
+
+        const cert = await prisma.technicalCertificate.findUnique({
+            where: { id: technicalCertificateId, tenantId },
+            include: { experiences: true }
+        });
+
+        if (!bidding || !cert) {
+            return res.status(404).json({ error: 'Processo ou atestado não encontrado.' });
+        }
+
+        const requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
+        const certData = {
+            title: cert.title,
+            object: cert.object,
+            experiences: cert.experiences.map(e => ({
+                description: e.description,
+                quantity: e.quantity,
+                unit: e.unit,
+                category: e.category
+            }))
+        };
+
+        // AI Comparison
+        const apiKey = process.env.GEMINI_API_KEY;
+        const ai = new GoogleGenAI({ apiKey: apiKey! });
+
+        console.log(`[AI Oracle] Comparing cert ${cert.title} with bidding ${bidding.title}`);
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.0-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        { text: `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(certData, null, 2)}` }
+                    ]
+                }
+            ],
+            config: {
+                systemInstruction: COMPARE_CERTIFICATE_SYSTEM_PROMPT,
+                temperature: 0.1,
+                responseMimeType: 'application/json'
+            }
+        });
+
+        const analysis = robustJsonParse(result.text);
+        res.json(analysis);
+    } catch (error: any) {
+        console.error("Comparison error:", error);
+        res.status(500).json({ error: 'Failed to analyze compatibility', details: error.message });
+    }
+});
+
 app.put('/api/companies/:id', authenticateToken, async (req: any, res) => {
     try {
         const { id } = req.params;

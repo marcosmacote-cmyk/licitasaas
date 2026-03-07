@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Upload, Search, FileText, Trash2, HardHat, FileBadge } from 'lucide-react';
+import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, TechnicalCertificate } from '../../types';
 import axios from 'axios';
 
@@ -7,6 +7,21 @@ interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onRefresh?: () => void;
+}
+
+interface AnalysisItem {
+    requirement: string;
+    status: 'Atende' | 'Similar' | 'Não Atende';
+    matchingCertificate: string;
+    foundExperience: string;
+    foundQuantity: number;
+    justification: string;
+    missing?: string;
+}
+
+interface AnalysisResult {
+    overallStatus: 'Apto' | 'Risco' | 'Inapto';
+    analysis: AnalysisItem[];
 }
 
 export function TechnicalOracle({ biddings, onRefresh }: Props) {
@@ -19,6 +34,8 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
 
     // Selected bidding for comparison
     const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
     useEffect(() => {
         fetchCertificates();
@@ -66,6 +83,26 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
             if (selectedCert?.id === id) setSelectedCert(null);
         } catch (error) {
             console.error('Failed to delete certificate:', error);
+        }
+    };
+
+    const handleAnalyzeCompatibility = async () => {
+        if (!selectedBiddingId || !selectedCert) return;
+
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+
+        try {
+            const res = await axios.post('/api/technical-certificates/compare', {
+                biddingProcessId: selectedBiddingId,
+                technicalCertificateId: selectedCert.id
+            });
+            setAnalysisResult(res.data);
+        } catch (error) {
+            console.error('Failed to analyze compatibility:', error);
+            alert('Erro ao realizar a análise de compatibilidade.');
+        } finally {
+            setIsAnalyzing(false);
         }
     };
 
@@ -134,7 +171,7 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
                         filteredCertificates.map(cert => (
                             <div
                                 key={cert.id}
-                                onClick={() => setSelectedCert(cert)}
+                                onClick={() => { setSelectedCert(cert); setAnalysisResult(null); }}
                                 style={{
                                     padding: '12px',
                                     borderRadius: '8px',
@@ -174,86 +211,148 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
             </div>
 
             {/* Right Column: Details and Analysis */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto', paddingBottom: '24px' }}>
                 {selectedCert ? (
-                    <div className="card" style={{ padding: '24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{selectedCert.title}</h2>
-                                <p style={{ margin: '4px 0 0 0', color: 'var(--color-text-tertiary)', fontSize: '0.95rem' }}>
-                                    {selectedCert.issuer} {selectedCert.issueDate && `• ${new Date(selectedCert.issueDate).toLocaleDateString()}`}
-                                </p>
-                            </div>
-                            <a href={selectedCert.fileUrl} target="_blank" rel="noreferrer" className="btn btn-secondary">
-                                Visualizar PDF
-                            </a>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                            <div>
-                                <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: '12px' }}>
-                                    Objeto Detalhado
-                                </h4>
-                                <div style={{ background: 'var(--color-bg-secondary)', padding: '16px', borderRadius: '8px', fontSize: '0.9rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
-                                    {selectedCert.object || 'Objeto não extraído.'}
+                    <>
+                        <div className="card" style={{ padding: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{selectedCert.title}</h2>
+                                    <p style={{ margin: '4px 0 0 0', color: 'var(--color-text-tertiary)', fontSize: '0.95rem' }}>
+                                        {selectedCert.issuer} {selectedCert.issueDate && `• ${new Date(selectedCert.issueDate).toLocaleDateString()}`}
+                                    </p>
                                 </div>
+                                <a href={selectedCert.fileUrl} target="_blank" rel="noreferrer" className="btn btn-secondary">
+                                    Visualizar PDF
+                                </a>
                             </div>
-                            <div>
-                                <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: '12px' }}>
-                                    Experiências Extraídas
-                                </h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {selectedCert.experiences?.map((exp, idx) => (
-                                        <div key={exp.id || idx} style={{ padding: '12px', background: 'white', border: '1px solid var(--color-border)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{exp.description}</div>
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>{exp.category}</div>
-                                            </div>
-                                            <div style={{ textAlign: 'right', marginLeft: '16px' }}>
-                                                <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-primary)' }}>
-                                                    {exp.quantity?.toLocaleString() || '-'} {exp.unit}
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                                <div>
+                                    <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: '12px' }}>
+                                        Objeto Detalhado
+                                    </h4>
+                                    <div style={{ background: 'var(--color-bg-secondary)', padding: '16px', borderRadius: '8px', fontSize: '0.9rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                                        {selectedCert.object || 'Objeto não extraído.'}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: '12px' }}>
+                                        Experiências Extraídas
+                                    </h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {selectedCert.experiences?.map((exp, idx) => (
+                                            <div key={exp.id || idx} style={{ padding: '12px', background: 'white', border: '1px solid var(--color-border)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{exp.description}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>{exp.category}</div>
+                                                </div>
+                                                <div style={{ textAlign: 'right', marginLeft: '16px' }}>
+                                                    <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                                                        {exp.quantity?.toLocaleString() || '-'} {exp.unit}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                    {(!selectedCert.experiences || selectedCert.experiences.length === 0) && (
-                                        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-tertiary)' }}>Nenhuma experiência técnica listada.</p>
-                                    )}
+                                        ))}
+                                        {(!selectedCert.experiences || selectedCert.experiences.length === 0) && (
+                                            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-tertiary)' }}>Nenhuma experiência técnica listada.</p>
+                                        )}
+                                    </div>
                                 </div>
+                            </div>
+
+                            {/* Analysis Trigger Section */}
+                            <div style={{ marginTop: '32px', borderTop: '1px solid var(--color-border)', paddingTop: '32px' }}>
+                                <h3 style={{ margin: '0 0 16px 0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <HardHat size={22} color="#f59e0b" />
+                                    Oráculo: Comparar com Licitação
+                                </h3>
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                    <select
+                                        className="form-control"
+                                        style={{ flex: 1 }}
+                                        value={selectedBiddingId || ''}
+                                        onChange={(e) => setSelectedBiddingId(e.target.value)}
+                                    >
+                                        <option value="">Selecione uma licitação alvo...</option>
+                                        {biddingsWithAnalysis.map(b => (
+                                            <option key={b.id} value={b.id}>{b.title}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        className="btn btn-primary"
+                                        disabled={!selectedBiddingId || isAnalyzing}
+                                        onClick={handleAnalyzeCompatibility}
+                                    >
+                                        {isAnalyzing ? 'Consultando Oráculo...' : 'Analisar Compatibilidade'}
+                                    </button>
+                                </div>
+                                <p style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--color-text-tertiary)' }}>
+                                    O Oráculo comparará as exigências de Qualificação Técnica do edital com este acervo técnico.
+                                </p>
                             </div>
                         </div>
 
-                        {/* Analysis Section */}
-                        <div style={{ marginTop: '32px', borderTop: '1px solid var(--color-border)', paddingTop: '32px' }}>
-                            <h3 style={{ margin: '0 0 16px 0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <HardHat size={22} color="#f59e0b" />
-                                Oráculo: Comparar com Licitação
-                            </h3>
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                                <select
-                                    className="form-control"
-                                    style={{ flex: 1 }}
-                                    value={selectedBiddingId || ''}
-                                    onChange={(e) => setSelectedBiddingId(e.target.value)}
-                                >
-                                    <option value="">Selecione uma licitação alvo...</option>
-                                    {biddingsWithAnalysis.map(b => (
-                                        <option key={b.id} value={b.id}>{b.title}</option>
+                        {/* Analysis Results Display */}
+                        {analysisResult && (
+                            <div className="card" style={{ padding: '24px', border: `1px solid ${analysisResult.overallStatus === 'Apto' ? '#10b981' : analysisResult.overallStatus === 'Risco' ? '#f59e0b' : '#ef4444'}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                                    {analysisResult.overallStatus === 'Apto' ? <CheckCircle2 color="#10b981" size={32} /> :
+                                        analysisResult.overallStatus === 'Risco' ? <AlertTriangle color="#f59e0b" size={32} /> :
+                                            <XCircle color="#ef4444" size={32} />}
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Resultado da Análise: {analysisResult.overallStatus}</h3>
+                                        <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-text-tertiary)' }}>Parecer técnico-jurídico gerado pela IA.</p>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {analysisResult.analysis.map((item, idx) => (
+                                        <div key={idx} style={{ padding: '16px', background: 'var(--color-bg-secondary)', borderRadius: '8px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                                <div style={{ flex: 1, paddingRight: '16px' }}>
+                                                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.95rem' }}>Exigência:</h4>
+                                                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>{item.requirement}</p>
+                                                </div>
+                                                <span style={{
+                                                    padding: '4px 10px',
+                                                    borderRadius: '20px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 700,
+                                                    background: item.status === 'Atende' ? '#ecfdf5' : item.status === 'Similar' ? '#fffbeb' : '#fef2f2',
+                                                    color: item.status === 'Atende' ? '#065f46' : item.status === 'Similar' ? '#92400e' : '#991b1b',
+                                                    border: `1px solid ${item.status === 'Atende' ? '#10b981' : item.status === 'Similar' ? '#f59e0b' : '#ef4444'}`
+                                                }}>
+                                                    {item.status}
+                                                </span>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '0.85rem' }}>
+                                                <div>
+                                                    <div style={{ color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                                                        <Info size={14} /> Item Encontrado
+                                                    </div>
+                                                    <p style={{ margin: 0, fontWeight: 500 }}>{item.foundExperience} ({item.foundQuantity?.toLocaleString()})</p>
+                                                </div>
+                                                <div>
+                                                    <div style={{ color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                                                        <FileBadge size={14} /> Justificativa
+                                                    </div>
+                                                    <p style={{ margin: 0 }}>{item.justification}</p>
+                                                </div>
+                                            </div>
+
+                                            {item.missing && (
+                                                <div style={{ marginTop: '12px', padding: '8px 12px', background: '#fff1f2', borderRadius: '4px', borderLeft: '3px solid #ef4444', fontSize: '0.85rem', color: '#991b1b' }}>
+                                                    <strong>⚠️ Pendência:</strong> {item.missing}
+                                                </div>
+                                            )}
+                                        </div>
                                     ))}
-                                </select>
-                                <button
-                                    className="btn btn-primary"
-                                    disabled={!selectedBiddingId}
-                                    onClick={() => {/* Not implemented yet */ }}
-                                >
-                                    Analisar Compatibilidade
-                                </button>
+                                </div>
                             </div>
-                            <p style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--color-text-tertiary)' }}>
-                                O Oráculo comparará as Parcelas de Maior Relevância do edital com este acervo técnico.
-                            </p>
-                        </div>
-                    </div>
+                        )}
+                    </>
                 ) : (
                     <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', padding: '48px' }}>
                         <FileText size={64} style={{ opacity: 0.2, marginBottom: '24px' }} />
