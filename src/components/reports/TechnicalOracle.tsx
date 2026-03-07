@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info, Building2, ChevronRight, Layers } from 'lucide-react';
+import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info, Building2, ChevronRight, Layers, Package } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, TechnicalCertificate } from '../../types';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
@@ -132,6 +132,30 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
         } finally {
             setIsAnalyzing(false);
         }
+    };
+
+    const handleNewSearch = () => {
+        setAnalysisResult(null);
+        setSelectedCertIds(new Set());
+        setSelectedBiddingId(null);
+        setViewingCert(null);
+    };
+
+    const handleAddToDossier = () => {
+        if (!selectedBiddingId || !analysisResult) return;
+
+        const evidence: Record<string, { docIds: string[], note: string }> = {};
+        analysisResult.analysis.forEach(item => {
+            if (item.status !== 'Não Atende') {
+                evidence[item.requirement] = {
+                    docIds: Array.from(selectedCertIds),
+                    note: "Exigência conferida pelo o Oráculo (Acervo)"
+                };
+            }
+        });
+
+        localStorage.setItem(`oracle_evidence_${selectedBiddingId}`, JSON.stringify(evidence));
+        alert('Evidências vinculadas ao Dossiê com sucesso! ✅');
     };
 
     const filteredCertificates = useMemo(() => {
@@ -311,16 +335,37 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                 ))}
                             </select>
                         </div>
-                        <button
-                            className="btn btn-primary"
-                            disabled={!selectedBiddingId || selectedCertIds.size === 0 || isAnalyzing}
-                            onClick={handleAnalyzeCompatibility}
-                            style={{ padding: '10px 24px' }}
-                        >
-                            {isAnalyzing ? 'Processando Somatório...' : 'Analisar Somatório'}
-                        </button>
+                        {!analysisResult ? (
+                            <button
+                                className="btn btn-primary"
+                                disabled={!selectedBiddingId || selectedCertIds.size === 0 || isAnalyzing}
+                                onClick={handleAnalyzeCompatibility}
+                                style={{ padding: '10px 24px' }}
+                            >
+                                {isAnalyzing ? 'Processando Somatório...' : 'Analisar Somatório'}
+                            </button>
+                        ) : (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleAddToDossier}
+                                    style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                    title="Vincular certificados selecionados ao Dossiê desta licitação"
+                                >
+                                    <Package size={16} /> Adicionar ao Dossiê
+                                </button>
+                                <button
+                                    className="btn btn-outline"
+                                    onClick={handleNewSearch}
+                                    style={{ padding: '10px 16px' }}
+                                    title="Zerar análise e começar nova pesquisa"
+                                >
+                                    <Layers size={16} /> Nova Pesquisa
+                                </button>
+                            </div>
+                        )}
                     </div>
-                    {selectedCertIds.size === 0 && (
+                    {selectedCertIds.size === 0 && !analysisResult && (
                         <p style={{ marginTop: '12px', fontSize: '0.8rem', color: 'var(--color-danger)', fontWeight: 500 }}>
                             ⚠️ Selecione ao menos um atestado na lista lateral para iniciar a análise.
                         </p>
@@ -373,7 +418,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                                 <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>{item.foundQuantity?.toLocaleString()}</span>
                                             </div>
                                             <div style={{ marginTop: '12px', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-                                                <strong>Atestados utilized:</strong> {item.matchingCertificate}
+                                                <strong>Atestados utilizados:</strong> {item.matchingCertificate}
                                             </div>
                                         </div>
                                         <div style={{ background: 'rgba(37, 99, 235, 0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(37, 99, 235, 0.1)' }}>

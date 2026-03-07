@@ -170,6 +170,7 @@ function RequirementCard({
     isIgnored,
     companyDocs,
     onToggleMatch,
+    note,
 }: {
     idx: number;
     req: string;
@@ -178,6 +179,7 @@ function RequirementCard({
     isIgnored: boolean;
     companyDocs: CompanyDocument[];
     onToggleMatch: (requirement: string, docId: string) => void;
+    note?: string;
 }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -276,6 +278,16 @@ function RequirementCard({
                     </div>
                     {isSatisfied && !isIgnored && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                            {note && (
+                                <span style={{
+                                    padding: '2px 10px', borderRadius: '12px',
+                                    background: 'rgba(56, 189, 248, 0.15)', color: '#0369a1',
+                                    fontSize: '0.65rem', fontWeight: 800,
+                                    display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid rgba(56, 189, 248, 0.3)'
+                                }}>
+                                    <Sparkles size={10} /> {note}
+                                </span>
+                            )}
                             {selectedDocs.map(doc => (
                                 <span key={doc.docId} style={{
                                     padding: '2px 10px', borderRadius: '12px',
@@ -433,6 +445,7 @@ export function DossierExporter({ biddings, companies }: Props) {
     const [isExporting, setIsExporting] = useState(false);
     const [dateFilter, setDateFilter] = useState<'all' | 'active' | 'expired'>('active');
     const [manualMatches, setManualMatches] = useState<Record<string, string[]>>({});
+    const [oracleNotes, setOracleNotes] = useState<Record<string, string>>({});
     const [aiApplied, setAiApplied] = useState(false);
 
     const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis && b.status === 'Preparando Documentação'), [biddings]);
@@ -520,7 +533,23 @@ export function DossierExporter({ biddings, companies }: Props) {
                 const data = await response.json();
                 console.log(`[Dossier] Gemini matched ${data.matchCount}/${data.totalRequirements}`);
 
-                setManualMatches(data.matches || {});
+                // --- INTEGRATION WITH ORACLE ---
+                const savedEvidence = localStorage.getItem(`oracle_evidence_${selectedBiddingId}`);
+                const parsedEvidence = savedEvidence ? JSON.parse(savedEvidence) : {};
+
+                const combinedMatches = { ...(data.matches || {}) };
+                const notes: Record<string, string> = {};
+
+                Object.keys(parsedEvidence).forEach(req => {
+                    // Combine AI matches with Oracle matches
+                    combinedMatches[req] = Array.from(new Set([...(combinedMatches[req] || []), ...parsedEvidence[req].docIds]));
+                    notes[req] = parsedEvidence[req].note;
+                });
+
+                setManualMatches(combinedMatches);
+                setOracleNotes(notes);
+                // -----------------------------
+
                 setAiApplied(true);
             } catch (error) {
                 console.error('[Dossier] Gemini AI matching failed, falling back to local:', error);
@@ -1180,6 +1209,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                                 isIgnored={isIgnored}
                                 companyDocs={companyDocs}
                                 onToggleMatch={toggleMatch}
+                                note={oracleNotes[reqText]}
                             />
                         );
                     })}
