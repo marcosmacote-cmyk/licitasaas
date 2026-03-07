@@ -7,6 +7,8 @@ import { DocumentExpirationList } from './reports/DocumentExpirationList';
 import { BiddingListExporter } from './reports/BiddingListExporter';
 import { AiDeclarationGenerator } from './reports/AiDeclarationGenerator';
 import { ProposalGeneratorPage } from './proposals/ProposalGeneratorPage';
+import { TechnicalOracle } from './reports/TechnicalOracle';
+import { BrainCircuit } from 'lucide-react';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -15,7 +17,7 @@ interface Props {
 }
 
 export function ReportsPage({ biddings, companies, onRefresh }: Props) {
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'proposal' | 'exporter' | 'expiration' | 'biddingList' | 'declarations'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'proposal' | 'exporter' | 'expiration' | 'biddingList' | 'declarations' | 'oracle'>('dashboard');
 
     return (
         <div className="page-container">
@@ -68,6 +70,16 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                     <Sparkles size={16} /> Gerador de Declarações (IA)
                 </button>
                 <button
+                    onClick={() => setActiveTab('oracle')}
+                    style={{
+                        ...tabStyle,
+                        color: activeTab === 'oracle' ? '#059669' : 'var(--color-text-tertiary)',
+                        borderBottom: activeTab === 'oracle' ? '2px solid #059669' : '2px solid transparent'
+                    }}
+                >
+                    <BrainCircuit size={16} /> Oráculo (Acervos)
+                </button>
+                <button
                     onClick={() => setActiveTab('expiration')}
                     style={{
                         ...tabStyle,
@@ -94,6 +106,7 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                 {activeTab === 'proposal' && <ProposalGeneratorPage biddings={biddings} companies={companies} />}
                 {activeTab === 'exporter' && <DossierExporter biddings={biddings} companies={companies} />}
                 {activeTab === 'declarations' && <AiDeclarationGenerator biddings={biddings} companies={companies} onSave={onRefresh} />}
+                {activeTab === 'oracle' && <TechnicalOracle biddings={biddings} companies={companies} onRefresh={onRefresh} />}
                 {activeTab === 'expiration' && <DocumentExpirationList companies={companies} />}
                 {activeTab === 'biddingList' && <BiddingListExporter biddings={biddings} companies={companies} />}
             </div>

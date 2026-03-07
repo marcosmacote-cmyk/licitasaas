@@ -1,6 +1,6 @@
 import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION } from "./services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT } from "./services/ai/prompt.service";
 import { fallbackToOpenAi } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import express from 'express';
@@ -404,6 +404,99 @@ app.delete('/api/documents/:id', authenticateToken, async (req: any, res) => {
     } catch (error: any) {
         console.error("Delete doc error:", error);
         res.status(500).json({ error: 'Failed to delete document' });
+    }
+});
+
+// Technical Certificates (Oráculo de Atestados)
+app.get('/api/technical-certificates', authenticateToken, async (req: any, res) => {
+    try {
+        const certificates = await prisma.technicalCertificate.findMany({
+            where: { tenantId: req.user.tenantId },
+            include: { experiences: true, company: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(certificates);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch certificates' });
+    }
+});
+
+app.post('/api/technical-certificates', authenticateToken, upload.single('file'), async (req: any, res) => {
+    try {
+        const { companyProfileId, title, type } = req.body;
+        if (!req.file) return res.status(400).json({ error: 'File is required' });
+
+        const { url: fileUrl } = await storageService.uploadFile(req.file, req.user.tenantId);
+
+        // AI Extraction
+        const apiKey = process.env.GEMINI_API_KEY;
+        const ai = new GoogleGenAI({ apiKey: apiKey! });
+
+        console.log(`[AI Oracle] Analyzing certificate: ${req.file.originalname}`);
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.0-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } },
+                        { text: "Extraia os dados técnicos deste documento seguindo o formato JSON especificado." }
+                    ]
+                }
+            ],
+            config: {
+                systemInstruction: EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
+                temperature: 0.1,
+                responseMimeType: 'application/json'
+            }
+        });
+
+        const extracted = robustJsonParse(result.text);
+
+        const certificate = await prisma.technicalCertificate.create({
+            data: {
+                tenantId: req.user.tenantId,
+                companyProfileId: companyProfileId || null,
+                title: title || extracted.title || req.file.originalname,
+                type: type || extracted.type || 'Atestado',
+                fileUrl,
+                fileName: req.file.originalname,
+                issuer: extracted.issuer || null,
+                issueDate: extracted.issueDate ? new Date(extracted.issueDate) : null,
+                object: extracted.object || null,
+                extractedData: extracted,
+                experiences: {
+                    create: (extracted.experiences || []).map((exp: any) => ({
+                        description: exp.description,
+                        quantity: exp.quantity ? parseFloat(String(exp.quantity).replace(',', '.')) : null,
+                        unit: exp.unit,
+                        category: exp.category
+                    }))
+                }
+            },
+            include: { experiences: true }
+        });
+
+        res.json(certificate);
+    } catch (error: any) {
+        console.error("Certificate upload error:", error);
+        res.status(500).json({ error: 'Failed to process certificate', details: error.message });
+    }
+});
+
+app.delete('/api/technical-certificates/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const cert = await prisma.technicalCertificate.findUnique({ where: { id } });
+        if (cert && cert.tenantId === req.user.tenantId) {
+            await storageService.deleteFile(cert.fileUrl);
+            await prisma.technicalCertificate.delete({ where: { id } });
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'Certificate not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete certificate' });
     }
 });
 

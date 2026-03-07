@@ -102,6 +102,7 @@ export interface CompanyCredential {
     password?: string;
     notes?: string;
     createdAt?: string;
+    company?: CompanyProfile;
 }
 
 export interface PncpSavedSearch {
@@ -187,4 +188,31 @@ export interface PriceProposal {
     items: ProposalItem[];
     biddingProcess?: BiddingProcess;
     company?: CompanyProfile;
+}
+
+export interface TechnicalCertificate {
+    id: string;
+    tenantId: string;
+    companyProfileId?: string;
+    title: string;
+    type: string; // 'Atestado' | 'CAT' | 'Acervo'
+    fileUrl: string;
+    fileName: string;
+    issuer?: string;
+    issueDate?: string;
+    object?: string;
+    extractedData?: any;
+    createdAt: string;
+    updatedAt: string;
+    experiences?: CertificateExperience[];
+    company?: CompanyProfile;
+}
+
+export interface CertificateExperience {
+    id: string;
+    technicalCertificateId: string;
+    description: string;
+    quantity?: number;
+    unit?: string;
+    category?: string;
 }
