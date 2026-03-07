@@ -234,6 +234,8 @@ model TechnicalCertificate {
   issuer           String?  // Contratante
   issueDate        DateTime?
   object           String?  @db.Text
+  executingCompany String?  // Empresa contratada
+  technicalResponsible String? // RT do atestado
   extractedData    Json?    // AI extraction meta
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

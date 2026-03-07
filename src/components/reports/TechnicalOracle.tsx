@@ -405,9 +405,17 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                     <span style={{ fontSize: '0.7rem', background: 'var(--color-primary)', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>{viewingCert.type}</span>
                                     <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{viewingCert.title}</h2>
                                 </div>
-                                <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.95rem', fontWeight: 500 }}>
-                                    {viewingCert.company?.razaoSocial} | {viewingCert.issuer} {viewingCert.issueDate && `• ${new Date(viewingCert.issueDate).toLocaleDateString()}`}
+                                <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.9rem', fontWeight: 500 }}>
+                                    <strong>Emissor:</strong> {viewingCert.issuer} {viewingCert.issueDate && `• ${new Date(viewingCert.issueDate).toLocaleDateString()}`}
                                 </p>
+                                <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '0.85rem' }}>
+                                    <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+                                        <strong>Empresa Executora:</strong> {viewingCert.executingCompany || viewingCert.company?.razaoSocial || '-'}
+                                    </p>
+                                    <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+                                        <strong>Responsável Técnico:</strong> {viewingCert.technicalResponsible || '-'}
+                                    </p>
+                                </div>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <button

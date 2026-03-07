@@ -201,6 +201,8 @@ export interface TechnicalCertificate {
     issuer?: string;
     issueDate?: string;
     object?: string;
+    executingCompany?: string;
+    technicalResponsible?: string;
     extractedData?: any;
     createdAt: string;
     updatedAt: string;

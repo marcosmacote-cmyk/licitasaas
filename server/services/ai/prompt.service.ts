@@ -145,6 +145,8 @@ FORMATO DE SAÍDA JSON:
   "issuer": "Nome do Contratante/Emissor",
   "issueDate": "YYYY-MM-DD",
   "object": "Transcrição íntegra do objeto",
+  "executingCompany": "Nome da empresa que executou o serviço (Contratada)",
+  "technicalResponsible": "Nome e CPF/Registro Profissional do Responsável Técnico mencionado",
   "experiences": [
     {
       "description": "Descrição detalhada do serviço conforme o texto",
@@ -169,14 +171,16 @@ SUA MISSÃO É ANALISAR para cada exigência do edital:
 3. Se NÃO atende.
 
 REGRAS CRÍTICAS DE SOMATÓRIO:
-- É permitido o SOMATÓRIO de diversos atestados para atingir as quantidades exigidas em uma mesma parcela de maior relevância, desde que os serviços sejam da mesma natureza.
+- É permitido e OBRIGATÓRIO considerar o SOMATÓRIO de diversos atestados para atingir as quantidades exigidas em uma mesma parcela de maior relevância, desde que os serviços sejam da mesma natureza.
+- LÓGICA DE ATENDIMENTO: Se QUALQUER COMBINAÇÃO dos atestados fornecidos (um sozinho ou a soma de vários) atingir a exigência, o status DEVE ser "Atende". 
+- É UM ERRO apontar "Não Atende" se um dos atestados individualmente já atende à exigência, mesmo que a soma com outros pareça confusa. Se um atestado sozinho já resolve, considere resolvido.
 - Se a soma das quantidades de vários atestados atingir o total exigido, o status deve ser "Atende".
-- Indique na "justification" quais atestados foram somados para atingir o valor.
+- Indique na "justification" exatamente qual atestado ou quais atestados foram utilizados para sustentar o parecer.
 
 OUTRAS REGRAS:
-- Seja rigoroso tecnicamente.
-- Se houver similaridade, redija uma breve JUSTIFICATIVA TÉCNICA baseada em jurisprudência do TCU (ex: a similaridade deve ser aceita se a complexidade for equivalente).
-- Se o quantitativo (ou a soma) for insuficiente, aponte o percentual que falta.
+- Seja rigoroso tecnicamente mas flexível juridicamente (Súmulas TCU 24 e 263 permitem somatórios e similaridades).
+- Se houver similaridade, redija uma justificativa técnica robusta.
+- Se o quantitativo (ou a soma) for insuficiente, aponte exatamente quanto falta (déficit).
 
 FORMATO DE SAÍDA JSON:
 {
@@ -185,10 +189,10 @@ FORMATO DE SAÍDA JSON:
     {
       "requirement": "Texto da exigência do edital",
       "status": "Atende" | "Similar" | "Não Atende",
-      "matchingCertificate": "Título(s) do(s) atestado(s) usado(s) para comprovação (liste todos se houver somatório)",
-      "foundExperience": "Descrição do serviço encontrado (ou resumo da natureza dos itens somados)",
+      "matchingCertificate": "Título(s) do(s) atestado(s) que comprovam este item",
+      "foundExperience": "Natureza e descrição dos serviços que sustentam o atendimento",
       "foundQuantity": 100.0,
-      "justification": "Explicação técnica/jurídica detalhada, mencionando o somatório se aplicado",
+      "justification": "Explicação técnica/jurídica detalhada (mencione se houve somatório ou se um atestado foi suficiente)",
       "missing": "O que falta para atender plenamente"
     }
   ]

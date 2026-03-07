@@ -464,6 +464,8 @@ app.post('/api/technical-certificates', authenticateToken, upload.single('file')
                 issuer: extracted.issuer || null,
                 issueDate: extracted.issueDate ? new Date(extracted.issueDate) : null,
                 object: extracted.object || null,
+                executingCompany: extracted.executingCompany || null,
+                technicalResponsible: extracted.technicalResponsible || null,
                 extractedData: extracted,
                 experiences: {
                     create: (extracted.experiences || []).map((exp: any) => ({
