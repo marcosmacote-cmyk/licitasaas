@@ -77,6 +77,7 @@ export function generateProposalPdf(
             <td style="padding: 8px; text-align: center;">${it.model || '-'}</td>
             <td style="padding: 8px; text-align: center;">${it.unit}</td>
             <td style="padding: 8px; text-align: center;">${fmtNum(it.quantity)}</td>
+            <td style="padding: 8px; text-align: center;">${it.multiplier > 1 ? it.multiplier : '1'}</td>
             <td style="padding: 8px; text-align: right;">${fmt(it.unitPrice)}</td>
             <td style="padding: 8px; text-align: right; font-weight: bold;">${fmt(it.totalPrice)}</td>
             <td style="padding: 8px; text-align: right; font-size: 0.8em; color: #555;">${peso.toFixed(1)}%</td>
@@ -218,6 +219,7 @@ export function generateProposalPdf(
                         <th style="text-align:center; width: 55px;">Modelo</th>
                         <th style="text-align:center; width: 35px;">Unid</th>
                         <th style="text-align:center; width: 45px;">Qtd</th>
+                        <th style="text-align:center; width: 35px;">Mult.</th>
                         <th style="text-align:right; width: 75px;">Unitário</th>
                         <th style="text-align:right; width: 85px;">Total</th>
                         <th style="text-align:right; width: 40px;">%</th>
@@ -235,9 +237,9 @@ export function generateProposalPdf(
                 </tbody>
             </table>
             
-            <div style="clear: both; margin-top: 50px; text-align: left; font-size: 13px;">
-                Atenciosamente,<br/><br/>
-                ${localData}
+            <div style="clear: both; margin-top: 50px;">
+                <div style="text-align: right; font-size: 13px;">${localData}</div>
+                <div style="text-align: left; font-size: 13px; margin-top: 20px;">Atenciosamente,</div>
             </div>
 
             <div class="signature-block">

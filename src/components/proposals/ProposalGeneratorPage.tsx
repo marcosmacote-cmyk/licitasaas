@@ -514,29 +514,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             </select>
                         </div>
 
-                        {/* Orientação de Impressão */}
-                        <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <label style={{
-                                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                                padding: '8px 14px', borderRadius: '8px',
-                                backgroundColor: printLandscape ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
-                                border: printLandscape ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                transition: 'all 0.2s ease'
-                            }}>
-                                <input
-                                    type="checkbox"
-                                    checked={printLandscape}
-                                    onChange={(e) => setPrintLandscape(e.target.checked)}
-                                    style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
-                                />
-                                <span style={{ fontSize: '0.8rem', fontWeight: 500, color: printLandscape ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
-                                    🔄 Imprimir em Paisagem (horizontal)
-                                </span>
-                            </label>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
-                                Recomendado para planilhas com muitas colunas.
-                            </span>
-                        </div>
+
 
                         <div style={{ display: 'flex', alignItems: 'end', gap: '10px', marginTop: '10px' }}>
                             {!proposal && (
@@ -551,7 +529,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 </button>
                             )}
                             {proposal && (
-                                <div style={{ display: 'flex', gap: '10px' }}>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                                     <button
                                         className="btn btn-outline"
                                         onClick={handleSaveConfig}
@@ -560,12 +538,31 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     >
                                         <Save size={16} /> Salvar Proposta em Dossiê
                                     </button>
+
+                                    {/* Orientação de Impressão moved here */}
+                                    <label style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                                        padding: '10px 14px', borderRadius: '10px',
+                                        backgroundColor: 'var(--color-bg-base)',
+                                        border: '1px solid var(--color-border)',
+                                    }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={printLandscape}
+                                            onChange={(e) => setPrintLandscape(e.target.checked)}
+                                            style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
+                                        />
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                                            Paisagem
+                                        </span>
+                                    </label>
+
                                     <button
                                         className="btn btn-primary"
                                         onClick={handlePrintProposal}
                                         style={{ padding: '10px 24px', borderRadius: '10px', fontWeight: 700, background: '#111' }}
                                     >
-                                        <Printer size={16} /> Exportar PDF
+                                        <Printer size={16} /> Exportar Proposta
                                     </button>
                                 </div>
                             )}
@@ -619,17 +616,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             ({proposals.length} versões)
                         </span>
                     )}
-                    <button
-                        onClick={handleExportExcel}
-                        style={{
-                            marginLeft: 'auto', padding: '6px 14px', borderRadius: '8px',
-                            background: '#15803d', color: 'white', border: 'none',
-                            fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '6px'
-                        }}
-                    >
-                        Exportar Excel
-                    </button>
+
                 </div>
             )}
 
@@ -752,6 +739,18 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
                                 </button>
                             )}
+                            <button
+                                onClick={handleExportExcel}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '8px',
+                                    background: '#15803d', color: 'white', border: 'none',
+                                    fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: '6px'
+                                }}
+                            >
+                                <Save size={14} /> Exportar Planilha
+                            </button>
+
                             <button
                                 className="btn btn-outline"
                                 onClick={handleAddItem}
