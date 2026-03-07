@@ -502,7 +502,7 @@ app.delete('/api/technical-certificates/:id', authenticateToken, async (req: any
 
 app.post('/api/technical-certificates/compare', authenticateToken, async (req: any, res) => {
     try {
-        const { biddingProcessId, technicalCertificateId } = req.body;
+        const { biddingProcessId, technicalCertificateIds } = req.body; // Accepts array
         const tenantId = req.user.tenantId;
 
         const bidding = await prisma.biddingProcess.findUnique({
@@ -510,39 +510,41 @@ app.post('/api/technical-certificates/compare', authenticateToken, async (req: a
             include: { aiAnalysis: true }
         });
 
-        const cert = await prisma.technicalCertificate.findUnique({
-            where: { id: technicalCertificateId, tenantId },
+        const certificates = await prisma.technicalCertificate.findMany({
+            where: { id: { in: technicalCertificateIds }, tenantId },
             include: { experiences: true }
         });
 
-        if (!bidding || !cert) {
-            return res.status(404).json({ error: 'Processo ou atestado não encontrado.' });
+        if (!bidding || certificates.length === 0) {
+            return res.status(404).json({ error: 'Processo ou atestados não encontrados.' });
         }
 
         const requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
-        const certData = {
-            title: cert.title,
-            object: cert.object,
-            experiences: cert.experiences.map(e => ({
+
+        // Aggregate all experiences from all selected certificates
+        const aggregatedCertData = certificates.map(cert => ({
+            atestado_titulo: cert.title,
+            objeto: cert.object,
+            experiencias: cert.experiences.map(e => ({
                 description: e.description,
                 quantity: e.quantity,
                 unit: e.unit,
                 category: e.category
             }))
-        };
+        }));
 
         // AI Comparison
         const apiKey = process.env.GEMINI_API_KEY;
         const ai = new GoogleGenAI({ apiKey: apiKey! });
 
-        console.log(`[AI Oracle] Comparing cert ${cert.title} with bidding ${bidding.title}`);
+        console.log(`[AI Oracle] Comparing ${certificates.length} certs with bidding ${bidding.title}`);
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.0-flash',
             contents: [
                 {
                     role: 'user',
                     parts: [
-                        { text: `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(certData, null, 2)}` }
+                        { text: `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(aggregatedCertData, null, 2)}` }
                     ]
                 }
             ],
