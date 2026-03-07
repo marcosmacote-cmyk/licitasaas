@@ -521,17 +521,15 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
 
                         <div style={{ display: 'flex', alignItems: 'end', gap: '10px', marginTop: '10px' }}>
-                            {!proposal && (
-                                <button
-                                    className="btn btn-primary"
-                                    onClick={handleCreateProposal}
-                                    disabled={isLoading || !selectedBiddingId || !selectedCompanyId}
-                                    style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: 600 }}
-                                >
-                                    {isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
-                                    Nova Proposta
-                                </button>
-                            )}
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleCreateProposal}
+                                disabled={isLoading || !selectedBiddingId || !selectedCompanyId}
+                                style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: 600 }}
+                            >
+                                {isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
+                                Nova Proposta
+                            </button>
                             {proposal && (
                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                                     <button

@@ -213,15 +213,15 @@ export function generateProposalPdf(
             <table class="items">
                 <thead>
                     <tr>
-                        <th style="text-align:center; width: 60px;">Item</th>
+                        <th style="text-align:center; width: 45px;">Item</th>
                         <th>Descrição detalhada</th>
-                        <th style="text-align:center; width: 55px;">Marca</th>
-                        <th style="text-align:center; width: 55px;">Modelo</th>
+                        <th style="text-align:center; width: 60px;">Marca</th>
+                        <th style="text-align:center; width: 60px;">Modelo</th>
                         <th style="text-align:center; width: 35px;">Unid</th>
                         <th style="text-align:center; width: 45px;">Qtd</th>
                         <th style="text-align:center; width: 35px;">Mult.</th>
-                        <th style="text-align:right; width: 75px;">Unitário</th>
-                        <th style="text-align:right; width: 85px;">Total</th>
+                        <th style="text-align:right; width: 80px;">Unitário</th>
+                        <th style="text-align:right; width: 90px;">Total</th>
                         <th style="text-align:right; width: 40px;">%</th>
                     </tr>
                 </thead>
