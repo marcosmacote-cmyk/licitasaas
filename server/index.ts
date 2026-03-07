@@ -249,7 +249,7 @@ app.post('/api/tenants', async (req, res) => {
 app.put('/api/companies/:id/proposal-template', authenticateToken, async (req: any, res) => {
     try {
         const { id } = req.params;
-        const { headerImage, footerImage, headerHeight, footerHeight } = req.body;
+        const { headerImage, footerImage, headerHeight, footerHeight, defaultLetterContent } = req.body;
 
         await prisma.companyProfile.update({
             where: { id, tenantId: req.user.tenantId },
@@ -257,7 +257,8 @@ app.put('/api/companies/:id/proposal-template', authenticateToken, async (req: a
                 defaultProposalHeader: headerImage,
                 defaultProposalFooter: footerImage,
                 defaultProposalHeaderHeight: headerHeight,
-                defaultProposalFooterHeight: footerHeight
+                defaultProposalFooterHeight: footerHeight,
+                defaultLetterContent: defaultLetterContent
             }
         });
 
@@ -1489,6 +1490,9 @@ app.post('/api/proposals', authenticateToken, async (req: any, res) => {
     try {
         const { biddingProcessId, companyProfileId, bdiPercentage, taxPercentage, socialCharges, validityDays, notes } = req.body;
 
+        // Fetch company for default images and letter
+        const company = await prisma.companyProfile.findUnique({ where: { id: companyProfileId } });
+
         // Count existing versions
         const existingCount = await prisma.priceProposal.count({
             where: { biddingProcessId, tenantId: req.user.tenantId },
@@ -1505,6 +1509,11 @@ app.post('/api/proposals', authenticateToken, async (req: any, res) => {
                 socialCharges: socialCharges || 0,
                 validityDays: validityDays || 60,
                 notes: notes || null,
+                headerImage: company?.defaultProposalHeader || null,
+                footerImage: company?.defaultProposalFooter || null,
+                headerImageHeight: company?.defaultProposalHeaderHeight || 150,
+                footerImageHeight: company?.defaultProposalFooterHeight || 100,
+                letterContent: company?.defaultLetterContent || null
             },
             include: { items: true, company: true },
         });
@@ -1596,7 +1605,12 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             const bdi = existing.bdiPercentage || 0;
-            const unitPrice = item.unitCost * (1 + bdi / 100);
+            const linearDisc = existing.taxPercentage || 0;
+            const itemDisc = item.discountPercentage ?? 0;
+
+            // Unit Price including BDI and then applying both Linear and Item Discount
+            // Formula: Price = Cost * (1 + BDI/100) * (1 - LinearDisc/100) * (1 - ItemDisc/100)
+            const unitPrice = item.unitCost * (1 + bdi / 100) * (1 - linearDisc / 100) * (1 - itemDisc / 100);
 
             // App-level default is 1 if not provided
             const multiplier = item.multiplier ?? 1;
@@ -1615,6 +1629,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
                     unitPrice: Math.round(unitPrice * 100) / 100,
                     totalPrice: Math.round(totalPrice * 100) / 100,
                     referencePrice: item.referencePrice || null,
+                    discountPercentage: itemDisc,
                     brand: item.brand || null,
                     model: item.model || null,
                     sortOrder: item.sortOrder ?? i,
@@ -1639,7 +1654,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
 // PUT update single item
 app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, res) => {
     try {
-        const { itemNumber, description, unit, quantity, multiplier, multiplierLabel, unitCost, referencePrice, brand, model } = req.body;
+        const { itemNumber, description, unit, quantity, multiplier, multiplierLabel, unitCost, referencePrice, brand, model, discountPercentage } = req.body;
         const proposalId = req.params.id;
         const itemId = req.params.itemId;
 
@@ -1649,10 +1664,14 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
         if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
 
         const bdi = proposal.bdiPercentage || 0;
+        const linearDisc = proposal.taxPercentage || 0;
+        const itemDisc = discountPercentage ?? 0;
+
         const finalUnitCost = unitCost !== undefined ? unitCost : 0;
         const finalQuantity = quantity !== undefined ? quantity : 0;
         const finalMultiplier = multiplier !== undefined ? multiplier : 1;
-        const unitPrice = finalUnitCost * (1 + bdi / 100);
+
+        const unitPrice = finalUnitCost * (1 + bdi / 100) * (1 - linearDisc / 100) * (1 - itemDisc / 100);
         const totalPrice = finalQuantity * finalMultiplier * unitPrice;
 
         const updated = await prisma.proposalItem.update({
@@ -1668,6 +1687,7 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
                 unitPrice: Math.round(unitPrice * 100) / 100,
                 totalPrice: Math.round(totalPrice * 100) / 100,
                 referencePrice: referencePrice ?? null,
+                discountPercentage: itemDisc,
                 brand: brand ?? null,
                 model: model ?? null,
             },

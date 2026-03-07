@@ -74,6 +74,7 @@ export interface CompanyProfile {
     defaultProposalFooter?: string;
     defaultProposalHeaderHeight?: number;
     defaultProposalFooterHeight?: number;
+    defaultLetterContent?: string;
 }
 
 export type DocumentStatus = 'Válido' | 'Vencendo' | 'Vencido' | 'Alerta' | 'Crítico';
@@ -153,6 +154,7 @@ export interface ProposalItem {
     unitPrice: number;
     totalPrice: number;
     referencePrice?: number;
+    discountPercentage?: number;
     brand?: string;
     model?: string;
     costComposition?: string;

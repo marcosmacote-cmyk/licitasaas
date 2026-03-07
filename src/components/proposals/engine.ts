@@ -11,10 +11,11 @@ export function calculateItem(
     const quantity = item.quantity || 0;
     const unitCost = item.unitCost || 0;
     const multiplier = item.multiplier || 1;
+    const itemDisc = item.discountPercentage || 0;
 
-    // Unit Price including BDI and then applying Discount
-    // Formula: Price = Cost * (1 + BDI/100) * (1 - Discount/100)
-    const rawUnitPrice = unitCost * (1 + bdiPercentage / 100) * (1 - discountPercentage / 100);
+    // Unit Price including BDI, Linear Discount (discountPercentage arg) and then Item Discount
+    // Formula: Price = Cost * (1 + BDI/100) * (1 - LinearDisc/100) * (1 - ItemDisc/100)
+    const rawUnitPrice = unitCost * (1 + bdiPercentage / 100) * (1 - discountPercentage / 100) * (1 - itemDisc / 100);
 
     let unitPrice: number;
     if (roundingMode === 'ROUND') {

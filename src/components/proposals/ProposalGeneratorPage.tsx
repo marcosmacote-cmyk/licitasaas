@@ -123,12 +123,15 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 setProposal(data);
                 setItems(data.items || []);
                 setProposals(prev => [data, ...prev]);
-                // Set images from company default if present
+                // Set images and letter from company default if present
                 if (selectedCompany) {
                     setHeaderImage(selectedCompany.defaultProposalHeader || '');
                     setFooterImage(selectedCompany.defaultProposalFooter || '');
                     setHeaderImageHeight(selectedCompany.defaultProposalHeaderHeight || 80);
                     setFooterImageHeight(selectedCompany.defaultProposalFooterHeight || 60);
+                    if (selectedCompany.defaultLetterContent) {
+                        setLetterContent(selectedCompany.defaultLetterContent);
+                    }
                 }
                 showSaveMsg('Proposta criada com sucesso!');
             }
@@ -277,7 +280,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     headerImage,
                     footerImage,
                     headerHeight: headerImageHeight,
-                    footerHeight: footerImageHeight
+                    footerHeight: footerImageHeight,
+                    defaultLetterContent: letterContent
                 })
             });
             if (res.ok) {
@@ -693,7 +697,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 </div>
                                 <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }}></div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Desconto:</span>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Desc. Linear:</span>
                                     <input
                                         type="number"
                                         value={discount}
@@ -772,6 +776,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     <th style={thStyle}>Unid</th>
                                     <th style={thStyle}>Qtd</th>
                                     <th style={thStyle}>Multiplicador</th>
+                                    <th style={thStyle}>Desc. (%)</th>
                                     <th style={thStyle}>Custo Unit.</th>
                                     <th style={thStyle}>Preço Unit.</th>
                                     <th style={thStyle}>Total</th>
@@ -877,6 +882,17 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                                         </div>
                                                     ) : '-'
                                                 )}
+                                            </td>
+                                            <td style={tdCenterStyle}>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number"
+                                                        value={item.discountPercentage || 0}
+                                                        onChange={e => updateItem(item.id, 'discountPercentage', parseFloat(e.target.value) || 0)}
+                                                        style={{ ...inputStyle, width: '50px', textAlign: 'center' }}
+                                                        step="0.1"
+                                                    />
+                                                ) : (item.discountPercentage ? `${item.discountPercentage}%` : '-')}
                                             </td>
                                             <td style={tdCenterStyle}>
                                                 {isEditing ? (

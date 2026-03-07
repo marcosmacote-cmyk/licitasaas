@@ -52,6 +52,7 @@ model CompanyProfile {
   defaultProposalFooter   String?      // Base64 image
   defaultProposalHeaderHeight Int?      @default(80)
   defaultProposalFooterHeight Int?      @default(60)
+  defaultLetterContent String?       // Default letter template content
   biddingProcesses BiddingProcess[]
   credentials      CompanyCredential[]
   pncpSearches     PncpSavedSearch[]
@@ -200,6 +201,7 @@ model ProposalItem {
   referencePrice    Float?
   brand             String?
   model             String?
+  discountPercentage Float?           @default(0) // Individual discount per item
   costComposition   String?
   sortOrder         Int                 @default(0)
 
