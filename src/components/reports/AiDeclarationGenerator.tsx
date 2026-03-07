@@ -164,7 +164,9 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
         updateLayout({ ...DEFAULT_LAYOUT, name: layoutName });
     };
 
-    const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis || b.summary), [biddings]);
+    const biddingsWithAnalysis = useMemo(() =>
+        biddings.filter(b => b.status === 'Preparando Documentação' && (b.aiAnalysis || b.summary))
+        , [biddings]);
 
     const declarationTypesFromEdital = useMemo(() => {
         if (!selectedBiddingId) return [];
