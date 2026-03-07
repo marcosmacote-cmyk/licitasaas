@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, TechnicalCertificate } from '../../types';
 import axios from 'axios';
+import { API_BASE_URL } from '../../config';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -41,10 +42,14 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
         fetchCertificates();
     }, []);
 
+    const getAuthHeaders = () => ({
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+
     const fetchCertificates = async () => {
         setIsLoading(true);
         try {
-            const res = await axios.get('/api/technical-certificates');
+            const res = await axios.get(`${API_BASE_URL}/api/technical-certificates`, getAuthHeaders());
             setCertificates(res.data);
         } catch (error) {
             console.error('Failed to fetch certificates:', error);
@@ -65,7 +70,7 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
         formData.append('title', file.name);
 
         try {
-            await axios.post('/api/technical-certificates', formData);
+            await axios.post(`${API_BASE_URL}/api/technical-certificates`, formData, getAuthHeaders());
             fetchCertificates();
             if (onRefresh) onRefresh();
         } catch (error: any) {
@@ -78,7 +83,7 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
     const handleDeleteCert = async (id: string) => {
         if (!confirm('Tem certeza que deseja excluir este acervo?')) return;
         try {
-            await axios.delete(`/api/technical-certificates/${id}`);
+            await axios.delete(`${API_BASE_URL}/api/technical-certificates/${id}`, getAuthHeaders());
             fetchCertificates();
             if (selectedCert?.id === id) setSelectedCert(null);
         } catch (error) {
@@ -93,10 +98,10 @@ export function TechnicalOracle({ biddings, onRefresh }: Props) {
         setAnalysisResult(null);
 
         try {
-            const res = await axios.post('/api/technical-certificates/compare', {
+            const res = await axios.post(`${API_BASE_URL}/api/technical-certificates/compare`, {
                 biddingProcessId: selectedBiddingId,
                 technicalCertificateId: selectedCert.id
-            });
+            }, getAuthHeaders());
             setAnalysisResult(res.data);
         } catch (error) {
             console.error('Failed to analyze compatibility:', error);
