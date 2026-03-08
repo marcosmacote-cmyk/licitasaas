@@ -155,16 +155,20 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     };
 
     const handleGenerate = async () => {
-        if (!selectedBiddingId || !factsSummary) {
-            alert('Por favor, selecione um processo e descreva os fatos.');
+        if (!selectedBiddingId || !selectedCompanyId || (!factsSummary && attachments.length === 0)) {
+            alert('Por favor, selecione o processo, a empresa e descreva os fatos ou anexe documentos.');
             return;
         }
 
         setIsGenerating(true);
         try {
+            const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE_URL}/api/petitions/generate`, {
                 method: 'POST',
-                headers,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     biddingProcessId: selectedBiddingId,
                     companyId: selectedCompanyId,
@@ -556,7 +560,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                     <button
                         className="btn btn-primary"
                         style={{ width: '100%', height: '52px', gap: '10px', fontSize: '1rem', borderRadius: '14px', fontWeight: 700, boxShadow: '0 4px 14px rgba(37,99,235,0.25)' }}
-                        disabled={isGenerating || !selectedBiddingId || !factsSummary}
+                        disabled={isGenerating || !selectedBiddingId || !selectedCompanyId || (!factsSummary && attachments.length === 0)}
                         onClick={handleGenerate}
                     >
                         {isGenerating ? <Loader2 size={20} className="spin" /> : <Sparkles size={20} />}
