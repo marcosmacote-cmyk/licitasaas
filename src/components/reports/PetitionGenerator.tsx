@@ -237,10 +237,11 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             if (ev.target?.result && editorRef.current) {
                 const imgHtml = `<div style="text-align: center; margin: 20px 0;"><img src="${ev.target.result}" class="petition-img" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" /></div><br/>`;
 
-                // insertAtCursor logic or append
                 editorRef.current.focus();
                 document.execCommand('insertHTML', false, imgHtml);
-                setGeneratedDraft(editorRef.current.innerHTML);
+                const newHtml = editorRef.current.innerHTML;
+                lastAiResult.current = newHtml; // Persist for re-renders
+                setGeneratedDraft(newHtml);
             }
         };
         reader.readAsDataURL(file);
@@ -272,7 +273,9 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         }
 
         if (editorRef.current) {
-            setGeneratedDraft(editorRef.current.innerHTML);
+            const newHtml = editorRef.current.innerHTML;
+            lastAiResult.current = newHtml;
+            setGeneratedDraft(newHtml);
         }
     };
 
@@ -290,7 +293,9 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
             setSelectedImg(null);
             if (editorRef.current) {
-                setGeneratedDraft(editorRef.current.innerHTML);
+                const newHtml = editorRef.current.innerHTML;
+                lastAiResult.current = newHtml;
+                setGeneratedDraft(newHtml);
             }
         }
     };
@@ -332,17 +337,22 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             const sigContent = parts[1].split('[FIM_ASSINATURA]')[0] || '';
             const afterSig = parts[1].split('[FIM_ASSINATURA]')[1] || '';
 
-            // Formata o bloco de assinatura com espaçamento zero e centralizado
+            // Formata o bloco de assinatura
             const formattedSignature = `
-                <div style="text-align: center; margin-top: 60px; width: 100%; display: block; line-height: 1.25;">
+                <div style="margin-top: 60px; width: 100%; display: block; line-height: 1.25;">
                     ${sigContent.replace(/<br\s*\/?>|<\/p>|<div>/gi, '\n')
                     .replace(/<(?!\/?strong)[^>]*>/g, '') // Remove tags exceto <strong>
                     .split('\n')
                     .map(line => {
                         const l = line.trim();
                         if (!l) return '';
+
+                        // Align local/data to left, others to center
+                        const isLocalData = l.includes('Local') && l.includes('data');
+                        const textAlign = isLocalData ? 'left' : 'center';
                         const style = l.includes('____') ? 'margin-bottom: 2px; margin-top: 25px;' : '';
-                        return `<div style="${style}">${l}</div>`;
+
+                        return `<div style="text-align: ${textAlign}; ${style}">${l}</div>`;
                     }).join('')}
                 </div>
             `;
