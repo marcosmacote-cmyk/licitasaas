@@ -247,10 +247,11 @@ export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta completa e DETALHA
 3. ESTRUTURA DE ASSINATURA: A peça deve finalizar CENTRALIZADA. Siga esta ordem SEM ESPAÇOS EXTRAS entre as linhas:
    - Local ({companyCity}/{companyState}), data ({currentDate})
    - (Linha de assinatura: ______________________________________)
+   - **{legalRepresentativeName}**
+   - CPF nº: {legalRepresentativeCpf}
+   - Representante Legal
    - **{companyName}**
    - CNPJ: {companyCnpj}
-   - {legalRepresentativeName}
-   - Representante Legal - CPF: {legalRepresentativeCpf}
 4. PROIBIÇÃO: ESTÁ PROIBIDO citar Advogado ou OAB.
 5. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça.
 6. ARQUIVOS ANEXOS: Além do contexto em texto, foram enviados documentos originais (atas, decisões, provas). Você DEVE analisar o conteúdo desses anexos e utilizá-los como base factual para corroborar os fatos e argumentos da petição.

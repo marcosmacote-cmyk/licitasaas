@@ -284,17 +284,15 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             // Limpeza de asteriscos que sobraram
             .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
             .replace(/\*\*/g, '')
-            // Centralização de Peças Específicas (OBJETO e Assinatura)
+            // Centralização apenas da Assinatura
             .split(/<br\s*\/?>|\n|<\/p>|<div>/).map(line => {
                 const trimmed = line.replace(/<[^>]*>/g, '').trim();
 
-                // Centering rules
-                const isSignature = trimmed.includes('____') || trimmed.includes('CNPJ:') || trimmed.includes('CPF:');
-                const isObject = (trimmed.toUpperCase().startsWith('OBJETO:'));
-                const isLegalLine = (trimmed.startsWith('**') && trimmed.endsWith('**') && (trimmed.length > 30 && trimmed.length < 150));
+                // Centering rule: Only for signature elements
+                const isSignature = trimmed.includes('____') || trimmed.includes('CNPJ:') || trimmed.includes('CPF:') || trimmed.includes('Representante Legal');
 
-                if (isSignature || isObject || isLegalLine) {
-                    const extraStyles = isSignature ? 'margin-top: 5px;' : '';
+                if (isSignature) {
+                    const extraStyles = (trimmed.includes('____')) ? 'margin-top: 25px;' : '';
                     return `<div style="text-align: center; margin-left: auto; margin-right: auto; width: 100%; display: block; ${extraStyles}">${line}</div>`;
                 }
                 return line;
