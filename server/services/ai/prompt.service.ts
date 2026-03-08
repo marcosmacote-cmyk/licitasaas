@@ -235,6 +235,7 @@ DADOS DO PROCESSO:
 DADOS DA EMPRESA RECORRENTE:
 - Razão Social: {companyName}
 - CNPJ: {companyCnpj}
+- Qualificação Completa: {companyQualification}
 
 CONTEXTO DOS FATOS E ARGUMENTOS (FORNECIDO PELO USUÁRIO):
 {userContext}

@@ -2363,6 +2363,7 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
             .replace('{portal}', bidding.portal)
             .replace('{companyName}', company.razaoSocial)
             .replace('{companyCnpj}', company.cnpj)
+            .replace('{companyQualification}', company.qualification || 'Não informada')
             .replace('{userContext}', userContext);
 
         const result = await callGeminiWithRetry(ai.models, {
