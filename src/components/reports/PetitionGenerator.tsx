@@ -119,6 +119,12 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         setAttachments([]);
         setGeneratedDraft('');
         setSelectedBiddingId('');
+
+        // Clear file inputs to allow re-uploading same file
+        const fileInput = document.getElementById('attach-up') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+        const imgInput = document.getElementById('content-image-up') as HTMLInputElement;
+        if (imgInput) imgInput.value = '';
     };
 
     const handleNew = () => {
@@ -278,11 +284,18 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             // Limpeza de asteriscos que sobraram
             .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
             .replace(/\*\*/g, '')
-            // Centralização da Assinatura (Detecta por CNPJ/CPF ou linha horizontal)
-            .split('\n').map(line => {
-                const trimmed = line.trim();
-                if (trimmed.includes('____') || trimmed.includes('CNPJ:') || trimmed.includes('CPF:') || (trimmed.startsWith('**') && trimmed.endsWith('**') && (line.length > 50 && line.length < 150))) {
-                    return `<div style="text-align: center; margin: 0 auto; width: 100%;">${line}</div>`;
+            // Centralização de Peças Específicas (OBJETO e Assinatura)
+            .split(/<br\s*\/?>|\n|<\/p>|<div>/).map(line => {
+                const trimmed = line.replace(/<[^>]*>/g, '').trim();
+
+                // Centering rules
+                const isSignature = trimmed.includes('____') || trimmed.includes('CNPJ:') || trimmed.includes('CPF:');
+                const isObject = (trimmed.toUpperCase().startsWith('OBJETO:'));
+                const isLegalLine = (trimmed.startsWith('**') && trimmed.endsWith('**') && (trimmed.length > 30 && trimmed.length < 150));
+
+                if (isSignature || isObject || isLegalLine) {
+                    const extraStyles = isSignature ? 'margin-top: 5px;' : '';
+                    return `<div style="text-align: center; margin-left: auto; margin-right: auto; width: 100%; display: block; ${extraStyles}">${line}</div>`;
                 }
                 return line;
             }).join('\n');
