@@ -1,6 +1,6 @@
 import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT } from "./services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION } from "./services/ai/prompt.service";
 import { fallbackToOpenAi } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import express from 'express';
@@ -2321,6 +2321,69 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
         // Return the REAL error message for debugging
         const realError = error?.message || String(error);
         res.status(500).json({ error: `Erro na IA: ${realError}` });
+    }
+});
+
+// Petition Generation Endpoint
+app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => {
+    try {
+        const { biddingProcessId, companyId, templateType, userContext } = req.body;
+        const tenantId = req.user.tenantId;
+
+        console.log(`[Petition] Generating ${templateType} for process ${biddingProcessId} by company ${companyId}`);
+
+        const bidding = await prisma.biddingProcess.findUnique({
+            where: { id: biddingProcessId, tenantId },
+            include: { aiAnalysis: true }
+        });
+
+        const company = await prisma.companyProfile.findUnique({
+            where: { id: companyId, tenantId }
+        });
+
+        if (!bidding) {
+            return res.status(404).json({ error: 'Processo licitatório não encontrado.' });
+        }
+
+        if (!company) {
+            return res.status(404).json({ error: 'Empresa litigante não encontrada.' });
+        }
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
+        }
+        const ai = new GoogleGenAI({ apiKey });
+
+        const userInstruction = PETITION_USER_INSTRUCTION
+            .replace('{petitionType}', templateType.toUpperCase())
+            .replace('{object}', bidding.title)
+            .replace('{issuer}', bidding.portal)
+            .replace('{modality}', bidding.modality)
+            .replace('{portal}', bidding.portal)
+            .replace('{companyName}', company.razaoSocial)
+            .replace('{companyCnpj}', company.cnpj)
+            .replace('{userContext}', userContext);
+
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.0-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [{ text: userInstruction }]
+                }
+            ],
+            config: {
+                systemInstruction: MASTER_PETITION_SYSTEM_PROMPT,
+                temperature: 0.2,
+                maxOutputTokens: 8192
+            }
+        });
+
+        res.json({ text: result.text });
+    } catch (error: any) {
+        console.error('[Petition] Error:', error.message);
+        res.status(500).json({ error: 'Erro ao gerar petição: ' + (error.message || 'Unknown error') });
     }
 });
 
