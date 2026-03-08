@@ -2389,9 +2389,12 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
             .replace(/{companyCnpj}/g, company.cnpj);
 
 
+        // Objeto mais completo possível
+        const fullBiddingObject = `${bidding.title}${bidding.portal ? ` (${bidding.portal})` : ''}`;
+
         const userInstruction = PETITION_USER_INSTRUCTION
             .replace('{petitionType}', templateType.toUpperCase())
-            .replace('{object}', bidding.title)
+            .replace(/{fullBiddingObject}/g, fullBiddingObject)
             .replace('{issuer}', bidding.portal)
             .replace('{modality}', bidding.modality)
             .replace('{portal}', bidding.portal)

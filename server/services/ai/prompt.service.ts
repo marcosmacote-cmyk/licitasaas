@@ -211,7 +211,7 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
 5. ESTRUTURA DA PEÇA:
    - Endereçamento formal.
    - Preâmbulo completo (Qualificação da Recorrente).
-   - REGRA DO OBJETO (OBRIGATÓRIO): Logo após o preâmbulo, DEVE conter uma linha isolada e em negrito exatamente assim: "**OBJETO: {object}**".
+   - REGRA DO OBJETO (OBRIGATÓRIO): Logo após o preâmbulo, DEVE conter uma linha isolada e em negrito exatamente assim: "**OBJETO: {fullBiddingObject}**".
    - Dos Fatos (Relato minucioso, usando cada detalhe do contexto fornecido).
    - Do Direito/Fundamentação Jurídica (Análise exaustiva ponto a ponto).
    - Dos Pedidos/Requerimentos (O que se espera: anulação, reforma, etc.).
@@ -233,7 +233,8 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
 - Argumentação lógica, estruturada em tópicos se necessário.
 - Evite "juridiquês" arcaico; prefira a clareza e a objetividade jurídica moderna.
 - Se o usuário fornecer um contexto ou resumo dos fatos, incorpore-o INTEGRALMENTE e de forma profissional à peça. Não faça resumos.
-- Se houver dados do processo (objeto real, órgão, portal), use-os para personalizar a petição, MAS a linha do OBJETO no preâmbulo deve ser exatamente a frase fixa da regra 5.
+- Se houver dados do processo (objeto real, órgão, portal), use-os para personalizar a petição, MAS a linha do OBJETO no preâmbulo deve ser exatamente a fundamentada em {fullBiddingObject}.
+- NUNCA use textos genéricos como "Contratação de serviços especializados". Use o objeto real fornecido.
 
 RETORNE APENAS O TEXTO DA PETIÇÃO, sem comentários adicionais.`;
 
@@ -241,13 +242,13 @@ export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta completa e DETALHA
 
 === REGRAS CRÍTICAS DE GERAÇÃO ===
 1. NÃO RESUMA NEM ABREVIE: Utilize o texto completo e detalhado. Não resuma o contexto dos fatos fornecido.
-2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ESTA LINHA): "**OBJETO: {object}**"
+2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ESTA LINHA): "**OBJETO: {fullBiddingObject}**"
 3. ESTRUTURA DE ASSINATURA: A peça deve ser finalizada exatamente com Local ({companyCity}/{companyState}), data ({currentDate}), seguido da linha de assinatura, nome da empresa em negrito, CNPJ, nome do representante e CPF.
 4. PROIBIÇÃO: ESTÁ PROIBIDO citar Advogado ou OAB.
 5. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça.
 
 DADOS DO PROCESSO:
-- Objeto (Título Original): {object}
+- Objeto (Título Real do Processo): {fullBiddingObject}
 - Órgão/Portal: {issuer} / {portal}
 - Modalidade: {modality}
 

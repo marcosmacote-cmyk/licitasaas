@@ -26,6 +26,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [petitionTypeId, setPetitionTypeId] = useState('recurso');
     const [factsSummary, setFactsSummary] = useState('');
+    const [attachments, setAttachments] = useState<{ name: string; content: string }[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedDraft, setGeneratedDraft] = useState('');
     const [isCopied, setIsCopied] = useState(false);
@@ -94,6 +95,31 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         biddings.filter(b => b.status === 'Recurso')
         , [biddings]);
 
+    const handleClear = () => {
+        setFactsSummary('');
+        setAttachments([]);
+        setGeneratedDraft('');
+        setSelectedBiddingId('');
+    };
+
+    const handleNew = () => {
+        if (confirm('Deseja iniciar uma nova petição? Todos os dados atuais serão perdidos.')) {
+            handleClear();
+        }
+    };
+
+    const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        for (const file of files) {
+            // Em um sistema real, extrairíamos o texto do PDF/DOCX aqui.
+            // Para este protótipo, vamos simular que o conteúdo foi extraído.
+            setAttachments(prev => [...prev, {
+                name: file.name,
+                content: `[Conteúdo extraído do documento ${file.name}]`
+            }]);
+        }
+    };
+
     const handleCopy = () => {
         navigator.clipboard.writeText(generatedDraft);
         setIsCopied(true);
@@ -108,6 +134,15 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
         setIsGenerating(true);
         try {
+            // Include attachments content in userContext if any
+            let enrichedContext = factsSummary;
+            if (attachments.length > 0) {
+                enrichedContext += '\n\nANEXOS/DOCUMENTOS PARA CORROBORAÇÃO:\n';
+                attachments.forEach(att => {
+                    enrichedContext += `--- Documento: ${att.name} ---\n${att.content}\n`;
+                });
+            }
+
             const response = await fetch(`${API_BASE_URL}/api/petitions/generate`, {
                 method: 'POST',
                 headers: {
@@ -118,7 +153,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                     biddingProcessId: selectedBiddingId,
                     companyId: selectedCompanyId,
                     templateType: petitionTypeId,
-                    userContext: factsSummary
+                    userContext: enrichedContext
                 })
             });
 
@@ -166,16 +201,16 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         const topMargin = headerImage ? (headerImageHeight + 20) : 100;
         const bottomMargin = footerImage ? (footerImageHeight + 30) : 100;
 
-        // Process markdown in the text if it's not already HTML
-        let cleanText = contentToExport;
-        if (!contentToExport.includes('<')) {
-            cleanText = contentToExport
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-                .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-                .replace(/^# (.+)$/gm, '<h2>$1</h2>');
-        }
+        // Process markdown AND clean up remaining stars
+        let cleanText = contentToExport
+            .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+            .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+            .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+            // Limpeza de asteriscos que sobraram (ex: ** Título **)
+            .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
+            .replace(/\*\*/g, ''); // Remove asteriscos órfãos
 
         const html = `
             <!DOCTYPE html>
@@ -240,15 +275,52 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         printWindow.document.close();
     };
 
+    const applyImageStyle = (style: React.CSSProperties) => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+
+        let node = sel.anchorNode;
+        // Search for IMG element or its DIV wrapper
+        let img: HTMLImageElement | null = null;
+
+        // Check if we clicked directly on an image (sometimes selection works this way)
+        if (node instanceof HTMLElement && node.tagName === 'IMG') {
+            img = node as HTMLImageElement;
+        } else {
+            // Find in parents or siblings
+            const parent = node?.parentElement;
+            img = parent?.querySelector('img') || null;
+        }
+
+        if (img) {
+            if (style.textAlign) {
+                const wrapper = img.parentElement;
+                if (wrapper && wrapper.tagName === 'DIV') {
+                    wrapper.style.textAlign = style.textAlign as string;
+                }
+            }
+            if (style.width) {
+                img.style.width = style.width as string;
+            }
+            setGeneratedDraft(document.getElementById('petition-editable-content')?.innerHTML || '');
+        }
+    };
+
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px', height: 'calc(100vh - 200px)' }}>
             {/* Left: Configuration */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: '16px', border: '1px solid var(--color-border)' }}>
                 <div style={{ padding: '20px', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))' }}>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-primary)' }}>
-                        <Scale size={20} color="var(--color-primary)" />
-                        Mestre de Petições
-                    </h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-primary)' }}>
+                            <Scale size={20} color="var(--color-primary)" />
+                            Mestre de Petições
+                        </h3>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={handleNew} className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: '0.7rem' }}>Novo</button>
+                            <button onClick={handleClear} className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: '0.7rem', color: 'var(--color-danger)' }}>Limpar</button>
+                        </div>
+                    </div>
                     <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-tertiary)' }}>
                         Inteligência Jurídica Especializada Lei 14.133.
                     </p>
@@ -404,7 +476,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         <textarea
                             className="form-control"
                             style={{
-                                minHeight: '160px',
+                                minHeight: '120px',
                                 fontSize: '0.875rem',
                                 borderRadius: '12px',
                                 padding: '16px',
@@ -417,6 +489,26 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                             value={factsSummary}
                             onChange={(e) => setFactsSummary(e.target.value)}
                         />
+                    </div>
+
+                    <div className="form-group">
+                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Anexos de Corroboração (Atas, Provas...)</label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                            {attachments.map((att, idx) => (
+                                <span key={idx} style={{
+                                    padding: '4px 10px', background: 'rgba(37,99,235,0.1)',
+                                    color: 'var(--color-primary)', borderRadius: '20px', fontSize: '0.75rem',
+                                    display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid rgba(37,99,235,0.2)'
+                                }}>
+                                    <ScrollText size={12} /> {att.name}
+                                    <Trash2 size={12} style={{ cursor: 'pointer' }} onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} />
+                                </span>
+                            ))}
+                        </div>
+                        <input type="file" id="attach-up" hidden multiple onChange={handleAttachmentUpload} />
+                        <button onClick={() => document.getElementById('attach-up')?.click()} className="btn btn-sm btn-outline" style={{ width: '100%', borderRadius: '10px' }}>
+                            <ImageIcon size={14} style={{ marginRight: '6px' }} /> Anexar Documentos de Base
+                        </button>
                     </div>
 
                     <button
@@ -450,7 +542,18 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                             <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Clique abaixo para editar o texto</span>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {generatedDraft && (
+                            <div style={{ display: 'flex', gap: '4px', padding: '4px', background: '#f1f5f9', borderRadius: '8px', marginRight: '10px' }}>
+                                <button title="Alinhar Esquerda" onClick={() => applyImageStyle({ textAlign: 'left' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>L</button>
+                                <button title="Centralizar" onClick={() => applyImageStyle({ textAlign: 'center' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>C</button>
+                                <button title="Alinhar Direita" onClick={() => applyImageStyle({ textAlign: 'right' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>R</button>
+                                <div style={{ width: '1px', background: '#cbd5e1', margin: '0 4px' }} />
+                                <button title="Pequeno" onClick={() => applyImageStyle({ width: '200px' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>P</button>
+                                <button title="Médio" onClick={() => applyImageStyle({ width: '400px' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>M</button>
+                                <button title="Grande" onClick={() => applyImageStyle({ width: '100%' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>G</button>
+                            </div>
+                        )}
                         <input type="file" id="content-image-up" hidden accept="image/*" onChange={handleInsertImage} />
                         <button
                             className="btn btn-outline"
