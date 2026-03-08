@@ -211,7 +211,7 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
 5. ESTRUTURA DA PEÇA:
    - Endereçamento formal.
    - Preâmbulo completo (Qualificação da Recorrente).
-   - REGRA DO OBJETO (ABSOLUTAMENTE OBRIGATÓRIO): Logo após o preâmbulo, DEVE conter uma linha isolada e em negrito exatamente assim: "**OBJETO: Contratação de serviços especializados (conforme edital).**". A IA não deve omitir esta linha em hipótese alguma.
+   - REGRA DO OBJETO (OBRIGATÓRIO): Logo após o preâmbulo, DEVE conter uma linha isolada e em negrito exatamente assim: "**OBJETO: {object}**".
    - Dos Fatos (Relato minucioso, usando cada detalhe do contexto fornecido).
    - Do Direito/Fundamentação Jurídica (Análise exaustiva ponto a ponto).
    - Dos Pedidos/Requerimentos (O que se espera: anulação, reforma, etc.).
@@ -219,10 +219,10 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
      
      {companyCity}/{companyState}, {currentDate}.
      
+     _________________________________________________
      **{companyName}**
      CNPJ: {companyCnpj}
      
-     _________________________________________________
      **{legalRepresentativeName}**
      Representante Legal - CPF: {legalRepresentativeCpf}
 
@@ -241,8 +241,8 @@ export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta completa e DETALHA
 
 === REGRAS CRÍTICAS DE GERAÇÃO ===
 1. NÃO RESUMA NEM ABREVIE: Utilize o texto completo e detalhado. Não resuma o contexto dos fatos fornecido.
-2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ESTA LINHA): "**OBJETO: Contratação de serviços especializados (conforme edital).**"
-3. ESTRUTURA DE ASSINATURA: A peça deve ser finalizada exatamente com os dados da empresa ({companyName}, CNPJ: {companyCnpj}), local ({companyCity}/{companyState}), data ({currentDate}) e o Representante Legal ({legalRepresentativeName}, CPF: {legalRepresentativeCpf}).
+2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ESTA LINHA): "**OBJETO: {object}**"
+3. ESTRUTURA DE ASSINATURA: A peça deve ser finalizada exatamente com Local ({companyCity}/{companyState}), data ({currentDate}), seguido da linha de assinatura, nome da empresa em negrito, CNPJ, nome do representante e CPF.
 4. PROIBIÇÃO: ESTÁ PROIBIDO citar Advogado ou OAB.
 5. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça.
 

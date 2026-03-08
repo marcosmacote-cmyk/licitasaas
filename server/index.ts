@@ -2374,17 +2374,20 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
         const currentDateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
         const repName = company.contactName || '[Nome do Representante]';
         const repCpf = company.contactCpf || '[CPF]';
-        const companyCity = company.city || '[Cidade]';
-        const companyState = company.state || '[UF]';
+
+        // Limpeza simples para evitar duplicação de UF se o usuário cadastrou "Cidade/UF" no campo cidade
+        let cleanCity = (company.city || '[Cidade]').split('/')[0].trim();
+        const companyState = (company.state || '[UF]').toUpperCase().trim();
 
         const systemInstruction = MASTER_PETITION_SYSTEM_PROMPT
             .replace(/{currentDate}/g, currentDateStr)
             .replace(/{legalRepresentativeName}/g, repName)
             .replace(/{legalRepresentativeCpf}/g, repCpf)
-            .replace(/{companyCity}/g, companyCity)
+            .replace(/{companyCity}/g, cleanCity)
             .replace(/{companyState}/g, companyState)
             .replace(/{companyName}/g, company.razaoSocial)
             .replace(/{companyCnpj}/g, company.cnpj);
+
 
         const userInstruction = PETITION_USER_INSTRUCTION
             .replace('{petitionType}', templateType.toUpperCase())
@@ -2398,7 +2401,7 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
             .replace('{companyQualification}', company.qualification || 'Não informada')
             .replace(/{legalRepresentativeName}/g, repName)
             .replace(/{legalRepresentativeCpf}/g, repCpf)
-            .replace(/{companyCity}/g, companyCity)
+            .replace(/{companyCity}/g, cleanCity)
             .replace(/{companyState}/g, companyState)
             .replace(/{currentDate}/g, currentDateStr)
             .replace('{userContext}', userContext);

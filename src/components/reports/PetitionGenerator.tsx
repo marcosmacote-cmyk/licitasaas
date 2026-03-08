@@ -133,8 +133,29 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         }
     };
 
+    const handleInsertImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            if (ev.target?.result) {
+                const imgHtml = `<div style="text-align: center; margin: 20px 0;"><img src="${ev.target.result}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" /></div><br/>`;
+                // Append image to the document
+                const el = document.getElementById('petition-editable-content');
+                if (el) {
+                    el.innerHTML += imgHtml;
+                    setGeneratedDraft(el.innerHTML);
+                }
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleExportPDF = () => {
-        if (!generatedDraft) return;
+        const editableEl = document.getElementById('petition-editable-content');
+        const contentToExport = editableEl ? editableEl.innerHTML : generatedDraft;
+
+        if (!contentToExport) return;
 
         const printWindow = window.open('', '_blank');
         if (!printWindow) {
@@ -145,12 +166,16 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         const topMargin = headerImage ? (headerImageHeight + 20) : 100;
         const bottomMargin = footerImage ? (footerImageHeight + 30) : 100;
 
-        const cleanText = generatedDraft
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-            .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-            .replace(/^# (.+)$/gm, '<h2>$1</h2>');
+        // Process markdown in the text if it's not already HTML
+        let cleanText = contentToExport;
+        if (!contentToExport.includes('<')) {
+            cleanText = contentToExport
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+                .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^# (.+)$/gm, '<h2>$1</h2>');
+        }
 
         const html = `
             <!DOCTYPE html>
@@ -170,13 +195,14 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                     @media print {
                         @page { size: portrait; margin: 1cm 1.5cm; }
                         .fixed-header, .fixed-footer { position: fixed; }
+                        button { display: none; }
                     }
                 </style>
             </head>
             <body>
                 <script>
                     window.onload = function() {
-                        setTimeout(() => { window.print(); window.close(); }, 500);
+                        setTimeout(() => { window.print(); window.close(); }, 800);
                     };
                 </script>
                 
@@ -421,10 +447,19 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         </div>
                         <div>
                             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Minuta Jurídica</h3>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Prévia do documento final</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Clique abaixo para editar o texto</span>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '12px' }}>
+                        <input type="file" id="content-image-up" hidden accept="image/*" onChange={handleInsertImage} />
+                        <button
+                            className="btn btn-outline"
+                            style={{ padding: '8px 16px', fontSize: '0.875rem', borderRadius: '10px', gap: '6px' }}
+                            disabled={!generatedDraft}
+                            onClick={() => document.getElementById('content-image-up')?.click()}
+                        >
+                            <ImageIcon size={16} /> Inserir Imagem
+                        </button>
                         <button
                             className="btn btn-outline"
                             style={{ padding: '8px 16px', fontSize: '0.875rem', borderRadius: '10px' }}
@@ -492,18 +527,26 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: 'rgba(0,0,0,0.05)' }}></div>
                             </div>}
 
-                            <div style={{
-                                marginTop: headerImage ? `${headerImageHeight + 20}px` : '0',
-                                marginBottom: footerImage ? `${footerImageHeight + 20}px` : '0',
-                                whiteSpace: 'pre-wrap',
-                                fontFamily: 'serif',
-                                fontSize: '1.2rem',
-                                lineHeight: '1.6',
-                                color: '#1a1a1a',
-                                textAlign: 'justify'
-                            }}>
-                                {generatedDraft}
-                            </div>
+                            <div
+                                id="petition-editable-content"
+                                contentEditable
+                                suppressContentEditableWarning
+                                onInput={(e) => setGeneratedDraft(e.currentTarget.innerHTML)}
+                                style={{
+                                    marginTop: headerImage ? `${headerImageHeight + 20}px` : '0',
+                                    marginBottom: footerImage ? `${footerImageHeight + 20}px` : '0',
+                                    whiteSpace: 'pre-wrap',
+                                    fontFamily: 'serif',
+                                    fontSize: '1.2rem',
+                                    lineHeight: '1.6',
+                                    color: '#1a1a1a',
+                                    textAlign: 'justify',
+                                    minHeight: '400px',
+                                    outline: 'none',
+                                    padding: '10px'
+                                }}
+                                dangerouslySetInnerHTML={{ __html: generatedDraft }}
+                            />
 
                             {footerImage && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${footerImageHeight}px`, overflow: 'hidden' }}>
                                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'rgba(0,0,0,0.05)' }}></div>
