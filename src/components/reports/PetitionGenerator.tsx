@@ -283,20 +283,32 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             .replace(/^# (.+)$/gm, '<h2>$1</h2>')
             // Limpeza de asteriscos que sobraram
             .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
-            .replace(/\*\*/g, '')
-            // Centralização apenas da Assinatura
-            .split(/<br\s*\/?>|\n|<\/p>|<div>/).map(line => {
-                const trimmed = line.replace(/<[^>]*>/g, '').trim();
+            .replace(/\*\*/g, '');
 
-                // Centering rule: Only for signature elements
-                const isSignature = trimmed.includes('____') || trimmed.includes('CNPJ:') || trimmed.includes('CPF:') || trimmed.includes('Representante Legal');
+        // Nova abordagem: Captura o bloco entre as tags e aplica formatação fixa e centralizada
+        if (cleanText.includes('[INICIO_ASSINATURA]')) {
+            const parts = cleanText.split('[INICIO_ASSINATURA]');
+            const beforeSig = parts[0];
+            const sigContent = parts[1].split('[FIM_ASSINATURA]')[0] || '';
+            const afterSig = parts[1].split('[FIM_ASSINATURA]')[1] || '';
 
-                if (isSignature) {
-                    const extraStyles = (trimmed.includes('____')) ? 'margin-top: 25px;' : '';
-                    return `<div style="text-align: center; margin-left: auto; margin-right: auto; width: 100%; display: block; ${extraStyles}">${line}</div>`;
-                }
-                return line;
-            }).join('\n');
+            // Formata o bloco de assinatura com espaçamento zero e centralizado
+            const formattedSignature = `
+                <div style="text-align: center; margin-top: 60px; width: 100%; display: block; line-height: 1.25;">
+                    ${sigContent.replace(/<br\s*\/?>|<\/p>|<div>/gi, '\n')
+                    .replace(/<(?!\/?strong)[^>]*>/g, '') // Remove tags exceto <strong>
+                    .split('\n')
+                    .map(line => {
+                        const l = line.trim();
+                        if (!l) return '';
+                        const style = l.includes('____') ? 'margin-bottom: 2px; margin-top: 25px;' : '';
+                        return `<div style="${style}">${l}</div>`;
+                    }).join('')}
+                </div>
+            `;
+
+            cleanText = beforeSig + formattedSignature + afterSig;
+        }
 
         const html = `
             <!DOCTYPE html>
@@ -722,7 +734,11 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                                     outline: 'none',
                                     padding: '10px'
                                 }}
-                                dangerouslySetInnerHTML={{ __html: generatedDraft }}
+                                dangerouslySetInnerHTML={{
+                                    __html: generatedDraft
+                                        .replace(/\[INICIO_ASSINATURA\]/g, '')
+                                        .replace(/\[FIM_ASSINATURA\]/g, '')
+                                }}
                             />
                             <style>{`
                                 #petition-editable-content img { transition: all 0.2s; border: 2px solid transparent; border-radius: 4px; }

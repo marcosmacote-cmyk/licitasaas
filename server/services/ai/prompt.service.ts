@@ -244,14 +244,20 @@ export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta completa e DETALHA
 === REGRAS CRÍTICAS DE GERAÇÃO ===
 1. NÃO RESUMA NEM ABREVIE: Utilize o texto completo e detalhado. Não resuma o contexto dos fatos fornecido.
 2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ESTA LINHA): "**OBJETO: {fullBiddingObject}**"
-3. ESTRUTURA DE ASSINATURA: A peça deve finalizar CENTRALIZADA. Siga esta ordem SEM ESPAÇOS EXTRAS entre as linhas:
-   - Local ({companyCity}/{companyState}), data ({currentDate})
-   - (Linha de assinatura: ______________________________________)
-   - **{legalRepresentativeName}**
-   - CPF nº: {legalRepresentativeCpf}
-   - Representante Legal
-   - **{companyName}**
-   - CNPJ: {companyCnpj}
+3. ESTRUTURA DE ASSINATURA: A peça deve finalizar obrigatoriamente com o bloco abaixo, CENTRALIZADO. 
+Use EXATAMENTE as tags [INICIO_ASSINATURA] e [FIM_ASSINATURA] para envolver este bloco final. NÃO adicione linhas vazias entre o nome e os dados:
+
+[INICIO_ASSINATURA]
+Local ({companyCity}/{companyState}), data ({currentDate})
+
+______________________________________
+**{legalRepresentativeName}**
+CPF nº: {legalRepresentativeCpf}
+Representante Legal
+**{companyName}**
+CNPJ: {companyCnpj}
+[FIM_ASSINATURA]
+
 4. PROIBIÇÃO: ESTÁ PROIBIDO citar Advogado ou OAB.
 5. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça.
 6. ARQUIVOS ANEXOS: Além do contexto em texto, foram enviados documentos originais (atas, decisões, provas). Você DEVE analisar o conteúdo desses anexos e utilizá-los como base factual para corroborar os fatos e argumentos da petição.
