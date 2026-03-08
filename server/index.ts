@@ -2355,12 +2355,29 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
         }
         const ai = new GoogleGenAI({ apiKey });
 
+        const aiAnalysis = bidding.aiAnalysis;
+        let biddingAnalysisText = 'Nenhuma análise detalhada disponível.';
+        if (aiAnalysis) {
+            biddingAnalysisText = `
+Resumo do Edital (Card): ${bidding.summary || 'Não disponível'}
+Parecer Técnico-Jurídico Profundo: ${aiAnalysis.fullSummary || 'Não disponível'}
+Documentos Exigidos: ${typeof aiAnalysis.requiredDocuments === 'string' ? aiAnalysis.requiredDocuments : JSON.stringify(aiAnalysis.requiredDocuments)}
+Itens e Lotes: ${aiAnalysis.biddingItems || 'Não disponível'}
+Exigências de Qualificação Técnica (LITERAL): ${aiAnalysis.qualificationRequirements || 'Não disponível'}
+Prazos e Datas Críticas: ${typeof aiAnalysis.deadlines === 'string' ? aiAnalysis.deadlines : JSON.stringify(aiAnalysis.deadlines)}
+Considerações de Preço: ${aiAnalysis.pricingConsiderations || 'Não disponível'}
+Alertas e Irregularidades: ${typeof aiAnalysis.irregularitiesFlags === 'string' ? aiAnalysis.irregularitiesFlags : JSON.stringify(aiAnalysis.irregularitiesFlags)}
+Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
+`.trim();
+        }
+
         const userInstruction = PETITION_USER_INSTRUCTION
             .replace('{petitionType}', templateType.toUpperCase())
             .replace('{object}', bidding.title)
             .replace('{issuer}', bidding.portal)
             .replace('{modality}', bidding.modality)
             .replace('{portal}', bidding.portal)
+            .replace('{biddingAnalysis}', biddingAnalysisText)
             .replace('{companyName}', company.razaoSocial)
             .replace('{companyCnpj}', company.cnpj)
             .replace('{companyQualification}', company.qualification || 'Não informada')
