@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
     Sparkles, Download, Loader2, Scale, ScrollText, AlertCircle,
     ChevronRight, Copy, Check, Image as ImageIcon, Settings2,
@@ -39,6 +39,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [showStyles, setShowStyles] = useState(false);
     const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
+    const editorRef = useRef<HTMLDivElement>(null);
 
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -57,22 +58,26 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     }, [selectedCompany]);
 
     useEffect(() => {
-        const el = document.getElementById('petition-editable-content');
+        const el = editorRef.current;
         if (!el) return;
 
         const handleClick = (e: MouseEvent) => {
-            if ((e.target as HTMLElement).tagName === 'IMG') {
-                const target = e.target as HTMLImageElement;
-                setSelectedImg(target);
-                // Manage classes
-                el.querySelectorAll('img').forEach(i => i.classList.remove('selected'));
-                target.classList.add('selected');
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'IMG') {
+                const img = target as HTMLImageElement;
+                setSelectedImg(img);
+                // Manage visual selection
+                el.querySelectorAll('img').forEach((i: HTMLImageElement) => i.classList.remove('selected'));
+                img.classList.add('selected');
+            } else if (!target.closest('.image-toolbar')) {
+                // Deselect if clicking outside image and not on toolbar
+                // setSelectedImg(null); // Optional: keep selection to allow tool use
             }
         };
 
         el.addEventListener('click', handleClick);
         return () => el.removeEventListener('click', handleClick);
-    }, [generatedDraft]);
+    }, []);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
         const file = e.target.files?.[0];
@@ -119,6 +124,9 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         setAttachments([]);
         setGeneratedDraft('');
         setSelectedBiddingId('');
+        setSelectedImg(null);
+
+        if (editorRef.current) editorRef.current.innerHTML = '';
 
         // Clear file inputs to allow re-uploading same file
         const fileInput = document.getElementById('attach-up') as HTMLInputElement;
@@ -190,7 +198,14 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Erro ao gerar petição');
-            setGeneratedDraft(data.text);
+
+            // Transform tags for display
+            const displayHtml = data.text
+                .replace(/\[INICIO_ASSINATURA\]/g, '<span class="tech-tag" data-tag="start">[INICIO_ASSINATURA]</span>')
+                .replace(/\[FIM_ASSINATURA\]/g, '<span class="tech-tag" data-tag="end">[FIM_ASSINATURA]</span>');
+
+            setGeneratedDraft(displayHtml);
+            if (editorRef.current) editorRef.current.innerHTML = displayHtml;
         } catch (error: any) {
             console.error(error);
             alert(`Erro: ${error.message}`);
@@ -204,14 +219,13 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
-            if (ev.target?.result) {
-                const imgHtml = `<div style="text-align: center; margin: 20px 0;"><img src="${ev.target.result}" style="max-width: 100%; height: auto; border: 1px solid #ddd; borderRadius: 4px; cursor: pointer;" /></div><br/>`;
-                // Append image to the document
-                const el = document.getElementById('petition-editable-content');
-                if (el) {
-                    el.innerHTML += imgHtml;
-                    setGeneratedDraft(el.innerHTML);
-                }
+            if (ev.target?.result && editorRef.current) {
+                const imgHtml = `<div style="text-align: center; margin: 20px 0;"><img src="${ev.target.result}" class="petition-img" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" /></div><br/>`;
+
+                // insertAtCursor logic or append
+                editorRef.current.focus();
+                document.execCommand('insertHTML', false, imgHtml);
+                setGeneratedDraft(editorRef.current.innerHTML);
             }
         };
         reader.readAsDataURL(file);
@@ -226,7 +240,8 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         const img = selectedImg;
         if (style.textAlign) {
             let wrapper = img.parentElement;
-            if (wrapper && wrapper.tagName === 'DIV') {
+            // Handle if the parent is just the editor or a tag
+            if (wrapper && wrapper.tagName === 'DIV' && wrapper.id !== 'petition-editable-content') {
                 wrapper.style.textAlign = style.textAlign as string;
             } else {
                 const div = document.createElement('div');
@@ -241,21 +256,27 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             img.style.height = 'auto';
         }
 
-        const el = document.getElementById('petition-editable-content');
-        if (el) setGeneratedDraft(el.innerHTML);
+        if (editorRef.current) {
+            setGeneratedDraft(editorRef.current.innerHTML);
+        }
     };
 
     const handleDeleteImage = () => {
         if (!selectedImg) return;
         if (confirm('Deseja remover esta imagem?')) {
-            const wrapper = selectedImg.parentElement;
-            if (wrapper && wrapper.tagName === 'DIV' && wrapper.childNodes.length === 1) {
+            const img = selectedImg;
+            const wrapper = img.parentElement;
+
+            if (wrapper && wrapper.tagName === 'DIV' && wrapper.childNodes.length === 1 && wrapper.id !== 'petition-editable-content') {
                 wrapper.remove();
             } else {
-                selectedImg.remove();
+                img.remove();
             }
+
             setSelectedImg(null);
-            setGeneratedDraft(document.getElementById('petition-editable-content')?.innerHTML || '');
+            if (editorRef.current) {
+                setGeneratedDraft(editorRef.current.innerHTML);
+            }
         }
     };
 
@@ -283,7 +304,8 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             .replace(/^# (.+)$/gm, '<h2>$1</h2>')
             // Limpeza de asteriscos que sobraram
             .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
-            .replace(/\*\*/g, '');
+            .replace(/\*\*/g, '')
+            .replace(/<span class="tech-tag"[^>]*>(\[.*?\])<\/span>/g, '$1'); // Remove technical spans but keep the tags for splitting
 
         // Nova abordagem: Captura o bloco entre as tags e aplica formatação fixa e centralizada
         if (cleanText.includes('[INICIO_ASSINATURA]')) {
@@ -612,9 +634,9 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                        {generatedDraft && (
-                            <div style={{ display: 'flex', gap: '4px', padding: '4px', background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', borderRadius: '10px', marginRight: '10px' }}>
-                                <div style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0 8px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Imagem</div>
+                        {selectedImg && (
+                            <div className="image-toolbar" style={{ display: 'flex', gap: '4px', padding: '6px', background: 'var(--color-primary-light)', border: '1px solid var(--color-primary)', boxShadow: '0 4px 12px rgba(37,99,235,0.15)', borderRadius: '12px', marginRight: '10px', animation: 'fadeIn 0.2s ease-out' }}>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0 8px', color: 'var(--color-primary)', textTransform: 'uppercase', alignSelf: 'center' }}>Imagem</div>
                                 <button title="Alinhar Esquerda" onClick={() => applyImageStyle({ textAlign: 'left' })} className="btn btn-sm btn-ghost" style={{ padding: '6px' }}>
                                     <div style={{ width: '12px', height: '2px', background: 'currentColor', marginBottom: '2px', marginRight: '4px' }}></div>
                                     <div style={{ width: '8px', height: '2px', background: 'currentColor', marginBottom: '2px', marginRight: '8px' }}></div>
@@ -718,6 +740,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
                             <div
                                 id="petition-editable-content"
+                                ref={editorRef}
                                 contentEditable
                                 suppressContentEditableWarning
                                 onInput={(e) => setGeneratedDraft(e.currentTarget.innerHTML)}
@@ -734,16 +757,13 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                                     outline: 'none',
                                     padding: '10px'
                                 }}
-                                dangerouslySetInnerHTML={{
-                                    __html: generatedDraft
-                                        .replace(/\[INICIO_ASSINATURA\]/g, '')
-                                        .replace(/\[FIM_ASSINATURA\]/g, '')
-                                }}
                             />
                             <style>{`
-                                #petition-editable-content img { transition: all 0.2s; border: 2px solid transparent; border-radius: 4px; }
+                                #petition-editable-content img { transition: all 0.2s; border: 2px solid transparent; border-radius: 4px; display: inline-block; vertical-align: middle; }
                                 #petition-editable-content img:hover { border-color: var(--color-primary-light); }
-                                #petition-editable-content img.selected { border-color: var(--color-primary); box-shadow: 0 0 10px rgba(37,99,235,0.25); }
+                                #petition-editable-content img.selected { border-color: var(--color-primary); box-shadow: 0 0 0 4px rgba(37,99,235,0.15); outline: none; }
+                                .tech-tag { display: none !important; pointer-events: none; }
+                                @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
                             `}</style>
 
                             {footerImage && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${footerImageHeight}px`, overflow: 'hidden' }}>
