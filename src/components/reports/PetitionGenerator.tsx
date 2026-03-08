@@ -38,6 +38,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     const [footerImageHeight, setFooterImageHeight] = useState(60);
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [showStyles, setShowStyles] = useState(false);
+    const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
 
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -54,6 +55,24 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             setFooterImageHeight(selectedCompany.defaultProposalFooterHeight || 60);
         }
     }, [selectedCompany]);
+
+    useEffect(() => {
+        const el = document.getElementById('petition-editable-content');
+        if (!el) return;
+
+        const handleClick = (e: MouseEvent) => {
+            if ((e.target as HTMLElement).tagName === 'IMG') {
+                const target = e.target as HTMLImageElement;
+                setSelectedImg(target);
+                // Manage classes
+                el.querySelectorAll('img').forEach(i => i.classList.remove('selected'));
+                target.classList.add('selected');
+            }
+        };
+
+        el.addEventListener('click', handleClick);
+        return () => el.removeEventListener('click', handleClick);
+    }, [generatedDraft]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
         const file = e.target.files?.[0];
@@ -174,7 +193,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         const reader = new FileReader();
         reader.onload = (ev) => {
             if (ev.target?.result) {
-                const imgHtml = `<div style="text-align: center; margin: 20px 0;"><img src="${ev.target.result}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" /></div><br/>`;
+                const imgHtml = `<div style="text-align: center; margin: 20px 0;"><img src="${ev.target.result}" style="max-width: 100%; height: auto; border: 1px solid #ddd; borderRadius: 4px; cursor: pointer;" /></div><br/>`;
                 // Append image to the document
                 const el = document.getElementById('petition-editable-content');
                 if (el) {
@@ -184,6 +203,48 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             }
         };
         reader.readAsDataURL(file);
+    };
+
+    const applyImageStyle = (style: React.CSSProperties) => {
+        if (!selectedImg) {
+            alert('Dica: Primeiro clique na imagem desejada dentro do texto para selecioná-la.');
+            return;
+        }
+
+        const img = selectedImg;
+        if (style.textAlign) {
+            let wrapper = img.parentElement;
+            if (wrapper && wrapper.tagName === 'DIV') {
+                wrapper.style.textAlign = style.textAlign as string;
+            } else {
+                const div = document.createElement('div');
+                div.style.textAlign = style.textAlign as string;
+                div.style.margin = '20px 0';
+                img.parentNode?.insertBefore(div, img);
+                div.appendChild(img);
+            }
+        }
+        if (style.width) {
+            img.style.width = style.width as string;
+            img.style.height = 'auto';
+        }
+
+        const el = document.getElementById('petition-editable-content');
+        if (el) setGeneratedDraft(el.innerHTML);
+    };
+
+    const handleDeleteImage = () => {
+        if (!selectedImg) return;
+        if (confirm('Deseja remover esta imagem?')) {
+            const wrapper = selectedImg.parentElement;
+            if (wrapper && wrapper.tagName === 'DIV' && wrapper.childNodes.length === 1) {
+                wrapper.remove();
+            } else {
+                selectedImg.remove();
+            }
+            setSelectedImg(null);
+            setGeneratedDraft(document.getElementById('petition-editable-content')?.innerHTML || '');
+        }
     };
 
     const handleExportPDF = () => {
@@ -208,9 +269,17 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             .replace(/^### (.+)$/gm, '<h4>$1</h4>')
             .replace(/^## (.+)$/gm, '<h3>$1</h3>')
             .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-            // Limpeza de asteriscos que sobraram (ex: ** Título **)
+            // Limpeza de asteriscos que sobraram
             .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
-            .replace(/\*\*/g, ''); // Remove asteriscos órfãos
+            .replace(/\*\*/g, '')
+            // Centralização da Assinatura (Detecta por CNPJ/CPF ou linha horizontal)
+            .split('\n').map(line => {
+                const trimmed = line.trim();
+                if (trimmed.includes('____') || trimmed.includes('CNPJ:') || trimmed.includes('CPF:') || (trimmed.startsWith('**') && trimmed.endsWith('**') && (line.length > 50 && line.length < 150))) {
+                    return `<div style="text-align: center; margin: 0 auto; width: 100%;">${line}</div>`;
+                }
+                return line;
+            }).join('\n');
 
         const html = `
             <!DOCTYPE html>
@@ -275,36 +344,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         printWindow.document.close();
     };
 
-    const applyImageStyle = (style: React.CSSProperties) => {
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
 
-        let node = sel.anchorNode;
-        // Search for IMG element or its DIV wrapper
-        let img: HTMLImageElement | null = null;
-
-        // Check if we clicked directly on an image (sometimes selection works this way)
-        if (node instanceof HTMLElement && node.tagName === 'IMG') {
-            img = node as HTMLImageElement;
-        } else {
-            // Find in parents or siblings
-            const parent = node?.parentElement;
-            img = parent?.querySelector('img') || null;
-        }
-
-        if (img) {
-            if (style.textAlign) {
-                const wrapper = img.parentElement;
-                if (wrapper && wrapper.tagName === 'DIV') {
-                    wrapper.style.textAlign = style.textAlign as string;
-                }
-            }
-            if (style.width) {
-                img.style.width = style.width as string;
-            }
-            setGeneratedDraft(document.getElementById('petition-editable-content')?.innerHTML || '');
-        }
-    };
 
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px', height: 'calc(100vh - 200px)' }}>
@@ -542,16 +582,33 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                             <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Clique abaixo para editar o texto</span>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                         {generatedDraft && (
-                            <div style={{ display: 'flex', gap: '4px', padding: '4px', background: '#f1f5f9', borderRadius: '8px', marginRight: '10px' }}>
-                                <button title="Alinhar Esquerda" onClick={() => applyImageStyle({ textAlign: 'left' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>L</button>
-                                <button title="Centralizar" onClick={() => applyImageStyle({ textAlign: 'center' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>C</button>
-                                <button title="Alinhar Direita" onClick={() => applyImageStyle({ textAlign: 'right' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>R</button>
-                                <div style={{ width: '1px', background: '#cbd5e1', margin: '0 4px' }} />
-                                <button title="Pequeno" onClick={() => applyImageStyle({ width: '200px' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>P</button>
-                                <button title="Médio" onClick={() => applyImageStyle({ width: '400px' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>M</button>
-                                <button title="Grande" onClick={() => applyImageStyle({ width: '100%' })} className="btn btn-sm btn-ghost" style={{ padding: '4px' }}>G</button>
+                            <div style={{ display: 'flex', gap: '4px', padding: '4px', background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', borderRadius: '10px', marginRight: '10px' }}>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0 8px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>Imagem</div>
+                                <button title="Alinhar Esquerda" onClick={() => applyImageStyle({ textAlign: 'left' })} className="btn btn-sm btn-ghost" style={{ padding: '6px' }}>
+                                    <div style={{ width: '12px', height: '2px', background: 'currentColor', marginBottom: '2px', marginRight: '4px' }}></div>
+                                    <div style={{ width: '8px', height: '2px', background: 'currentColor', marginBottom: '2px', marginRight: '8px' }}></div>
+                                    <div style={{ width: '12px', height: '2px', background: 'currentColor', marginRight: '4px' }}></div>
+                                </button>
+                                <button title="Centralizar" onClick={() => applyImageStyle({ textAlign: 'center' })} className="btn btn-sm btn-ghost" style={{ padding: '6px' }}>
+                                    <div style={{ width: '12px', height: '2px', background: 'currentColor', marginBottom: '2px' }}></div>
+                                    <div style={{ width: '8px', height: '2px', background: 'currentColor', marginBottom: '2px' }}></div>
+                                    <div style={{ width: '12px', height: '2px', background: 'currentColor' }}></div>
+                                </button>
+                                <button title="Alinhar Direita" onClick={() => applyImageStyle({ textAlign: 'right' })} className="btn btn-sm btn-ghost" style={{ padding: '6px' }}>
+                                    <div style={{ width: '12px', height: '2px', background: 'currentColor', marginBottom: '2px', marginLeft: '4px' }}></div>
+                                    <div style={{ width: '8px', height: '2px', background: 'currentColor', marginBottom: '2px', marginLeft: '8px' }}></div>
+                                    <div style={{ width: '12px', height: '2px', background: 'currentColor', marginLeft: '4px' }}></div>
+                                </button>
+                                <div style={{ width: '1px', background: 'var(--color-border)', margin: '0 4px' }} />
+                                <button title="Reduzir" onClick={() => applyImageStyle({ width: '30%' })} className="btn btn-sm btn-ghost" style={{ fontWeight: 800, minWidth: '32px' }}>P</button>
+                                <button title="Média" onClick={() => applyImageStyle({ width: '60%' })} className="btn btn-sm btn-ghost" style={{ fontWeight: 800, minWidth: '32px' }}>M</button>
+                                <button title="Largura Total" onClick={() => applyImageStyle({ width: '100%' })} className="btn btn-sm btn-ghost" style={{ fontWeight: 800, minWidth: '32px' }}>G</button>
+                                <div style={{ width: '1px', background: 'var(--color-border)', margin: '0 4px' }} />
+                                <button title="Excluir Imagem" onClick={handleDeleteImage} className="btn btn-sm btn-ghost" style={{ color: 'var(--color-danger)', padding: '6px' }}>
+                                    <Trash2 size={16} />
+                                </button>
                             </div>
                         )}
                         <input type="file" id="content-image-up" hidden accept="image/*" onChange={handleInsertImage} />
@@ -650,6 +707,11 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                                 }}
                                 dangerouslySetInnerHTML={{ __html: generatedDraft }}
                             />
+                            <style>{`
+                                #petition-editable-content img { transition: all 0.2s; border: 2px solid transparent; border-radius: 4px; }
+                                #petition-editable-content img:hover { border-color: var(--color-primary-light); }
+                                #petition-editable-content img.selected { border-color: var(--color-primary); box-shadow: 0 0 10px rgba(37,99,235,0.25); }
+                            `}</style>
 
                             {footerImage && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${footerImageHeight}px`, overflow: 'hidden' }}>
                                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'rgba(0,0,0,0.05)' }}></div>

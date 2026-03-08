@@ -233,8 +233,9 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
 - Argumentação lógica, estruturada em tópicos se necessário.
 - Evite "juridiquês" arcaico; prefira a clareza e a objetividade jurídica moderna.
 - Se o usuário fornecer um contexto ou resumo dos fatos, incorpore-o INTEGRALMENTE e de forma profissional à peça. Não faça resumos.
-- Se houver dados do processo (objeto real, órgão, portal), use-os para personalizar a petição, MAS a linha do OBJETO no preâmbulo deve ser exatamente a fundamentada em {fullBiddingObject}.
-- NUNCA use textos genéricos como "Contratação de serviços especializados". Use o objeto real fornecido.
+- Se houver dados do processo (objeto real, órgão, portal), use-os para personalizar a petição, MAS a linha do OBJETO no preâmbulo deve ser RÍGIDAMENTE isolada e em negrito apenas com o texto de {fullBiddingObject}.
+- NUNCA use textos genéricos como "Contratação de serviços especializados". Use APENAS o título real fornecido em {fullBiddingObject}.
+- NÃO adicione informações como portal, link ou número do processo na linha do OBJETO se não fizerem parte do título real.
 
 RETORNE APENAS O TEXTO DA PETIÇÃO, sem comentários adicionais.`;
 

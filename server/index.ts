@@ -2389,8 +2389,8 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
             .replace(/{companyCnpj}/g, company.cnpj);
 
 
-        // Objeto mais completo possível
-        const fullBiddingObject = `${bidding.title}${bidding.portal ? ` (${bidding.portal})` : ''}`;
+        // Objeto: Prioriza o sumário (objeto real) ao título (que tem modalidade/número)
+        const fullBiddingObject = bidding.summary || bidding.title;
 
         const userInstruction = PETITION_USER_INSTRUCTION
             .replace('{petitionType}', templateType.toUpperCase())
