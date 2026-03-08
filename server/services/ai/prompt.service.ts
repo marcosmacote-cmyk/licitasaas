@@ -211,16 +211,20 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
 5. ESTRUTURA DA PEÇA:
    - Endereçamento formal.
    - Preâmbulo completo (Qualificação da Recorrente).
+   - REGRA DO OBJETO: Logo após o preâmbulo, DEVE conter exatamente: "OBJETO: Contratação de serviços especializados (conforme edital)."
    - Dos Fatos (Relato minucioso, usando cada detalhe do contexto fornecido).
    - Do Direito/Fundamentação Jurídica (Análise exaustiva ponto a ponto).
    - Dos Pedidos/Requerimentos (O que se espera: anulação, reforma, etc.).
+   - FECHAMENTO E ASSINATURA: Finalize com Local e Data ({currentDate}).
+   - ASSINATURA OBRIGATÓRIA: Use apenas "Representante Legal: {legalRepresentativeName}" e "CPF: {legalRepresentativeCpf}". 
+   - PROIBIÇÃO: NUNCA insira campos para Advogado, OAB ou assinaturas jurídicas. A petição é assinada apenas pelo representante da empresa.
 
 === REGRAS DE ESTILO ===
 - Tom extremamente formal, técnico e respeitoso.
 - Argumentação lógica, estruturada em tópicos se necessário.
 - Evite "juridiquês" arcaico; prefira a clareza e a objetividade jurídica moderna.
 - Se o usuário fornecer um contexto ou resumo dos fatos, incorpore-o INTEGRALMENTE e de forma profissional à peça. Não faça resumos.
-- Se houver dados do processo (objeto, órgão, portal), use-os para personalizar a petição.
+- Se houver dados do processo (objeto real, órgão, portal), use-os para personalizar a petição, mas mantenha a frase do OBJETO fixa conforme regra 5.
 
 RETORNE APENAS O TEXTO DA PETIÇÃO, sem comentários adicionais.`;
 
@@ -228,9 +232,10 @@ export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta completa e DETALHA
 
 === REGRAS CRÍTICAS DE GERAÇÃO ===
 1. NÃO RESUMA NEM ABREVIE: Utilize o texto completo e detalhado. Todas as fundamentações e argumentos devem ser extensos e robustos. Não resuma o contexto dos fatos fornecido.
-2. OBJETO OBRIGATÓRIO: No preâmbulo ou cabeçalho, deve constar exatamente: "OBJETO: Contratação de serviços especializados (conforme edital)."
+2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ASSIM): "OBJETO: Contratação de serviços especializados (conforme edital)."
 3. DATA: Utilize a data de hoje: {currentDate}.
-4. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça (prazos, exigências de habilitação, itens, etc.).
+4. ASSINATURA: A peça deve ser finalizada para assinatura apenas de {legalRepresentativeName} (CPF: {legalRepresentativeCpf}). PROIBIDO citar Advogado ou OAB.
+5. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça (prazos, exigências de habilitação, itens, etc.).
 
 DADOS DO PROCESSO:
 - Objeto (Título): {object}
@@ -244,9 +249,12 @@ DADOS DA EMPRESA RECORRENTE:
 - Razão Social: {companyName}
 - CNPJ: {companyCnpj}
 - Qualificação Completa: {companyQualification}
+- Representante Legal: {legalRepresentativeName}
+- CPF Representante: {legalRepresentativeCpf}
 
 CONTEXTO DOS FATOS E ARGUMENTOS (FORNECIDO PELO USUÁRIO):
 {userContext}
 
 Utilize todas as informações acima (dados do processo, análise técnica do edital e o contexto do usuário) para criar uma peça robusta, extremamente detalhada e personalizada, observando estritamente a Lei 14.133/2021 e a jurisprudência atual.`;
+
 

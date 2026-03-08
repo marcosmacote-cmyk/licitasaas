@@ -2371,6 +2371,15 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
 `.trim();
         }
 
+        const currentDateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+        const repName = company.contactName || '[Nome do Representante]';
+        const repCpf = company.contactCpf || '[CPF]';
+
+        const systemInstruction = MASTER_PETITION_SYSTEM_PROMPT
+            .replace(/{currentDate}/g, currentDateStr)
+            .replace(/{legalRepresentativeName}/g, repName)
+            .replace(/{legalRepresentativeCpf}/g, repCpf);
+
         const userInstruction = PETITION_USER_INSTRUCTION
             .replace('{petitionType}', templateType.toUpperCase())
             .replace('{object}', bidding.title)
@@ -2381,7 +2390,9 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
             .replace('{companyName}', company.razaoSocial)
             .replace('{companyCnpj}', company.cnpj)
             .replace('{companyQualification}', company.qualification || 'Não informada')
-            .replace('{currentDate}', new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }))
+            .replace(/{legalRepresentativeName}/g, repName)
+            .replace(/{legalRepresentativeCpf}/g, repCpf)
+            .replace(/{currentDate}/g, currentDateStr)
             .replace('{userContext}', userContext);
 
         const result = await callGeminiWithRetry(ai.models, {
@@ -2393,7 +2404,8 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
                 }
             ],
             config: {
-                systemInstruction: MASTER_PETITION_SYSTEM_PROMPT,
+                systemInstruction: systemInstruction,
+
                 temperature: 0.2,
                 maxOutputTokens: 8192
             }
