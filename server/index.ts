@@ -2346,7 +2346,7 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
             return res.status(404).json({ error: 'Processo ou Empresa não encontrados.' });
         }
 
-        if (!biddingProcessId || !companyId || (!userContext && attachments.length === 0)) {
+        if (!biddingProcessId || !companyId || (!userContext && (attachments?.length || 0) === 0)) {
             return res.status(400).json({ error: 'Por favor, selecione o processo, a empresa e descreva os fatos ou anexe documentos.' });
         }
         const apiKey = process.env.GEMINI_API_KEY;

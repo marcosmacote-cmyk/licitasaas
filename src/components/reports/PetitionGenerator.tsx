@@ -40,6 +40,8 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     const [showStyles, setShowStyles] = useState(false);
     const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
     const editorRef = useRef<HTMLDivElement>(null);
+    const lastAiResult = useRef('');
+    const [editorKey, setEditorKey] = useState(0);
 
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -125,6 +127,8 @@ export function PetitionGenerator({ biddings, companies }: Props) {
         setGeneratedDraft('');
         setSelectedBiddingId('');
         setSelectedImg(null);
+        lastAiResult.current = '';
+        setEditorKey(prev => prev + 1);
 
         if (editorRef.current) editorRef.current.innerHTML = '';
 
@@ -204,8 +208,9 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                 .replace(/\[INICIO_ASSINATURA\]/g, '<span class="tech-tag" data-tag="start">[INICIO_ASSINATURA]</span>')
                 .replace(/\[FIM_ASSINATURA\]/g, '<span class="tech-tag" data-tag="end">[FIM_ASSINATURA]</span>');
 
+            lastAiResult.current = displayHtml;
             setGeneratedDraft(displayHtml);
-            if (editorRef.current) editorRef.current.innerHTML = displayHtml;
+            setEditorKey(prev => prev + 1);
         } catch (error: any) {
             console.error(error);
             alert(`Erro: ${error.message}`);
@@ -213,6 +218,16 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             setIsGenerating(false);
         }
     };
+
+    // Safety effect to ensure content is synced when mounting or generation finishes
+    useEffect(() => {
+        if (!isGenerating && generatedDraft && editorRef.current) {
+            // Se o editor estiver vazio por causa do re-render do React, repovoamos
+            if (editorRef.current.innerHTML.trim() === '' || editorRef.current.innerHTML === '<br>') {
+                editorRef.current.innerHTML = generatedDraft;
+            }
+        }
+    }, [isGenerating, generatedDraft]);
 
     const handleInsertImage = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -306,6 +321,9 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             .replace(/\*\*\s*(.+?)\s*\*\*/g, '<strong>$1</strong>')
             .replace(/\*\*/g, '')
             .replace(/<span class="tech-tag"[^>]*>(\[.*?\])<\/span>/g, '$1'); // Remove technical spans but keep the tags for splitting
+
+        // Reset OBJETO to be justified if centralized by mistake
+        cleanText = cleanText.replace(/<div style="text-align: center;[^>]*>(<strong>)?OBJETO:/gi, '<div>$1OBJETO:');
 
         // Nova abordagem: Captura o bloco entre as tags e aplica formatação fixa e centralizada
         if (cleanText.includes('[INICIO_ASSINATURA]')) {
@@ -740,10 +758,12 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
                             <div
                                 id="petition-editable-content"
+                                key={editorKey}
                                 ref={editorRef}
                                 contentEditable
                                 suppressContentEditableWarning
                                 onInput={(e) => setGeneratedDraft(e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{ __html: lastAiResult.current }}
                                 style={{
                                     marginTop: headerImage ? `${headerImageHeight + 20}px` : '0',
                                     marginBottom: footerImage ? `${footerImageHeight + 20}px` : '0',
