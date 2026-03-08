@@ -11,7 +11,7 @@ NÃO AGRUPE documentos em uma única string. Se o edital pede "Certidão Federal
 
 === REGRAS CRÍTICAS ===
 1. Responda APENAS com um objeto JSON válido. NUNCA adicione crases Markdown, textos explicativos, ou qualquer conteúdo antes ou depois do JSON.
-2. NUNCA invente dados. Se uma informação não estiver no documento, retorne string vazia ou array vazio.
+2. NUNCA invente dados. Se uma informação não estiver no documento, retorne string vazia or array vazio.
 3. O campo 'risk' deve ser obrigatoriamente: "Baixo", "Médio", "Alto" ou "Crítico".
 4. FUJA DE ASPAS DUPLAS INTERNAS: NUNCA use aspas duplas dentro dos valores de texto do seu JSON. Use aspas simples.
 
@@ -211,34 +211,43 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
 5. ESTRUTURA DA PEÇA:
    - Endereçamento formal.
    - Preâmbulo completo (Qualificação da Recorrente).
-   - REGRA DO OBJETO: Logo após o preâmbulo, DEVE conter exatamente: "OBJETO: Contratação de serviços especializados (conforme edital)."
+   - REGRA DO OBJETO (ABSOLUTAMENTE OBRIGATÓRIO): Logo após o preâmbulo, DEVE conter uma linha isolada e em negrito exatamente assim: "**OBJETO: Contratação de serviços especializados (conforme edital).**". A IA não deve omitir esta linha em hipótese alguma.
    - Dos Fatos (Relato minucioso, usando cada detalhe do contexto fornecido).
    - Do Direito/Fundamentação Jurídica (Análise exaustiva ponto a ponto).
    - Dos Pedidos/Requerimentos (O que se espera: anulação, reforma, etc.).
-   - FECHAMENTO E ASSINATURA: Finalize com Local e Data ({currentDate}).
-   - ASSINATURA OBRIGATÓRIA: Use apenas "Representante Legal: {legalRepresentativeName}" e "CPF: {legalRepresentativeCpf}". 
-   - PROIBIÇÃO: NUNCA insira campos para Advogado, OAB ou assinaturas jurídicas. A petição é assinada apenas pelo representante da empresa.
+   - FECHAMENTO E ASSINATURA: Finalize a peça exatamente com a seguinte estrutura:
+     
+     {companyCity}/{companyState}, {currentDate}.
+     
+     **{companyName}**
+     CNPJ: {companyCnpj}
+     
+     _________________________________________________
+     **{legalRepresentativeName}**
+     Representante Legal - CPF: {legalRepresentativeCpf}
+
+   - PROIBIÇÃO: NUNCA insira campos para Advogado, OAB ou assinaturas jurídicas. A petição é assinada apenas pelo representante da empresa conforme estrutura acima.
 
 === REGRAS DE ESTILO ===
 - Tom extremamente formal, técnico e respeitoso.
 - Argumentação lógica, estruturada em tópicos se necessário.
 - Evite "juridiquês" arcaico; prefira a clareza e a objetividade jurídica moderna.
 - Se o usuário fornecer um contexto ou resumo dos fatos, incorpore-o INTEGRALMENTE e de forma profissional à peça. Não faça resumos.
-- Se houver dados do processo (objeto real, órgão, portal), use-os para personalizar a petição, mas mantenha a frase do OBJETO fixa conforme regra 5.
+- Se houver dados do processo (objeto real, órgão, portal), use-os para personalizar a petição, MAS a linha do OBJETO no preâmbulo deve ser exatamente a frase fixa da regra 5.
 
 RETORNE APENAS O TEXTO DA PETIÇÃO, sem comentários adicionais.`;
 
 export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta completa e DETALHADA (mínimo de 1200 palavras) de {petitionType} para o processo licitatório abaixo.
 
 === REGRAS CRÍTICAS DE GERAÇÃO ===
-1. NÃO RESUMA NEM ABREVIE: Utilize o texto completo e detalhado. Todas as fundamentações e argumentos devem ser extensos e robustos. Não resuma o contexto dos fatos fornecido.
-2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ASSIM): "OBJETO: Contratação de serviços especializados (conforme edital)."
-3. DATA: Utilize a data de hoje: {currentDate}.
-4. ASSINATURA: A peça deve ser finalizada para assinatura apenas de {legalRepresentativeName} (CPF: {legalRepresentativeCpf}). PROIBIDO citar Advogado ou OAB.
-5. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça (prazos, exigências de habilitação, itens, etc.).
+1. NÃO RESUMA NEM ABREVIE: Utilize o texto completo e detalhado. Não resuma o contexto dos fatos fornecido.
+2. OBJETO OBRIGATÓRIO (DEVE CONSTAR EXATAMENTE ESTA LINHA): "**OBJETO: Contratação de serviços especializados (conforme edital).**"
+3. ESTRUTURA DE ASSINATURA: A peça deve ser finalizada exatamente com os dados da empresa ({companyName}, CNPJ: {companyCnpj}), local ({companyCity}/{companyState}), data ({currentDate}) e o Representante Legal ({legalRepresentativeName}, CPF: {legalRepresentativeCpf}).
+4. PROIBIÇÃO: ESTÁ PROIBIDO citar Advogado ou OAB.
+5. CONTEXTO DO EDITAL: Utilize as informações detalhadas da análise do edital abaixo para fundamentar tecnicamente a peça.
 
 DADOS DO PROCESSO:
-- Objeto (Título): {object}
+- Objeto (Título Original): {object}
 - Órgão/Portal: {issuer} / {portal}
 - Modalidade: {modality}
 
@@ -249,12 +258,11 @@ DADOS DA EMPRESA RECORRENTE:
 - Razão Social: {companyName}
 - CNPJ: {companyCnpj}
 - Qualificação Completa: {companyQualification}
+- Sede: {companyCity}/{companyState}
 - Representante Legal: {legalRepresentativeName}
 - CPF Representante: {legalRepresentativeCpf}
 
 CONTEXTO DOS FATOS E ARGUMENTOS (FORNECIDO PELO USUÁRIO):
 {userContext}
 
-Utilize todas as informações acima (dados do processo, análise técnica do edital e o contexto do usuário) para criar uma peça robusta, extremamente detalhada e personalizada, observando estritamente a Lei 14.133/2021 e a jurisprudência atual.`;
-
-
+Utilize todas as informações acima para criar uma peça robusta, extremamente detalhada e personalizada, observando estritamente a Lei 14.133/2021 e a jurisprudência atual.`;
