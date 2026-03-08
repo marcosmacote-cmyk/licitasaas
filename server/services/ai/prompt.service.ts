@@ -180,7 +180,7 @@ REGRAS CRÍTICAS DE SOMATÓRIO:
 OUTRAS REGRAS:
 - Seja rigoroso tecnicamente mas flexível juridicamente (Súmulas TCU 24 e 263 permitem somatórios e similaridades).
 - Se houver similaridade, redija uma justificativa técnica robusta.
-- Se o quantitativo (ou a soma) for insuficiente, aponte exatamente quanto falta (déficit).
+- Se houver insuficiente, aponte exatamente quanto falta (déficit).
 
 FORMATO DE SAÍDA JSON:
 {
@@ -198,8 +198,8 @@ FORMATO DE SAÍDA JSON:
   ]
 }
 `;
-export const MASTER_PETITION_SYSTEM_PROMPT = `
-Você é um Mestre em Petições Administrativas, o maior especialista do Brasil em Direito Administrativo voltado a Licitações Públicas, com foco total na Nova Lei de Licitações (Lei 14.133/2021).
+
+export const MASTER_PETITION_SYSTEM_PROMPT = `Você é um Mestre em Petições Administrativas, o maior especialista do Brasil em Direito Administrativo voltado a Licitações Públicas, com foco total na Nova Lei de Licitações (Lei 14.133/2021).
 
 SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrarrazões, etc.) com o mais alto rigor técnico-jurídico, clareza e poder de persuasão.
 
@@ -218,19 +218,22 @@ SUA MISSÃO É: Elaborar minutas de petições (Impugnações, Recursos, Contrar
 - Tom extremamente formal, técnico e respeitoso.
 - Argumentação lógica, estruturada em tópicos se necessário.
 - Evite "juridiquês" arcaico; prefira a clareza e a objetividade jurídica moderna.
-- Se o usuário fornecer um resumo dos fatos, incorpore-o de forma orgânica e profissional à peça.
+- Se o usuário fornecer um contexto ou resumo dos fatos, incorpore-o INTEGRALMENTE e de forma profissional à peça.
 - Se houver dados do processo (objeto, órgão, portal), use-os para personalizar a petição.
 
-RETORNE APENAS O TEXTO DA PETIÇÃO, sem comentários adicionais.
-`;
+RETORNE APENAS O TEXTO DA PETIÇÃO, sem comentários adicionais.`;
 
-export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta de {petitionType} para o processo licitatório abaixo:
+export const PETITION_USER_INSTRUCTION = `Elaborar uma minuta completa e detalhada de {petitionType} para o processo licitatório abaixo.
+
+=== REGRAS CRÍTICAS DE GERAÇÃO ===
+1. NÃO RESUMA NEM ABREVIE: Utilize o texto completo e detalhado. Todas as fundamentações e argumentos devem ser extensos e robustos. Não resuma o contexto dos fatos fornecido.
+2. OBJETO OBRIGATÓRIO: No preâmbulo ou cabeçalho, deve constar exatamente: "OBJETO: Contratação de serviços especializados (conforme edital)."
+3. DATA: Utilize a data de hoje: {currentDate}.
 
 DADOS DO PROCESSO:
-- Objeto: {object}
-- Órgão: {issuer}
+- Objeto (Título): {object}
+- Órgão/Portal: {issuer} / {portal}
 - Modalidade: {modality}
-- Portal: {portal}
 
 DADOS DA EMPRESA RECORRENTE:
 - Razão Social: {companyName}
@@ -240,5 +243,4 @@ DADOS DA EMPRESA RECORRENTE:
 CONTEXTO DOS FATOS E ARGUMENTOS (FORNECIDO PELO USUÁRIO):
 {userContext}
 
-Utilize todas as informações acima para criar uma peça robusta e personalizada, observando estritamente a Lei 14.133/2021 e a jurisprudência atual.
-`;
+Utilize todas as informações acima para criar uma peça robusta e personalizada, observando estritamente a Lei 14.133/2021 e a jurisprudência atual.`;

@@ -2364,6 +2364,7 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
             .replace('{companyName}', company.razaoSocial)
             .replace('{companyCnpj}', company.cnpj)
             .replace('{companyQualification}', company.qualification || 'Não informada')
+            .replace('{currentDate}', new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }))
             .replace('{userContext}', userContext);
 
         const result = await callGeminiWithRetry(ai.models, {

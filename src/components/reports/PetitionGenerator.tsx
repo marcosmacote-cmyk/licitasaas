@@ -65,7 +65,10 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     };
 
     const handleSaveCompanyTemplate = async () => {
-        if (!selectedCompanyId) return;
+        if (!selectedCompanyId) {
+            alert('Por favor, selecione uma empresa primeiro.');
+            return;
+        }
         setIsSavingTemplate(true);
         try {
             const res = await fetch(`${API_BASE_URL}/api/companies/${selectedCompanyId}/proposal-template`, {
@@ -77,7 +80,8 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                     footerHeight: footerImageHeight,
                 })
             });
-            if (res.ok) alert('Configurações salvas como padrão da empresa!');
+            if (res.ok) alert(`Configurações salvas como padrão para ${selectedCompany?.razaoSocial}!`);
+            else throw new Error('Falha ao salvar');
         } catch (e) {
             alert('Erro ao salvar template.');
         } finally {
@@ -289,10 +293,12 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                             <button
                                 onClick={handleSaveCompanyTemplate}
                                 disabled={isSavingTemplate || !selectedCompanyId}
-                                style={{ width: '100%', marginTop: '8px', fontSize: '0.75rem', padding: '8px', borderRadius: '8px' }}
+                                style={{ width: '100%', marginTop: '8px', fontSize: '0.72rem', padding: '8px', borderRadius: '8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                title={selectedCompany ? `Salvar como padrão para ${selectedCompany.razaoSocial}` : 'Selecione uma empresa'}
                                 className="btn btn-outline"
                             >
-                                {isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar como Padrão
+                                {isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+                                {selectedCompany ? ` Salvar Padrão p/ ${selectedCompany.razaoSocial.split(' ')[0]}` : ' Salvar como Padrão'}
                             </button>
                         </div>
                     )}
@@ -367,11 +373,20 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         </div>
                     </div>
 
-                    <div className="form-group">
-                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Fatos e Argumentos (IA usará como base)</label>
+                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0' }}>Fatos e Argumentos (IA usará como base)</label>
                         <textarea
                             className="form-control"
-                            style={{ minHeight: '140px', fontSize: '0.875rem', borderRadius: '12px', padding: '12px' }}
+                            style={{
+                                minHeight: '160px',
+                                fontSize: '0.875rem',
+                                borderRadius: '12px',
+                                padding: '16px',
+                                border: '1.5px solid var(--color-border)',
+                                lineHeight: '1.5',
+                                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
+                                resize: 'vertical'
+                            }}
                             placeholder="Descreva aqui os motivos do recurso, irregularidades encontradas ou fatos relevantes..."
                             value={factsSummary}
                             onChange={(e) => setFactsSummary(e.target.value)}
