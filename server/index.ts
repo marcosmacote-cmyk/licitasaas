@@ -2327,11 +2327,12 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
 // Petition Generation Endpoint
 app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => {
     try {
-        const { biddingProcessId, companyId, templateType, userContext } = req.body;
+        const { biddingProcessId, companyId, templateType, userContext, attachments } = req.body;
         const tenantId = req.user.tenantId;
 
-        console.log(`[Petition] Generating ${templateType} for process ${biddingProcessId} by company ${companyId}`);
+        console.log(`[Petition] Generating ${templateType} for process ${biddingProcessId} with ${attachments?.length || 0} attachments`);
 
+        // ... (rest of the fetching logic) ...
         const bidding = await prisma.biddingProcess.findUnique({
             where: { id: biddingProcessId, tenantId },
             include: { aiAnalysis: true }
@@ -2341,21 +2342,16 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
             where: { id: companyId, tenantId }
         });
 
-        if (!bidding) {
-            return res.status(404).json({ error: 'Processo licitatório não encontrado.' });
-        }
-
-        if (!company) {
-            return res.status(404).json({ error: 'Empresa litigante não encontrada.' });
+        if (!bidding || !company) {
+            return res.status(404).json({ error: 'Processo ou Empresa não encontrados.' });
         }
 
         const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
-        }
-        const ai = new GoogleGenAI({ apiKey });
+        if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
 
+        const ai = new GoogleGenAI({ apiKey });
         const aiAnalysis = bidding.aiAnalysis;
+
         let biddingAnalysisText = 'Nenhuma análise detalhada disponível.';
         if (aiAnalysis) {
             biddingAnalysisText = `
@@ -2375,7 +2371,6 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
         const repName = company.contactName || '[Nome do Representante]';
         const repCpf = company.contactCpf || '[CPF]';
 
-        // Limpeza simples para evitar duplicação de UF se o usuário cadastrou "Cidade/UF" no campo cidade
         let cleanCity = (company.city || '[Cidade]').split('/')[0].trim();
         const companyState = (company.state || '[UF]').toUpperCase().trim();
 
@@ -2388,8 +2383,6 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
             .replace(/{companyName}/g, company.razaoSocial)
             .replace(/{companyCnpj}/g, company.cnpj);
 
-
-        // Objeto: Prioriza o sumário (objeto real) ao título (que tem modalidade/número)
         const fullBiddingObject = bidding.summary || bidding.title;
 
         const userInstruction = PETITION_USER_INSTRUCTION
@@ -2409,12 +2402,28 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
             .replace(/{currentDate}/g, currentDateStr)
             .replace('{userContext}', userContext);
 
+        // Preparar partes para o Gemini (Texto + Arquivos PDF/Imagens)
+        const parts: any[] = [{ text: userInstruction }];
+
+        if (attachments && Array.isArray(attachments)) {
+            attachments.forEach((att: any) => {
+                if (att.data && att.mimeType) {
+                    parts.push({
+                        inlineData: {
+                            data: att.data,
+                            mimeType: att.mimeType
+                        }
+                    });
+                }
+            });
+        }
+
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.0-flash',
             contents: [
                 {
                     role: 'user',
-                    parts: [{ text: userInstruction }]
+                    parts: parts
                 }
             ],
             config: {

@@ -26,7 +26,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [petitionTypeId, setPetitionTypeId] = useState('recurso');
     const [factsSummary, setFactsSummary] = useState('');
-    const [attachments, setAttachments] = useState<{ name: string; content: string }[]>([]);
+    const [attachments, setAttachments] = useState<{ name: string; content: string; data?: string; mimeType?: string }[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedDraft, setGeneratedDraft] = useState('');
     const [isCopied, setIsCopied] = useState(false);
@@ -130,12 +130,21 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         for (const file of files) {
-            // Em um sistema real, extrairíamos o texto do PDF/DOCX aqui.
-            // Para este protótipo, vamos simular que o conteúdo foi extraído.
-            setAttachments(prev => [...prev, {
-                name: file.name,
-                content: `[Conteúdo extraído do documento ${file.name}]`
-            }]);
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                if (ev.target?.result) {
+                    const result = ev.target.result as string;
+                    const base64 = result.includes(',') ? result.split(',')[1] : '';
+
+                    setAttachments(prev => [...prev, {
+                        name: file.name,
+                        content: `[Arquivo anexado: ${file.name}]`,
+                        data: base64,
+                        mimeType: file.type
+                    }]);
+                }
+            };
+            reader.readAsDataURL(file);
         }
     };
 
@@ -153,26 +162,19 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
         setIsGenerating(true);
         try {
-            // Include attachments content in userContext if any
-            let enrichedContext = factsSummary;
-            if (attachments.length > 0) {
-                enrichedContext += '\n\nANEXOS/DOCUMENTOS PARA CORROBORAÇÃO:\n';
-                attachments.forEach(att => {
-                    enrichedContext += `--- Documento: ${att.name} ---\n${att.content}\n`;
-                });
-            }
-
             const response = await fetch(`${API_BASE_URL}/api/petitions/generate`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
+                headers,
                 body: JSON.stringify({
                     biddingProcessId: selectedBiddingId,
                     companyId: selectedCompanyId,
                     templateType: petitionTypeId,
-                    userContext: enrichedContext
+                    userContext: factsSummary,
+                    attachments: attachments.map(a => ({
+                        name: a.name,
+                        data: a.data,
+                        mimeType: a.mimeType
+                    }))
                 })
             });
 
