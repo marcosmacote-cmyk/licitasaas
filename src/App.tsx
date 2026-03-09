@@ -18,6 +18,7 @@ import { Dashboard } from './components/Dashboard';
 import { DocumentsPage } from './components/DocumentsPage';
 import { ReportsPage } from './components/ReportsPage';
 import { LoginPage } from './components/LoginPage';
+import { SettingsPage } from './components/SettingsPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -25,7 +26,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 function App() {
   const [user, setUser] = useState<any>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bidding' | 'documents' | 'reports' | 'pncp'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'bidding' | 'documents' | 'reports' | 'pncp' | 'settings'>('dashboard');
   const [items, setItems] = useState<BiddingProcess[]>([]);
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,7 +156,7 @@ function App() {
               <span>Relatórios</span>
             </a>
             <div style={{ flex: 1 }}></div>
-            <a href="#" className="nav-item">
+            <a href="#" className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('settings'); }}>
               <Settings size={20} />
               <span>Configurações</span>
             </a>
@@ -206,6 +207,7 @@ function App() {
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
           {activeTab === 'reports' && <ReportsPage biddings={items} companies={companies} onRefresh={refreshData} />}
           {activeTab === 'pncp' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
+          {activeTab === 'settings' && <SettingsPage />}
         </main>
       </div>
     </ErrorBoundary>

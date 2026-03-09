@@ -21,6 +21,8 @@ model Tenant {
   pncpSearches     PncpSavedSearch[]
   proposals        PriceProposal[]
   technicalCertificates TechnicalCertificate[]
+  chatMonitorConfig ChatMonitorConfig?
+  chatMonitorLogs    ChatMonitorLog[]
 }
 
 model User {
@@ -76,6 +78,7 @@ model BiddingProcess {
   estimatedValue   Float           @default(0.0)
   sessionDate      DateTime
   link             String?
+  isMonitored      Boolean         @default(false)
   observations     String?         @default("[]")
   reminderDate     DateTime?
   reminderStatus   String?         @default("pending")
@@ -255,4 +258,29 @@ model CertificateExperience {
   category               String? // Categoria técnica (ex: Obras, TI)
   
   certificate            TechnicalCertificate @relation(fields: [technicalCertificateId], references: [id], onDelete: Cascade)
+}
+
+model ChatMonitorConfig {
+  id               String   @id @default(uuid())
+  tenantId         String   @unique
+  keywords         String?  @default("suspensa,reaberta,vencedora")
+  phoneNumber      String?
+  telegramChatId   String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model ChatMonitorLog {
+  id               String   @id @default(uuid())
+  tenantId         String
+  biddingProcessId String
+  messageId        String?  // PNCP message ID if available
+  content          String
+  detectedKeyword  String?
+  sentTo           String?  // Phone or Telegram ID
+  status           String   @default("SENT") // SENT, FAILED
+  createdAt        DateTime @default(now())
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

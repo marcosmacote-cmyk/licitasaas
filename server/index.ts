@@ -2653,6 +2653,58 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+// Chat Monitor Configuration
+// ═══════════════════════════════════════════════════════════════════════
+app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => {
+    try {
+        const config = await prisma.chatMonitorConfig.findUnique({
+            where: { tenantId: req.user.tenantId }
+        });
+        res.json(config || { keywords: "suspensa,reaberta,vencedora", isActive: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch chat monitor config' });
+    }
+});
+
+app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) => {
+    try {
+        const { keywords, phoneNumber, telegramChatId, isActive } = req.body;
+        const config = await prisma.chatMonitorConfig.upsert({
+            where: { tenantId: req.user.tenantId },
+            create: {
+                tenantId: req.user.tenantId,
+                keywords,
+                phoneNumber,
+                telegramChatId,
+                isActive: isActive ?? true
+            },
+            update: {
+                keywords,
+                phoneNumber,
+                telegramChatId,
+                isActive: isActive ?? true
+            }
+        });
+        res.json(config);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to save chat monitor config' });
+    }
+});
+
+app.get('/api/chat-monitor/logs', authenticateToken, async (req: any, res) => {
+    try {
+        const logs = await prisma.chatMonitorLog.findMany({
+            where: { tenantId: req.user.tenantId },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch chat monitor logs' });
+    }
+});
+
 // ── Serve Frontend in Production ──
 if (process.env.NODE_ENV === 'production') {
     const publicDir = path.join(SERVER_ROOT, 'public');
