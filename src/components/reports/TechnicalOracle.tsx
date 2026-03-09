@@ -224,11 +224,25 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
 
     const groupedCertificates = useMemo(() => {
         const groups: Record<string, TechnicalCertificate[]> = {};
+        
+        // Grouping
         filteredCertificates.forEach(cert => {
             const companyName = cert.company?.razaoSocial || 'Empresa não vinculada';
             if (!groups[companyName]) groups[companyName] = [];
             groups[companyName].push(cert);
         });
+
+        // Sorting each group by category then title
+        Object.keys(groups).forEach(companyName => {
+            groups[companyName].sort((a, b) => {
+                const catA = a.category || '';
+                const catB = b.category || '';
+                if (catA < catB) return -1;
+                if (catA > catB) return 1;
+                return a.title.localeCompare(b.title);
+            });
+        });
+
         return groups;
     }, [filteredCertificates]);
 
