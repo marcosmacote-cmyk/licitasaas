@@ -1,5 +1,5 @@
 import { useDraggable } from '@dnd-kit/core';
-import { Calendar, DollarSign, Brain, Building2, Trash2, MessageSquare, Bell } from 'lucide-react';
+import { Calendar, DollarSign, Brain, Building2, Trash2, MessageSquare, Bell, Radio } from 'lucide-react';
 import { format } from 'date-fns';
 import type { BiddingProcess, CompanyProfile, ObservationLog } from '../types';
 
@@ -17,12 +17,13 @@ interface Props {
     onViewAnalysis?: () => void;
     onDoubleClick?: () => void;
     onDelete?: (id: string) => void;
+    onToggleMonitor?: (id: string) => void;
     cardFields?: CardFieldConfig[];
     compactMode?: boolean;
     highlightExpiring?: boolean;
 }
 
-export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, cardFields, compactMode, highlightExpiring }: Props) {
+export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, onToggleMonitor, cardFields, compactMode, highlightExpiring }: Props) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: item.id,
         data: item,
@@ -93,6 +94,22 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                             <MessageSquare size={14} />
                             <span>{observations.length}</span>
                         </div>
+                    )}
+                    {item.portal === 'PNCP' && (
+                        <button
+                            className="icon-btn"
+                            style={{ 
+                                padding: '4px', 
+                                cursor: 'pointer', 
+                                color: item.isMonitored ? 'var(--color-primary)' : 'var(--color-text-tertiary)', 
+                                background: item.isMonitored ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                                borderRadius: '50%'
+                            }}
+                            onClick={(e) => { e.stopPropagation(); onToggleMonitor?.(item.id); }}
+                            title={item.isMonitored ? "Monitoramento Ativo (Radar)" : "Ativar Monitor de Chat (Radar)"}
+                        >
+                            <Radio size={14} className={item.isMonitored ? "pulse-animation" : ""} />
+                        </button>
                     )}
                     {hasAnalysis && (
                         <button

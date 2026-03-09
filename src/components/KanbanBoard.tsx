@@ -35,6 +35,7 @@ interface Props {
     onViewAnalysis: (analysis: AiAnalysis, process: BiddingProcess) => void;
     onDeleteProcess: (id: string) => void;
     onStatusChange: (id: string, newStatus: BiddingStatus) => void;
+    onToggleMonitor?: (id: string) => void;
     cardFields?: CardFieldConfig[];
     visibleColumns?: string[];
     sortBy?: string;
@@ -42,7 +43,7 @@ interface Props {
     highlightExpiring?: boolean;
 }
 
-export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, cardFields, visibleColumns, sortBy, compactMode, highlightExpiring }: Props) {
+export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, onToggleMonitor, cardFields, visibleColumns, sortBy, compactMode, highlightExpiring }: Props) {
     const [activeItem, setActiveItem] = useState<BiddingProcess | null>(null);
 
     const sensors = useSensors(
@@ -130,6 +131,7 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
                             items={colItems}
                             onEditProcess={onEditProcess}
                             onDeleteProcess={onDeleteProcess}
+                            onToggleMonitor={onToggleMonitor}
                             analyses={analyses}
                             companies={companies}
                             onViewAnalysis={onViewAnalysis}
@@ -141,7 +143,7 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
                 })}
 
                 <DragOverlay>
-                    {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} cardFields={cardFields} compactMode={compactMode} highlightExpiring={highlightExpiring} /> : null}
+                    {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} onToggleMonitor={onToggleMonitor} cardFields={cardFields} compactMode={compactMode} highlightExpiring={highlightExpiring} /> : null}
                 </DragOverlay>
             </div>
         </DndContext>

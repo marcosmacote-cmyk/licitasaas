@@ -14,6 +14,7 @@ interface Props {
     companies: CompanyProfile[];
     onEditProcess: (process: BiddingProcess) => void;
     onDeleteProcess: (id: string) => void;
+    onToggleMonitor?: (id: string) => void;
     analyses: AiAnalysis[];
     onViewAnalysis: (analysis: AiAnalysis, process: BiddingProcess) => void;
     cardFields?: CardFieldConfig[];
@@ -21,7 +22,7 @@ interface Props {
     highlightExpiring?: boolean;
 }
 
-export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteProcess, analyses, onViewAnalysis, cardFields, compactMode, highlightExpiring }: Props) {
+export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteProcess, onToggleMonitor, analyses, onViewAnalysis, cardFields, compactMode, highlightExpiring }: Props) {
     const { isOver, setNodeRef } = useDroppable({
         id: title, // title acts as ID
     });
@@ -50,6 +51,7 @@ export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteP
                             hasAnalysis={!!analysis}
                             onViewAnalysis={analysis ? () => onViewAnalysis(analysis, item) : undefined}
                             onDelete={() => onDeleteProcess(item.id)}
+                            onToggleMonitor={onToggleMonitor}
                             cardFields={cardFields}
                             compactMode={compactMode}
                             highlightExpiring={highlightExpiring}

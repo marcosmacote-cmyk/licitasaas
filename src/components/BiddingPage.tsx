@@ -58,6 +58,7 @@ const INITIAL_CARD_FIELDS: CardFieldConfig[] = [
     { key: 'summary', label: 'Objeto Resumido', visible: false },
     { key: 'observations', label: 'Observações', visible: true },
     { key: 'reminder', label: 'Lembrete', visible: true },
+    { key: 'monitoring', label: 'Monitor de Chat (PNCP)', visible: true },
 ];
 
 export function BiddingPage({ items, setItems, companies }: Props) {
@@ -508,6 +509,30 @@ export function BiddingPage({ items, setItems, companies }: Props) {
             alert("Erro ao salvar a movimentação no servidor. Verifique sua conexão.");
             // Optional: Revert local state if needed
             refreshData();
+        });
+    };
+
+    const handleToggleMonitor = (id: string) => {
+        const item = items.find(p => p.id === id);
+        if (!item) return;
+
+        const newStatus = !item.isMonitored;
+        
+        // Update locally
+        setItems(prev => prev.map(p => p.id === id ? { ...p, isMonitored: newStatus } : p));
+
+        // Update in backend
+        fetch(`${API_BASE_URL}/api/biddings/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ isMonitored: newStatus })
+        }).catch(err => {
+            console.error("Failed to toggle monitor:", err);
+            // Revert locally if failed
+            setItems(prev => prev.map(p => p.id === id ? { ...p, isMonitored: !newStatus } : p));
         });
     };
 
@@ -1216,6 +1241,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                         if (process) setViewingProcessForAnalysis(process);
                     }}
                     onStatusChange={handleStatusChange}
+                    onToggleMonitor={handleToggleMonitor}
                     cardFields={cardFields}
                     visibleColumns={visibleColumns}
                     sortBy={sortBy}

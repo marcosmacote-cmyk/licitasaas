@@ -3,6 +3,7 @@ import { callGeminiWithRetry } from "./services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION } from "./services/ai/prompt.service";
 import { fallbackToOpenAi } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
+import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -2838,6 +2839,9 @@ app.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
     console.log(`Upload directory: ${uploadDir}`);
     await runAutoSetup();
+    
+    // Start Chat Monitor Polling
+    pncpMonitor.startPolling(5); // Run every 5 minutes
 });
 
 // Keep event loop alive (required in this environment)
