@@ -30,6 +30,7 @@ function App() {
   const [items, setItems] = useState<BiddingProcess[]>([]);
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastLogId, setLastLogId] = useState<string | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -92,7 +93,52 @@ function App() {
     if (!user) return;
     fetchCompanies();
     fetchBiddings();
-  }, [user]);
+
+    // Browser Notification Support
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
+    // Interval to check for Chat Monitor Logs (Sound Alert)
+    const checkChatLogs = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const logs = await res.json();
+          if (logs.length > 0) {
+            const latestLog = logs[0];
+            // If it's a new log and matches a keyword
+            if (lastLogId && latestLog.id !== lastLogId && latestLog.detectedKeyword) {
+              // Play Sound
+              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+              audio.play().catch(e => console.error("Audio play failed:", e));
+
+              // Browser Notification
+              if (Notification.permission === "granted") {
+                new Notification("Alerta de Chat PNCP", {
+                  body: `Palavra-chave "${latestLog.detectedKeyword}" detectada!`,
+                  icon: "https://pncp.gov.br/app/favicon.ico"
+                });
+              }
+            }
+            setLastLogId(latestLog.id);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch chat logs:", err);
+      }
+    };
+
+    const interval = setInterval(checkChatLogs, 30000); // Check every 30 seconds
+    checkChatLogs(); // Initial check
+
+    return () => clearInterval(interval);
+  }, [user, lastLogId]);
 
   const refreshData = async () => {
     await Promise.all([fetchCompanies(), fetchBiddings()]);
