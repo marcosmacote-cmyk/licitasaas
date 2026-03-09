@@ -39,6 +39,18 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
     const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+    const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+    const [selectedCategory, setSelectedCategory] = useState<string>('');
+
+    const PREDEFINED_CATEGORIES = [
+        "Obras e Serviços de Engenharia",
+        "Locação de Máquinas Pesadas",
+        "Locação de Veículos",
+        "Transporte Escolar",
+        "Serviços de Manutenção",
+        "Fornecimento de Materiais",
+        "Outros"
+    ];
 
     useEffect(() => {
         fetchCertificates();
@@ -76,6 +88,9 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
         formData.append('file', file);
         formData.append('title', file.name);
         formData.append('companyProfileId', selectedCompanyId);
+        if (selectedCategory) {
+            formData.append('category', selectedCategory);
+        }
 
         try {
             await axios.post(`${API_BASE_URL}/api/technical-certificates`, formData, getAuthHeaders());
@@ -174,6 +189,26 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
         biddings.filter(b => b.status === 'Preparando Documentação' && (b.aiAnalysis || b.summary))
         , [biddings]);
 
+    const groupedCertificates = useMemo(() => {
+        const groups: Record<string, TechnicalCertificate[]> = {};
+        filteredCertificates.forEach(cert => {
+            const companyName = cert.company?.razaoSocial || 'Empresa não vinculada';
+            if (!groups[companyName]) groups[companyName] = [];
+            groups[companyName].push(cert);
+        });
+        return groups;
+    }, [filteredCertificates]);
+
+    const toggleCompanyExpansion = (companyName: string) => {
+        const newExpanded = new Set(expandedCompanies);
+        if (newExpanded.has(companyName)) {
+            newExpanded.delete(companyName);
+        } else {
+            newExpanded.add(companyName);
+        }
+        setExpandedCompanies(newExpanded);
+    };
+
 
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px', height: 'calc(100vh - 250px)' }}>
@@ -190,16 +225,27 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                 </div>
 
                 <div style={{ marginBottom: '16px', background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px' }}>
-                    <div style={{ marginBottom: '12px' }}>
+                    <div style={{ marginBottom: '12px', display: 'flex', gap: '8px' }}>
                         <select
                             className="form-control"
-                            style={{ width: '100%', fontSize: '0.85rem' }}
+                            style={{ flex: 1, fontSize: '0.82rem' }}
                             value={selectedCompanyId}
                             onChange={(e) => setSelectedCompanyId(e.target.value)}
                         >
-                            <option value="">Selecione a empresa para upload...</option>
+                            <option value="">Empresa...</option>
                             {companies.map(c => (
                                 <option key={c.id} value={c.id}>{c.razaoSocial}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="form-control"
+                            style={{ flex: 1, fontSize: '0.82rem' }}
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                        >
+                            <option value="">Categoria...</option>
+                            {PREDEFINED_CATEGORIES.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
                             ))}
                         </select>
                     </div>
@@ -237,67 +283,113 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px' }}>
                     {isLoading ? (
                         <div style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-tertiary)' }}>Carregando...</div>
-                    ) : filteredCertificates.length === 0 ? (
+                    ) : Object.keys(groupedCertificates).length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-tertiary)', fontSize: '0.9rem' }}>
                             Nenhum atestado encontrado.
                         </div>
                     ) : (
-                        filteredCertificates.map(cert => (
-                            <div
-                                key={cert.id}
-                                onClick={() => setViewingCert(cert)}
-                                style={{
-                                    padding: '12px',
-                                    borderRadius: '8px',
-                                    border: `1px solid ${viewingCert?.id === cert.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                                    background: viewingCert?.id === cert.id ? 'rgba(37, 99, 235, 0.05)' : 'white',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    position: 'relative',
-                                    boxShadow: selectedCertIds.has(cert.id) ? '0 0 0 2px var(--color-primary)' : 'none'
-                                }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedCertIds.has(cert.id)}
-                                            onChange={() => { }} // Controlled via onClick handle
-                                            onClick={(e) => toggleCertSelection(cert.id, e)}
-                                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                                        />
-                                        <span style={{
-                                            fontSize: '0.65rem',
-                                            background: 'var(--color-bg-secondary)',
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
-                                            fontWeight: 700,
-                                            color: 'var(--color-text-secondary)',
-                                            textTransform: 'uppercase'
-                                        }}>
-                                            {cert.type}
-                                        </span>
+                        Object.entries(groupedCertificates).map(([companyName, certs]) => (
+                            <div key={companyName} style={{ marginBottom: '4px' }}>
+                                <div
+                                    onClick={() => toggleCompanyExpansion(companyName)}
+                                    style={{
+                                        padding: '10px 12px',
+                                        background: 'var(--color-bg-secondary)',
+                                        borderRadius: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        cursor: 'pointer',
+                                        fontWeight: 600,
+                                        fontSize: '0.85rem',
+                                        color: 'var(--color-text-primary)',
+                                        border: '1px solid var(--color-border)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    <Building2 size={16} color="var(--color-primary)" />
+                                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{companyName}</span>
+                                    <span style={{ fontSize: '0.7rem', background: 'var(--color-border)', padding: '2px 6px', borderRadius: '10px', minWidth: '20px', textAlign: 'center' }}>
+                                        {certs.length}
+                                    </span>
+                                    <ChevronRight
+                                        size={16}
+                                        style={{
+                                            transform: expandedCompanies.has(companyName) ? 'rotate(90deg)' : 'none',
+                                            transition: 'transform 0.2s ease',
+                                            opacity: 0.5
+                                        }}
+                                    />
+                                </div>
+
+                                {expandedCompanies.has(companyName) && (
+                                    <div style={{ padding: '8px 0 8px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {certs.map(cert => (
+                                            <div
+                                                key={cert.id}
+                                                onClick={() => setViewingCert(cert)}
+                                                style={{
+                                                    padding: '12px',
+                                                    borderRadius: '8px',
+                                                    border: `1px solid ${viewingCert?.id === cert.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                                                    background: viewingCert?.id === cert.id ? 'rgba(37, 99, 235, 0.05)' : 'white',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s ease',
+                                                    position: 'relative',
+                                                    boxShadow: selectedCertIds.has(cert.id) ? '0 0 0 2px var(--color-primary)' : 'none'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedCertIds.has(cert.id)}
+                                                            onChange={() => { }} // Controlled via onClick handle
+                                                            onClick={(e) => toggleCertSelection(cert.id, e)}
+                                                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                                        />
+                                                        <span style={{
+                                                            fontSize: '0.65rem',
+                                                            background: 'var(--color-bg-secondary)',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '4px',
+                                                            fontWeight: 700,
+                                                            color: 'var(--color-text-secondary)',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            {cert.type}
+                                                        </span>
+                                                        {cert.category && (
+                                                            <span style={{
+                                                                fontSize: '0.65rem',
+                                                                background: '#eff6ff',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                fontWeight: 700,
+                                                                color: 'var(--color-primary)',
+                                                                border: '1px solid #dbeafe'
+                                                            }}>
+                                                                {cert.category}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDeleteCert(cert.id); }}
+                                                        style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '2px' }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                                <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                                    {cert.title}
+                                                </h4>
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '0.7rem', color: 'var(--color-text-tertiary)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {cert.issuer}
+                                                </p>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleDeleteCert(cert.id); }}
-                                        style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '2px' }}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                                <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    {cert.title}
-                                    <ChevronRight size={14} style={{ opacity: 0.3 }} />
-                                </h4>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
-                                    <Building2 size={11} color="var(--color-text-tertiary)" />
-                                    <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>
-                                        {cert.company?.razaoSocial || 'Empresa não vinculada'}
-                                    </p>
-                                </div>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '0.7rem', color: 'var(--color-text-tertiary)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {cert.issuer}
-                                </p>
+                                )}
                             </div>
                         ))
                     )}
@@ -448,6 +540,11 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                                     <span style={{ fontSize: '0.7rem', background: 'var(--color-primary)', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>{viewingCert.type}</span>
+                                    {viewingCert.category && (
+                                        <span style={{ fontSize: '0.7rem', background: '#eff6ff', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, border: '1px solid #dbeafe' }}>
+                                            {viewingCert.category}
+                                        </span>
+                                    )}
                                     <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{viewingCert.title}</h2>
                                 </div>
                                 <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.9rem', fontWeight: 500 }}>

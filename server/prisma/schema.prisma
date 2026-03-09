@@ -236,7 +236,8 @@ model TechnicalCertificate {
   object           String?  @db.Text
   executingCompany String?  // Empresa contratada
   technicalResponsible String? // RT do atestado
-  extractedData    Json?    // AI extraction meta
+  category             String?  // Categoria do acervo (ex: Obras, Locação)
+  extractedData        Json?    // AI extraction meta
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

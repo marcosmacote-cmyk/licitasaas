@@ -421,9 +421,9 @@ app.get('/api/technical-certificates', authenticateToken, async (req: any, res) 
     }
 });
 
-app.post('/api/technical-certificates', authenticateToken, upload.single('file'), async (req: any, res) => {
+app.post('/api/technical-certificates', authenticateToken, upload.single('file'), async (req: any, res: any) => {
     try {
-        const { companyProfileId, title, type } = req.body;
+        const { companyProfileId, title, type, category } = req.body;
         if (!req.file) return res.status(400).json({ error: 'File is required' });
 
         const { url: fileUrl } = await storageService.uploadFile(req.file, req.user.tenantId);
@@ -459,6 +459,7 @@ app.post('/api/technical-certificates', authenticateToken, upload.single('file')
                 companyProfileId: companyProfileId || null,
                 title: title || extracted.title || req.file.originalname,
                 type: type || extracted.type || 'Atestado',
+                category: category || extracted.category || null,
                 fileUrl,
                 fileName: req.file.originalname,
                 issuer: extracted.issuer || null,

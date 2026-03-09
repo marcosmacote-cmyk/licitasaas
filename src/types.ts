@@ -196,6 +196,7 @@ export interface TechnicalCertificate {
     companyProfileId?: string;
     title: string;
     type: string; // 'Atestado' | 'CAT' | 'Acervo'
+    category?: string;
     fileUrl: string;
     fileName: string;
     issuer?: string;
