@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { ExternalLink, Edit2, Brain, Building2 } from 'lucide-react';
+import { ExternalLink, Edit2, Brain, Building2, Radio } from 'lucide-react';
 import type { BiddingProcess, AiAnalysis, CompanyProfile } from '../types';
 
 interface Props {
@@ -8,9 +8,10 @@ interface Props {
     onEditProcess: (process: BiddingProcess) => void;
     analyses: AiAnalysis[];
     onViewAnalysis: (analysis: AiAnalysis, process: BiddingProcess) => void;
+    onToggleMonitor?: (id: string) => void;
 }
 
-export function BiddingTable({ items, companies, onEditProcess, analyses, onViewAnalysis }: Props) {
+export function BiddingTable({ items, companies, onEditProcess, analyses, onViewAnalysis, onToggleMonitor }: Props) {
     const renderDate = (dateStr?: string) => {
         if (!dateStr) return 'Sem data';
         const d = new Date(dateStr);
@@ -85,6 +86,20 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                                         title="Ver Relatório da IA"
                                                     >
                                                         <Brain size={16} />
+                                                    </button>
+                                                )}
+                                                 {item.portal === 'PNCP' && (
+                                                    <button
+                                                        className="icon-btn"
+                                                        style={{ 
+                                                            color: item.isMonitored ? 'var(--color-primary)' : 'var(--color-text-tertiary)', 
+                                                            background: item.isMonitored ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                                                            borderRadius: '50%'
+                                                        }}
+                                                        onClick={() => onToggleMonitor?.(item.id)}
+                                                        title={item.isMonitored ? "Monitoramento Ativo (Radar)" : "Ativar Monitor de Chat (Radar)"}
+                                                    >
+                                                        <Radio size={16} className={item.isMonitored ? "pulse-animation" : ""} />
                                                     </button>
                                                 )}
                                                 {item.link && (

@@ -1257,6 +1257,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     onViewAnalysis={(_analysis, process) => {
                         if (process) setViewingProcessForAnalysis(process);
                     }}
+                    onToggleMonitor={handleToggleMonitor}
                 />
             )}
 

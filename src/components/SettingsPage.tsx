@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info } from 'lucide-react';
+import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info, History, ExternalLink, Calendar } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export function SettingsPage() {
@@ -11,6 +11,7 @@ export function SettingsPage() {
         telegramChatId: '',
         isActive: true
     });
+    const [logs, setLogs] = useState<any[]>([]);
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -34,7 +35,23 @@ export function SettingsPage() {
                 setLoading(false);
             }
         };
+        const fetchLogs = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setLogs(data);
+                }
+            } catch (e) {
+                console.error("Failed to fetch logs", e);
+            }
+        };
+
         fetchConfig();
+        fetchLogs();
     }, []);
 
     const handleSave = async () => {
@@ -187,6 +204,68 @@ export function SettingsPage() {
                                 Salvar Configurações
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                {/* Monitoring Logs Card */}
+                <div className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                    <div style={{ padding: '20px 24px', background: 'var(--color-bg-surface-hover)', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <History size={20} color="var(--color-primary)" />
+                            <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--color-text-primary)' }}>Histórico de Alertas (Radar)</h2>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>Últimos 50 alertas</span>
+                    </div>
+
+                    <div style={{ padding: '0', maxHeight: '400px', overflowY: 'auto' }}>
+                        {logs.length === 0 ? (
+                            <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                                <Info size={32} style={{ marginBottom: '12px', opacity: 0.3 }} />
+                                <p>Nenhum alerta detectado pelo radar ainda.</p>
+                            </div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                <thead style={{ background: 'var(--color-bg-base)', position: 'sticky', top: 0, zIndex: 1, borderBottom: '1px solid var(--color-border)' }}>
+                                    <tr>
+                                        <th style={{ textAlign: 'left', padding: '12px 24px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Data/Hora</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Citação (Bot)</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Palavra</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Processo</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 24px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Link</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {logs.map((log) => (
+                                        <tr key={log.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            <td style={{ padding: '16px 24px', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <Calendar size={14} />
+                                                    {new Date(log.createdAt).toLocaleString('pt-BR')}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '16px 16px', maxWidth: '300px' }}>
+                                                <div style={{ fontStyle: 'italic', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                                    "{log.content}"
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '16px 16px' }}>
+                                                <span className="badge badge-red" style={{ fontSize: '0.7rem' }}>{log.detectedKeyword}</span>
+                                            </td>
+                                            <td style={{ padding: '16px 16px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                                                {log.biddingProcess?.title || 'Processo não encontrado'}
+                                            </td>
+                                            <td style={{ padding: '16px 24px', textAlign: 'center' }}>
+                                                {log.biddingProcess?.link && (
+                                                    <a href={log.biddingProcess.link} target="_blank" rel="noopener noreferrer" className="icon-btn" title="Ir para o Processo">
+                                                        <ExternalLink size={16} color="var(--color-primary)" />
+                                                    </a>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
                 </div>
 

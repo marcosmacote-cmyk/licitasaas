@@ -31,6 +31,7 @@ function App() {
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastLogId, setLastLogId] = useState<string | null>(null);
+  const [alertCount, setAlertCount] = useState(0);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -114,6 +115,7 @@ function App() {
             const latestLog = logs[0];
             // If it's a new log and matches a keyword
             if (lastLogId && latestLog.id !== lastLogId && latestLog.detectedKeyword) {
+              setAlertCount(prev => prev + 1);
               // Play Sound
               const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
               audio.play().catch(e => console.error("Audio play failed:", e));
@@ -202,8 +204,11 @@ function App() {
               <span>Relatórios</span>
             </a>
             <div style={{ flex: 1 }}></div>
-            <a href="#" className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('settings'); }}>
-              <Settings size={20} />
+            <a href="#" className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('settings'); setAlertCount(0); }}>
+              <div style={{ position: 'relative' }}>
+                <Settings size={20} />
+                {alertCount > 0 && <span className="badge badge-red" style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '0.6rem', padding: '2px 5px', minWidth: '15px' }}>{alertCount}</span>}
+              </div>
               <span>Configurações</span>
             </a>
           </nav>
