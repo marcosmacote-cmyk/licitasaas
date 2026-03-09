@@ -136,12 +136,13 @@ REGRAS CRÍTICAS:
 2. Transcreva o 'object' (objeto do atestado) NA ÍNTEGRA.
 3. Se for uma CAT, extraia o número da CAT e o órgão emissor (CREA/CAU).
 4. Extraia CADA item de experiência/serviço mencionado, com sua respectiva quantidade e unidade (ex: "Escavação de terra - 5.000 m3").
-5. Classifique o serviço em uma categoria técnica (ex: Obras Civis, Pavimentação, TI, Logística).
+5. Classifique o documento em uma das seguintes CATEGORIAS GERAIS, se possível: "Obras e Serviços de Engenharia", "Locação de Máquinas Pesadas", "Locação de Veículos", "Transporte Escolar", "Serviços de Manutenção", "Fornecimento de Materiais". Caso não se encaixe, sugira uma categoria curta e precisa.
 
 FORMATO DE SAÍDA JSON:
 {
   "title": "Breve identificação do documento (Ex: Atestado nº 123 - Prefeitura de X)",
   "type": "Atestado" | "CAT" | "Acervo",
+  "category": "Uma das categorias citadas ou sugestão própria",
   "issuer": "Nome do Contratante/Emissor",
   "issueDate": "YYYY-MM-DD",
   "object": "Transcrição íntegra do objeto",
