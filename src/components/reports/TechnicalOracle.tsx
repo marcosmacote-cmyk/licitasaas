@@ -42,15 +42,48 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
     const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
     const [selectedCategory, setSelectedCategory] = useState<string>('');
 
-    const PREDEFINED_CATEGORIES = [
-        "Obras e Serviços de Engenharia",
-        "Locação de Máquinas Pesadas",
-        "Locação de Veículos",
-        "Transporte Escolar",
-        "Serviços de Manutenção",
-        "Fornecimento de Materiais",
-        "Outros"
-    ];
+    const CATEGORIES_HIERARCHY = {
+        "Infraestrutura, Urbanismo e Manutenção": [
+            "Obras e Serviços de Engenharia",
+            "Manutenção Predial (Elétrica, Hidráulica e Civil)",
+            "Serviços de Iluminação Pública",
+            "Manutenção e Conservação de Estradas e Rodovias",
+            "Sinalização Viária (Vertical, Horizontal e Semafórica)",
+            "Manutenção de Ar-Condicionado e Sistemas de Refrigeração",
+            "Serviços de Jardinagem e Manutenção de Áreas Verdes"
+        ],
+        "Saúde e Bem-Estar": [
+            "Medicamentos e Insumos Hospitalares",
+            "Serviços Médicos Especializados e Credenciamentos",
+            "Equipamentos e Mobiliário Médico-Hospitalar",
+            "Oxigênio Hospitalar e Gases Medicinais",
+            "Locação de Equipamentos Médicos e Ambulâncias",
+            "Próteses, Órteses e Materiais Especiais (OPME)",
+            "Serviços de Laboratório e Análises Clínicas"
+        ],
+        "Educação e Desenvolvimento Social": [
+            "Gêneros Alimentícios e Merenda Escolar",
+            "Materiais Pedagógicos e de Escritório",
+            "Mobiliário Escolar",
+            "Transporte Escolar (Locação de Ônibus e Vans)",
+            "Uniformes e Vestuário Profissional",
+            "Brinquedos e Equipamentos de Playground"
+        ],
+        "Tecnologia, Administrativo e Segurança": [
+            "Serviços de TI, Software e Licenciamentos",
+            "Vigilância e Segurança Patrimonial",
+            "Serviços de Limpeza, Conservação e Higienização",
+            "Locação de Veículos e Máquinas Pesadas",
+            "Serviços de Impressão e Outsourcing de Impressoras",
+            "Consultoria e Assessoria Jurídica ou Contábil",
+            "Monitoramento Eletrônico e Câmeras de Segurança"
+        ],
+        "Logística e Operacional": [
+            "Combustíveis e Lubrificantes para Frotas Oficiais",
+            "Gestão, Coleta e Destinação de Resíduos Sólidos",
+            "Peças de Reposição para Veículos e Máquinas"
+        ]
+    };
 
     useEffect(() => {
         fetchCertificates();
@@ -224,35 +257,55 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                     </p>
                 </div>
 
-                <div style={{ marginBottom: '16px', background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px' }}>
-                    <div style={{ marginBottom: '12px', display: 'flex', gap: '8px' }}>
-                        <select
-                            className="form-control"
-                            style={{ flex: 1, fontSize: '0.82rem' }}
-                            value={selectedCompanyId}
-                            onChange={(e) => setSelectedCompanyId(e.target.value)}
-                        >
-                            <option value="">Empresa...</option>
-                            {companies.map(c => (
-                                <option key={c.id} value={c.id}>{c.razaoSocial}</option>
-                            ))}
-                        </select>
-                        <select
-                            className="form-control"
-                            style={{ flex: 1, fontSize: '0.82rem' }}
-                            value={selectedCategory}
-                            onChange={(e) => setSelectedCategory(e.target.value)}
-                        >
-                            <option value="">Categoria...</option>
-                            {PREDEFINED_CATEGORIES.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
+                <div style={{ marginBottom: '20px', background: 'var(--color-bg-secondary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.05em' }}>
+                            Vincular à Empresa
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                            <Building2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
+                            <select
+                                className="form-control"
+                                style={{ width: '100%', paddingLeft: '36px', fontSize: '0.85rem', height: '42px' }}
+                                value={selectedCompanyId}
+                                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                            >
+                                <option value="">Selecione a empresa...</option>
+                                {companies.map(c => (
+                                    <option key={c.id} value={c.id}>{c.razaoSocial}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
-                    <label className="btn btn-primary w-full" style={{ justifyContent: 'center', opacity: (isUploading || !selectedCompanyId) ? 0.7 : 1, cursor: (isUploading || !selectedCompanyId) ? 'not-allowed' : 'pointer' }}>
-                        {isUploading ? 'Processando IA...' : 'Adicionar Novo Acervo'}
-                        <Upload size={16} />
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.05em' }}>
+                            Categoria do Acervo
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                            <Layers size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
+                            <select
+                                className="form-control"
+                                style={{ width: '100%', paddingLeft: '36px', fontSize: '0.85rem', height: '42px' }}
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                            >
+                                <option value="">Selecione uma categoria...</option>
+                                {Object.entries(CATEGORIES_HIERARCHY).map(([group, cats]) => (
+                                    <optgroup key={group} label={group}>
+                                        {cats.map(cat => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                                <option value="Outros">Outros</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <label className="btn btn-primary w-full" style={{ justifyContent: 'center', height: '42px', opacity: (isUploading || !selectedCompanyId) ? 0.7 : 1, cursor: (isUploading || !selectedCompanyId) ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                        {isUploading ? 'Processando IA...' : 'Enviar Novo Atestado'}
+                        <Upload size={18} />
                         <input
                             type="file"
                             hidden
@@ -262,22 +315,28 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         />
                     </label>
                     {uploadError && (
-                        <div style={{ color: 'var(--color-danger)', fontSize: '0.8rem', marginTop: '8px', padding: '8px', border: '1px solid currentColor', borderRadius: '4px' }}>
+                        <div style={{ color: 'var(--color-danger)', fontSize: '0.8rem', marginTop: '10px', padding: '10px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <AlertTriangle size={14} />
                             {uploadError}
                         </div>
                     )}
                 </div>
 
-                <div className="input-group" style={{ marginBottom: '16px' }}>
-                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-                    <input
-                        type="text"
-                        placeholder="Buscar por objeto, empresa ou emissor..."
-                        className="form-control"
-                        style={{ paddingLeft: '40px' }}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.05em' }}>
+                        Busca por Objeto
+                    </label>
+                    <div className="input-group" style={{ position: 'relative' }}>
+                        <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
+                        <input
+                            type="text"
+                            placeholder="Descreva o que procura no acervo..."
+                            className="form-control"
+                            style={{ paddingLeft: '40px', height: '42px', fontSize: '0.85rem', width: '100%' }}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px' }}>

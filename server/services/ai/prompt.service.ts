@@ -136,7 +136,7 @@ REGRAS CRÍTICAS:
 2. Transcreva o 'object' (objeto do atestado) NA ÍNTEGRA.
 3. Se for uma CAT, extraia o número da CAT e o órgão emissor (CREA/CAU).
 4. Extraia CADA item de experiência/serviço mencionado, com sua respectiva quantidade e unidade (ex: "Escavação de terra - 5.000 m3").
-5. Classifique o documento em uma das seguintes CATEGORIAS GERAIS, se possível: "Obras e Serviços de Engenharia", "Locação de Máquinas Pesadas", "Locação de Veículos", "Transporte Escolar", "Serviços de Manutenção", "Fornecimento de Materiais". Caso não se encaixe, sugira uma categoria curta e precisa.
+5. Classifique o documento em uma das seguintes CATEGORIAS GERAIS: "Obras e Serviços de Engenharia", "Manutenção Predial (Elétrica, Hidráulica e Civil)", "Serviços de Iluminação Pública", "Manutenção e Conservação de Estradas e Rodovias", "Sinalização Viária", "Manutenção de Ar-Condicionado", "Serviços de Jardinagem", "Medicamentos e Insumos Hospitalares", "Serviços Médicos", "Equipamentos Médicos", "Oxigênio Hospitalar", "Locação de Ambulâncias", "OPME", "Serviços de Laboratório", "Gêneros Alimentícios", "Materiais Pedagógicos", "Mobiliário Escolar", "Transporte Escolar", "Uniformes e Vestuário", "Playground", "TI e Software", "Vigilância", "Limpeza e Conservação", "Locação de Veículos e Máquinas", "Impressão e Outsourcing", "Consultoria Jurídica/Contábil", "Monitoramento Eletrônico", "Combustíveis", "Gestão de Resíduos", "Peças de Reposição". Caso não se encaixe, sugira uma curta.
 
 FORMATO DE SAÍDA JSON:
 {
