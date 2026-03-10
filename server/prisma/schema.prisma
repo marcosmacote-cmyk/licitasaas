@@ -78,6 +78,10 @@ model BiddingProcess {
   estimatedValue   Float           @default(0.0)
   sessionDate      DateTime
   link             String?
+  uasg             String?         // UASG do órgão (ex: "943001") — para ComprasNet
+  modalityCode     String?         // Código da modalidade (ex: "5" = Pregão Eletrônico)
+  processNumber    String?         // Número do processo (ex: "91398")
+  processYear      String?         // Ano do processo (ex: "2025")
   isMonitored      Boolean         @default(false)
   observations     String?         @default("[]")
   reminderDate     DateTime?
@@ -277,11 +281,16 @@ model ChatMonitorLog {
   id               String   @id @default(uuid())
   tenantId         String
   biddingProcessId String
-  messageId        String?  // PNCP message ID if available
-  content          String
+  messageId        String?  // UUID da mensagem (chaveMensagemNaOrigem)
+  content          String   @db.Text
   detectedKeyword  String?
   sentTo           String?  // Phone or Telegram ID
-  status           String   @default("SENT") // SENT, FAILED
+  status           String   @default("SENT") // SENT, FAILED, PENDING_NOTIFICATION, SKIPPED, NO_CHANNEL
+  authorType       String?  // "sistema", "pregoeiro", "fornecedor"
+  authorCnpj       String?  // CNPJ do remetente
+  eventCategory    String?  // Código de categoria ("8"=convocação, "9"=comunicado, etc.)
+  itemRef          String?  // Item da disputa ("2", "3", etc.)
+  captureSource    String?  @default("pncp-status") // "comprasnet-xhr" ou "pncp-status"
   createdAt        DateTime @default(now())
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   biddingProcess   BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
