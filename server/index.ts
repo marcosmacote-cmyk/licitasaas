@@ -2707,6 +2707,44 @@ app.get('/api/chat-monitor/logs', authenticateToken, async (req: any, res) => {
     }
 });
 
+// Test Notification Endpoint
+app.post('/api/chat-monitor/test', authenticateToken, async (req: any, res) => {
+    try {
+        const { NotificationService } = await import('./services/monitoring/notification.service');
+        const result = await NotificationService.sendTestNotification(req.user.tenantId);
+        res.json({
+            success: true,
+            results: result,
+            message: result.telegram === null && result.whatsapp === null
+                ? 'Nenhum canal configurado. Insira um Telegram Chat ID ou WhatsApp.'
+                : 'Teste de notificação enviado! Verifique seus canais.'
+        });
+    } catch (error: any) {
+        console.error('[ChatMonitor] Test notification error:', error.message);
+        res.status(500).json({ error: 'Falha ao enviar teste de notificação.' });
+    }
+});
+
+// Monitor Health Status Endpoint
+app.get('/api/chat-monitor/health', authenticateToken, async (req: any, res) => {
+    try {
+        const health = pncpMonitor.getHealthStatus();
+        const monitoredCount = await prisma.biddingProcess.count({
+            where: { isMonitored: true, tenantId: req.user.tenantId }
+        });
+        const totalAlerts = await prisma.chatMonitorLog.count({
+            where: { tenantId: req.user.tenantId }
+        });
+        res.json({
+            ...health,
+            monitoredProcesses: monitoredCount,
+            totalAlerts
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get monitor health' });
+    }
+});
+
 // ── Serve Frontend in Production ──
 if (process.env.NODE_ENV === 'production') {
     const publicDir = path.join(SERVER_ROOT, 'public');

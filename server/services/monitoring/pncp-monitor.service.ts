@@ -2,8 +2,40 @@ import { prisma } from '../../lib/prisma';
 import axios from 'axios';
 import { NotificationService } from './notification.service';
 
+// ── Helpers ──
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Faz uma requisição HTTP GET com retry e backoff exponencial.
+ * Tenta até `maxRetries` vezes, dobrando o tempo de espera a cada falha.
+ */
+async function fetchWithRetry(url: string, maxRetries = 3, initialDelayMs = 1000): Promise<any> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await axios.get(url, { timeout: 15000 });
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      const isRetryable = !error.response || error.response.status >= 500 || error.code === 'ECONNABORTED';
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+      const delay = initialDelayMs * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+      console.warn(`[PncpMonitor] ⚠️ Tentativa ${attempt}/${maxRetries} falhou (${error.message}). Retentando em ${delay}ms...`);
+      await sleep(delay);
+    }
+  }
+  throw lastError;
+}
+
+// ── Service ──
 export class PncpMonitorService {
   private isProcessing = false;
+  private lastPollTime: Date | null = null;
+  private lastPollStatus: 'success' | 'error' | null = null;
+  private processedCount = 0;
+  private alertsDetected = 0;
 
   constructor() {
     console.log('[PncpMonitor] Service initialized.');
@@ -16,9 +48,21 @@ export class PncpMonitorService {
     this.pollMonitoredProcesses();
   }
 
+  /** Retorna status de saúde do monitor (usado pela API) */
+  getHealthStatus() {
+    return {
+      isProcessing: this.isProcessing,
+      lastPollTime: this.lastPollTime?.toISOString() || null,
+      lastPollStatus: this.lastPollStatus,
+      processedCount: this.processedCount,
+      alertsDetected: this.alertsDetected,
+    };
+  }
+
   private async pollMonitoredProcesses() {
     if (this.isProcessing) return;
     this.isProcessing = true;
+    this.alertsDetected = 0;
 
     try {
       console.log('[PncpMonitor] Polling started...');
@@ -28,6 +72,7 @@ export class PncpMonitorService {
         where: { isMonitored: true }
       });
 
+      this.processedCount = monitoredProcesses.length;
       console.log(`[PncpMonitor] Found ${monitoredProcesses.length} monitored processes.`);
 
       for (const process of monitoredProcesses) {
@@ -37,11 +82,14 @@ export class PncpMonitorService {
       // After checking messages, process any pending notifications
       await NotificationService.processPendingNotifications();
 
+      this.lastPollStatus = 'success';
     } catch (error) {
       console.error('[PncpMonitor] Polling error:', error);
+      this.lastPollStatus = 'error';
     } finally {
       this.isProcessing = false;
-      console.log('[PncpMonitor] Polling cycle finished.');
+      this.lastPollTime = new Date();
+      console.log(`[PncpMonitor] Polling cycle finished. Alerts: ${this.alertsDetected}`);
     }
   }
 
@@ -54,12 +102,36 @@ export class PncpMonitorService {
       }
 
       const [_, cnpj, ano, sequencial] = pncpMatch;
-      const apiUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/mensagens?pagina=1&tamanhoPagina=100`;
-
-      const response = await axios.get(apiUrl, { timeout: 10000 });
-      const messages = (response.data as any)?.data || [];
       
-      if (messages.length === 0) return;
+      // Fetch messages with retry and backoff
+      const allMessages: any[] = [];
+      let page = 1;
+      const pageSize = 100;
+      let hasMore = true;
+
+      while (hasMore) {
+        const apiUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/mensagens?pagina=${page}&tamanhoPagina=${pageSize}`;
+        
+        try {
+          const response = await fetchWithRetry(apiUrl);
+          const pageData = (response.data as any)?.data || [];
+          
+          if (pageData.length === 0) {
+            hasMore = false;
+          } else {
+            allMessages.push(...pageData);
+            // Only paginate if we got a full page (there might be more)
+            hasMore = pageData.length === pageSize && page < 5; // Max 5 pages (500 msgs) safety limit
+            page++;
+          }
+        } catch (fetchErr: any) {
+          // After all retries failed, log and move on to next process
+          console.error(`[PncpMonitor] ❌ API PNCP indisponível para processo ${process.title} após 3 tentativas: ${fetchErr.message}`);
+          return;
+        }
+      }
+      
+      if (allMessages.length === 0) return;
 
       const config = await prisma.chatMonitorConfig.findUnique({
         where: { tenantId: process.tenantId }
@@ -76,7 +148,7 @@ export class PncpMonitorService {
       });
       const loggedMessageIds = new Set(existingLogs.map(l => l.messageId));
       
-      for (const msg of messages) {
+      for (const msg of allMessages) {
         const msgId = String(msg.id || msg.numero);
         const content = msg.conteudo?.toLowerCase() || '';
 
@@ -86,6 +158,7 @@ export class PncpMonitorService {
 
         if (detectedKeyword) {
           console.log(`[PncpMonitor] 🚨 KEYWORD DETECTED! "${detectedKeyword}" in process ${process.title}`);
+          this.alertsDetected++;
           
           await prisma.chatMonitorLog.create({
             data: {

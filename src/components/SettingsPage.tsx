@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info, History, ExternalLink, Calendar } from 'lucide-react';
+import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info, History, ExternalLink, Calendar, Zap, Activity, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export function SettingsPage() {
@@ -12,6 +12,8 @@ export function SettingsPage() {
         isActive: true
     });
     const [logs, setLogs] = useState<any[]>([]);
+    const [testing, setTesting] = useState(false);
+    const [health, setHealth] = useState<any>(null);
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -50,8 +52,24 @@ export function SettingsPage() {
             }
         };
 
+        const fetchHealth = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE_URL}/api/chat-monitor/health`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setHealth(data);
+                }
+            } catch (e) {
+                console.error("Failed to fetch health", e);
+            }
+        };
+
         fetchConfig();
         fetchLogs();
+        fetchHealth();
     }, []);
 
     const handleSave = async () => {
@@ -76,6 +94,35 @@ export function SettingsPage() {
             alert("Falha ao salvar configurações.");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleTestNotification = async () => {
+        setTesting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/chat-monitor/test`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                const parts = [];
+                if (data.results.telegram === true) parts.push('✅ Telegram OK');
+                else if (data.results.telegram === false) parts.push('❌ Telegram falhou');
+                if (data.results.whatsapp === true) parts.push('✅ WhatsApp OK');
+                else if (data.results.whatsapp === false) parts.push('❌ WhatsApp falhou');
+                alert(parts.length > 0 ? parts.join('\n') : data.message);
+            } else {
+                alert('Erro no teste: ' + (data.error || 'Tente novamente.'));
+            }
+        } catch (e) {
+            alert('Falha de conexão ao testar notificação.');
+        } finally {
+            setTesting(false);
         }
     };
 
@@ -193,7 +240,17 @@ export function SettingsPage() {
                             </div>
                         </div>
 
-                        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border)', paddingTop: '24px' }}>
+                        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--color-border)', paddingTop: '24px' }}>
+                            <button 
+                                className="btn" 
+                                style={{ padding: '10px 20px', borderRadius: '12px', gap: '8px', fontWeight: 600, background: 'var(--color-bg-surface-hover)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
+                                onClick={handleTestNotification}
+                                disabled={testing}
+                                title="Envia uma mensagem de teste para os canais configurados"
+                            >
+                                {testing ? <Loader2 size={16} className="spinner" /> : <Zap size={16} />}
+                                Testar Notificação
+                            </button>
                             <button 
                                 className="btn btn-primary" 
                                 style={{ padding: '12px 28px', borderRadius: '12px', gap: '8px', fontWeight: 600 }}
@@ -206,6 +263,28 @@ export function SettingsPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* Health Status Card */}
+                {health && (
+                    <div className="card" style={{ padding: '20px 24px', border: '1px solid var(--color-border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Activity size={18} color="var(--color-primary)" />
+                                <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>Status do Radar</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginLeft: 'auto', fontSize: '0.8125rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-text-secondary)' }}>
+                                    {health.lastPollStatus === 'success' ? <CheckCircle size={14} color="var(--color-success)" /> : health.lastPollStatus === 'error' ? <XCircle size={14} color="var(--color-danger)" /> : <AlertTriangle size={14} color="var(--color-warning)" />}
+                                    <span>{health.lastPollTime ? `Última verificação: ${new Date(health.lastPollTime).toLocaleString('pt-BR')}` : 'Aguardando primeira verificação...'}</span>
+                                </div>
+                                <span style={{ color: 'var(--color-text-tertiary)' }}>|</span>
+                                <span style={{ color: 'var(--color-text-secondary)' }}>📡 {health.monitoredProcesses} processos monitorados</span>
+                                <span style={{ color: 'var(--color-text-tertiary)' }}>|</span>
+                                <span style={{ color: 'var(--color-text-secondary)' }}>🚨 {health.totalAlerts} alertas totais</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Monitoring Logs Card */}
                 <div className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
@@ -231,6 +310,7 @@ export function SettingsPage() {
                                         <th style={{ textAlign: 'left', padding: '12px 16px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Citação (Bot)</th>
                                         <th style={{ textAlign: 'left', padding: '12px 16px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Palavra</th>
                                         <th style={{ textAlign: 'left', padding: '12px 16px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Processo</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 16px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Status</th>
                                         <th style={{ textAlign: 'center', padding: '12px 24px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Link</th>
                                     </tr>
                                 </thead>
@@ -253,6 +333,12 @@ export function SettingsPage() {
                                             </td>
                                             <td style={{ padding: '16px 16px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
                                                 {log.biddingProcess?.title || 'Processo não encontrado'}
+                                            </td>
+                                            <td style={{ padding: '16px 16px', textAlign: 'center' }}>
+                                                <span className={`badge ${log.status === 'SENT' ? 'badge-green' : log.status === 'FAILED' ? 'badge-red' : log.status === 'PENDING_NOTIFICATION' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '0.65rem' }}>
+                                                    {log.status === 'SENT' ? '✅ Enviado' : log.status === 'FAILED' ? '❌ Falhou' : log.status === 'PENDING_NOTIFICATION' ? '⏳ Pendente' : log.status === 'NO_CHANNEL' ? '📭 Sem canal' : log.status}
+                                                </span>
+                                                {log.sentTo && <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>{log.sentTo}</div>}
                                             </td>
                                             <td style={{ padding: '16px 24px', textAlign: 'center' }}>
                                                 {log.biddingProcess?.link && (
