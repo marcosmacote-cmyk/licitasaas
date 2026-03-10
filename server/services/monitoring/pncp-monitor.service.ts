@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 import axios from 'axios';
 import { NotificationService } from './notification.service';
-
-const prisma = new PrismaClient();
 
 export class PncpMonitorService {
   private isProcessing = false;
@@ -70,19 +68,19 @@ export class PncpMonitorService {
       if (!config || !config.isActive) return;
 
       const keywords = config.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
+
+      // Fetch all already-logged message IDs for this process in ONE query (eliminates N+1)
+      const existingLogs = await prisma.chatMonitorLog.findMany({
+        where: { biddingProcessId: process.id },
+        select: { messageId: true }
+      });
+      const loggedMessageIds = new Set(existingLogs.map(l => l.messageId));
       
       for (const msg of messages) {
         const msgId = String(msg.id || msg.numero);
         const content = msg.conteudo?.toLowerCase() || '';
 
-        const alreadyLogged = await prisma.chatMonitorLog.findFirst({
-          where: { 
-            biddingProcessId: process.id,
-            messageId: msgId
-          }
-        });
-
-        if (alreadyLogged) continue;
+        if (loggedMessageIds.has(msgId)) continue;
 
         const detectedKeyword = keywords.find(k => content.includes(k));
 
@@ -99,6 +97,8 @@ export class PncpMonitorService {
               status: 'PENDING_NOTIFICATION'
             }
           });
+          // Add to set to avoid duplicate creation within the same cycle
+          loggedMessageIds.add(msgId);
         }
       }
 

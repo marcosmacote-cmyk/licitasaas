@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Briefcase,
   LayoutDashboard,
@@ -30,7 +30,7 @@ function App() {
   const [items, setItems] = useState<BiddingProcess[]>([]);
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastLogId, setLastLogId] = useState<string | null>(null);
+  const lastLogIdRef = useRef<string | null>(null);
   const [alertCount, setAlertCount] = useState(0);
 
   useEffect(() => {
@@ -101,6 +101,7 @@ function App() {
     }
 
     // Interval to check for Chat Monitor Logs (Sound Alert)
+    // Uses useRef to avoid re-creating the interval on every new log
     const checkChatLogs = async () => {
       const token = localStorage.getItem('token');
       if (!token) return;
@@ -114,11 +115,24 @@ function App() {
           if (logs.length > 0) {
             const latestLog = logs[0];
             // If it's a new log and matches a keyword
-            if (lastLogId && latestLog.id !== lastLogId && latestLog.detectedKeyword) {
+            if (lastLogIdRef.current && latestLog.id !== lastLogIdRef.current && latestLog.detectedKeyword) {
               setAlertCount(prev => prev + 1);
               // Play Sound
-              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-              audio.play().catch(e => console.error("Audio play failed:", e));
+              try {
+                const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.frequency.value = 880;
+                oscillator.type = 'sine';
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.5);
+              } catch (audioErr) {
+                console.error("Audio alert failed:", audioErr);
+              }
 
               // Browser Notification
               if (Notification.permission === "granted") {
@@ -128,7 +142,7 @@ function App() {
                 });
               }
             }
-            setLastLogId(latestLog.id);
+            lastLogIdRef.current = latestLog.id;
           }
         }
       } catch (err) {
@@ -140,7 +154,7 @@ function App() {
     checkChatLogs(); // Initial check
 
     return () => clearInterval(interval);
-  }, [user, lastLogId]);
+  }, [user]);
 
   const refreshData = async () => {
     await Promise.all([fetchCompanies(), fetchBiddings()]);
