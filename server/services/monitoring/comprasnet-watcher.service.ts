@@ -1,10 +1,9 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import { prisma } from '../../lib/prisma';
 import { NotificationService } from './notification.service';
 import path from 'path';
 import fs from 'fs';
 
-// ── Types ──
+// ── Types (no Playwright imports at module level) ──
 
 interface ComprasGovMessage {
   chaveCompra: {
@@ -27,7 +26,7 @@ interface ComprasGovMessage {
 interface WatcherSession {
   processId: string;
   compraId: string;
-  page: Page;
+  page: any; // Playwright Page (dynamically loaded)
   isActive: boolean;
   lastHeartbeat: Date;
   messagesLogged: Set<string>;
@@ -52,19 +51,38 @@ const SENDER_TYPE_MAP: Record<string, string> = {
   '3': 'pregoeiro',
 };
 
+// ── Lazy Playwright loader ──
+
+let _playwright: any = null;
+
+async function getPlaywright() {
+  if (_playwright) return _playwright;
+  try {
+    _playwright = await import('playwright');
+    return _playwright;
+  } catch (err: any) {
+    console.warn('[ComprasnetWatcher] ⚠️ Playwright não está instalado. O monitor de chat do ComprasNet ficará indisponível.');
+    console.warn('[ComprasnetWatcher] Para habilitar, execute: npm install playwright');
+    return null;
+  }
+}
+
 // ── Service ──
 
 export class ComprasnetWatcherService {
-  private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
+  private browser: any = null;
+  private context: any = null;
   private sessions: Map<string, WatcherSession> = new Map();
   private isLaunched = false;
+  private playwrightAvailable: boolean | null = null;
 
   constructor() {
     console.log('[ComprasnetWatcher] Service initialized.');
-    if (!fs.existsSync(SESSION_STATE_DIR)) {
-      fs.mkdirSync(SESSION_STATE_DIR, { recursive: true });
-    }
+    try {
+      if (!fs.existsSync(SESSION_STATE_DIR)) {
+        fs.mkdirSync(SESSION_STATE_DIR, { recursive: true });
+      }
+    } catch { /* ignore in read-only environments */ }
   }
 
   // ─── Public API ───
@@ -73,6 +91,7 @@ export class ComprasnetWatcherService {
   getStatus() {
     return {
       isLaunched: this.isLaunched,
+      playwrightAvailable: this.playwrightAvailable,
       activeSessions: Array.from(this.sessions.entries()).map(([id, s]) => ({
         processId: s.processId,
         compraId: s.compraId,
@@ -87,12 +106,19 @@ export class ComprasnetWatcherService {
   /** Launch the browser for manual login */
   async launchForLogin(): Promise<{ success: boolean; message: string }> {
     try {
+      const pw = await getPlaywright();
+      if (!pw) {
+        this.playwrightAvailable = false;
+        return { success: false, message: 'Playwright não está instalado no servidor. Este recurso requer Playwright.' };
+      }
+      this.playwrightAvailable = true;
+
       if (this.browser) {
         await this.browser.close().catch(() => {});
       }
 
       console.log('[ComprasnetWatcher] Launching browser for login...');
-      this.browser = await chromium.launch({
+      this.browser = await pw.chromium.launch({
         headless: false, // Visible for manual login
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
@@ -124,6 +150,11 @@ export class ComprasnetWatcherService {
   /** Start monitoring a specific process */
   async startMonitoring(processId: string): Promise<{ success: boolean; message: string }> {
     try {
+      const pw = await getPlaywright();
+      if (!pw) {
+        return { success: false, message: 'Playwright não está instalado no servidor.' };
+      }
+
       const process = await prisma.biddingProcess.findUnique({ where: { id: processId } });
       if (!process) {
         return { success: false, message: 'Processo não encontrado.' };
@@ -154,7 +185,7 @@ export class ComprasnetWatcherService {
         where: { biddingProcessId: processId },
         select: { messageId: true },
       });
-      const messagesLogged = new Set<string>(existingLogs.map(l => l.messageId).filter(Boolean) as string[]);
+      const messagesLogged = new Set<string>(existingLogs.map((l: any) => l.messageId).filter(Boolean) as string[]);
 
       const session: WatcherSession = {
         processId,
@@ -235,7 +266,7 @@ export class ComprasnetWatcherService {
 
   /** Set up network interception to capture chat messages */
   private _setupNetworkInterception(session: WatcherSession, process: any) {
-    session.page.on('response', async (response) => {
+    session.page.on('response', async (response: any) => {
       try {
         const url = response.url();
         if (!COMPRASNET_CHAT_URL_PATTERN.test(url)) return;
@@ -267,7 +298,7 @@ export class ComprasnetWatcherService {
 
     if (!config || !config.isActive) return;
 
-    const keywords = config.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
+    const keywords = config.keywords?.split(',').map((k: string) => k.trim().toLowerCase()) || [];
 
     for (const msg of messages) {
       const msgId = msg.chaveMensagemNaOrigem;
@@ -275,7 +306,7 @@ export class ComprasnetWatcherService {
 
       const texto = msg.texto || '';
       const textoLower = texto.toLowerCase();
-      const detectedKeyword = keywords.find(k => textoLower.includes(k));
+      const detectedKeyword = keywords.find((k: string) => textoLower.includes(k));
       const authorType = SENDER_TYPE_MAP[msg.tipoRemetente] || 'desconhecido';
       const category = CATEGORY_MAP[msg.categoria] || msg.categoria;
 
@@ -316,7 +347,7 @@ export class ComprasnetWatcherService {
   }
 
   /** Wait for user to complete login, then save session state */
-  private async _waitForLogin(page: Page) {
+  private async _waitForLogin(page: any) {
     try {
       // Wait for navigation to private area (successful login indicator)
       await page.waitForURL('**/private/**', { timeout: 300000 }); // 5 min timeout
@@ -346,8 +377,11 @@ export class ComprasnetWatcherService {
     if (!fs.existsSync(statePath)) return false;
 
     try {
+      const pw = await getPlaywright();
+      if (!pw) return false;
+
       console.log('[ComprasnetWatcher] Loading stored session state...');
-      this.browser = await chromium.launch({
+      this.browser = await pw.chromium.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
       });
@@ -369,7 +403,11 @@ export class ComprasnetWatcherService {
 
   /** Check if a stored session exists */
   private hasStoredSession(): boolean {
-    return fs.existsSync(path.join(SESSION_STATE_DIR, 'comprasnet-session.json'));
+    try {
+      return fs.existsSync(path.join(SESSION_STATE_DIR, 'comprasnet-session.json'));
+    } catch {
+      return false;
+    }
   }
 
   /** Heartbeat to keep session alive and detect disconnections */
