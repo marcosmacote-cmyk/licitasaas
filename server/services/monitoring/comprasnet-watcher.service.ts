@@ -58,7 +58,9 @@ let _playwright: any = null;
 async function getPlaywright() {
   if (_playwright) return _playwright;
   try {
-    _playwright = await import('playwright');
+    // Use require() with a variable to prevent TypeScript from resolving the module at compile time
+    const moduleName = 'playwright';
+    _playwright = require(moduleName);
     return _playwright;
   } catch (err: any) {
     console.warn('[ComprasnetWatcher] ⚠️ Playwright não está instalado. O monitor de chat do ComprasNet ficará indisponível.');
