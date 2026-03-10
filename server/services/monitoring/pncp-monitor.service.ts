@@ -182,25 +182,26 @@ export class PncpMonitorService {
 
         if (loggedMessageIds.has(msgId)) continue;
 
-        const detectedKeyword = keywords.find(k => content.includes(k));
+        const detectedKeyword = keywords.find(k => content.includes(k)) || null;
 
         if (detectedKeyword) {
           console.log(`[PncpMonitor] 🚨 KEYWORD DETECTED! "${detectedKeyword}" in process ${process.title}`);
           this.alertsDetected++;
-          
-          await prisma.chatMonitorLog.create({
-            data: {
-              tenantId: process.tenantId,
-              biddingProcessId: process.id,
-              messageId: msgId,
-              content: msg.conteudo,
-              detectedKeyword: detectedKeyword,
-              status: 'PENDING_NOTIFICATION'
-            }
-          });
-          // Add to set to avoid duplicate creation within the same cycle
-          loggedMessageIds.add(msgId);
         }
+
+        // Capture ALL messages (not just keyword matches)
+        await prisma.chatMonitorLog.create({
+          data: {
+            tenantId: process.tenantId,
+            biddingProcessId: process.id,
+            messageId: msgId,
+            content: msg.conteudo || '',
+            authorType: msg.nomeUsuario || msg.tipo || 'Sistema',
+            detectedKeyword: detectedKeyword,
+            status: detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED'
+          }
+        });
+        loggedMessageIds.add(msgId);
       }
 
     } catch (error: any) {

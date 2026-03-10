@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot, Star, Archive, ArchiveRestore, CheckCheck } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot, Star, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, Zap, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 type TabFilter = 'all' | 'unread' | 'important' | 'archived';
@@ -29,6 +29,7 @@ interface ProcessSummary {
   modality: string;
   uasg: string | null;
   companyProfileId: string | null;
+  isMonitored?: boolean;
   totalMessages: number;
   unreadCount: number;
   isImportant: boolean;
@@ -105,6 +106,13 @@ export function ChatMonitorPage({ companies }: Props) {
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // ── State: Config Panel ──
+  const [showConfig, setShowConfig] = useState(false);
+  const [monitorConfig, setMonitorConfig] = useState({ keywords: 'suspensa,reaberta,vencedora', phoneNumber: '', telegramChatId: '', isActive: true });
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [testingNotif, setTestingNotif] = useState(false);
+  const [health, setHealth] = useState<any>(null);
+
   const token = localStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -154,6 +162,32 @@ export function ChatMonitorPage({ companies }: Props) {
     } finally {
       setLoadingMessages(false);
     }
+  }, []);
+
+  // Fetch config + health on mount
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setMonitorConfig({
+            keywords: data.keywords || 'suspensa,reaberta,vencedora',
+            phoneNumber: data.phoneNumber || '',
+            telegramChatId: data.telegramChatId || '',
+            isActive: data.isActive ?? true
+          });
+        }
+      } catch { /* silent */ }
+    };
+    const fetchHealth = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chat-monitor/health`, { headers });
+        if (res.ok) setHealth(await res.json());
+      } catch { /* silent */ }
+    };
+    fetchConfig();
+    fetchHealth();
   }, []);
 
   // Load messages when selection changes
@@ -284,8 +318,111 @@ export function ChatMonitorPage({ companies }: Props) {
           <button className="btn btn-ghost" onClick={() => fetchProcesses(true)} title="Atualizar" style={{ padding: '6px' }}>
             <RefreshCw size={16} />
           </button>
+          <button className="btn btn-ghost" onClick={() => setShowConfig(!showConfig)} title="Configurações do Monitor" style={{ padding: '6px', color: showConfig ? 'var(--color-primary)' : undefined }}>
+            <Settings size={16} />
+          </button>
         </div>
       </div>
+
+      {/* ── Config Panel (collapsible) ── */}
+      {showConfig && (
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-base)', flexShrink: 0, display: 'grid', gap: '16px', maxHeight: '300px', overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', alignItems: 'end' }}>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+                <Bell size={12} /> Palavras-chave de Alerta
+              </label>
+              <input
+                type="text"
+                value={monitorConfig.keywords}
+                onChange={(e) => setMonitorConfig({...monitorConfig, keywords: e.target.value})}
+                placeholder="suspensa, reaberta, vencedora..."
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+                <Phone size={12} color="#10b981" /> WhatsApp
+              </label>
+              <input
+                type="text"
+                value={monitorConfig.phoneNumber}
+                onChange={(e) => setMonitorConfig({...monitorConfig, phoneNumber: e.target.value})}
+                placeholder="+5585999999999"
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+                <Send size={12} color="#0088cc" /> Telegram Chat ID
+              </label>
+              <input
+                type="text"
+                value={monitorConfig.telegramChatId}
+                onChange={(e) => setMonitorConfig({...monitorConfig, telegramChatId: e.target.value})}
+                placeholder="Chat ID ou @usuario"
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button
+                className="btn btn-ghost"
+                style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '0.75rem', gap: '6px', border: '1px solid var(--color-border)' }}
+                disabled={testingNotif}
+                onClick={async () => {
+                  setTestingNotif(true);
+                  try {
+                    const res = await fetch(`${API_BASE_URL}/api/chat-monitor/test`, { method: 'POST', headers });
+                    const data = await res.json();
+                    const parts: string[] = [];
+                    if (data.results?.telegram === true) parts.push('✅ Telegram OK');
+                    else if (data.results?.telegram === false) parts.push('❌ Telegram falhou');
+                    if (data.results?.whatsapp === true) parts.push('✅ WhatsApp OK');
+                    else if (data.results?.whatsapp === false) parts.push('❌ WhatsApp falhou');
+                    alert(parts.length > 0 ? parts.join('\n') : data.message);
+                  } catch { alert('Falha no teste.'); }
+                  finally { setTestingNotif(false); }
+                }}
+              >
+                {testingNotif ? <Loader2 size={12} className="spinner" /> : <Zap size={12} />}
+                Testar
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '0.75rem', gap: '6px' }}
+                disabled={savingConfig}
+                onClick={async () => {
+                  setSavingConfig(true);
+                  try {
+                    const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, { method: 'POST', headers, body: JSON.stringify(monitorConfig) });
+                    if (res.ok) alert('✅ Configurações salvas!');
+                    else alert('❌ Erro ao salvar');
+                  } catch { alert('❌ Falha na conexão.'); }
+                  finally { setSavingConfig(false); }
+                }}
+              >
+                {savingConfig ? <Loader2 size={12} className="spinner" /> : <Save size={12} />}
+                Salvar
+              </button>
+            </div>
+            {health && (
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  {health.lastPollStatus === 'success' ? <CheckCircle size={12} color="var(--color-success)" /> : health.lastPollStatus === 'error' ? <XCircle size={12} color="var(--color-danger)" /> : <AlertTriangle size={12} color="var(--color-warning)" />}
+                  {health.lastPollTime ? new Date(health.lastPollTime).toLocaleString('pt-BR') : 'Aguardando...'}
+                </div>
+                <span>📡 {health.monitoredProcesses || 0} monitorados</span>
+                <span>🚨 {health.totalAlerts || 0} alertas</span>
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Info size={10} /> Ative o monitoramento nos cards do Kanban (ícone 📻) para que as mensagens sejam capturadas aqui.
+          </div>
+        </div>
+      )}
 
       {/* ── Split Panel ── */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

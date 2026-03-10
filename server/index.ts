@@ -2781,74 +2781,79 @@ app.get('/api/chat-monitor/health', authenticateToken, async (req: any, res) => 
 // ── Chat Monitor Module v2 Endpoints ──
 // ══════════════════════════════════════════
 
-// Get grouped processes with message counts (V2 — query ChatMonitorLog directly)
+// Get grouped processes with message counts (V3 — includes monitored processes without logs)
 app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) => {
     try {
         const { companyId, platform } = req.query;
+        const tenantId = req.user.tenantId;
 
-        // Step 1: Get distinct processIds with counts from ChatMonitorLog
-        const logGroups: any[] = await (prisma.chatMonitorLog as any).groupBy({
-            by: ['biddingProcessId'],
-            where: { tenantId: req.user.tenantId },
-            _count: { id: true },
-        });
-
-        if (logGroups.length === 0) {
-            return res.json([]);
-        }
-
-        const processIds = logGroups.map((g: any) => g.biddingProcessId);
-        const totalMap = new Map(logGroups.map((g: any) => [g.biddingProcessId, g._count.id]));
-
-        // Step 2: Get BiddingProcess details for those IDs
-        const processWhere: any = { id: { in: processIds } };
+        // Step 1: Get ALL relevant processes — monitored OR with chat logs
+        const processWhere: any = {
+            tenantId,
+            OR: [
+                { isMonitored: true },
+                { chatMonitorLogs: { some: {} } }
+            ],
+        };
         if (companyId) processWhere.companyProfileId = companyId as string;
 
         const processes = await prisma.biddingProcess.findMany({
             where: processWhere,
             select: {
                 id: true, title: true, portal: true, modality: true,
-                uasg: true, companyProfileId: true,
+                uasg: true, companyProfileId: true, isMonitored: true,
+                _count: { select: { chatMonitorLogs: true } },
             }
         });
 
-        // Step 3: Get last message per process
-        const lastMessages: any[] = await prisma.$queryRawUnsafe(`
-            SELECT DISTINCT ON ("biddingProcessId") 
-                "biddingProcessId", "content", "createdAt", "authorType", "detectedKeyword"
-            FROM "ChatMonitorLog" 
-            WHERE "tenantId" = $1 AND "biddingProcessId" = ANY($2::text[])
-            ORDER BY "biddingProcessId", "createdAt" DESC
-        `, req.user.tenantId, processIds);
-        const lastMsgMap = new Map(lastMessages.map((m: any) => [m.biddingProcessId, m]));
+        if (processes.length === 0) {
+            return res.json([]);
+        }
 
-        // Step 4: Safely get unread counts (isRead may not exist)
+        const processIds = processes.map(p => p.id);
+
+        // Step 2: Get last message per process (raw SQL for performance)
+        let lastMsgMap = new Map<string, any>();
+        try {
+            const lastMessages: any[] = await prisma.$queryRawUnsafe(`
+                SELECT DISTINCT ON ("biddingProcessId") 
+                    "biddingProcessId", "content", "createdAt", "authorType", "detectedKeyword"
+                FROM "ChatMonitorLog" 
+                WHERE "tenantId" = $1 AND "biddingProcessId" = ANY($2::text[])
+                ORDER BY "biddingProcessId", "createdAt" DESC
+            `, tenantId, processIds);
+            lastMsgMap = new Map(lastMessages.map((m: any) => [m.biddingProcessId, m]));
+        } catch (e) {
+            console.log('[ChatMonitor] Raw query failed, skipping last messages:', e);
+        }
+
+        // Step 3: Safely get unread counts
         let unreadMap = new Map<string, number>();
         try {
             const unreadCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
                 by: ['biddingProcessId'],
-                where: { tenantId: req.user.tenantId, isRead: false },
+                where: { tenantId, isRead: false },
                 _count: { id: true },
             });
             unreadMap = new Map(unreadCounts.map((u: any) => [u.biddingProcessId, u._count.id]));
         } catch {
-            console.log('[ChatMonitor] isRead not available, all msgs treated as unread');
+            // isRead column may not exist yet
         }
 
-        // Step 5: Get important (keyword detected) processes
+        // Step 4: Get important (keyword detected) processes
         let importantSet = new Set<string>();
         try {
             const kwLogs: any[] = await prisma.chatMonitorLog.findMany({
-                where: { tenantId: req.user.tenantId, detectedKeyword: { not: null } },
+                where: { tenantId, detectedKeyword: { not: null } },
                 select: { biddingProcessId: true },
                 distinct: ['biddingProcessId'],
             });
             importantSet = new Set(kwLogs.map((k: any) => k.biddingProcessId));
         } catch { /* silent */ }
 
-        // Step 6: Build result
+        // Step 5: Build result
         const result = processes.map((p: any) => {
-            const total = totalMap.get(p.id) || 0;
+            const total = p._count.chatMonitorLogs || 0;
             const lastMsg = lastMsgMap.get(p.id);
             return {
                 id: p.id,
@@ -2857,6 +2862,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 modality: p.modality,
                 uasg: p.uasg,
                 companyProfileId: p.companyProfileId,
+                isMonitored: p.isMonitored,
                 totalMessages: total,
                 unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : total,
                 isImportant: importantSet.has(p.id),
@@ -2870,7 +2876,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             };
         });
 
-        // Sort by last message date (most recent first)
+        // Sort: processes with messages first (by last msg date), then monitored without msgs
         result.sort((a, b) => {
             const dateA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
             const dateB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
