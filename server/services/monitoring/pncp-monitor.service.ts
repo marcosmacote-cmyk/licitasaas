@@ -59,7 +59,7 @@ export class PncpMonitorService {
       const apiUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/mensagens?pagina=1&tamanhoPagina=100`;
 
       const response = await axios.get(apiUrl, { timeout: 10000 });
-      const messages = response.data?.data || [];
+      const messages = (response.data as any)?.data || [];
       
       if (messages.length === 0) return;
 
