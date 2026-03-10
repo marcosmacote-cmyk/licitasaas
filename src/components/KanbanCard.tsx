@@ -1,5 +1,5 @@
 import { useDraggable } from '@dnd-kit/core';
-import { Calendar, DollarSign, Brain, Building2, Trash2, MessageSquare, Bell, Radio, Satellite } from 'lucide-react';
+import { Calendar, DollarSign, Brain, Building2, Trash2, MessageSquare, Bell, Radio } from 'lucide-react';
 import { format } from 'date-fns';
 import type { BiddingProcess, CompanyProfile, ObservationLog } from '../types';
 
@@ -18,13 +18,13 @@ interface Props {
     onDoubleClick?: () => void;
     onDelete?: (id: string) => void;
     onToggleMonitor?: (id: string) => void;
-    onStartChatWatcher?: (id: string) => void;
+
     cardFields?: CardFieldConfig[];
     compactMode?: boolean;
     highlightExpiring?: boolean;
 }
 
-export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, onToggleMonitor, onStartChatWatcher, cardFields, compactMode, highlightExpiring }: Props) {
+export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, onToggleMonitor, cardFields, compactMode, highlightExpiring }: Props) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: item.id,
         data: item,
@@ -42,8 +42,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
     if (portalLower.includes('compras') || portalLower.includes('cnet')) portalColor = 'badge-teal';
     if (portalLower.includes('bll')) portalColor = 'badge-orange';
 
-    const isComprasnet = portalLower.includes('compras') || portalLower.includes('cnet') || (item.link || '').toLowerCase().includes('comprasnet');
-    const hasComprasnetData = !!(item.uasg && item.modalityCode && item.processNumber && item.processYear);
+
 
     const now = new Date();
     const sessionDate = new Date(item.sessionDate);
@@ -115,22 +114,6 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                             title={item.isMonitored ? "Monitoramento Ativo (Radar PNCP)" : "Ativar Monitor de Status (Radar PNCP)"}
                         >
                             <Radio size={14} className={item.isMonitored ? "pulse-animation" : ""} />
-                        </button>
-                    )}
-                    {isComprasnet && hasComprasnetData && (
-                        <button
-                            className="icon-btn"
-                            style={{ 
-                                padding: '4px', 
-                                cursor: 'pointer', 
-                                color: '#059669',
-                                background: 'rgba(5, 150, 105, 0.1)',
-                                borderRadius: '50%'
-                            }}
-                            onClick={(e) => { e.stopPropagation(); onStartChatWatcher?.(item.id); }}
-                            title="📡 Monitorar Chat da Sessão (ComprasNet)"
-                        >
-                            <Satellite size={14} />
                         </button>
                     )}
                     {hasAnalysis && (

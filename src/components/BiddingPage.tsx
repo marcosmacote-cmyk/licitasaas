@@ -536,19 +536,6 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         });
     };
 
-    const handleStartChatWatcher = async (id: string) => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/chat-watcher/monitor/${id}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            const data = await res.json();
-            alert(data.message || (data.success ? '📡 Monitoramento iniciado!' : '❌ Erro ao iniciar monitoramento'));
-        } catch (err) {
-            alert('❌ Falha na conexão com o servidor. Verifique se o watcher está ativo em Configurações.');
-        }
-    };
 
     const handleDeleteProcess = async (id: string) => {
         if (window.confirm('Tem certeza que deseja excluir esta licitação?')) {
@@ -1256,7 +1243,6 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     }}
                     onStatusChange={handleStatusChange}
                     onToggleMonitor={handleToggleMonitor}
-                    onStartChatWatcher={handleStartChatWatcher}
                     cardFields={cardFields}
                     visibleColumns={visibleColumns}
                     sortBy={sortBy}

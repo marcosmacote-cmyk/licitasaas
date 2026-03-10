@@ -2781,91 +2781,101 @@ app.get('/api/chat-monitor/health', authenticateToken, async (req: any, res) => 
 // ── Chat Monitor Module v2 Endpoints ──
 // ══════════════════════════════════════════
 
-// Get grouped processes with message counts
+// Get grouped processes with message counts (V2 — query ChatMonitorLog directly)
 app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) => {
     try {
         const { companyId, platform } = req.query;
-        const where: any = { tenantId: req.user.tenantId };
 
-        const processes: any[] = await (prisma.biddingProcess as any).findMany({
-            where: {
-                ...where,
-                chatMonitorLogs: { some: {} },
-                ...(companyId ? { companyProfileId: companyId as string } : {}),
-            },
-            include: {
-                _count: {
-                    select: { chatMonitorLogs: true }
-                },
-                chatMonitorLogs: {
-                    orderBy: { createdAt: 'desc' },
-                    take: 1,
-                }
-            },
-            orderBy: { sessionDate: 'desc' }
+        // Step 1: Get distinct processIds with counts from ChatMonitorLog
+        const logGroups: any[] = await (prisma.chatMonitorLog as any).groupBy({
+            by: ['biddingProcessId'],
+            where: { tenantId: req.user.tenantId },
+            _count: { id: true },
         });
 
-        // Safely try to compute unread/important/archived (new columns may not exist yet)
-        let unreadMap = new Map<string, number>();
-        let importantSet = new Set<string>();
-        let archivedMap = new Map<string, number>();
+        if (logGroups.length === 0) {
+            return res.json([]);
+        }
 
+        const processIds = logGroups.map((g: any) => g.biddingProcessId);
+        const totalMap = new Map(logGroups.map((g: any) => [g.biddingProcessId, g._count.id]));
+
+        // Step 2: Get BiddingProcess details for those IDs
+        const processWhere: any = { id: { in: processIds } };
+        if (companyId) processWhere.companyProfileId = companyId as string;
+
+        const processes = await prisma.biddingProcess.findMany({
+            where: processWhere,
+            select: {
+                id: true, title: true, portal: true, modality: true,
+                uasg: true, companyProfileId: true,
+            }
+        });
+
+        // Step 3: Get last message per process
+        const lastMessages: any[] = await prisma.$queryRawUnsafe(`
+            SELECT DISTINCT ON ("biddingProcessId") 
+                "biddingProcessId", "content", "createdAt", "authorType", "detectedKeyword"
+            FROM "ChatMonitorLog" 
+            WHERE "tenantId" = $1 AND "biddingProcessId" = ANY($2::text[])
+            ORDER BY "biddingProcessId", "createdAt" DESC
+        `, req.user.tenantId, processIds);
+        const lastMsgMap = new Map(lastMessages.map((m: any) => [m.biddingProcessId, m]));
+
+        // Step 4: Safely get unread counts (isRead may not exist)
+        let unreadMap = new Map<string, number>();
         try {
             const unreadCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
                 by: ['biddingProcessId'],
-                where: { ...where, isRead: false },
+                where: { tenantId: req.user.tenantId, isRead: false },
                 _count: { id: true },
             });
             unreadMap = new Map(unreadCounts.map((u: any) => [u.biddingProcessId, u._count.id]));
         } catch {
-            // isRead column may not exist yet — treat all as unread
-            console.log('[ChatMonitor] isRead column not available yet, using defaults');
+            console.log('[ChatMonitor] isRead not available, all msgs treated as unread');
         }
 
+        // Step 5: Get important (keyword detected) processes
+        let importantSet = new Set<string>();
         try {
-            const importantProcessIds: any[] = await (prisma.chatMonitorLog as any).findMany({
-                where: { ...where, OR: [{ isImportant: true }, { detectedKeyword: { not: null } }] },
+            const kwLogs: any[] = await prisma.chatMonitorLog.findMany({
+                where: { tenantId: req.user.tenantId, detectedKeyword: { not: null } },
                 select: { biddingProcessId: true },
                 distinct: ['biddingProcessId'],
             });
-            importantSet = new Set(importantProcessIds.map((i: any) => i.biddingProcessId));
-        } catch {
-            // isImportant column may not exist — fallback to detectedKeyword
-            try {
-                const kwProcessIds: any[] = await prisma.chatMonitorLog.findMany({
-                    where: { ...where, detectedKeyword: { not: null } },
-                    select: { biddingProcessId: true },
-                    distinct: ['biddingProcessId'],
-                });
-                importantSet = new Set(kwProcessIds.map((i: any) => i.biddingProcessId));
-            } catch { /* silent */ }
-        }
+            importantSet = new Set(kwLogs.map((k: any) => k.biddingProcessId));
+        } catch { /* silent */ }
 
-        try {
-            const archivedCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
-                by: ['biddingProcessId'],
-                where: { ...where, isArchived: true },
-                _count: { id: true },
-            });
-            archivedMap = new Map(archivedCounts.map((a: any) => [a.biddingProcessId, a._count.id]));
-        } catch {
-            // isArchived column may not exist yet — no archives
-            console.log('[ChatMonitor] isArchived column not available yet, using defaults');
-        }
+        // Step 6: Build result
+        const result = processes.map((p: any) => {
+            const total = totalMap.get(p.id) || 0;
+            const lastMsg = lastMsgMap.get(p.id);
+            return {
+                id: p.id,
+                title: p.title,
+                portal: p.portal,
+                modality: p.modality,
+                uasg: p.uasg,
+                companyProfileId: p.companyProfileId,
+                totalMessages: total,
+                unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : total,
+                isImportant: importantSet.has(p.id),
+                isArchived: false,
+                lastMessage: lastMsg ? {
+                    content: lastMsg.content,
+                    createdAt: lastMsg.createdAt,
+                    authorType: lastMsg.authorType,
+                    detectedKeyword: lastMsg.detectedKeyword,
+                } : null,
+            };
+        });
 
-        const result = processes.map((p: any) => ({
-            id: p.id,
-            title: p.title,
-            portal: p.portal,
-            modality: p.modality,
-            uasg: p.uasg,
-            companyProfileId: p.companyProfileId,
-            totalMessages: p._count.chatMonitorLogs,
-            unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : p._count.chatMonitorLogs,
-            isImportant: importantSet.has(p.id),
-            isArchived: (archivedMap.get(p.id) || 0) >= p._count.chatMonitorLogs && p._count.chatMonitorLogs > 0 && archivedMap.has(p.id),
-            lastMessage: p.chatMonitorLogs[0] || null,
-        }));
+        // Sort by last message date (most recent first)
+        result.sort((a, b) => {
+            const dateA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+            const dateB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+            return dateB - dateA;
+        });
 
         // Apply platform filter
         let filtered = result;
@@ -2883,7 +2893,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
         res.json(filtered);
     } catch (error) {
         console.error('[ChatMonitor] Error fetching processes:', error);
-        res.status(500).json({ error: 'Failed to fetch chat monitor processes' });
+        res.status(500).json({ error: 'Failed to fetch chat monitor processes', details: String(error) });
     }
 });
 
