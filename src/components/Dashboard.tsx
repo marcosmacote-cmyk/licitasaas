@@ -84,7 +84,7 @@ export function Dashboard({ items }: Props) {
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
     // --- RADAR MOCK DATA ---
-    const pncpCount = items.filter(i => i.portal === 'PNCP').length;
+    const pncpCount = items.filter(i => i.portal?.toLowerCase().includes('pncp') || i.link?.toLowerCase().includes('pncp.gov.br')).length;
     const aiCount = items.filter(i => i.aiAnalysis).length;
 
     return (

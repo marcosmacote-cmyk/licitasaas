@@ -88,7 +88,7 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                                         <Brain size={16} />
                                                     </button>
                                                 )}
-                                                 {item.portal === 'PNCP' && (
+                                                 {(item.portal?.toLowerCase().includes('pncp') || item.link?.toLowerCase().includes('pncp.gov.br')) && (
                                                     <button
                                                         className="icon-btn"
                                                         style={{ 

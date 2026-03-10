@@ -35,9 +35,10 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
         return cardFields.find(f => f.key === key)?.visible ?? true;
     };
 
+    const portalLower = (item.portal || '').toLowerCase();
     let portalColor = 'badge-blue';
-    if (item.portal === 'PNCP') portalColor = 'badge-green';
-    if (item.portal === 'BLL') portalColor = 'badge-orange';
+    if (portalLower.includes('pncp')) portalColor = 'badge-green';
+    if (portalLower.includes('bll')) portalColor = 'badge-orange';
 
     const now = new Date();
     const sessionDate = new Date(item.sessionDate);
@@ -95,7 +96,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                             <span>{observations.length}</span>
                         </div>
                     )}
-                    {item.portal === 'PNCP' && (
+                    {(item.portal?.toLowerCase().includes('pncp') || item.link?.toLowerCase().includes('pncp.gov.br')) && (
                         <button
                             className="icon-btn"
                             style={{ 
