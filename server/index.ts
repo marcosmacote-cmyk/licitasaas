@@ -2802,32 +2802,56 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                     take: 1,
                 }
             },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { sessionDate: 'desc' }
         });
 
-        // Compute unread counts per process
-        const unreadCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
-            by: ['biddingProcessId'],
-            where: { ...where, isRead: false },
-            _count: { id: true },
-        });
-        const unreadMap = new Map(unreadCounts.map((u: any) => [u.biddingProcessId, u._count.id]));
+        // Safely try to compute unread/important/archived (new columns may not exist yet)
+        let unreadMap = new Map<string, number>();
+        let importantSet = new Set<string>();
+        let archivedMap = new Map<string, number>();
 
-        // Compute important flag per process (any important log or has detectedKeyword)
-        const importantProcessIds: any[] = await (prisma.chatMonitorLog as any).findMany({
-            where: { ...where, OR: [{ isImportant: true }, { detectedKeyword: { not: null } }] },
-            select: { biddingProcessId: true },
-            distinct: ['biddingProcessId'],
-        });
-        const importantSet = new Set(importantProcessIds.map((i: any) => i.biddingProcessId));
+        try {
+            const unreadCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
+                by: ['biddingProcessId'],
+                where: { ...where, isRead: false },
+                _count: { id: true },
+            });
+            unreadMap = new Map(unreadCounts.map((u: any) => [u.biddingProcessId, u._count.id]));
+        } catch {
+            // isRead column may not exist yet — treat all as unread
+            console.log('[ChatMonitor] isRead column not available yet, using defaults');
+        }
 
-        // Compute archived flag per process (all logs archived)
-        const archivedCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
-            by: ['biddingProcessId'],
-            where: { ...where, isArchived: true },
-            _count: { id: true },
-        });
-        const archivedMap = new Map(archivedCounts.map((a: any) => [a.biddingProcessId, a._count.id]));
+        try {
+            const importantProcessIds: any[] = await (prisma.chatMonitorLog as any).findMany({
+                where: { ...where, OR: [{ isImportant: true }, { detectedKeyword: { not: null } }] },
+                select: { biddingProcessId: true },
+                distinct: ['biddingProcessId'],
+            });
+            importantSet = new Set(importantProcessIds.map((i: any) => i.biddingProcessId));
+        } catch {
+            // isImportant column may not exist — fallback to detectedKeyword
+            try {
+                const kwProcessIds: any[] = await prisma.chatMonitorLog.findMany({
+                    where: { ...where, detectedKeyword: { not: null } },
+                    select: { biddingProcessId: true },
+                    distinct: ['biddingProcessId'],
+                });
+                importantSet = new Set(kwProcessIds.map((i: any) => i.biddingProcessId));
+            } catch { /* silent */ }
+        }
+
+        try {
+            const archivedCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
+                by: ['biddingProcessId'],
+                where: { ...where, isArchived: true },
+                _count: { id: true },
+            });
+            archivedMap = new Map(archivedCounts.map((a: any) => [a.biddingProcessId, a._count.id]));
+        } catch {
+            // isArchived column may not exist yet — no archives
+            console.log('[ChatMonitor] isArchived column not available yet, using defaults');
+        }
 
         const result = processes.map((p: any) => ({
             id: p.id,
@@ -2837,9 +2861,9 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             uasg: p.uasg,
             companyProfileId: p.companyProfileId,
             totalMessages: p._count.chatMonitorLogs,
-            unreadCount: unreadMap.get(p.id) || 0,
+            unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : p._count.chatMonitorLogs,
             isImportant: importantSet.has(p.id),
-            isArchived: (archivedMap.get(p.id) || 0) >= p._count.chatMonitorLogs && p._count.chatMonitorLogs > 0,
+            isArchived: (archivedMap.get(p.id) || 0) >= p._count.chatMonitorLogs && p._count.chatMonitorLogs > 0 && archivedMap.has(p.id),
             lastMessage: p.chatMonitorLogs[0] || null,
         }));
 
@@ -2911,8 +2935,9 @@ app.get('/api/chat-monitor/unread-count', authenticateToken, async (req: any, re
             where: { tenantId: req.user.tenantId, isRead: false, isArchived: false }
         });
         res.json({ count });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to get unread count' });
+    } catch {
+        // isRead/isArchived columns may not exist yet
+        res.json({ count: 0 });
     }
 });
 
