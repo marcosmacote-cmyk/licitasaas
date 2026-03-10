@@ -380,6 +380,11 @@ a:hover {
   color: var(--color-danger);
 }
 
+.badge-teal {
+  background-color: rgba(5, 150, 105, 0.1);
+  color: #059669;
+}
+
 /* Utils */
 .flex-between {
   display: flex;

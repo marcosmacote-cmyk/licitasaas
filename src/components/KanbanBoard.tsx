@@ -36,6 +36,7 @@ interface Props {
     onDeleteProcess: (id: string) => void;
     onStatusChange: (id: string, newStatus: BiddingStatus) => void;
     onToggleMonitor?: (id: string) => void;
+    onStartChatWatcher?: (id: string) => void;
     cardFields?: CardFieldConfig[];
     visibleColumns?: string[];
     sortBy?: string;
@@ -43,7 +44,7 @@ interface Props {
     highlightExpiring?: boolean;
 }
 
-export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, onToggleMonitor, cardFields, visibleColumns, sortBy, compactMode, highlightExpiring }: Props) {
+export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, analyses, companies, onViewAnalysis, onStatusChange, onToggleMonitor, onStartChatWatcher, cardFields, visibleColumns, sortBy, compactMode, highlightExpiring }: Props) {
     const [activeItem, setActiveItem] = useState<BiddingProcess | null>(null);
 
     const sensors = useSensors(
@@ -132,6 +133,7 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
                             onEditProcess={onEditProcess}
                             onDeleteProcess={onDeleteProcess}
                             onToggleMonitor={onToggleMonitor}
+                            onStartChatWatcher={onStartChatWatcher}
                             analyses={analyses}
                             companies={companies}
                             onViewAnalysis={onViewAnalysis}
