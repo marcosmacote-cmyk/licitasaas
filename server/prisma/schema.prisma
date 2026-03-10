@@ -87,6 +87,7 @@ model BiddingProcess {
   aiAnalysis       AiAnalysis?
   proposals        PriceProposal[]
   chunks           DocumentChunk[]
+  chatMonitorLogs  ChatMonitorLog[]
   company          CompanyProfile? @relation(fields: [companyProfileId], references: [id])
   tenant           Tenant          @relation(fields: [tenantId], references: [id])
 }
@@ -283,4 +284,5 @@ model ChatMonitorLog {
   status           String   @default("SENT") // SENT, FAILED
   createdAt        DateTime @default(now())
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  biddingProcess   BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
 }

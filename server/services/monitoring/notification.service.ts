@@ -76,7 +76,7 @@ export class NotificationService {
       });
 
       for (const log of pendingLogs) {
-        const config = log.tenant.chatMonitorConfig[0];
+        const config = (log.tenant as any).chatMonitorConfig;
         if (!config || !config.isActive) continue;
 
         const message = `🚨 <b>ALERTA DE CHAT - PNCP</b>\n\n` +
@@ -86,8 +86,8 @@ export class NotificationService {
                         `<i>Verifique agora no LicitaSaaS!</i>`;
 
         // WhatsApp
-        if (config.whatsappPhone) {
-          await this.sendWhatsApp(log.tenantId, config.whatsappPhone, message.replace(/<[^>]*>/g, ''));
+        if (config.phoneNumber) {
+          await this.sendWhatsApp(log.tenantId, config.phoneNumber, message.replace(/<[^>]*>/g, ''));
         }
 
         // Telegram
