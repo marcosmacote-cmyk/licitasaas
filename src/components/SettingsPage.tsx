@@ -1,6 +1,129 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info, History, ExternalLink, Calendar, Zap, Activity, CheckCircle, XCircle, AlertTriangle, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info, History, ExternalLink, Calendar, Zap, Activity, CheckCircle, XCircle, AlertTriangle, Search, ChevronLeft, ChevronRight, X, Power, Wifi, WifiOff, Radio } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+
+function ComprasnetWatcherControls() {
+    const [status, setStatus] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const [actionMsg, setActionMsg] = useState('');
+
+    const token = localStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    const fetchStatus = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/chat-watcher/status`, { headers });
+            if (res.ok) setStatus(await res.json());
+        } catch { /* silent */ }
+    };
+
+    useEffect(() => {
+        fetchStatus();
+        const interval = setInterval(fetchStatus, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleLogin = async () => {
+        setLoading(true);
+        setActionMsg('');
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/chat-watcher/login`, { method: 'POST', headers });
+            const data = await res.json();
+            setActionMsg(data.message || (data.success ? '✅ Browser aberto' : '❌ Erro'));
+            setTimeout(fetchStatus, 2000);
+        } catch (e) {
+            setActionMsg('❌ Erro de conexão');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleShutdown = async () => {
+        if (!confirm('Encerrar o monitor de chat e fechar o navegador?')) return;
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/chat-watcher/shutdown`, { method: 'POST', headers });
+            const data = await res.json();
+            setActionMsg(data.message || '⏹ Encerrado');
+            setTimeout(fetchStatus, 1000);
+        } catch { setActionMsg('❌ Erro'); } 
+        finally { setLoading(false); }
+    };
+
+    const isLaunched = status?.isLaunched;
+    const sessionCount = status?.activeSessions?.length || 0;
+    const hasSession = status?.hasStoredSession;
+
+    return (
+        <div style={{ display: 'grid', gap: '16px' }}>
+            {/* Status Row */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '8px', background: isLaunched ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.06)', border: `1px solid ${isLaunched ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.15)'}` }}>
+                    {isLaunched ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="#ef4444" />}
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: isLaunched ? '#059669' : '#ef4444' }}>
+                        {isLaunched ? 'Watcher Ativo' : 'Watcher Inativo'}
+                    </span>
+                </div>
+                {sessionCount > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', background: 'rgba(37, 99, 235, 0.08)', border: '1px solid rgba(37, 99, 235, 0.15)' }}>
+                        <Radio size={14} color="#2563eb" />
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#2563eb' }}>
+                            {sessionCount} {sessionCount === 1 ? 'sessão' : 'sessões'} monitorada{sessionCount > 1 ? 's' : ''}
+                        </span>
+                    </div>
+                )}
+                {hasSession && !isLaunched && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                        💾 Sessão salva disponível
+                    </span>
+                )}
+            </div>
+
+            {/* Active Sessions Detail */}
+            {status?.activeSessions?.length > 0 && (
+                <div style={{ display: 'grid', gap: '8px' }}>
+                    {status.activeSessions.map((s: any) => (
+                        <div key={s.processId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', fontSize: '0.8125rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.isActive ? '#10b981' : '#ef4444', animation: s.isActive ? 'pulse 2s infinite' : 'none' }} />
+                                <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>CompraID: {s.compraId}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>
+                                <span>📨 {s.messagesLogged} msgs</span>
+                                <span>💓 {new Date(s.lastHeartbeat).toLocaleTimeString('pt-BR')}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Action Message */}
+            {actionMsg && (
+                <div style={{ padding: '10px 14px', borderRadius: '8px', background: actionMsg.startsWith('✅') || actionMsg.startsWith('⏹') ? 'rgba(16,185,129,0.08)' : actionMsg.startsWith('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(37,99,235,0.08)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                    {actionMsg}
+                </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+                {!isLaunched && (
+                    <button className="btn" onClick={handleLogin} disabled={loading}
+                        style={{ padding: '10px 20px', borderRadius: '10px', gap: '8px', fontWeight: 600, background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', cursor: 'pointer' }}>
+                        {loading ? <Loader2 size={16} className="spinner" /> : <Power size={16} />}
+                        Fazer Login no ComprasNet
+                    </button>
+                )}
+                {isLaunched && (
+                    <button className="btn" onClick={handleShutdown} disabled={loading}
+                        style={{ padding: '10px 20px', borderRadius: '10px', gap: '8px', fontWeight: 500, background: 'var(--color-bg-surface-hover)', color: 'var(--color-danger)', border: '1px solid var(--color-border)', cursor: 'pointer' }}>
+                        {loading ? <Loader2 size={16} className="spinner" /> : <Power size={16} />}
+                        Encerrar Watcher
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export function SettingsPage() {
     const [loading, setLoading] = useState(true);
@@ -326,6 +449,28 @@ export function SettingsPage() {
                     </div>
                 )}
 
+                {/* ComprasNet Chat Watcher Card */}
+                <div className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                    <div style={{ padding: '20px 24px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <MessageSquare size={20} />
+                        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>Monitor de Chat — Compras.gov.br</h2>
+                        <span style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '4px 10px', background: 'rgba(255,255,255,0.2)', borderRadius: '20px' }}>Novo</span>
+                    </div>
+                    
+                    <div style={{ padding: '24px' }}>
+                        <div style={{ marginBottom: '16px', padding: '14px 16px', background: 'rgba(5, 150, 105, 0.05)', borderRadius: '10px', border: '1px solid rgba(5, 150, 105, 0.15)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+                            <Info size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                            Monitora em tempo real as mensagens do chat da <strong>Sala de Disputa</strong> do ComprasNet.
+                            Captura convocações, diligências, suspensões e outros eventos críticos.
+                            <br />
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px', display: 'block' }}>
+                                Pré-requisito: Preencha os campos UASG, Modalidade, Nº Processo e Ano no card do processo (aparecem quando o portal é "ComprasNet").
+                            </span>
+                        </div>
+
+                        <ComprasnetWatcherControls />
+                    </div>
+                </div>
                 {/* Monitoring Logs Card */}
                 <div className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
                     <div style={{ padding: '20px 24px', background: 'var(--color-bg-surface-hover)', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

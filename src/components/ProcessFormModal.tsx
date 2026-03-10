@@ -399,6 +399,44 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* Valor, Data e Risco */}
+                            {/* ComprasNet Fields — only when portal indicates comprasnet */}
+                            {(formData.portal?.toLowerCase().includes('compras') || formData.portal?.toLowerCase().includes('cnet') || formData.link?.toLowerCase().includes('comprasnet') || formData.link?.toLowerCase().includes('cnetmobile')) && (
+                                <div style={{ gridColumn: '1 / -1', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', padding: '16px', border: '1px solid var(--color-border)' }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        📡 Dados ComprasNet (para monitoramento de chat)
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
+                                        <div>
+                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>UASG</label>
+                                            <input type="text" name="uasg" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
+                                                placeholder="Ex: 943001" value={formData.uasg || ''} onChange={handleChange} />
+                                        </div>
+                                        <div>
+                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>Cód. Modalidade</label>
+                                            <select name="modalityCode" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
+                                                value={formData.modalityCode || ''} onChange={handleChange}>
+                                                <option value="">Selecione</option>
+                                                <option value="5">5 - Pregão Eletrônico</option>
+                                                <option value="6">6 - Concorrência Eletrônica</option>
+                                                <option value="1">1 - Convite</option>
+                                                <option value="2">2 - Tomada de Preços</option>
+                                                <option value="3">3 - Concorrência</option>
+                                                <option value="4">4 - Pregão</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>Nº Processo</label>
+                                            <input type="text" name="processNumber" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
+                                                placeholder="Ex: 91398" value={formData.processNumber || ''} onChange={handleChange} />
+                                        </div>
+                                        <div>
+                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>Ano</label>
+                                            <input type="text" name="processYear" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
+                                                placeholder="Ex: 2025" value={formData.processYear || ''} onChange={handleChange} />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div>
                                 <label style={labelStyle}>Valor Estimado (R$)</label>
                                 <div style={inputContainerStyle}>

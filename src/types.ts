@@ -18,6 +18,10 @@ export interface BiddingProcess {
     portal: string;
     risk?: RiskTag; // Tag de risco
     link?: string; // Link para acesso ao processo
+    uasg?: string; // UASG do órgão (ComprasNet)
+    modalityCode?: string; // Código da modalidade (ComprasNet)
+    processNumber?: string; // Número do processo (ComprasNet)
+    processYear?: string; // Ano do processo (ComprasNet)
     isMonitored?: boolean; // Se o monitor de chat está ativo para este processo
     companyProfileId?: string; // ID da empresa vinculada
     observations?: string; // JSON stringified ObservationLog[]
