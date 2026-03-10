@@ -93,6 +93,8 @@ export class PncpMonitorService {
     }
   }
 
+  private consecutiveFailures: Map<string, number> = new Map();
+
   private async checkProcessMessages(process: any) {
     try {
       // Extract CNPJ and sequential number from link if possible
@@ -124,9 +126,35 @@ export class PncpMonitorService {
             hasMore = pageData.length === pageSize && page < 5; // Max 5 pages (500 msgs) safety limit
             page++;
           }
+          // Reset failure counter on success
+          this.consecutiveFailures.delete(process.id);
         } catch (fetchErr: any) {
-          // After all retries failed, log and move on to next process
-          console.error(`[PncpMonitor] ❌ API PNCP indisponível para processo ${process.title} após 3 tentativas: ${fetchErr.message}`);
+          const status = fetchErr?.response?.status;
+          
+          // 404 = endpoint doesn't exist for this process (expected for many process types)
+          if (status === 404) {
+            const failures = (this.consecutiveFailures.get(process.id) || 0) + 1;
+            this.consecutiveFailures.set(process.id, failures);
+            
+            // Only log on first occurrence, then silently skip
+            if (failures === 1) {
+              console.warn(`[PncpMonitor] ⚠️ Processo "${process.title.substring(0, 60)}..." não possui endpoint de mensagens no PNCP (404). Será ignorado silenciosamente.`);
+            }
+            
+            // After 3 consecutive 404s, auto-disable monitoring to stop wasting requests
+            if (failures >= 3) {
+              console.warn(`[PncpMonitor] 🔕 Auto-desativando monitoramento para "${process.title.substring(0, 50)}..." (3 falhas 404 consecutivas).`);
+              await prisma.biddingProcess.update({
+                where: { id: process.id },
+                data: { isMonitored: false }
+              }).catch(() => {});
+              this.consecutiveFailures.delete(process.id);
+            }
+            return;
+          }
+          
+          // Other errors (500, timeout, etc.) — log as error
+          console.error(`[PncpMonitor] ❌ Erro ao verificar processo "${process.title.substring(0, 60)}...": ${fetchErr.message}`);
           return;
         }
       }
