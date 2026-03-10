@@ -34,6 +34,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const lastLogIdRef = useRef<string | null>(null);
   const [alertCount, setAlertCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -156,7 +157,24 @@ function App() {
     const interval = setInterval(checkChatLogs, 30000); // Check every 30 seconds
     checkChatLogs(); // Initial check
 
-    return () => clearInterval(interval);
+    // Poll unread count for sidebar badge
+    const fetchUnreadCount = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chat-monitor/unread-count`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setChatUnreadCount(data.count || 0);
+        }
+      } catch { /* silent */ }
+    };
+    const unreadInterval = setInterval(fetchUnreadCount, 30000);
+    fetchUnreadCount();
+
+    return () => { clearInterval(interval); clearInterval(unreadInterval); };
   }, [user]);
 
   const refreshData = async () => {
@@ -217,7 +235,10 @@ function App() {
               <span>Busca PNCP</span>
             </a>
             <a href="#" className={`nav-item ${activeTab === 'chat-monitor' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('chat-monitor'); }}>
-              <Satellite size={20} />
+              <div style={{ position: 'relative' }}>
+                <Satellite size={20} />
+                {chatUnreadCount > 0 && <span className="badge badge-red" style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '0.6rem', padding: '2px 5px', minWidth: '15px' }}>{chatUnreadCount}</span>}
+              </div>
               <span>Monitor Chat</span>
             </a>
             <a href="#" className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('reports'); }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot, Star, Archive, ArchiveRestore, CheckCheck } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 type TabFilter = 'all' | 'unread' | 'important' | 'archived';
@@ -14,6 +14,9 @@ interface ChatMessage {
   eventCategory: string | null;
   itemRef: string | null;
   captureSource: string | null;
+  isRead: boolean;
+  isImportant: boolean;
+  isArchived: boolean;
   createdAt: string;
   status: string;
   biddingProcessId: string;
@@ -103,6 +106,33 @@ export function ChatMonitorPage({ companies }: Props) {
   const token = localStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
+  // ── Actions ──
+  const markProcessRead = async (processId: string) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/chat-monitor/read-all/${processId}`, { method: 'PUT', headers });
+      setMessages(prev => prev.map(m => m.biddingProcessId === processId ? { ...m, isRead: true } : m));
+    } catch { /* silent */ }
+  };
+
+  const toggleProcessImportant = async (processId: string, current: boolean) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/chat-monitor/process-action/${processId}`, {
+        method: 'PUT', headers, body: JSON.stringify({ isImportant: !current })
+      });
+      setMessages(prev => prev.map(m => m.biddingProcessId === processId ? { ...m, isImportant: !current } : m));
+    } catch { /* silent */ }
+  };
+
+  const toggleProcessArchive = async (processId: string, current: boolean) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/chat-monitor/process-action/${processId}`, {
+        method: 'PUT', headers, body: JSON.stringify({ isArchived: !current })
+      });
+      setMessages(prev => prev.map(m => m.biddingProcessId === processId ? { ...m, isArchived: !current } : m));
+      if (!current && selectedProcessId === processId) setSelectedProcessId(null);
+    } catch { /* silent */ }
+  };
+
   // ── Fetch all messages ──
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -153,7 +183,9 @@ export function ChatMonitorPage({ companies }: Props) {
       if (new Date(msg.createdAt) > new Date(group.lastMessageAt)) {
         group.lastMessageAt = msg.createdAt;
       }
-      if (msg.detectedKeyword) group.isImportant = true;
+      if (msg.detectedKeyword || (msg as any).isImportant) group.isImportant = true;
+      if (!(msg as any).isRead) group.unreadCount++;
+      if ((msg as any).isArchived) group.isArchived = true;
     }
 
     return Array.from(groupMap.values()).sort((a, b) =>
@@ -163,6 +195,11 @@ export function ChatMonitorPage({ companies }: Props) {
 
   // ── Apply filters ──
   const filteredGroups = processGroups.filter(g => {
+    // Archived tab: only show archived
+    if (activeTab === 'archived') return g.isArchived;
+    // Non-archived tabs: hide archived items
+    if (g.isArchived) return false;
+    if (activeTab === 'unread' && g.unreadCount === 0) return false;
     if (activeTab === 'important' && !g.isImportant) return false;
     // Search
     if (searchQuery) {
@@ -197,6 +234,15 @@ export function ChatMonitorPage({ companies }: Props) {
     }
   }, [filteredGroups, selectedProcessId]);
 
+  // Mark as read when selecting a process
+  const handleSelectProcess = (processId: string) => {
+    setSelectedProcessId(processId);
+    const group = processGroups.find(g => g.processId === processId);
+    if (group && group.unreadCount > 0) {
+      markProcessRead(processId);
+    }
+  };
+
   // ── Scroll to bottom on process change ──
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -204,7 +250,9 @@ export function ChatMonitorPage({ companies }: Props) {
 
   const totalMessages = messages.length;
   const totalProcesses = processGroups.length;
-  const importantCount = processGroups.filter(g => g.isImportant).length;
+  const importantCount = processGroups.filter(g => g.isImportant && !g.isArchived).length;
+  const unreadCount = processGroups.filter(g => g.unreadCount > 0 && !g.isArchived).length;
+  const archivedCount = processGroups.filter(g => g.isArchived).length;
 
   if (loading) {
     return (
@@ -290,8 +338,10 @@ export function ChatMonitorPage({ companies }: Props) {
             {/* Tabs */}
             <div style={{ display: 'flex', gap: '4px' }}>
               {([
-                { key: 'all' as TabFilter, label: 'Todos', count: processGroups.length },
+                { key: 'all' as TabFilter, label: 'Todos', count: processGroups.filter(g => !g.isArchived).length },
+                { key: 'unread' as TabFilter, label: 'Não lidos', count: unreadCount },
                 { key: 'important' as TabFilter, label: 'Importantes', count: importantCount },
+                { key: 'archived' as TabFilter, label: 'Arquivados', count: archivedCount },
               ]).map(tab => (
                 <button
                   key={tab.key}
@@ -334,7 +384,7 @@ export function ChatMonitorPage({ companies }: Props) {
                 return (
                   <div
                     key={group.processId}
-                    onClick={() => setSelectedProcessId(group.processId)}
+                    onClick={() => handleSelectProcess(group.processId)}
                     style={{
                       padding: '14px 16px',
                       borderBottom: '1px solid var(--color-border)',
@@ -378,9 +428,14 @@ export function ChatMonitorPage({ companies }: Props) {
                       </div>
                     </div>
 
-                    {/* Message count */}
-                    <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
+                    {/* Message count + unread badge */}
+                    <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center' }}>
                       <span>📨 {group.messages.length} msgs</span>
+                      {group.unreadCount > 0 && (
+                        <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'var(--color-primary)', color: 'white', fontWeight: 600, fontSize: '0.625rem' }}>
+                          {group.unreadCount} novas
+                        </span>
+                      )}
                       {group.messages.filter(m => m.detectedKeyword).length > 0 && (
                         <span style={{ color: '#f59e0b', fontWeight: 600 }}>
                           🔔 {group.messages.filter(m => m.detectedKeyword).length} alertas
@@ -411,10 +466,31 @@ export function ChatMonitorPage({ companies }: Props) {
                       <span>{(() => { const b = portalBadge(selectedGroup.portal); return b.label; })()}</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', background: 'var(--color-bg-surface-hover)', color: 'var(--color-text-secondary)' }}>
                       {selectedMessages.length} mensagens
                     </span>
+                    <button
+                      title={selectedGroup.isImportant ? 'Remover destaque' : 'Marcar como importante'}
+                      onClick={(e) => { e.stopPropagation(); toggleProcessImportant(selectedGroup.processId, selectedGroup.isImportant); }}
+                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: selectedGroup.isImportant ? 'rgba(245, 158, 11, 0.15)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      <Star size={16} fill={selectedGroup.isImportant ? '#f59e0b' : 'none'} color={selectedGroup.isImportant ? '#f59e0b' : 'var(--color-text-tertiary)'} />
+                    </button>
+                    <button
+                      title={selectedGroup.isArchived ? 'Desarquivar' : 'Arquivar'}
+                      onClick={(e) => { e.stopPropagation(); toggleProcessArchive(selectedGroup.processId, selectedGroup.isArchived); }}
+                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      {selectedGroup.isArchived ? <ArchiveRestore size={16} color="var(--color-text-tertiary)" /> : <Archive size={16} color="var(--color-text-tertiary)" />}
+                    </button>
+                    <button
+                      title="Marcar tudo como lido"
+                      onClick={() => markProcessRead(selectedGroup.processId)}
+                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      <CheckCheck size={16} color="var(--color-text-tertiary)" />
+                    </button>
                   </div>
                 </div>
               </div>

@@ -2777,9 +2777,159 @@ app.get('/api/chat-monitor/health', authenticateToken, async (req: any, res) => 
     }
 });
 
-// ══════════════════════════════════════
-// ── ComprasNet Chat Watcher Endpoints ──
-// ══════════════════════════════════════
+// ══════════════════════════════════════════
+// ── Chat Monitor Module v2 Endpoints ──
+// ══════════════════════════════════════════
+
+// Get grouped processes with message counts
+app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) => {
+    try {
+        const { companyId, platform } = req.query;
+        const where: any = { tenantId: req.user.tenantId };
+
+        const processes: any[] = await (prisma.biddingProcess as any).findMany({
+            where: {
+                ...where,
+                chatMonitorLogs: { some: {} },
+                ...(companyId ? { companyProfileId: companyId as string } : {}),
+            },
+            include: {
+                _count: {
+                    select: { chatMonitorLogs: true }
+                },
+                chatMonitorLogs: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // Compute unread counts per process
+        const unreadCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
+            by: ['biddingProcessId'],
+            where: { ...where, isRead: false },
+            _count: { id: true },
+        });
+        const unreadMap = new Map(unreadCounts.map((u: any) => [u.biddingProcessId, u._count.id]));
+
+        // Compute important flag per process (any important log or has detectedKeyword)
+        const importantProcessIds: any[] = await (prisma.chatMonitorLog as any).findMany({
+            where: { ...where, OR: [{ isImportant: true }, { detectedKeyword: { not: null } }] },
+            select: { biddingProcessId: true },
+            distinct: ['biddingProcessId'],
+        });
+        const importantSet = new Set(importantProcessIds.map((i: any) => i.biddingProcessId));
+
+        // Compute archived flag per process (all logs archived)
+        const archivedCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
+            by: ['biddingProcessId'],
+            where: { ...where, isArchived: true },
+            _count: { id: true },
+        });
+        const archivedMap = new Map(archivedCounts.map((a: any) => [a.biddingProcessId, a._count.id]));
+
+        const result = processes.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            portal: p.portal,
+            modality: p.modality,
+            uasg: p.uasg,
+            companyProfileId: p.companyProfileId,
+            totalMessages: p._count.chatMonitorLogs,
+            unreadCount: unreadMap.get(p.id) || 0,
+            isImportant: importantSet.has(p.id),
+            isArchived: (archivedMap.get(p.id) || 0) >= p._count.chatMonitorLogs && p._count.chatMonitorLogs > 0,
+            lastMessage: p.chatMonitorLogs[0] || null,
+        }));
+
+        // Apply platform filter
+        let filtered = result;
+        if (platform) {
+            const pf = (platform as string).toLowerCase();
+            filtered = result.filter((p: any) => {
+                const portal = (p.portal || '').toLowerCase();
+                if (pf === 'comprasnet') return portal.includes('compras') || portal.includes('cnet');
+                if (pf === 'pncp') return portal.includes('pncp');
+                if (pf === 'bll') return portal.includes('bll');
+                return true;
+            });
+        }
+
+        res.json(filtered);
+    } catch (error) {
+        console.error('[ChatMonitor] Error fetching processes:', error);
+        res.status(500).json({ error: 'Failed to fetch chat monitor processes' });
+    }
+});
+
+// Get unread count (for sidebar badge)
+app.get('/api/chat-monitor/unread-count', authenticateToken, async (req: any, res) => {
+    try {
+        const count = await (prisma.chatMonitorLog as any).count({
+            where: { tenantId: req.user.tenantId, isRead: false, isArchived: false }
+        });
+        res.json({ count });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get unread count' });
+    }
+});
+
+// Toggle read/important/archive on a log
+app.put('/api/chat-monitor/log/:logId', authenticateToken, async (req: any, res) => {
+    try {
+        const { logId } = req.params;
+        const { isRead, isImportant, isArchived } = req.body;
+
+        const data: any = {};
+        if (isRead !== undefined) data.isRead = isRead;
+        if (isImportant !== undefined) data.isImportant = isImportant;
+        if (isArchived !== undefined) data.isArchived = isArchived;
+
+        const updated = await prisma.chatMonitorLog.update({
+            where: { id: logId },
+            data,
+        });
+
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update log' });
+    }
+});
+
+// Batch mark-read all messages for a process
+app.put('/api/chat-monitor/read-all/:processId', authenticateToken, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const result = await (prisma.chatMonitorLog as any).updateMany({
+            where: { biddingProcessId: processId, tenantId: req.user.tenantId, isRead: false } as any,
+            data: { isRead: true },
+        });
+        res.json({ updated: result.count });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to mark messages as read' });
+    }
+});
+
+// Batch toggle important/archive for all messages of a process
+app.put('/api/chat-monitor/process-action/:processId', authenticateToken, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const { isImportant, isArchived } = req.body;
+
+        const data: any = {};
+        if (isImportant !== undefined) data.isImportant = isImportant;
+        if (isArchived !== undefined) data.isArchived = isArchived;
+
+        const result = await prisma.chatMonitorLog.updateMany({
+            where: { biddingProcessId: processId, tenantId: req.user.tenantId },
+            data,
+        });
+        res.json({ updated: result.count });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update process messages' });
+    }
+});
 
 // Launch browser for manual login
 app.post('/api/chat-watcher/login', authenticateToken, async (req: any, res) => {
