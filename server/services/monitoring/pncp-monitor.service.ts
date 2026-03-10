@@ -96,14 +96,17 @@ export class PncpMonitorService {
   private consecutiveFailures: Map<string, number> = new Map();
 
   private async checkProcessMessages(process: any) {
+    const shortTitle = process.title?.substring(0, 55) || process.id;
     try {
       // Extract CNPJ and sequential number from link if possible
       const pncpMatch = process.link?.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
       if (!pncpMatch) {
+        console.log(`[PncpMonitor] ⏭️ "${shortTitle}" — link não bate com padrão /editais/CNPJ/ANO/SEQ/. Link: "${process.link || 'NULL'}"`);
         return;
       }
 
       const [_, cnpj, ano, sequencial] = pncpMatch;
+      console.log(`[PncpMonitor] 🔍 Verificando "${shortTitle}" — CNPJ: ${cnpj}, Ano: ${ano}, Seq: ${sequencial}`);
       
       // Fetch messages with retry and backoff
       const allMessages: any[] = [];
@@ -138,12 +141,12 @@ export class PncpMonitorService {
             
             // Only log on first occurrence, then silently skip
             if (failures === 1) {
-              console.warn(`[PncpMonitor] ⚠️ Processo "${process.title.substring(0, 60)}..." não possui endpoint de mensagens no PNCP (404). Será ignorado silenciosamente.`);
+              console.warn(`[PncpMonitor] ⚠️ "${shortTitle}" — 404 no endpoint de mensagens. Será ignorado.`);
             }
             
             // After 3 consecutive 404s, auto-disable monitoring to stop wasting requests
             if (failures >= 3) {
-              console.warn(`[PncpMonitor] 🔕 Auto-desativando monitoramento para "${process.title.substring(0, 50)}..." (3 falhas 404 consecutivas).`);
+              console.warn(`[PncpMonitor] 🔕 Auto-desativando monitoramento para "${shortTitle}" (3 falhas 404 consecutivas).`);
               await prisma.biddingProcess.update({
                 where: { id: process.id },
                 data: { isMonitored: false }
@@ -154,18 +157,26 @@ export class PncpMonitorService {
           }
           
           // Other errors (500, timeout, etc.) — log as error
-          console.error(`[PncpMonitor] ❌ Erro ao verificar processo "${process.title.substring(0, 60)}...": ${fetchErr.message}`);
+          console.error(`[PncpMonitor] ❌ Erro ao verificar "${shortTitle}": ${fetchErr.message}`);
           return;
         }
       }
       
-      if (allMessages.length === 0) return;
+      if (allMessages.length === 0) {
+        console.log(`[PncpMonitor] 📭 "${shortTitle}" — PNCP retornou 0 mensagens.`);
+        return;
+      }
+
+      console.log(`[PncpMonitor] 📨 "${shortTitle}" — ${allMessages.length} mensagens obtidas da API PNCP.`);
 
       const config = await prisma.chatMonitorConfig.findUnique({
         where: { tenantId: process.tenantId }
       });
 
-      if (!config || !config.isActive) return;
+      if (!config || !config.isActive) {
+        console.log(`[PncpMonitor] ⏸️ "${shortTitle}" — Config desativada ou inexistente. Skipping.`);
+        return;
+      }
 
       const keywords = config.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
 
@@ -176,6 +187,7 @@ export class PncpMonitorService {
       });
       const loggedMessageIds = new Set(existingLogs.map(l => l.messageId));
       
+      let newCount = 0;
       for (const msg of allMessages) {
         const msgId = String(msg.id || msg.numero);
         const content = msg.conteudo?.toLowerCase() || '';
@@ -185,7 +197,7 @@ export class PncpMonitorService {
         const detectedKeyword = keywords.find(k => content.includes(k)) || null;
 
         if (detectedKeyword) {
-          console.log(`[PncpMonitor] 🚨 KEYWORD DETECTED! "${detectedKeyword}" in process ${process.title}`);
+          console.log(`[PncpMonitor] 🚨 KEYWORD "${detectedKeyword}" in "${shortTitle}"`);
           this.alertsDetected++;
         }
 
@@ -202,10 +214,13 @@ export class PncpMonitorService {
           }
         });
         loggedMessageIds.add(msgId);
+        newCount++;
       }
 
+      console.log(`[PncpMonitor] ✅ "${shortTitle}" — ${newCount} novas mensagens capturadas (${existingLogs.length} já existiam).`);
+
     } catch (error: any) {
-      console.error(`[PncpMonitor] Error checking process ${process.id}:`, error.message);
+      console.error(`[PncpMonitor] ❌ Error checking "${shortTitle}":`, error.message);
     }
   }
 }
