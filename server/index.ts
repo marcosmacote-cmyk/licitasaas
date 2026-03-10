@@ -2863,6 +2863,47 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
     }
 });
 
+// Get messages for a specific process (paginated, ordered chronologically)
+app.get('/api/chat-monitor/messages/:processId', authenticateToken, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const { page = '1', limit = '100' } = req.query;
+        const pageNum = Math.max(1, parseInt(page as string) || 1);
+        const limitNum = Math.min(500, Math.max(1, parseInt(limit as string) || 100));
+        const skip = (pageNum - 1) * limitNum;
+
+        const [messages, total] = await Promise.all([
+            prisma.chatMonitorLog.findMany({
+                where: { biddingProcessId: processId, tenantId: req.user.tenantId },
+                orderBy: { createdAt: 'asc' },
+                skip,
+                take: limitNum,
+            }),
+            prisma.chatMonitorLog.count({
+                where: { biddingProcessId: processId, tenantId: req.user.tenantId },
+            }),
+        ]);
+
+        // Also get the process details
+        const process = await prisma.biddingProcess.findUnique({
+            where: { id: processId },
+            select: {
+                id: true, title: true, portal: true, modality: true,
+                companyProfileId: true,
+            },
+        });
+
+        res.json({
+            messages,
+            process: process ? { ...process, uasg: (process as any).uasg } : null,
+            pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
+        });
+    } catch (error) {
+        console.error('[ChatMonitor] Error fetching messages:', error);
+        res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+});
+
 // Get unread count (for sidebar badge)
 app.get('/api/chat-monitor/unread-count', authenticateToken, async (req: any, res) => {
     try {

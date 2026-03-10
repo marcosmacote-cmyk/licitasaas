@@ -20,30 +20,25 @@ interface ChatMessage {
   createdAt: string;
   status: string;
   biddingProcessId: string;
-  biddingProcess?: {
-    id: string;
-    title: string;
-    portal: string;
-    modality: string;
-    uasg: string | null;
-    processNumber: string | null;
-    processYear: string | null;
-    companyId: string | null;
-  };
 }
 
-interface ProcessGroup {
-  processId: string;
+interface ProcessSummary {
+  id: string;
   title: string;
   portal: string;
   modality: string;
   uasg: string | null;
-  companyId: string | null;
-  messages: ChatMessage[];
-  lastMessageAt: string;
+  companyProfileId: string | null;
+  totalMessages: number;
   unreadCount: number;
   isImportant: boolean;
   isArchived: boolean;
+  lastMessage: {
+    content: string;
+    createdAt: string;
+    authorType: string | null;
+    detectedKeyword: string | null;
+  } | null;
 }
 
 interface Props {
@@ -93,10 +88,17 @@ function portalBadge(portal: string) {
 }
 
 export function ChatMonitorPage({ companies }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  // ── State: Process List (left panel) ──
+  const [processes, setProcesses] = useState<ProcessSummary[]>([]);
+  const [loadingProcesses, setLoadingProcesses] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── State: Selected Process Messages (right panel) ──
   const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
+  const [selectedMessages, setSelectedMessages] = useState<ChatMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // ── State: Filters ──
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
@@ -106,11 +108,77 @@ export function ChatMonitorPage({ companies }: Props) {
   const token = localStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
+  // ══════════════════════════════════════
+  // ── API: Fetch process list (lightweight) ──
+  // ══════════════════════════════════════
+  const fetchProcesses = useCallback(async (silent = false) => {
+    if (!silent) setLoadingProcesses(true);
+    else setRefreshing(true);
+    try {
+      const params = new URLSearchParams();
+      if (companyFilter !== 'all') params.set('companyId', companyFilter);
+      if (platformFilter !== 'all') params.set('platform', platformFilter);
+
+      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/processes?${params}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setProcesses(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch processes:', err);
+    } finally {
+      setLoadingProcesses(false);
+      setRefreshing(false);
+    }
+  }, [companyFilter, platformFilter]);
+
+  useEffect(() => {
+    fetchProcesses();
+    const interval = setInterval(() => fetchProcesses(true), 15000);
+    return () => clearInterval(interval);
+  }, [fetchProcesses]);
+
+  // ══════════════════════════════════════
+  // ── API: Fetch messages for selected process ──
+  // ══════════════════════════════════════
+  const fetchMessages = useCallback(async (processId: string) => {
+    setLoadingMessages(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/messages/${processId}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedMessages(data.messages || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch messages:', err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, []);
+
+  // Load messages when selection changes
+  useEffect(() => {
+    if (selectedProcessId) {
+      fetchMessages(selectedProcessId);
+    } else {
+      setSelectedMessages([]);
+    }
+  }, [selectedProcessId, fetchMessages]);
+
+  // Auto-refresh selected process messages
+  useEffect(() => {
+    if (!selectedProcessId) return;
+    const interval = setInterval(() => fetchMessages(selectedProcessId), 20000);
+    return () => clearInterval(interval);
+  }, [selectedProcessId, fetchMessages]);
+
+  // ══════════════════════════════════════
   // ── Actions ──
+  // ══════════════════════════════════════
   const markProcessRead = async (processId: string) => {
     try {
       await fetch(`${API_BASE_URL}/api/chat-monitor/read-all/${processId}`, { method: 'PUT', headers });
-      setMessages(prev => prev.map(m => m.biddingProcessId === processId ? { ...m, isRead: true } : m));
+      setProcesses(prev => prev.map(p => p.id === processId ? { ...p, unreadCount: 0 } : p));
     } catch { /* silent */ }
   };
 
@@ -119,7 +187,7 @@ export function ChatMonitorPage({ companies }: Props) {
       await fetch(`${API_BASE_URL}/api/chat-monitor/process-action/${processId}`, {
         method: 'PUT', headers, body: JSON.stringify({ isImportant: !current })
       });
-      setMessages(prev => prev.map(m => m.biddingProcessId === processId ? { ...m, isImportant: !current } : m));
+      setProcesses(prev => prev.map(p => p.id === processId ? { ...p, isImportant: !current } : p));
     } catch { /* silent */ }
   };
 
@@ -128,133 +196,61 @@ export function ChatMonitorPage({ companies }: Props) {
       await fetch(`${API_BASE_URL}/api/chat-monitor/process-action/${processId}`, {
         method: 'PUT', headers, body: JSON.stringify({ isArchived: !current })
       });
-      setMessages(prev => prev.map(m => m.biddingProcessId === processId ? { ...m, isArchived: !current } : m));
+      setProcesses(prev => prev.map(p => p.id === processId ? { ...p, isArchived: !current } : p));
       if (!current && selectedProcessId === processId) setSelectedProcessId(null);
     } catch { /* silent */ }
   };
 
-  // ── Fetch all messages ──
-  const fetchMessages = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs?limit=500`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(data.logs || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch chat messages:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(() => fetchMessages(true), 15000); // Auto-refresh every 15s
-    return () => clearInterval(interval);
-  }, [fetchMessages]);
-
-  // ── Group messages by process ──
-  const processGroups: ProcessGroup[] = (() => {
-    const groupMap = new Map<string, ProcessGroup>();
-
-    for (const msg of messages) {
-      const pid = msg.biddingProcessId;
-      if (!groupMap.has(pid)) {
-        groupMap.set(pid, {
-          processId: pid,
-          title: msg.biddingProcess?.title || 'Processo desconhecido',
-          portal: msg.biddingProcess?.portal || '',
-          modality: msg.biddingProcess?.modality || '',
-          uasg: msg.biddingProcess?.uasg || null,
-          companyId: msg.biddingProcess?.companyId || null,
-          messages: [],
-          lastMessageAt: msg.createdAt,
-          unreadCount: 0,
-          isImportant: false,
-          isArchived: false,
-        });
-      }
-      const group = groupMap.get(pid)!;
-      group.messages.push(msg);
-      if (new Date(msg.createdAt) > new Date(group.lastMessageAt)) {
-        group.lastMessageAt = msg.createdAt;
-      }
-      if (msg.detectedKeyword || (msg as any).isImportant) group.isImportant = true;
-      if (!(msg as any).isRead) group.unreadCount++;
-      if ((msg as any).isArchived) group.isArchived = true;
-    }
-
-    return Array.from(groupMap.values()).sort((a, b) =>
-      new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-    );
-  })();
-
-  // ── Apply filters ──
-  const filteredGroups = processGroups.filter(g => {
-    // Archived tab: only show archived
-    if (activeTab === 'archived') return g.isArchived;
-    // Non-archived tabs: hide archived items
-    if (g.isArchived) return false;
-    if (activeTab === 'unread' && g.unreadCount === 0) return false;
-    if (activeTab === 'important' && !g.isImportant) return false;
-    // Search
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = g.title.toLowerCase().includes(q);
-      const matchContent = g.messages.some(m => m.content.toLowerCase().includes(q));
-      const matchUasg = g.uasg?.includes(q);
-      if (!matchTitle && !matchContent && !matchUasg) return false;
-    }
-    // Company filter
-    if (companyFilter !== 'all' && g.companyId !== companyFilter) return false;
-    // Platform filter
-    if (platformFilter !== 'all') {
-      const portal = g.portal.toLowerCase();
-      if (platformFilter === 'comprasnet' && !portal.includes('compras') && !portal.includes('cnet')) return false;
-      if (platformFilter === 'pncp' && !portal.includes('pncp')) return false;
-      if (platformFilter === 'bll' && !portal.includes('bll')) return false;
-    }
-    return true;
-  });
-
-  // ── Selected process messages ──
-  const selectedGroup = filteredGroups.find(g => g.processId === selectedProcessId) || null;
-  const selectedMessages = selectedGroup?.messages.sort((a, b) =>
-    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  ) || [];
-
-  // Auto-select first process
-  useEffect(() => {
-    if (!selectedProcessId && filteredGroups.length > 0) {
-      setSelectedProcessId(filteredGroups[0].processId);
-    }
-  }, [filteredGroups, selectedProcessId]);
-
-  // Mark as read when selecting a process
   const handleSelectProcess = (processId: string) => {
     setSelectedProcessId(processId);
-    const group = processGroups.find(g => g.processId === processId);
-    if (group && group.unreadCount > 0) {
+    const proc = processes.find(p => p.id === processId);
+    if (proc && proc.unreadCount > 0) {
       markProcessRead(processId);
     }
   };
 
-  // ── Scroll to bottom on process change ──
+  // ══════════════════════════════════════
+  // ── Filters ──
+  // ══════════════════════════════════════
+  const filteredProcesses = processes.filter(p => {
+    // Tab filter
+    if (activeTab === 'archived') return p.isArchived;
+    if (p.isArchived) return false;
+    if (activeTab === 'unread' && p.unreadCount === 0) return false;
+    if (activeTab === 'important' && !p.isImportant) return false;
+    // Search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = p.title.toLowerCase().includes(q);
+      const matchUasg = p.uasg?.toLowerCase().includes(q);
+      const matchContent = p.lastMessage?.content?.toLowerCase().includes(q);
+      if (!matchTitle && !matchUasg && !matchContent) return false;
+    }
+    return true;
+  });
+
+  // Auto-select first process
+  useEffect(() => {
+    if (!selectedProcessId && filteredProcesses.length > 0) {
+      setSelectedProcessId(filteredProcesses[0].id);
+    }
+  }, [filteredProcesses, selectedProcessId]);
+
+  // Scroll to bottom on process change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [selectedProcessId, selectedMessages.length]);
 
-  const totalMessages = messages.length;
-  const totalProcesses = processGroups.length;
-  const importantCount = processGroups.filter(g => g.isImportant && !g.isArchived).length;
-  const unreadCount = processGroups.filter(g => g.unreadCount > 0 && !g.isArchived).length;
-  const archivedCount = processGroups.filter(g => g.isArchived).length;
+  // ── Counts ──
+  const totalProcesses = processes.filter(p => !p.isArchived).length;
+  const totalMessages = processes.reduce((sum, p) => sum + p.totalMessages, 0);
+  const unreadProcessCount = processes.filter(p => p.unreadCount > 0 && !p.isArchived).length;
+  const importantCount = processes.filter(p => p.isImportant && !p.isArchived).length;
+  const archivedCount = processes.filter(p => p.isArchived).length;
 
-  if (loading) {
+  const selectedProc = filteredProcesses.find(p => p.id === selectedProcessId) || null;
+
+  if (loadingProcesses) {
     return (
       <div className="page-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
         <Loader2 size={32} className="spinner" color="var(--color-primary)" />
@@ -285,7 +281,7 @@ export function ChatMonitorPage({ companies }: Props) {
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
           {refreshing && <Loader2 size={14} className="spinner" color="var(--color-text-tertiary)" />}
-          <button className="btn btn-ghost" onClick={() => fetchMessages(true)} title="Atualizar" style={{ padding: '6px' }}>
+          <button className="btn btn-ghost" onClick={() => fetchProcesses(true)} title="Atualizar" style={{ padding: '6px' }}>
             <RefreshCw size={16} />
           </button>
         </div>
@@ -338,8 +334,8 @@ export function ChatMonitorPage({ companies }: Props) {
             {/* Tabs */}
             <div style={{ display: 'flex', gap: '4px' }}>
               {([
-                { key: 'all' as TabFilter, label: 'Todos', count: processGroups.filter(g => !g.isArchived).length },
-                { key: 'unread' as TabFilter, label: 'Não lidos', count: unreadCount },
+                { key: 'all' as TabFilter, label: 'Todos', count: totalProcesses },
+                { key: 'unread' as TabFilter, label: 'Não lidos', count: unreadProcessCount },
                 { key: 'important' as TabFilter, label: 'Importantes', count: importantCount },
                 { key: 'archived' as TabFilter, label: 'Arquivados', count: archivedCount },
               ]).map(tab => (
@@ -367,38 +363,38 @@ export function ChatMonitorPage({ companies }: Props) {
 
           {/* Process List */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {filteredGroups.length === 0 ? (
+            {filteredProcesses.length === 0 ? (
               <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
                 <MessageSquare size={32} style={{ marginBottom: '12px', opacity: 0.3 }} />
                 <p>Nenhuma mensagem capturada ainda.</p>
                 <p style={{ fontSize: '0.75rem', marginTop: '8px' }}>Ative o monitoramento nos cards de licitação.</p>
               </div>
             ) : (
-              filteredGroups.map(group => {
-                const isSelected = group.processId === selectedProcessId;
-                const badge = portalBadge(group.portal);
-                const company = companies.find(c => c.id === group.companyId);
-                const lastMsg = group.messages[group.messages.length - 1];
-                const preview = lastMsg?.content?.substring(0, 80) || '';
+              filteredProcesses.map(proc => {
+                const isSelected = proc.id === selectedProcessId;
+                const badge = portalBadge(proc.portal);
+                const company = companies.find(c => c.id === proc.companyProfileId);
+                const preview = proc.lastMessage?.content?.substring(0, 80) || '';
+                const lastMsgDate = proc.lastMessage?.createdAt;
 
                 return (
                   <div
-                    key={group.processId}
-                    onClick={() => handleSelectProcess(group.processId)}
+                    key={proc.id}
+                    onClick={() => handleSelectProcess(proc.id)}
                     style={{
                       padding: '14px 16px',
                       borderBottom: '1px solid var(--color-border)',
                       cursor: 'pointer',
-                      background: isSelected ? 'var(--color-primary-light)' : 'transparent',
+                      background: isSelected ? 'var(--color-primary-light, rgba(37, 99, 235, 0.06))' : 'transparent',
                       borderLeft: isSelected ? '3px solid var(--color-primary)' : '3px solid transparent',
                       transition: 'all 150ms',
                     }}
                   >
                     {/* Title + Badge */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>
-                        {group.isImportant && <span style={{ color: '#f59e0b', marginRight: '4px' }}>⚡</span>}
-                        {group.title.substring(0, 70)}{group.title.length > 70 ? '...' : ''}
+                      <span style={{ fontSize: '0.8125rem', fontWeight: proc.unreadCount > 0 ? 700 : 600, color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>
+                        {proc.isImportant && <span style={{ color: '#f59e0b', marginRight: '4px' }}>⚡</span>}
+                        {proc.title.substring(0, 70)}{proc.title.length > 70 ? '...' : ''}
                       </span>
                       <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: badge.bg, color: badge.color, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {badge.label}
@@ -416,29 +412,26 @@ export function ChatMonitorPage({ companies }: Props) {
                     {/* Preview + Time */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                        {preview}...
+                        {preview}{preview.length >= 80 ? '...' : ''}
                       </span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
-                        <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
-                          {new Date(group.lastMessageAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                        </span>
-                        <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
-                          {new Date(group.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
+                      {lastMsgDate && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
+                            {new Date(lastMsgDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          </span>
+                          <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
+                            {new Date(lastMsgDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Message count + unread badge */}
                     <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center' }}>
-                      <span>📨 {group.messages.length} msgs</span>
-                      {group.unreadCount > 0 && (
+                      <span>📨 {proc.totalMessages} msgs</span>
+                      {proc.unreadCount > 0 && (
                         <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'var(--color-primary)', color: 'white', fontWeight: 600, fontSize: '0.625rem' }}>
-                          {group.unreadCount} novas
-                        </span>
-                      )}
-                      {group.messages.filter(m => m.detectedKeyword).length > 0 && (
-                        <span style={{ color: '#f59e0b', fontWeight: 600 }}>
-                          🔔 {group.messages.filter(m => m.detectedKeyword).length} alertas
+                          {proc.unreadCount} novas
                         </span>
                       )}
                     </div>
@@ -451,42 +444,42 @@ export function ChatMonitorPage({ companies }: Props) {
 
         {/* ── RIGHT: Chat Messages ── */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--color-bg-base)', overflow: 'hidden' }}>
-          {selectedGroup ? (
+          {selectedProc ? (
             <>
               {/* Process Header */}
               <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--color-text-primary)' }}>
-                      {selectedGroup.title}
+                      {selectedProc.title}
                     </h2>
                     <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-                      {selectedGroup.uasg && <span>UASG: {selectedGroup.uasg}</span>}
-                      {selectedGroup.modality && <span>{selectedGroup.modality}</span>}
-                      <span>{(() => { const b = portalBadge(selectedGroup.portal); return b.label; })()}</span>
+                      {selectedProc.uasg && <span>UASG: {selectedProc.uasg}</span>}
+                      {selectedProc.modality && <span>{selectedProc.modality}</span>}
+                      <span>{portalBadge(selectedProc.portal).label}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', background: 'var(--color-bg-surface-hover)', color: 'var(--color-text-secondary)' }}>
-                      {selectedMessages.length} mensagens
+                      {selectedProc.totalMessages} mensagens
                     </span>
                     <button
-                      title={selectedGroup.isImportant ? 'Remover destaque' : 'Marcar como importante'}
-                      onClick={(e) => { e.stopPropagation(); toggleProcessImportant(selectedGroup.processId, selectedGroup.isImportant); }}
-                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: selectedGroup.isImportant ? 'rgba(245, 158, 11, 0.15)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      title={selectedProc.isImportant ? 'Remover destaque' : 'Marcar como importante'}
+                      onClick={(e) => { e.stopPropagation(); toggleProcessImportant(selectedProc.id, selectedProc.isImportant); }}
+                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: selectedProc.isImportant ? 'rgba(245, 158, 11, 0.15)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
-                      <Star size={16} fill={selectedGroup.isImportant ? '#f59e0b' : 'none'} color={selectedGroup.isImportant ? '#f59e0b' : 'var(--color-text-tertiary)'} />
+                      <Star size={16} fill={selectedProc.isImportant ? '#f59e0b' : 'none'} color={selectedProc.isImportant ? '#f59e0b' : 'var(--color-text-tertiary)'} />
                     </button>
                     <button
-                      title={selectedGroup.isArchived ? 'Desarquivar' : 'Arquivar'}
-                      onClick={(e) => { e.stopPropagation(); toggleProcessArchive(selectedGroup.processId, selectedGroup.isArchived); }}
+                      title={selectedProc.isArchived ? 'Desarquivar' : 'Arquivar'}
+                      onClick={(e) => { e.stopPropagation(); toggleProcessArchive(selectedProc.id, selectedProc.isArchived); }}
                       style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
-                      {selectedGroup.isArchived ? <ArchiveRestore size={16} color="var(--color-text-tertiary)" /> : <Archive size={16} color="var(--color-text-tertiary)" />}
+                      {selectedProc.isArchived ? <ArchiveRestore size={16} color="var(--color-text-tertiary)" /> : <Archive size={16} color="var(--color-text-tertiary)" />}
                     </button>
                     <button
                       title="Marcar tudo como lido"
-                      onClick={() => markProcessRead(selectedGroup.processId)}
+                      onClick={() => markProcessRead(selectedProc.id)}
                       style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
                       <CheckCheck size={16} color="var(--color-text-tertiary)" />
@@ -497,61 +490,73 @@ export function ChatMonitorPage({ companies }: Props) {
 
               {/* Messages Area */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-                <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {selectedMessages.map(msg => {
-                    const colors = authorColor(msg.authorType);
-                    const hasKeyword = !!msg.detectedKeyword;
-
-                    return (
-                      <div
-                        key={msg.id}
-                        style={{
-                          padding: '14px 18px',
-                          borderRadius: '12px',
-                          background: colors.bg,
-                          border: `1px solid ${hasKeyword ? 'rgba(245, 158, 11, 0.3)' : colors.border}`,
-                          boxShadow: hasKeyword ? '0 0 0 1px rgba(245, 158, 11, 0.1)' : 'none',
-                        }}
-                      >
-                        {/* Author Header */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.text, fontSize: '0.75rem', fontWeight: 600 }}>
-                            <AuthorIcon type={msg.authorType} />
-                            <span>{authorLabel(msg.authorType)}</span>
-                            {msg.itemRef && (
-                              <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', fontSize: '0.6875rem', fontWeight: 400 }}>
-                                Item {msg.itemRef}
-                              </span>
-                            )}
-                            {hasKeyword && (
-                              <span style={{ padding: '1px 8px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', fontSize: '0.6875rem', fontWeight: 600 }}>
-                                ⚡ {msg.detectedKeyword}
-                              </span>
-                            )}
-                          </div>
-                          <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
-                            {new Date(msg.createdAt).toLocaleDateString('pt-BR')} {new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-
-                        {/* Message Content */}
-                        <div style={{ fontSize: '0.8125rem', lineHeight: 1.6, color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>
-                          {highlightKeywords(msg.content, msg.detectedKeyword)}
-                        </div>
-
-                        {/* Source badge */}
-                        {msg.captureSource && (
-                          <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
-                            <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
-                              via {msg.captureSource === 'comprasnet-xhr' ? 'ComprasNet' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
-                            </span>
-                          </div>
-                        )}
+                {loadingMessages ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+                    <Loader2 size={24} className="spinner" color="var(--color-text-tertiary)" />
+                  </div>
+                ) : (
+                  <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {selectedMessages.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
+                        Nenhuma mensagem para este processo.
                       </div>
-                    );
-                  })}
-                  <div ref={messagesEndRef} />
-                </div>
+                    ) : (
+                      selectedMessages.map(msg => {
+                        const colors = authorColor(msg.authorType);
+                        const hasKeyword = !!msg.detectedKeyword;
+
+                        return (
+                          <div
+                            key={msg.id}
+                            style={{
+                              padding: '14px 18px',
+                              borderRadius: '12px',
+                              background: colors.bg,
+                              border: `1px solid ${hasKeyword ? 'rgba(245, 158, 11, 0.3)' : colors.border}`,
+                              boxShadow: hasKeyword ? '0 0 0 1px rgba(245, 158, 11, 0.1)' : 'none',
+                            }}
+                          >
+                            {/* Author Header */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.text, fontSize: '0.75rem', fontWeight: 600 }}>
+                                <AuthorIcon type={msg.authorType} />
+                                <span>{authorLabel(msg.authorType)}</span>
+                                {msg.itemRef && (
+                                  <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', fontSize: '0.6875rem', fontWeight: 400 }}>
+                                    Item {msg.itemRef}
+                                  </span>
+                                )}
+                                {hasKeyword && (
+                                  <span style={{ padding: '1px 8px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', fontSize: '0.6875rem', fontWeight: 600 }}>
+                                    ⚡ {msg.detectedKeyword}
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
+                                {new Date(msg.createdAt).toLocaleDateString('pt-BR')} {new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+
+                            {/* Message Content */}
+                            <div style={{ fontSize: '0.8125rem', lineHeight: 1.6, color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>
+                              {highlightKeywords(msg.content, msg.detectedKeyword)}
+                            </div>
+
+                            {/* Source badge */}
+                            {msg.captureSource && (
+                              <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                                <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
+                                  via {msg.captureSource === 'comprasnet-xhr' ? 'ComprasNet' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
               </div>
             </>
           ) : (
