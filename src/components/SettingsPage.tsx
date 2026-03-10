@@ -6,6 +6,7 @@ function ComprasnetWatcherControls() {
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [actionMsg, setActionMsg] = useState('');
+    const [playwrightUnavailable, setPlaywrightUnavailable] = useState(false);
 
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -13,7 +14,13 @@ function ComprasnetWatcherControls() {
     const fetchStatus = async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/chat-watcher/status`, { headers });
-            if (res.ok) setStatus(await res.json());
+            if (res.ok) {
+                const data = await res.json();
+                setStatus(data);
+                if (data.playwrightAvailable === false) {
+                    setPlaywrightUnavailable(true);
+                }
+            }
         } catch { /* silent */ }
     };
 
@@ -29,6 +36,9 @@ function ComprasnetWatcherControls() {
         try {
             const res = await fetch(`${API_BASE_URL}/api/chat-watcher/login`, { method: 'POST', headers });
             const data = await res.json();
+            if (data.message?.includes('Playwright')) {
+                setPlaywrightUnavailable(true);
+            }
             setActionMsg(data.message || (data.success ? '✅ Browser aberto' : '❌ Erro'));
             setTimeout(fetchStatus, 2000);
         } catch (e) {
@@ -53,6 +63,32 @@ function ComprasnetWatcherControls() {
     const isLaunched = status?.isLaunched;
     const sessionCount = status?.activeSessions?.length || 0;
     const hasSession = status?.hasStoredSession;
+
+    // Playwright not available — show informational message instead of controls
+    if (playwrightUnavailable) {
+        return (
+            <div style={{ display: 'grid', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                    <AlertTriangle size={14} color="#f59e0b" />
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#d97706' }}>
+                        Recurso indisponível neste servidor
+                    </span>
+                </div>
+                <div style={{ padding: '16px', borderRadius: '10px', background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', fontSize: '0.8125rem', lineHeight: 1.7, color: 'var(--color-text-secondary)' }}>
+                    <p style={{ margin: '0 0 12px 0' }}>
+                        O <strong>Monitor de Chat do ComprasNet</strong> utiliza automação de navegador (Playwright) para capturar mensagens em tempo real da Sala de Disputa. Este recurso funciona apenas em <strong>ambiente local</strong> (seu computador).
+                    </p>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: 'var(--color-text-primary)' }}>📋 Como usar:</p>
+                    <ol style={{ margin: '0', paddingLeft: '20px' }}>
+                        <li>Rode o servidor localmente: <code style={{ background: 'var(--color-bg-surface-hover)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}>npm run dev</code></li>
+                        <li>O botão "Fazer Login" abrirá um navegador Chrome</li>
+                        <li>Faça login no Compras.gov.br manualmente</li>
+                        <li>Volte aqui e clique no ícone 📡 do card do processo</li>
+                    </ol>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ display: 'grid', gap: '16px' }}>
