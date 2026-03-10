@@ -54,9 +54,12 @@ const SENDER_TYPE_MAP: Record<string, string> = {
 // ── Lazy Playwright loader ──
 
 let _playwright: any = null;
+let _playwrightChecked = false;
 
 async function getPlaywright() {
   if (_playwright) return _playwright;
+  if (_playwrightChecked) return null; // Already checked, don't log again
+  _playwrightChecked = true;
   try {
     // Use require() with a variable to prevent TypeScript from resolving the module at compile time
     const moduleName = 'playwright';
