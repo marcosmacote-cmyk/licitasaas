@@ -2697,6 +2697,7 @@ app.get('/api/chat-monitor/logs', authenticateToken, async (req: any, res) => {
     try {
         const logs = await prisma.chatMonitorLog.findMany({
             where: { tenantId: req.user.tenantId },
+            include: { biddingProcess: true },
             orderBy: { createdAt: 'desc' },
             take: 50
         });
