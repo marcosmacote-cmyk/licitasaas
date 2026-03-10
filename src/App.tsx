@@ -107,11 +107,12 @@ function App() {
       if (!token) return;
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs`, {
+        const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs?limit=1`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
-          const logs = await res.json();
+          const data = await res.json();
+          const logs = data.logs || [];
           if (logs.length > 0) {
             const latestLog = logs[0];
             // If it's a new log and matches a keyword

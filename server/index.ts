@@ -2695,13 +2695,44 @@ app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) =>
 
 app.get('/api/chat-monitor/logs', authenticateToken, async (req: any, res) => {
     try {
-        const logs = await prisma.chatMonitorLog.findMany({
-            where: { tenantId: req.user.tenantId },
-            include: { biddingProcess: true },
-            orderBy: { createdAt: 'desc' },
-            take: 50
+        const { keyword, search, status, page = '1', limit = '20' } = req.query;
+        const pageNum = Math.max(1, parseInt(page as string) || 1);
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
+        const skip = (pageNum - 1) * limitNum;
+
+        // Build dynamic where clause
+        const where: any = { tenantId: req.user.tenantId };
+
+        if (keyword) {
+            where.detectedKeyword = { contains: keyword as string, mode: 'insensitive' };
+        }
+        if (search) {
+            where.content = { contains: search as string, mode: 'insensitive' };
+        }
+        if (status) {
+            where.status = status as string;
+        }
+
+        const [logs, total] = await Promise.all([
+            prisma.chatMonitorLog.findMany({
+                where,
+                include: { biddingProcess: true },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limitNum
+            }),
+            prisma.chatMonitorLog.count({ where })
+        ]);
+
+        res.json({
+            logs,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                totalPages: Math.ceil(total / limitNum)
+            }
         });
-        res.json(logs);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch chat monitor logs' });
     }

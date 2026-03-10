@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info, History, ExternalLink, Calendar, Zap, Activity, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Save, Bell, Shield, MessageSquare, Phone, Send, Loader2, Info, History, ExternalLink, Calendar, Zap, Activity, CheckCircle, XCircle, AlertTriangle, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export function SettingsPage() {
@@ -14,6 +14,37 @@ export function SettingsPage() {
     const [logs, setLogs] = useState<any[]>([]);
     const [testing, setTesting] = useState(false);
     const [health, setHealth] = useState<any>(null);
+    // Filter & Pagination state
+    const [searchText, setSearchText] = useState('');
+    const [filterKeyword, setFilterKeyword] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pagination, setPagination] = useState<any>(null);
+    const [logsLoading, setLogsLoading] = useState(false);
+
+    const fetchLogs = useCallback(async (page = 1, keyword = '', search = '', status = '') => {
+        setLogsLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const params = new URLSearchParams({ page: String(page), limit: '15' });
+            if (keyword) params.set('keyword', keyword);
+            if (search) params.set('search', search);
+            if (status) params.set('status', status);
+
+            const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs?${params}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setLogs(data.logs || []);
+                setPagination(data.pagination || null);
+            }
+        } catch (e) {
+            console.error("Failed to fetch logs", e);
+        } finally {
+            setLogsLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -37,20 +68,6 @@ export function SettingsPage() {
                 setLoading(false);
             }
         };
-        const fetchLogs = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    setLogs(data);
-                }
-            } catch (e) {
-                console.error("Failed to fetch logs", e);
-            }
-        };
 
         const fetchHealth = async () => {
             try {
@@ -70,7 +87,30 @@ export function SettingsPage() {
         fetchConfig();
         fetchLogs();
         fetchHealth();
-    }, []);
+    }, [fetchLogs]);
+
+    // Debounced search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setCurrentPage(1);
+            fetchLogs(1, filterKeyword, searchText, filterStatus);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [searchText, filterKeyword, filterStatus, fetchLogs]);
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+        fetchLogs(page, filterKeyword, searchText, filterStatus);
+    };
+
+    const clearFilters = () => {
+        setSearchText('');
+        setFilterKeyword('');
+        setFilterStatus('');
+        setCurrentPage(1);
+    };
+
+    const hasFilters = searchText || filterKeyword || filterStatus;
 
     const handleSave = async () => {
         setSaving(true);
@@ -293,14 +333,65 @@ export function SettingsPage() {
                             <History size={20} color="var(--color-primary)" />
                             <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--color-text-primary)' }}>Histórico de Alertas (Radar)</h2>
                         </div>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>Últimos 50 alertas</span>
+                        {pagination && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pagination.total} alertas encontrados</span>}
                     </div>
 
-                    <div style={{ padding: '0', maxHeight: '400px', overflowY: 'auto' }}>
+                    {/* Filters Bar */}
+                    <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', background: 'var(--color-bg-base)' }}>
+                        <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '180px' }}>
+                            <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+                            <input
+                                type="text"
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                placeholder="Buscar no conteúdo..."
+                                style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+                            />
+                        </div>
+                        <select
+                            value={filterKeyword}
+                            onChange={(e) => setFilterKeyword(e.target.value)}
+                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                        >
+                            <option value="">Todas as palavras</option>
+                            {config.keywords.split(',').map(k => k.trim()).filter(Boolean).map(k => (
+                                <option key={k} value={k}>{k}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                        >
+                            <option value="">Todos os status</option>
+                            <option value="SENT">✅ Enviado</option>
+                            <option value="FAILED">❌ Falhou</option>
+                            <option value="PENDING_NOTIFICATION">⏳ Pendente</option>
+                            <option value="NO_CHANNEL">📭 Sem canal</option>
+                            <option value="SKIPPED">⏭️ Ignorado</option>
+                        </select>
+                        {hasFilters && (
+                            <button
+                                className="icon-btn"
+                                onClick={clearFilters}
+                                style={{ padding: '8px', borderRadius: '8px', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}
+                                title="Limpar filtros"
+                            >
+                                <X size={14} /> Limpar
+                            </button>
+                        )}
+                    </div>
+
+                    <div style={{ padding: '0', maxHeight: '500px', overflowY: 'auto', position: 'relative' }}>
+                        {logsLoading && (
+                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
+                                <Loader2 size={24} className="spinner" color="var(--color-primary)" />
+                            </div>
+                        )}
                         {logs.length === 0 ? (
                             <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                                 <Info size={32} style={{ marginBottom: '12px', opacity: 0.3 }} />
-                                <p>Nenhum alerta detectado pelo radar ainda.</p>
+                                <p>{hasFilters ? 'Nenhum alerta encontrado com os filtros atuais.' : 'Nenhum alerta detectado pelo radar ainda.'}</p>
                             </div>
                         ) : (
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
@@ -353,6 +444,63 @@ export function SettingsPage() {
                             </table>
                         )}
                     </div>
+
+                    {/* Pagination Controls */}
+                    {pagination && pagination.totalPages > 1 && (
+                        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-bg-base)', fontSize: '0.8125rem' }}>
+                            <span style={{ color: 'var(--color-text-tertiary)' }}>
+                                Página {pagination.page} de {pagination.totalPages}
+                            </span>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                    className="icon-btn"
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                    disabled={currentPage <= 1}
+                                    style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--color-border)', opacity: currentPage <= 1 ? 0.4 : 1 }}
+                                >
+                                    <ChevronLeft size={16} />
+                                </button>
+                                {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
+                                    let pageNum: number;
+                                    if (pagination.totalPages <= 5) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage <= 3) {
+                                        pageNum = i + 1;
+                                    } else if (currentPage >= pagination.totalPages - 2) {
+                                        pageNum = pagination.totalPages - 4 + i;
+                                    } else {
+                                        pageNum = currentPage - 2 + i;
+                                    }
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            className="icon-btn"
+                                            onClick={() => handlePageChange(pageNum)}
+                                            style={{
+                                                padding: '6px 12px',
+                                                borderRadius: '8px',
+                                                border: '1px solid var(--color-border)',
+                                                fontWeight: pageNum === currentPage ? 700 : 400,
+                                                background: pageNum === currentPage ? 'var(--color-primary)' : 'transparent',
+                                                color: pageNum === currentPage ? 'white' : 'var(--color-text-secondary)',
+                                                fontSize: '0.8125rem'
+                                            }}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                })}
+                                <button
+                                    className="icon-btn"
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                    disabled={currentPage >= pagination.totalPages}
+                                    style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--color-border)', opacity: currentPage >= pagination.totalPages ? 0.4 : 1 }}
+                                >
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Other settings placeholder */}
