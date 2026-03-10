@@ -10,7 +10,8 @@ import {
   Building2,
   PieChart,
   Loader2,
-  Search
+  Search,
+  Satellite
 } from 'lucide-react';
 import { PncpPage } from './components/PncpPage';
 import { BiddingPage } from './components/BiddingPage';
@@ -19,6 +20,7 @@ import { DocumentsPage } from './components/DocumentsPage';
 import { ReportsPage } from './components/ReportsPage';
 import { LoginPage } from './components/LoginPage';
 import { SettingsPage } from './components/SettingsPage';
+import { ChatMonitorPage } from './components/ChatMonitorPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -26,7 +28,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 function App() {
   const [user, setUser] = useState<any>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bidding' | 'documents' | 'reports' | 'pncp' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'bidding' | 'documents' | 'reports' | 'pncp' | 'chat-monitor' | 'settings'>('dashboard');
   const [items, setItems] = useState<BiddingProcess[]>([]);
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,6 +216,10 @@ function App() {
               <Search size={20} />
               <span>Busca PNCP</span>
             </a>
+            <a href="#" className={`nav-item ${activeTab === 'chat-monitor' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('chat-monitor'); }}>
+              <Satellite size={20} />
+              <span>Monitor Chat</span>
+            </a>
             <a href="#" className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('reports'); }}>
               <PieChart size={20} />
               <span>Relatórios</span>
@@ -273,6 +279,7 @@ function App() {
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
           {activeTab === 'reports' && <ReportsPage biddings={items} companies={companies} onRefresh={refreshData} />}
           {activeTab === 'pncp' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
+          {activeTab === 'chat-monitor' && <ChatMonitorPage companies={companies} />}
           {activeTab === 'settings' && <SettingsPage />}
         </main>
       </div>
