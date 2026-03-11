@@ -380,17 +380,34 @@ async function startProcessMonitor(proc) {
     }
   } catch { /* ignore */ }
 
-  // 2) Click humanizado no botão de mensagens (✉️)
-  try {
-    const envelopeClicked = await humanClickBySelector(page, 'i.fa-envelope');
-    if (envelopeClicked) {
-      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Envelope clicado (mouse humanizado, isTrusted:true)!`);
+  // 2) Click humanizado no botão de mensagens (✉️) — com retries
+  let envelopeClicked = false;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      envelopeClicked = await humanClickBySelector(page, 'i.fa-envelope');
+      if (envelopeClicked) {
+        console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Envelope clicado (mouse humanizado, tentativa ${attempt})!`);
+        await page.waitForTimeout(5000);
+        break;
+      }
+    } catch { /* next attempt */ }
+    
+    if (!envelopeClicked && attempt < 3) {
+      console.log(`  ⏳ [${proc.processNumber}/${proc.processYear}] Envelope não encontrado (tentativa ${attempt}/3), aguardando 5s...`);
       await page.waitForTimeout(5000);
-    } else {
-      console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Botão envelope não encontrado.`);
     }
-  } catch(e) {
-    console.warn(`  ⚠️ Erro ao clicar envelope:`, e.message?.substring(0, 120));
+  }
+
+  if (!envelopeClicked) {
+    // Diagnóstico: mostra TODOS os ícones na página
+    const icons = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('i[class]'))
+        .map(el => el.className)
+        .filter(c => c.length > 2);
+    });
+    console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Envelope não encontrado após 3 tentativas.`);
+    console.log(`  📋 URL: ${page.url()}`);
+    console.log(`  📋 Ícones na página (${icons.length}): ${icons.join(' | ')}`);
   }
 
   // ── Captura contínua: DOM + XHR (o XHR interceptor já roda acima) ──
