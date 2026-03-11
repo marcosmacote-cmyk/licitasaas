@@ -13,11 +13,7 @@
  */
 
 
-const { chromium } = require('playwright-extra');
-const stealth = require('puppeteer-extra-plugin-stealth');
-
-// Remove marcadores de automação para evitar CAPTCHA
-chromium.use(stealth());
+const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
