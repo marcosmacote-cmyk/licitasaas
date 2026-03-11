@@ -3220,6 +3220,34 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
     }
 });
 
+// GET: /api/chat-monitor/logs - Histórico de atividade do Agente Local (Fase 4)
+app.get('/api/chat-monitor/logs', requireAuth, async (req, res) => {
+    try {
+        const tenantId = (req as any).user.tenantId;
+        const limit = parseInt(req.query.limit as string) || 50;
+
+        const logs = await prisma.chatMonitorLog.findMany({
+            where: { tenantId },
+            include: {
+                biddingProcess: {
+                    select: {
+                        number: true,
+                        object: true,
+                        uatgName: true
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit
+        });
+
+        res.json(logs);
+    } catch (error: any) {
+        console.error('[Chat Monitor Logs] Error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch monitor logs' });
+    }
+});
+
 // ── Serve Frontend in Production ──
 if (process.env.NODE_ENV === 'production') {
     const publicDir = path.join(SERVER_ROOT, 'public');

@@ -28,7 +28,7 @@ const CONFIG = {
 
   // Token JWT — obtenha fazendo login no LicitaSaaS
   // Abra DevTools > Network > copie o header Authorization de qualquer request
-  TOKEN: 'SEU_TOKEN_JWT_AQUI',
+  TOKEN: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0MmE2MjliMC00ZmQzLTQ4YjQtOWExNi1jNTg1NjAwZmU2ODIiLCJ0ZW5hbnRJZCI6IjlmN2E3MTU1LWJlNjctNDQ3MC04OTUyLWViOTQ3ZmQ5NzkzMSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzIyOTQwNiwiZXhwIjoxNzczMjU4MjA2fQ.Et3OFHEBvrENdrOophW79j4PMfI2F6UJ0T8W3W-DDvA',
 
   // Intervalo de refresh da aba de mensagens (ms)
   REFRESH_INTERVAL: 60000, // 60 segundos
@@ -302,12 +302,22 @@ async function main() {
   const hasSession = fs.existsSync(SESSION_FILE);
   const browser = await chromium.launch({
     headless: false, // Visible for login and monitoring
-    args: ['--no-sandbox'],
+    args: [
+      '--no-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-infobars',
+      '--window-position=0,0',
+      '--ignore-certificate-errors',
+      '--ignore-certificate-errors-spki-list',
+    ],
   });
 
   const contextOptions = {
     viewport: { width: 1400, height: 900 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    // Set realistic permissions to mimic real browser
+    permissions: ['geolocation', 'notifications'],
+    bypassCSP: true,
   };
   if (hasSession) {
     contextOptions.storageState = SESSION_FILE;
@@ -318,28 +328,59 @@ async function main() {
 
   // Login page
   const loginPage = await state.context.newPage();
-  await loginPage.goto(`${COMPRASNET_BASE}/comprasnet-web/public/landing`, {
-    waitUntil: 'networkidle',
+  
+  // Mudamos a URL base porque o Serpro desativou a tela /public/landing
+  await loginPage.goto(`https://www.comprasnet.gov.br/seguro/loginPortal.asp`, {
+    waitUntil: 'domcontentloaded',
     timeout: 30000,
   });
 
-  // Check if already logged in
+  // Check if already logged in by waiting for a moment to see where the URL stabilizes after applying state
+  await loginPage.waitForTimeout(3000); // give it a beat to redirect
   const currentUrl = loginPage.url();
-  if (currentUrl.includes('private') || hasSession) {
+  
+  // Mudamos a heurística de "já logado" 
+  const isAlreadyLoggedIn = (currentUrl.includes('private') || currentUrl.includes('cnetmobile.estaleiro')) && !currentUrl.includes('loginportal') && !currentUrl.includes('acesso.gov.br');
+
+  if (isAlreadyLoggedIn && hasSession) {
     console.log('✅ Já logado (sessão reutilizada)!');
   } else {
     console.log('');
     console.log('┌────────────────────────────────────────────┐');
     console.log('│  🔐 Faça login no ComprasNet no navegador  │');
-    console.log('│  Aguardando login... (timeout: 5 min)      │');
+    console.log('│  Aguardando login... (timeout: 10 min)     │');
     console.log('└────────────────────────────────────────────┘');
     console.log('');
 
+    loginPage.setDefaultTimeout(600000); // Força 10 minutos (600000ms) ignorando o padrão de 30s
     try {
-      await loginPage.waitForURL('**/private/**', { timeout: 300000 });
-      console.log('✅ Login detectado!');
-    } catch {
-      console.error('❌ Timeout de login (5 min). Saindo...');
+      // Damos 10 minutos (600.000 ms) para o usuário rodar MFA, celular e autorizar.
+      // E não damos nenhum "goto" agora, deixamos a tela livre para você logar no seu ritmo.
+      await loginPage.waitForFunction(() => {
+        const url = window.location.href.toLowerCase();
+        
+        // Se a url for uma página em branco ou nova guia, ignorar.
+        if (url === 'about:blank' || url.includes('newtab')) return false;
+
+        // Se estivermos em qualquer tela de login, SSO, ou do portal unificado Gov.br (sso.acesso.gov.br), continua esperando.
+        if (
+          url.includes('loginportal') || 
+          url.includes('sso.acesso.gov.br') || 
+          url.includes('autenticacao')
+        ) {
+          return false;
+        }
+
+        // Se chegou aqui, não é página de login e nem gov.br.
+        // O Serpro costuma transferir você para comprasnet.gov.br/... ou cnetmobile...
+        const isComprasnet = url.includes('comprasnet.gov');
+        const isCnetMobile = url.includes('cnetmobile');
+        return isComprasnet || isCnetMobile;
+      }, undefined, { timeout: 600000, polling: 3000 });
+      
+      console.log('✅ Login detectado com sucesso!');
+    } catch (e) {
+      console.error('❌ Falha ou Timeout (10 min) aguardando login:', e.message);
       await browser.close();
       process.exit(1);
     }
