@@ -144,7 +144,6 @@ async function sendPendingMessages() {
 
       const data = await res.json();
       if (data.success) {
-        // Mark as sent
         const ids = msgs.map(m => m.id);
         const placeholders = ids.map(() => '?').join(',');
         db.prepare(`UPDATE messages SET status = 'sent' WHERE id IN (${placeholders})`).run(ids);
@@ -164,70 +163,115 @@ async function startProcessMonitor(proc) {
 
   console.log(`  📡 Iniciando captura para: ${proc.id.substring(0, 8)}... → compraId: ${compraId}`);
 
-  const page = await state.context.newPage();
+  // ── NOVA ABORDAGEM: Poll direto na API de Chat do ComprasNet ──
+  // Em vez de abrir uma aba do navegador (que dá 404 em muitos processos),
+  // usamos a API de mensagens diretamente com os cookies salvos.
+  const chatApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-mensagem/v2/chat/${compraId}`;
 
-  // Set up network interception BEFORE navigating
-  page.on('response', async (response) => {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO messages (processId, messageId, content, authorType, authorCnpj, eventCategory, itemRef, captureSource)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  async function pollMessages() {
     try {
-      const url = response.url();
-      if (!CHAT_URL_PATTERN.test(url)) return;
-      if (response.status() !== 200 && response.status() !== 206) return;
+      // Pega cookies atuais do navegador para autenticar
+      const cookies = await state.context.cookies();
+      const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+      const response = await fetch(chatApiUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Cookie': cookieStr,
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        }
+      });
+
+      if (response.status === 204) {
+        // 204 = sem mensagens nessa compra (pregoeiro não falou nada ainda)
+        return;
+      }
+
+      if (!response.ok) {
+        console.warn(`  ⚠️ Chat API [${compraId}]: HTTP ${response.status}`);
+        return;
+      }
 
       const body = await response.json().catch(() => null);
-      if (!body || !Array.isArray(body)) return;
-
-      const insert = db.prepare(`
-        INSERT OR IGNORE INTO messages (processId, messageId, content, authorType, authorCnpj, eventCategory, itemRef, captureSource)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+      if (!body || !Array.isArray(body) || body.length === 0) return;
 
       const insertMany = db.transaction((msgs) => {
         let count = 0;
+        let newTexts = [];
         for (const msg of msgs) {
           if (!msg.chaveMensagemNaOrigem) continue;
-          const res = insert.run(
-            proc.id,
-            msg.chaveMensagemNaOrigem,
-            msg.texto || '',
-            SENDER_TYPE_MAP[msg.tipoRemetente] || 'desconhecido',
-            msg.identificadorRemetente || null,
-            msg.categoria || null,
-            msg.identificadorItem || null,
-            'local-watcher'
-          );
-          if (res.changes > 0) count++;
+          try {
+            const res = insert.run(
+              proc.id,
+              msg.chaveMensagemNaOrigem,
+              msg.texto || '',
+              msg.tipoRemetente || 'desconhecido',
+              msg.identificadorRemetente || null,
+              msg.categoria || null,
+              msg.identificadorItem || null,
+              'comprasnet-xhr'
+            );
+            if (res.changes > 0) {
+              count++;
+              newTexts.push(msg.texto ? msg.texto.substring(0, 120).replace(/\n/g, ' ') : '[Mensagem Vazia]');
+            }
+          } catch(e) {
+            // IGNORE unique constraint errors
+          }
         }
-        return count;
+        return { count, newTexts };
       });
 
-      const newCount = insertMany(body);
+      const { count: newCount, newTexts } = insertMany(body);
 
       if (newCount > 0) {
-        console.log(`  📨 ${newCount} msg(s) capturadas - [${proc.id.substring(0, 8)}]`);
+        console.log(`\n======================================================`);
+        console.log(`  🚨 MENSAGEM CAPTURADA AO VIVO NO COMPRASNET!`);
+        console.log(`  📍 Processo: ${proc.processNumber}/${proc.processYear} (UASG ${proc.uasg})`);
+        console.log(`  📨 Quantidade nova nesta varredura: ${newCount}`);
+        newTexts.slice(0, 3).forEach(t => {
+          console.log(`  💬 "${t}${t.length >= 120 ? '...' : ''}"`);
+        });
+        console.log(`======================================================\n`);
       }
     } catch (err) {
-      if (!err.message?.includes('Target closed')) {
-        console.warn(`  ⚠️ Response parse:`, err.message);
+      if (!err.message?.includes('Target closed') && !err.message?.includes('context')) {
+        console.warn(`  ⚠️ Poll error [${compraId}]:`, err.message);
       }
     }
-  });
-
-  // Navigate to the process page
-  const sessionUrl = `${COMPRASNET_BASE}/comprasnet-web/private/fornecedor/compras/acompanhamento-compra/${compraId}`;
-  try {
-    await page.goto(sessionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  } catch (err) {
-    console.error(`  ❌ Erro ao navegar no processo ${proc.id}: ${err.message}`);
   }
 
-  // Periodic refresh — click Mensagens tab
-  const intervalId = setInterval(async () => {
-    try {
-      await page.click('text=Mensagem', { timeout: 5000 }).catch(() => {});
-    } catch { /* ignore */ }
-  }, CONFIG.REFRESH_INTERVAL);
+  // Primeira varredura imediata
+  await pollMessages();
+  
+  // Diagnóstico: verifica se a API responde
+  try {
+    const cookies = await state.context.cookies();
+    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    const probe = await fetch(chatApiUrl, {
+      headers: { 'Accept': 'application/json', 'Cookie': cookieStr }
+    });
+    if (probe.status === 204) {
+      console.log(`  ℹ️  [${proc.processNumber}/${proc.processYear}] Nenhuma mensagem no chat ainda (pregoeiro silencioso).`);
+    } else if (probe.ok) {
+      const msgs = await probe.json().catch(() => []);
+      console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] ${Array.isArray(msgs) ? msgs.length : 0} mensagens encontradas no ComprasNet.`);
+    } else {
+      console.log(`  ⚠️  [${proc.processNumber}/${proc.processYear}] Chat API retornou status ${probe.status}`);
+    }
+  } catch(e) {
+    console.warn(`  ⚠️  Diagnóstico falhou:`, e.message);
+  }
 
-  state.activeSessions.set(proc.id, { page, intervalId });
+  // Varreduras periódicas
+  const intervalId = setInterval(pollMessages, CONFIG.REFRESH_INTERVAL);
+
+  state.activeSessions.set(proc.id, { intervalId });
 }
 
 async function stopProcessMonitor(processId) {
@@ -236,7 +280,6 @@ async function stopProcessMonitor(processId) {
 
   console.log(`  ⏹ Parando monitoramento para proc ${processId.substring(0,8)}`);
   clearInterval(session.intervalId);
-  await session.page.close().catch(() => {});
   state.activeSessions.delete(processId);
 }
 
