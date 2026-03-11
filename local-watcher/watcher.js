@@ -342,23 +342,28 @@ async function startProcessMonitor(proc) {
       await page.waitForTimeout(5000);
     } else {
       console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Ícone de mensagens não encontrado.`);
-      // Diagnóstico: mostra TODOS os ícones que existem na página
+      console.log(`  📋 URL atual: ${page.url()}`);
+      // Diagnóstico: mostra TODOS os ícones e botões
       const icons = await page.evaluate(() => {
         const res = [];
-        document.querySelectorAll('i, span[class*="fa-"], svg[data-p-icon]').forEach(el => {
-          res.push({ class: el.className?.substring(0, 60), tag: el.tagName, dataIcon: el.getAttribute('data-p-icon') });
+        // Todos os <i> com classe
+        document.querySelectorAll('i[class]').forEach(el => {
+          res.push({ type: 'icon', class: String(el.className).substring(0, 80) });
         });
-        document.querySelectorAll('button, a').forEach(el => {
+        // Todos os botões com innerHTML resumido
+        document.querySelectorAll('button, a[class*="br-button"]').forEach((el, i) => {
+          const cls = typeof el.className === 'string' ? el.className.substring(0, 60) : '';
+          const inner = el.innerHTML.substring(0, 100);
           const tip = el.getAttribute('ptooltip') || el.getAttribute('title') || el.getAttribute('aria-label') || '';
-          if (tip) res.push({ type: 'btn-tip', tip, class: el.className?.substring(0, 60) });
+          res.push({ type: 'btn', i, class: cls, tip, inner });
         });
         return res;
       });
-      console.log(`  📋 Ícones na página (${icons.length}):`);
-      icons.slice(0, 20).forEach(ic => console.log(`     ${JSON.stringify(ic)}`));
+      console.log(`  📋 Elementos (${icons.length}):`);
+      icons.forEach(ic => console.log(`     ${JSON.stringify(ic)}`));
     }
   } catch(e) {
-    console.warn(`  ⚠️ Erro ao clicar mensagens:`, e.message.substring(0, 80));
+    console.warn(`  ⚠️ Erro ao clicar mensagens:`, e.message?.substring(0, 120));
   }
 
   // Refresh periódico — recarrega e clica no ícone de mensagens
