@@ -4,7 +4,6 @@ import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIF
 import { fallbackToOpenAi } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
-import { comprasnetWatcher } from "./services/monitoring/comprasnet-watcher.service";
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -3184,58 +3183,6 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
     } catch (error: any) {
         console.error('[Ingest] Error:', error.message);
         res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
-    }
-});
-
-// Launch browser for manual login
-app.post('/api/chat-watcher/login', authenticateToken, async (req: any, res) => {
-    try {
-        const result = await comprasnetWatcher.launchForLogin();
-        res.json(result);
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// Start monitoring a process
-app.post('/api/chat-watcher/monitor/:processId', authenticateToken, async (req: any, res) => {
-    try {
-        const { processId } = req.params;
-        const result = await comprasnetWatcher.startMonitoring(processId);
-        res.json(result);
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// Stop monitoring a process
-app.post('/api/chat-watcher/stop/:processId', authenticateToken, async (req: any, res) => {
-    try {
-        const { processId } = req.params;
-        const result = await comprasnetWatcher.stopMonitoring(processId);
-        res.json(result);
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// Get watcher status
-app.get('/api/chat-watcher/status', authenticateToken, async (req: any, res) => {
-    try {
-        const status = comprasnetWatcher.getStatus();
-        res.json(status);
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// Shutdown watcher
-app.post('/api/chat-watcher/shutdown', authenticateToken, async (req: any, res) => {
-    try {
-        await comprasnetWatcher.shutdown();
-        res.json({ success: true, message: 'Watcher encerrado.' });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
     }
 });
 
