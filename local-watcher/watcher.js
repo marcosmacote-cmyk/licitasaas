@@ -271,30 +271,36 @@ async function startProcessMonitor(proc) {
     await page.click('button:has-text("Pesquisar")', { timeout: 5000 });
     await page.waitForTimeout(5000); // Espera resultados
 
-    // 4) Clica no primeiro card de resultado
-    const cardSelectors = [
-      'app-card-compra',
-      '.card-compra',
-      '[class*="card-compra"]',
-      '.resultado-compra',
-      'a[href*="acompanhamento"]',
-    ];
+    // 4) Clica no ícone de "lista/detalhes" (≡) dentro do primeiro card
+    //    O card em si não é clicável — precisa clicar no ícone do meio (lista)
+    const cardClicked = await page.evaluate(() => {
+      // Procura os ícones de lista dentro dos cards de resultado
+      const listIcons = ['fa-list', 'fa-list-ul', 'fa-list-alt', 'fa-bars', 'fa-th-list', 'fa-tasks'];
+      for (const cls of listIcons) {
+        const icon = document.querySelector(`app-card-compra i.${cls}, .card-compra i.${cls}, i.${cls}`);
+        if (icon) {
+          const btn = icon.closest('button') || icon.closest('a') || icon;
+          btn.click();
+          return cls;
+        }
+      }
+      // Fallback: procura SVGs com data-p-icon de "list" ou "bars"
+      const svgs = document.querySelectorAll('svg[data-p-icon*="list"], svg[data-p-icon*="bars"]');
+      if (svgs.length > 0) {
+        const btn = svgs[0].closest('button') || svgs[0].closest('a') || svgs[0];
+        btn.click();
+        return 'svg-list';
+      }
+      // Fallback: clica no primeiro link de acompanhamento
+      const link = document.querySelector('a[href*="acompanhamento"], a[routerlink*="acompanhamento"]');
+      if (link) { link.click(); return 'link-acompanhamento'; }
+      return null;
+    });
     
-    let clicked = false;
-    for (const sel of cardSelectors) {
-      try {
-        await page.click(sel, { timeout: 3000 });
-        clicked = true;
-        break;
-      } catch { /* try next */ }
-    }
-    
-    if (!clicked) {
-      // Fallback: clica no primeiro link/card que aparece nos resultados
-      await page.evaluate(() => {
-        const el = document.querySelector('app-card-compra, [class*="card"], .compra-item');
-        if (el) el.click();
-      });
+    if (cardClicked) {
+      console.log(`  🖱️ [${proc.processNumber}/${proc.processYear}] Clicou no ícone: ${cardClicked}`);
+    } else {
+      console.warn(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Não encontrou ícone de detalhes no card.`);
     }
 
     await page.waitForTimeout(8000); // Espera a página do processo carregar
