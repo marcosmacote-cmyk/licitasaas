@@ -441,16 +441,10 @@ async function startProcessMonitor(proc) {
         });
         console.log(`  ❌ Painel fechado.`);
         await page.waitForTimeout(2000);
-
         // 2. Faz um reload REAL na página (F5) para resetar o estado do ComprasNet
         console.log(`  🔁 Recarregando a página por completo (F5)...`);
         await page.reload({ waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(10000); // Espera re-renderizar o Angular
-
-        // 3. Clica no ícone fa-tasks para reabrir o processo (pois o reload tira da tela do processo)
-        console.log(`  🖱️ Reabrindo tela do processo...`);
-        await humanClickBySelector(page, 'i.fa-tasks');
-        await page.waitForTimeout(8000); // Espera abrir
 
         // **Ação Humana Extra**: Move o mouse de forma aleatória pela tela
         console.log(`  🧠 Simulando leitura da tela (gerando ruído no mouse)...`);
