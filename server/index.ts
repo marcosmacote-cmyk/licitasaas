@@ -3033,7 +3033,82 @@ app.put('/api/chat-monitor/process-action/:processId', authenticateToken, async 
 });
 
 // ══════════════════════════════════════════
-// ── Local Watcher Ingest Endpoint ──
+// ── Local Watcher (Agent) Endpoints ──
+// ══════════════════════════════════════════
+
+// In-memory store for Agent Heartbeats (Phase 1)
+const agentHeartbeats = new Map<string, any>(); 
+
+// 1. Get sessions the agent should monitor
+app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const processes = await prisma.biddingProcess.findMany({
+            where: {
+                tenantId,
+                isMonitored: true,
+                uasg: { not: null },
+                modalityCode: { not: null },
+                processNumber: { not: null },
+                processYear: { not: null },
+            },
+            select: {
+                id: true,
+                title: true,
+                uasg: true,
+                modalityCode: true,
+                processNumber: true,
+                processYear: true,
+                portal: true
+            }
+        });
+        res.json(processes);
+    } catch (error: any) {
+        console.error('[Agent /sessions] Error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch agent sessions' });
+    }
+});
+
+// 2. Agent Heartbeat (Ping from Local Watcher)
+app.post('/api/chat-monitor/agents/heartbeat', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { machineName, activeSessions, agentVersion, status } = req.body;
+        
+        agentHeartbeats.set(tenantId, {
+            machineName: machineName || 'Local Agent',
+            activeSessions: activeSessions || 0,
+            agentVersion: agentVersion || '1.0.0',
+            status: status || 'online',
+            lastHeartbeatAt: new Date(),
+        });
+
+        res.json({ success: true, timestamp: new Date() });
+    } catch (error: any) {
+        res.status(500).json({ error: 'Failed to register heartbeat' });
+    }
+});
+
+// 3. Agent Status (Ping from React UI)
+app.get('/api/chat-monitor/agents/status', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const status = agentHeartbeats.get(tenantId);
+        
+        if (!status) {
+            return res.json({ isOnline: false });
+        }
+        
+        // Agent is considered offline if missed heartbeat for > 3 minutes
+        const isOnline = (new Date().getTime() - status.lastHeartbeatAt.getTime()) < 3 * 60 * 1000;
+        
+        res.json({ ...status, isOnline });
+    } catch (error: any) {
+        res.status(500).json({ error: 'Failed to fetch agent status' });
+    }
+});
+
+// Receives messages from local ComprasNet Watcher
 // ══════════════════════════════════════════
 
 // Receives messages from local ComprasNet Watcher
