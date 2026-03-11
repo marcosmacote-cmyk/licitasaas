@@ -3141,32 +3141,66 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
         });
         const keywords = config?.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
 
+        const { DedupService } = require('./services/monitoring/dedup.service');
+
         let created = 0;
         let alerts = 0;
 
         for (const msg of messages) {
-            if (!msg.messageId || existing.has(msg.messageId)) continue;
-
+            const messageId = msg.messageId || null;
             const content = msg.content || '';
+            const authorType = msg.authorType || 'desconhecido';
+            const fingerprintHash = DedupService.generateFingerprint(processId, messageId, content, authorType);
+
+            // Double deduplication: skip if messageId OR fingerprintHash exist
+            if ((messageId && existing.has(messageId))) continue;
+            
+            const isDuplicate = await prisma.chatMonitorLog.findUnique({
+                where: { fingerprintHash }
+            });
+
+            if (isDuplicate) continue;
+
             const detectedKeyword = keywords.find(k => content.toLowerCase().includes(k)) || null;
             if (detectedKeyword) alerts++;
+
+            // Simple taxonomy logic
+            let eventCategory = msg.eventCategory;
+            let status = detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED';
+
+            // Enhance taxonomy based on standard patterns if eventCategory is null
+            if (!eventCategory) {
+              const lowerContent = content.toLowerCase();
+              if (lowerContent.includes('encerrado o prazo') || lowerContent.includes('tempo aleatório')) {
+                eventCategory = '13'; // encerramento_prazo
+                status = 'PENDING_NOTIFICATION'; // Auto-alert for closing times
+                alerts++;
+              } else if (lowerContent.includes('suspenso') || lowerContent.includes('suspensão')) {
+                eventCategory = '12'; // suspensao
+              } else if (lowerContent.includes('bom dia') || lowerContent.includes('boa tarde')) {
+                eventCategory = '10'; // saudacao  
+              }
+            }
 
             await prisma.chatMonitorLog.create({
                 data: {
                     tenantId,
                     biddingProcessId: processId,
-                    messageId: msg.messageId,
+                    messageId,
+                    fingerprintHash,
                     content,
-                    authorType: msg.authorType || 'desconhecido',
+                    authorType,
                     authorCnpj: msg.authorCnpj || null,
-                    eventCategory: msg.eventCategory || null,
+                    eventCategory: eventCategory || null,
                     itemRef: msg.itemRef || null,
                     detectedKeyword,
                     captureSource: msg.captureSource || 'local-watcher',
-                    status: detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED',
+                    status,
                 }
             });
-            existing.add(msg.messageId);
+            if (messageId) {
+                existing.add(messageId);
+            }
             created++;
         }
 

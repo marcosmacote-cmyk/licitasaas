@@ -283,6 +283,7 @@ model ChatMonitorLog {
   tenantId         String
   biddingProcessId String
   messageId        String?  // UUID da mensagem (chaveMensagemNaOrigem)
+  fingerprintHash  String?  @unique // Hash sha256 para deduplicação robusta (Fase 3)
   content          String   @db.Text
   detectedKeyword  String?
   sentTo           String?  // Phone or Telegram ID
