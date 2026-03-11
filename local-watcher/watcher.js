@@ -303,10 +303,26 @@ async function startProcessMonitor(proc) {
 
   // Click humanizado: move mouse → pausa → click com down/up
   async function humanClick(pg, selector) {
+    // Primeiro garante que o elemento existe no DOM
     const el = pg.locator(selector).first();
-    await el.scrollIntoViewIfNeeded();
-    const box = await el.boundingBox();
-    if (!box) return false;
+    await el.waitFor({ state: 'attached', timeout: 5000 });
+    
+    // Tenta scrollIntoView (com timeout curto, ignora se falhar)
+    await el.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+    
+    // Pega coordenadas — tenta locator primeiro, fallback para evaluate
+    let box = await el.boundingBox();
+    if (!box) {
+      // Fallback: pega coords via evaluate (funciona com elementos "invisíveis" pro Playwright)
+      box = await pg.evaluate((sel) => {
+        const icon = document.querySelector(sel.replace('button:has(', '').replace(')', ''));
+        const btn = icon ? (icon.closest('button') || icon) : null;
+        if (!btn) return null;
+        const rect = btn.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      }, selector);
+    }
+    if (!box || box.width === 0) return false;
 
     // Ponto aleatório dentro do botão (não exatamente no centro)
     const targetX = box.x + (box.width * 0.3) + (Math.random() * (box.width * 0.4));
