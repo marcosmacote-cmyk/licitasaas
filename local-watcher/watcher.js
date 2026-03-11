@@ -450,7 +450,16 @@ async function startProcessMonitor(proc) {
         // 3. Clica no ícone fa-tasks para reabrir o processo (pois o reload tira da tela do processo)
         console.log(`  🖱️ Reabrindo tela do processo...`);
         await humanClickBySelector(page, 'i.fa-tasks');
-        await page.waitForTimeout(8000);
+        await page.waitForTimeout(8000); // Espera abrir
+
+        // **Ação Humana Extra**: Move o mouse de forma aleatória pela tela
+        console.log(`  🧠 Simulando leitura da tela (gerando ruído no mouse)...`);
+        for (let i = 0; i < 4; i++) {
+          const randX = Math.floor(Math.random() * 800) + 200;
+          const randY = Math.floor(Math.random() * 600) + 150;
+          await page.mouse.move(randX, randY, { steps: 15 });
+          await page.waitForTimeout(400 + Math.random() * 600);
+        }
 
         // 4. Clica de novo no envelope
         console.log(`  💬 Tentando envelope novamente após ressurreição...`);
