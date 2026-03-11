@@ -81,7 +81,9 @@ const state = {
 
 function buildCompraId(proc) {
   if (!proc.uasg || !proc.modalityCode || !proc.processNumber || !proc.processYear) return null;
-  return `${proc.uasg}${String(proc.modalityCode).padStart(2, '0')}${proc.processNumber}${proc.processYear}`;
+  const uasg = String(proc.uasg).padStart(6, '0');
+  const mod = String(proc.modalityCode).padStart(2, '0');
+  return `${uasg}${mod}${proc.processNumber}${proc.processYear}`;
 }
 
 async function apiFetch(endpoint, options = {}) {
@@ -364,7 +366,7 @@ async function main() {
   // Navega para o ComprasNet para verificar se já está logado
   const loginPage = state.context.pages()[0] || await state.context.newPage();
 
-  await loginPage.goto('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/private/fornecedor', {
+  await loginPage.goto('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor', {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   }).catch(() => {});
@@ -373,7 +375,7 @@ async function main() {
   const currentUrl = loginPage.url();
 
   // Se redirecionar para o painel privado do fornecedor, está logado
-  const isAlreadyLoggedIn = currentUrl.includes('/private/') && !currentUrl.includes('acesso.gov.br');
+  const isAlreadyLoggedIn = (currentUrl.includes('/seguro/') || currentUrl.includes('/private/')) && !currentUrl.includes('acesso.gov.br');
 
   if (isAlreadyLoggedIn) {
     console.log('✅ Já logado! Sessão anterior válida.');
@@ -397,8 +399,8 @@ async function main() {
         const url = window.location.href.toLowerCase();
         if (url === 'about:blank' || url.includes('newtab')) return false;
         if (url.includes('loginportal') || url.includes('sso.acesso.gov.br') || url.includes('autenticacao') || url.includes('public/landing')) return false;
-        // Logou com sucesso se estiver em qualquer página private do ComprasNet
-        return url.includes('/private/') || (url.includes('cnetmobile') && !url.includes('public'));
+        // Logou com sucesso se estiver em qualquer página private/seguro do ComprasNet
+        return url.includes('/private/') || url.includes('/seguro/') || (url.includes('cnetmobile') && !url.includes('public'));
       }, undefined, { timeout: 600000, polling: 3000 });
       
       console.log('✅ Login detectado com sucesso!');
