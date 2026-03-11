@@ -381,13 +381,14 @@ async function main() {
   }
 
   // ── Launch browser — ACESSO PÚBLICO (sem login!) ──
-  // O ComprasNet permite acesso público a qualquer processo.
-  // Não é necessário login, cookies, ou sessão do Gov.br.
+  // Usa o Chrome REAL instalado na máquina (não o Chromium do Playwright)
+  // porque o ComprasNet bloqueia o "Chrome for Testing" do Playwright.
   console.log('');
-  console.log('🌐 Abrindo navegador (Acesso Público — sem login)...');
+  console.log('🌐 Abrindo Chrome real (Acesso Público — sem login)...');
 
   state.browser = await chromium.launch({
-    headless: false, // false para a SPA Angular renderizar corretamente
+    channel: 'chrome',  // Usa o Google Chrome instalado na máquina!
+    headless: false,
     args: [
       '--no-sandbox',
       '--disable-blink-features=AutomationControlled',
