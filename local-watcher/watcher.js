@@ -342,18 +342,47 @@ async function startProcessMonitor(proc) {
     return true;
   }
 
+  // Pega coordenadas de um elemento via evaluate (mais confiável que locator)
+  async function getElementBox(pg, cssSelector) {
+    return await pg.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const btn = el.closest('button') || el;
+      const rect = btn.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }, cssSelector);
+  }
+
+  // Click humanizado usando coordenadas do DOM
+  async function humanClickBySelector(pg, cssSelector) {
+    const box = await getElementBox(pg, cssSelector);
+    if (!box) return false;
+
+    const targetX = box.x + (box.width * 0.3) + (Math.random() * (box.width * 0.4));
+    const targetY = box.y + (box.height * 0.3) + (Math.random() * (box.height * 0.4));
+
+    await pg.mouse.move(targetX, targetY, { steps: 25 });
+    await pg.waitForTimeout(Math.floor(Math.random() * 400) + 300);
+    await pg.mouse.down();
+    await pg.waitForTimeout(Math.floor(Math.random() * 80) + 40);
+    await pg.mouse.up();
+
+    return true;
+  }
+
   // 1) Click humanizado no botão de refresh (🔄)
   try {
-    const refreshed = await humanClick(page, 'button:has(i.fa-sync-alt)');
+    const refreshed = await humanClickBySelector(page, 'i.fa-sync-alt');
     if (refreshed) {
       console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] Atualização clicada (mouse humanizado)!`);
-      await page.waitForTimeout(8000); // Espera recarregar
+      await page.waitForTimeout(8000);
     }
   } catch { /* ignore */ }
 
   // 2) Click humanizado no botão de mensagens (✉️)
   try {
-    const envelopeClicked = await humanClick(page, 'button:has(i.fa-envelope)');
+    const envelopeClicked = await humanClickBySelector(page, 'i.fa-envelope');
     if (envelopeClicked) {
       console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Envelope clicado (mouse humanizado, isTrusted:true)!`);
       await page.waitForTimeout(5000);
@@ -404,11 +433,11 @@ async function startProcessMonitor(proc) {
       if (page.isClosed()) { clearInterval(intervalId); return; }
       
       // Tenta refresh humanizado
-      await humanClick(page, 'button:has(i.fa-sync-alt)').catch(() => {});
+      await humanClickBySelector(page, 'i.fa-sync-alt').catch(() => {});
       await page.waitForTimeout(8000);
       
       // Tenta envelope humanizado
-      await humanClick(page, 'button:has(i.fa-envelope)').catch(() => {});
+      await humanClickBySelector(page, 'i.fa-envelope').catch(() => {});
       await page.waitForTimeout(5000);
       
       // Captura do DOM se painel estiver aberto
