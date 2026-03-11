@@ -3032,6 +3032,86 @@ app.put('/api/chat-monitor/process-action/:processId', authenticateToken, async 
     }
 });
 
+// ══════════════════════════════════════════
+// ── Local Watcher Ingest Endpoint ──
+// ══════════════════════════════════════════
+
+// Receives messages from local ComprasNet Watcher
+app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) => {
+    try {
+        const { processId, messages } = req.body;
+        const tenantId = req.user.tenantId;
+
+        if (!processId || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ error: 'processId and messages[] required' });
+        }
+
+        // Verify process belongs to tenant
+        const process = await prisma.biddingProcess.findFirst({
+            where: { id: processId, tenantId }
+        });
+        if (!process) {
+            return res.status(404).json({ error: 'Process not found or not yours' });
+        }
+
+        // Get existing messageIds to deduplicate
+        const existingLogs = await prisma.chatMonitorLog.findMany({
+            where: { biddingProcessId: processId },
+            select: { messageId: true }
+        });
+        const existing = new Set(existingLogs.map(l => l.messageId));
+
+        // Get keywords config
+        const config = await prisma.chatMonitorConfig.findUnique({
+            where: { tenantId }
+        });
+        const keywords = config?.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
+
+        let created = 0;
+        let alerts = 0;
+
+        for (const msg of messages) {
+            if (!msg.messageId || existing.has(msg.messageId)) continue;
+
+            const content = msg.content || '';
+            const detectedKeyword = keywords.find(k => content.toLowerCase().includes(k)) || null;
+            if (detectedKeyword) alerts++;
+
+            await prisma.chatMonitorLog.create({
+                data: {
+                    tenantId,
+                    biddingProcessId: processId,
+                    messageId: msg.messageId,
+                    content,
+                    authorType: msg.authorType || 'desconhecido',
+                    authorCnpj: msg.authorCnpj || null,
+                    eventCategory: msg.eventCategory || null,
+                    itemRef: msg.itemRef || null,
+                    detectedKeyword,
+                    captureSource: msg.captureSource || 'local-watcher',
+                    status: detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED',
+                }
+            });
+            existing.add(msg.messageId);
+            created++;
+        }
+
+        // Trigger notifications if there were keyword matches
+        if (alerts > 0) {
+            try {
+                const { NotificationService } = require('./services/monitoring/notification.service');
+                await NotificationService.processPendingNotifications();
+            } catch { /* silent */ }
+        }
+
+        console.log(`[Ingest] ${created} msgs saved for process ${processId.substring(0, 8)}... (${alerts} alerts)`);
+        res.json({ success: true, created, alerts, total: messages.length });
+    } catch (error: any) {
+        console.error('[Ingest] Error:', error.message);
+        res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
+    }
+});
+
 // Launch browser for manual login
 app.post('/api/chat-watcher/login', authenticateToken, async (req: any, res) => {
     try {
