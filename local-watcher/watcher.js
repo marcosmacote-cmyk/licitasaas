@@ -345,12 +345,21 @@ async function startProcessMonitor(proc) {
   // Pega coordenadas de um elemento via evaluate (mais confiável que locator)
   async function getElementBox(pg, cssSelector) {
     return await pg.evaluate((sel) => {
-      const el = document.querySelector(sel);
-      if (!el) return null;
-      const btn = el.closest('button') || el;
-      const rect = btn.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return null;
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      // Procura todos os elementos que combinam
+      const elements = document.querySelectorAll(sel);
+      if (!elements || elements.length === 0) return null;
+      
+      // Itera de trás para frente (geralmente o ícone desktop é o último/mais específico)
+      for (let i = elements.length - 1; i >= 0; i--) {
+        const el = elements[i];
+        const btn = el.closest('button') || el;
+        const rect = btn.getBoundingClientRect();
+        // Verifica se está visível (width/height > 0)
+        if (rect.width > 0 && rect.height > 0) {
+           return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        }
+      }
+      return null;
     }, cssSelector);
   }
 
