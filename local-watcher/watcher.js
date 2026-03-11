@@ -337,47 +337,72 @@ async function startProcessMonitor(proc) {
 
   // Clica no ícone de atualização (🔄) ANTES das mensagens
   // Isso faz o Angular revalidar o reCAPTCHA corretamente
-  try {
-    const refreshClicked = await page.evaluate(() => {
+  async function clickRefresh(pg) {
+    return await pg.evaluate(() => {
       const icon = document.querySelector('i.fa-sync-alt');
       if (!icon) return false;
       const btn = icon.closest('button') || icon;
-      const event = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-      btn.dispatchEvent(event);
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
       return true;
     });
-    if (refreshClicked) {
-      console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] Atualização clicada!`);
-      await page.waitForTimeout(5000); // Espera a página recarregar
-    }
-  } catch { /* ignore */ }
+  }
+
+  // Fecha o painel de mensagens (clica no X)
+  async function closeMessagePanel(pg) {
+    return await pg.evaluate(() => {
+      // Procura botão de fechar (X) no painel de mensagens
+      const closeBtn = document.querySelector('.p-sidebar-close, button[aria-label="Close"], .p-dialog-close');
+      if (closeBtn) { closeBtn.click(); return true; }
+      // Fallback: procura qualquer X no sidebar
+      const xBtns = document.querySelectorAll('button');
+      for (const btn of xBtns) {
+        if (btn.textContent.trim() === '×' || btn.textContent.trim() === 'X') {
+          btn.click(); return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  // Detecta se o CAPTCHA bloqueou
+  async function hasCaptchaError(pg) {
+    return await pg.evaluate(() => {
+      const toast = document.querySelector('.p-toast-message, .p-message');
+      if (!toast) return false;
+      return toast.textContent.includes('Captcha') || toast.textContent.includes('captcha');
+    });
+  }
 
   try {
-    const opened = await clickMessageIcon(page);
+    // 1ª tentativa: Refresh → espera 10s → Mensagens
+    await clickRefresh(page);
+    console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] Atualização clicada!`);
+    await page.waitForTimeout(10000);
+    
+    let opened = await clickMessageIcon(page);
     if (opened) {
       console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Painel de mensagens aberto! (${opened})`);
-      await page.waitForTimeout(5000);
+      await page.waitForTimeout(3000);
+      
+      // Verifica se CAPTCHA bloqueou
+      const blocked = await hasCaptchaError(page);
+      if (blocked) {
+        console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] CAPTCHA detectado. Tentando novamente...`);
+        
+        // Fecha mensagens → Refresh → espera 10s → Abre mensagens
+        await closeMessagePanel(page);
+        await page.waitForTimeout(2000);
+        await clickRefresh(page);
+        console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] 2ª atualização!`);
+        await page.waitForTimeout(10000);
+        
+        opened = await clickMessageIcon(page);
+        if (opened) {
+          console.log(`  💬 [${proc.processNumber}/${proc.processYear}] 2ª tentativa - mensagens abertas! (${opened})`);
+        }
+      }
     } else {
       console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Ícone de mensagens não encontrado.`);
-      console.log(`  📋 URL atual: ${page.url()}`);
-      // Diagnóstico: mostra TODOS os ícones e botões
-      const icons = await page.evaluate(() => {
-        const res = [];
-        // Todos os <i> com classe
-        document.querySelectorAll('i[class]').forEach(el => {
-          res.push({ type: 'icon', class: String(el.className).substring(0, 80) });
-        });
-        // Todos os botões com innerHTML resumido
-        document.querySelectorAll('button, a[class*="br-button"]').forEach((el, i) => {
-          const cls = typeof el.className === 'string' ? el.className.substring(0, 60) : '';
-          const inner = el.innerHTML.substring(0, 100);
-          const tip = el.getAttribute('ptooltip') || el.getAttribute('title') || el.getAttribute('aria-label') || '';
-          res.push({ type: 'btn', i, class: cls, tip, inner });
-        });
-        return res;
-      });
-      console.log(`  📋 Elementos (${icons.length}):`);
-      icons.forEach(ic => console.log(`     ${JSON.stringify(ic)}`));
     }
   } catch(e) {
     console.warn(`  ⚠️ Erro ao clicar mensagens:`, e.message?.substring(0, 120));
@@ -387,15 +412,8 @@ async function startProcessMonitor(proc) {
   const intervalId = setInterval(async () => {
     try {
       if (page.isClosed()) { clearInterval(intervalId); return; }
-      // Clica no botão de atualização da própria página (não page.reload)
-      await page.evaluate(() => {
-        const icon = document.querySelector('i.fa-sync-alt');
-        if (icon) {
-          const btn = icon.closest('button') || icon;
-          btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-        }
-      });
-      await page.waitForTimeout(5000);
+      await clickRefresh(page);
+      await page.waitForTimeout(10000);
       await clickMessageIcon(page);
       await page.waitForTimeout(3000);
     } catch { /* ignore */ }
