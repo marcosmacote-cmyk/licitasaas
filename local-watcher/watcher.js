@@ -232,75 +232,111 @@ async function startProcessMonitor(proc) {
     }
   });
 
-  // ESTRATÉGIA: Primeiro carrega a SPA Angular, depois navega para o processo
-  // O ComprasNet não aceita deep-links diretos — precisa carregar o Angular primeiro.
+  // ESTRATÉGIA: Preencher os campos de pesquisa — igual ao acesso manual
   const basePage = `${COMPRASNET_BASE}/comprasnet-web/public/compras`;
-  const processUrl = `${COMPRASNET_BASE}/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
 
   try {
-    // 1) Carrega a página base (Angular SPA bootstrap)
+    // 1) Carrega a página de pesquisa pública
     await page.goto(basePage, { waitUntil: 'load', timeout: 30000 });
     await page.waitForTimeout(5000); // Espera Angular carregar
 
-    // 2) Agora navega para o processo específico (dentro da SPA)
-    await page.goto(processUrl, { waitUntil: 'load', timeout: 30000 });
-    await page.waitForTimeout(8000); // Espera renderizar
+    // 2) Preenche "Unidade compradora" (UASG)
+    const uasgInput = page.locator('label:has-text("Unidade compradora") + input, label:has-text("Unidade compradora") ~ input').first();
+    const numInput = page.locator('label:has-text("Número da compra") + input, label:has-text("Número da compra") ~ input, input[placeholder*="102021"]').first();
+    
+    // Fallback: pega inputs de texto que não sejam radio/checkbox
+    let uasgField = uasgInput;
+    let numField = numInput;
+    
+    try {
+      await uasgField.waitFor({ timeout: 3000 });
+    } catch {
+      // Fallback: procura por posição — "Unidade compradora" é o penúltimo input, "Número" é o último 
+      const allInputs = page.locator('input[type="text"], input:not([type])');
+      const count = await allInputs.count();
+      if (count >= 2) {
+        uasgField = allInputs.nth(count - 2);
+        numField = allInputs.nth(count - 1);
+      }
+    }
 
-    console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Página pública carregada.`);
-  } catch (err) {
-    console.error(`  ❌ [${proc.processNumber}/${proc.processYear}] Erro: ${err.message.substring(0, 100)}`);
-  }
+    await uasgField.fill(String(proc.uasg));
+    const compraNum = `${proc.processNumber}${proc.processYear}`;
+    await numField.fill(compraNum);
+    
+    console.log(`  🔍 [${proc.processNumber}/${proc.processYear}] Pesquisando UASG ${proc.uasg}, Nº ${compraNum}...`);
 
-  // Clica no ícone de envelope (✉️) para abrir o painel de mensagens
-  // O ícone é o último botão na barra de ações do cabeçalho do processo
-  async function clickMessageIcon(pg) {
-    // Tenta múltiplos seletores para encontrar o ícone de mensagens
-    const selectors = [
-      'button:has(mat-icon:text("email"))',
-      'button:has(mat-icon:text("mail"))',
-      'button:has(mat-icon:text("message"))',
-      'button:has(mat-icon:text("chat"))',
-      'button[mattooltip*="ensag"]',
-      'button[aria-label*="ensag"]',
-      'button[title*="ensag"]',
-      'a[mattooltip*="ensag"]',
-      // Último ícone na barra de ações (envelope é o último)
-      '.acoes-compra button:last-child',
-      '.botoes-acao button:last-child',
+    // 3) Clica em "Pesquisar"
+    await page.click('button:has-text("Pesquisar")', { timeout: 5000 });
+    await page.waitForTimeout(5000); // Espera resultados
+
+    // 4) Clica no primeiro card de resultado
+    const cardSelectors = [
+      'app-card-compra',
+      '.card-compra',
+      '[class*="card-compra"]',
+      '.resultado-compra',
+      'a[href*="acompanhamento"]',
     ];
     
-    for (const sel of selectors) {
+    let clicked = false;
+    for (const sel of cardSelectors) {
       try {
-        await pg.click(sel, { timeout: 2000 });
-        return true;
+        await page.click(sel, { timeout: 3000 });
+        clicked = true;
+        break;
       } catch { /* try next */ }
     }
     
-    // Fallback: procura qualquer elemento com "mail" ou "email" no ícone
+    if (!clicked) {
+      // Fallback: clica no primeiro link/card que aparece nos resultados
+      await page.evaluate(() => {
+        const el = document.querySelector('app-card-compra, [class*="card"], .compra-item');
+        if (el) el.click();
+      });
+    }
+
+    await page.waitForTimeout(8000); // Espera a página do processo carregar
+    console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Processo encontrado e aberto!`);
+  } catch (err) {
+    console.error(`  ❌ [${proc.processNumber}/${proc.processYear}] Erro na busca: ${err.message.substring(0, 100)}`);
+  }
+
+  // Clica no ícone de envelope (✉️) para abrir o painel de mensagens
+  // ComprasNet usa Font Awesome (fas fa-envelope) no Design System Gov.br
+  async function clickMessageIcon(pg) {
     try {
       const clicked = await pg.evaluate(() => {
-        // Procura por mat-icon ou i com texto de email
-        const icons = document.querySelectorAll('mat-icon, i.material-icons');
-        for (const icon of icons) {
-          const text = icon.textContent.trim().toLowerCase();
-          if (text === 'email' || text === 'mail' || text === 'mail_outline' || text === 'message' || text === 'chat') {
+        // Procura ícones Font Awesome de envelope/email
+        const iconClasses = ['fa-envelope', 'fa-envelope-open', 'fa-comment', 'fa-comments', 'fa-paper-plane'];
+        for (const cls of iconClasses) {
+          const icon = document.querySelector(`i.${cls}, span.${cls}`);
+          if (icon) {
             const btn = icon.closest('button') || icon.closest('a') || icon;
             btn.click();
-            return text;
+            return cls;
+          }
+        }
+        // Fallback: procura botão com tooltip de mensagem
+        const btns = document.querySelectorAll('button[ptooltip], button[mattooltip], button[title]');
+        for (const btn of btns) {
+          const tip = (btn.getAttribute('ptooltip') || btn.getAttribute('mattooltip') || btn.getAttribute('title') || '').toLowerCase();
+          if (tip.includes('mensag') || tip.includes('message') || tip.includes('chat')) {
+            btn.click();
+            return tip;
           }
         }
         return null;
       });
       if (clicked) return true;
     } catch { /* ignore */ }
-    
     return false;
   }
 
   try {
     const opened = await clickMessageIcon(page);
     if (opened) {
-      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Ícone de mensagens clicado!`);
+      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Painel de mensagens aberto!`);
       await page.waitForTimeout(5000);
     } else {
       console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Ícone de mensagens não encontrado.`);
