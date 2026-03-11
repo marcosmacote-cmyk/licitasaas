@@ -399,8 +399,8 @@ async function main() {
 
   state.context = await state.browser.newContext({
     viewport: { width: 1400, height: 900 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    bypassCSP: true,
+    // NÃO definir userAgent — deixar o Chrome real usar o dele!
+    // O ComprasNet rejeita Chrome 120 como "desatualizado"
   });
 
   console.log('🚀 Iniciando sincronização com LicitaSaaS...');
