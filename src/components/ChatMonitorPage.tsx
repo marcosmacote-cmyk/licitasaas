@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot, Star, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, Zap, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot, Star, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, Zap, CheckCircle, XCircle, AlertTriangle, Info, Radio, Wifi, WifiOff } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 type TabFilter = 'all' | 'unread' | 'important' | 'archived';
@@ -113,6 +113,10 @@ export function ChatMonitorPage({ companies }: Props) {
   const [testingNotif, setTestingNotif] = useState(false);
   const [health, setHealth] = useState<any>(null);
 
+  // ── State: ComprasNet Watcher ──
+  const [watcherStatus, setWatcherStatus] = useState<any>(null);
+  const [watcherLoading, setWatcherLoading] = useState(false);
+
   const token = localStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -189,6 +193,20 @@ export function ChatMonitorPage({ companies }: Props) {
     fetchConfig();
     fetchHealth();
   }, []);
+
+  // Fetch ComprasNet Watcher status
+  const fetchWatcherStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat-watcher/status`, { headers });
+      if (res.ok) setWatcherStatus(await res.json());
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => {
+    fetchWatcherStatus();
+    const interval = setInterval(fetchWatcherStatus, 30000); // Poll every 30s
+    return () => clearInterval(interval);
+  }, [fetchWatcherStatus]);
 
   // Load messages when selection changes
   useEffect(() => {
@@ -315,6 +333,15 @@ export function ChatMonitorPage({ companies }: Props) {
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
           {refreshing && <Loader2 size={14} className="spinner" color="var(--color-text-tertiary)" />}
+
+          {/* ComprasNet Watcher Status Indicator */}
+          {watcherStatus && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.6875rem', color: watcherStatus.isLaunched ? '#10b981' : 'var(--color-text-tertiary)', padding: '4px 10px', borderRadius: '6px', background: watcherStatus.isLaunched ? 'rgba(16, 185, 129, 0.08)' : 'var(--color-bg-surface-hover)', border: '1px solid ' + (watcherStatus.isLaunched ? 'rgba(16, 185, 129, 0.2)' : 'var(--color-border)') }}>
+              {watcherStatus.isLaunched ? <Wifi size={12} /> : <WifiOff size={12} />}
+              {watcherStatus.isLaunched ? `Watcher ativo (${watcherStatus.activeSessions?.length || 0} sessões)` : 'Watcher offline'}
+            </div>
+          )}
+
           <button className="btn btn-ghost" onClick={() => fetchProcesses(true)} title="Atualizar" style={{ padding: '6px' }}>
             <RefreshCw size={16} />
           </button>
@@ -418,8 +445,44 @@ export function ChatMonitorPage({ companies }: Props) {
               </div>
             )}
           </div>
+          {/* ComprasNet Watcher Status */}
+          <div style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.15)', background: 'rgba(16, 185, 129, 0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {watcherStatus?.isLaunched ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="var(--color-text-tertiary)" />}
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                  ComprasNet Watcher
+                </div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
+                  {watcherStatus?.isLaunched
+                    ? `${watcherStatus.activeSessions?.length || 0} sessão(ões) ativa(s)`
+                    : watcherStatus?.playwrightAvailable === false
+                      ? 'Playwright não instalado no servidor'
+                      : 'Offline — clique Login para iniciar'}
+                </div>
+              </div>
+            </div>
+            <button
+              className="btn btn-ghost"
+              style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '0.6875rem', gap: '4px', border: '1px solid var(--color-border)' }}
+              disabled={watcherLoading}
+              onClick={async () => {
+                setWatcherLoading(true);
+                try {
+                  const res = await fetch(`${API_BASE_URL}/api/chat-watcher/login`, { method: 'POST', headers });
+                  const data = await res.json();
+                  alert(data.message);
+                  fetchWatcherStatus();
+                } catch { alert('Falha na conexão.'); }
+                finally { setWatcherLoading(false); }
+              }}
+            >
+              {watcherLoading ? <Loader2 size={10} className="spinner" /> : <Radio size={10} />}
+              {watcherStatus?.isLaunched ? 'Reconectar' : 'Login'}
+            </button>
+          </div>
           <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Info size={10} /> Ative o monitoramento nos cards do Kanban (ícone 📻) para que as mensagens sejam capturadas aqui.
+            <Info size={10} /> Para ComprasNet: faça login e clique "ComprasNet" no header do processo. Para PNCP: ative o ícone 📻 no Kanban.
           </div>
         </div>
       )}
@@ -629,6 +692,32 @@ export function ChatMonitorPage({ companies }: Props) {
                     >
                       <CheckCheck size={16} color="var(--color-text-tertiary)" />
                     </button>
+                    {/* ComprasNet Watcher: Start/Stop per process */}
+                    {selectedProc.uasg && (
+                      <button
+                        title={watcherStatus?.activeSessions?.some((s: any) => s.processId === selectedProc.id) ? 'Parar monitoramento ComprasNet' : 'Iniciar monitoramento ComprasNet'}
+                        disabled={watcherLoading}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setWatcherLoading(true);
+                          try {
+                            const isActive = watcherStatus?.activeSessions?.some((s: any) => s.processId === selectedProc.id);
+                            const url = isActive
+                              ? `${API_BASE_URL}/api/chat-watcher/stop/${selectedProc.id}`
+                              : `${API_BASE_URL}/api/chat-watcher/monitor/${selectedProc.id}`;
+                            const res = await fetch(url, { method: 'POST', headers });
+                            const data = await res.json();
+                            alert(data.message || (data.success ? 'OK' : 'Erro'));
+                            fetchWatcherStatus();
+                          } catch { alert('Falha na conexão.'); }
+                          finally { setWatcherLoading(false); }
+                        }}
+                        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)', background: watcherStatus?.activeSessions?.some((s: any) => s.processId === selectedProc.id) ? 'rgba(16, 185, 129, 0.1)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.6875rem', color: '#10b981' }}
+                      >
+                        {watcherLoading ? <Loader2 size={12} className="spinner" /> : <Radio size={12} />}
+                        {watcherStatus?.activeSessions?.some((s: any) => s.processId === selectedProc.id) ? 'Watcher ON' : 'ComprasNet'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -643,7 +732,13 @@ export function ChatMonitorPage({ companies }: Props) {
                   <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {selectedMessages.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
-                        Nenhuma mensagem para este processo.
+                        <MessageSquare size={32} style={{ marginBottom: '8px', opacity: 0.3 }} />
+                        <p>Nenhuma mensagem capturada para este processo.</p>
+                        {selectedProc.uasg && (
+                          <p style={{ fontSize: '0.75rem', marginTop: '8px' }}>
+                            Clique no botão <strong>ComprasNet</strong> acima para iniciar o monitoramento em tempo real.
+                          </p>
+                        )}
                       </div>
                     ) : (
                       selectedMessages.map(msg => {

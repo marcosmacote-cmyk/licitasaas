@@ -311,32 +311,28 @@ export class ComprasnetWatcherService {
 
       const texto = msg.texto || '';
       const textoLower = texto.toLowerCase();
-      const detectedKeyword = keywords.find((k: string) => textoLower.includes(k));
+      const detectedKeyword = keywords.find((k: string) => textoLower.includes(k)) || null;
       const authorType = SENDER_TYPE_MAP[msg.tipoRemetente] || 'desconhecido';
       const category = CATEGORY_MAP[msg.categoria] || msg.categoria;
 
-      // Always log if it matches a keyword OR if it's from pregoeiro/system (high-value)
-      const isRelevant = !!detectedKeyword || msg.tipoRemetente === '0' || msg.tipoRemetente === '3';
-      if (!isRelevant) {
-        session.messagesLogged.add(msgId);
-        continue;
+      if (detectedKeyword) {
+        console.log(`[ComprasnetWatcher] 🚨 KEYWORD "${detectedKeyword}" [${authorType}/${category}] "${texto.substring(0, 80)}..."`);
       }
 
-      console.log(`[ComprasnetWatcher] 🚨 Relevant message detected! [${authorType}/${category}] "${texto.substring(0, 80)}..."`);
-
+      // Capture ALL messages (not just keyword/pregoeiro)
       await prisma.chatMonitorLog.create({
         data: {
           tenantId: process.tenantId,
           biddingProcessId: session.processId,
           messageId: msgId,
           content: texto,
-          detectedKeyword: detectedKeyword || null,
+          detectedKeyword,
           authorType,
           authorCnpj: msg.identificadorRemetente || null,
           eventCategory: msg.categoria,
           itemRef: msg.identificadorItem || null,
           captureSource: 'comprasnet-xhr',
-          status: detectedKeyword ? 'PENDING_NOTIFICATION' : 'SENT',
+          status: detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED',
         },
       });
 
