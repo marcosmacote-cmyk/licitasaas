@@ -16,6 +16,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const Database = require('better-sqlite3');
 
 // ══════════════════════════════════════════
 // ── CONFIGURAÇÃO — EDITE AQUI ──
@@ -50,11 +51,31 @@ const CHAT_URL_PATTERN = /comprasnet-mensagem\/v2\/chat\//;
 const SENDER_TYPE_MAP = { '0': 'sistema', '1': 'fornecedor', '3': 'pregoeiro' };
 const CATEGORY_MAP = { '8': 'convocacao', '9': 'comunicado_pregoeiro', '13': 'encerramento_prazo', '14': 'mensagem_participante' };
 
+// Initialize SQLite Database (Fase 2)
+const db = new Database(path.join(__dirname, 'watcher.db'));
+db.pragma('journal_mode = WAL');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    processId TEXT NOT NULL,
+    messageId TEXT NOT NULL,
+    content TEXT,
+    authorType TEXT,
+    authorCnpj TEXT,
+    eventCategory TEXT,
+    itemRef TEXT,
+    captureSource TEXT,
+    status TEXT DEFAULT 'pending',
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(processId, messageId)
+  );
+  CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
+`);
+
 // Estado Global
 const state = {
   activeSessions: new Map(), // processId -> { page, intervalId }
-  messageBuffers: new Map(), // processId -> messages[]
-  sentMessageIds: new Map(), // processId -> Set<messageId>
   context: null,
 };
 
@@ -103,29 +124,37 @@ async function fetchRemoteSessions() {
   }
 }
 
-async function sendToAPI(processId) {
-  const buffer = state.messageBuffers.get(processId) || [];
-  if (buffer.length === 0) return;
+async function sendPendingMessages() {
+  const pending = db.prepare("SELECT * FROM messages WHERE status = 'pending' LIMIT 200").all();
+  if (pending.length === 0) return;
 
-  const toSend = [...buffer];
-  state.messageBuffers.set(processId, []);
+  // Group by processId
+  const byProcess = {};
+  for (const p of pending) {
+    if (!byProcess[p.processId]) byProcess[p.processId] = [];
+    byProcess[p.processId].push(p);
+  }
 
-  try {
-    const res = await apiFetch('/api/chat-monitor/ingest', {
-      method: 'POST',
-      body: JSON.stringify({ processId, messages: toSend }),
-    });
+  for (const [processId, msgs] of Object.entries(byProcess)) {
+    try {
+      const res = await apiFetch('/api/chat-monitor/ingest', {
+        method: 'POST',
+        body: JSON.stringify({ processId, messages: msgs }),
+      });
 
-    const data = await res.json();
-    if (data.success) {
-      console.log(`  📤 Enviado ${data.created} msgs novas (${data.alerts} alertas) → proc ${processId.substring(0,8)}`);
-    } else {
-      console.error(`  ❌ API error:`, data.error || data);
-      state.messageBuffers.set(processId, [...toSend, ...(state.messageBuffers.get(processId) || [])]);
+      const data = await res.json();
+      if (data.success) {
+        // Mark as sent
+        const ids = msgs.map(m => m.id);
+        const placeholders = ids.map(() => '?').join(',');
+        db.prepare(`UPDATE messages SET status = 'sent' WHERE id IN (${placeholders})`).run(ids);
+        console.log(`  📤 Enviado ${data.created} msgs novas (${data.alerts} alertas) → proc ${processId.substring(0,8)}`);
+      } else {
+        console.error(`  ❌ API error:`, data.error || data);
+      }
+    } catch (err) {
+      console.error(`  ❌ Falha ao enviar p/ API (proc ${processId.substring(0,8)}):`, err.message);
     }
-  } catch (err) {
-    console.error(`  ❌ Falha ao enviar p/ API:`, err.message);
-    state.messageBuffers.set(processId, [...toSend, ...(state.messageBuffers.get(processId) || [])]);
   }
 }
 
@@ -134,9 +163,6 @@ async function startProcessMonitor(proc) {
   if (!compraId) return;
 
   console.log(`  📡 Iniciando captura para: ${proc.id.substring(0, 8)}... → compraId: ${compraId}`);
-
-  state.messageBuffers.set(proc.id, []);
-  state.sentMessageIds.set(proc.id, new Set());
 
   const page = await state.context.newPage();
 
@@ -150,28 +176,31 @@ async function startProcessMonitor(proc) {
       const body = await response.json().catch(() => null);
       if (!body || !Array.isArray(body)) return;
 
-      const sent = state.sentMessageIds.get(proc.id);
-      let newCount = 0;
+      const insert = db.prepare(`
+        INSERT OR IGNORE INTO messages (processId, messageId, content, authorType, authorCnpj, eventCategory, itemRef, captureSource)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-      for (const msg of body) {
-        const msgId = msg.chaveMensagemNaOrigem;
-        if (!msgId || sent.has(msgId)) continue;
+      const insertMany = db.transaction((msgs) => {
+        let count = 0;
+        for (const msg of msgs) {
+          if (!msg.chaveMensagemNaOrigem) continue;
+          const res = insert.run(
+            proc.id,
+            msg.chaveMensagemNaOrigem,
+            msg.texto || '',
+            SENDER_TYPE_MAP[msg.tipoRemetente] || 'desconhecido',
+            msg.identificadorRemetente || null,
+            msg.categoria || null,
+            msg.identificadorItem || null,
+            'local-watcher'
+          );
+          if (res.changes > 0) count++;
+        }
+        return count;
+      });
 
-        sent.add(msgId);
-        newCount++;
-
-        const buffer = state.messageBuffers.get(proc.id) || [];
-        buffer.push({
-          messageId: msgId,
-          content: msg.texto || '',
-          authorType: SENDER_TYPE_MAP[msg.tipoRemetente] || 'desconhecido',
-          authorCnpj: msg.identificadorRemetente || null,
-          eventCategory: msg.categoria || null,
-          itemRef: msg.identificadorItem || null,
-          captureSource: 'local-watcher',
-        });
-        state.messageBuffers.set(proc.id, buffer);
-      }
+      const newCount = insertMany(body);
 
       if (newCount > 0) {
         console.log(`  📨 ${newCount} msg(s) capturadas - [${proc.id.substring(0, 8)}]`);
@@ -330,11 +359,9 @@ async function main() {
   // Periodic Sync: Verifica processos criados/removidos
   setInterval(syncSessions, CONFIG.SYNC_INTERVAL);
 
-  // Periodic send to API: Envia o buffer capturado para o backend
+  // Periodic send to API: Envia o buffer persistido no banco de dados para o backend
   setInterval(async () => {
-    for (const processId of state.activeSessions.keys()) {
-      await sendToAPI(processId);
-    }
+    await sendPendingMessages();
   }, CONFIG.SEND_INTERVAL);
 
   console.log('');
@@ -343,6 +370,7 @@ async function main() {
   console.log('│                                              │');
   console.log('│  • Processos são sincronizados a cada 60s    │');
   console.log('│  • Mensagens são enviadas a cada 15s         │');
+  console.log('│  • DB Local Ligado — Prevenção a falhas      │');
   console.log('│  • Heartbeat enviado para o painel           │');
   console.log('│                                              │');
   console.log('│  Deixe esta janela aberta.                   │');
@@ -354,10 +382,8 @@ async function main() {
   process.on('SIGINT', async () => {
     console.log('\n🛑 Encerrando agente...');
     
-    // Tenta enviar o que sobrou no buffer
-    for (const processId of state.activeSessions.keys()) {
-      await sendToAPI(processId);
-    }
+    // Tenta enviar o que sobrou no buffer SQLite
+    await sendPendingMessages();
     
     await browser.close();
     console.log('✅ Agente encerrado.');

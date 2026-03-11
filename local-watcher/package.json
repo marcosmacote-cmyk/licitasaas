@@ -8,6 +8,11 @@
     "setup": "npm install && npx playwright install chromium"
   },
   "dependencies": {
+    "better-sqlite3": "^12.6.2",
     "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "body-parser": "^2.2.2",
+    "express": "^5.2.1"
   }
 }
