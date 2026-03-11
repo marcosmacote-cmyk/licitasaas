@@ -12,7 +12,12 @@
  *   3. npm start       (abre browser para login + monitora)
  */
 
-const { chromium } = require('playwright');
+
+const { chromium } = require('playwright-extra');
+const stealth = require('puppeteer-extra-plugin-stealth');
+
+// Remove marcadores de automação para evitar CAPTCHA
+chromium.use(stealth());
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
