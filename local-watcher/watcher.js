@@ -345,17 +345,22 @@ async function startProcessMonitor(proc) {
   // Pega coordenadas de um elemento via evaluate (mais confiável que locator)
   async function getElementBox(pg, cssSelector) {
     return await pg.evaluate((sel) => {
-      // Procura todos os elementos que combinam
       const elements = document.querySelectorAll(sel);
       if (!elements || elements.length === 0) return null;
       
-      // Itera de trás para frente (geralmente o ícone desktop é o último/mais específico)
-      for (let i = elements.length - 1; i >= 0; i--) {
+      // Itera em busca do elemento realmente visível na tela
+      for (let i = 0; i < elements.length; i++) {
         const el = elements[i];
         const btn = el.closest('button') || el;
+        
+        // Critérios estritos de visibilidade (Angular/PrimeNG muitas vezes usa display:none ou opacidade)
+        const style = window.getComputedStyle(btn);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+        if (btn.offsetWidth === 0 || btn.offsetHeight === 0) continue;
+        
         const rect = btn.getBoundingClientRect();
-        // Verifica se está visível (width/height > 0)
-        if (rect.width > 0 && rect.height > 0) {
+        // Garante que está no viewport e tem área clicável
+        if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0) {
            return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
         }
       }
