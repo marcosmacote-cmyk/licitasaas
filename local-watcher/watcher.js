@@ -422,6 +422,50 @@ async function startProcessMonitor(proc) {
     console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Envelope não encontrado após 3 tentativas.`);
     console.log(`  📋 URL: ${page.url()}`);
     console.log(`  📋 Ícones na página (${icons.length}): ${icons.join(' | ')}`);
+  } else {
+    // Verifica se deu erro de CAPTCHA após o clique (analisando o toast na tela)
+    const hasCaptchaError = await page.evaluate(() => {
+      const toast = document.querySelector('.p-toast-message, .p-message');
+      if (!toast) return false;
+      return toast.textContent.toLowerCase().includes('captcha');
+    });
+
+    if (hasCaptchaError) {
+      console.log(`  🚨 [${proc.processNumber}/${proc.processYear}] Erro de CAPTCHA detectado! Iniciando fallback avançado...`);
+      
+      try {
+        // 1. Fecha o painel de mensagens
+        await page.evaluate(() => {
+          const closeBtn = document.querySelector('.p-sidebar-close, button[aria-label="Close"]');
+          if (closeBtn) closeBtn.click();
+        });
+        console.log(`  ❌ Painel fechado.`);
+        await page.waitForTimeout(2000);
+
+        // 2. Faz um reload REAL na página (F5) para resetar o estado do ComprasNet
+        console.log(`  🔁 Recarregando a página por completo (F5)...`);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(10000); // Espera re-renderizar o Angular
+
+        // 3. Clica no ícone fa-tasks para reabrir o processo (pois o reload tira da tela do processo)
+        console.log(`  🖱️ Reabrindo tela do processo...`);
+        await humanClickBySelector(page, 'i.fa-tasks');
+        await page.waitForTimeout(8000);
+
+        // 4. Clica de novo no envelope
+        console.log(`  💬 Tentando envelope novamente após ressurreição...`);
+        const envelopeClickedAgain = await humanClickBySelector(page, 'i.fa-envelope');
+        
+        if (envelopeClickedAgain) {
+          console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Envelope re-clicado com sucesso!`);
+          await page.waitForTimeout(5000);
+        } else {
+          console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Falha ao reclicar no envelope no fallback.`);
+        }
+      } catch (err) {
+        console.warn(`  ⚠️ Erro no fallback de CAPTCHA: ${err.message?.substring(0, 100)}`);
+      }
+    }
   }
 
   // ── Captura contínua: DOM + XHR (o XHR interceptor já roda acima) ──
