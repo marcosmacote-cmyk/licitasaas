@@ -272,34 +272,30 @@ async function startProcessMonitor(proc) {
     await page.waitForTimeout(5000); // Espera resultados
 
     // 4) Clica no ícone de "lista/detalhes" (≡) dentro do primeiro card
-    //    O card em si não é clicável — precisa clicar no ícone do meio (lista)
-    const cardClicked = await page.evaluate(() => {
-      // Procura os ícones de lista dentro dos cards de resultado
-      const listIcons = ['fa-list', 'fa-list-ul', 'fa-list-alt', 'fa-bars', 'fa-th-list', 'fa-tasks'];
-      for (const cls of listIcons) {
-        const icon = document.querySelector(`app-card-compra i.${cls}, .card-compra i.${cls}, i.${cls}`);
-        if (icon) {
-          const btn = icon.closest('button') || icon.closest('a') || icon;
-          btn.click();
-          return cls;
-        }
-      }
-      // Fallback: procura SVGs com data-p-icon de "list" ou "bars"
-      const svgs = document.querySelectorAll('svg[data-p-icon*="list"], svg[data-p-icon*="bars"]');
-      if (svgs.length > 0) {
-        const btn = svgs[0].closest('button') || svgs[0].closest('a') || svgs[0];
-        btn.click();
-        return 'svg-list';
-      }
-      // Fallback: clica no primeiro link de acompanhamento
-      const link = document.querySelector('a[href*="acompanhamento"], a[routerlink*="acompanhamento"]');
-      if (link) { link.click(); return 'link-acompanhamento'; }
-      return null;
-    });
+    //    Usa Playwright click nativo (mouse real) — NÃO evaluate().click()!
+    //    O Angular não reconhece clicks via JavaScript puro.
+    const listIconSelectors = [
+      'i.fa-tasks',
+      'i.fa-list',
+      'i.fa-list-ul',
+      'i.fa-list-alt',
+      'i.fa-bars',
+      'i.fa-th-list',
+    ];
     
-    if (cardClicked) {
-      console.log(`  🖱️ [${proc.processNumber}/${proc.processYear}] Clicou no ícone: ${cardClicked}`);
-    } else {
+    let cardClicked = false;
+    for (const sel of listIconSelectors) {
+      try {
+        const icon = page.locator(sel).first();
+        await icon.waitFor({ timeout: 3000 });
+        await icon.click({ timeout: 3000 });
+        cardClicked = true;
+        console.log(`  🖱️ [${proc.processNumber}/${proc.processYear}] Clicou no ícone: ${sel}`);
+        break;
+      } catch { /* try next */ }
+    }
+    
+    if (!cardClicked) {
       console.warn(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Não encontrou ícone de detalhes no card.`);
     }
 
@@ -310,43 +306,56 @@ async function startProcessMonitor(proc) {
   }
 
   // Clica no ícone de envelope (✉️) para abrir o painel de mensagens
-  // ComprasNet usa Font Awesome (fas fa-envelope) no Design System Gov.br
+  // Usa Playwright click nativo para evitar problemas com Angular
   async function clickMessageIcon(pg) {
+    const msgIconSelectors = [
+      'i.fa-envelope',
+      'i.fa-envelope-open',
+      'i.fa-comment',
+      'i.fa-comments',
+      'i.fa-paper-plane',
+      'i.fa-comment-alt',
+      'i.fa-inbox',
+    ];
+    for (const sel of msgIconSelectors) {
+      try {
+        const icon = pg.locator(sel).first();
+        await icon.waitFor({ timeout: 2000 });
+        await icon.click({ timeout: 2000 });
+        return sel;
+      } catch { /* try next */ }
+    }
+    // Fallback: procura botão com tooltip de mensagem via Playwright
     try {
-      const clicked = await pg.evaluate(() => {
-        // Procura ícones Font Awesome de envelope/email
-        const iconClasses = ['fa-envelope', 'fa-envelope-open', 'fa-comment', 'fa-comments', 'fa-paper-plane'];
-        for (const cls of iconClasses) {
-          const icon = document.querySelector(`i.${cls}, span.${cls}`);
-          if (icon) {
-            const btn = icon.closest('button') || icon.closest('a') || icon;
-            btn.click();
-            return cls;
-          }
-        }
-        // Fallback: procura botão com tooltip de mensagem
-        const btns = document.querySelectorAll('button[ptooltip], button[mattooltip], button[title]');
-        for (const btn of btns) {
-          const tip = (btn.getAttribute('ptooltip') || btn.getAttribute('mattooltip') || btn.getAttribute('title') || '').toLowerCase();
-          if (tip.includes('mensag') || tip.includes('message') || tip.includes('chat')) {
-            btn.click();
-            return tip;
-          }
-        }
-        return null;
-      });
-      if (clicked) return true;
+      const btn = pg.locator('button[ptooltip*="ensag"], button[title*="ensag"], a[ptooltip*="ensag"]').first();
+      await btn.waitFor({ timeout: 2000 });
+      await btn.click({ timeout: 2000 });
+      return 'tooltip-mensag';
     } catch { /* ignore */ }
-    return false;
+    return null;
   }
 
   try {
     const opened = await clickMessageIcon(page);
     if (opened) {
-      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Painel de mensagens aberto!`);
+      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Painel de mensagens aberto! (${opened})`);
       await page.waitForTimeout(5000);
     } else {
       console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Ícone de mensagens não encontrado.`);
+      // Diagnóstico: mostra TODOS os ícones que existem na página
+      const icons = await page.evaluate(() => {
+        const res = [];
+        document.querySelectorAll('i, span[class*="fa-"], svg[data-p-icon]').forEach(el => {
+          res.push({ class: el.className?.substring(0, 60), tag: el.tagName, dataIcon: el.getAttribute('data-p-icon') });
+        });
+        document.querySelectorAll('button, a').forEach(el => {
+          const tip = el.getAttribute('ptooltip') || el.getAttribute('title') || el.getAttribute('aria-label') || '';
+          if (tip) res.push({ type: 'btn-tip', tip, class: el.className?.substring(0, 60) });
+        });
+        return res;
+      });
+      console.log(`  📋 Ícones na página (${icons.length}):`);
+      icons.slice(0, 20).forEach(ic => console.log(`     ${JSON.stringify(ic)}`));
     }
   } catch(e) {
     console.warn(`  ⚠️ Erro ao clicar mensagens:`, e.message.substring(0, 80));
