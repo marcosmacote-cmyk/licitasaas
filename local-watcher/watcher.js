@@ -243,9 +243,9 @@ async function startProcessMonitor(proc) {
   try {
     // 1) Carrega a página de pesquisa pública
     await page.goto(basePage, { waitUntil: 'load', timeout: 30000 });
-    await page.waitForTimeout(4000 + Math.random() * 3000); // Delay humano
+    await page.waitForTimeout(6000); // Espera Angular carregar
 
-    // 2) Preenche os campos — DIGITANDO como humano (não fill instantâneo)
+    // 2) Preenche os campos de pesquisa
     const allInputs = page.locator('input[type="text"], input:not([type])');
     await allInputs.first().waitFor({ state: 'attached', timeout: 10000 });
     const count = await allInputs.count();
@@ -255,27 +255,14 @@ async function startProcessMonitor(proc) {
     const uasg6 = String(proc.uasg).padStart(6, '0');
     const compraNum = `${proc.processNumber}${proc.processYear}`;
 
-    // Clica no campo e digita caractere por caractere (comportamento humano)
-    await uasgField.click();
-    await page.waitForTimeout(300 + Math.random() * 500);
-    await uasgField.pressSequentially(uasg6, { delay: 80 + Math.random() * 120 });
-    
-    await page.waitForTimeout(500 + Math.random() * 800);
-    
-    await numField.click();
-    await page.waitForTimeout(300 + Math.random() * 500);
-    await numField.pressSequentially(compraNum, { delay: 80 + Math.random() * 120 });
+    await uasgField.fill(uasg6, { timeout: 10000 });
+    await numField.fill(compraNum, { timeout: 10000 });
     
     console.log(`  🔍 [${proc.processNumber}/${proc.processYear}] Pesquisando UASG ${uasg6}, Nº ${compraNum}...`);
 
-    await page.waitForTimeout(800 + Math.random() * 1200);
-
     // 3) Clica em "Pesquisar"
-    const searchBtn = page.locator('button:has-text("Pesquisar")');
-    await searchBtn.hover(); // Move mouse antes de clicar
-    await page.waitForTimeout(200 + Math.random() * 400);
-    await searchBtn.click({ timeout: 5000 });
-    await page.waitForTimeout(5000 + Math.random() * 2000); // Espera resultados
+    await page.click('button:has-text("Pesquisar")', { timeout: 5000 });
+    await page.waitForTimeout(5000); // Espera resultados
 
     // 4) Clica no ícone de "lista/detalhes" (≡) dentro do primeiro card
     //    Usa Playwright click nativo (mouse real) — NÃO evaluate().click()!
@@ -466,29 +453,24 @@ async function main() {
   }
 
   // ── Launch browser — ACESSO PÚBLICO (sem login!) ──
-  // Usa launchPersistentContext com perfil próprio para manter cookies/história
-  // Isso ajuda o reCAPTCHA a confiar no browser (cookies Google, história, etc.)
+  // Usa o Chrome REAL instalado na máquina + stealth plugin
   console.log('');
   console.log('🌐 Abrindo Chrome real (Acesso Público — sem login)...');
 
-  const profileDir = path.join(__dirname, '.chromium-profile');
-  
-  state.context = await chromium.launchPersistentContext(profileDir, {
-    channel: 'chrome',  // Usa o Google Chrome instalado na máquina!
+  state.browser = await chromium.launch({
+    channel: 'chrome',
     headless: false,
-    viewport: { width: 1400, height: 900 },
     args: [
       '--no-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--disable-infobars',
       '--ignore-certificate-errors',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--disable-site-isolation-trials',
     ],
-    ignoreDefaultArgs: ['--enable-automation'],
-    // NÃO definir userAgent — deixar o Chrome real usar o dele!
   });
-  state.browser = state.context; // launchPersistentContext retorna o context
+
+  state.context = await state.browser.newContext({
+    viewport: { width: 1400, height: 900 },
+  });
 
   console.log('🚀 Iniciando sincronização com LicitaSaaS...');
   
