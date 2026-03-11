@@ -243,22 +243,72 @@ async function startProcessMonitor(proc) {
     console.error(`  ❌ [${proc.processNumber}/${proc.processYear}] Erro: ${err.message.substring(0, 100)}`);
   }
 
-  // Tenta clicar na aba "Mensagens" para forçar carregamento
-  try {
-    await page.click('text=/[Mm]ensage/', { timeout: 8000 });
-    console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Aba de mensagens aberta.`);
-    await page.waitForTimeout(5000);
-  } catch(e) {
-    // Pode não existir aba separada — mensagens carregam automaticamente
+  // Clica no ícone de envelope (✉️) para abrir o painel de mensagens
+  // O ícone é o último botão na barra de ações do cabeçalho do processo
+  async function clickMessageIcon(pg) {
+    // Tenta múltiplos seletores para encontrar o ícone de mensagens
+    const selectors = [
+      'button:has(mat-icon:text("email"))',
+      'button:has(mat-icon:text("mail"))',
+      'button:has(mat-icon:text("message"))',
+      'button:has(mat-icon:text("chat"))',
+      'button[mattooltip*="ensag"]',
+      'button[aria-label*="ensag"]',
+      'button[title*="ensag"]',
+      'a[mattooltip*="ensag"]',
+      // Último ícone na barra de ações (envelope é o último)
+      '.acoes-compra button:last-child',
+      '.botoes-acao button:last-child',
+    ];
+    
+    for (const sel of selectors) {
+      try {
+        await pg.click(sel, { timeout: 2000 });
+        return true;
+      } catch { /* try next */ }
+    }
+    
+    // Fallback: procura qualquer elemento com "mail" ou "email" no ícone
+    try {
+      const clicked = await pg.evaluate(() => {
+        // Procura por mat-icon ou i com texto de email
+        const icons = document.querySelectorAll('mat-icon, i.material-icons');
+        for (const icon of icons) {
+          const text = icon.textContent.trim().toLowerCase();
+          if (text === 'email' || text === 'mail' || text === 'mail_outline' || text === 'message' || text === 'chat') {
+            const btn = icon.closest('button') || icon.closest('a') || icon;
+            btn.click();
+            return text;
+          }
+        }
+        return null;
+      });
+      if (clicked) return true;
+    } catch { /* ignore */ }
+    
+    return false;
   }
 
-  // Refresh periódico — recarrega a página para pegar novas mensagens
+  try {
+    const opened = await clickMessageIcon(page);
+    if (opened) {
+      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Ícone de mensagens clicado!`);
+      await page.waitForTimeout(5000);
+    } else {
+      console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Ícone de mensagens não encontrado.`);
+    }
+  } catch(e) {
+    console.warn(`  ⚠️ Erro ao clicar mensagens:`, e.message.substring(0, 80));
+  }
+
+  // Refresh periódico — recarrega e clica no ícone de mensagens
   const intervalId = setInterval(async () => {
     try {
       if (page.isClosed()) { clearInterval(intervalId); return; }
       await page.reload({ waitUntil: 'load', timeout: 30000 }).catch(() => {});
-      await page.waitForTimeout(5000);
-      await page.click('text=/[Mm]ensage/', { timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(8000);
+      await clickMessageIcon(page);
+      await page.waitForTimeout(3000);
     } catch { /* ignore */ }
   }, CONFIG.REFRESH_INTERVAL);
 
