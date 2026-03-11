@@ -238,32 +238,20 @@ async function startProcessMonitor(proc) {
   try {
     // 1) Carrega a página de pesquisa pública
     await page.goto(basePage, { waitUntil: 'load', timeout: 30000 });
-    await page.waitForTimeout(5000); // Espera Angular carregar
+    await page.waitForTimeout(6000); // Espera Angular carregar
 
     // 2) Preenche "Unidade compradora" (UASG)
-    const uasgInput = page.locator('label:has-text("Unidade compradora") + input, label:has-text("Unidade compradora") ~ input').first();
-    const numInput = page.locator('label:has-text("Número da compra") + input, label:has-text("Número da compra") ~ input, input[placeholder*="102021"]').first();
-    
-    // Fallback: pega inputs de texto que não sejam radio/checkbox
-    let uasgField = uasgInput;
-    let numField = numInput;
-    
-    try {
-      await uasgField.waitFor({ timeout: 3000 });
-    } catch {
-      // Fallback: procura por posição — "Unidade compradora" é o penúltimo input, "Número" é o último 
-      const allInputs = page.locator('input[type="text"], input:not([type])');
-      const count = await allInputs.count();
-      if (count >= 2) {
-        uasgField = allInputs.nth(count - 2);
-        numField = allInputs.nth(count - 1);
-      }
-    }
+    // Espera o formulário de pesquisa renderizar
+    const allInputs = page.locator('input[type="text"], input:not([type])');
+    await allInputs.first().waitFor({ state: 'attached', timeout: 10000 });
+    const count = await allInputs.count();
+    const uasgField = allInputs.nth(count >= 2 ? count - 2 : 0);
+    const numField = allInputs.nth(count >= 2 ? count - 1 : Math.min(1, count - 1));
 
     const uasg6 = String(proc.uasg).padStart(6, '0');
-    await uasgField.fill(uasg6);
+    await uasgField.fill(uasg6, { timeout: 10000 });
     const compraNum = `${proc.processNumber}${proc.processYear}`;
-    await numField.fill(compraNum);
+    await numField.fill(compraNum, { timeout: 10000 });
     
     console.log(`  🔍 [${proc.processNumber}/${proc.processYear}] Pesquisando UASG ${uasg6}, Nº ${compraNum}...`);
 
@@ -408,11 +396,14 @@ async function syncSessions() {
   const remoteIds = new Set(remoteProcesses.map(p => p.id));
   const localIds = new Set(state.activeSessions.keys());
 
-  // Iniciar novos processos
-  for (const proc of remoteProcesses) {
-    if (!localIds.has(proc.id)) {
-      await startProcessMonitor(proc);
+  // Iniciar novos processos (sequencialmente com delay)
+  const newProcs = remoteProcesses.filter(p => !localIds.has(p.id));
+  for (let i = 0; i < newProcs.length; i++) {
+    if (i > 0) {
+      console.log(`  ⏳ Aguardando 10s antes do próximo processo...`);
+      await new Promise(r => setTimeout(r, 10000));
     }
+    await startProcessMonitor(newProcs[i]);
   }
 
   // Parar processos removidos/desativados
