@@ -232,12 +232,20 @@ async function startProcessMonitor(proc) {
     }
   });
 
-  // Navega para a página PÚBLICA do processo
+  // ESTRATÉGIA: Primeiro carrega a SPA Angular, depois navega para o processo
+  // O ComprasNet não aceita deep-links diretos — precisa carregar o Angular primeiro.
+  const basePage = `${COMPRASNET_BASE}/comprasnet-web/public/compras`;
   const processUrl = `${COMPRASNET_BASE}/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
+
   try {
-    await page.goto(processUrl, { waitUntil: 'load', timeout: 60000 });
-    // Angular SPA precisa de tempo para renderizar
-    await page.waitForTimeout(8000);
+    // 1) Carrega a página base (Angular SPA bootstrap)
+    await page.goto(basePage, { waitUntil: 'load', timeout: 30000 });
+    await page.waitForTimeout(5000); // Espera Angular carregar
+
+    // 2) Agora navega para o processo específico (dentro da SPA)
+    await page.goto(processUrl, { waitUntil: 'load', timeout: 30000 });
+    await page.waitForTimeout(8000); // Espera renderizar
+
     console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Página pública carregada.`);
   } catch (err) {
     console.error(`  ❌ [${proc.processNumber}/${proc.processYear}] Erro: ${err.message.substring(0, 100)}`);
