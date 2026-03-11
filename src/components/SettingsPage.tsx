@@ -10,10 +10,11 @@ interface AgentLog {
     status: string;
     captureSource: string;
     createdAt: string;
-    biddingProcess: {
-        number: string;
-        object: string;
-        uatgName: string;
+    biddingProcess?: {
+        processNumber?: string;
+        processYear?: string;
+        title?: string;
+        uasg?: string;
     };
 }
 
@@ -137,7 +138,7 @@ export function SettingsPage() {
 
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                                             <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                                                Ref: Processo {log.biddingProcess?.number} - {log.biddingProcess?.uatgName}
+                                                Ref: Processo {log.biddingProcess?.processNumber}{log.biddingProcess?.processYear ? '/' + log.biddingProcess.processYear : ''} - UASG {log.biddingProcess?.uasg || 'N/A'} - {log.biddingProcess?.title}
                                             </div>
                                         </div>
                                     </div>

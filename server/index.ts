@@ -3221,7 +3221,7 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
 });
 
 // GET: /api/chat-monitor/logs - Histórico de atividade do Agente Local (Fase 4)
-app.get('/api/chat-monitor/logs', requireAuth, async (req, res) => {
+app.get('/api/chat-monitor/logs', authenticateToken, async (req, res) => {
     try {
         const tenantId = (req as any).user.tenantId;
         const limit = parseInt(req.query.limit as string) || 50;
@@ -3231,9 +3231,10 @@ app.get('/api/chat-monitor/logs', requireAuth, async (req, res) => {
             include: {
                 biddingProcess: {
                     select: {
-                        number: true,
-                        object: true,
-                        uatgName: true
+                        processNumber: true,
+                        processYear: true,
+                        title: true,
+                        uasg: true
                     }
                 }
             },
