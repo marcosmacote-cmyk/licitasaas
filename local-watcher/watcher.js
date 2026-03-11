@@ -28,7 +28,7 @@ const CONFIG = {
 
   // Token JWT — obtenha fazendo login no LicitaSaaS
   // Abra DevTools > Network > copie o header Authorization de qualquer request
-  TOKEN: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0MmE2MjliMC00ZmQzLTQ4YjQtOWExNi1jNTg1NjAwZmU2ODIiLCJ0ZW5hbnRJZCI6IjlmN2E3MTU1LWJlNjctNDQ3MC04OTUyLWViOTQ3ZmQ5NzkzMSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzIyOTQwNiwiZXhwIjoxNzczMjU4MjA2fQ.Et3OFHEBvrENdrOophW79j4PMfI2F6UJ0T8W3W-DDvA',
+  TOKEN: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0MmE2MjliMC00ZmQzLTQ4YjQtOWExNi1jNTg1NjAwZmU2ODIiLCJ0ZW5hbnRJZCI6IjlmN2E3MTU1LWJlNjctNDQ3MC04OTUyLWViOTQ3ZmQ5NzkzMSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzI2MDUwNiwiZXhwIjoxNzczMjg5MzA2fQ.YhDQHB-uOz-_W8f4v0MzK14CWzzdYiawWqc1CU2RNkE',
 
   // Intervalo de refresh da aba de mensagens (ms)
   REFRESH_INTERVAL: 60000, // 60 segundos
@@ -165,39 +165,22 @@ async function startProcessMonitor(proc) {
 
   console.log(`  📡 Iniciando captura para: ${proc.id.substring(0, 8)}... → compraId: ${compraId}`);
 
-  // ── NOVA ABORDAGEM: Poll direto na API de Chat do ComprasNet ──
-  // Em vez de abrir uma aba do navegador (que dá 404 em muitos processos),
-  // usamos a API de mensagens diretamente com os cookies salvos.
-  const chatApiUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-mensagem/v2/chat/${compraId}`;
+  // ── ABORDAGEM: Página Pública + Interceptação de XHR ──
+  // O ComprasNet permite acesso público a qualquer processo.
+  // Abrimos a página pública e interceptamos as respostas XHR de mensagens.
+  const page = await state.context.newPage();
 
   const insert = db.prepare(`
     INSERT OR IGNORE INTO messages (processId, messageId, content, authorType, authorCnpj, eventCategory, itemRef, captureSource)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  async function pollMessages() {
+  // Intercepta TODAS as respostas de rede ANTES de navegar
+  page.on('response', async (response) => {
     try {
-      // Pega cookies atuais do navegador para autenticar
-      const cookies = await state.context.cookies();
-      const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-
-      const response = await fetch(chatApiUrl, {
-        headers: {
-          'Accept': 'application/json',
-          'Cookie': cookieStr,
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-        }
-      });
-
-      if (response.status === 204) {
-        // 204 = sem mensagens nessa compra (pregoeiro não falou nada ainda)
-        return;
-      }
-
-      if (!response.ok) {
-        console.warn(`  ⚠️ Chat API [${compraId}]: HTTP ${response.status}`);
-        return;
-      }
+      const url = response.url();
+      if (!CHAT_URL_PATTERN.test(url)) return;
+      if (response.status() !== 200) return;
 
       const body = await response.json().catch(() => null);
       if (!body || !Array.isArray(body) || body.length === 0) return;
@@ -222,9 +205,7 @@ async function startProcessMonitor(proc) {
               count++;
               newTexts.push(msg.texto ? msg.texto.substring(0, 120).replace(/\n/g, ' ') : '[Mensagem Vazia]');
             }
-          } catch(e) {
-            // IGNORE unique constraint errors
-          }
+          } catch(e) { /* unique constraint */ }
         }
         return { count, newTexts };
       });
@@ -235,45 +216,53 @@ async function startProcessMonitor(proc) {
         console.log(`\n======================================================`);
         console.log(`  🚨 MENSAGEM CAPTURADA AO VIVO NO COMPRASNET!`);
         console.log(`  📍 Processo: ${proc.processNumber}/${proc.processYear} (UASG ${proc.uasg})`);
-        console.log(`  📨 Quantidade nova nesta varredura: ${newCount}`);
+        console.log(`  📨 Quantidade nova: ${newCount}`);
         newTexts.slice(0, 3).forEach(t => {
           console.log(`  💬 "${t}${t.length >= 120 ? '...' : ''}"`);
         });
         console.log(`======================================================\n`);
+      } else if (body.length > 0) {
+        // Mensagens existem mas já foram capturadas
+        console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] ${body.length} msgs no chat (todas já capturadas).`);
       }
     } catch (err) {
-      if (!err.message?.includes('Target closed') && !err.message?.includes('context')) {
-        console.warn(`  ⚠️ Poll error [${compraId}]:`, err.message);
+      if (!err.message?.includes('Target closed')) {
+        console.warn(`  ⚠️ XHR parse error:`, err.message);
       }
     }
-  }
+  });
 
-  // Primeira varredura imediata
-  await pollMessages();
-  
-  // Diagnóstico: verifica se a API responde
+  // Navega para a página PÚBLICA do processo
+  const processUrl = `${COMPRASNET_BASE}/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
   try {
-    const cookies = await state.context.cookies();
-    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-    const probe = await fetch(chatApiUrl, {
-      headers: { 'Accept': 'application/json', 'Cookie': cookieStr }
-    });
-    if (probe.status === 204) {
-      console.log(`  ℹ️  [${proc.processNumber}/${proc.processYear}] Nenhuma mensagem no chat ainda (pregoeiro silencioso).`);
-    } else if (probe.ok) {
-      const msgs = await probe.json().catch(() => []);
-      console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] ${Array.isArray(msgs) ? msgs.length : 0} mensagens encontradas no ComprasNet.`);
-    } else {
-      console.log(`  ⚠️  [${proc.processNumber}/${proc.processYear}] Chat API retornou status ${probe.status}`);
-    }
-  } catch(e) {
-    console.warn(`  ⚠️  Diagnóstico falhou:`, e.message);
+    await page.goto(processUrl, { waitUntil: 'load', timeout: 60000 });
+    // Angular SPA precisa de tempo para renderizar
+    await page.waitForTimeout(8000);
+    console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Página pública carregada.`);
+  } catch (err) {
+    console.error(`  ❌ [${proc.processNumber}/${proc.processYear}] Erro: ${err.message.substring(0, 100)}`);
   }
 
-  // Varreduras periódicas
-  const intervalId = setInterval(pollMessages, CONFIG.REFRESH_INTERVAL);
+  // Tenta clicar na aba "Mensagens" para forçar carregamento
+  try {
+    await page.click('text=/[Mm]ensage/', { timeout: 8000 });
+    console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Aba de mensagens aberta.`);
+    await page.waitForTimeout(5000);
+  } catch(e) {
+    // Pode não existir aba separada — mensagens carregam automaticamente
+  }
 
-  state.activeSessions.set(proc.id, { intervalId });
+  // Refresh periódico — recarrega a página para pegar novas mensagens
+  const intervalId = setInterval(async () => {
+    try {
+      if (page.isClosed()) { clearInterval(intervalId); return; }
+      await page.reload({ waitUntil: 'load', timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(5000);
+      await page.click('text=/[Mm]ensage/', { timeout: 5000 }).catch(() => {});
+    } catch { /* ignore */ }
+  }, CONFIG.REFRESH_INTERVAL);
+
+  state.activeSessions.set(proc.id, { page, intervalId });
 }
 
 async function stopProcessMonitor(processId) {
@@ -282,6 +271,7 @@ async function stopProcessMonitor(processId) {
 
   console.log(`  ⏹ Parando monitoramento para proc ${processId.substring(0,8)}`);
   clearInterval(session.intervalId);
+  if (session.page) await session.page.close().catch(() => {});
   state.activeSessions.delete(processId);
 }
 
@@ -340,90 +330,28 @@ async function main() {
     process.exit(1);
   }
 
-  // ── Launch browser com PERSISTENT CONTEXT ──
-  // Diferença crucial: persistentContext mantém TODOS os cookies,
-  // cache, sessão OAuth do Gov.br e tokens do ComprasNet entre
-  // reinicializações. Não é modo anônimo!
+  // ── Launch browser — ACESSO PÚBLICO (sem login!) ──
+  // O ComprasNet permite acesso público a qualquer processo.
+  // Não é necessário login, cookies, ou sessão do Gov.br.
   console.log('');
-  console.log('🌐 Abrindo navegador...');
+  console.log('🌐 Abrindo navegador (Acesso Público — sem login)...');
 
-  const userDataDir = path.join(__dirname, '.chromium-profile');
-  
-  state.context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
-    viewport: { width: 1400, height: 900 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    bypassCSP: true,
+  state.browser = await chromium.launch({
+    headless: false, // false para a SPA Angular renderizar corretamente
     args: [
       '--no-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--disable-infobars',
-      '--disable-features=IsolateOrigins,site-per-process',
       '--ignore-certificate-errors',
     ],
   });
 
-  // Navega para o ComprasNet para verificar se já está logado
-  const loginPage = state.context.pages()[0] || await state.context.newPage();
+  state.context = await state.browser.newContext({
+    viewport: { width: 1400, height: 900 },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    bypassCSP: true,
+  });
 
-  await loginPage.goto('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/seguro/fornecedor', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  }).catch(() => {});
-
-  await loginPage.waitForTimeout(4000);
-  const currentUrl = loginPage.url();
-
-  // Se redirecionar para o painel privado do fornecedor, está logado
-  const isAlreadyLoggedIn = (currentUrl.includes('/seguro/') || currentUrl.includes('/private/')) && !currentUrl.includes('acesso.gov.br');
-
-  if (isAlreadyLoggedIn) {
-    console.log('✅ Já logado! Sessão anterior válida.');
-  } else {
-    // Precisa logar: redireciona para a tela de login
-    await loginPage.goto('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
-    }).catch(() => {});
-
-    console.log('');
-    console.log('┌────────────────────────────────────────────┐');
-    console.log('│  🔐 Faça login no ComprasNet no navegador  │');
-    console.log('│  Aguardando login... (timeout: 10 min)     │');
-    console.log('└────────────────────────────────────────────┘');
-    console.log('');
-
-    try {
-      // Espera até que o URL mude para uma página privada (logado)
-      await loginPage.waitForFunction(() => {
-        const url = window.location.href.toLowerCase();
-        if (url === 'about:blank' || url.includes('newtab')) return false;
-        if (url.includes('loginportal') || url.includes('sso.acesso.gov.br') || url.includes('autenticacao') || url.includes('public/landing')) return false;
-        // Logou com sucesso se estiver em qualquer página private/seguro do ComprasNet
-        return url.includes('/private/') || url.includes('/seguro/') || (url.includes('cnetmobile') && !url.includes('public'));
-      }, undefined, { timeout: 600000, polling: 3000 });
-      
-      console.log('✅ Login detectado com sucesso!');
-    } catch (e) {
-      console.error('❌ Falha ou Timeout (10 min) aguardando login:', e.message);
-      await state.context.close();
-      process.exit(1);
-    }
-  }
-
-  console.log('💾 Sessão salva (perfil persistente).');
-  
-  // Fecha a aba de login mas mantém o contexto
-  await loginPage.close().catch(() => {});
-
-  // Diagnóstico: testa se cookies reais são capturados
-  const cookies = await state.context.cookies('https://cnetmobile.estaleiro.serpro.gov.br');
-  console.log(`🍪 ${cookies.length} cookies do ComprasNet capturados.`);
-  if (cookies.length === 0) {
-    console.warn('⚠️  ATENÇÃO: Nenhum cookie encontrado! O login pode não ter funcionado.');
-  }
-
-  console.log('');
   console.log('🚀 Iniciando sincronização com LicitaSaaS...');
   
   // Sincroniza logo na partida
@@ -439,12 +367,12 @@ async function main() {
 
   console.log('');
   console.log('┌──────────────────────────────────────────────┐');
-  console.log('│  ✅ Agente Online e Rodando!                 │');
+  console.log('│  ✅ Agente Online e Rodando! (Modo Público)  │');
   console.log('│                                              │');
+  console.log('│  • Sem necessidade de login no ComprasNet    │');
   console.log('│  • Processos são sincronizados a cada 60s    │');
   console.log('│  • Mensagens são enviadas a cada 15s         │');
-  console.log('│  • DB Local Ligado — Prevenção a falhas      │');
-  console.log('│  • Heartbeat enviado para o painel           │');
+  console.log('│  • DB Local — Prevenção a falhas             │');
   console.log('│                                              │');
   console.log('│  Deixe esta janela aberta.                   │');
   console.log('│  Pressione Ctrl+C para encerrar.             │');
@@ -455,7 +383,7 @@ async function main() {
   process.on('SIGINT', async () => {
     console.log('\n🛑 Encerrando agente...');
     await sendPendingMessages();
-    await state.context.close();
+    await state.browser.close().catch(() => {});
     console.log('✅ Agente encerrado.');
     process.exit(0);
   });
