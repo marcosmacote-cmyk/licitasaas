@@ -335,6 +335,23 @@ async function startProcessMonitor(proc) {
     return null;
   }
 
+  // Clica no ícone de atualização (🔄) ANTES das mensagens
+  // Isso faz o Angular revalidar o reCAPTCHA corretamente
+  try {
+    const refreshClicked = await page.evaluate(() => {
+      const icon = document.querySelector('i.fa-sync-alt');
+      if (!icon) return false;
+      const btn = icon.closest('button') || icon;
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+      btn.dispatchEvent(event);
+      return true;
+    });
+    if (refreshClicked) {
+      console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] Atualização clicada!`);
+      await page.waitForTimeout(5000); // Espera a página recarregar
+    }
+  } catch { /* ignore */ }
+
   try {
     const opened = await clickMessageIcon(page);
     if (opened) {
@@ -366,12 +383,19 @@ async function startProcessMonitor(proc) {
     console.warn(`  ⚠️ Erro ao clicar mensagens:`, e.message?.substring(0, 120));
   }
 
-  // Refresh periódico — recarrega e clica no ícone de mensagens
+  // Refresh periódico — clica no ícone de atualização da página + mensagens
   const intervalId = setInterval(async () => {
     try {
       if (page.isClosed()) { clearInterval(intervalId); return; }
-      await page.reload({ waitUntil: 'load', timeout: 30000 }).catch(() => {});
-      await page.waitForTimeout(8000);
+      // Clica no botão de atualização da própria página (não page.reload)
+      await page.evaluate(() => {
+        const icon = document.querySelector('i.fa-sync-alt');
+        if (icon) {
+          const btn = icon.closest('button') || icon;
+          btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        }
+      });
+      await page.waitForTimeout(5000);
       await clickMessageIcon(page);
       await page.waitForTimeout(3000);
     } catch { /* ignore */ }
