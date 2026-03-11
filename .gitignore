@@ -28,3 +28,11 @@ server/uploads/
 *.njsproj
 *.sln
 *.sw?
+
+# Chromium profile data
+local-watcher/.chromium-profile/
+local-watcher/diagnose*
+local-watcher/*.png
+local-watcher/icon-debug*
+local-watcher/step1*
+local-watcher/test-pub*
