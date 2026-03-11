@@ -306,37 +306,43 @@ async function startProcessMonitor(proc) {
   }
 
   // Clica no ícone de envelope (✉️) para abrir o painel de mensagens
-  // Diagnóstico confirmou: <button class="br-button"><i class="fa-envelope fas"></i></button>
+  // O <i class="fa-envelope fas"> existe mas Playwright considera "non-actionable"
+  // Solução: force:true ignora visibility/actionability checks
   async function clickMessageIcon(pg) {
-    // Estratégia 1: Clicar no botão que contém o ícone fa-envelope
-    const btnSelectors = [
-      'button:has(i.fa-envelope)',
-      'a:has(i.fa-envelope)',
-      'button:has(.fa-envelope)',
-    ];
-    for (const sel of btnSelectors) {
-      try {
-        const btn = pg.locator(sel).first();
-        await btn.waitFor({ timeout: 5000 });
-        await btn.click({ timeout: 5000 });
-        return sel;
-      } catch { /* try next */ }
-    }
-    // Estratégia 2: Clicar diretamente no ícone
+    // Estratégia 1: Clicar no botão que contém fa-envelope (force click)
+    try {
+      const btn = pg.locator('button:has(i.fa-envelope)').first();
+      await btn.waitFor({ state: 'attached', timeout: 5000 });
+      await btn.click({ force: true, timeout: 5000 });
+      return 'button:has(fa-envelope)';
+    } catch { /* next */ }
+    // Estratégia 2: Clicar diretamente no <i> (force click)
     try {
       const icon = pg.locator('i.fa-envelope').first();
-      await icon.waitFor({ timeout: 5000 });
-      await icon.click({ timeout: 5000 });
+      await icon.waitFor({ state: 'attached', timeout: 5000 });
+      await icon.click({ force: true, timeout: 5000 });
       return 'i.fa-envelope';
-    } catch { /* ignore */ }
-    // Estratégia 3: Clique via coordenadas do ícone encontrado
+    } catch { /* next */ }
+    // Estratégia 3: Mouse click nas coordenadas
     try {
       const box = await pg.locator('i.fa-envelope').first().boundingBox();
       if (box) {
         await pg.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
         return 'mouse-click-envelope';
       }
-    } catch { /* ignore */ }
+    } catch { /* next */ }
+    // Estratégia 4: JavaScript dispatchEvent (simula click com event bubbling)
+    try {
+      const clicked = await pg.evaluate(() => {
+        const icon = document.querySelector('i.fa-envelope');
+        if (!icon) return false;
+        const btn = icon.closest('button') || icon;
+        const event = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+        btn.dispatchEvent(event);
+        return true;
+      });
+      if (clicked) return 'dispatchEvent-envelope';
+    } catch { /* next */ }
     return null;
   }
 
