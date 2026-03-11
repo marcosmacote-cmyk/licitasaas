@@ -98,11 +98,21 @@ export class PncpMonitorService {
   private async checkProcessMessages(process: any) {
     const shortTitle = process.title?.substring(0, 55) || process.id;
     try {
-      // Extract CNPJ and sequential number from link if possible
-      const pncpMatch = process.link?.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+      // Try pncpLink first (preserved PNCP URL), then fall back to link
+      const urlToMatch = process.pncpLink || process.link || '';
+      const pncpMatch = urlToMatch.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
       if (!pncpMatch) {
-        console.log(`[PncpMonitor] ⏭️ "${shortTitle}" — link não bate com padrão /editais/CNPJ/ANO/SEQ/. Link: "${process.link || 'NULL'}"`);
+        console.log(`[PncpMonitor] ⏭️ "${shortTitle}" — nenhum link PNCP válido. pncpLink: "${process.pncpLink || 'NULL'}", link: "${process.link || 'NULL'}"`);
         return;
+      }
+
+      // Auto-backfill pncpLink if it was found in link field
+      if (!process.pncpLink && process.link?.includes('editais')) {
+        await prisma.biddingProcess.update({
+          where: { id: process.id },
+          data: { pncpLink: process.link } as any
+        }).catch(() => {});
+        console.log(`[PncpMonitor] 📌 Auto-preenchido pncpLink para "${shortTitle}"`);
       }
 
       const [_, cnpj, ano, sequencial] = pncpMatch;

@@ -2781,6 +2781,24 @@ app.get('/api/chat-monitor/health', authenticateToken, async (req: any, res) => 
 // ── Chat Monitor Module v2 Endpoints ──
 // ══════════════════════════════════════════
 
+// Update pncpLink for a process (manual fix when link was overwritten)
+app.patch('/api/chat-monitor/pncp-link/:processId', authenticateToken, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const { pncpLink } = req.body;
+        if (!pncpLink?.includes('editais')) {
+            return res.status(400).json({ error: 'Link PNCP inválido. Deve conter /editais/CNPJ/ANO/SEQ' });
+        }
+        await (prisma.biddingProcess as any).update({
+            where: { id: processId },
+            data: { pncpLink }
+        });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Falha ao atualizar link PNCP' });
+    }
+});
+
 // Get grouped processes with message counts (V3 — includes monitored processes without logs)
 app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) => {
     try {
@@ -2801,7 +2819,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             where: processWhere,
             select: {
                 id: true, title: true, portal: true, modality: true,
-                uasg: true, companyProfileId: true, isMonitored: true,
+                uasg: true, companyProfileId: true, isMonitored: true, link: true,
                 _count: { select: { chatMonitorLogs: true } },
             }
         });
@@ -2863,6 +2881,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 uasg: p.uasg,
                 companyProfileId: p.companyProfileId,
                 isMonitored: p.isMonitored,
+                hasPncpLink: !!(p.link?.includes('editais')),
                 totalMessages: total,
                 unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : total,
                 isImportant: importantSet.has(p.id),

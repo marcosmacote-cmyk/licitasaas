@@ -18,6 +18,7 @@ export interface BiddingProcess {
     portal: string;
     risk?: RiskTag; // Tag de risco
     link?: string; // Link para acesso ao processo
+    pncpLink?: string; // URL original do PNCP (preservada para monitoramento)
     uasg?: string; // UASG do órgão (ComprasNet)
     modalityCode?: string; // Código da modalidade (ComprasNet)
     processNumber?: string; // Número do processo (ComprasNet)

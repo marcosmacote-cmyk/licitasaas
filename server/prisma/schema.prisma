@@ -78,6 +78,7 @@ model BiddingProcess {
   estimatedValue   Float           @default(0.0)
   sessionDate      DateTime
   link             String?
+  pncpLink         String?         // URL original do PNCP (ex: "https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ") — preservado para monitoramento
   uasg             String?         // UASG do órgão (ex: "943001") — para ComprasNet
   modalityCode     String?         // Código da modalidade (ex: "5" = Pregão Eletrônico)
   processNumber    String?         // Número do processo (ex: "91398")

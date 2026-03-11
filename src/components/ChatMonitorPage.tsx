@@ -563,13 +563,21 @@ export function ChatMonitorPage({ companies }: Props) {
                       )}
                     </div>
 
-                    {/* Message count + unread badge */}
+                    {/* Message count + unread badge + link warning */}
                     <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center' }}>
-                      <span>📨 {proc.totalMessages} msgs</span>
-                      {proc.unreadCount > 0 && (
-                        <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'var(--color-primary)', color: 'white', fontWeight: 600, fontSize: '0.625rem' }}>
-                          {proc.unreadCount} novas
+                      {(proc as any).hasPncpLink === false && proc.totalMessages === 0 ? (
+                        <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <AlertTriangle size={10} /> Sem link PNCP — edite o processo
                         </span>
+                      ) : (
+                        <>
+                          <span>📨 {proc.totalMessages} msgs</span>
+                          {proc.unreadCount > 0 && (
+                            <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'var(--color-primary)', color: 'white', fontWeight: 600, fontSize: '0.625rem' }}>
+                              {proc.unreadCount} novas
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

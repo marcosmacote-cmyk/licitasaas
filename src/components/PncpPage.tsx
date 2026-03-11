@@ -427,6 +427,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 ? new Date(item.data_encerramento_proposta).toISOString()
                 : (item.data_abertura ? new Date(item.data_abertura).toISOString() : new Date().toISOString()),
             link: item.link_sistema,
+            pncpLink: item.link_sistema,
             risk: aiData?.process?.risk || 'Médio',
             companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
             observations: JSON.stringify([{
@@ -494,6 +495,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
                 sessionDate: item.data_encerramento_proposta || item.data_abertura || new Date().toISOString(),
                 link: item.link_sistema,
+                pncpLink: item.link_sistema,
                 risk: processObj.risk || 'Médio',
                 companyProfileId: selectedSearchCompanyId || '',
                 createdAt: new Date().toISOString(),
