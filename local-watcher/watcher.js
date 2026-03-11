@@ -294,128 +294,122 @@ async function startProcessMonitor(proc) {
     console.error(`  ❌ [${proc.processNumber}/${proc.processYear}] Erro na busca: ${err.message.substring(0, 100)}`);
   }
 
-  // Clica no ícone de envelope (✉️) para abrir o painel de mensagens
-  // O <i class="fa-envelope fas"> existe mas Playwright considera "non-actionable"
-  // Solução: force:true ignora visibility/actionability checks
-  async function clickMessageIcon(pg) {
-    // Estratégia 1: Clicar no botão que contém fa-envelope (force click)
-    try {
-      const btn = pg.locator('button:has(i.fa-envelope)').first();
-      await btn.waitFor({ state: 'attached', timeout: 5000 });
-      await btn.click({ force: true, timeout: 5000 });
-      return 'button:has(fa-envelope)';
-    } catch { /* next */ }
-    // Estratégia 2: Clicar diretamente no <i> (force click)
-    try {
-      const icon = pg.locator('i.fa-envelope').first();
-      await icon.waitFor({ state: 'attached', timeout: 5000 });
-      await icon.click({ force: true, timeout: 5000 });
-      return 'i.fa-envelope';
-    } catch { /* next */ }
-    // Estratégia 3: Mouse click nas coordenadas
-    try {
-      const box = await pg.locator('i.fa-envelope').first().boundingBox();
-      if (box) {
-        await pg.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-        return 'mouse-click-envelope';
-      }
-    } catch { /* next */ }
-    // Estratégia 4: JavaScript dispatchEvent (simula click com event bubbling)
-    try {
-      const clicked = await pg.evaluate(() => {
-        const icon = document.querySelector('i.fa-envelope');
-        if (!icon) return false;
-        const btn = icon.closest('button') || icon;
-        const event = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-        btn.dispatchEvent(event);
-        return true;
-      });
-      if (clicked) return 'dispatchEvent-envelope';
-    } catch { /* next */ }
-    return null;
-  }
 
-  // Clica no ícone de atualização (🔄) ANTES das mensagens
-  // Isso faz o Angular revalidar o reCAPTCHA corretamente
-  async function clickRefresh(pg) {
-    return await pg.evaluate(() => {
-      const icon = document.querySelector('i.fa-sync-alt');
-      if (!icon) return false;
-      const btn = icon.closest('button') || icon;
-      btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-      return true;
-    });
-  }
+  // ═══════════════════════════════════════════════════════════
+  // CLICK HUMANIZADO via CDP (isTrusted: true)
+  // O reCAPTCHA v3 detecta dispatchEvent porque isTrusted=false
+  // Usando page.mouse via CDP, os eventos são isTrusted=true
+  // ═══════════════════════════════════════════════════════════
 
-  // Fecha o painel de mensagens (clica no X)
-  async function closeMessagePanel(pg) {
-    return await pg.evaluate(() => {
-      // Procura botão de fechar (X) no painel de mensagens
-      const closeBtn = document.querySelector('.p-sidebar-close, button[aria-label="Close"], .p-dialog-close');
-      if (closeBtn) { closeBtn.click(); return true; }
-      // Fallback: procura qualquer X no sidebar
-      const xBtns = document.querySelectorAll('button');
-      for (const btn of xBtns) {
-        if (btn.textContent.trim() === '×' || btn.textContent.trim() === 'X') {
-          btn.click(); return true;
-        }
-      }
-      return false;
-    });
-  }
+  // Click humanizado: move mouse → pausa → click com down/up
+  async function humanClick(pg, selector) {
+    const el = pg.locator(selector).first();
+    await el.scrollIntoViewIfNeeded();
+    const box = await el.boundingBox();
+    if (!box) return false;
 
-  // Detecta se o CAPTCHA bloqueou
-  async function hasCaptchaError(pg) {
-    return await pg.evaluate(() => {
-      const toast = document.querySelector('.p-toast-message, .p-message');
-      if (!toast) return false;
-      return toast.textContent.includes('Captcha') || toast.textContent.includes('captcha');
-    });
-  }
+    // Ponto aleatório dentro do botão (não exatamente no centro)
+    const targetX = box.x + (box.width * 0.3) + (Math.random() * (box.width * 0.4));
+    const targetY = box.y + (box.height * 0.3) + (Math.random() * (box.height * 0.4));
 
-  try {
-    // 1ª tentativa: Refresh → espera 10s → Mensagens
-    await clickRefresh(page);
-    console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] Atualização clicada!`);
-    await page.waitForTimeout(10000);
+    // Move mouse com trajetória (25 passos = parece humano)
+    await pg.mouse.move(targetX, targetY, { steps: 25 });
     
-    let opened = await clickMessageIcon(page);
-    if (opened) {
-      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Painel de mensagens aberto! (${opened})`);
-      await page.waitForTimeout(3000);
-      
-      // Verifica se CAPTCHA bloqueou
-      const blocked = await hasCaptchaError(page);
-      if (blocked) {
-        console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] CAPTCHA detectado. Tentando novamente...`);
-        
-        // Fecha mensagens → Refresh → espera 10s → Abre mensagens
-        await closeMessagePanel(page);
-        await page.waitForTimeout(2000);
-        await clickRefresh(page);
-        console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] 2ª atualização!`);
-        await page.waitForTimeout(10000);
-        
-        opened = await clickMessageIcon(page);
-        if (opened) {
-          console.log(`  💬 [${proc.processNumber}/${proc.processYear}] 2ª tentativa - mensagens abertas! (${opened})`);
-        }
-      }
+    // Pausa natural antes de clicar
+    await pg.waitForTimeout(Math.floor(Math.random() * 400) + 300);
+
+    // Click nativo CDP: down + delay + up (isTrusted: true!)
+    await pg.mouse.down();
+    await pg.waitForTimeout(Math.floor(Math.random() * 80) + 40);
+    await pg.mouse.up();
+
+    return true;
+  }
+
+  // 1) Click humanizado no botão de refresh (🔄)
+  try {
+    const refreshed = await humanClick(page, 'button:has(i.fa-sync-alt)');
+    if (refreshed) {
+      console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] Atualização clicada (mouse humanizado)!`);
+      await page.waitForTimeout(8000); // Espera recarregar
+    }
+  } catch { /* ignore */ }
+
+  // 2) Click humanizado no botão de mensagens (✉️)
+  try {
+    const envelopeClicked = await humanClick(page, 'button:has(i.fa-envelope)');
+    if (envelopeClicked) {
+      console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Envelope clicado (mouse humanizado, isTrusted:true)!`);
+      await page.waitForTimeout(5000);
     } else {
-      console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Ícone de mensagens não encontrado.`);
+      console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Botão envelope não encontrado.`);
     }
   } catch(e) {
-    console.warn(`  ⚠️ Erro ao clicar mensagens:`, e.message?.substring(0, 120));
+    console.warn(`  ⚠️ Erro ao clicar envelope:`, e.message?.substring(0, 120));
   }
 
-  // Refresh periódico — clica no ícone de atualização da página + mensagens
+  // ── Captura contínua: DOM + XHR (o XHR interceptor já roda acima) ──
+
+  // Captura mensagens diretamente do DOM renderizado
+  async function captureMessagesFromDOM(pg) {
+    return await pg.evaluate(() => {
+      const messages = [];
+      // Procura blocos de mensagem no painel
+      const sidebar = document.querySelector('.p-sidebar, .p-dialog');
+      if (!sidebar) return messages;
+      
+      // Procura divs que parecem mensagens individuais
+      const allDivs = sidebar.querySelectorAll('div');
+      allDivs.forEach(div => {
+        const text = div.textContent?.trim();
+        // Mensagens tipicamente têm mais de 20 chars e contém data/hora
+        if (text && text.length > 20 && text.length < 2000) {
+          messages.push({
+            text: text,
+            html: div.innerHTML?.substring(0, 3000),
+          });
+        }
+      });
+      
+      // Fallback: pega todo o conteúdo do sidebar
+      if (messages.length === 0 && sidebar) {
+        const allText = sidebar.textContent?.trim();
+        if (allText && allText.length > 20) {
+          messages.push({ text: allText.substring(0, 5000), html: sidebar.innerHTML?.substring(0, 10000) });
+        }
+      }
+      return messages;
+    });
+  }
+
+  // Polling periódico: refresh (humanizado) + envelope (humanizado) + captura DOM
   const intervalId = setInterval(async () => {
     try {
       if (page.isClosed()) { clearInterval(intervalId); return; }
-      await clickRefresh(page);
-      await page.waitForTimeout(10000);
-      await clickMessageIcon(page);
-      await page.waitForTimeout(3000);
+      
+      // Tenta refresh humanizado
+      await humanClick(page, 'button:has(i.fa-sync-alt)').catch(() => {});
+      await page.waitForTimeout(8000);
+      
+      // Tenta envelope humanizado
+      await humanClick(page, 'button:has(i.fa-envelope)').catch(() => {});
+      await page.waitForTimeout(5000);
+      
+      // Captura do DOM se painel estiver aberto
+      const domMsgs = await captureMessagesFromDOM(page).catch(() => []);
+      if (domMsgs.length > 0) {
+        for (const msg of domMsgs) {
+          try {
+            const hash = Buffer.from(msg.text.substring(0, 200)).toString('base64');
+            db.prepare(`INSERT OR IGNORE INTO messages (id, processId, data, status) VALUES (?, ?, ?, 'pending')`)
+              .run(`dom-${proc.id}-${hash}`, proc.id, JSON.stringify({
+                source: 'dom',
+                text: msg.text,
+                capturedAt: new Date().toISOString(),
+              }));
+          } catch { /* duplicate */ }
+        }
+      }
     } catch { /* ignore */ }
   }, CONFIG.REFRESH_INTERVAL);
 
