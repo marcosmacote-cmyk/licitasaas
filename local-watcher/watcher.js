@@ -260,11 +260,12 @@ async function startProcessMonitor(proc) {
       }
     }
 
-    await uasgField.fill(String(proc.uasg));
+    const uasg6 = String(proc.uasg).padStart(6, '0');
+    await uasgField.fill(uasg6);
     const compraNum = `${proc.processNumber}${proc.processYear}`;
     await numField.fill(compraNum);
     
-    console.log(`  🔍 [${proc.processNumber}/${proc.processYear}] Pesquisando UASG ${proc.uasg}, Nº ${compraNum}...`);
+    console.log(`  🔍 [${proc.processNumber}/${proc.processYear}] Pesquisando UASG ${uasg6}, Nº ${compraNum}...`);
 
     // 3) Clica em "Pesquisar"
     await page.click('button:has-text("Pesquisar")', { timeout: 5000 });
