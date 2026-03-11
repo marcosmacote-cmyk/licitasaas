@@ -338,56 +338,52 @@ async function main() {
     process.exit(1);
   }
 
-  // Launch browser
+  // ── Launch browser com PERSISTENT CONTEXT ──
+  // Diferença crucial: persistentContext mantém TODOS os cookies,
+  // cache, sessão OAuth do Gov.br e tokens do ComprasNet entre
+  // reinicializações. Não é modo anônimo!
   console.log('');
   console.log('🌐 Abrindo navegador...');
 
-  const hasSession = fs.existsSync(SESSION_FILE);
-  const browser = await chromium.launch({
-    headless: false, // Visible for login and monitoring
+  const userDataDir = path.join(__dirname, '.chromium-profile');
+  
+  state.context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    viewport: { width: 1400, height: 900 },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    bypassCSP: true,
     args: [
       '--no-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--disable-infobars',
-      '--window-position=0,0',
+      '--disable-features=IsolateOrigins,site-per-process',
       '--ignore-certificate-errors',
-      '--ignore-certificate-errors-spki-list',
     ],
   });
 
-  const contextOptions = {
-    viewport: { width: 1400, height: 900 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    // Set realistic permissions to mimic real browser
-    permissions: ['geolocation', 'notifications'],
-    bypassCSP: true,
-  };
-  if (hasSession) {
-    contextOptions.storageState = SESSION_FILE;
-    console.log('📋 Sessão anterior encontrada. Tentando reutilizar...');
-  }
+  // Navega para o ComprasNet para verificar se já está logado
+  const loginPage = state.context.pages()[0] || await state.context.newPage();
 
-  state.context = await browser.newContext(contextOptions);
-
-  // Login page
-  const loginPage = await state.context.newPage();
-  
-  // Mudamos a URL base porque o Serpro desativou a tela /public/landing
-  await loginPage.goto(`https://www.comprasnet.gov.br/seguro/loginPortal.asp`, {
+  await loginPage.goto('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/private/fornecedor', {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
-  });
+  }).catch(() => {});
 
-  // Check if already logged in by waiting for a moment to see where the URL stabilizes after applying state
-  await loginPage.waitForTimeout(3000); // give it a beat to redirect
+  await loginPage.waitForTimeout(4000);
   const currentUrl = loginPage.url();
-  
-  // Mudamos a heurística de "já logado" 
-  const isAlreadyLoggedIn = (currentUrl.includes('private') || currentUrl.includes('cnetmobile.estaleiro')) && !currentUrl.includes('loginportal') && !currentUrl.includes('acesso.gov.br');
 
-  if (isAlreadyLoggedIn && hasSession) {
-    console.log('✅ Já logado (sessão reutilizada)!');
+  // Se redirecionar para o painel privado do fornecedor, está logado
+  const isAlreadyLoggedIn = currentUrl.includes('/private/') && !currentUrl.includes('acesso.gov.br');
+
+  if (isAlreadyLoggedIn) {
+    console.log('✅ Já logado! Sessão anterior válida.');
   } else {
+    // Precisa logar: redireciona para a tela de login
+    await loginPage.goto('https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/landing', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    }).catch(() => {});
+
     console.log('');
     console.log('┌────────────────────────────────────────────┐');
     console.log('│  🔐 Faça login no ComprasNet no navegador  │');
@@ -395,44 +391,35 @@ async function main() {
     console.log('└────────────────────────────────────────────┘');
     console.log('');
 
-    loginPage.setDefaultTimeout(600000); // Força 10 minutos (600000ms) ignorando o padrão de 30s
     try {
-      // Damos 10 minutos (600.000 ms) para o usuário rodar MFA, celular e autorizar.
-      // E não damos nenhum "goto" agora, deixamos a tela livre para você logar no seu ritmo.
+      // Espera até que o URL mude para uma página privada (logado)
       await loginPage.waitForFunction(() => {
         const url = window.location.href.toLowerCase();
-        
-        // Se a url for uma página em branco ou nova guia, ignorar.
         if (url === 'about:blank' || url.includes('newtab')) return false;
-
-        // Se estivermos em qualquer tela de login, SSO, ou do portal unificado Gov.br (sso.acesso.gov.br), continua esperando.
-        if (
-          url.includes('loginportal') || 
-          url.includes('sso.acesso.gov.br') || 
-          url.includes('autenticacao')
-        ) {
-          return false;
-        }
-
-        // Se chegou aqui, não é página de login e nem gov.br.
-        // O Serpro costuma transferir você para comprasnet.gov.br/... ou cnetmobile...
-        const isComprasnet = url.includes('comprasnet.gov');
-        const isCnetMobile = url.includes('cnetmobile');
-        return isComprasnet || isCnetMobile;
+        if (url.includes('loginportal') || url.includes('sso.acesso.gov.br') || url.includes('autenticacao') || url.includes('public/landing')) return false;
+        // Logou com sucesso se estiver em qualquer página private do ComprasNet
+        return url.includes('/private/') || (url.includes('cnetmobile') && !url.includes('public'));
       }, undefined, { timeout: 600000, polling: 3000 });
       
       console.log('✅ Login detectado com sucesso!');
     } catch (e) {
       console.error('❌ Falha ou Timeout (10 min) aguardando login:', e.message);
-      await browser.close();
+      await state.context.close();
       process.exit(1);
     }
   }
 
-  // Save session
-  await state.context.storageState({ path: SESSION_FILE });
-  console.log('💾 Sessão salva.');
-  await loginPage.close();
+  console.log('💾 Sessão salva (perfil persistente).');
+  
+  // Fecha a aba de login mas mantém o contexto
+  await loginPage.close().catch(() => {});
+
+  // Diagnóstico: testa se cookies reais são capturados
+  const cookies = await state.context.cookies('https://cnetmobile.estaleiro.serpro.gov.br');
+  console.log(`🍪 ${cookies.length} cookies do ComprasNet capturados.`);
+  if (cookies.length === 0) {
+    console.warn('⚠️  ATENÇÃO: Nenhum cookie encontrado! O login pode não ter funcionado.');
+  }
 
   console.log('');
   console.log('🚀 Iniciando sincronização com LicitaSaaS...');
@@ -440,10 +427,10 @@ async function main() {
   // Sincroniza logo na partida
   await syncSessions();
 
-  // Periodic Sync: Verifica processos criados/removidos
+  // Periodic Sync
   setInterval(syncSessions, CONFIG.SYNC_INTERVAL);
 
-  // Periodic send to API: Envia o buffer persistido no banco de dados para o backend
+  // Periodic send to API
   setInterval(async () => {
     await sendPendingMessages();
   }, CONFIG.SEND_INTERVAL);
@@ -465,11 +452,8 @@ async function main() {
   // Keep alive / Graceful shutdown
   process.on('SIGINT', async () => {
     console.log('\n🛑 Encerrando agente...');
-    
-    // Tenta enviar o que sobrou no buffer SQLite
     await sendPendingMessages();
-    
-    await browser.close();
+    await state.context.close();
     console.log('✅ Agente encerrado.');
     process.exit(0);
   });
