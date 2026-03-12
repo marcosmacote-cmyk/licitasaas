@@ -29,7 +29,7 @@ const CONFIG = {
 
   // Token JWT — obtenha fazendo login no LicitaSaaS
   // Abra DevTools > Network > copie o header Authorization de qualquer request
-  TOKEN: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0MmE2MjliMC00ZmQzLTQ4YjQtOWExNi1jNTg1NjAwZmU2ODIiLCJ0ZW5hbnRJZCI6IjlmN2E3MTU1LWJlNjctNDQ3MC04OTUyLWViOTQ3ZmQ5NzkzMSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzI2MDUwNiwiZXhwIjoxNzczMjg5MzA2fQ.YhDQHB-uOz-_W8f4v0MzK14CWzzdYiawWqc1CU2RNkE',
+  TOKEN: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0MmE2MjliMC00ZmQzLTQ4YjQtOWExNi1jNTg1NjAwZmU2ODIiLCJ0ZW5hbnRJZCI6IjlmN2E3MTU1LWJlNjctNDQ3MC04OTUyLWViOTQ3ZmQ5NzkzMSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc3MzMwODgzOSwiZXhwIjoxNzczMzM3NjM5fQ.j6vPzkdEHlpduahOqSzJ8rk-SftD0gQShC-p_904ka4',
 
   // Intervalo de refresh da aba de mensagens (ms)
   REFRESH_INTERVAL: 60000, // 60 segundos

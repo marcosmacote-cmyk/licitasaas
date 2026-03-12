@@ -48,7 +48,7 @@ export const aiService = {
 
         // 2. Request AI Analysis sending multiple file names
         try {
-            const aiResponse = await fetch(`${API_BASE_URL}/api/analyze-edital`, {
+            const aiResponse = await fetch(`${API_BASE_URL}/api/analyze-edital/v2`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -87,6 +87,7 @@ export const aiService = {
                 penalties: analysis.penalties || '',
                 qualificationRequirements: analysis.qualificationRequirements || '',
                 sourceFileNames: JSON.stringify(fileNames), // Persist uploaded PDF names for chat context
+                schemaV2: aiData.schemaV2 || null, // V2 structured analysis
                 analyzedAt: new Date().toISOString()
             };
 

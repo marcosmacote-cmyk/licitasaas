@@ -1,6 +1,7 @@
 import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION } from "./services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION } from "./services/ai/prompt.service";
+import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "./services/ai/analysis-schema-v1";
 import { fallbackToOpenAi } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
@@ -2323,6 +2324,357 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
         // Return the REAL error message for debugging
         const realError = error?.message || String(error);
         res.status(500).json({ error: `Erro na IA: ${realError}` });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// V2 — Análise de Edital em Pipeline (3 Etapas)
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Validador automático de completude (sem IA).
+ * Verifica se o JSON extraído está minimamente preenchido.
+ */
+function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolean; issues: string[] } {
+    const issues: string[] = [];
+
+    // Identificação básica
+    if (!schema.process_identification.objeto_resumido && !schema.process_identification.objeto_completo) {
+        issues.push('Objeto da licitação não identificado');
+    }
+    if (!schema.process_identification.modalidade) {
+        issues.push('Modalidade não identificada');
+    }
+    if (!schema.process_identification.orgao) {
+        issues.push('Órgão licitante não identificado');
+    }
+
+    // Timeline
+    if (!schema.timeline.data_sessao) {
+        issues.push('Data da sessão não identificada');
+    }
+
+    // Requirements — pelo menos algum bloco preenchido
+    const totalReqs = Object.values(schema.requirements).reduce((sum, arr) => sum + arr.length, 0);
+    if (totalReqs === 0) {
+        issues.push('Nenhuma exigência de habilitação identificada');
+    }
+
+    // Evidências
+    if (schema.evidence_registry.length === 0) {
+        issues.push('Nenhuma evidência textual registrada');
+    }
+
+    return { valid: issues.length <= 2, issues };
+}
+
+app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
+    const analysisStartTime = Date.now();
+    const result = createEmptyAnalysisSchema();
+    result.analysis_meta.analysis_id = `analysis_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    result.analysis_meta.generated_at = new Date().toISOString();
+
+    try {
+        const { fileNames, biddingProcessId } = req.body;
+        if (!fileNames || !Array.isArray(fileNames) || fileNames.length === 0) {
+            return res.status(400).json({ error: 'fileNames array is required' });
+        }
+
+        // ── 1. Ingestão Documental (Etapa 0) ──
+        const pdfParts: any[] = [];
+        const sourceFiles: string[] = [];
+
+        for (let fileNameSource of fileNames) {
+            const fileName = decodeURIComponent(fileNameSource).split('?')[0];
+
+            const doc = await prisma.document.findFirst({
+                where: {
+                    fileUrl: { contains: fileName },
+                    tenantId: req.user.tenantId
+                }
+            });
+
+            const belongsToTenant = doc || fileName.startsWith(`${req.user.tenantId}_`) || fileName.includes(`${req.user.tenantId}/`);
+            if (!belongsToTenant) {
+                console.warn(`[AI-V2] Unauthorized access attempt to file: ${fileName}`);
+                continue;
+            }
+
+            const fileToFetch = doc ? doc.fileUrl : fileName;
+            const pdfBuffer = await getFileBufferSafe(fileToFetch, req.user.tenantId);
+
+            if (pdfBuffer) {
+                console.log(`[AI-V2] Read file ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                pdfParts.push({
+                    inlineData: {
+                        data: pdfBuffer.toString('base64'),
+                        mimeType: 'application/pdf'
+                    }
+                });
+                sourceFiles.push(fileName);
+            } else {
+                console.error(`[AI-V2] Could not find file: ${fileName}`);
+            }
+        }
+
+        if (pdfParts.length === 0) {
+            return res.status(400).json({ error: 'Nenhum arquivo válido encontrado para análise.' });
+        }
+
+        result.analysis_meta.source_files = sourceFiles;
+        result.analysis_meta.source_type = 'upload_manual';
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
+        }
+        const ai = new GoogleGenAI({ apiKey });
+
+        console.log(`[AI-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${sourceFiles.join(', ')})`);
+
+        // ── 2. Etapa 1: Extração Factual ──
+        console.log(`[AI-V2] ── Etapa 1/3: Extração Factual...`);
+        let extractionJson: any;
+        const t1Start = Date.now();
+
+        try {
+            const extractionResponse = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{
+                    role: 'user',
+                    parts: [
+                        ...pdfParts,
+                        { text: V2_EXTRACTION_USER_INSTRUCTION }
+                    ]
+                }],
+                config: {
+                    systemInstruction: V2_EXTRACTION_PROMPT,
+                    temperature: 0.05,
+                    maxOutputTokens: 32768,
+                    responseMimeType: 'application/json'
+                }
+            });
+
+            const extractionText = extractionResponse.text;
+            if (!extractionText) throw new Error('Etapa 1 retornou vazio');
+
+            extractionJson = robustJsonParse(extractionText, 'V2-Extraction');
+            result.analysis_meta.workflow_stage_status.extraction = 'done';
+            console.log(`[AI-V2] ✅ Etapa 1 concluída em ${((Date.now() - t1Start) / 1000).toFixed(1)}s — ` +
+                `${(extractionJson.evidence_registry || []).length} evidências, ` +
+                `${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
+
+        } catch (err: any) {
+            console.error(`[AI-V2] ❌ Etapa 1 falhou: ${err.message}`);
+            result.analysis_meta.workflow_stage_status.extraction = 'failed';
+            result.confidence.warnings.push(`Etapa 1 (Extração) falhou: ${err.message}`);
+            result.confidence.overall_confidence = 'baixa';
+            // Retorna o que tiver, com status parcial
+            result.analysis_meta.model_used = 'gemini-2.5-flash';
+            return res.json({ schemaV2: result, partial: true, error: `Etapa 1 falhou: ${err.message}` });
+        }
+
+        // Merge extraction into result
+        if (extractionJson.process_identification) result.process_identification = extractionJson.process_identification;
+        if (extractionJson.timeline) result.timeline = extractionJson.timeline;
+        if (extractionJson.participation_conditions) result.participation_conditions = extractionJson.participation_conditions;
+        if (extractionJson.requirements) result.requirements = extractionJson.requirements;
+        if (extractionJson.technical_analysis) result.technical_analysis = extractionJson.technical_analysis;
+        if (extractionJson.economic_financial_analysis) result.economic_financial_analysis = extractionJson.economic_financial_analysis;
+        if (extractionJson.proposal_analysis) result.proposal_analysis = extractionJson.proposal_analysis;
+        if (extractionJson.contractual_analysis) result.contractual_analysis = extractionJson.contractual_analysis;
+        if (extractionJson.evidence_registry) result.evidence_registry = extractionJson.evidence_registry;
+
+        // ── 3. Etapa 2: Normalização Licitatória ──
+        console.log(`[AI-V2] ── Etapa 2/3: Normalização Licitatória...`);
+        let normalizationJson: any;
+        const t2Start = Date.now();
+
+        try {
+            const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
+                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2));
+
+            const normResponse = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{
+                    role: 'user',
+                    parts: [{ text: normUserInstruction }]
+                }],
+                config: {
+                    systemInstruction: V2_NORMALIZATION_PROMPT,
+                    temperature: 0.1,
+                    maxOutputTokens: 16384,
+                    responseMimeType: 'application/json'
+                }
+            });
+
+            const normText = normResponse.text;
+            if (!normText) throw new Error('Etapa 2 retornou vazio');
+
+            normalizationJson = robustJsonParse(normText, 'V2-Normalization');
+            result.analysis_meta.workflow_stage_status.normalization = 'done';
+            console.log(`[AI-V2] ✅ Etapa 2 concluída em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ` +
+                `${(normalizationJson.operational_outputs?.documents_to_prepare || []).length} docs a preparar, ` +
+                `${(normalizationJson.operational_outputs?.internal_checklist || []).length} itens no checklist`);
+
+        } catch (err: any) {
+            console.error(`[AI-V2] ❌ Etapa 2 falhou: ${err.message}`);
+            result.analysis_meta.workflow_stage_status.normalization = 'failed';
+            result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${err.message}`);
+            normalizationJson = {};
+        }
+
+        // Merge normalization — requirements normalizados sobrescrevem os da extração
+        if (normalizationJson.requirements_normalized) {
+            result.requirements = normalizationJson.requirements_normalized;
+        }
+        if (normalizationJson.operational_outputs) {
+            result.operational_outputs = { ...result.operational_outputs, ...normalizationJson.operational_outputs };
+        }
+        if (normalizationJson.confidence) {
+            result.confidence = { ...result.confidence, ...normalizationJson.confidence };
+        }
+
+        // ── 4. Etapa 3: Revisão de Risco ──
+        console.log(`[AI-V2] ── Etapa 3/3: Revisão de Risco...`);
+        const t3Start = Date.now();
+
+        try {
+            const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
+                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2));
+
+            const riskResponse = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{
+                    role: 'user',
+                    parts: [{ text: riskUserInstruction }]
+                }],
+                config: {
+                    systemInstruction: V2_RISK_REVIEW_PROMPT,
+                    temperature: 0.2,
+                    maxOutputTokens: 16384,
+                    responseMimeType: 'application/json'
+                }
+            });
+
+            const riskText = riskResponse.text;
+            if (!riskText) throw new Error('Etapa 3 retornou vazio');
+
+            const riskJson = robustJsonParse(riskText, 'V2-RiskReview');
+            result.analysis_meta.workflow_stage_status.risk_review = 'done';
+            console.log(`[AI-V2] ✅ Etapa 3 concluída em ${((Date.now() - t3Start) / 1000).toFixed(1)}s — ` +
+                `${(riskJson.legal_risk_review?.critical_points || []).length} pontos críticos`);
+
+            // Merge risk review
+            if (riskJson.legal_risk_review) {
+                result.legal_risk_review = riskJson.legal_risk_review;
+            }
+            if (riskJson.operational_outputs_risk) {
+                if (riskJson.operational_outputs_risk.questions_for_consultor_chat) {
+                    result.operational_outputs.questions_for_consultor_chat = riskJson.operational_outputs_risk.questions_for_consultor_chat;
+                }
+                if (riskJson.operational_outputs_risk.possible_petition_routes) {
+                    result.operational_outputs.possible_petition_routes = riskJson.operational_outputs_risk.possible_petition_routes;
+                }
+            }
+            if (riskJson.confidence_update) {
+                result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
+            }
+
+        } catch (err: any) {
+            console.error(`[AI-V2] ❌ Etapa 3 falhou: ${err.message}`);
+            result.analysis_meta.workflow_stage_status.risk_review = 'failed';
+            result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${err.message}`);
+        }
+
+        // ── 5. Validação Automática (sem IA) ──
+        const validation = validateAnalysisCompleteness(result);
+        result.analysis_meta.workflow_stage_status.validation = validation.valid ? 'done' : 'failed';
+        if (validation.issues.length > 0) {
+            result.confidence.warnings.push(...validation.issues);
+            console.log(`[AI-V2] ⚠️ Validação encontrou ${validation.issues.length} problemas: ${validation.issues.join('; ')}`);
+        }
+
+        // ── 6. Confidence Score Final ──
+        const stagesDone = Object.values(result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
+        if (stagesDone === 4) {
+            result.confidence.overall_confidence = 'alta';
+        } else if (stagesDone >= 2) {
+            result.confidence.overall_confidence = 'media';
+        } else {
+            result.confidence.overall_confidence = 'baixa';
+        }
+
+        result.analysis_meta.model_used = 'gemini-2.5-flash';
+
+        // ── 7. Indexação RAG ──
+        if (biddingProcessId && pdfParts.length > 0) {
+            try {
+                await indexDocumentChunks(biddingProcessId, pdfParts);
+                console.log(`[AI-V2] 🔗 RAG indexado para processo ${biddingProcessId}`);
+            } catch (ragErr: any) {
+                console.warn(`[AI-V2] RAG indexação falhou: ${ragErr.message}`);
+            }
+        }
+
+        const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
+        const totalReqs = Object.values(result.requirements).reduce((sum, arr) => sum + arr.length, 0);
+        console.log(`[AI-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
+            `${totalReqs} exigências | ${result.legal_risk_review.critical_points.length} riscos | ` +
+            `${result.evidence_registry.length} evidências | Confiança: ${result.confidence.overall_confidence}`);
+
+        // ── 8. Compatibilidade V1 ──
+        // Gera campos legacy para consumo pelos módulos que ainda usam o formato antigo
+        const legacyCompat = {
+            process: {
+                title: result.process_identification.objeto_resumido || result.process_identification.numero_edital,
+                modality: result.process_identification.modalidade,
+                object: result.process_identification.objeto_completo,
+                agency: result.process_identification.orgao,
+                estimatedValue: '',
+                sessionDate: result.timeline.data_sessao,
+            },
+            analysis: {
+                fullSummary: `ANÁLISE V2 — ${result.process_identification.objeto_resumido}\n\n` +
+                    `Modalidade: ${result.process_identification.modalidade}\n` +
+                    `Órgão: ${result.process_identification.orgao}\n` +
+                    `Sessão: ${result.timeline.data_sessao}\n\n` +
+                    `Objeto: ${result.process_identification.objeto_completo}\n\n` +
+                    `--- CONDIÇÕES ---\n` +
+                    `Consórcio: ${result.participation_conditions.permite_consorcio ?? 'Não informado'}\n` +
+                    `Subcontratação: ${result.participation_conditions.permite_subcontratacao ?? 'Não informado'}\n` +
+                    `Visita Técnica: ${result.participation_conditions.exige_visita_tecnica ?? 'Não informado'}\n\n` +
+                    `--- RISCOS CRÍTICOS (${result.legal_risk_review.critical_points.length}) ---\n` +
+                    result.legal_risk_review.critical_points.map(cp =>
+                        `[${cp.severity.toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`
+                    ).join('\n'),
+                qualificationRequirements: Object.values(result.requirements)
+                    .flat()
+                    .map(r => `[${r.requirement_id}] ${r.title}: ${r.description}`)
+                    .join('\n'),
+                biddingItems: result.proposal_analysis.observacoes_proposta.join('\n'),
+                pricingConsiderations: result.economic_financial_analysis.indices_exigidos
+                    .map(i => `${i.indice}: ${i.formula_ou_descricao} (mín: ${i.valor_minimo})`)
+                    .join('\n'),
+            }
+        };
+
+        res.json({
+            ...legacyCompat,          // Campos V1 para compatibilidade
+            schemaV2: result,          // Schema completo V2
+            _version: '2.0',
+            _pipeline_duration_s: totalDuration
+        });
+
+    } catch (error: any) {
+        console.error(`[AI-V2] ERRO FATAL:`, error?.message || error);
+        const logMsg = `[${new Date().toISOString()}] V2 Pipeline Error: ${error?.message || String(error)}\n${error?.stack || ''}\n\n`;
+        fs.appendFileSync(path.join(uploadDir, 'debug-analysis.log'), logMsg);
+        res.status(500).json({
+            error: `Erro no pipeline V2: ${error?.message || 'Erro desconhecido'}`,
+            schemaV2: result  // Retorna o que conseguiu mesmo em erro
+        });
     }
 });
 

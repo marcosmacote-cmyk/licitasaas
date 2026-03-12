@@ -46,6 +46,7 @@ export interface AiAnalysis {
     qualificationRequirements?: string; // Analysis on technical qualification required
     chatHistory?: string;
     sourceFileNames?: string;
+    schemaV2?: any; // AnalysisSchemaV1 structured output from V2 pipeline
     analyzedAt: string;
 }
 export const COLUMNS: BiddingStatus[] = [

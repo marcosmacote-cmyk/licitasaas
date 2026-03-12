@@ -178,7 +178,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
         try {
             setIsCheckingAi(true);
             const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/analyze-edital`, {
+            const res = await fetch(`${API_BASE_URL}/api/analyze-edital/v2`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -229,6 +229,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                     penalties: aiData.analysis.penalties || '',
                     qualificationRequirements: aiData.analysis.qualificationRequirements || '',
                     sourceFileNames: JSON.stringify(fileNames),
+                    schemaV2: aiData.schemaV2 || null,
                     analyzedAt: new Date().toISOString()
                 };
                 setAiAnalysisData(analysisObj);
