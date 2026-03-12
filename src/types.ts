@@ -47,6 +47,10 @@ export interface AiAnalysis {
     chatHistory?: string;
     sourceFileNames?: string;
     schemaV2?: any; // AnalysisSchemaV1 structured output from V2 pipeline
+    promptVersion?: string; // e.g. "v2.0.0"
+    modelUsed?: string; // e.g. "gemini-2.5-flash"
+    pipelineDurationS?: number; // Total pipeline duration in seconds
+    overallConfidence?: string; // baixa | media | alta
     analyzedAt: string;
 }
 export const COLUMNS: BiddingStatus[] = [

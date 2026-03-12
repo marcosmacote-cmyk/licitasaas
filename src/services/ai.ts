@@ -88,6 +88,10 @@ export const aiService = {
                 qualificationRequirements: analysis.qualificationRequirements || '',
                 sourceFileNames: JSON.stringify(fileNames), // Persist uploaded PDF names for chat context
                 schemaV2: aiData.schemaV2 || null, // V2 structured analysis
+                promptVersion: aiData._prompt_version || null,
+                modelUsed: aiData._model_used || null,
+                pipelineDurationS: aiData._pipeline_duration_s || null,
+                overallConfidence: aiData._overall_confidence || null,
                 analyzedAt: new Date().toISOString()
             };
 

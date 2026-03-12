@@ -110,6 +110,11 @@ model AiAnalysis {
   qualificationRequirements String?
   chatHistory               String?        @default("[]")
   sourceFileNames           String?        @default("[]")
+  schemaV2                  Json?          // AnalysisSchemaV1 structured output from V2 pipeline
+  promptVersion             String?        // Version of prompts used (e.g. "v2.0.0")
+  modelUsed                 String?        // AI model used (e.g. "gemini-2.5-flash")
+  pipelineDurationS         Float?         // Total pipeline duration in seconds
+  overallConfidence         String?        // baixa | media | alta
   analyzedAt                DateTime       @default(now())
   biddingProcess            BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
 }

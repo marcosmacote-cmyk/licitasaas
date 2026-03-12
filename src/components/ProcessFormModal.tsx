@@ -230,6 +230,10 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                     qualificationRequirements: aiData.analysis.qualificationRequirements || '',
                     sourceFileNames: JSON.stringify(fileNames),
                     schemaV2: aiData.schemaV2 || null,
+                    promptVersion: aiData._prompt_version || null,
+                    modelUsed: aiData._model_used || null,
+                    pipelineDurationS: aiData._pipeline_duration_s || null,
+                    overallConfidence: aiData._overall_confidence || null,
                     analyzedAt: new Date().toISOString()
                 };
                 setAiAnalysisData(analysisObj);

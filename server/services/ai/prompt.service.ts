@@ -297,6 +297,15 @@ Utilize todas as informações acima para criar uma peça robusta, extremamente 
 // ══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Versão dos prompts V2. Incrementar a cada alteração significativa.
+ * Formato: vMAJOR.MINOR.PATCH
+ *   MAJOR = mudança de pipeline ou schema
+ *   MINOR = melhoria de prompt que altera qualidade
+ *   PATCH = ajuste de formatação ou exemplos
+ */
+export const V2_PROMPT_VERSION = 'v2.0.0';
+
+/**
  * PROMPT BASE DE DOMÍNIO — Camada mestra compartilhada por todos os módulos V2.
  * Define a personalidade, as regras de conduta e a especialização do analista.
  */

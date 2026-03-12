@@ -483,6 +483,10 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 biddingItems: analysisObj.biddingItems || '',
                 sourceFileNames: JSON.stringify(aiData.pncpSource?.downloadedFiles || []),
                 schemaV2: aiData.schemaV2 || null,
+                promptVersion: aiData._prompt_version || null,
+                modelUsed: aiData._model_used || null,
+                pipelineDurationS: aiData._pipeline_duration_s || null,
+                overallConfidence: aiData._overall_confidence || null,
                 analyzedAt: new Date().toISOString()
             };
 

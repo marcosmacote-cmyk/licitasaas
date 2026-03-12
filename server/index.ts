@@ -1,6 +1,6 @@
 import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION } from "./services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION } from "./services/ai/prompt.service";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "./services/ai/analysis-schema-v1";
 import { fallbackToOpenAi } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
@@ -1509,14 +1509,33 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
 
         ['biddingItems', 'pricingConsiderations', 'fullSummary', 'penalties', 'qualificationRequirements', 'irregularitiesFlags', 'sourceFileNames'].forEach(stringifyIfObject);
 
-        console.log(`[Analysis] Upserting analysis for process ${payload.biddingProcessId}. Payload summary length: ${payload.fullSummary?.length || 0}. Files: ${payload.sourceFileNames}`);
+        // V2 fields — persist structured schema and metadata
+        const v2Fields: any = {};
+        if (payload.schemaV2 && typeof payload.schemaV2 === 'object') {
+            v2Fields.schemaV2 = payload.schemaV2;
+        }
+        if (payload.promptVersion) v2Fields.promptVersion = payload.promptVersion;
+        if (payload.modelUsed) v2Fields.modelUsed = payload.modelUsed;
+        if (payload.pipelineDurationS !== undefined) v2Fields.pipelineDurationS = parseFloat(payload.pipelineDurationS);
+        if (payload.overallConfidence) v2Fields.overallConfidence = payload.overallConfidence;
+
+        // Remove V2 fields from payload to avoid Prisma unknown field error
+        delete payload.schemaV2;
+        delete payload.promptVersion;
+        delete payload.modelUsed;
+        delete payload.pipelineDurationS;
+        delete payload.overallConfidence;
+
+        const mergedPayload = { ...payload, ...v2Fields };
+
+        console.log(`[Analysis] Upserting analysis for process ${mergedPayload.biddingProcessId}. Payload summary length: ${mergedPayload.fullSummary?.length || 0}. Files: ${mergedPayload.sourceFileNames}. V2: ${!!v2Fields.schemaV2}`);
 
         const analysis = await prisma.aiAnalysis.upsert({
             where: {
-                biddingProcessId: payload.biddingProcessId
+                biddingProcessId: mergedPayload.biddingProcessId
             },
-            create: payload,
-            update: payload
+            create: mergedPayload,
+            update: mergedPayload
         });
 
         // Debug log to confirm what was actually saved
@@ -2335,37 +2354,98 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
  * Validador automático de completude (sem IA).
  * Verifica se o JSON extraído está minimamente preenchido.
  */
-function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolean; issues: string[] } {
+function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolean; issues: string[]; confidence_score: number } {
     const issues: string[] = [];
+    let totalChecks = 0;
+    let passedChecks = 0;
 
-    // Identificação básica
-    if (!schema.process_identification.objeto_resumido && !schema.process_identification.objeto_completo) {
-        issues.push('Objeto da licitação não identificado');
-    }
-    if (!schema.process_identification.modalidade) {
-        issues.push('Modalidade não identificada');
-    }
-    if (!schema.process_identification.orgao) {
-        issues.push('Órgão licitante não identificado');
-    }
+    const check = (condition: boolean, message: string) => {
+        totalChecks++;
+        if (condition) {
+            passedChecks++;
+        } else {
+            issues.push(message);
+        }
+    };
 
-    // Timeline
-    if (!schema.timeline.data_sessao) {
-        issues.push('Data da sessão não identificada');
-    }
+    // ── 1. Identificação do Processo (peso alto) ──
+    check(
+        !!(schema.process_identification.objeto_resumido || schema.process_identification.objeto_completo),
+        'Objeto da licitação não identificado'
+    );
+    check(!!schema.process_identification.modalidade, 'Modalidade não identificada');
+    check(!!schema.process_identification.orgao, 'Órgão licitante não identificado');
+    check(!!schema.process_identification.numero_edital, 'Número do edital não identificado');
 
-    // Requirements — pelo menos algum bloco preenchido
+    // ── 2. Timeline ──
+    check(!!schema.timeline.data_sessao, 'Data da sessão não identificada');
+    check(
+        !!(schema.timeline.data_publicacao || schema.timeline.prazo_impugnacao || schema.timeline.prazo_esclarecimento),
+        'Nenhum prazo relevante identificado (publicação, impugnação ou esclarecimento)'
+    );
+
+    // ── 3. Exigências de Habilitação ──
     const totalReqs = Object.values(schema.requirements).reduce((sum, arr) => sum + arr.length, 0);
-    if (totalReqs === 0) {
-        issues.push('Nenhuma exigência de habilitação identificada');
-    }
+    check(totalReqs > 0, 'Nenhuma exigência de habilitação identificada');
+    check(totalReqs >= 3, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
 
-    // Evidências
-    if (schema.evidence_registry.length === 0) {
-        issues.push('Nenhuma evidência textual registrada');
-    }
+    // ── 4. Condições de Participação ──
+    check(
+        schema.participation_conditions.permite_consorcio !== null ||
+        schema.participation_conditions.permite_subcontratacao !== null ||
+        !!schema.participation_conditions.tratamento_me_epp,
+        'Nenhuma condição de participação identificada'
+    );
 
-    return { valid: issues.length <= 2, issues };
+    // ── 5. Análise Técnica ──
+    check(
+        schema.requirements.qualificacao_tecnica_operacional.length > 0 ||
+        schema.requirements.qualificacao_tecnica_profissional.length > 0 ||
+        schema.technical_analysis.exige_atestado_capacidade_tecnica === true,
+        'Nenhuma exigência técnica ou atestado identificado'
+    );
+
+    // ── 6. Análise Econômico-Financeira ──
+    check(
+        schema.economic_financial_analysis.indices_exigidos.length > 0 ||
+        !!schema.economic_financial_analysis.capital_social_minimo ||
+        !!schema.economic_financial_analysis.patrimonio_liquido_minimo,
+        'Nenhuma exigência econômico-financeira identificada'
+    );
+
+    // ── 7. Proposta/Preço ──
+    check(
+        !!schema.process_identification.criterio_julgamento,
+        'Critério de julgamento não identificado'
+    );
+
+    // ── 8. Evidências ──
+    check(schema.evidence_registry.length > 0, 'Nenhuma evidência textual registrada');
+    check(
+        schema.evidence_registry.length >= 5,
+        `Poucas evidências registradas (apenas ${schema.evidence_registry.length}), rastreabilidade comprometida`
+    );
+
+    // ── 9. Outputs Operacionais ──
+    check(
+        (schema.operational_outputs.documents_to_prepare?.length || 0) > 0,
+        'Lista de documentos a preparar não gerada'
+    );
+
+    // ── 10. Revisão de Risco ──
+    check(
+        schema.legal_risk_review.critical_points.length > 0 ||
+        schema.legal_risk_review.ambiguities.length > 0,
+        'Nenhum ponto crítico ou ambiguidade identificada (análise de risco pode estar incompleta)'
+    );
+
+    const confidence_score = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
+
+    return {
+        valid: confidence_score >= 60, // 60%+ das checagens passaram
+        issues,
+        confidence_score
+    };
 }
 
 app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
@@ -2593,20 +2673,29 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         result.analysis_meta.workflow_stage_status.validation = validation.valid ? 'done' : 'failed';
         if (validation.issues.length > 0) {
             result.confidence.warnings.push(...validation.issues);
-            console.log(`[AI-V2] ⚠️ Validação encontrou ${validation.issues.length} problemas: ${validation.issues.join('; ')}`);
+            console.log(`[AI-V2] ⚠️ Validação: ${validation.confidence_score}% (${validation.issues.length} problemas: ${validation.issues.join('; ')})`);
+        } else {
+            console.log(`[AI-V2] ✅ Validação: ${validation.confidence_score}% — todas as checagens passaram`);
         }
 
         // ── 6. Confidence Score Final ──
+        // Combina: pipeline stages (50%) + validação de conteúdo (50%)
         const stagesDone = Object.values(result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
-        if (stagesDone === 4) {
+        const stagesTotal = 4;
+        const stageScore = (stagesDone / stagesTotal) * 100; // 0-100
+        const combinedScore = Math.round((stageScore * 0.5) + (validation.confidence_score * 0.5));
+
+        if (combinedScore >= 80) {
             result.confidence.overall_confidence = 'alta';
-        } else if (stagesDone >= 2) {
+        } else if (combinedScore >= 50) {
             result.confidence.overall_confidence = 'media';
         } else {
             result.confidence.overall_confidence = 'baixa';
         }
+        (result.confidence as any).score_percentage = combinedScore;
 
         result.analysis_meta.model_used = 'gemini-2.5-flash';
+        (result.analysis_meta as any).prompt_version = V2_PROMPT_VERSION;
 
         // ── 7. Indexação RAG ──
         if (biddingProcessId && pdfParts.length > 0) {
@@ -2664,7 +2753,10 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             ...legacyCompat,          // Campos V1 para compatibilidade
             schemaV2: result,          // Schema completo V2
             _version: '2.0',
-            _pipeline_duration_s: totalDuration
+            _pipeline_duration_s: parseFloat(totalDuration),
+            _prompt_version: V2_PROMPT_VERSION,
+            _model_used: 'gemini-2.5-flash',
+            _overall_confidence: result.confidence.overall_confidence
         });
 
     } catch (error: any) {
