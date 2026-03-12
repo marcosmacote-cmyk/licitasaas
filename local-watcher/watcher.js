@@ -445,18 +445,34 @@ async function startProcessMonitor(proc) {
       }
       
       // Captura do DOM se painel estiver aberto
-      const domMsgs = await captureMessagesFromDOM(page).catch(() => []);
-      if (domMsgs.length > 0) {
-        for (const msg of domMsgs) {
-          try {
-            const hash = Buffer.from(msg.text.substring(0, 200)).toString('base64');
-            db.prepare(`INSERT OR IGNORE INTO messages (id, processId, data, status) VALUES (?, ?, ?, 'pending')`)
-              .run(`dom-${proc.id}-${hash}`, proc.id, JSON.stringify({
-                source: 'dom',
-                text: msg.text,
-                capturedAt: new Date().toISOString(),
-              }));
-          } catch { /* duplicate */ }
+      if (panelOpen) {
+        const domMsgs = await captureMessagesFromDOM(page).catch(() => []);
+        
+        // Filtra mensagens de interface do painel
+        const validMsgs = domMsgs.filter(m => {
+          const txt = m.text.toLowerCase();
+          if (txt.includes('não há mensagens')) return false;
+          if (txt.includes('visualize aqui as mensagens da sessão pública')) return false;
+          return true;
+        });
+
+        if (validMsgs.length > 0) {
+          let newInserted = 0;
+          for (const msg of validMsgs) {
+            try {
+              const hash = Buffer.from(msg.text.substring(0, 200)).toString('base64');
+              const info = db.prepare(`INSERT OR IGNORE INTO messages (id, processId, data, status) VALUES (?, ?, ?, 'pending')`)
+                .run(`dom-${proc.id}-${hash}`, proc.id, JSON.stringify({
+                  source: 'dom',
+                  text: msg.text,
+                  capturedAt: new Date().toISOString(),
+                }));
+              if (info.changes > 0) newInserted++;
+            } catch { /* duplicate */ }
+          }
+          if (newInserted > 0) {
+            console.log(`  💾 [${proc.processNumber}/${proc.processYear}] ${newInserted} NOVAS mensagens lidas do DOM e salvas no banco.`);
+          }
         }
       }
     } catch { /* ignore */ }
