@@ -388,31 +388,59 @@ async function startProcessMonitor(proc) {
   async function captureMessagesFromDOM(pg) {
     return await pg.evaluate(() => {
       const messages = [];
-      // Procura blocos de mensagem no painel
-      const sidebar = document.querySelector('.p-sidebar, .p-dialog');
-      if (!sidebar) return messages;
       
-      // Procura divs que parecem mensagens individuais
-      const allDivs = sidebar.querySelectorAll('div');
+      // Procura possíveis containers do chat (pode ser PrimeNG, offcanvas, etc)
+      // O critério maior é: tem que ter textos parecidos com os do chat
+      
+      const allDivs = document.querySelectorAll('div');
+      
+      // Vamos buscar especificamente pelos "cards" de mensagens
       allDivs.forEach(div => {
-        const text = div.textContent?.trim();
-        // Mensagens tipicamente têm mais de 20 chars e contém data/hora
-        if (text && text.length > 20 && text.length < 2000) {
-          messages.push({
-            text: text,
-            html: div.innerHTML?.substring(0, 3000),
-          });
+        // Ignorar divs muito pequenos ou colossais (body inteiro)
+        const text = div.textContent?.trim() || '';
+        if (text.length < 20 || text.length > 4000) return;
+        
+        // Padrão de uma mensagem: Geralmente tem o autor("Mensagem do", "Sistema", "Pregoeiro") e a data ("Enviada em")
+        const hasAuthor = text.toLowerCase().includes('mensagem do') || text.toLowerCase().includes('sistema') || text.toLowerCase().includes('pregoeiro');
+        const hasDateLine = text.toLowerCase().includes('enviada em') || text.match(/[0-9]{2}\/[0-9]{2}\/[0-9]{4}/) !== null;
+        
+        // Se a div atual não tem filhos div grandes, significa que ela é o "nó folha" (o cartão da mensagem)
+        const childDivs = Array.from(div.querySelectorAll('div')).filter(d => (d.textContent?.trim().length || 0) > 20);
+        
+        if (hasAuthor && hasDateLine && childDivs.length <= 3) {
+           // É uma forte candidata a ser um card de mensagem!
+           messages.push({
+             text: text,
+             html: div.innerHTML?.substring(0, 3000),
+           });
         }
       });
-      
-      // Fallback: pega todo o conteúdo do sidebar
-      if (messages.length === 0 && sidebar) {
-        const allText = sidebar.textContent?.trim();
-        if (allText && allText.length > 20) {
-          messages.push({ text: allText.substring(0, 5000), html: sidebar.innerHTML?.substring(0, 10000) });
+
+      // Dedup pela via do HTML interno (textos iguais podem ocorrer)
+      const uniqueMessages = [];
+      const seen = new Set();
+      for (const m of messages) {
+        if (!seen.has(m.text)) {
+          seen.add(m.text);
+          uniqueMessages.push(m);
         }
       }
-      return messages;
+
+      // Se a filtragem avançada por card falhar, mas soubermos que o sidepanel existe, tentamos varrer o parent.
+      if (uniqueMessages.length === 0) {
+        const titleHeaders = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, div')).filter(el => el.textContent.trim() === 'Mensagens');
+        if (titleHeaders.length > 0) {
+          const panel = titleHeaders[0].closest('div[class*="sidebar"], div[class*="dialog"], div[class*="offcanvas"], div:not([class])');
+          if (panel) {
+            uniqueMessages.push({
+               text: panel.textContent?.substring(0, 5000),
+               html: panel.innerHTML?.substring(0, 5000)
+            });
+          }
+        }
+      }
+
+      return uniqueMessages;
     });
   }
 
