@@ -546,40 +546,52 @@ async function startProcessMonitor(proc) {
       if (panelOpen) {
         const domMsgs = await captureMessagesFromDOM(page).catch(() => []);
         console.log(`  📊 [${proc.processNumber}/${proc.processYear}] captureMessagesFromDOM retornou ${domMsgs.length} items brutos.`);
-        // Filtra mensagens que são puramente boilerplate (sem conteúdo real)
+        
+        // Log de cada item bruto para diagnóstico
+        domMsgs.forEach((m, idx) => {
+          console.log(`     [${idx}] Tamanho: ${m.text?.length || 0} chars | Começa: "${m.text?.substring(0, 80)}..."`);
+        });
+
+        // Filtra mensagens que são puramente boilerplate
         const validMsgs = domMsgs.filter(m => {
           const txt = m.text?.trim() || '';
-          // Rejeitar se for só o texto do header do painel (sem mensagem real)
           if (txt === 'Mensagens') return false;
           if (txt.length < 30) return false;
-          // Aceitar se começa com "Mensagem do" (é um card de mensagem)
-          if (txt.startsWith('Mensagem do')) return true;
-          // Aceitar se contém data de envio
-          if (txt.includes('Enviada em')) return true;
-          // Aceitar qualquer texto com mais de 50 chars como fallback
-          return txt.length > 50;
+          return true;
         });
+
+        console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Após filtro: ${validMsgs.length} mensagens válidas.`);
 
         if (validMsgs.length > 0) {
           let newInserted = 0;
           for (const msg of validMsgs) {
             try {
               const hash = Buffer.from(msg.text.substring(0, 200)).toString('base64');
+              const msgId = `dom-${proc.id}-${hash}`;
               const info = db.prepare(`INSERT OR IGNORE INTO messages (id, processId, data, status) VALUES (?, ?, ?, 'pending')`)
-                .run(`dom-${proc.id}-${hash}`, proc.id, JSON.stringify({
+                .run(msgId, proc.id, JSON.stringify({
                   source: 'dom',
                   text: msg.text,
                   capturedAt: new Date().toISOString(),
                 }));
-              if (info.changes > 0) newInserted++;
-            } catch { /* duplicate */ }
+              if (info.changes > 0) {
+                newInserted++;
+                console.log(`     💾 Nova msg salva: "${msg.text.substring(0, 60)}..."`);
+              }
+            } catch (err) {
+              console.log(`     ❌ Erro ao salvar: ${err.message?.substring(0, 80)}`);
+            }
           }
           if (newInserted > 0) {
-            console.log(`  💾 [${proc.processNumber}/${proc.processYear}] ${newInserted} NOVAS mensagens lidas do DOM e salvas no banco.`);
+            console.log(`  🎉 [${proc.processNumber}/${proc.processYear}] ${newInserted} NOVAS mensagens salvas no banco!`);
+          } else {
+            console.log(`  ℹ️  [${proc.processNumber}/${proc.processYear}] ${validMsgs.length} mensagens já existiam no banco (duplicadas).`);
           }
         }
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.log(`  ❌ Erro no polling: ${err.message?.substring(0, 120)}`);
+    }
   }, CONFIG.REFRESH_INTERVAL);
 
   state.activeSessions.set(proc.id, { page, intervalId });
