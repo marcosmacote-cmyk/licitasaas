@@ -13,6 +13,10 @@ import { ORACLE_SYSTEM_PROMPT } from "./services/ai/modules/prompts/oraclePrompt
 import { DECLARATION_SYSTEM_PROMPT } from "./services/ai/modules/prompts/declarationPromptV2";
 import { evaluateModuleQuality } from "./services/ai/modules/moduleQualityEvaluator";
 import { evaluateHumanReview } from "./services/ai/modules/humanReviewPolicy";
+import { submitFeedback, getFeedbackByModule, getFeedbackStats, AIExecutionFeedback } from "./services/ai/governance/feedbackService";
+import { generateSystemReport, recordExecution } from "./services/ai/governance/operationalMetrics";
+import { registerInitialVersions, getAllVersions, getPromotionHistory } from "./services/ai/governance/versionGovernance";
+import { generateImprovementInsights, convertFeedbackToGoldenCases } from "./services/ai/governance/improvementInsights";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import express from 'express';
 import cors from 'cors';
@@ -4189,11 +4193,80 @@ async function fetchPdfPartsForProcess(biddingProcessId: string | null, fileName
     }
     return pdfParts;
 }
+// ══════════════════════════════════════════════════════════════════
+//  Sprint 7 — Governance API Endpoints
+// ══════════════════════════════════════════════════════════════════
+
+// POST /api/ai/feedback — Submit structured feedback
+app.post('/api/ai/feedback', async (req: any, res: any) => {
+    try {
+        const feedback = submitFeedback(req.body as AIExecutionFeedback);
+        res.json({ success: true, feedbackId: feedback.feedbackId });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/ai/feedback/:moduleName — Get feedback by module
+app.get('/api/ai/feedback/:moduleName', async (req: any, res: any) => {
+    try {
+        const items = getFeedbackByModule(req.params.moduleName);
+        const stats = getFeedbackStats(req.params.moduleName);
+        res.json({ items, stats });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/ai/metrics — System operational report
+app.get('/api/ai/metrics', async (_req: any, res: any) => {
+    try {
+        const report = generateSystemReport(30);
+        res.json(report);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/ai/versions — Version catalog
+app.get('/api/ai/versions', async (_req: any, res: any) => {
+    try {
+        const versions = getAllVersions();
+        const promotions = getPromotionHistory();
+        res.json({ versions, promotions });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/ai/insights — Improvement insights
+app.get('/api/ai/insights', async (_req: any, res: any) => {
+    try {
+        const report = generateImprovementInsights(30);
+        res.json(report);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/ai/golden-cases/convert — Convert feedback to golden cases
+app.post('/api/ai/golden-cases/convert', async (_req: any, res: any) => {
+    try {
+        const converted = convertFeedbackToGoldenCases();
+        res.json({ success: true, converted: converted.length, cases: converted });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
     console.log(`Upload directory: ${uploadDir}`);
     await runAutoSetup();
+
+    // Initialize version catalog
+    registerInitialVersions();
+    console.log(`[Governance] Version catalog initialized with ${getAllVersions().length} components`);
     
     // Start Chat Monitor Polling
     pncpMonitor.startPolling(5); // Run every 5 minutes

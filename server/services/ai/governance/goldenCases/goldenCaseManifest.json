@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "description": "Base supervisionada de casos validados — orienta evolução controlada do sistema",
+  "created_at": "2026-03-12",
+  "caseTypes": {
+    "approved": "Saída considerada satisfatória — referência positiva",
+    "corrected": "Saída da IA corrigida por humano — material de aprendizado",
+    "rejected": "Saída inadequada — caso negativo para regressão",
+    "high_risk": "Caso sensível que sempre exige revisão humana"
+  },
+  "modules": {
+    "analysis": { "totalCases": 0, "approved": 0, "corrected": 0, "rejected": 0, "highRisk": 0 },
+    "chat": { "totalCases": 0, "approved": 0, "corrected": 0, "rejected": 0, "highRisk": 0 },
+    "petition": { "totalCases": 0, "approved": 0, "corrected": 0, "rejected": 0, "highRisk": 0 },
+    "oracle": { "totalCases": 0, "approved": 0, "corrected": 0, "rejected": 0, "highRisk": 0 },
+    "dossier": { "totalCases": 0, "approved": 0, "corrected": 0, "rejected": 0, "highRisk": 0 },
+    "declaration": { "totalCases": 0, "approved": 0, "corrected": 0, "rejected": 0, "highRisk": 0 },
+    "proposal": { "totalCases": 0, "approved": 0, "corrected": 0, "rejected": 0, "highRisk": 0 }
+  },
+  "schema": {
+    "caseId": "string — unique ID",
+    "moduleName": "string — module this case belongs to",
+    "caseType": "approved | corrected | rejected | high_risk",
+    "input": "object — the input that was given",
+    "context": "string — the context used",
+    "aiOutput": "object — the raw AI output",
+    "humanFeedback": "object — the feedback instance",
+    "correctedOutput": "object | null — human-corrected output if available",
+    "promptVersion": "string — version of prompt used",
+    "modelUsed": "string — AI model used",
+    "editalType": "string — tipo_objeto of the edital",
+    "tags": "string[] — categorization tags",
+    "createdAt": "string — ISO timestamp",
+    "sourceExecutionId": "string — original execution ID"
+  },
+  "usage": "Golden cases são usados pelo regressionRunner para validar que mudanças não degradam resultados em casos conhecidos. Casos corrigidos servem como material de treinamento futuro."
+}
