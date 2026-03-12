@@ -389,58 +389,85 @@ async function startProcessMonitor(proc) {
     return await pg.evaluate(() => {
       const messages = [];
       
-      // Procura possíveis containers do chat (pode ser PrimeNG, offcanvas, etc)
-      // O critério maior é: tem que ter textos parecidos com os do chat
+      // ─── Estratégia: encontrar headers "Mensagem do ..." e extrair o card pai ───
+      // Cada mensagem no ComprasNet tem um header tipo "Mensagem do Agente de contratação"
+      // seguido do texto e uma data "Enviada em dd/mm/yyyy às hh:mm:ss"
       
-      const allDivs = document.querySelectorAll('div');
+      const allElements = document.querySelectorAll('*');
       
-      // Vamos buscar especificamente pelos "cards" de mensagens
-      allDivs.forEach(div => {
-        // Ignorar divs muito pequenos ou colossais (body inteiro)
-        const text = div.textContent?.trim() || '';
-        if (text.length < 20 || text.length > 4000) return;
+      for (const el of allElements) {
+        // Verifica se o texto PRÓPRIO deste elemento (não herdado) começa com "Mensagem do"
+        const ownText = el.innerText?.trim() || '';
         
-        // Padrão de uma mensagem: Geralmente tem o autor("Mensagem do", "Sistema", "Pregoeiro") e a data ("Enviada em")
-        const hasAuthor = text.toLowerCase().includes('mensagem do') || text.toLowerCase().includes('sistema') || text.toLowerCase().includes('pregoeiro');
-        const hasDateLine = text.toLowerCase().includes('enviada em') || text.match(/[0-9]{2}\/[0-9]{2}\/[0-9]{4}/) !== null;
-        
-        // Se a div atual não tem filhos div grandes, significa que ela é o "nó folha" (o cartão da mensagem)
-        const childDivs = Array.from(div.querySelectorAll('div')).filter(d => (d.textContent?.trim().length || 0) > 20);
-        
-        if (hasAuthor && hasDateLine && childDivs.length <= 3) {
-           // É uma forte candidata a ser um card de mensagem!
-           messages.push({
-             text: text,
-             html: div.innerHTML?.substring(0, 3000),
-           });
-        }
-      });
-
-      // Dedup pela via do HTML interno (textos iguais podem ocorrer)
-      const uniqueMessages = [];
-      const seen = new Set();
-      for (const m of messages) {
-        if (!seen.has(m.text)) {
-          seen.add(m.text);
-          uniqueMessages.push(m);
-        }
-      }
-
-      // Se a filtragem avançada por card falhar, mas soubermos que o sidepanel existe, tentamos varrer o parent.
-      if (uniqueMessages.length === 0) {
-        const titleHeaders = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, div')).filter(el => el.textContent.trim() === 'Mensagens');
-        if (titleHeaders.length > 0) {
-          const panel = titleHeaders[0].closest('div[class*="sidebar"], div[class*="dialog"], div[class*="offcanvas"], div:not([class])');
-          if (panel) {
-            uniqueMessages.push({
-               text: panel.textContent?.substring(0, 5000),
-               html: panel.innerHTML?.substring(0, 5000)
-            });
+        if (ownText.startsWith('Mensagem do') && ownText.length < 60) {
+          // Encontramos um header de mensagem! O card completo está no parent
+          // Podemos subir 1, 2 ou 3 níveis para pegar o card inteiro
+          let card = el.parentElement;
+          
+          // Sobe até encontrar um card que tenha a data "Enviada em"
+          for (let level = 0; level < 4 && card; level++) {
+            const cardText = card.innerText?.trim() || '';
+            if (cardText.includes('Enviada em') && cardText.length > 30 && cardText.length < 2000) {
+              messages.push({
+                text: cardText,
+                html: card.innerHTML?.substring(0, 3000),
+              });
+              break;
+            }
+            card = card.parentElement;
           }
         }
       }
-
-      return uniqueMessages;
+      
+      // Dedup: pode ter achado o mesmo card em diferentes níveis
+      const unique = [];
+      const seen = new Set();
+      for (const m of messages) {
+        // Usa os primeiros 100 chars como chave
+        const key = m.text.substring(0, 100);
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(m);
+        }
+      }
+      
+      // ─── Fallback: se não achou cards, pega o texto bruto do painel inteiro ───
+      if (unique.length === 0) {
+        // Procura o painel pelo título "Mensagens"
+        const allSpans = document.querySelectorAll('span, h1, h2, h3, h4, h5, div');
+        for (const sp of allSpans) {
+          if (sp.innerText?.trim() === 'Mensagens' && sp.children.length === 0) {
+            // Achou o título! Sobe até o container overlay
+            let container = sp.parentElement;
+            for (let i = 0; i < 6 && container; i++) {
+              const style = window.getComputedStyle(container);
+              // Overlay geralmente é position:fixed ou position:absolute
+              if (style.position === 'fixed' || style.position === 'absolute' || container.classList.toString().includes('sidebar') || container.classList.toString().includes('dialog')) {
+                const fullText = container.innerText?.trim() || '';
+                if (fullText.length > 50) {
+                  // Tenta separar mensagens pelo padrão "Mensagem do"
+                  const parts = fullText.split(/(?=Mensagem do )/);
+                  for (const part of parts) {
+                    const trimmed = part.trim();
+                    if (trimmed.startsWith('Mensagem do') && trimmed.length > 30) {
+                      unique.push({ text: trimmed, html: '' });
+                    }
+                  }
+                  // Se split não funcionou, pega blob completo
+                  if (unique.length === 0) {
+                    unique.push({ text: fullText.substring(0, 5000), html: container.innerHTML?.substring(0, 5000) });
+                  }
+                }
+                break;
+              }
+              container = container.parentElement;
+            }
+            break;
+          }
+        }
+      }
+      
+      return unique;
     });
   }
 
@@ -519,13 +546,18 @@ async function startProcessMonitor(proc) {
       if (panelOpen) {
         const domMsgs = await captureMessagesFromDOM(page).catch(() => []);
         console.log(`  📊 [${proc.processNumber}/${proc.processYear}] captureMessagesFromDOM retornou ${domMsgs.length} items brutos.`);
-        
-        // Filtra mensagens de interface do painel
+        // Filtra mensagens que são puramente boilerplate (sem conteúdo real)
         const validMsgs = domMsgs.filter(m => {
-          const txt = m.text.toLowerCase();
-          if (txt.includes('não há mensagens')) return false;
-          if (txt.includes('visualize aqui as mensagens da sessão pública')) return false;
-          return true;
+          const txt = m.text?.trim() || '';
+          // Rejeitar se for só o texto do header do painel (sem mensagem real)
+          if (txt === 'Mensagens') return false;
+          if (txt.length < 30) return false;
+          // Aceitar se começa com "Mensagem do" (é um card de mensagem)
+          if (txt.startsWith('Mensagem do')) return true;
+          // Aceitar se contém data de envio
+          if (txt.includes('Enviada em')) return true;
+          // Aceitar qualquer texto com mais de 50 chars como fallback
+          return txt.length > 50;
         });
 
         if (validMsgs.length > 0) {
