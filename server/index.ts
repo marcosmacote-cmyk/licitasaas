@@ -2,7 +2,7 @@ import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION } from "./services/ai/prompt.service";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "./services/ai/analysis-schema-v1";
-import { fallbackToOpenAi } from "./services/ai/openai.service";
+import { fallbackToOpenAi, fallbackToOpenAiV2 } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import express from 'express';
@@ -2517,6 +2517,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         let extractionJson: any;
         const t1Start = Date.now();
 
+        let modelsUsed: string[] = [];
+
         try {
             const extractionResponse = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
@@ -2540,18 +2542,38 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
 
             extractionJson = robustJsonParse(extractionText, 'V2-Extraction');
             result.analysis_meta.workflow_stage_status.extraction = 'done';
+            modelsUsed.push('gemini-2.5-flash');
             console.log(`[AI-V2] ✅ Etapa 1 concluída em ${((Date.now() - t1Start) / 1000).toFixed(1)}s — ` +
                 `${(extractionJson.evidence_registry || []).length} evidências, ` +
                 `${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
 
         } catch (err: any) {
-            console.error(`[AI-V2] ❌ Etapa 1 falhou: ${err.message}`);
-            result.analysis_meta.workflow_stage_status.extraction = 'failed';
-            result.confidence.warnings.push(`Etapa 1 (Extração) falhou: ${err.message}`);
-            result.confidence.overall_confidence = 'baixa';
-            // Retorna o que tiver, com status parcial
-            result.analysis_meta.model_used = 'gemini-2.5-flash';
-            return res.json({ schemaV2: result, partial: true, error: `Etapa 1 falhou: ${err.message}` });
+            console.warn(`[AI-V2] ⚠️ Etapa 1 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+
+            try {
+                const openAiResult = await fallbackToOpenAiV2({
+                    systemPrompt: V2_EXTRACTION_PROMPT,
+                    userPrompt: V2_EXTRACTION_USER_INSTRUCTION,
+                    pdfParts,
+                    temperature: 0.05,
+                    stageName: 'Etapa 1 (Extração)'
+                });
+
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+
+                extractionJson = robustJsonParse(openAiResult.text, 'V2-Extraction-OpenAI');
+                result.analysis_meta.workflow_stage_status.extraction = 'done';
+                modelsUsed.push(openAiResult.model);
+                console.log(`[AI-V2] ✅ Etapa 1 concluída via OpenAI em ${((Date.now() - t1Start) / 1000).toFixed(1)}s`);
+
+            } catch (openAiErr: any) {
+                console.error(`[AI-V2] ❌ Etapa 1 falhou (Gemini + OpenAI): ${openAiErr.message}`);
+                result.analysis_meta.workflow_stage_status.extraction = 'failed';
+                result.confidence.warnings.push(`Etapa 1 (Extração) falhou em ambos os modelos: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
+                result.confidence.overall_confidence = 'baixa';
+                result.analysis_meta.model_used = 'gemini-2.5-flash+openai-failed';
+                return res.json({ schemaV2: result, partial: true, error: `Etapa 1 falhou` });
+            }
         }
 
         // Merge extraction into result
@@ -2593,15 +2615,38 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
 
             normalizationJson = robustJsonParse(normText, 'V2-Normalization');
             result.analysis_meta.workflow_stage_status.normalization = 'done';
+            modelsUsed.push('gemini-2.5-flash');
             console.log(`[AI-V2] ✅ Etapa 2 concluída em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ` +
                 `${(normalizationJson.operational_outputs?.documents_to_prepare || []).length} docs a preparar, ` +
                 `${(normalizationJson.operational_outputs?.internal_checklist || []).length} itens no checklist`);
 
         } catch (err: any) {
-            console.error(`[AI-V2] ❌ Etapa 2 falhou: ${err.message}`);
-            result.analysis_meta.workflow_stage_status.normalization = 'failed';
-            result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${err.message}`);
-            normalizationJson = {};
+            console.warn(`[AI-V2] ⚠️ Etapa 2 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+
+            try {
+                const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
+                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2));
+
+                const openAiResult = await fallbackToOpenAiV2({
+                    systemPrompt: V2_NORMALIZATION_PROMPT,
+                    userPrompt: normUserInstruction,
+                    temperature: 0.1,
+                    stageName: 'Etapa 2 (Normalização)'
+                });
+
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+
+                normalizationJson = robustJsonParse(openAiResult.text, 'V2-Normalization-OpenAI');
+                result.analysis_meta.workflow_stage_status.normalization = 'done';
+                modelsUsed.push(openAiResult.model);
+                console.log(`[AI-V2] ✅ Etapa 2 concluída via OpenAI em ${((Date.now() - t2Start) / 1000).toFixed(1)}s`);
+
+            } catch (openAiErr: any) {
+                console.error(`[AI-V2] ❌ Etapa 2 falhou (Gemini + OpenAI): ${openAiErr.message}`);
+                result.analysis_meta.workflow_stage_status.normalization = 'failed';
+                result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
+                normalizationJson = {};
+            }
         }
 
         // Merge normalization — requirements normalizados sobrescrevem os da extração
@@ -2643,6 +2688,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
 
             const riskJson = robustJsonParse(riskText, 'V2-RiskReview');
             result.analysis_meta.workflow_stage_status.risk_review = 'done';
+            modelsUsed.push('gemini-2.5-flash');
             console.log(`[AI-V2] ✅ Etapa 3 concluída em ${((Date.now() - t3Start) / 1000).toFixed(1)}s — ` +
                 `${(riskJson.legal_risk_review?.critical_points || []).length} pontos críticos`);
 
@@ -2663,9 +2709,45 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             }
 
         } catch (err: any) {
-            console.error(`[AI-V2] ❌ Etapa 3 falhou: ${err.message}`);
-            result.analysis_meta.workflow_stage_status.risk_review = 'failed';
-            result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${err.message}`);
+            console.warn(`[AI-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+
+            try {
+                const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
+                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                    .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2));
+
+                const openAiResult = await fallbackToOpenAiV2({
+                    systemPrompt: V2_RISK_REVIEW_PROMPT,
+                    userPrompt: riskUserInstruction,
+                    temperature: 0.2,
+                    stageName: 'Etapa 3 (Risco)'
+                });
+
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+
+                const riskJson = robustJsonParse(openAiResult.text, 'V2-RiskReview-OpenAI');
+                result.analysis_meta.workflow_stage_status.risk_review = 'done';
+                modelsUsed.push(openAiResult.model);
+                console.log(`[AI-V2] ✅ Etapa 3 concluída via OpenAI em ${((Date.now() - t3Start) / 1000).toFixed(1)}s`);
+
+                if (riskJson.legal_risk_review) result.legal_risk_review = riskJson.legal_risk_review;
+                if (riskJson.operational_outputs_risk) {
+                    if (riskJson.operational_outputs_risk.questions_for_consultor_chat) {
+                        result.operational_outputs.questions_for_consultor_chat = riskJson.operational_outputs_risk.questions_for_consultor_chat;
+                    }
+                    if (riskJson.operational_outputs_risk.possible_petition_routes) {
+                        result.operational_outputs.possible_petition_routes = riskJson.operational_outputs_risk.possible_petition_routes;
+                    }
+                }
+                if (riskJson.confidence_update) {
+                    result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
+                }
+
+            } catch (openAiErr: any) {
+                console.error(`[AI-V2] ❌ Etapa 3 falhou (Gemini + OpenAI): ${openAiErr.message}`);
+                result.analysis_meta.workflow_stage_status.risk_review = 'failed';
+                result.confidence.warnings.push(`Etapa 3 (Risco) falhou: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
+            }
         }
 
         // ── 5. Validação Automática (sem IA) ──
@@ -2694,8 +2776,15 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         }
         (result.confidence as any).score_percentage = combinedScore;
 
-        result.analysis_meta.model_used = 'gemini-2.5-flash';
+        // Track all models used (deduped)
+        const uniqueModels = [...new Set(modelsUsed)];
+        result.analysis_meta.model_used = uniqueModels.join('+');
         (result.analysis_meta as any).prompt_version = V2_PROMPT_VERSION;
+        (result.analysis_meta as any).models_per_stage = {
+            extraction: modelsUsed[0] || 'failed',
+            normalization: modelsUsed[1] || 'failed',
+            risk_review: modelsUsed[2] || 'failed'
+        };
 
         // ── 7. Indexação RAG ──
         if (biddingProcessId && pdfParts.length > 0) {
@@ -2710,8 +2799,9 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
         const totalReqs = Object.values(result.requirements).reduce((sum, arr) => sum + arr.length, 0);
         console.log(`[AI-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
+            `Modelos: ${uniqueModels.join('+')} | ` +
             `${totalReqs} exigências | ${result.legal_risk_review.critical_points.length} riscos | ` +
-            `${result.evidence_registry.length} evidências | Confiança: ${result.confidence.overall_confidence}`);
+            `${result.evidence_registry.length} evidências | Score: ${combinedScore}% (${result.confidence.overall_confidence})`);
 
         // ── 8. Compatibilidade V1 ──
         // Gera campos legacy para consumo pelos módulos que ainda usam o formato antigo
@@ -2755,7 +2845,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             _version: '2.0',
             _pipeline_duration_s: parseFloat(totalDuration),
             _prompt_version: V2_PROMPT_VERSION,
-            _model_used: 'gemini-2.5-flash',
+            _model_used: uniqueModels.join('+'),
             _overall_confidence: result.confidence.overall_confidence
         });
 
