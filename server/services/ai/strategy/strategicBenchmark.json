@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "description": "Benchmark estratégico — valida score, recomendação e plano de ação por empresa × edital",
+  "created_at": "2026-03-12",
+  "cases": [
+    { "id": "strat-001", "scenario": "Empresa plenamente apta — todos os documentos, acervo robusto, balanço OK", "expected": { "recommendation": "participar", "minScore": 80, "maxPending": 2 }},
+    { "id": "strat-002", "scenario": "Empresa apta com certidão vencida e 1 atestado parcial", "expected": { "recommendation": "participar_com_ressalvas", "minScore": 60, "maxScore": 79 }},
+    { "id": "strat-003", "scenario": "Empresa sem atestado aderente para edital de engenharia", "expected": { "recommendation": "revisao_humana_obrigatoria", "mustHaveHighRiskGap": true }},
+    { "id": "strat-004", "scenario": "Empresa com pendência contábil crítica (balanço desatualizado + índices exigidos)", "expected": { "recommendation": "participar_com_ressalvas", "mustHaveEFWarning": true }},
+    { "id": "strat-005", "scenario": "Empresa com docs OK mas prazo de 2 dias e 5 pendências", "expected": { "recommendation": "revisao_humana_obrigatoria", "highOperationalEffort": true }},
+    { "id": "strat-006", "scenario": "Edital com alto risco jurídico + empresa sem fragilidade", "expected": { "recommendation": "participar_com_ressalvas", "mustHavePetitionSuggestion": true }},
+    { "id": "strat-007", "scenario": "Empresa MEI tentando participar de licitação com requisitos de grande porte", "expected": { "recommendation": "nao_participar", "maxScore": 40 }},
+    { "id": "strat-008", "scenario": "Empresa com RT ativo CREA e edital exigindo CAT de engenheiro", "expected": { "technicalScore": 80, "recommendation": "participar" }},
+    { "id": "strat-009", "scenario": "Empresa com RT inativo e edital exigindo responsável técnico", "expected": { "mustHaveHighRiskGap": true, "recommendation": "revisao_humana_obrigatoria" }},
+    { "id": "strat-010", "scenario": "Empresa de fornecimento com catálogo pronto, proposta simples", "expected": { "recommendation": "participar", "proposalScore": 80 }},
+    { "id": "strat-011", "scenario": "Edital exigindo amostra + empresa sem laboratório", "expected": { "mustHaveProposalRisk": true }},
+    { "id": "strat-012", "scenario": "Empresa com histórico forte no segmento mas documentação fiscal pendente", "expected": { "recommendation": "participar_com_ressalvas", "mustHaveStrategicNote": true }}
+  ],
+  "scoring": {
+    "dimensions": {
+      "scoreAccuracy": 30,
+      "recommendationAccuracy": 30,
+      "gapDetection": 20,
+      "actionPlanUsefulness": 20
+    }
+  }
+}

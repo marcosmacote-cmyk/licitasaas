@@ -17,6 +17,10 @@ import { submitFeedback, getFeedbackByModule, getFeedbackStats, AIExecutionFeedb
 import { generateSystemReport, recordExecution } from "./services/ai/governance/operationalMetrics";
 import { registerInitialVersions, getAllVersions, getPromotionHistory } from "./services/ai/governance/versionGovernance";
 import { generateImprovementInsights, convertFeedbackToGoldenCases } from "./services/ai/governance/improvementInsights";
+import { createOrUpdateProfile, getProfile, getAllProfiles, createEmptyProfile, CompanyLicitationProfile } from "./services/ai/company/companyProfileService";
+import { matchCompanyToEdital, calculateParticipationScore, generateActionPlan } from "./services/ai/strategy/participationEngine";
+import { buildHybridContext } from "./services/ai/strategy/companyAwareContext";
+import { generateCompanyInsights, recordMatchHistory } from "./services/ai/strategy/companyLearningInsights";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import express from 'express';
 import cors from 'cors';
@@ -4254,6 +4258,87 @@ app.post('/api/ai/golden-cases/convert', async (_req: any, res: any) => {
     try {
         const converted = convertFeedbackToGoldenCases();
         res.json({ success: true, converted: converted.length, cases: converted });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  Sprint 8 — Strategic Company API Endpoints
+// ══════════════════════════════════════════════════════════════════
+
+// POST /api/company/profile — Create or update company profile
+app.post('/api/company/profile', async (req: any, res: any) => {
+    try {
+        const profile = createOrUpdateProfile(req.body as CompanyLicitationProfile);
+        res.json({ success: true, companyId: profile.companyId });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/company/profiles — List all company profiles
+app.get('/api/company/profiles', async (_req: any, res: any) => {
+    try {
+        res.json(getAllProfiles());
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/company/:companyId — Get company profile
+app.get('/api/company/:companyId', async (req: any, res: any) => {
+    try {
+        const profile = getProfile(req.params.companyId);
+        if (!profile) return res.status(404).json({ error: 'Company not found' });
+        res.json(profile);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/strategy/analyze — Full strategic analysis: match + score + action plan
+app.post('/api/strategy/analyze', async (req: any, res: any) => {
+    try {
+        const { companyId, biddingProcessId } = req.body;
+        if (!companyId || !biddingProcessId) {
+            return res.status(400).json({ error: 'companyId and biddingProcessId are required' });
+        }
+
+        const bidding = await prisma.biddingProcess.findUnique({
+            where: { id: biddingProcessId },
+            include: { aiAnalysis: true }
+        });
+
+        if (!bidding?.aiAnalysis?.schemaV2) {
+            return res.status(404).json({ error: 'Bidding process or schemaV2 not found' });
+        }
+
+        const schemaV2 = bidding.aiAnalysis.schemaV2;
+        const matchResult = matchCompanyToEdital(companyId, schemaV2, biddingProcessId);
+        const assessment = calculateParticipationScore(matchResult, schemaV2);
+        const actionPlan = generateActionPlan(matchResult, assessment, schemaV2);
+
+        // Record for learning
+        recordMatchHistory(companyId, biddingProcessId, {
+            doc: matchResult.documentaryFit.score,
+            tech: matchResult.technicalFit.score,
+            ef: matchResult.economicFinancialFit.score,
+            prop: matchResult.proposalFit.score,
+            overall: assessment.overallScore
+        }, assessment.recommendation);
+
+        res.json({ matchResult, assessment, actionPlan });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/company/:companyId/insights — Company learning insights
+app.get('/api/company/:companyId/insights', async (req: any, res: any) => {
+    try {
+        const report = generateCompanyInsights(req.params.companyId);
+        res.json(report);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
