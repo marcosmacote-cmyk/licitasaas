@@ -1,0 +1,86 @@
+{
+  "version": "1.0.0",
+  "description": "Benchmark funcional dos módulos consumidores — casos reais anonimizados",
+  "created_at": "2026-03-12",
+  "prompt_versions": {
+    "chat": "chat-v2.0.0",
+    "petition": "petition-v2.0.0",
+    "oracle": "oracle-v2.0.0",
+    "dossier": "dossier-v2.0.0",
+    "declaration": "declaration-v2.0.0",
+    "proposal": "proposal-v2.0.0"
+  },
+  "modules": {
+    "chat": {
+      "cases": [
+        { "id": "chat-001", "question": "Quais documentos de habilitação jurídica são exigidos?", "expected": { "mustMention": ["contrato social", "registro comercial"], "mustNotInvent": true, "minEditalBasis": 1 }},
+        { "id": "chat-002", "question": "Qual é o prazo para impugnação do edital?", "expected": { "mustMention": ["impugnação", "dias"], "mustNotInvent": true, "minEditalBasis": 1 }},
+        { "id": "chat-003", "question": "A licitação exige visita técnica?", "expected": { "mustMention": ["visita"], "mustNotInvent": true, "minEditalBasis": 1 }},
+        { "id": "chat-004", "question": "O edital permite consórcio?", "expected": { "mustMention": ["consórcio"], "mustNotInvent": true, "minEditalBasis": 1 }},
+        { "id": "chat-005", "question": "Existe algum risco de inabilitação neste edital?", "expected": { "mustMention": ["inabilitação", "risco"], "mustHaveRiskAlert": true, "minEditalBasis": 1 }}
+      ]
+    },
+    "petition": {
+      "cases": [
+        { "id": "pet-001", "type": "impugnacao", "target": "Exigência de visita técnica obrigatória sem justificativa", "expected": { "mustHaveThesis": true, "mustHaveLegalGround": true, "mustHaveRequest": true, "minFacts": 2 }},
+        { "id": "pet-002", "type": "esclarecimento", "target": "Ambiguidade no prazo de entrega entre edital e TR", "expected": { "mustHaveThesis": true, "mustHaveRequest": true, "minFacts": 1 }},
+        { "id": "pet-003", "type": "impugnacao", "target": "Vedação de consórcio sem justificativa em obra de grande porte", "expected": { "mustHaveThesis": true, "mustHaveLegalGround": true, "mustHaveRequest": true, "mustMentionLaw": "14.133" }},
+        { "id": "pet-004", "type": "impugnacao", "target": "Quantitativo mínimo de atestado de 70% — desproporcional", "expected": { "mustHaveThesis": true, "mustHaveLegalGround": true, "mustMentionTCU": true }},
+        { "id": "pet-005", "type": "esclarecimento", "target": "Exigência vaga de 'experiência comprovada'", "expected": { "mustHaveThesis": true, "mustHaveRequest": true, "shouldHaveLimitations": true }},
+        { "id": "pet-006", "type": "impugnacao", "target": "Edital sem irregularidade clara — testar contenção", "expected": { "shouldHaveLimitations": true, "shouldSignalWeakThesis": true }},
+        { "id": "pet-007", "type": "recurso", "target": "Ponto com fundamento fraco", "expected": { "shouldHaveLimitations": true, "shouldSignalWeakThesis": true }}
+      ]
+    },
+    "oracle": {
+      "cases": [
+        { "id": "orc-001", "scenario": "Atestado operacional que cobre 100% da exigência", "expected": { "adherence": "full", "gaps": 0, "falsePositive": false }},
+        { "id": "orc-002", "scenario": "Atestado operacional que cobre 60% do quantitativo", "expected": { "adherence": "partial", "minGaps": 1, "falsePositive": false }},
+        { "id": "orc-003", "scenario": "Atestado sem relação material com a exigência", "expected": { "adherence": "none", "minGaps": 1, "falsePositive": false }},
+        { "id": "orc-004", "scenario": "CAT profissional corretamente identificado como profissional", "expected": { "isProfessional": true, "isOperational": false }},
+        { "id": "orc-005", "scenario": "Atestado da empresa tentando atender exigência profissional", "expected": { "adherence": "none", "mustDetectMismatch": true }},
+        { "id": "orc-006", "scenario": "Atestado com similaridade textual mas escopo diferente (falso positivo)", "expected": { "adherence": "none", "falsePositive": true }},
+        { "id": "orc-007", "scenario": "Atestado parcial com quantitativo acima do mínimo mas escopo parcial", "expected": { "adherence": "partial", "minGaps": 1 }},
+        { "id": "orc-008", "scenario": "Dois atestados somados atingindo o mínimo", "expected": { "adherence": "partial", "mustCheckSumAllowed": true }}
+      ]
+    },
+    "dossier": {
+      "cases": [
+        { "id": "dos-001", "scenario": "Edital simples de fornecimento", "expected": { "minDocuments": 8, "mustHaveCritical": true, "mustHaveAreas": 2 }},
+        { "id": "dos-002", "scenario": "Edital de obra complexa com CAT e BDI", "expected": { "minDocuments": 15, "mustHaveCritical": true, "mustHaveAreas": 4 }},
+        { "id": "dos-003", "scenario": "Edital com exigências duplicadas em fontes diferentes", "expected": { "maxDuplicates": 2 }},
+        { "id": "dos-004", "scenario": "Edital com documento faltante crítico", "expected": { "mustHaveMissing": true, "mustHaveCritical": true }},
+        { "id": "dos-005", "scenario": "Edital com áreas responsáveis diversificadas", "expected": { "mustHaveAreas": 3, "mustHaveActions": true }}
+      ]
+    },
+    "declaration": {
+      "cases": [
+        { "id": "dec-001", "type": "inexistencia_fato_impeditivo", "expected": { "mustBeFormal": true, "mustHaveFields": true, "maxInventions": 0 }},
+        { "id": "dec-002", "type": "cumprimento_art7_xxxiii", "expected": { "mustBeFormal": true, "mustMentionCF": true }},
+        { "id": "dec-003", "type": "enquadramento_me_epp", "expected": { "mustBeFormal": true, "mustHaveFields": true }},
+        { "id": "dec-004", "type": "visita_tecnica", "expected": { "mustBeFormal": true, "mustHaveFields": true }},
+        { "id": "dec-005", "type": "especifica_edital", "expected": { "mustBeFormal": true, "mustAdaptToEdital": true }},
+        { "id": "dec-006", "type": "inexistencia_fato_impeditivo", "insufficientData": true, "expected": { "mustSignalMissing": true }},
+        { "id": "dec-007", "type": "ambiguous_requirement", "expected": { "mustSignalAmbiguity": true }}
+      ]
+    },
+    "proposal": {
+      "cases": [
+        { "id": "prop-001", "scenario": "Edital exigindo planilha orçamentária detalhada", "expected": { "mustCapture": ["planilha"], "minRequirements": 3 }},
+        { "id": "prop-002", "scenario": "Edital exigindo carta proposta com modelo específico", "expected": { "mustCapture": ["carta proposta", "modelo"], "minRequirements": 3 }},
+        { "id": "prop-003", "scenario": "Edital de fornecimento com catálogo e ficha técnica", "expected": { "mustCapture": ["catálogo", "ficha técnica"], "mustHaveAttachments": true }},
+        { "id": "prop-004", "scenario": "Edital exigindo amostra antes da adjudicação", "expected": { "mustCapture": ["amostra"], "mustHaveRisk": true }},
+        { "id": "prop-005", "scenario": "Edital com critério de exequibilidade restritivo", "expected": { "mustHaveRisk": true, "mustCapture": ["exequibilidade"] }},
+        { "id": "prop-006", "scenario": "Edital com risco claro de desclassificação por formatação", "expected": { "mustHaveDisqualificationRisk": true }}
+      ]
+    }
+  },
+  "scoring": {
+    "perCase": 100,
+    "dimensions": {
+      "adherence": 30,
+      "completeness": 25,
+      "safety": 25,
+      "usefulness": 20
+    }
+  }
+}

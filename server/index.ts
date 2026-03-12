@@ -6,6 +6,13 @@ import { fallbackToOpenAi, fallbackToOpenAiV2 } from "./services/ai/openai.servi
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import { executeRiskRules } from "./services/ai/riskRulesEngine";
 import { evaluateAnalysisQuality } from "./services/ai/analysisQualityEvaluator";
+import { buildModuleContext, ModuleName } from "./services/ai/modules/moduleContextContracts";
+import { CHAT_SYSTEM_PROMPT, CHAT_USER_INSTRUCTION } from "./services/ai/modules/prompts/chatPromptV2";
+import { PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION as PETITION_V2_USER_INSTRUCTION } from "./services/ai/modules/prompts/petitionPromptV2";
+import { ORACLE_SYSTEM_PROMPT } from "./services/ai/modules/prompts/oraclePromptV2";
+import { DECLARATION_SYSTEM_PROMPT } from "./services/ai/modules/prompts/declarationPromptV2";
+import { evaluateModuleQuality } from "./services/ai/modules/moduleQualityEvaluator";
+import { evaluateHumanReview } from "./services/ai/modules/humanReviewPolicy";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import express from 'express';
 import cors from 'cors';
@@ -529,8 +536,8 @@ app.post('/api/technical-certificates/compare', authenticateToken, async (req: a
         // Prefer V2 structured context for oracle (technical focus)
         let requirements: string;
         if (bidding.aiAnalysis?.schemaV2) {
-            requirements = buildSchemaV2Context(bidding.aiAnalysis.schemaV2, 'oracle');
-            console.log(`[AI Oracle] Using V2 schemaV2 context for comparison`);
+            requirements = buildModuleContext(bidding.aiAnalysis.schemaV2, 'oracle');
+            console.log(`[AI Oracle] Using buildModuleContext('oracle') for comparison`);
         } else {
             requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
         }
@@ -866,7 +873,7 @@ Objeto: ${bidding.title}
 Modalidade/Nº: ${bidding.modality || ''}
 
 RESUMO ESTRUTURADO DO EDITAL (Base compulsória):
-${bidding.aiAnalysis?.schemaV2 ? buildSchemaV2Context(bidding.aiAnalysis.schemaV2, 'declaration') : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
+${bidding.aiAnalysis?.schemaV2 ? buildModuleContext(bidding.aiAnalysis.schemaV2, 'declaration') : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
 
 INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
 1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário para conferir validade perante a Lei 14.133/2021.
@@ -3146,11 +3153,11 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
             // Prefer V2 structured context for petitions (risk + impugnation focus)
             if (aiAnalysis.schemaV2) {
                 biddingAnalysisText = `
-${buildSchemaV2Context(aiAnalysis.schemaV2, 'petition')}
+${buildModuleContext(aiAnalysis.schemaV2, 'petition')}
 
 Resumo Executivo: ${aiAnalysis.fullSummary || 'N/A'}
 `.trim();
-                console.log(`[Petition] Using V2 schemaV2 context for petition generation`);
+                console.log(`[Petition] Using buildModuleContext('petition') for generation`);
             } else {
                 biddingAnalysisText = `
 Resumo do Edital (Card): ${bidding.summary || 'Não disponível'}
@@ -3264,11 +3271,11 @@ app.post('/api/analyze-edital/chat', authenticateToken, async (req: any, res) =>
                 // Prefer V2 structured context when available
                 if (analysis.schemaV2) {
                     analysisContext = `
-ANÁLISE ESTRUTURADA V2 DO EDITAL (gerada pela IA com confiança: ${(analysis.schemaV2 as any)?.confidence?.overall_confidence || 'N/A'}):
+ANÁLISE ESTRUTURADA V2 DO EDITAL (confiança: ${(analysis.schemaV2 as any)?.confidence?.overall_confidence || 'N/A'}):
 
-${buildSchemaV2Context(analysis.schemaV2, 'chat')}
+${buildModuleContext(analysis.schemaV2, 'chat')}
 `;
-                    traceLog(`[V2] Schema V2 context loaded (${analysisContext.length} chars). Confidence: ${(analysis.schemaV2 as any)?.confidence?.overall_confidence}`);
+                    traceLog(`[V2] Chat context loaded via buildModuleContext (${analysisContext.length} chars). Confidence: ${(analysis.schemaV2 as any)?.confidence?.overall_confidence}`);
                 } else {
                     // Fallback to legacy V1 fields
                     analysisContext = `
