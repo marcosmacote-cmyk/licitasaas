@@ -466,6 +466,49 @@ async function startProcessMonitor(proc) {
       if (panelOpen && !chatDetected) {
         chatDetected = true;
         console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Painel de mensagens DETECTADO! Assumindo captura...`);
+        
+        // DIAGNÓSTICO: Dump do conteúdo visível no painel
+        const diagDump = await page.evaluate(() => {
+          // Tenta achar qualquer container com "Mensagens" no texto
+          const allElements = document.querySelectorAll('*');
+          let panelEl = null;
+          for (const el of allElements) {
+            // Procura elemento que tenha "Mensagens" como texto direto (não herdado)
+            const ownText = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
+            if (ownText === 'Mensagens' || el.textContent?.trim().startsWith('Mensagens')) {
+              // Sobe até achar o container pai
+              panelEl = el.parentElement || el;
+              break;
+            }
+          }
+          
+          if (!panelEl) {
+            // Fallback: procura pelo título h2/h3 ou por classe
+            const sidebar = document.querySelector('.p-sidebar, .p-dialog, [class*="sidebar"], [class*="offcanvas"], [class*="drawer"]');
+            panelEl = sidebar;
+          }
+          
+          if (!panelEl) return { found: false, bodySnippet: document.body.innerText?.substring(0, 2000) };
+          
+          return {
+            found: true,
+            tagName: panelEl.tagName,
+            className: panelEl.className,
+            textContent: panelEl.textContent?.substring(0, 2000),
+            childCount: panelEl.children.length,
+            childTags: Array.from(panelEl.children).map(c => `${c.tagName}.${c.className?.substring(0,30)}`).join(' | '),
+          };
+        });
+        
+        console.log(`  🔍 DIAGNÓSTICO DO PAINEL:`);
+        console.log(`     Encontrado: ${diagDump.found}`);
+        if (diagDump.found) {
+          console.log(`     Tag: ${diagDump.tagName}, Class: ${diagDump.className?.substring(0, 80)}`);
+          console.log(`     Filhos (${diagDump.childCount}): ${diagDump.childTags?.substring(0, 200)}`);
+          console.log(`     Texto (primeiros 500 chars): ${diagDump.textContent?.substring(0, 500)}`);
+        } else {
+          console.log(`     Body snippet: ${diagDump.bodySnippet?.substring(0, 500)}`);
+        }
       }
       if (!panelOpen && chatDetected) {
         chatDetected = false;
@@ -475,6 +518,7 @@ async function startProcessMonitor(proc) {
       // Captura do DOM se painel estiver aberto
       if (panelOpen) {
         const domMsgs = await captureMessagesFromDOM(page).catch(() => []);
+        console.log(`  📊 [${proc.processNumber}/${proc.processYear}] captureMessagesFromDOM retornou ${domMsgs.length} items brutos.`);
         
         // Filtra mensagens de interface do painel
         const validMsgs = domMsgs.filter(m => {
