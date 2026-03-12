@@ -357,7 +357,6 @@ async function startProcessMonitor(proc) {
         const style = window.getComputedStyle(btn);
         if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
         if (btn.offsetWidth === 0 || btn.offsetHeight === 0) continue;
-        
         const rect = btn.getBoundingClientRect();
         // Garante que está no viewport e tem área clicável
         if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0) {
@@ -368,108 +367,20 @@ async function startProcessMonitor(proc) {
     }, cssSelector);
   }
 
-  // Click humanizado usando coordenadas do DOM
-  async function humanClickBySelector(pg, cssSelector) {
-    const box = await getElementBox(pg, cssSelector);
-    if (!box) return false;
+  // ═══════════════════════════════════════════════════════════
+  // PURE HUMAN-IN-THE-LOOP (CAPTCHA BYPASS)
+  // Como as automações Playwright falham reCAPTCHA v3, nós 
+  // avisamos o usuário para abrir o painel. Nós então monitoramos.
+  // ═══════════════════════════════════════════════════════════
 
-    const targetX = box.x + (box.width * 0.3) + (Math.random() * (box.width * 0.4));
-    const targetY = box.y + (box.height * 0.3) + (Math.random() * (box.height * 0.4));
-
-    await pg.mouse.move(targetX, targetY, { steps: 25 });
-    await pg.waitForTimeout(Math.floor(Math.random() * 400) + 300);
-    await pg.mouse.down();
-    await pg.waitForTimeout(Math.floor(Math.random() * 80) + 40);
-    await pg.mouse.up();
-
-    return true;
-  }
-
-  // 1) Click humanizado no botão de refresh (🔄)
-  try {
-    const refreshed = await humanClickBySelector(page, 'i.fa-sync-alt');
-    if (refreshed) {
-      console.log(`  🔄 [${proc.processNumber}/${proc.processYear}] Atualização clicada (mouse humanizado)!`);
-      await page.waitForTimeout(8000);
-    }
-  } catch { /* ignore */ }
-
-  // 2) Click humanizado no botão de mensagens (✉️) — com retries
-  let envelopeClicked = false;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      envelopeClicked = await humanClickBySelector(page, 'i.fa-envelope');
-      if (envelopeClicked) {
-        console.log(`  💬 [${proc.processNumber}/${proc.processYear}] Envelope clicado (mouse humanizado, tentativa ${attempt})!`);
-        await page.waitForTimeout(5000);
-        break;
-      }
-    } catch { /* next attempt */ }
-    
-    if (!envelopeClicked && attempt < 3) {
-      console.log(`  ⏳ [${proc.processNumber}/${proc.processYear}] Envelope não encontrado (tentativa ${attempt}/3), aguardando 5s...`);
-      await page.waitForTimeout(5000);
-    }
-  }
-
-  if (!envelopeClicked) {
-    // Diagnóstico: mostra TODOS os ícones na página
-    const icons = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('i[class]'))
-        .map(el => el.className)
-        .filter(c => c.length > 2);
-    });
-    console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Envelope não encontrado após 3 tentativas.`);
-    console.log(`  📋 URL: ${page.url()}`);
-    console.log(`  📋 Ícones na página (${icons.length}): ${icons.join(' | ')}`);
-  } else {
-    // Verifica se deu erro de CAPTCHA após o clique (analisando o toast na tela)
-    const hasCaptchaError = await page.evaluate(() => {
-      const toast = document.querySelector('.p-toast-message, .p-message');
-      if (!toast) return false;
-      return toast.textContent.toLowerCase().includes('captcha');
-    });
-
-    if (hasCaptchaError) {
-      console.log(`  🚨 [${proc.processNumber}/${proc.processYear}] Erro de CAPTCHA detectado! Iniciando fallback avançado...`);
-      
-      try {
-        // 1. Fecha o painel de mensagens
-        await page.evaluate(() => {
-          const closeBtn = document.querySelector('.p-sidebar-close, button[aria-label="Close"]');
-          if (closeBtn) closeBtn.click();
-        });
-        console.log(`  ❌ Painel fechado.`);
-        await page.waitForTimeout(2000);
-        // 2. Faz um reload REAL na página (F5) para resetar o estado do ComprasNet
-        console.log(`  🔁 Recarregando a página por completo (F5)...`);
-        await page.reload({ waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(10000); // Espera re-renderizar o Angular
-
-        // **Ação Humana Extra**: Move o mouse de forma aleatória pela tela
-        console.log(`  🧠 Simulando leitura da tela (gerando ruído no mouse)...`);
-        for (let i = 0; i < 4; i++) {
-          const randX = Math.floor(Math.random() * 800) + 200;
-          const randY = Math.floor(Math.random() * 600) + 150;
-          await page.mouse.move(randX, randY, { steps: 15 });
-          await page.waitForTimeout(400 + Math.random() * 600);
-        }
-
-        // 4. Clica de novo no envelope
-        console.log(`  💬 Tentando envelope novamente após ressurreição...`);
-        const envelopeClickedAgain = await humanClickBySelector(page, 'i.fa-envelope');
-        
-        if (envelopeClickedAgain) {
-          console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Envelope re-clicado com sucesso!`);
-          await page.waitForTimeout(5000);
-        } else {
-          console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Falha ao reclicar no envelope no fallback.`);
-        }
-      } catch (err) {
-        console.warn(`  ⚠️ Erro no fallback de CAPTCHA: ${err.message?.substring(0, 100)}`);
-      }
-    }
-  }
+  // Avisa o usuário para abrir as mensagens manualmente
+  console.log(`  👤 [${proc.processNumber}/${proc.processYear}] Processo aberto! Aguardando ação manual...`);
+  console.log(`  ┌─────────────────────────────────────────────────────┐`);
+  console.log(`  │  📌 AÇÃO NECESSÁRIA (Human-in-the-Loop):           │`);
+  console.log(`  │  1. Na aba aberta, clique em 🔄 (Atualizar)        │`);
+  console.log(`  │  2. Em seguida, clique em ✉️ (Mensagens)           │`);
+  console.log(`  │  O watcher vai detectar e assumir a captura!       │`);
+  console.log(`  └─────────────────────────────────────────────────────┘`);
 
   // ── Captura contínua: DOM + XHR (o XHR interceptor já roda acima) ──
 
@@ -505,18 +416,33 @@ async function startProcessMonitor(proc) {
     });
   }
 
-  // Polling periódico: refresh (humanizado) + envelope (humanizado) + captura DOM
+  // Detecta se o painel de mensagens está aberto no DOM (Ação humana)
+  async function isChatPanelOpen(pg) {
+    return await pg.evaluate(() => {
+      const sidebar = document.querySelector('.p-sidebar, .p-dialog');
+      if (sidebar && sidebar.textContent.includes('Mensagens')) return true;
+      const msgs = document.querySelectorAll('[class*="mensagem"], [class*="message"], [class*="chat"]');
+      if (msgs.length > 0) return true;
+      return false;
+    });
+  }
+
+  // Polling periódico: apenas observa o DOM! Não clica em nada automatizado.
+  let chatDetected = false;
   const intervalId = setInterval(async () => {
     try {
       if (page.isClosed()) { clearInterval(intervalId); return; }
       
-      // Tenta refresh humanizado
-      await humanClickBySelector(page, 'i.fa-sync-alt').catch(() => {});
-      await page.waitForTimeout(8000);
+      const panelOpen = await isChatPanelOpen(page);
       
-      // Tenta envelope humanizado
-      await humanClickBySelector(page, 'i.fa-envelope').catch(() => {});
-      await page.waitForTimeout(5000);
+      if (panelOpen && !chatDetected) {
+        chatDetected = true;
+        console.log(`  ✅ [${proc.processNumber}/${proc.processYear}] Painel de mensagens DETECTADO! Assumindo captura...`);
+      }
+      if (!panelOpen && chatDetected) {
+        chatDetected = false;
+        console.log(`  ⚠️ [${proc.processNumber}/${proc.processYear}] Painel fechou. Aguardando reabertura humana...`);
+      }
       
       // Captura do DOM se painel estiver aberto
       const domMsgs = await captureMessagesFromDOM(page).catch(() => []);
