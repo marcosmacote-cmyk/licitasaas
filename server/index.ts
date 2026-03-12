@@ -524,7 +524,14 @@ app.post('/api/technical-certificates/compare', authenticateToken, async (req: a
             return res.status(404).json({ error: 'Processo ou atestados não encontrados.' });
         }
 
-        const requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
+        // Prefer V2 structured context for oracle (technical focus)
+        let requirements: string;
+        if (bidding.aiAnalysis?.schemaV2) {
+            requirements = buildSchemaV2Context(bidding.aiAnalysis.schemaV2, 'oracle');
+            console.log(`[AI Oracle] Using V2 schemaV2 context for comparison`);
+        } else {
+            requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
+        }
 
         // Aggregate all experiences from all selected certificates
         const aggregatedCertData = certificates.map(cert => ({
@@ -857,7 +864,7 @@ Objeto: ${bidding.title}
 Modalidade/Nº: ${bidding.modality || ''}
 
 RESUMO ESTRUTURADO DO EDITAL (Base compulsória):
-${(bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
+${bidding.aiAnalysis?.schemaV2 ? buildSchemaV2Context(bidding.aiAnalysis.schemaV2, 'declaration') : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
 
 INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
 1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário para conferir validade perante a Lei 14.133/2021.
@@ -1564,6 +1571,49 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
     } catch (error) {
         console.error("Create analysis error:", error);
         res.status(500).json({ error: 'Failed to save AI analysis' });
+    }
+});
+
+// GET structured analysis for a process (frontend consumption)
+app.get('/api/analysis/:processId', authenticateToken, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const tenantId = req.user.tenantId;
+
+        // Verify process ownership
+        const process = await prisma.biddingProcess.findUnique({
+            where: { id: processId, tenantId }
+        });
+        if (!process) {
+            return res.status(404).json({ error: 'Processo não encontrado' });
+        }
+
+        const analysis = await prisma.aiAnalysis.findUnique({
+            where: { biddingProcessId: processId }
+        });
+
+        if (!analysis) {
+            return res.status(404).json({ error: 'Análise não encontrada para este processo' });
+        }
+
+        res.json({
+            id: analysis.id,
+            biddingProcessId: analysis.biddingProcessId,
+            schemaV2: analysis.schemaV2 || null,
+            promptVersion: analysis.promptVersion || null,
+            modelUsed: analysis.modelUsed || null,
+            pipelineDurationS: analysis.pipelineDurationS || null,
+            overallConfidence: analysis.overallConfidence || null,
+            analyzedAt: analysis.analyzedAt,
+            hasV2: !!analysis.schemaV2,
+            // Legacy fields for backward compatibility
+            fullSummary: analysis.fullSummary,
+            qualificationRequirements: analysis.qualificationRequirements,
+            biddingItems: analysis.biddingItems,
+        });
+    } catch (error: any) {
+        console.error("Get analysis error:", error);
+        res.status(500).json({ error: 'Failed to fetch analysis' });
     }
 });
 
@@ -2351,6 +2401,161 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
 // ══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Gera contexto textual estruturado a partir do schemaV2 para consumo
+ * por módulos downstream (Chat, Petições, Oráculo, Dossiê, Declarações, Proposta).
+ * 
+ * @param schema - O objeto AnalysisSchemaV1 (ou JSON equivalente)
+ * @param focus  - Opcional: foco do contexto para reduzir tokens
+ */
+function buildSchemaV2Context(schema: any, focus?: 'full' | 'chat' | 'petition' | 'oracle' | 'dossier' | 'proposal' | 'declaration'): string {
+    if (!schema) return '';
+    const f = focus || 'full';
+    const sections: string[] = [];
+
+    // ── Identificação (sempre incluso) ──
+    const pid = schema.process_identification || {};
+    sections.push(`══ IDENTIFICAÇÃO DO PROCESSO ══
+Órgão: ${pid.orgao || 'N/A'}
+Edital: ${pid.numero_edital || 'N/A'} | Processo: ${pid.numero_processo || 'N/A'}
+Modalidade: ${pid.modalidade || 'N/A'} | Critério: ${pid.criterio_julgamento || 'N/A'}
+Objeto: ${pid.objeto_completo || pid.objeto_resumido || 'N/A'}
+Tipo: ${pid.tipo_objeto || 'N/A'} | Município/UF: ${pid.municipio_uf || 'N/A'}`);
+
+    // ── Timeline (chat, petition, full) ──
+    if (['full', 'chat', 'petition'].includes(f)) {
+        const tl = schema.timeline || {};
+        sections.push(`══ PRAZOS E DATAS ══
+Sessão: ${tl.data_sessao || 'N/A'}
+Publicação: ${tl.data_publicacao || 'N/A'}
+Impugnação: ${tl.prazo_impugnacao || 'N/A'}
+Esclarecimento: ${tl.prazo_esclarecimento || 'N/A'}
+Proposta: ${tl.prazo_envio_proposta || 'N/A'}
+Recurso: ${tl.prazo_recurso || 'N/A'}`);
+    }
+
+    // ── Condições de Participação (chat, petition, declaration, full) ──
+    if (['full', 'chat', 'petition', 'declaration'].includes(f)) {
+        const pc = schema.participation_conditions || {};
+        sections.push(`══ CONDIÇÕES DE PARTICIPAÇÃO ══
+Consórcio: ${pc.permite_consorcio === null ? 'Não informado' : pc.permite_consorcio ? 'SIM' : 'NÃO'}
+Subcontratação: ${pc.permite_subcontratacao === null ? 'Não informado' : pc.permite_subcontratacao ? 'SIM' : 'NÃO'}
+Visita Técnica: ${pc.exige_visita_tecnica === null ? 'Não informado' : pc.exige_visita_tecnica ? 'SIM' : 'NÃO'}${pc.visita_tecnica_detalhes ? ' — ' + pc.visita_tecnica_detalhes : ''}
+Garantia Proposta: ${pc.exige_garantia_proposta ? 'SIM — ' + pc.garantia_proposta_detalhes : 'NÃO'}
+Garantia Contratual: ${pc.exige_garantia_contratual ? 'SIM — ' + pc.garantia_contratual_detalhes : 'NÃO'}
+Tratamento ME/EPP: ${pc.tratamento_me_epp || 'N/A'}`);
+    }
+
+    // ── Exigências de Habilitação (chat, dossier, oracle, declaration, full) ──
+    if (['full', 'chat', 'dossier', 'oracle', 'declaration'].includes(f)) {
+        const reqs = schema.requirements || {};
+        const reqSections = [
+            ['Habilitação Jurídica', reqs.habilitacao_juridica],
+            ['Regularidade Fiscal/Trabalhista', reqs.regularidade_fiscal_trabalhista],
+            ['Qualificação Econômico-Financeira', reqs.qualificacao_economico_financeira],
+            ['Qualificação Técnica Operacional', reqs.qualificacao_tecnica_operacional],
+            ['Qualificação Técnica Profissional', reqs.qualificacao_tecnica_profissional],
+            ['Proposta Comercial', reqs.proposta_comercial],
+            ['Documentos Complementares', reqs.documentos_complementares],
+        ];
+        let reqText = '══ EXIGÊNCIAS DE HABILITAÇÃO ══\n';
+        for (const [cat, items] of reqSections) {
+            if (Array.isArray(items) && items.length > 0) {
+                reqText += `\n▸ ${cat}:\n`;
+                for (const r of items) {
+                    reqText += `  [${r.requirement_id}] ${r.title}: ${r.description}${r.mandatory ? ' (OBRIGATÓRIO)' : ''}\n`;
+                }
+            }
+        }
+        sections.push(reqText);
+    }
+
+    // ── Análise Técnica (oracle, dossier, full) ──
+    if (['full', 'oracle', 'dossier', 'chat'].includes(f)) {
+        const ta = schema.technical_analysis || {};
+        let taText = '══ ANÁLISE TÉCNICA ══\n';
+        taText += `Atestado Capacidade Técnica: ${ta.exige_atestado_capacidade_tecnica ? 'SIM' : 'NÃO/N.I.'}\n`;
+        if (ta.parcelas_relevantes?.length > 0) {
+            taText += 'Parcelas Relevantes:\n';
+            for (const p of ta.parcelas_relevantes) {
+                taText += `  • ${p.item}: ${p.descricao} (mín: ${p.quantitativo_minimo} ${p.unidade})\n`;
+            }
+        }
+        sections.push(taText);
+    }
+
+    // ── Econômico-Financeira (chat, proposal, full) ──
+    if (['full', 'chat', 'proposal'].includes(f)) {
+        const ef = schema.economic_financial_analysis || {};
+        let efText = '══ ANÁLISE ECONÔMICO-FINANCEIRA ══\n';
+        if (ef.indices_exigidos?.length > 0) {
+            for (const idx of ef.indices_exigidos) {
+                efText += `  • ${idx.indice}: ${idx.formula_ou_descricao} (mín: ${idx.valor_minimo})\n`;
+            }
+        }
+        if (ef.patrimonio_liquido_minimo) efText += `Patrimônio Líquido Mínimo: ${ef.patrimonio_liquido_minimo}\n`;
+        if (ef.capital_social_minimo) efText += `Capital Social Mínimo: ${ef.capital_social_minimo}\n`;
+        sections.push(efText);
+    }
+
+    // ── Proposta (proposal, chat, full) ──
+    if (['full', 'chat', 'proposal'].includes(f)) {
+        const pa = schema.proposal_analysis || {};
+        let paText = '══ ANÁLISE DA PROPOSTA ══\n';
+        paText += `Planilha Orçamentária: ${pa.exige_planilha_orcamentaria ? 'SIM' : 'NÃO/N.I.'}\n`;
+        paText += `Carta Proposta: ${pa.exige_carta_proposta ? 'SIM' : 'NÃO/N.I.'}\n`;
+        paText += `Composição BDI: ${pa.exige_composicao_bdi ? 'SIM' : 'NÃO/N.I.'}\n`;
+        if (pa.criterios_desclassificacao_proposta?.length > 0) {
+            paText += 'Critérios de Desclassificação:\n';
+            pa.criterios_desclassificacao_proposta.forEach((c: string) => paText += `  ⚠️ ${c}\n`);
+        }
+        sections.push(paText);
+    }
+
+    // ── Riscos Críticos (petition, chat, full) ──
+    if (['full', 'chat', 'petition'].includes(f)) {
+        const rr = schema.legal_risk_review || {};
+        if (rr.critical_points?.length > 0) {
+            let rrText = '══ PONTOS CRÍTICOS E RISCOS ══\n';
+            for (const cp of rr.critical_points) {
+                rrText += `  🔴 [${cp.severity?.toUpperCase()}] ${cp.title}\n`;
+                rrText += `     ${cp.description}\n`;
+                rrText += `     ➜ Ação: ${cp.recommended_action}\n`;
+            }
+            sections.push(rrText);
+        }
+        if (rr.ambiguities?.length > 0) {
+            sections.push('Ambiguidades:\n' + rr.ambiguities.map((a: string) => `  ⚠️ ${a}`).join('\n'));
+        }
+        if (rr.points_for_impugnation_or_clarification?.length > 0) {
+            sections.push('Pontos para Impugnação/Esclarecimento:\n' +
+                rr.points_for_impugnation_or_clarification.map((p: string) => `  📌 ${p}`).join('\n'));
+        }
+    }
+
+    // ── Outputs Operacionais (dossier, declaration, full) ──
+    if (['full', 'dossier', 'declaration'].includes(f)) {
+        const oo = schema.operational_outputs || {};
+        if (oo.documents_to_prepare?.length > 0) {
+            let ooText = '══ DOCUMENTOS A PREPARAR ══\n';
+            for (const doc of oo.documents_to_prepare) {
+                ooText += `  📋 ${doc.document_name} [${doc.priority?.toUpperCase()}] — ${doc.responsible_area}\n`;
+            }
+            sections.push(ooText);
+        }
+    }
+
+    // ── Confiança (sempre) ──
+    const conf = schema.confidence || {};
+    sections.push(`══ CONFIANÇA DA ANÁLISE ══
+Nível: ${conf.overall_confidence || 'N/A'}${conf.score_percentage ? ` (${conf.score_percentage}%)` : ''}
+Modelo: ${schema.analysis_meta?.model_used || 'N/A'}
+Prompt: ${(schema.analysis_meta as any)?.prompt_version || 'N/A'}`);
+
+    return sections.join('\n\n');
+}
+
+
+/**
  * Validador automático de completude (sem IA).
  * Verifica se o JSON extraído está minimamente preenchido.
  */
@@ -2893,7 +3098,16 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
 
         let biddingAnalysisText = 'Nenhuma análise detalhada disponível.';
         if (aiAnalysis) {
-            biddingAnalysisText = `
+            // Prefer V2 structured context for petitions (risk + impugnation focus)
+            if (aiAnalysis.schemaV2) {
+                biddingAnalysisText = `
+${buildSchemaV2Context(aiAnalysis.schemaV2, 'petition')}
+
+Resumo Executivo: ${aiAnalysis.fullSummary || 'N/A'}
+`.trim();
+                console.log(`[Petition] Using V2 schemaV2 context for petition generation`);
+            } else {
+                biddingAnalysisText = `
 Resumo do Edital (Card): ${bidding.summary || 'Não disponível'}
 Parecer Técnico-Jurídico Profundo: ${aiAnalysis.fullSummary || 'Não disponível'}
 Documentos Exigidos: ${typeof aiAnalysis.requiredDocuments === 'string' ? aiAnalysis.requiredDocuments : JSON.stringify(aiAnalysis.requiredDocuments)}
@@ -2904,6 +3118,7 @@ Considerações de Preço: ${aiAnalysis.pricingConsiderations || 'Não disponív
 Alertas e Irregularidades: ${typeof aiAnalysis.irregularitiesFlags === 'string' ? aiAnalysis.irregularitiesFlags : JSON.stringify(aiAnalysis.irregularitiesFlags)}
 Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
 `.trim();
+            }
         }
 
         const currentDateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -2993,7 +3208,7 @@ app.post('/api/analyze-edital/chat', authenticateToken, async (req: any, res) =>
         let { fileNames, biddingProcessId, messages } = req.body;
         traceLog(`Chat Request Received. processId: ${biddingProcessId}, messages: ${messages?.length}`);
 
-        // Fetch analysis data for fallback context AND source file names
+        // Fetch analysis data for context AND source file names
         let analysisContext = "";
         let sourceFileNamesFromAnalysis: string[] = [];
         if (biddingProcessId) {
@@ -3001,7 +3216,17 @@ app.post('/api/analyze-edital/chat', authenticateToken, async (req: any, res) =>
                 where: { biddingProcessId }
             });
             if (analysis) {
-                analysisContext = `
+                // Prefer V2 structured context when available
+                if (analysis.schemaV2) {
+                    analysisContext = `
+ANÁLISE ESTRUTURADA V2 DO EDITAL (gerada pela IA com confiança: ${(analysis.schemaV2 as any)?.confidence?.overall_confidence || 'N/A'}):
+
+${buildSchemaV2Context(analysis.schemaV2, 'chat')}
+`;
+                    traceLog(`[V2] Schema V2 context loaded (${analysisContext.length} chars). Confidence: ${(analysis.schemaV2 as any)?.confidence?.overall_confidence}`);
+                } else {
+                    // Fallback to legacy V1 fields
+                    analysisContext = `
 CONTEÚDO DO RELATÓRIO ANALÍTICO EXISTENTE:
 Resumo Executivo: ${analysis.fullSummary || 'N/A'}
 Itens Licitados: ${analysis.biddingItems || 'N/A'}
@@ -3012,7 +3237,8 @@ Documentos Exigidos: ${analysis.requiredDocuments || '[]'}
 Prazos: ${analysis.deadlines || '[]'}
 Riscos e Irregularidades: ${analysis.irregularitiesFlags || '[]'}
 `;
-                traceLog("Analysis context loaded for fallback.");
+                    traceLog("Legacy V1 analysis context loaded.");
+                }
 
                 // Retrieve the original PDF file names used during analysis
                 if (analysis.sourceFileNames) {
