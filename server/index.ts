@@ -1,9 +1,11 @@
 import { robustJsonParse } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION } from "./services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction } from "./services/ai/prompt.service";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "./services/ai/analysis-schema-v1";
 import { fallbackToOpenAi, fallbackToOpenAiV2 } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
+import { executeRiskRules } from "./services/ai/riskRulesEngine";
+import { evaluateAnalysisQuality } from "./services/ai/analysisQualityEvaluator";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import express from 'express';
 import cors from 'cors';
@@ -2731,7 +2733,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
                     role: 'user',
                     parts: [
                         ...pdfParts,
-                        { text: V2_EXTRACTION_USER_INSTRUCTION }
+                        { text: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') }
                     ]
                 }],
                 config: {
@@ -2758,7 +2760,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             try {
                 const openAiResult = await fallbackToOpenAiV2({
                     systemPrompt: V2_EXTRACTION_PROMPT,
-                    userPrompt: V2_EXTRACTION_USER_INSTRUCTION,
+                    userPrompt: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
                     pdfParts,
                     temperature: 0.05,
                     stageName: 'Etapa 1 (Extração)'
@@ -2792,6 +2794,13 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         if (extractionJson.contractual_analysis) result.contractual_analysis = extractionJson.contractual_analysis;
         if (extractionJson.evidence_registry) result.evidence_registry = extractionJson.evidence_registry;
 
+        // ── 2.5. Domain Routing — Reforço por Tipo de Objeto ──
+        const detectedObjectType = result.process_identification?.tipo_objeto || 'outro';
+        const domainReinforcement = getDomainRoutingInstruction(detectedObjectType);
+        if (domainReinforcement) {
+            console.log(`[AI-V2] 🎯 Roteamento por tipo: ${detectedObjectType} — reforço aplicado nas Etapas 2 e 3`);
+        }
+
         // ── 3. Etapa 2: Normalização Licitatória ──
         console.log(`[AI-V2] ── Etapa 2/3: Normalização Licitatória...`);
         let normalizationJson: any;
@@ -2799,7 +2808,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
 
         try {
             const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
-                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2));
+                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
 
             const normResponse = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
@@ -2830,7 +2840,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
 
             try {
                 const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
-                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2));
+                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
 
                 const openAiResult = await fallbackToOpenAiV2({
                     systemPrompt: V2_NORMALIZATION_PROMPT,
@@ -2872,7 +2883,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         try {
             const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
                 .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
-                .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2));
+                .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2))
+                + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
 
             const riskResponse = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
@@ -2919,7 +2931,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             try {
                 const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
                     .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
-                    .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2));
+                    .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2))
+                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
 
                 const openAiResult = await fallbackToOpenAiV2({
                     systemPrompt: V2_RISK_REVIEW_PROMPT,
@@ -2965,12 +2978,44 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             console.log(`[AI-V2] ✅ Validação: ${validation.confidence_score}% — todas as checagens passaram`);
         }
 
+        // ── 5.5. Motor de Regras de Domínio ──
+        let ruleFindings: any[] = [];
+        try {
+            ruleFindings = executeRiskRules(result);
+            if (ruleFindings.length > 0) {
+                (result.analysis_meta as any).rule_findings = ruleFindings;
+                const criticalFindings = ruleFindings.filter(f => f.severity === 'critical' || f.severity === 'high');
+                if (criticalFindings.length > 0) {
+                    result.confidence.warnings.push(`Motor de regras: ${criticalFindings.length} findings críticos/altos`);
+                }
+            }
+            console.log(`[AI-V2] 🔧 Motor de Regras: ${ruleFindings.length} findings`);
+        } catch (ruleErr: any) {
+            console.warn(`[AI-V2] ⚠️ Motor de regras falhou: ${ruleErr.message}`);
+        }
+
+        // ── 5.6. Avaliador de Qualidade ──
+        let qualityReport: any = null;
+        try {
+            qualityReport = evaluateAnalysisQuality(result, ruleFindings, result.analysis_meta.analysis_id);
+            (result.analysis_meta as any).quality_report = {
+                overallScore: qualityReport.overallScore,
+                categoryScores: qualityReport.categoryScores,
+                issueCount: qualityReport.issues.length,
+                summary: qualityReport.summary
+            };
+            console.log(`[AI-V2] 📊 Qualidade: ${qualityReport.overallScore}% | ${qualityReport.summary}`);
+        } catch (qualErr: any) {
+            console.warn(`[AI-V2] ⚠️ Avaliador de qualidade falhou: ${qualErr.message}`);
+        }
+
         // ── 6. Confidence Score Final ──
-        // Combina: pipeline stages (50%) + validação de conteúdo (50%)
+        // Combina: pipeline stages (30%) + validação de conteúdo (35%) + quality score (35%)
         const stagesDone = Object.values(result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
         const stagesTotal = 4;
-        const stageScore = (stagesDone / stagesTotal) * 100; // 0-100
-        const combinedScore = Math.round((stageScore * 0.5) + (validation.confidence_score * 0.5));
+        const stageScore = (stagesDone / stagesTotal) * 100;
+        const qualityScore = qualityReport?.overallScore || 50;
+        const combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.35) + (qualityScore * 0.35));
 
         if (combinedScore >= 80) {
             result.confidence.overall_confidence = 'alta';

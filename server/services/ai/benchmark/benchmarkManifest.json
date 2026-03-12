@@ -1,0 +1,177 @@
+{
+  "version": "1.0.0",
+  "description": "Benchmark jurídico-licitatório — Casos reais anonimizados para avaliação objetiva do pipeline V2",
+  "created_at": "2026-03-12",
+  "updated_at": "2026-03-12",
+  "prompt_version": "v3.0.0",
+  "total_cases": 10,
+  "distribution": {
+    "fornecimento": 2,
+    "servico_comum": 2,
+    "obra_engenharia": 3,
+    "registro_precos": 1,
+    "clausula_restritiva": 1,
+    "inconsistencia_edital_tr": 1
+  },
+  "cases": [
+    {
+      "id": "case-001",
+      "name": "Fornecimento simples com catálogo e ficha técnica",
+      "tipo_objeto": "fornecimento",
+      "complexity": "baixa",
+      "description": "Pregão Eletrônico para aquisição de material de escritório com exigência de catálogo e ficha técnica",
+      "expected": {
+        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "proposta_comercial"],
+        "key_requirements": ["Catálogo ou ficha técnica dos produtos", "Certidão Conjunta Federal", "CRF FGTS", "CNDT"],
+        "critical_points": [],
+        "tipo_objeto_expected": "fornecimento",
+        "min_requirements": 8,
+        "min_evidence_refs": 5
+      }
+    },
+    {
+      "id": "case-002",
+      "name": "Fornecimento com amostra e certificação",
+      "tipo_objeto": "fornecimento",
+      "complexity": "media",
+      "description": "Pregão para aquisição de equipamentos hospitalares com exigência de amostra, registro ANVISA e declaração do fabricante",
+      "expected": {
+        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "proposta_comercial", "documentos_complementares"],
+        "key_requirements": ["Amostra", "Registro ANVISA", "Declaração do fabricante ou distribuidor autorizado", "Ficha técnica"],
+        "critical_points": ["amostra_sem_criterios", "registro_anvisa"],
+        "tipo_objeto_expected": "fornecimento",
+        "min_requirements": 12,
+        "min_evidence_refs": 8
+      }
+    },
+    {
+      "id": "case-003",
+      "name": "Serviço comum com exigências trabalhistas",
+      "tipo_objeto": "servico_comum",
+      "complexity": "media",
+      "description": "Pregão Eletrônico para contratação de serviço de limpeza e conservação predial com exigências de regularidade trabalhista e atestado de capacidade técnica",
+      "expected": {
+        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "qualificacao_tecnica_operacional", "execucao_contratual"],
+        "key_requirements": ["CNDT", "CRF FGTS", "Atestado de capacidade técnica de serviços similares", "Planilha de composição de custos"],
+        "critical_points": ["repactuacao", "encargos_sociais"],
+        "tipo_objeto_expected": "servico_comum",
+        "min_requirements": 15,
+        "min_evidence_refs": 10
+      }
+    },
+    {
+      "id": "case-004",
+      "name": "Serviço comum de vigilância com exigências técnicas robustas",
+      "tipo_objeto": "servico_comum",
+      "complexity": "alta",
+      "description": "Pregão para contratação de serviço de vigilância patrimonial armada com exigências de autorização da PF, certificado de regularidade do SESMT e atestados",
+      "expected": {
+        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "qualificacao_tecnica_operacional", "qualificacao_economico_financeira", "documentos_complementares"],
+        "key_requirements": ["Autorização da Polícia Federal", "Certificado de Regularidade do SESMT", "Atestado de vigilância armada", "Alvará de funcionamento"],
+        "critical_points": ["exigencia_pf_limitante", "seguro_obrigatorio"],
+        "tipo_objeto_expected": "servico_comum",
+        "min_requirements": 20,
+        "min_evidence_refs": 12
+      }
+    },
+    {
+      "id": "case-005",
+      "name": "Serviço comum de engenharia com atestado e RT",
+      "tipo_objeto": "servico_comum_engenharia",
+      "complexity": "alta",
+      "description": "Pregão para serviço de manutenção predial com exigência de atestado de capacidade técnica operacional e responsável técnico com registro no CREA",
+      "expected": {
+        "categories_to_find": ["qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional"],
+        "key_requirements": ["Atestado de capacidade técnica operacional", "Responsável técnico com registro CREA", "Comprovação de vínculo do RT"],
+        "critical_points": ["distincao_operacional_profissional"],
+        "tipo_objeto_expected": "servico_comum_engenharia",
+        "min_requirements": 18,
+        "min_evidence_refs": 12
+      }
+    },
+    {
+      "id": "case-006",
+      "name": "Obra de engenharia com CAT, ART e parcelas relevantes",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Concorrência Eletrônica para obra de pavimentação asfáltica com CAT, ART, parcelas de maior relevância e quantitativos mínimos",
+      "expected": {
+        "categories_to_find": ["qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional", "qualificacao_economico_financeira", "proposta_comercial"],
+        "key_requirements": ["CAT do profissional", "ART", "Parcelas de maior relevância", "Balanço patrimonial", "Planilha orçamentária com BDI", "Cronograma físico-financeiro"],
+        "critical_points": ["quantitativo_minimo_parcela", "bdi_imposto", "cat_vs_atestado"],
+        "tipo_objeto_expected": "obra_engenharia",
+        "min_requirements": 25,
+        "min_evidence_refs": 15
+      }
+    },
+    {
+      "id": "case-007",
+      "name": "Obra com exigência econômico-financeira robusta",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Concorrência para construção de edifício público com índices LG, LC, SG, patrimônio líquido mínimo e certidão de falência",
+      "expected": {
+        "categories_to_find": ["qualificacao_economico_financeira", "qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional"],
+        "key_requirements": ["LG >= 1.0", "LC >= 1.0", "SG >= 1.0", "Patrimônio líquido mínimo de 10%", "Certidão de falência", "CAT para obras de edificação"],
+        "critical_points": ["indice_sem_formula", "patrimonio_elevado"],
+        "tipo_objeto_expected": "obra_engenharia",
+        "min_requirements": 22,
+        "min_evidence_refs": 14
+      }
+    },
+    {
+      "id": "case-008",
+      "name": "Registro de preços com múltiplos lotes e anexos",
+      "tipo_objeto": "fornecimento",
+      "complexity": "media",
+      "description": "Pregão SRP para aquisição de materiais de informática em 5 lotes com Termo de Referência em anexo separado e planilha quantitativa",
+      "expected": {
+        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "proposta_comercial"],
+        "key_requirements": ["Proposta por lote com marca e modelo", "Garantia mínima dos equipamentos", "Prazo de entrega por lote"],
+        "critical_points": ["lotes_multiplos", "anexo_divergente"],
+        "tipo_objeto_expected": "fornecimento",
+        "min_requirements": 12,
+        "min_evidence_refs": 8
+      }
+    },
+    {
+      "id": "case-009",
+      "name": "Edital com possível cláusula restritiva",
+      "tipo_objeto": "servico_comum_engenharia",
+      "complexity": "alta",
+      "description": "Pregão para serviço de engenharia com exigência de visita técnica obrigatória, vedação de consórcio sem justificativa e atestado com quantitativo mínimo de 70%",
+      "expected": {
+        "categories_to_find": ["qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional"],
+        "key_requirements": ["Visita técnica obrigatória", "Atestado com 70% do quantitativo"],
+        "critical_points": ["visita_tecnica_restricao", "vedacao_consorcio_injustificada", "quantitativo_70_porcento"],
+        "tipo_objeto_expected": "servico_comum_engenharia",
+        "min_requirements": 15,
+        "min_evidence_refs": 10
+      }
+    },
+    {
+      "id": "case-010",
+      "name": "Edital com divergência entre edital e TR",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Tomada de Preços para obra com prazo de execução diferente entre corpo do edital (12 meses) e Termo de Referência (8 meses), e quantitativos divergentes na planilha",
+      "expected": {
+        "categories_to_find": ["qualificacao_tecnica_operacional", "proposta_comercial", "execucao_contratual"],
+        "key_requirements": ["Planilha com composição de custos", "Cronograma físico-financeiro"],
+        "critical_points": ["divergencia_prazo_edital_tr", "divergencia_quantitativos", "inconsistencia_entre_documentos"],
+        "tipo_objeto_expected": "obra_engenharia",
+        "min_requirements": 18,
+        "min_evidence_refs": 12
+      }
+    }
+  ],
+  "scoring": {
+    "tipo_objeto_correct": 10,
+    "categories_found_pct": 25,
+    "key_requirements_found_pct": 30,
+    "critical_points_found_pct": 20,
+    "min_requirements_met": 10,
+    "min_evidence_met": 5
+  },
+  "usage": "Para cada caso, execute o pipeline V2 com os documentos do caso e compare o output com o expected. O script de benchmark calcula o acerto categorial, detecção de exigências-chave e pontos críticos."
+}
