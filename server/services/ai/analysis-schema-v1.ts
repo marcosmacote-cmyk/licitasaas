@@ -26,7 +26,7 @@
 
 export type WorkflowStageStatus = 'pending' | 'done' | 'failed';
 export type SourceType = 'upload_manual' | 'pncp_download';
-export type TipoObjeto = 'servico' | 'obra' | 'engenharia' | 'fornecimento' | 'locacao' | 'servico_comum' | 'outro';
+export type TipoObjeto = 'servico' | 'obra' | 'engenharia' | 'fornecimento' | 'locacao' | 'servico_comum' | 'servico_comum_engenharia' | 'obra_engenharia' | 'outro';
 export type AplicaA = 'licitante' | 'consorcio' | 'subcontratada' | 'nao_informado';
 export type TipoParcela = 'operacional' | 'profissional' | 'nao_informado';
 export type SeveridadeRisco = 'baixa' | 'media' | 'alta' | 'critica';

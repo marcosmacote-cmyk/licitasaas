@@ -170,7 +170,7 @@ const rules: { name: string; fn: RuleFunction }[] = [
     name: 'R09-engenharia-sem-parcela',
     fn: (s) => {
       const tipo = s.process_identification.tipo_objeto;
-      if ((tipo === 'engenharia' || tipo === 'obra') && s.technical_analysis.parcelas_relevantes.length === 0) {
+      if ((tipo === 'engenharia' || tipo === 'obra' || tipo === 'obra_engenharia' || tipo === 'servico_comum_engenharia') && s.technical_analysis.parcelas_relevantes.length === 0) {
         return [{
           code: 'R09', severity: 'high', category: 'qualificacao_tecnica',
           message: 'Edital de engenharia/obra sem parcelas de maior relevância identificadas. Provável falha na extração ou omissão.',
@@ -231,10 +231,10 @@ const rules: { name: string; fn: RuleFunction }[] = [
       const findings: RuleFinding[] = [];
       const referencedIds = new Set<string>();
       // Collect all evidence_refs from requirements
-      Object.values(s.requirements).flat().forEach(r => r.evidence_refs?.forEach(id => referencedIds.add(id)));
-      s.technical_analysis.parcelas_relevantes.forEach(p => p.evidence_refs?.forEach(id => referencedIds.add(id)));
-      s.economic_financial_analysis.indices_exigidos.forEach(i => i.evidence_refs?.forEach(id => referencedIds.add(id)));
-      s.legal_risk_review.critical_points.forEach(cp => cp.evidence_refs?.forEach(id => referencedIds.add(id)));
+      Object.values(s.requirements).flat().forEach(r => r.evidence_refs?.forEach((id: string) => referencedIds.add(id)));
+      s.technical_analysis.parcelas_relevantes.forEach(p => p.evidence_refs?.forEach((id: string) => referencedIds.add(id)));
+      s.economic_financial_analysis.indices_exigidos.forEach(i => i.evidence_refs?.forEach((id: string) => referencedIds.add(id)));
+      s.legal_risk_review.critical_points.forEach(cp => cp.evidence_refs?.forEach((id: string) => referencedIds.add(id)));
 
       const orphans = s.evidence_registry.filter(e => !referencedIds.has(e.evidence_id));
       if (orphans.length > 5) {

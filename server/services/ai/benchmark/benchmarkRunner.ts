@@ -7,7 +7,8 @@
  *  Uso: import e chamada programática, ou via endpoint de debug.
  */
 
-import benchmarkManifest from './benchmarkManifest.json';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const benchmarkManifest = require('./benchmarkManifest.json');
 import { AnalysisSchemaV1 } from '../analysis-schema-v1';
 
 export interface BenchmarkResult {
