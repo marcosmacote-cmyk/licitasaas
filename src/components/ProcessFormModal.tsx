@@ -615,7 +615,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                     border: '1px solid var(--color-border)',
                                                     borderRadius: 'var(--radius-lg)',
                                                     overflow: 'hidden',
-                                                    background: '#525659',
+                                                    background: 'var(--color-text-secondary)',
                                                     position: 'relative'
                                                 }}>
                                                     <div style={{
@@ -700,7 +700,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                     <span style={{
                                                         marginLeft: 'auto', padding: '3px 10px',
                                                         background: 'linear-gradient(135deg, var(--color-ai), var(--color-ai-hover))',
-                                                        color: '#fff', borderRadius: 'var(--radius-lg)',
+                                                        color: 'white', borderRadius: 'var(--radius-lg)',
                                                         fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)',
                                                         display: 'flex', alignItems: 'center', gap: '4px'
                                                     }}>
@@ -728,7 +728,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                                 <span style={{
                                                                     position: 'absolute', top: -8, right: 12,
                                                                     padding: '2px 8px', background: 'var(--color-success)',
-                                                                    color: '#fff', borderRadius: 'var(--radius-md)',
+                                                                    color: 'white', borderRadius: 'var(--radius-md)',
                                                                     fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)'
                                                                 }}>
                                                                     ✓ RECOMENDADA

@@ -720,7 +720,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 Filtros Avançados
                                 {activeFilterCount > 0 && (
                                     <span style={{
-                                        background: 'var(--color-primary)', color: '#fff', borderRadius: 'var(--radius-lg)',
+                                        background: 'var(--color-primary)', color: 'white', borderRadius: 'var(--radius-lg)',
                                         padding: '1px var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)',
                                     }}>{activeFilterCount}</span>
                                 )}
@@ -1005,7 +1005,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                         borderRadius: 'var(--radius-md)',
                                                         gap: '4px',
                                                         whiteSpace: 'nowrap',
-                                                        background: analyzingItemId === item.id ? 'linear-gradient(135deg, #6366f1, var(--color-ai))' : 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
+                                                        background: analyzingItemId === item.id ? 'linear-gradient(135deg, var(--color-ai), var(--color-primary))' : 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
                                                         color: 'white',
                                                         border: 'none',
                                                         cursor: analyzingItemId ? 'not-allowed' : 'pointer',

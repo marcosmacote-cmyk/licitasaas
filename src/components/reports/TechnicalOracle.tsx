@@ -440,7 +440,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                                                 borderRadius: 'var(--radius-sm)',
                                                                 fontWeight: 'var(--font-bold)',
                                                                 color: 'var(--color-primary)',
-                                                                border: '1px solid #dbeafe'
+                                                                border: '1px solid var(--color-primary-border)'
                                                             }}>
                                                                 {cert.category}
                                                             </span>
@@ -480,7 +480,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                             Oráculo de Somatório
                         </h3>
                         {selectedCertIds.size > 0 && (
-                            <span style={{ fontSize: 'var(--text-base)', background: 'var(--color-warning-bg)', color: '#92400e', padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-full)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', border: '1px solid var(--color-warning-border)' }}>
+                            <span style={{ fontSize: 'var(--text-base)', background: 'var(--color-warning-bg)', color: 'var(--color-warning-hover)', padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-full)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', border: '1px solid var(--color-warning-border)' }}>
                                 <Layers size={14} /> {selectedCertIds.size} atestado(s) selecionado(s) para soma
                             </span>
                         )}
@@ -565,7 +565,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                             fontWeight: 'var(--font-bold)',
                                             textTransform: 'uppercase',
                                             background: item.status === 'Atende' ? 'var(--color-success-bg)' : item.status === 'Similar' ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)',
-                                            color: item.status === 'Atende' ? '#065f46' : item.status === 'Similar' ? '#92400e' : '#991b1b',
+                                            color: item.status === 'Atende' ? 'var(--color-success-hover)' : item.status === 'Similar' ? 'var(--color-warning-hover)' : 'var(--color-danger-hover)',
                                             border: `1px solid ${item.status === 'Atende' ? 'var(--color-success)' : item.status === 'Similar' ? 'var(--color-warning)' : 'var(--color-danger)'}`
                                         }}>
                                             {item.status}
@@ -595,7 +595,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                     </div>
 
                                     {item.missing && (
-                                        <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-danger-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-danger-border)', fontSize: 'var(--text-base)', color: '#991b1b', display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                                        <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-danger-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-danger-border)', fontSize: 'var(--text-base)', color: 'var(--color-danger-hover)', display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                             <AlertTriangle size={16} />
                                             <span><strong>Déficit de Qualificação:</strong> {item.missing}</span>
                                         </div>
@@ -614,7 +614,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
                                     <span style={{ fontSize: 'var(--text-sm)', background: 'var(--color-primary)', color: 'white', padding: '2px var(--space-2)', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)' }}>{viewingCert.type}</span>
                                     {viewingCert.category && (
-                                        <span style={{ fontSize: 'var(--text-sm)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px var(--space-2)', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', border: '1px solid #dbeafe' }}>
+                                        <span style={{ fontSize: 'var(--text-sm)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px var(--space-2)', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', border: '1px solid var(--color-primary-border)' }}>
                                             {viewingCert.category}
                                         </span>
                                     )}

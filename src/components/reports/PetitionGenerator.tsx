@@ -719,7 +719,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                     </div>
                 </div>
 
-                <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', background: '#f8f9fa', display: 'flex', justifyContent: 'center' }}>
+                <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', background: 'var(--color-bg-base)', display: 'flex', justifyContent: 'center' }}>
                     {!generatedDraft && !isGenerating ? (
                         <div style={{
                             height: '100%',
@@ -781,7 +781,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                                     fontFamily: 'serif',
                                     fontSize: '1.2rem',
                                     lineHeight: '1.6',
-                                    color: '#1a1a1a',
+                                    color: 'var(--color-text-primary)',
                                     textAlign: 'justify',
                                     minHeight: '400px',
                                     outline: 'none',

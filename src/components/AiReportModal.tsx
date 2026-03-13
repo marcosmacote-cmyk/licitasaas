@@ -327,7 +327,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                 {/* Modern AI Header */}
                 <div style={{
                     padding: 'var(--space-8) var(--space-10)',
-                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    background: 'linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-bg-surface-hover) 100%)',
                     color: 'white',
                     display: 'flex',
                     flexDirection: 'column',
@@ -340,10 +340,10 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                             </div>
                             <div>
                                 <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, margin: 0, letterSpacing: '-0.025em' }}>
-                                    Análise Estratégica <span style={{ color: '#93c5fd' }}>IA</span>
+                                    Análise Estratégica <span style={{ color: 'var(--color-primary-border)' }}>IA</span>
                                 </h2>
                                 <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)', marginTop: '4px' }}>
-                                    Processando: <span style={{ color: '#e2e8f0', fontWeight: 'var(--font-semibold)' }}>{process?.title}</span>
+                                    Processando: <span style={{ color: 'var(--color-border)', fontWeight: 'var(--font-semibold)' }}>{process?.title}</span>
                                 </p>
                             </div>
                         </div>
@@ -363,8 +363,8 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                             onClick={() => setActiveTab('report')}
                             style={{
                                 ...tabStyle,
-                                color: activeTab === 'report' ? '#60a5fa' : '#64748b',
-                                borderBottom: activeTab === 'report' ? '3px solid #60a5fa' : '3px solid transparent'
+                                color: activeTab === 'report' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                borderBottom: activeTab === 'report' ? '3px solid var(--color-primary)' : '3px solid transparent'
                             }}
                         >
                             <FileCheck size={18} /> Relatório Analítico
@@ -373,8 +373,8 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                             onClick={() => setActiveTab('chat')}
                             style={{
                                 ...tabStyle,
-                                color: activeTab === 'chat' ? '#60a5fa' : '#64748b',
-                                borderBottom: activeTab === 'chat' ? '3px solid #60a5fa' : '3px solid transparent'
+                                color: activeTab === 'chat' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                borderBottom: activeTab === 'chat' ? '3px solid var(--color-primary)' : '3px solid transparent'
                             }}
                         >
                             <MessageSquare size={18} /> Consultor de Edital

@@ -280,10 +280,7 @@ export function Dashboard({ items }: Props) {
             {/* ═════════════════════════════
                 KPIs (compact strip)
                 ═════════════════════════════ */}
-            <div className="stagger-children" style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 'var(--space-4)',
+            <div className="stagger-children grid-4" style={{
                 marginBottom: 'var(--space-5)',
             }}>
                 <KpiCard
@@ -321,11 +318,7 @@ export function Dashboard({ items }: Props) {
             {/* ═════════════════════════════
                 MAIN GRID: 2 columns
                 ═════════════════════════════ */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1.2fr 1fr',
-                gap: 'var(--space-5)',
-            }}>
+            <div className="grid-2-1">
                 {/* ── LEFT COLUMN ── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
@@ -434,7 +427,7 @@ export function Dashboard({ items }: Props) {
                     )}
 
                     {/* RADAR DO SISTEMA */}
-                    <div className="stagger-children" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
+                    <div className="stagger-children grid-3">
                         <RadarCard
                             icon={<Satellite size={18} />}
                             title="Captação PNCP"

@@ -580,7 +580,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                         <button
                                             className="btn btn-primary"
                                             onClick={() => handlePrintProposal('FULL')}
-                                            style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', background: '#111', fontSize: 'var(--text-md)' }}
+                                            style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', background: 'var(--color-text-primary)', fontSize: 'var(--text-md)' }}
                                         >
                                             <Printer size={16} /> Exportar Completa
                                         </button>
@@ -732,7 +732,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 disabled={isAiLoading}
                                 style={{
                                     padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
-                                    background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                                    background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
                                     color: 'white', border: 'none',
                                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                                 }}
@@ -764,7 +764,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 onClick={handleExportExcel}
                                 style={{
                                     padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
-                                    background: '#15803d', color: 'white', border: 'none',
+                                    background: 'var(--color-success-hover)', color: 'white', border: 'none',
                                     fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
                                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
                                 }}
@@ -1063,7 +1063,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 disabled={isLetterLoading}
                                 style={{
                                     padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)',
-                                    background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                                    background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
                                     color: 'white', border: 'none',
                                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
                                 }}
@@ -1137,7 +1137,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
                                 {headerImage && (
-                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '100px', overflow: 'hidden', background: '#fff' }}>
+                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '100px', overflow: 'hidden', background: 'white' }}>
                                         <img src={headerImage} alt="Header Preview" style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'contain' }} />
                                     </div>
                                 )}
@@ -1153,7 +1153,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
                                 {footerImage && (
-                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '80px', overflow: 'hidden', background: '#fff' }}>
+                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '80px', overflow: 'hidden', background: 'white' }}>
                                         <img src={footerImage} alt="Footer Preview" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
                                     </div>
                                 )}

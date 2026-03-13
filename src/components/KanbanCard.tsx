@@ -119,7 +119,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                     {hasAnalysis && (
                         <button
                             className="icon-btn"
-                            style={{ padding: '4px', cursor: 'pointer', color: '#8b5cf6', background: 'rgba(139, 92, 246, 0.1)' }}
+                            style={{ padding: '4px', cursor: 'pointer', color: 'var(--color-ai)', background: 'var(--color-ai-bg)' }}
                             onClick={(e) => { e.stopPropagation(); onViewAnalysis?.(); }}
                             title="Ver Relatório da IA"
                         >

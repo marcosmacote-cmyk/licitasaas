@@ -202,7 +202,7 @@ const buttonStyle: React.CSSProperties = {
     gap: 'var(--space-2)',
     padding: 'var(--space-3)',
     backgroundColor: 'var(--color-primary)',
-    color: '#ffffff',
+    color: 'white',
     border: 'none',
     borderRadius: 'var(--radius-md)',
     fontSize: 'var(--text-lg)',

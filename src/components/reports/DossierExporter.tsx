@@ -17,7 +17,7 @@ const DOCUMENT_GROUP_META: Record<string, { icon: any; color: string; priority: 
     'Regularidade Fiscal, Social e Trabalhista': { icon: FileSearch, color: 'var(--color-success)', priority: 2 },
     'Qualificação Técnica': { icon: Briefcase, color: 'var(--color-ai)', priority: 3 },
     'Qualificação Econômica Financeira': { icon: FileText, color: 'var(--color-warning)', priority: 4 },
-    'Declarações': { icon: Sparkles, color: '#ec4899', priority: 5 },
+    'Declarações': { icon: Sparkles, color: 'var(--color-danger)', priority: 5 },
     'Outros': { icon: HelpCircle, color: 'var(--color-neutral)', priority: 99 },
 };
 
@@ -218,7 +218,7 @@ function RequirementCard({
         return result;
     }, [groupedDocs, searchTerm]);
 
-    const statusColor = isIgnored ? '#94a3b8' : isSatisfied ? '#22c55e' : '#ef4444';
+    const statusColor = isIgnored ? 'var(--color-neutral)' : isSatisfied ? 'var(--color-success)' : 'var(--color-danger)';
     const statusBg = isIgnored ? 'rgba(148,163,184,0.06)' : isSatisfied ? 'rgba(34,197,94,0.04)' : 'rgba(239,68,68,0.04)';
 
     return (
@@ -281,7 +281,7 @@ function RequirementCard({
                             {note && (
                                 <span style={{
                                     padding: '2px var(--space-3)', borderRadius: 'var(--radius-lg)',
-                                    background: 'rgba(56, 189, 248, 0.15)', color: '#0369a1',
+                                    background: 'var(--color-primary-light)', color: 'var(--color-primary)',
                                     fontSize: '0.65rem', fontWeight: 'var(--font-bold)',
                                     display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid rgba(56, 189, 248, 0.3)'
                                 }}>
@@ -291,7 +291,7 @@ function RequirementCard({
                             {selectedDocs.map(doc => (
                                 <span key={doc.docId} style={{
                                     padding: '2px var(--space-3)', borderRadius: 'var(--radius-lg)',
-                                    background: 'rgba(34,197,94,0.1)', color: '#16a34a',
+                                    background: 'var(--color-success-bg)', color: 'var(--color-success)',
                                     fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)',
                                     display: 'flex', alignItems: 'center', gap: '4px',
                                     maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -1078,7 +1078,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                             <svg width="56" height="56" viewBox="0 0 56 56">
                                 <circle cx="28" cy="28" r="24" fill="none" stroke="var(--color-border)" strokeWidth="4" />
                                 <circle cx="28" cy="28" r="24" fill="none"
-                                    stroke={readinessScore >= 100 ? '#22c55e' : readinessScore >= 50 ? '#f59e0b' : '#ef4444'}
+                                    stroke={readinessScore >= 100 ? 'var(--color-success)' : readinessScore >= 50 ? 'var(--color-warning)' : 'var(--color-danger)'}
                                     strokeWidth="4" strokeLinecap="round"
                                     strokeDasharray={`${(readinessScore / 100) * 150.8} 150.8`}
                                     transform="rotate(-90 28 28)"
@@ -1087,7 +1087,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                             <span style={{
                                 position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 fontSize: '0.8rem', fontWeight: 800,
-                                color: readinessScore >= 100 ? '#22c55e' : readinessScore >= 50 ? '#f59e0b' : '#ef4444',
+                                color: readinessScore >= 100 ? 'var(--color-success)' : readinessScore >= 50 ? 'var(--color-warning)' : 'var(--color-danger)',
                             }}>
                                 {Math.round(readinessScore)}%
                             </span>
@@ -1130,7 +1130,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                             disabled={isExporting || matchedDocs.length === 0}
                             style={{
                                 padding: 'var(--space-3) var(--space-7)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                                background: matchedDocs.length > 0 ? 'linear-gradient(135deg, var(--color-primary), #4f46e5)' : undefined,
+                                background: matchedDocs.length > 0 ? 'linear-gradient(135deg, var(--color-primary), var(--color-ai))' : undefined,
                                 borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)',
                                 boxShadow: matchedDocs.length > 0 ? '0 4px 12px rgba(37,99,235,0.25)' : undefined,
                             }}
@@ -1154,8 +1154,8 @@ export function DossierExporter({ biddings, companies }: Props) {
                 }}>
                     {isAiLoading ? (
                         <>
-                            <Loader2 size={16} color="#f59e0b" className="spin" />
-                            <span style={{ fontSize: '0.8125rem', color: '#d97706', fontWeight: 600 }}>
+                            <Loader2 size={16} color="var(--color-warning)" className="spin" />
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-warning-hover)', fontWeight: 600 }}>
                                 Gemini analisando correspondências...
                             </span>
                             <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
@@ -1164,8 +1164,8 @@ export function DossierExporter({ biddings, companies }: Props) {
                         </>
                     ) : (
                         <>
-                            <Sparkles size={16} color="#8b5cf6" />
-                            <span style={{ fontSize: '0.8125rem', color: '#7c3aed', fontWeight: 600 }}>
+                            <Sparkles size={16} color="var(--color-ai)" />
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-ai)', fontWeight: 600 }}>
                                 Correspondência Inteligente (Gemini) aplicada
                             </span>
                             <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>

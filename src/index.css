@@ -1095,6 +1095,292 @@ textarea:focus {
   opacity: 1;
   transform: translateY(0);
 }
+/* ═══════════════════════════
+   RESPONSIVE BREAKPOINTS
+   ═══════════════════════════ */
+
+/* ── Responsive Utility Classes ── */
+.hide-mobile { display: initial; }
+.show-mobile { display: none !important; }
+
+/* ── Grid Utility Classes ── */
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
+.grid-2-1 { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--space-5); }
+
+/* ── Laptop / Small Desktop (≤ 1280px) ── */
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-width: 220px;
+    --page-padding: 20px;
+    --card-padding: 16px;
+  }
+
+  .kanban-column {
+    min-width: 280px;
+    width: 280px;
+  }
+
+  .kanban-board {
+    gap: var(--space-4);
+  }
+}
+
+/* ── Tablet Landscape (≤ 1024px) ── */
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 64px;
+    --page-padding: 16px;
+    --card-padding: 14px;
+  }
+
+  /* Collapse sidebar to icons only */
+  .sidebar {
+    width: 64px;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .sidebar-header span,
+  .sidebar-header .sidebar-title {
+    display: none;
+  }
+
+  .nav-section-label {
+    display: none;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: var(--space-2);
+  }
+
+  .nav-item span:not(.nav-badge) {
+    display: none;
+  }
+
+  .nav-item .nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 9px;
+    padding: 0 4px;
+    min-width: 14px;
+  }
+
+  .nav-item.active::before {
+    left: 0;
+    width: 3px;
+  }
+
+  /* Dashboard grid adjustments */
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid-2-1 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Kanban */
+  .kanban-column {
+    min-width: 260px;
+    width: 260px;
+  }
+
+  .kanban-board {
+    height: calc(100vh - 140px);
+  }
+
+  /* Page title */
+  .page-title {
+    font-size: var(--text-2xl);
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  /* Tables become horizontally scrollable */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  thead, tbody, tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+}
+
+/* ── Tablet Portrait (≤ 768px) ── */
+@media (max-width: 768px) {
+  :root {
+    --page-padding: 12px;
+    --card-padding: 12px;
+    --modal-padding: 16px;
+  }
+
+  /* Sidebar: hidden by default, overlay when open */
+  .sidebar {
+    position: fixed;
+    left: -240px;
+    top: 0;
+    bottom: 0;
+    width: 240px;
+    z-index: 1000;
+    box-shadow: var(--shadow-xl);
+    transition: left var(--transition-normal);
+  }
+
+  .sidebar.sidebar-open {
+    left: 0;
+  }
+
+  /* Sidebar overlay backdrop */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 999;
+  }
+
+  .sidebar-overlay.active {
+    display: block;
+  }
+
+  /* Main content takes full width */
+  .main-content {
+    width: 100%;
+  }
+
+  /* Grids collapse */
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .grid-3,
+  .grid-2-1 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Kanban: narrower columns */
+  .kanban-column {
+    min-width: 240px;
+    width: 240px;
+  }
+
+  .kanban-board {
+    height: calc(100vh - 120px);
+    gap: var(--space-3);
+  }
+
+  /* Page header */
+  .page-title {
+    font-size: var(--text-xl);
+  }
+
+  .page-subtitle {
+    font-size: var(--text-sm);
+  }
+
+  /* Breadcrumbs smaller */
+  .breadcrumb {
+    font-size: var(--text-xs);
+    margin-bottom: var(--space-3);
+  }
+
+  /* Buttons wrap */
+  .btn {
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* Badges compact */
+  .badge {
+    font-size: var(--text-xs);
+    padding: 2px 6px;
+  }
+
+  /* Responsive hide */
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: initial !important; }
+
+  /* Toast bottom center on mobile */
+  .toast {
+    bottom: var(--space-4);
+    right: var(--space-4);
+    left: var(--space-4);
+  }
+
+  .toast-item {
+    max-width: 100%;
+  }
+}
+
+/* ── Mobile (≤ 480px) ── */
+@media (max-width: 480px) {
+  :root {
+    --page-padding: 8px;
+    --card-padding: 10px;
+    --modal-padding: 12px;
+  }
+
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .page-title {
+    font-size: var(--text-lg);
+  }
+
+  .header {
+    padding: 0 var(--space-3);
+    height: 48px;
+  }
+
+  /* Kanban single column scroll */
+  .kanban-column {
+    min-width: 220px;
+    width: 220px;
+  }
+
+  .kanban-card {
+    padding: var(--space-3);
+  }
+
+  .kanban-card-title {
+    font-size: var(--text-sm);
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* Stagger: reduce delay on mobile for snappier feel */
+  .stagger-children > * {
+    animation-duration: 150ms;
+  }
+  .stagger-children > *:nth-child(n+5) {
+    animation-delay: 150ms;
+  }
+}
 
 /* ═══════════════════════════
    SCROLLBAR (subtle)

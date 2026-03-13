@@ -357,7 +357,7 @@ export function DocumentExpirationList({ companies }: Props) {
                 >
                     <Filter size={14} /> Filtros
                     {activeFilterCount > 0 && (
-                        <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--color-primary)', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                        <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--color-primary)', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                             {activeFilterCount}
                         </span>
                     )}

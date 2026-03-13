@@ -706,7 +706,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                             <button className="btn btn-outline flex-gap" onClick={handleAddToDocuments} disabled={!generatedText || isSaving} style={{ fontSize: '0.8rem' }}>
                                 {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Vincular ao Dossiê
                             </button>
-                            <button className="btn flex-gap" onClick={handleExportPDF} disabled={!generatedText} style={{ backgroundColor: 'var(--color-success)', color: '#fff', fontSize: 'var(--text-md)' }}>
+                            <button className="btn flex-gap" onClick={handleExportPDF} disabled={!generatedText} style={{ backgroundColor: 'var(--color-success)', color: 'white', fontSize: 'var(--text-md)' }}>
                                 <Download size={14} /> Baixar PDF
                             </button>
                         </div>
@@ -808,7 +808,7 @@ function ImageUploadSection({ label, image, width, height, onUpload, onRemove, o
             <label style={smallLabel}>{label}</label>
             {image ? (
                 <div style={{ border: '1px dashed var(--color-border)', borderRadius: '6px', padding: '8px', backgroundColor: 'var(--color-bg-body)' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '6px', background: '#fff', padding: '6px', borderRadius: '4px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '6px', background: 'white', padding: '6px', borderRadius: '4px' }}>
                         <img src={image} alt={label} style={{ maxWidth: `${width * 3}px`, maxHeight: `${height * 3}px`, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '6px', alignItems: 'end' }}>

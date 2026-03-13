@@ -1183,7 +1183,7 @@ function FilterCheckbox({ label, checked, onChange }: { label: string; checked: 
     );
 }
 
-function FilterChip({ label, color = '#64748b', onRemove }: { label: string; color?: string; onRemove: () => void }) {
+function FilterChip({ label, color = 'var(--color-text-tertiary)', onRemove }: { label: string; color?: string; onRemove: () => void }) {
     return (
         <span style={{
             display: 'inline-flex', alignItems: 'center', gap: '4px',

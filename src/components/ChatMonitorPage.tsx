@@ -368,7 +368,7 @@ export function ChatMonitorPage({ companies }: Props) {
             </div>
             <div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
-                <Phone size={12} color="#10b981" /> WhatsApp
+                <Phone size={12} color="var(--color-success)" /> WhatsApp
               </label>
               <input
                 type="text"
@@ -380,7 +380,7 @@ export function ChatMonitorPage({ companies }: Props) {
             </div>
             <div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
-                <Send size={12} color="#0088cc" /> Telegram Chat ID
+                <Send size={12} color="var(--color-primary)" /> Telegram Chat ID
               </label>
               <input
                 type="text"
