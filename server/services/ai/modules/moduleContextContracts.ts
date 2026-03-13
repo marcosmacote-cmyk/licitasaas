@@ -89,24 +89,24 @@ export const MODULE_CONTRACTS: Record<ModuleName, ModuleContextContract> = {
         moduleName: 'oracle',
         description: 'Comparador técnico entre exigências do edital e acervo/atestados da empresa',
         contextStrategy: 'technical_focused',
-        maxTokenEstimate: 3000,
+        maxTokenEstimate: 3500,
         requiredSections: [
             'process_identification',
             'requirements.qualificacao_tecnica_operacional',
             'requirements.qualificacao_tecnica_profissional',
             'technical_analysis',
-            'evidence_registry'
+            'evidence_registry',
+            'participation_conditions'
         ],
         optionalSections: [
             'requirements.qualificacao_economico_financeira',
-            'legal_risk_review.critical_points'
+            'legal_risk_review.critical_points',
+            'proposal_analysis'
         ],
         forbiddenSections: [
             'operational_outputs',
             'contractual_analysis',
-            'proposal_analysis',
             'timeline',
-            'participation_conditions',
             'analysis_meta'
         ]
     },
@@ -121,12 +121,14 @@ export const MODULE_CONTRACTS: Record<ModuleName, ModuleContextContract> = {
             'requirements',
             'operational_outputs.documents_to_prepare',
             'operational_outputs.internal_checklist',
-            'evidence_registry'
+            'evidence_registry',
+            'timeline'
         ],
         optionalSections: [
             'technical_analysis',
             'participation_conditions',
-            'legal_risk_review.critical_points'
+            'legal_risk_review.critical_points',
+            'economic_financial_analysis'
         ],
         forbiddenSections: [
             'contractual_analysis',
@@ -164,22 +166,24 @@ export const MODULE_CONTRACTS: Record<ModuleName, ModuleContextContract> = {
         moduleName: 'proposal',
         description: 'Estruturador de insumos para proposta comercial e documental',
         contextStrategy: 'proposal_focused',
-        maxTokenEstimate: 3500,
+        maxTokenEstimate: 4000,
         requiredSections: [
             'process_identification',
             'requirements.proposta_comercial',
             'proposal_analysis',
-            'operational_outputs.proposal_routes'
+            'operational_outputs.proposal_routes',
+            'timeline',
+            'evidence_registry'
         ],
         optionalSections: [
             'economic_financial_analysis',
             'technical_analysis.parcelas_relevantes',
             'legal_risk_review.critical_points',
-            'evidence_registry'
+            'legal_risk_review.inconsistencies',
+            'requirements.qualificacao_tecnica_operacional'
         ],
         forbiddenSections: [
             'participation_conditions',
-            'contractual_analysis',
             'analysis_meta.quality_report'
         ]
     }

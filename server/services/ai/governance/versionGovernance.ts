@@ -118,15 +118,23 @@ export function runRegression(
     return result;
 }
 
-// ── Promotion Gate ──
+// ── Thresholds por criticidade ──
+
+const CRITICAL_MODULES = ['prompt-oracle', 'prompt-petition', 'prompt-proposal', 'participation-engine', 'oracle', 'petition', 'proposal', 'participation'];
+const CRITICAL_THRESHOLDS = { minPassRate: 90, maxRegressions: 1, minDelta: -5 };
+const STANDARD_THRESHOLDS = { minPassRate: 80, maxRegressions: 2, minDelta: -10 };
 
 export function evaluatePromotion(
     componentName: string,
     candidateVersion: string,
     baselineVersion: string,
     regressionResult: RegressionResult,
-    thresholds = { minPassRate: 80, maxRegressions: 2, minDelta: -10 }
+    customThresholds?: { minPassRate: number; maxRegressions: number; minDelta: number }
 ): PromotionDecision {
+    // Módulos críticos usam thresholds mais rígidos
+    const isCritical = CRITICAL_MODULES.some(m => componentName.includes(m));
+    const thresholds = customThresholds || (isCritical ? CRITICAL_THRESHOLDS : STANDARD_THRESHOLDS);
+
     const passRate = regressionResult.totalTests > 0
         ? Math.round((regressionResult.passed / regressionResult.totalTests) * 100)
         : 0;
@@ -134,17 +142,27 @@ export function evaluatePromotion(
     let decision: 'promote' | 'hold' | 'rollback';
     let reason: string;
 
-    if (passRate >= thresholds.minPassRate &&
+    // Verificar regressions em métricas críticas (falso positivo, omissão crítica, utilidade)
+    const criticalRegressions = regressionResult.regressions.filter(r =>
+        r.toLowerCase().includes('false_positive') ||
+        r.toLowerCase().includes('omiss') ||
+        r.toLowerCase().includes('critical')
+    );
+
+    if (isCritical && criticalRegressions.length > 0) {
+        decision = 'hold';
+        reason = `Módulo CRÍTICO com regressão em métrica sensível: ${criticalRegressions.join('; ')}. Requer revisão manual.`;
+    } else if (passRate >= thresholds.minPassRate &&
         regressionResult.regressions.length <= thresholds.maxRegressions &&
         regressionResult.deltaScore >= thresholds.minDelta) {
         decision = 'promote';
-        reason = `Pass rate: ${passRate}% (>= ${thresholds.minPassRate}%), regressions: ${regressionResult.regressions.length} (<= ${thresholds.maxRegressions}), delta: ${regressionResult.deltaScore} (>= ${thresholds.minDelta})`;
+        reason = `Pass rate: ${passRate}% (>= ${thresholds.minPassRate}%), regressions: ${regressionResult.regressions.length} (<= ${thresholds.maxRegressions}), delta: ${regressionResult.deltaScore} (>= ${thresholds.minDelta})${isCritical ? ' [CRITICAL MODULE]' : ''}`;
     } else if (regressionResult.deltaScore < -30 || passRate < 50) {
         decision = 'rollback';
         reason = `Critical regression: pass rate ${passRate}%, delta ${regressionResult.deltaScore}`;
     } else {
         decision = 'hold';
-        reason = `Below thresholds: pass rate ${passRate}%, regressions ${regressionResult.regressions.length}, delta ${regressionResult.deltaScore}`;
+        reason = `Below thresholds: pass rate ${passRate}% (need ${thresholds.minPassRate}%), regressions ${regressionResult.regressions.length} (max ${thresholds.maxRegressions}), delta ${regressionResult.deltaScore} (min ${thresholds.minDelta})`;
     }
 
     const promotionDecision: PromotionDecision = {
@@ -168,7 +186,6 @@ export function evaluatePromotion(
         if (decision === 'promote') {
             versionEntry.status = 'promoted';
             versionEntry.promotedAt = new Date().toISOString();
-            // Demote previous
             versionStore.filter(v =>
                 v.componentName === componentName &&
                 v.version !== candidateVersion &&
@@ -181,7 +198,7 @@ export function evaluatePromotion(
         }
     }
 
-    console.log(`[Promotion] ${componentName}: ${candidateVersion} — ${decision.toUpperCase()} — ${reason}`);
+    console.log(`[Promotion] ${componentName}${isCritical ? ' [CRITICAL]' : ''}: ${candidateVersion} — ${decision.toUpperCase()} — ${reason}`);
 
     return promotionDecision;
 }

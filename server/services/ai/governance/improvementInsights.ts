@@ -18,9 +18,11 @@ export interface ImprovementInsight {
     issuePattern: string;
     frequency: number;
     severity: 'low' | 'medium' | 'high' | 'critical';
+    probableCause: string;
     suggestedAction: string;
     relatedCases: string[];
     affectedComponent?: string;
+    impactDescription: string;
     createdAt: string;
 }
 
@@ -34,6 +36,8 @@ export interface ImprovementReport {
         highInsights: number;
         topModule: string;
         topPattern: string;
+        topReworkModules: string[];
+        actionableBacklog: number;
     };
     goldenCaseCandidates: number;
 }
@@ -60,8 +64,10 @@ export function generateImprovementInsights(periodDays = 30): ImprovementReport 
     for (const [moduleName, issues] of Object.entries(moduleIssues)) {
         for (const [issueType, execIds] of Object.entries(issues)) {
             if (execIds.length >= 2) {
-                const severity = determineSeverity(issueType, execIds.length);
+                const severity = determineSeverity(moduleName, issueType, execIds.length);
                 const action = suggestAction(moduleName, issueType);
+                const cause = determineProbableCause(issueType);
+                const impact = describeImpact(moduleName, issueType, execIds.length);
 
                 insights.push({
                     insightId: `ins-${moduleName}-${issueType}-${Date.now()}`,
@@ -69,9 +75,11 @@ export function generateImprovementInsights(periodDays = 30): ImprovementReport 
                     issuePattern: issueType,
                     frequency: execIds.length,
                     severity,
+                    probableCause: cause,
                     suggestedAction: action,
                     relatedCases: execIds.slice(0, 5),
                     affectedComponent: mapIssueToComponent(issueType),
+                    impactDescription: impact,
                     createdAt: new Date().toISOString()
                 });
             }
@@ -89,9 +97,11 @@ export function generateImprovementInsights(periodDays = 30): ImprovementReport 
                 issuePattern: 'high_rejection_rate',
                 frequency: metrics.totalExecutions,
                 severity: metrics.rejectionRate > 40 ? 'critical' : 'high',
-                suggestedAction: `Módulo ${mod} com ${metrics.rejectionRate}% de rejeição. Revisar prompt e contrato de contexto.`,
+                probableCause: `Taxa de rejeição de ${metrics.rejectionRate}% indica problema sistêmico no módulo`,
+                suggestedAction: `Módulo ${mod} com ${metrics.rejectionRate}% de rejeição. Revisar prompt, contrato de contexto e schema de saída.`,
                 relatedCases: [],
                 affectedComponent: `prompt-${mod}`,
+                impactDescription: `${mod}: ${metrics.rejectionRate}% das saídas rejeitadas — módulo não está entregando valor ao usuário`,
                 createdAt: new Date().toISOString()
             });
         }
@@ -107,6 +117,11 @@ export function generateImprovementInsights(periodDays = 30): ImprovementReport 
     const topModule = insights.length > 0 ? insights[0].moduleName : 'none';
     const topPattern = insights.length > 0 ? insights[0].issuePattern : 'none';
 
+    // Top rework modules (módulos com mais insights)
+    const moduleCount: Record<string, number> = {};
+    for (const ins of insights) moduleCount[ins.moduleName] = (moduleCount[ins.moduleName] || 0) + 1;
+    const topReworkModules = Object.entries(moduleCount).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => `${e[0]}(${e[1]})`);
+
     const report: ImprovementReport = {
         generatedAt: new Date().toISOString(),
         period: `${periodDays}d`,
@@ -116,7 +131,9 @@ export function generateImprovementInsights(periodDays = 30): ImprovementReport 
             criticalInsights: insights.filter(i => i.severity === 'critical').length,
             highInsights: insights.filter(i => i.severity === 'high').length,
             topModule,
-            topPattern
+            topPattern,
+            topReworkModules,
+            actionableBacklog: insights.filter(i => i.severity === 'critical' || i.severity === 'high').length
         },
         goldenCaseCandidates: goldenCandidates.length
     };
@@ -166,14 +183,45 @@ export function convertFeedbackToGoldenCases(): Array<{
 
 // ── Helpers ──
 
-function determineSeverity(issueType: string, frequency: number): ImprovementInsight['severity'] {
+function determineSeverity(moduleName: string, issueType: string, frequency: number): ImprovementInsight['severity'] {
     const criticalIssues = ['hallucination', 'unsafe_to_use_directly', 'invented_content'];
     const highIssues = ['false_positive', 'missing_legal_ground', 'incorrect_classification'];
+    const criticalModules = ['oracle', 'petition', 'proposal', 'participation'];
 
     if (criticalIssues.includes(issueType)) return 'critical';
+    if (highIssues.includes(issueType) && criticalModules.includes(moduleName)) return 'critical';
     if (highIssues.includes(issueType) || frequency >= 5) return 'high';
     if (frequency >= 3) return 'medium';
     return 'low';
+}
+
+function determineProbableCause(issueType: string): string {
+    const causeMap: Record<string, string> = {
+        'hallucination': 'Prompt com margem excessiva para criação de conteúdo não evidenciado',
+        'false_positive': 'Matching por similaridade textual sem validação material/quantitativa',
+        'false_negative': 'Contexto insuficiente ou campos decisivos em forbiddenSections',
+        'missing_information': 'Campos necessários ausentes no contrato de contexto do módulo',
+        'incorrect_classification': 'Regras de taxonomia ou perfis de tipo com gap de cobertura',
+        'weak_reasoning': 'Prompt sem exemplos de cadeia de raciocínio esperada',
+        'poor_evidence_usage': 'Evidence_registry não incluído ou muito truncado no contexto',
+        'weak_operational_value': 'Falta de instrução sobre utilidade prática no prompt',
+        'unsafe_to_use_directly': 'Threshold de revisão humana ou confiança está alto demais',
+        'excessive_generic': 'Prompt genérico sem contenção contra genericidade',
+        'wrong_category': 'Padrões de matching textual na taxonomia com falha',
+        'missing_legal_ground': 'Base de fundamentos jurídicos insuficiente no prompt',
+        'invented_content': 'Ausência de proibição explícita ou reforço fraco no prompt'
+    };
+    return causeMap[issueType] || `Investigar causa para padrão: ${issueType}`;
+}
+
+function describeImpact(moduleName: string, issueType: string, frequency: number): string {
+    return `${moduleName}: padrão '${issueType}' ocorreu ${frequency}x no período — ${getImpactLevel(issueType)} impacto operacional`;
+}
+
+function getImpactLevel(issueType: string): string {
+    const high = ['hallucination', 'false_positive', 'unsafe_to_use_directly', 'invented_content', 'missing_legal_ground'];
+    if (high.includes(issueType)) return 'ALTO';
+    return 'MÉDIO';
 }
 
 function suggestAction(moduleName: string, issueType: string): string {

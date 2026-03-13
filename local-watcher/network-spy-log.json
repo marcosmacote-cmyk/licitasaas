@@ -1,0 +1,543 @@
+[
+  {
+    "seq": 1,
+    "timestamp": "2026-03-12T14:49:50.434Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras",
+    "resourceType": "document",
+    "requestHeaders": {
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "text/html"
+    },
+    "responseBody": "<!DOCTYPE html>\n<html lang=\"pt-br\" data-beasties-container>\n  <head>\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta charset=\"utf-8\">\n    <title>Compras.gov.br</title>\n    <base href=\"/comprasnet-web/\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n    <link rel=\"icon\" type=\"image/x-icon\" href=\"favicon.ico\">\n    <!-- Google Tag Manager -->\n    <script>\n      (function(w, d, s, l, i) {\n        w[l] = w[l] || [];\n        w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });\n        var f = d.getElementsByTagName(s)[0],\n          j = d.createElement(s),\n          dl = l != 'dataLayer' ? '&l=' + l : '';\n        j.async = true;\n        j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;\n        f.parentNode.insertBefore(j, f);\n      })(window, document, 'script', 'dataLayer', 'GTM-W4Q5W8W');\n    </script>\n    <!-- End Google Tag Manager -->\n  <style>:root{--fa-family-brands:\"Font Awesome 7 Brands\";--fa-font-brands:normal 400 1em/1 var(--fa-family-brands)}:root{--fa-font-regular:normal 400 1em/1 var(--fa-family-classic)}:root{--fa-family-classic:\"Font Awesome 7 Free\";--fa-font-solid:normal 900 1em/1 var(--fa-family-classic);--fa-style-family-classic:var(--fa-family-classic)}:root{--bs-blue:#0d6efd;--bs-indigo:#6610f2;--bs-purple:#6f42c1;--bs-pink:#d63384;--bs-red:#dc3545;--bs-orange:#fd7e14;--bs-yellow:#ffc107;--bs-green:#198754;--bs-teal:#20c997;--bs-cyan:#0dcaf0;--bs-black:#000;--bs-white:#fff;--bs-gray:#6c757d;--bs-gray-dark:#343a40;--bs-gray-100:#f8f9fa;--bs-gray-200:#e9ecef;--bs-gray-300:#dee2e6;--bs-gray-400:#ced4da;--bs-gray-500:#adb5bd;--bs-gray-600:#6c757d;--bs-gray-700:#495057;--bs-gray-800:#343a40;--bs-gray-900:#212529;--bs-primary:#0d6efd;--bs-secondary:#6c757d;--bs-success:#198754;--bs-info:#0dcaf0;--bs-warning:#ffc107;--bs-danger:#dc3545;--bs-light:#f8f9fa;--bs-dark:#212529;--bs-primary-rgb:13,110,253;--bs-secondary-rgb:108,117,125;--bs-success-rgb:25,135,84;--bs-info-rgb:13,202,240;--bs-warning-rgb:255,193,7;--bs-danger-rgb:220,53,69;--bs-light-rgb:248,249,250;--bs-dark-rgb:33,37,41;--bs-primary-text-emphasis:#052c65;--bs-secondary-text-emphasis:#2b2f32;--bs-success-text-emphasis:#0a3622;--bs-info-text-emphasis:#055160;--bs-warning-text-emphasis:#664d03;--bs-danger-text-emphasis:#58151c;--bs-light-text-emphasis:#495057;--bs-dark-text-emphasis:#495057;--bs-primary-bg-subtle:#cfe2ff;--bs-secondary-bg-subtle:#e2e3e5;--bs-success-bg-subtle:#d1e7dd;--bs-info-bg-subtle:#cff4fc;--bs-warning-bg-subtle:#fff3cd;--bs-danger-bg-subtle:#f8d7da;--bs-light-bg-subtle:#fcfcfd;--bs-dark-bg-subtle:#ced4da;--bs-primary-border-subtle:#9ec5fe;--bs-secondary-border-subtle:#c4c8cb;--bs-success-border-subtle:#a3cfbb;--bs-info-border-subtle:#9eeaf9;--bs-warning-border-subtle:#ffe69c;--bs-danger-border-subtle:#f1aeb5;--bs-light-border-subtle:#e9ecef;--bs-dark-border-subtle:#adb5bd;--bs-white-rgb:255,255,255;--bs-black-rgb:0,0,0;--bs-font-sans-serif:system-ui,-apple-system,\"Segoe UI\",Roboto,\"Helvetica Neue\",\"Noto Sans\",\"Liberation Sans\",Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\",\"Segoe UI Symbol\",\"Noto Color Emoji\";--bs-font-monospace:SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace;--bs-gradient:linear-gradient(180deg, rgba(255, 255, 255, .15), rgba(255, 255, 255, 0));--bs-body-font-family:var(--bs-font-sans-serif);--bs-body-font-size:1rem;--bs-body-font-weight:400;--bs-body-line-height:1.5;--bs-body-color:#212529;--bs-body-color-rgb:33,37,41;--bs-body-bg:#fff;--bs-body-bg-rgb:255,255,255;--bs-emphasis-color:#000;--bs-emphasis-color-rgb:0,0,0;--bs-secondary-color:rgba(33, 37, 41, .75);--bs-secondary-color-rgb:33,37,41;--bs-secondary-bg:#e9ecef;--bs-secondary-bg-rgb:233,236,239;--bs-tertiary-color:rgba(33, 37, 41, .5);--bs-tertiary-color-rgb:33,37,41;--bs-tertiary-bg:#f8f9fa;--bs-tertiary-bg-rgb:248,249,250;--bs-heading-color:inherit;--bs-link-color:#0d6efd;--bs-link-color-rgb:13,110,253;--bs-link-decoration:underline;--bs-link-hover-color:#0a58ca;--bs-link-hover-color-rgb:10,88,202;--bs-code-color:#d63384;--bs-highlight-color:#212529;--bs-highlight-bg:#fff3cd;--bs-border-width:1px;--bs-border-style:solid;--bs-border-color:#dee2e6;--bs-border-color-translucent:rgba(0, 0, 0, .175);--bs-border-radius:.375rem;--bs-border-radius-sm:.25rem;--bs-border-radius-lg:.5rem;--bs-border-radius-xl:1rem;--bs-border-radius-xxl:2rem;--bs-border-radius-2xl:var(--bs-border-radius-xxl);--bs-border-radius-pill:50rem;--bs-box-shadow:0 .5rem 1rem rgba(0, 0, 0, .15);--bs-box-shadow-sm:0 .125rem .25rem rgba(0, 0, 0, .075);--bs-box-shadow-lg:0 1rem 3rem rgba(0, 0, 0, .175);--bs-box-shadow-inset:inset 0 1px 2px rgba(0, 0, 0, .075);--bs-focus-ring-width:.25rem;--bs-focus-ring-opacity:.25;--bs-focus-ring-color:rgba(13, 110, 253, .25);--bs-form-valid-color:#198754;--bs-form-valid-border-color:#198754;--bs-form-invalid-color:#dc3545;--bs-form-invalid-border-color:#dc3545}@media(prefers-reduced-motion:no-preference){:root{scroll-behavior:smooth}}"
+  },
+  {
+    "seq": 2,
+    "timestamp": "2026-03-12T14:49:50.842Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-ED66ZJC6.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 8,
+    "timestamp": "2026-03-12T14:49:50.847Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-GK7RZGST.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 5,
+    "timestamp": "2026-03-12T14:49:50.845Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-ZGEHSMTX.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 11,
+    "timestamp": "2026-03-12T14:49:50.848Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/main-4Y72RKN4.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 13,
+    "timestamp": "2026-03-12T14:49:50.850Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtm.js?id=GTM-W4Q5W8W",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript; charset=UTF-8"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 10,
+    "timestamp": "2026-03-12T14:49:50.847Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/polyfills-NS4656QS.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 12,
+    "timestamp": "2026-03-12T14:49:50.850Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/scripts-RV6CNZMB.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 3,
+    "timestamp": "2026-03-12T14:49:50.845Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-ZL5SFVZB.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 4,
+    "timestamp": "2026-03-12T14:49:50.845Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-2BRNJDUK.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 6,
+    "timestamp": "2026-03-12T14:49:50.846Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-ADGR46AO.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 14,
+    "timestamp": "2026-03-12T14:49:51.726Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/destination?id=G-623FPXHZ7K&cx=c&gtm=4e63a1",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript; charset=UTF-8"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 7,
+    "timestamp": "2026-03-12T14:49:50.846Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-NTWJLD3G.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 9,
+    "timestamp": "2026-03-12T14:49:50.847Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-AVOKKJXV.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 15,
+    "timestamp": "2026-03-12T14:49:51.726Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/js?id=G-623FPXHZ7K&cx=c&gtm=4e63a1",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript; charset=UTF-8"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 17,
+    "timestamp": "2026-03-12T14:49:52.321Z",
+    "type": "HTTP",
+    "method": "POST",
+    "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-623FPXHZ7K&gtm=45je63a1v9117450663z89117634999za20gzb9117634999zd9117634999&_p=1773326990841&gcd=13l3l3l3l1l1&npa=0&dma=0&cid=80345684.1773326992&ul=pt-br&sr=1400x900&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CGoogle%2520Chrome%3B145.0.7632.160%7CChromium%3B145.0.7632.160&uamb=0&uam=&uap=macOS&uapv=26.3.0&uaw=0&are=1&frm=0&pscdl=noapi&_eu=AAAAAAQ&tag_exp=103116026~103200004~115938465~115938468~116024733~117484252~117625637&dl=https%3A%2F%2Fcnetmobile.estaleiro.serpro.gov.br%2Fcomprasnet-web%2Fpublic%2Fcompras&sid=1773326992&sct=1&seg=0&dt=Compras.gov.br&_s=2&tfd=1891",
+    "resourceType": "fetch",
+    "requestHeaders": {
+      "content-type": "text/plain;charset=UTF-8",
+      "accept": "*/*"
+    },
+    "requestBody": "en=gtm.init&_et=18\r\nen=gtm.js&_et=1\r\nen=gtm.dom&_et=1\r\nen=gtm.scrollDepth&_et=2",
+    "responseStatus": 204,
+    "responseHeaders": {
+      "content-type": "text/plain"
+    },
+    "responseBody": ""
+  },
+  {
+    "seq": 16,
+    "timestamp": "2026-03-12T14:49:52.317Z",
+    "type": "HTTP",
+    "method": "POST",
+    "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-623FPXHZ7K&gtm=45je63a1v9117450663z89117634999za20gzb9117634999zd9117634999&_p=1773326990841&gcd=13l3l3l3l1l1&npa=0&dma=0&cid=80345684.1773326992&ul=pt-br&sr=1400x900&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CGoogle%2520Chrome%3B145.0.7632.160%7CChromium%3B145.0.7632.160&uamb=0&uam=&uap=macOS&uapv=26.3.0&uaw=0&are=1&frm=0&pscdl=noapi&_s=1&tag_exp=103116026~103200004~115938465~115938468~116024733~117484252~117625637&dl=https%3A%2F%2Fcnetmobile.estaleiro.serpro.gov.br%2Fcomprasnet-web%2Fpublic%2Fcompras&sid=1773326992&sct=1&seg=0&dt=Compras.gov.br&en=gtm.init_consent&_fv=1&_nsi=1&_ss=1&tfd=1865",
+    "resourceType": "fetch",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 204,
+    "responseHeaders": {
+      "content-type": "text/plain"
+    },
+    "responseBody": ""
+  },
+  {
+    "seq": 18,
+    "timestamp": "2026-03-12T14:49:52.323Z",
+    "type": "HTTP",
+    "method": "POST",
+    "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-623FPXHZ7K&gtm=45je63a1v9117450663za20gzb9117634999zd9117634999&_p=1773326990841&gcd=13l3l3l3l1l1&npa=0&dma=0&cid=80345684.1773326992&ul=pt-br&sr=1400x900&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CGoogle%2520Chrome%3B145.0.7632.160%7CChromium%3B145.0.7632.160&uamb=0&uam=&uap=macOS&uapv=26.3.0&uaw=0&are=1&frm=0&pscdl=noapi&_eu=AEAAAAQ&_s=3&tag_exp=103116026~103200004~115938465~115938468~116024733~117484252~117625637&dl=https%3A%2F%2Fcnetmobile.estaleiro.serpro.gov.br%2Fcomprasnet-web%2Fpublic%2Fcompras&sid=1773326992&sct=1&seg=0&dt=Compras.gov.br&en=scroll&epn.percent_scrolled=90&_et=1&tfd=1893",
+    "resourceType": "fetch",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 204,
+    "responseHeaders": {
+      "content-type": "text/plain"
+    },
+    "responseBody": ""
+  },
+  {
+    "seq": 19,
+    "timestamp": "2026-03-12T14:49:52.942Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-LLP5IZRL.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "cookie": "_ga=GA1.1.80345684.1773326992; _ga_623FPXHZ7K=GS2.1.s1773326992$o1$g0$t1773326992$j60$l0$h0",
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 22,
+    "timestamp": "2026-03-12T14:49:53.016Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-7OHKM6QI.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "cookie": "_ga=GA1.1.80345684.1773326992; _ga_623FPXHZ7K=GS2.1.s1773326992$o1$g0$t1773326992$j60$l0$h0",
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 20,
+    "timestamp": "2026-03-12T14:49:53.016Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-CUK5ZB5K.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "cookie": "_ga=GA1.1.80345684.1773326992; _ga_623FPXHZ7K=GS2.1.s1773326992$o1$g0$t1773326992$j60$l0$h0",
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 21,
+    "timestamp": "2026-03-12T14:49:53.016Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/chunk-NDW7Q43D.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "cookie": "_ga=GA1.1.80345684.1773326992; _ga_623FPXHZ7K=GS2.1.s1773326992$o1$g0$t1773326992$j60$l0$h0",
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 23,
+    "timestamp": "2026-03-12T14:49:55.159Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/captcha/configuracao",
+    "resourceType": "xhr",
+    "requestHeaders": {
+      "cookie": "_ga=GA1.1.80345684.1773326992; _ga_623FPXHZ7K=GS2.1.s1773326992$o1$g0$t1773326993$j59$l0$h0",
+      "accept": "application/json, text/plain, */*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/json"
+    },
+    "responseBody": "{\"recaptchaHabilitado\":false,\"recaptchaSiteKey\":\"6LeFY7UUAAAAANq3IRQtuH9hQFugmh_OR9OlQHaW\",\"hcaptchaHabilitado\":true,\"hcaptchaSiteKey\":\"b8bbded1-9d04-4ace-9952-b67cde081a7b\"}"
+  },
+  {
+    "seq": 24,
+    "timestamp": "2026-03-12T14:49:55.160Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-fase-externa/v1/enums",
+    "resourceType": "xhr",
+    "requestHeaders": {
+      "cookie": "_ga=GA1.1.80345684.1773326992; _ga_623FPXHZ7K=GS2.1.s1773326992$o1$g0$t1773326993$j59$l0$h0",
+      "accept": "application/json, text/plain, */*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/json"
+    },
+    "responseBody": "[{\"name\":\"CaracteristicaCompraEnum\",\"values\":[{\"enumName\":\"TRADICIONAL\",\"value\":\"1\",\"label\":\"Tradicional\"},{\"enumName\":\"REGISTRO_PRECO\",\"value\":\"2\",\"label\":\"Registro de Preço\"}]},{\"name\":\"CodigoRetornoSituacaoSessaoPublicaEnum\",\"values\":[{\"enumName\":\"SESSAO_PUBLICA_AGUARDANDO_ABERTURA\",\"value\":\"1\",\"label\":\"A sessão pública ainda não abriu\"},{\"enumName\":\"SESSAO_PUBLICA_ABERTA\",\"value\":\"2\",\"label\":\"A sessão pública já abriu\"},{\"enumName\":\"SESSAO_PUBLICA_SUSPENSA\",\"value\":\"3\",\"label\":\"A sessão pública já abriu, mas está suspensa\"},{\"enumName\":\"SESSAO_PUBLICA_ENCERRADA\",\"value\":\"4\",\"label\":\"A sessão pública já foi encerrada\"}]},{\"name\":\"CriterioJulgamentoCompraEnum\",\"values\":[{\"enumName\":\"MELHOR_TECNICA\",\"value\":\"3\",\"label\":\"Melhor Técnica\"},{\"enumName\":\"TECNICA_PRECO\",\"value\":\"4\",\"label\":\"Técnica e Preço\"},{\"enumName\":\"CONTEUDO_ARTISTICO\",\"value\":\"5\",\"label\":\"Conteúdo Artístico\"},{\"enumName\":\"MAIOR_RETORNO_ECONOMICO\",\"value\":\"6\",\"label\":\"Maior Retorno Econômico\"},{\"enumName\":\"MENOR_PRECO_OU_MAIOR_DESCONTO\",\"value\":\"7\",\"label\":\"Menor Preço / Maior Desconto\"},{\"enumName\":\"MELHOR_TECNICA_OU_CONTEUDO_ARTISTICO\",\"value\":\"8\",\"label\":\"Melhor Técnica / Conteúdo Artístico\"}]},{\"name\":\"CriterioJulgamentoItemEnum\",\"values\":[{\"enumName\":\"MENOR_PRECO\",\"value\":\"1\",\"label\":\"Menor Preço\"},{\"enumName\":\"MAIOR_DESCONTO\",\"value\":\"2\",\"label\":\"Maior Desconto\"},{\"enumName\":\"MELHOR_TECNICA\",\"value\":\"3\",\"label\":\"Melhor Técnica\"},{\"enumName\":\"TECNICA_PRECO\",\"value\":\"4\",\"label\":\"Técnica e Preço\"},{\"enumName\":\"CONTEUDO_ARTISTICO\",\"value\":\"5\",\"label\":\"Conteúdo Artístico\"},{\"enumName\":\"MAIOR_RETORNO_ECONOMICO\",\"value\":\"6\",\"label\":\"Maior Retorno Econômico\"},{\"enumName\":\"MELHOR_TECNICA_OU_CONTEUDO_ARTISTICO\",\"value\":\"8\",\"label\":\"Melhor Técnica ou Conteúdo Artístico\"}]},{\"name\":\"CriterioValorItemEnum\",\"values\":[{\"enumName\":\"VALOR_ESTIMADO\",\"value\":\"E\",\"label\":\"Valor estimado\"},{\"enumName\":\"VALOR_REFERENCIA\",\"value\":\"R\",\"label\":\"Valor de referência\"},{\"enumName\":\"VALOR_MAXIMO_ACEITAVEL\",\"value\":\"M\",\"label\":\"Valor máximo aceitável\"},{\"enumName\":\"VALOR_CRITERIO_VALOR\",\"value\":\"C\",\"label\":\"Critério de valor\"},{\"enumName\":\"PREMIO_REMUNERACAO\",\"value\":\"P\",\"label\":\"Prêmio / Remuneração\"},{\"enumName\":\"VALOR_GASTO_ATUALMENTE\",\"value\":\"A\",\"label\":\"Valor gasto atualmente\"}]},{\"name\":\"DeclaracoesMargemPreferenciaEnum\",\"values\":[{\"enumName\":\"NAO_SE_APLICA\",\"value\":\"0\",\"label\":\"Não se aplica\"},{\"enumName\":\"APENAS_MPN\",\"value\":\"1\",\"label\":\"MPN\"},{\"enumName\":\"MPN_MPA\",\"value\":\"2\",\"label\":\"MPN + MPA\"}]},{\"name\":\"DestinoRetornoJulgamentoParaSalaDisputaEnum\",\"values\":[{\"enumName\":\"ETAPA_FECHADA_MODO_ABERTO_FECHADO\",\"value\":\"F\",\"label\":\"disputa fechada\"},{\"enumName\":\"DESEMPATE_ME_EPP\",\"value\":\"M\",\"label\":\"desempate Me/Epp\"},{\"enumName\":\"DESEMPATE_7174\",\"value\":\"7\",\"label\":\"desempate 7174\"},{\"enumName\":\"DISPUTA_FINAL_DESEMPATE_VALOR\",\"value\":\"V\",\"label\":\"desempate por disputa final do art. 60 da lei 14.133/2021\"}]},{\"name\":\"EtapaDisputaEnum\",\"values\":[{\"enumName\":\"ABERTA\",\"value\":\"A\",\"label\":\"Aberta\"},{\"enumName\":\"FECHADA\",\"value\":\"F\",\"label\":\"Fechada\"},{\"enumName\":\"DESEMPATE\",\"value\":\"D\",\"label\":\"Desempate\"},{\"enumName\":\"DISPUTA_FINAL_DESEMPATE_VALOR\",\"value\":\"V\",\"label\":\"Disputa final - Art. 60 da Lei 14.133/2021\"},{\"enumName\":\"ENCERRADA\",\"value\":\"E\",\"label\":\"Encerrada\"}]},{\"name\":\"EtapaSelecaoFornecedoresEnum\",\"values\":[{\"enumName\":\"JULGAMENTO_PROPOSTAS\",\"value\":\"JP\",\"label\":\"Julgamento de Proposta\"},{\"enumName\":\"HABILITACAO_FORNECEDORES\",\"value\":\"HF\",\"label\":\"Habilitação de Fornecedores\"},{\"enumName\":\"ADJUDICACAO_HOMOLOGACAO\",\"value\":\"AH\",\"label\":\"Adjudicação/Homologação\"},{\"enumName\":\"FASE_RECURSAL\",\"value\":\"FR\",\"label\":\"Fase Recursal\"}]},{\"name\":\"FaseCompraFaseExternaEnum\",\"values\":[{\"enumName\":\"AGUARDANDO_ABERTURA_SESSAO_PUBLICA\",\"value\":\"1\",\"label\":\"Aguardando abertura da sessão pública\"},{\"enumName\":\"EM_ANALISE_PROPOSTAS\",\"value\":\"2\",\"label\":\"Em análise de propostas\"},{\"enumName\":\"DISPUTA_INICIADA\",\"value\":\"3\",\"label\":\"Disputa iniciada\"},{\"enumName\":\"SELECAO_FORNECEDORES_INICIADA\",\"value\":\"4\",\"label\":\"Seleção de fornecedores iniciada\"},{\"enumName\":\"CARREGANDO_COMPRA\",\"value\":\"5\",\"label\":\"Carregando compra da Fase Interna\"},{\"enumName\":\"AGUARDANDO_PUBLICACAO\",\"value\":\"6\",\"label\":\"Aguardando publicação\"},{\"enumName\":\"DISPUTA_AGENDADA\",\"value\":\"99\",\"label\":\"Disputa Agendada\"}]},{\"name\":\"FaseItemEnum\",\"values\":[{\"enumName\":\"AGUARDANDO_ABERTURA_SESSAO_PUBLICA\",\"value\":\"AS\",\"label\":\"Aguardando abertura da sessão pública\"},{\"enumName\":\"PENDENTE_ANALISE_PROPOSTAS\",\"value\":\"AP\",\"label\":\"Pendente da análise de propostas\"},{\"enumName\":\"AGUARDANDO_DISPUTA\",\"value\":\"F\",\"label\":\"Aguardando disputa\"},{\"enumName\":\"AGUARDANDO_ABERTURA_PARA_LANCES\",\"value\":\"AA\",\"label\":\"Aguardando abertura\"},{\"enumName\":\"ABERTURA_LANCES_SUSPENSA\",\"value\":\"LS\",\"label\":\"Abertura Suspensa\"},{\"enumName\":\"ABERTO_LANCES_FASE_ABERTA\",\"value\":\"LA\",\"label\":\"Etapa aberta\"},{\"enumName\":\"ABERTO_LANCES_FASE_FECHADA\",\"value\":\"LF\",\"label\":\"Etapa fechada\"},{\"enumName\":\"EM_ENCERRAMENTO_ALEATORIO\",\"value\":"
+  },
+  {
+    "seq": 25,
+    "timestamp": "2026-03-12T14:49:55.222Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://hcaptcha.com/1/api.js?hl=pt-BR&recaptchacompat=off&render=explicit&onload=onloadHCaptcha",
+    "resourceType": "script",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript",
+      "set-cookie": "__cf_bm=J_ANLPII0VLkkQfMcrccpibpy8oKe42OllZy8qjWWI8-1773326995-1.0.1.1-W2uQ0iMkasHm07SW1.4QnfLsUhRshvVDHWDY3GrtQZDxoCLPFB0NYuhWjur9aKuQcRHA_spXo7CJlYef7XuWpfITnByBm4bQnRKPitoOfkE; path=/; expires=Thu, 12-Mar-26 15:19:55 GMT; domain=.hcaptcha.com; HttpOnly; Secure; SameSite=None"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 27,
+    "timestamp": "2026-03-12T14:49:55.507Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://newassets.hcaptcha.com/captcha/v1/5ea3feff9cf1292d7051510930d98c4719f64575/static/hcaptcha.html",
+    "resourceType": "document",
+    "requestHeaders": {
+      "cookie": "__cf_bm=J_ANLPII0VLkkQfMcrccpibpy8oKe42OllZy8qjWWI8-1773326995-1.0.1.1-W2uQ0iMkasHm07SW1.4QnfLsUhRshvVDHWDY3GrtQZDxoCLPFB0NYuhWjur9aKuQcRHA_spXo7CJlYef7XuWpfITnByBm4bQnRKPitoOfkE",
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "text/html"
+    },
+    "responseBody": "<!DOCTYPE html>\n<html lang=\"en\" data-id=\"hcaptcha-frame-5ea3feff9cf1292d7051510930d98c4719f64575\">\n<head>\n    <title>hCaptcha</title>\n    <meta charset=\"utf-8\">\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta http-equiv=\"Content-Security-Policy\" content=\"object-src 'none'; base-uri 'self'; worker-src blob:; script-src 'self' 'unsafe-eval' 'sha256-OsMzwCMUSHRLbuZuwqZ7NpkPMQfxPRnAQanRkZDRTx4=';\">\n    <style type=\"text/css\">*{-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}body,html{margin:0;padding:0;font-family:-apple-system,system-ui,BlinkMacSystemFont,\"Segoe UI\",Roboto,Oxygen,Ubuntu,\"Helvetica Neue\",Arial,sans-serif;overflow:hidden;height:100%;width:100%;background-color:rgba(255,255,255,0);background-color:transparent}fieldset{margin:0;padding:15px 20px;border:none}button:focus,input:focus,select:focus,textarea:focus{outline:0}:focus{border:none;outline:0}textarea{border:none;overflow:auto;outline:0;-webkit-box-shadow:none;-moz-box-shadow:none;box-shadow:none;resize:none}.no-selection{-webkit-touch-callout:none;-webkit-user-select:none;-khtml-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}@-webkit-keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}@-moz-keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}@-o-keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}@keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}</style>\n</head>\n<body class=\"no-selection\">\n    <script type=\"text/javascript\">/* { \"version\": \"1\", \"hash\": \"MEUCIByGc2quIEcnMRWvF4yLvAEoUyAHGEQgHGMwnDJEtsUgAiEAgcAc4Kk25bqNGlTIyPusti52j/Lg/8i4DiE5BEc4IbE=\" } */\n/* https://hcaptcha.com/license */\n!function(){\"use strict\";function t(t){var e=this.constructor;return this.then((function(i){return e.resolve(t()).then((function(){return i}))}),(function(i){return e.resolve(t()).then((function(){return e.reject(i)}))}))}function e(t){return new this((function(e,i){if(!t||\"undefined\"==typeof t.length)return i(new TypeError(typeof t+\" \"+t+\" is not iterable(cannot read property Symbol(Symbol.iterator))\"));var n=Array.prototype.slice.call(t);if(0===n.length)return e([]);var o=n.length;function r(t,i){if(i&&(\"object\"==typeof i||\"function\"==typeof i)){var s=i.then;if(\"function\"==typeof s)return void s.call(i,(function(e){r(t,e)}),(function(i){n[t]={status:\"rejected\",reason:i},0==--o&&e(n)}))}n[t]={status:\"fulfilled\",value:i},0==--o&&e(n)}for(var s=0;s<n.length;s++)r(s,n[s])}))}var i=setTimeout,n=\"undefined\"!=typeof setImmediate?setImmediate:null;function o(t){return Boolean(t&&\"undefined\"!=typeof t.length)}function r(){}function s(t){if(!(this instanceof s))throw new TypeError(\"Promises must be constructed via new\");if(\"function\"!=typeof t)throw new TypeError(\"not a function\");this._state=0,this._handled=!1,this._value=undefined,this._deferreds=[],p(t,this)}function a(t,e){for(;3===t._state;)t=t._value;0!==t._state?(t._handled=!0,s._immediateFn((function(){var i=1===t._state?e.onFulfilled:e.onRejected;if(null!==i){var n;try{n=i(t._value)}catch(o){return void c(e.promise,o)}l(e.promise,n)}else(1===t._state?l:c)(e.promise,t._value)}))):t._deferreds.push(e)}function l(t,e){try{if(e===t)throw new TypeError(\"A promise cannot be resolved with itself.\");if(e&&(\"object\"==typeof e||\"function\"==typeof e)){var i=e.then;if(e instanceof s)return t._state=3,t._value=e,void h(t);if(\"function\"==typeof i)return void p((n=i,o=e,function(){n.apply(o,arguments)}),t)}t._state=1,t._value=e,h(t)}catch(r){c(t,r)}var n,o}function c(t,e){t._state=2,t._value=e,h(t)}function h(t){2===t._state&&0===t._deferreds.length&&s._immediateFn((function(){t._handled||s._unhandledRejectionFn(t._value)}));for(var e=0,i=t._deferreds.length;e<i;e++)a(t,t._deferreds[e]);t._deferreds=null}function u(t,e,i){this.onFulfilled=\"function\"==typeof t?t:null,this.onRejected=\"function\"==typeof e?e:null,this.promise=i}function p(t,e){var i=!1;try{t((function(t){i||(i=!0,l(e,t))}),(function(t){i||(i=!0,c(e,t))}))}catch(n){if(i)return;i=!0,c(e,n)}}s.prototype[\"catch\"]=function(t){return this.then(null,t)},s.prototype.then=function(t,e){var i=new this.constructor(r);return a(this,new u(t,e,i)),i},s.prototype[\"finally\"]=t,s.all=function(t){return new s((function(e,i){if(!o(t))return i(new TypeError(\"Promise.all accepts an array\"));var n=Array.prototype.slice.call(t);if(0===n.length)return e([]);var r=n.length;function s(t,o){try{if(o&&(\"object\"==typeof o||\"function\"==typeof o)){var a=o.then;if(\"function\"==typeof a)return void a.call(o,(function(e){s(t,e)}),i)}n[t]=o,0==--r&&e(n)}catch(l){i(l)}}for(var a=0;a<n.length;a++)s(a,n[a])}))},s.allSettled=e,s.resolve=function(t){return t&&\"object\"==typeof t&&t.constructor===s?t:new s((function(e){e(t)}))},s.reject=function(t){return new s((function(e,i){i(t)}))},s.race=fu"
+  },
+  {
+    "seq": 26,
+    "timestamp": "2026-03-12T14:49:55.426Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://newassets.hcaptcha.com/captcha/v1/5ea3feff9cf1292d7051510930d98c4719f64575/static/i18n/pt-BR.json",
+    "resourceType": "xhr",
+    "requestHeaders": {
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/json"
+    },
+    "responseBody": "{\n  \"'I am human' is now checked. You are verified\": \"A opção \\\"Eu sou humano\\\" agora está marcada. Você está verificado\",\n  \"'I am human', Select in order to trigger the challenge, or to bypass it if you have an accessibility cookie\": \"'Eu sou humano', selecione para acionar o desafio ou para ignorá-lo se você tiver um cookie de acessibilidade\",\n  \"A new SMS will open with a one time code for you to send.\": \"Uma nova mensagem SMS será aberta com um código único que você deverá enviar.\",\n  \"About hCaptcha & Accessibility Options\": \"Sobre o hCaptcha e as opções de acessibilidade\",\n  \"Accessibility\": \"Acessibilidade\",\n  \"Accessibility Challenge\": \"Desafio de acessibilidade\",\n  \"Accessibility Cookie\": \"Cookie de acessibilidade\",\n  \"Accessibility cookie is not set. {{retrieve-cookie}}\": \"O cookie de acessibilidade não está definido. {{retrieve-cookie}}\",\n  \"Accessibility cookie is set. For help, please email {{support}}\": \"O cookie de acessibilidade está definido. Para obter ajuda, envie um e-mail para {{support}}\",\n  \"Accessibility: Retrieve Cookie\": \"Acessibilidade: Recuperar Cookie\",\n  \"Back\": \"De volta\",\n  \"Back to previous verification option\": \"Voltar para a opção de verificação anterior\",\n  \"Can't Click\": \"Não é possível clicar\",\n  \"Can't Solve\": \"Não é possível resolver\",\n  \"Cancel\": \"Cancelar\",\n  \"Cancel Navigation\": \"Cancelar navegação\",\n  \"Cancel Response\": \"Cancelar resposta\",\n  \"Cannot contact hCaptcha. Check your connection and try again.\": \"Não é possível contatar hCaptcha. Verifique sua conexão e tente novamente.\",\n  \"Challenge Image {{id}}\": \"Imagem do desafio {{id}}\",\n  \"Challenge refreshed.\": \"Desafio renovado.\",\n  \"Challenge Text Input\": \"Entrada de Texto de Desafio\",\n  \"Check\": \"Verificar\",\n  \"Check mark\": \"Marca de verificação\",\n  \"Close\": \"Fechar\",\n  \"Close Modal\": \"Fechar Modal\",\n  \"Code\": \"Código\",\n  \"collapsed\": \"desabou\",\n  \"Confirm\": \"confirme\",\n  \"Confirm Code\": \"Confirmar código\",\n  \"Confirm Navigation\": \"Confirmar navegação\",\n  \"Confirming code {{code}}\": \"Confirmando código {{code}}\",\n  \"Cookies are disabled or the accessibility cookie is not set. {{enable-cookies}}\": \"Os cookies estão desativados ou o cookie de acessibilidade não está definido. {{enable-cookies}}\",\n  \"Copied\": \"Copiado\",\n  \"Copy Code\": \"Copiar código\",\n  \"Copy Phone Number\": \"Copiar número de telefone\",\n  \"Copy phone number: {{phone}}\": \"Copiar número de telefone: {{phone}}\",\n  \"Copy verification code: {{code}}\": \"Código de verificação de cópia: {{code}}\",\n  \"Couldn't verify the code, please try again\": \"Não foi possível verificar o código. Tente novamente.\",\n  \"Describe why you are reporting an image.\": \"Descreva por que você está relatando uma imagem.\",\n  \"Didn't get the code?\": \"Não recebeu o código?\",\n  \"Display hCaptcha Accessibility Challenge\": \"Exibir o desafio de acessibilidade hCaptcha\",\n  \"Display hCaptcha Visual Challenge\": \"Exibir o desafio visual hCaptcha\",\n  \"Drag the item\": \"Arraste o item\",\n  \"Email\": \"E-mail\",\n  \"Enable cross-site cookies.\": \"Habilite cookies entre sites.\",\n  \"Enter code\": \"Digite o código\",\n  \"Enter the two words in the image.\": \"Digite as duas palavras na imagem.\",\n  \"Enter verification code\": \"Insira o código de verificação\",\n  \"Enter your email address\": \"Insira seu endereço de e-mail\",\n  \"Enter your phone number\": \"Digite seu número de telefone\",\n  \"Error fetching captcha.\": \"Erro ao obter o captcha.\",\n  \"Error submitting captcha.\": \"Erro ao enviar captcha.\",\n  \"Example image {{id}}\": \"Imagem de exemplo {{id}}\",\n  \"expanded\": \"expandido\",\n  \"Feedback\": \"Comentários\",\n  \"Having a problem?\": \"Está tendo um problema?\",\n  \"hCaptcha challenge\": \"Desafio hCaptcha\",\n  \"hCaptcha is a service that reduces bots and spam by asking simple questions. Please follow the instructions at the top of the screen for each challenge. For more info visit\": \"O hCaptcha é um serviço que reduz bots e spam, fazendo perguntas simples. Por favor, siga as instruções na parte superior da tela para cada desafio. Para mais informações, visite\",\n  \"hCaptcha is a service that reduces bots and spam by asking simple questions. Please follow the instructions at the top of the screen for each challenge. For more information visit {{site-url}}\": \"hCaptcha é um serviço que reduz bots e spam fazendo perguntas simples. Siga as instruções na parte superior da tela para cada desafio. Para obter mais informações, visite {{site-url}}\",\n  \"hCaptcha logo, opens new window with more information\": \"Logotipo do hCaptcha, abre uma nova janela com mais informações\",\n  \"hCaptcha Privacy Policy, opens in a new tab\": \"Política de Privacidade do hCaptcha (abre em nova aba)\",\n  \"hCaptcha security token has expired. Please complete the challenge again.\": \"O token de segurança hCaptcha expirou. Por favor, complete o desafio novamente.\",\n  \"hCaptcha Terms of Service, opens in a new tab\": \"Termos de Serviço do hCaptcha (abre em nova aba)\",\n  \"hCaptcha window closed due to timeout.\": \"A janela do hCaptcha foi fechada devido ao tempo lim"
+  },
+  {
+    "seq": 29,
+    "timestamp": "2026-03-12T14:49:55.803Z",
+    "type": "HTTP",
+    "method": "POST",
+    "url": "https://api.hcaptcha.com/checksiteconfig?v=5ea3feff9cf1292d7051510930d98c4719f64575&host=cnetmobile.estaleiro.serpro.gov.br&sitekey=b8bbded1-9d04-4ace-9952-b67cde081a7b&sc=1&swa=1&spst=1",
+    "resourceType": "xhr",
+    "requestHeaders": {
+      "cookie": "__cf_bm=J_ANLPII0VLkkQfMcrccpibpy8oKe42OllZy8qjWWI8-1773326995-1.0.1.1-W2uQ0iMkasHm07SW1.4QnfLsUhRshvVDHWDY3GrtQZDxoCLPFB0NYuhWjur9aKuQcRHA_spXo7CJlYef7XuWpfITnByBm4bQnRKPitoOfkE",
+      "content-type": "text/plain",
+      "accept": "application/json"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/json"
+    },
+    "responseBody": "{\"features\":{\"enc_get_req\":true},\"c\":{\"type\":\"hsw\",\"req\":\"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJmIjowLCJzIjoyLCJ0IjoidyIsImQiOiJtRzNCWmpRUHkxRnpoWFJXeXlsNWRYTjRrQ1p5V1ptOC9MeVpIZGxTM2NtSnBHaFd4ZVNhbVNrS29ZTFdCQW1iM2Y3ZmRHRHpyNCtIT2lacS9qR1Vsa3o5MlAvWXBmVWZZV09lazVNWmRYM1kxSnBDbXZuTkhaSTdSVUsxRUxjUmFzUEdYeEhNQ3l0cURLemp3dnNSU01JdjFWK0xxb09USVZOcVRXOTBPYXYrWHhVL09xU1ZUK1hwYnVTT2tIOUdvbVJLVnRrQkNpd1lkOEs1OUVrdjY4aHFQS3JYVUMyblorZ01XUk1JcitUcFlhVW5xNld5WUM3NGQzNVlWd2xpVlBaVU1VQ0hyMHUvSFRFPWFGdXRZZHR6cHFuTGpkRi8iLCJsIjoiL2MvMmE4NzNhODY1ZmM4NDRjY2ZhYWRlYTRlM2ExNWZmYTM5YmQ0YzQ2ZDEwNzA2MTc3YjcxNjgzYjJiOWQ4Y2VkZiIsImkiOiJzaGEyNTYtdlFGTGwzYUk2NGRUWUVDM1N6cGhNNERiU1M2VjJJVDBUS0tFajVnT3pHbz0iLCJlIjoxNzczMzMwNTk2LCJuIjoiaHN3IiwiYyI6MTAwMH0.Ty6A8lbbooPsFqwXZX8gpxbuOfskCEZL5VI7F6a5MV8\"},\"pass\":true}"
+  },
+  {
+    "seq": 28,
+    "timestamp": "2026-03-12T14:49:55.507Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://newassets.hcaptcha.com/captcha/v1/5ea3feff9cf1292d7051510930d98c4719f64575/static/hcaptcha.html",
+    "resourceType": "document",
+    "requestHeaders": {
+      "cookie": "__cf_bm=J_ANLPII0VLkkQfMcrccpibpy8oKe42OllZy8qjWWI8-1773326995-1.0.1.1-W2uQ0iMkasHm07SW1.4QnfLsUhRshvVDHWDY3GrtQZDxoCLPFB0NYuhWjur9aKuQcRHA_spXo7CJlYef7XuWpfITnByBm4bQnRKPitoOfkE",
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "text/html"
+    },
+    "responseBody": "<!DOCTYPE html>\n<html lang=\"en\" data-id=\"hcaptcha-frame-5ea3feff9cf1292d7051510930d98c4719f64575\">\n<head>\n    <title>hCaptcha</title>\n    <meta charset=\"utf-8\">\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta http-equiv=\"Content-Security-Policy\" content=\"object-src 'none'; base-uri 'self'; worker-src blob:; script-src 'self' 'unsafe-eval' 'sha256-OsMzwCMUSHRLbuZuwqZ7NpkPMQfxPRnAQanRkZDRTx4=';\">\n    <style type=\"text/css\">*{-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}body,html{margin:0;padding:0;font-family:-apple-system,system-ui,BlinkMacSystemFont,\"Segoe UI\",Roboto,Oxygen,Ubuntu,\"Helvetica Neue\",Arial,sans-serif;overflow:hidden;height:100%;width:100%;background-color:rgba(255,255,255,0);background-color:transparent}fieldset{margin:0;padding:15px 20px;border:none}button:focus,input:focus,select:focus,textarea:focus{outline:0}:focus{border:none;outline:0}textarea{border:none;overflow:auto;outline:0;-webkit-box-shadow:none;-moz-box-shadow:none;box-shadow:none;resize:none}.no-selection{-webkit-touch-callout:none;-webkit-user-select:none;-khtml-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}@-webkit-keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}@-moz-keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}@-o-keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}@keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.8)}80%{transform:scale(.6)}100%{transform:scale(1)}}</style>\n</head>\n<body class=\"no-selection\">\n    <script type=\"text/javascript\">/* { \"version\": \"1\", \"hash\": \"MEUCIByGc2quIEcnMRWvF4yLvAEoUyAHGEQgHGMwnDJEtsUgAiEAgcAc4Kk25bqNGlTIyPusti52j/Lg/8i4DiE5BEc4IbE=\" } */\n/* https://hcaptcha.com/license */\n!function(){\"use strict\";function t(t){var e=this.constructor;return this.then((function(i){return e.resolve(t()).then((function(){return i}))}),(function(i){return e.resolve(t()).then((function(){return e.reject(i)}))}))}function e(t){return new this((function(e,i){if(!t||\"undefined\"==typeof t.length)return i(new TypeError(typeof t+\" \"+t+\" is not iterable(cannot read property Symbol(Symbol.iterator))\"));var n=Array.prototype.slice.call(t);if(0===n.length)return e([]);var o=n.length;function r(t,i){if(i&&(\"object\"==typeof i||\"function\"==typeof i)){var s=i.then;if(\"function\"==typeof s)return void s.call(i,(function(e){r(t,e)}),(function(i){n[t]={status:\"rejected\",reason:i},0==--o&&e(n)}))}n[t]={status:\"fulfilled\",value:i},0==--o&&e(n)}for(var s=0;s<n.length;s++)r(s,n[s])}))}var i=setTimeout,n=\"undefined\"!=typeof setImmediate?setImmediate:null;function o(t){return Boolean(t&&\"undefined\"!=typeof t.length)}function r(){}function s(t){if(!(this instanceof s))throw new TypeError(\"Promises must be constructed via new\");if(\"function\"!=typeof t)throw new TypeError(\"not a function\");this._state=0,this._handled=!1,this._value=undefined,this._deferreds=[],p(t,this)}function a(t,e){for(;3===t._state;)t=t._value;0!==t._state?(t._handled=!0,s._immediateFn((function(){var i=1===t._state?e.onFulfilled:e.onRejected;if(null!==i){var n;try{n=i(t._value)}catch(o){return void c(e.promise,o)}l(e.promise,n)}else(1===t._state?l:c)(e.promise,t._value)}))):t._deferreds.push(e)}function l(t,e){try{if(e===t)throw new TypeError(\"A promise cannot be resolved with itself.\");if(e&&(\"object\"==typeof e||\"function\"==typeof e)){var i=e.then;if(e instanceof s)return t._state=3,t._value=e,void h(t);if(\"function\"==typeof i)return void p((n=i,o=e,function(){n.apply(o,arguments)}),t)}t._state=1,t._value=e,h(t)}catch(r){c(t,r)}var n,o}function c(t,e){t._state=2,t._value=e,h(t)}function h(t){2===t._state&&0===t._deferreds.length&&s._immediateFn((function(){t._handled||s._unhandledRejectionFn(t._value)}));for(var e=0,i=t._deferreds.length;e<i;e++)a(t,t._deferreds[e]);t._deferreds=null}function u(t,e,i){this.onFulfilled=\"function\"==typeof t?t:null,this.onRejected=\"function\"==typeof e?e:null,this.promise=i}function p(t,e){var i=!1;try{t((function(t){i||(i=!0,l(e,t))}),(function(t){i||(i=!0,c(e,t))}))}catch(n){if(i)return;i=!0,c(e,n)}}s.prototype[\"catch\"]=function(t){return this.then(null,t)},s.prototype.then=function(t,e){var i=new this.constructor(r);return a(this,new u(t,e,i)),i},s.prototype[\"finally\"]=t,s.all=function(t){return new s((function(e,i){if(!o(t))return i(new TypeError(\"Promise.all accepts an array\"));var n=Array.prototype.slice.call(t);if(0===n.length)return e([]);var r=n.length;function s(t,o){try{if(o&&(\"object\"==typeof o||\"function\"==typeof o)){var a=o.then;if(\"function\"==typeof a)return void a.call(o,(function(e){s(t,e)}),i)}n[t]=o,0==--r&&e(n)}catch(l){i(l)}}for(var a=0;a<n.length;a++)s(a,n[a])}))},s.allSettled=e,s.resolve=function(t){return t&&\"object\"==typeof t&&t.constructor===s?t:new s((function(e){e(t)}))},s.reject=function(t){return new s((function(e,i){i(t)}))},s.race=fu"
+  },
+  {
+    "seq": 30,
+    "timestamp": "2026-03-12T14:49:56.074Z",
+    "type": "HTTP",
+    "method": "GET",
+    "url": "https://newassets.hcaptcha.com/c/2a873a865fc844ccfaadea4e3a15ffa39bd4c46d10706177b71683b2b9d8cedf/hsw.js",
+    "resourceType": "script",
+    "requestHeaders": {
+      "cookie": "__cf_bm=J_ANLPII0VLkkQfMcrccpibpy8oKe42OllZy8qjWWI8-1773326995-1.0.1.1-W2uQ0iMkasHm07SW1.4QnfLsUhRshvVDHWDY3GrtQZDxoCLPFB0NYuhWjur9aKuQcRHA_spXo7CJlYef7XuWpfITnByBm4bQnRKPitoOfkE",
+      "accept": "*/*"
+    },
+    "requestBody": null,
+    "responseStatus": 200,
+    "responseHeaders": {
+      "content-type": "application/javascript"
+    },
+    "responseBody": null
+  },
+  {
+    "seq": 31,
+    "timestamp": "2026-03-12T14:49:57.886Z",
+    "type": "HTTP",
+    "method": "POST",
+    "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-623FPXHZ7K&gtm=45je63a1v9117450663z89117634999za20gzb9117634999zd9117634999&_p=1773326990841&gcd=13l3l3l3l1l1&npa=0&dma=0&cid=80345684.1773326992&ul=pt-br&sr=1400x900&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CGoogle%2520Chrome%3B145.0.7632.160%7CChromium%3B145.0.7632.160&uamb=0&uam=&uap=macOS&uapv=26.3.0&uaw=0&are=1&frm=0&pscdl=noapi&_eu=AAAAAAQ&tag_exp=103116026~103200004~115938465~115938468~116024733~117484252~117625637&dl=https%3A%2F%2Fcnetmobile.estaleiro.serpro.gov.br%2Fcomprasnet-web%2Fpublic%2Fcompras&sid=1773326992&sct=1&seg=0&dt=Compras.gov.br&_s=4&tfd=6895",
+    "resourceType": "fetch",
+    "requestHeaders": {
+      "content-type": "text/plain;charset=UTF-8",
+      "accept": "*/*"
+    },
+    "requestBody": "en=scroll&_et=1\r\nen=gtm.load&_et=1092",
+    "responseStatus": 204,
+    "responseHeaders": {
+      "content-type": "text/plain"
+    },
+    "responseBody": ""
+  }
+]

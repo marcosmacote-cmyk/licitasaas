@@ -72,9 +72,14 @@ export interface DocumentRecord {
     category: 'juridica' | 'fiscal' | 'trabalhista' | 'economico_financeira' | 'tecnica' | 'declaracao' | 'proposta' | 'outro';
     subcategory?: string;
     status: 'valid' | 'expired' | 'pending' | 'missing';
+    reliability: 'confirmed' | 'unverified' | 'outdated';
     expiresAt?: string;
+    lastVerifiedAt?: string;
     lastUsedAt?: string;
     timesUsed: number;
+    timesSuccessful: number;
+    reuseCategory?: 'always_reusable' | 'edital_specific' | 'time_limited';
+    bestForEditalTypes?: string[];
     notes?: string;
 }
 
@@ -120,6 +125,9 @@ export function createEmptyProfile(companyId: string, legalName: string, cnpj: s
 
 export function addDocumentToMemory(companyId: string, doc: DocumentRecord): void {
     if (!memoryStore.has(companyId)) memoryStore.set(companyId, []);
+    // Default reliability
+    if (!doc.reliability) doc.reliability = 'unverified';
+    if (!doc.timesSuccessful) doc.timesSuccessful = 0;
     memoryStore.get(companyId)!.push(doc);
 }
 
@@ -146,13 +154,48 @@ export function getMostReusedDocuments(companyId: string, limit = 10): DocumentR
         .slice(0, limit);
 }
 
-export function markDocumentUsed(companyId: string, docName: string): void {
+export function getDocumentsExpiringWithin(companyId: string, days: number): DocumentRecord[] {
+    const cutoff = new Date(Date.now() + days * 86400000).toISOString();
+    return getCompanyDocuments(companyId).filter(d => d.expiresAt && d.expiresAt <= cutoff && d.status === 'valid');
+}
+
+export function getReusableDocumentsForEditalType(companyId: string, editalType: string): DocumentRecord[] {
+    return getCompanyDocuments(companyId).filter(d =>
+        d.status === 'valid' && d.reuseCategory === 'always_reusable' ||
+        (d.bestForEditalTypes?.some(t => t.toLowerCase().includes(editalType.toLowerCase())))
+    );
+}
+
+export function getRecurringlyMissingDocuments(companyId: string): DocumentRecord[] {
+    return getCompanyDocuments(companyId).filter(d =>
+        d.status === 'missing' && d.timesUsed > 0
+    );
+}
+
+export function markDocumentUsed(companyId: string, docName: string, successful = true): void {
     const docs = memoryStore.get(companyId) || [];
     const doc = docs.find(d => d.name === docName);
     if (doc) {
         doc.timesUsed++;
         doc.lastUsedAt = new Date().toISOString();
+        if (successful) doc.timesSuccessful++;
     }
+}
+
+export function refreshDocumentStatuses(companyId: string): { refreshed: number; expired: number } {
+    const docs = memoryStore.get(companyId) || [];
+    const now = new Date().toISOString();
+    let refreshed = 0;
+    let expired = 0;
+    for (const doc of docs) {
+        if (doc.expiresAt && doc.status === 'valid' && doc.expiresAt < now) {
+            doc.status = 'expired';
+            doc.reliability = 'outdated';
+            expired++;
+            refreshed++;
+        }
+    }
+    return { refreshed, expired };
 }
 
 /**
