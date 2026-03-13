@@ -229,7 +229,7 @@ export function Dashboard({ items }: Props) {
                 CRITICAL ALERTS (top banner)
                 ═════════════════════════════ */}
             {criticalAlerts.length > 0 && (
-                <div style={{
+            <div className="animate-fade-in-down" style={{
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 'var(--space-2)',
@@ -280,7 +280,7 @@ export function Dashboard({ items }: Props) {
             {/* ═════════════════════════════
                 KPIs (compact strip)
                 ═════════════════════════════ */}
-            <div style={{
+            <div className="stagger-children" style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: 'var(--space-4)',
@@ -434,7 +434,7 @@ export function Dashboard({ items }: Props) {
                     )}
 
                     {/* RADAR DO SISTEMA */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
+                    <div className="stagger-children" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
                         <RadarCard
                             icon={<Satellite size={18} />}
                             title="Captação PNCP"
