@@ -157,7 +157,7 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                 </div>
 
                 {/* Filters Button */}
-                <div style={{ position: 'relative' }}>
+                <div className="pos-relative">
                     <button className={`btn ${b.showFilterPanel || b.hasActiveFilters ? 'btn-primary' : 'btn-outline'}`} onClick={() => { b.setShowFilterPanel(!b.showFilterPanel); b.setShowCardConfig(false); }}>
                         <Filter size={14} /> Filtros
                         {b.activeFilterCount > 0 && (

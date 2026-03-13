@@ -134,11 +134,11 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                     </FormField>
 
                     {/* Canais de Contato */}
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <div className="card" style={{ padding: 'var(--space-6)' }}>
+                    <div className="col-span-full">
+                        <div className="card p-6">
                             <div className="flex-gap" style={{ gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                 <Phone size={16} />
-                                <span className="form-label" style={{ marginBottom: 0 }}>Canais de Contato</span>
+                                <span className="form-label mb-0">Canais de Contato</span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
                                 <FormField label="Nome do Contato (Repr. Legal)">
@@ -176,11 +176,11 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                     </div>
 
                     {/* Endereço */}
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <div className="card" style={{ padding: 'var(--space-6)' }}>
+                    <div className="col-span-full">
+                        <div className="card p-6">
                             <div className="flex-gap" style={{ gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                 <MapPin size={16} />
-                                <span className="form-label" style={{ marginBottom: 0 }}>Endereço da Sede</span>
+                                <span className="form-label mb-0">Endereço da Sede</span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-3)' }}>
                                 <FormField label="Endereço Completo">

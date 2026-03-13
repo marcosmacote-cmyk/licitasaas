@@ -4,6 +4,19 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Heavy vendor libraries — split out of main bundle
+          'vendor-pdf': ['jspdf', 'jspdf-autotable'],
+          'vendor-canvas': ['html2canvas'],
+          'vendor-sanitize': ['dompurify'],
+          'vendor-icons': ['lucide-react'],
+        }
+      }
+    }
+  },
   server: {
     host: '0.0.0.0',
     proxy: {

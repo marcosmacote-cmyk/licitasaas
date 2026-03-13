@@ -134,7 +134,7 @@ export function BiddingListExporter({ biddings, companies }: Props) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-            <div className="card" style={{ padding: 'var(--space-6)' }}>
+            <div className="card p-6">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flex: 1, minWidth: '300px' }}>
                         <div style={{ position: 'relative', flex: 1 }}>

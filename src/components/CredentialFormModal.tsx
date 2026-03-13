@@ -114,7 +114,7 @@ export function CredentialFormModal({ companyId, initialData, onClose, onSave }:
                         />
                     </FormField>
 
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)' }}>
+                    <div className="col-span-full flex-center gap-2 text-tertiary" style={{ fontSize: 'var(--text-base)' }}>
                         <Info size={14} />
                         <span>A senha será exibida em texto plano para facilitar a cópia rápida.</span>
                     </div>

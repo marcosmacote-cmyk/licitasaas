@@ -188,7 +188,7 @@ export function ProcessHubPanel({
                 })()}
 
                 {/* ── Quick Actions Grid ── */}
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div className="col-span-full">
                     <label style={{ ...labelStyle, marginBottom: 'var(--space-3)' }}>Ações Rápidas</label>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)' }}>
                         <QuickAction icon={<Brain size={20} />} label="Análise IA" desc="Relatório inteligente do edital" color="var(--color-ai)" onClick={() => { onClose(); onNavigateToModule?.('intelligence', initialData?.id); }} />
@@ -201,7 +201,7 @@ export function ProcessHubPanel({
                 </div>
 
                 {/* ── Observações inline (resumo) ── */}
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div className="col-span-full">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
                         <label style={labelStyle}>
                             <MessageSquare size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />

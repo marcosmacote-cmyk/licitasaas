@@ -303,7 +303,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     {/* CALENDÁRIO */}
                     <div className="card" style={{ padding: 'var(--card-padding)' }}>
                         <div className="flex-between mb-4">
-                            <h3 className="dash-section-title" style={{ marginBottom: 0 }}><CalendarIcon size={18} color="var(--color-primary)" /> Calendário</h3>
+                            <h3 className="dash-section-title mb-0"><CalendarIcon size={18} color="var(--color-primary)" /> Calendário</h3>
                             <div className="flex-center gap-2">
                                 <button onClick={prevMonth} className="dash-cal-btn"><ChevronLeft size={14} /></button>
                                 <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', minWidth: 120, textAlign: 'center' }}>{monthNames[month]} {year}</span>
@@ -352,7 +352,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     {/* AGENDA DO DIA */}
                     <div className="card" style={{ padding: 'var(--card-padding)', flex: 1, display: 'flex', flexDirection: 'column' }}>
                         <div className="flex-between mb-4">
-                            <h3 className="dash-section-title" style={{ marginBottom: 0 }}>{selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</h3>
+                            <h3 className="dash-section-title mb-0">{selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</h3>
                             {selectedDateKey === m.todayStr && <span className="badge badge-danger" style={{ fontSize: 'var(--text-xs)' }}>HOJE</span>}
                         </div>
                         <div className="flex-col gap-2" style={{ flex: 1, overflowY: 'auto' }}>

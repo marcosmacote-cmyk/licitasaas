@@ -99,7 +99,7 @@ export function PerformanceDashboard({ biddings }: Props) {
 
             {/* KPI Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-5)' }}>
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div className="card p-6">
                     <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <span className="kpi-label">Taxa de Conversão (Win Rate)</span>
                         <div className="kpi-icon" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
@@ -112,7 +112,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                     </div>
                 </div>
 
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div className="card p-6">
                     <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <span className="kpi-label">Montante Ganho</span>
                         <div className="kpi-icon" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
@@ -123,7 +123,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                     <div className="kpi-sub">Valor consolidado dos processos "Vencidos"</div>
                 </div>
 
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div className="card p-6">
                     <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <span className="kpi-label">Total em Jogo (Pipeline)</span>
                         <div className="kpi-icon" style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
@@ -138,7 +138,7 @@ export function PerformanceDashboard({ biddings }: Props) {
             {/* Charts Section */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-5)' }}>
                 {/* Modality Chart */}
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div className="card p-6">
                     <div className="flex-between" style={{ marginBottom: '24px' }}>
                         <div className="flex-gap">
                             <FileStack size={18} color="var(--color-primary)" />
@@ -166,7 +166,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                 </div>
 
                 {/* Status Chart */}
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div className="card p-6">
                     <div className="flex-between" style={{ marginBottom: '24px' }}>
                         <div className="flex-gap">
                             <PieIcon size={18} color="var(--color-primary)" />

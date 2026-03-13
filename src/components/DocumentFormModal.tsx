@@ -198,7 +198,7 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                     </FormField>
 
                     {/* Upload de Arquivo */}
-                    <div style={{ gridColumn: '1 / -1' }}>
+                    <div className="col-span-full">
                         <FormField label={initialData ? 'Substituir Arquivo PDF' : 'Arquivo PDF do Documento'} required={!initialData}>
                             <div style={{
                                 border: '2px dashed var(--color-border)',

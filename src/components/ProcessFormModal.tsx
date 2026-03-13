@@ -134,7 +134,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                             {/* Título */}
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <label style={labelStyle}>Título / Identificação do Processo *</label>
                                 <div style={inputContainerStyle}>
                                     <input type="text" name="title" style={inputInnerStyle}
@@ -144,7 +144,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* Empresa Participante */}
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <label style={labelStyle}>Empresa Participante</label>
                                 <div style={inputContainerStyle}>
                                     <select name="companyProfileId" value={form.formData.companyProfileId || ''} onChange={form.handleChange} style={inputInnerStyle}>
@@ -159,7 +159,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* Objeto */}
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <label style={labelStyle}>Objeto Resumido</label>
                                 <div style={{ ...inputContainerStyle, alignItems: 'flex-start' }}>
                                     <textarea name="summary" style={{ ...inputInnerStyle, height: '80px', resize: 'none' }}
@@ -244,7 +244,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* Tag de Risco */}
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <label style={labelStyle}>Tag de Risco</label>
                                 <div style={{ display: 'flex', gap: '12px' }}>
                                     {['Baixo', 'Médio', 'Alto', 'Crítico'].map((level) => (
@@ -271,7 +271,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* Link / Upload + PDF Viewer + Credenciais */}
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <label style={labelStyle}>Documentos do Edital / TR</label>
 
                                 {/* External Portal Link */}
@@ -389,7 +389,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* Sistema de Lembrete Inteligente */}
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <ReminderConfig
                                     formData={form.formData}
                                     setFormData={form.setFormData}
@@ -400,7 +400,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* Observações */}
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <label style={labelStyle}>Historico de Observações</label>
                                 <div style={{
                                     background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)',

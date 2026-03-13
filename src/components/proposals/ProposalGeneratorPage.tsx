@@ -182,7 +182,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
             {/* ── Items Tab ── */}
             {p.activeTab === 'items' && (p.proposal || p.items.length > 0) && (
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div className="card p-6">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                         <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                             Itens da Proposta ({p.items.length})
@@ -281,7 +281,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                                 {isEditing ? (
                                                     <input value={item.description} onChange={e => p.updateItem(item.id, 'description', e.target.value)} className="prop-input" autoFocus />
                                                 ) : (
-                                                    <span onClick={() => p.setEditingItemId(item.id)} style={{ cursor: 'pointer' }} title="Clique para editar">
+                                                    <span onClick={() => p.setEditingItemId(item.id)} className="cursor-pointer" title="Clique para editar">
                                                         {item.description || '(sem descrição)'}
                                                     </span>
                                                 )}
@@ -413,7 +413,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
             {/* ── Letter Tab ── */}
             {p.activeTab === 'letter' && (
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div className="card p-6">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>

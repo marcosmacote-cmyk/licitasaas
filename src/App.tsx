@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import {
   Briefcase,
   LayoutDashboard,
@@ -16,20 +16,23 @@ import {
   LogOut,
   Gavel
 } from 'lucide-react';
-import { PncpPage } from './components/PncpPage';
+// Static imports — core pages that load on startup
 import { BiddingPage } from './components/BiddingPage';
 import { Dashboard } from './components/Dashboard';
-import { DocumentsPage } from './components/DocumentsPage';
 import { LoginPage } from './components/LoginPage';
-import { SettingsPage } from './components/SettingsPage';
-import { ChatMonitorPage } from './components/ChatMonitorPage';
-import { InteligenciaPage } from './components/InteligenciaPage';
-import { ProducaoPage } from './components/ProducaoPage';
-import { ResultadosPage } from './components/ResultadosPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui';
+
+// Lazy imports — pages loaded on demand
+const PncpPage = lazy(() => import('./components/PncpPage').then(m => ({ default: m.PncpPage })));
+const DocumentsPage = lazy(() => import('./components/DocumentsPage').then(m => ({ default: m.DocumentsPage })));
+const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const ChatMonitorPage = lazy(() => import('./components/ChatMonitorPage').then(m => ({ default: m.ChatMonitorPage })));
+const InteligenciaPage = lazy(() => import('./components/InteligenciaPage').then(m => ({ default: m.InteligenciaPage })));
+const ProducaoPage = lazy(() => import('./components/ProducaoPage').then(m => ({ default: m.ProducaoPage })));
+const ResultadosPage = lazy(() => import('./components/ResultadosPage').then(m => ({ default: m.ResultadosPage })));
 
 type AppTab = 'dashboard' | 'opportunities' | 'bidding' | 'intelligence' | 'companies' | 'production' | 'monitoring' | 'results' | 'settings';
 
@@ -390,6 +393,7 @@ function App() {
           </header>
 
           {/* ── Page Content ── */}
+          <Suspense fallback={<div className="flex-center" style={{ padding: 'var(--space-20)', justifyContent: 'center' }}><Loader2 size={32} className="spinner" color="var(--color-primary)" /></div>}>
           {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { setNavFilter(filter || null); setActiveTab(tab as AppTab); }} />}
           {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)} />}
@@ -399,6 +403,7 @@ function App() {
           {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} />}
           {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}
           {activeTab === 'settings' && <SettingsPage />}
+          </Suspense>
         </main>
       </div>
     </ErrorBoundary>

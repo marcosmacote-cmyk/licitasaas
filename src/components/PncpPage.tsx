@@ -1,13 +1,9 @@
-import { useState, useEffect } from 'react';
 import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { API_BASE_URL } from '../config';
-import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../types';
+import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
-import { useToast, ConfirmDialog } from './ui';
-import { v4 as uuidv4 } from 'uuid';
+import { ConfirmDialog } from './ui';
+import { usePncpPage, UFS, ESFERAS, MODALIDADES, STATUS_OPTIONS } from './hooks/usePncpPage';
 
 interface Props {
     companies: CompanyProfile[];
@@ -15,577 +11,8 @@ interface Props {
     items?: BiddingProcess[];
 }
 
-const UFS = [
-    'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
-    'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN',
-    'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'
-];
-
-const ESFERAS = [
-    { value: 'todas', label: 'Todas as Esferas' },
-    { value: 'F', label: 'Federal' },
-    { value: 'E', label: 'Estadual' },
-    { value: 'M', label: 'Municipal' },
-    { value: 'D', label: 'Distrital' },
-];
-
-const MODALIDADES = [
-    { value: 'todas', label: 'Todas as Modalidades' },
-    { value: '1', label: 'Pregão Eletrônico' },
-    { value: '2', label: 'Concorrência' },
-    { value: '3', label: 'Concurso' },
-    { value: '4', label: 'Leilão' },
-    { value: '5', label: 'Diálogo Competitivo' },
-    { value: '6', label: 'Dispensa de Licitação' },
-    { value: '7', label: 'Inexigibilidade' },
-    { value: '8', label: 'Tomada de Preços' },
-    { value: '9', label: 'Convite' },
-];
-
-const STATUS_OPTIONS = [
-    { value: 'recebendo_proposta', label: '🟢 Abertas (Recebendo Propostas)' },
-    { value: 'encerrada', label: '🔴 Encerradas' },
-    { value: 'suspensa', label: '🟡 Suspensas' },
-    { value: 'anulada', label: '⚫ Anuladas' },
-    { value: 'todas', label: '📋 Todas' },
-];
-
 export function PncpPage({ companies, onRefresh, items = [] }: Props) {
-    const toast = useToast();
-    const [savedSearches, setSavedSearches] = useState<PncpSavedSearch[]>([]);
-    const [results, setResults] = useState<PncpBiddingItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-
-    // Form state
-    const [keywords, setKeywords] = useState('');
-    const [status, setStatus] = useState('recebendo_proposta');
-    const [selectedUf, setSelectedUf] = useState('');
-    const [selectedSearchCompanyId, setSelectedSearchCompanyId] = useState('');
-    const [modalidade, setModalidade] = useState('todas');
-    const [esfera, setEsfera] = useState('todas');
-    const [orgao, setOrgao] = useState('');
-    const [orgaosLista, setOrgaosLista] = useState('');
-    const [dataInicio, setDataInicio] = useState('');
-    const [dataFim, setDataFim] = useState('');
-    const [page, setPage] = useState(1);
-    const [totalResults, setTotalResults] = useState(0);
-
-    // Modal state
-    const [editingProcess, setEditingProcess] = useState<Partial<BiddingProcess> | null>(null);
-
-    // AI Analysis state
-    const [analyzingItemId, setAnalyzingItemId] = useState<string | null>(null);
-    const [pncpAnalysis, setPncpAnalysis] = useState<{ process: Partial<BiddingProcess>; analysis: AiAnalysis } | null>(null);
-    const [viewingAnalysisProcess, setViewingAnalysisProcess] = useState<BiddingProcess | null>(null);
-    const [analyzedPncpItem, setAnalyzedPncpItem] = useState<PncpBiddingItem | null>(null);
-    const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
-
-    // Favoritos State
-    const [favoritos, setFavoritos] = useState<PncpBiddingItem[]>(() => {
-        const saved = localStorage.getItem('pncp_favoritos');
-        return saved ? JSON.parse(saved) : [];
-    });
-    const [showFavoritosTab, setShowFavoritosTab] = useState(false);
-    const [confirmAction, setConfirmAction] = useState<{ type: string; message?: string; onConfirm: () => void } | null>(null);
-
-    useEffect(() => {
-        localStorage.setItem('pncp_favoritos', JSON.stringify(favoritos));
-    }, [favoritos]);
-
-    const toggleFavorito = (item: PncpBiddingItem) => {
-        setFavoritos(prev => {
-            const isFav = prev.some(f => f.id === item.id);
-            if (isFav) return prev.filter(f => f.id !== item.id);
-            return [...prev, item];
-        });
-    };
-
-    const displayItems = showFavoritosTab ? [...favoritos].sort((a, b) => {
-        const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
-        const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
-        return dateA.getTime() - dateB.getTime();
-    }) : results;
-
-    useEffect(() => {
-        const checkExpired = () => {
-            const now = new Date();
-            setFavoritos(prev => {
-                const filtered = prev.filter(f => {
-                    if (!f.data_encerramento_proposta && !f.data_abertura) return true;
-                    // Se a data e hora do termino for menor que o momento atual, retira dos favoritos (pois já encerrou)
-                    const sessao = new Date(f.data_encerramento_proposta || f.data_abertura || Date.now());
-                    return sessao.getTime() >= now.getTime();
-                });
-                if (filtered.length !== prev.length) return filtered;
-                return prev;
-            });
-        };
-
-        checkExpired(); // primeira checagem assim que monta
-        const interval = setInterval(checkExpired, 60000); // 1 minuto
-        return () => clearInterval(interval);
-    }, []);
-
-    const exportFavoritesToPdf = () => {
-        if (favoritos.length === 0) {
-            toast.warning('Não há licitações favoritadas.');
-            return;
-        }
-
-        const doc = new jsPDF('l', 'mm', 'a4');
-        doc.setFontSize(16);
-        doc.text("Relatório de Licitações Favoritas (PNCP)", 14, 20);
-
-        doc.setFontSize(10);
-        doc.text(`Data da Exportação: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
-
-        const tableColumn = ["Órgão", "Mod. / N°", "Objeto", "Prazo Limite", "Val. Est. (R$)", "Município", "Link PNCP"];
-        const tableRows: any[][] = [];
-
-        const sortedFavoritos = [...favoritos].sort((a, b) => {
-            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
-            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
-            return dateA.getTime() - dateB.getTime();
-        });
-
-        sortedFavoritos.forEach(item => {
-            const rowData = [
-                item.orgao_nome,
-                `${item.modalidade_nome}\n${item.ano}/${item.numero_sequencial}`,
-                item.objeto.length > 90 ? item.objeto.substring(0, 87) + '...' : item.objeto,
-                item.data_encerramento_proposta
-                    ? `${new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR')} às ${new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-                    : '-',
-                item.valor_estimado ? item.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-',
-                item.municipio ? `${item.municipio}-${item.uf}` : item.uf,
-                ''
-            ];
-            tableRows.push(rowData);
-        });
-
-        autoTable(doc, {
-            head: [tableColumn],
-            body: tableRows,
-            startY: 35,
-            styles: { fontSize: 8 },
-            headStyles: { fillColor: [37, 99, 235] },
-            columnStyles: { 2: { cellWidth: 70 }, 6: { cellWidth: 35 } },
-            didDrawCell: (data) => {
-                if (data.section === 'body' && data.column.index === 6) {
-                    const item = sortedFavoritos[data.row.index];
-                    if (item && item.link_sistema) {
-                        doc.setTextColor(37, 99, 235);
-                        doc.textWithLink("Acessar no PNCP", data.cell.x + 2, data.cell.y + 5, { url: item.link_sistema });
-                    }
-                }
-            }
-        });
-
-        doc.save(`licitacoes-favoritas-${new Date().toISOString().split('T')[0]}.pdf`);
-    };
-
-    useEffect(() => {
-        fetchSavedSearches();
-    }, []);
-
-    const fetchSavedSearches = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/searches`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setSavedSearches(data);
-            }
-        } catch (e) {
-            console.error("Failed to fetch saved searches", e);
-        }
-    };
-
-    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string }) => {
-        if (e) {
-            e.preventDefault();
-            setPage(1);
-        }
-        setLoading(true);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    keywords: overrides?.keywords ?? keywords,
-                    status: overrides?.status ?? status,
-                    uf: overrides?.uf ?? selectedUf,
-                    pagina: e ? 1 : page,
-                    modalidade: overrides?.modalidade ?? modalidade,
-                    dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
-                    dataFim: (overrides?.dataFim ?? dataFim) || undefined,
-                    esfera: overrides?.esfera ?? esfera,
-                    orgao: overrides?.orgao ?? orgao,
-                    orgaosLista: overrides?.orgaosLista ?? orgaosLista,
-                })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setResults(data.items || data);
-                setTotalResults(data.total || data.length);
-            } else {
-                throw new Error("Erro na busca");
-            }
-        } catch (e) {
-            console.error(e);
-            toast.error('Falha ao buscar editais. Tente novamente.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSaveSearch = async () => {
-        const name = prompt("Defina um nome para esta pesquisa (ex: Equipamentos TI em SP):");
-        if (!name) return;
-
-        setSaving(true);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/searches`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name,
-                    keywords,
-                    status,
-                    companyProfileId: selectedSearchCompanyId || undefined,
-                    states: JSON.stringify({
-                        uf: selectedUf,
-                        modalidade,
-                        esfera,
-                        orgao,
-                        orgaosLista,
-                        dataInicio,
-                        dataFim
-                    })
-                })
-            });
-
-            if (res.ok) {
-                fetchSavedSearches();
-            } else {
-                throw new Error("Failed to save");
-            }
-        } catch (e) {
-            console.error(e);
-            toast.error('Erro ao salvar pesquisa.');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const loadSavedSearch = (search: PncpSavedSearch) => {
-        const searchKeywords = search.keywords || '';
-        const searchStatus = search.status || 'recebendo_proposta';
-
-        let customState = {
-            uf: '',
-            modalidade: 'todas',
-            esfera: 'todas',
-            orgao: '',
-            orgaosLista: '',
-            dataInicio: '',
-            dataFim: ''
-        };
-
-        try {
-            const parsedStates = JSON.parse(search.states || '{}');
-            if (Array.isArray(parsedStates)) {
-                // Backward compatibility for old saved searches that just stored [uf]
-                customState.uf = parsedStates[0] || '';
-            } else if (typeof parsedStates === 'object' && parsedStates !== null) {
-                customState = { ...customState, ...parsedStates };
-            }
-        } catch {
-            // retain defaults
-        }
-
-        // Update form state for display
-        setKeywords(searchKeywords);
-        setStatus(searchStatus);
-        setSelectedSearchCompanyId(search.companyProfileId || '');
-        setSelectedUf(customState.uf);
-        setModalidade(customState.modalidade);
-        setEsfera(customState.esfera);
-        setOrgao(customState.orgao);
-        setOrgaosLista(customState.orgaosLista);
-        setDataInicio(customState.dataInicio);
-        setDataFim(customState.dataFim);
-        setPage(1);
-
-        // Execute search immediately with the saved values (bypass stale state)
-        handleSearch(undefined, {
-            keywords: searchKeywords,
-            status: searchStatus,
-            uf: customState.uf,
-            modalidade: customState.modalidade,
-            esfera: customState.esfera,
-            orgao: customState.orgao,
-            orgaosLista: customState.orgaosLista,
-            dataInicio: customState.dataInicio,
-            dataFim: customState.dataFim
-        });
-    };
-
-    useEffect(() => {
-        if (!loading) {
-            handleSearch();
-        }
-    }, [page]);
-
-    const deleteSavedSearch = async (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        setConfirmAction({ type: 'deleteSearch', onConfirm: async () => {
-            setConfirmAction(null);
-            try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE_URL}/api/pncp/searches/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) fetchSavedSearches();
-            } catch (e) {
-                console.error(e);
-            }
-        }});
-    };
-
-    const clearSearch = () => {
-        setKeywords('');
-        setStatus('recebendo_proposta');
-        setSelectedUf('');
-        setSelectedSearchCompanyId('');
-        setModalidade('todas');
-        setEsfera('todas');
-        setOrgao('');
-        setOrgaosLista('');
-        setDataInicio('');
-        setDataFim('');
-        setResults([]);
-        setTotalResults(0);
-        setPage(1);
-    };
-
-    const handleImportToFunnel = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
-        // Verifica se a licitação já existe no Kanban checando o link_sistema
-        if (items) {
-            const existingProcess = items.find(p => p.link && p.link === item.link_sistema);
-            if (existingProcess) {
-                const isCaptado = existingProcess.status === 'Captado';
-                const locationStr = isCaptado ? 'na coluna "Captada"' : `na coluna "${existingProcess.status}"`;
-                setConfirmAction({
-                    type: 'duplicate',
-                    message: `Esta licitação aparentemente já está no seu funil (${locationStr}). Tem certeza que deseja importar novamente e criar uma duplicidade?`,
-                    onConfirm: () => {
-                        setConfirmAction(null);
-                        doImport(item, aiData);
-                    }
-                });
-                return;
-            }
-        }
-        doImport(item, aiData);
-    };
-
-    const doImport = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
-        let bestPortalName = "PNCP";
-        if (companies.length > 0) {
-            const allCreds = companies.flatMap(c => c.credentials || []);
-            const link = (item.link_sistema || '').toLowerCase();
-            const match = allCreds.find(c => {
-                const cu = (c.url || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
-                return cu && link.includes(cu.split('/')[0]); // simple domain check
-            });
-
-            if (match) {
-                bestPortalName = match.platform;
-            } else if (link.includes('comprasnet') || link.includes('gov.br/compras')) {
-                bestPortalName = "ComprasNet";
-            } else if (link.includes('bll.org')) {
-                bestPortalName = "BLL";
-            } else if (link.includes('bnccompras') || link.includes('bnc.org.br')) {
-                bestPortalName = "BNC";
-            } else if (link.includes('licitacoes-e')) {
-                bestPortalName = "Licitações-e (BB)";
-            } else if (link.includes('portaldecompraspublicas')) {
-                bestPortalName = "Portal de Compras Públicas";
-            } else if (link.includes('bec.sp')) {
-                bestPortalName = "BEC/SP";
-            }
-        }
-
-        const processData: Partial<BiddingProcess> = {
-            title: aiData?.process?.title || item.titulo,
-            summary: aiData?.process?.summary || item.objeto,
-            portal: aiData?.process?.portal || bestPortalName,
-            modality: aiData?.process?.modality || item.modalidade_nome || "Não Informado (PNCP)",
-            status: "Captado",
-            estimatedValue: aiData?.process?.estimatedValue || item.valor_estimado || 0,
-            sessionDate: item.data_encerramento_proposta
-                ? new Date(item.data_encerramento_proposta).toISOString()
-                : (item.data_abertura ? new Date(item.data_abertura).toISOString() : new Date().toISOString()),
-            link: item.link_sistema,
-            pncpLink: item.link_sistema,
-            risk: aiData?.process?.risk || 'Médio',
-            companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
-            observations: JSON.stringify([{
-                id: crypto.randomUUID?.() || Date.now().toString(),
-                text: `Importado do PNCP | Órgão: ${item.orgao_nome} | ${item.municipio}-${item.uf}${item.data_encerramento_proposta ? ' | Prazo Limite: ' + new Date(item.data_encerramento_proposta).toLocaleString('pt-BR') : ''}`,
-                createdAt: new Date().toISOString(),
-                author: 'Sistema'
-            }])
-        };
-        setEditingProcess(processData);
-    };
-
-    // AI Analysis for PNCP items (fetches PDFs directly from PNCP)
-    const handlePncpAiAnalyze = async (item: PncpBiddingItem) => {
-        if (analyzingItemId) return; // prevent double-click
-        setAnalyzingItemId(item.id);
-        setAnalyzedPncpItem(item);
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/api/pncp/analyze`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    orgao_cnpj: item.orgao_cnpj,
-                    ano: item.ano,
-                    numero_sequencial: item.numero_sequencial,
-                    link_sistema: item.link_sistema
-                })
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || 'Falha na análise IA');
-            }
-
-            const aiData = await response.json();
-            const processObj = aiData.process || {};
-            const analysisObj = aiData.analysis || {};
-
-            const analysisData: AiAnalysis = {
-                id: uuidv4(),
-                biddingProcessId: '',
-                requiredDocuments: JSON.stringify(analysisObj.requiredDocuments || []),
-                pricingConsiderations: analysisObj.pricingConsiderations || '',
-                irregularitiesFlags: JSON.stringify(analysisObj.irregularitiesFlags || []),
-                fullSummary: analysisObj.fullSummary || '',
-                deadlines: JSON.stringify(analysisObj.deadlines || []),
-                penalties: analysisObj.penalties || '',
-                qualificationRequirements: analysisObj.qualificationRequirements || '',
-                biddingItems: analysisObj.biddingItems || '',
-                sourceFileNames: JSON.stringify(aiData.pncpSource?.downloadedFiles || []),
-                schemaV2: aiData.schemaV2 || null,
-                promptVersion: aiData._prompt_version || null,
-                modelUsed: aiData._model_used || null,
-                pipelineDurationS: aiData._pipeline_duration_s || null,
-                overallConfidence: aiData._overall_confidence || null,
-                analyzedAt: new Date().toISOString()
-            };
-
-            const fakeProcess: BiddingProcess = {
-                id: `pncp-${item.id}`,
-                title: processObj.title || item.titulo,
-                summary: processObj.summary || item.objeto,
-                portal: 'PNCP',
-                modality: processObj.modality || item.modalidade_nome || '',
-                status: 'Captado',
-                estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
-                sessionDate: item.data_encerramento_proposta || item.data_abertura || new Date().toISOString(),
-                link: item.link_sistema,
-                pncpLink: item.link_sistema,
-                risk: processObj.risk || 'Médio',
-                companyProfileId: selectedSearchCompanyId || '',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                observations: '[]'
-            } as BiddingProcess;
-
-            setPncpAnalysis({ process: processObj, analysis: analysisData });
-            setViewingAnalysisProcess(fakeProcess);
-
-        } catch (error: any) {
-            console.error('PNCP AI Analysis error:', error);
-            toast.error(`Erro na análise IA: ${error.message}`);
-        } finally {
-            setAnalyzingItemId(null);
-        }
-    };
-
-    const handleSaveProcess = async (data: Partial<BiddingProcess>, aiData?: any) => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/biddings`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-
-            if (res.ok) {
-                const savedProcess = await res.json();
-                // Save AI analysis if provided (either from form or from PNCP analysis)
-                const analysisToSave = aiData || pendingAiAnalysis;
-                if (analysisToSave) {
-                    await fetch(`${API_BASE_URL}/api/analysis`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ ...analysisToSave, biddingProcessId: savedProcess.id })
-                    });
-                }
-                toast.success('Licitação importada com sucesso!' + (analysisToSave ? ' (com análise IA)' : ''));
-                setEditingProcess(null);
-                setPendingAiAnalysis(null);
-                setPncpAnalysis(null);
-                setAnalyzedPncpItem(null);
-                // Refresh global data so Licitações tab shows the new card
-                if (onRefresh) await onRefresh();
-            } else {
-                throw new Error("Erro ao importar.");
-            }
-        } catch (e) {
-            console.error(e);
-            toast.error('Erro ao importar licitação.');
-        }
-    };
-
-    const activeFilterCount = [
-        modalidade !== 'todas',
-        esfera !== 'todas',
-        orgao !== '',
-        orgaosLista.trim() !== '',
-        dataInicio !== '',
-        dataFim !== '',
-        selectedSearchCompanyId !== ''
-    ].filter(Boolean).length;
-
-
+    const p = usePncpPage({ companies, onRefresh, items });
 
     return (
         <>
@@ -600,7 +27,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 <div style={{ display: 'flex', gap: 'var(--space-3)', overflowX: 'auto', paddingBottom: '4px' }}>
                     <div className="indicator-card">
                         <div className="indicator-label"><BarChart2 size={12} /> Descobertos</div>
-                        <div className="indicator-value">{totalResults.toLocaleString('pt-BR')}</div>
+                        <div className="indicator-value">{p.totalResults.toLocaleString('pt-BR')}</div>
                     </div>
                     <div className="indicator-card">
                         <div className="indicator-label"><Bookmark size={12} /> No Funil</div>
@@ -608,22 +35,22 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     </div>
                     <div className="indicator-card">
                         <div className="indicator-label"><Star size={12} /> Favoritos</div>
-                        <div className="indicator-value" style={{ color: 'var(--color-warning)' }}>{favoritos.length}</div>
+                        <div className="indicator-value" style={{ color: 'var(--color-warning)' }}>{p.favoritos.length}</div>
                     </div>
                 </div>
             </div>
 
             {/* Saved Searches as Chips */}
-            {savedSearches.length > 0 && (
+            {p.savedSearches.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-5)', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>
                         <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
                         Pesquisas Salvas:
                     </span>
-                    {savedSearches.map(s => (
+                    {p.savedSearches.map(s => (
                         <div
                             key={s.id}
-                            onClick={() => loadSavedSearch(s)}
+                            onClick={() => p.loadSavedSearch(s)}
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
@@ -644,7 +71,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             {s.name}
                             {s.companyProfileId && <Building2 size={12} color="var(--color-primary)" />}
                             <button
-                                onClick={(e) => deleteSavedSearch(s.id, e)}
+                                onClick={(e) => p.deleteSavedSearch(s.id, e)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 0, display: 'flex' }}
                             >
                                 <X size={13} />
@@ -656,18 +83,18 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
             {/* Search Card */}
             <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)', background: 'var(--color-bg-surface)' }}>
-                <form onSubmit={handleSearch}>
+                <form onSubmit={p.handleSearch}>
                     {/* Main Search Row */}
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'end', flexWrap: 'wrap' }}>
                         <div style={{ flex: 2, minWidth: '280px' }}>
                             <label className="form-label">Palavras-chave (Objeto)</label>
-                            <div style={{ position: 'relative' }}>
+                            <div className="pos-relative">
                                 <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
                                 <input
                                     type="text"
                                     placeholder="Ex: Serviços de TI, Transporte Escolar (Use vírgulas para buscar vários ao mesmo tempo)"
-                                    value={keywords}
-                                    onChange={(e) => setKeywords(e.target.value)}
+                                    value={p.keywords}
+                                    onChange={(e) => p.setKeywords(e.target.value)}
                                     style={{
                                         paddingLeft: '42px',
                                         fontSize: '0.9375rem',
@@ -679,14 +106,14 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
                         <div style={{ flex: 1, minWidth: '180px' }}>
                             <label className="form-label">Status</label>
-                            <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-select">
+                            <select value={p.status} onChange={(e) => p.setStatus(e.target.value)} className="form-select">
                                 {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                         </div>
 
                         <div style={{ minWidth: '120px' }}>
                             <label className="form-label">Estado (UF)</label>
-                            <select value={selectedUf} onChange={(e) => setSelectedUf(e.target.value)} className="form-select">
+                            <select value={p.selectedUf} onChange={(e) => p.setSelectedUf(e.target.value)} className="form-select">
                                 <option value="">Brasil (Todas as UFs)</option>
                                 <optgroup label="Agrupamento por Região">
                                     <option value="AC,AP,AM,PA,RO,RR,TO">Região Norte</option>
@@ -702,8 +129,8 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         </div>
 
                         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'end' }}>
-                            <button type="submit" className="btn btn-primary" disabled={loading} style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', height: '44px' }}>
-                                {loading ? <Loader2 size={18} className="spinner" /> : <Search size={18} />}
+                            <button type="submit" className="btn btn-primary" disabled={p.loading} style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', height: '44px' }}>
+                                {p.loading ? <Loader2 size={18} className="spinner" /> : <Search size={18} />}
                                 Buscar
                             </button>
                         </div>
@@ -714,38 +141,38 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                             <button
                                 type="button"
-                                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                                onClick={() => p.setShowAdvancedFilters(!p.showAdvancedFilters)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                                     fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
-                                    color: showAdvancedFilters ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                    color: p.showAdvancedFilters ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                                     background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
                                 }}
                             >
                                 <Filter size={15} />
                                 Filtros Avançados
-                                {activeFilterCount > 0 && (
+                                {p.activeFilterCount > 0 && (
                                     <span style={{
                                         background: 'var(--color-primary)', color: 'white', borderRadius: 'var(--radius-lg)',
                                         padding: '1px var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)',
-                                    }}>{activeFilterCount}</span>
+                                    }}>{p.activeFilterCount}</span>
                                 )}
-                                {showAdvancedFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                {p.showAdvancedFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </button>
                         </div>
 
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            <button type="button" className="btn btn-ghost" onClick={clearSearch} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
+                            <button type="button" className="btn btn-ghost" onClick={p.clearSearch} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
                                 <X size={14} /> Limpar
                             </button>
-                            <button type="button" className="btn btn-outline" onClick={handleSaveSearch} disabled={saving} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
-                                {saving ? <Loader2 size={14} className="spinner" /> : <Save size={14} />} Salvar Pesquisa
+                            <button type="button" className="btn btn-outline" onClick={p.handleSaveSearch} disabled={p.saving} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
+                                {p.saving ? <Loader2 size={14} className="spinner" /> : <Save size={14} />} Salvar Pesquisa
                             </button>
                         </div>
                     </div>
 
                     {/* Advanced Filters (Collapsible) */}
-                    {showAdvancedFilters && (
+                    {p.showAdvancedFilters && (
                         <div style={{
                             marginTop: 'var(--space-4)',
                             padding: 'var(--space-5)',
@@ -759,29 +186,29 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         }}>
                             <div>
                                 <label className="form-label">Modalidade</label>
-                                <select value={modalidade} onChange={(e) => setModalidade(e.target.value)} className="form-select">
+                                <select value={p.modalidade} onChange={(e) => p.setModalidade(e.target.value)} className="form-select">
                                     {MODALIDADES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                                 </select>
                             </div>
 
                             <div>
                                 <label className="form-label">Esfera de Governo</label>
-                                <select value={esfera} onChange={(e) => setEsfera(e.target.value)} className="form-select">
+                                <select value={p.esfera} onChange={(e) => p.setEsfera(e.target.value)} className="form-select">
                                     {ESFERAS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
                                 </select>
                             </div>
 
                             <div>
                                 <label className="form-label">Órgão (Nome ou CNPJ)</label>
-                                <input type="text" placeholder="Ex: Comando da Marinha" value={orgao} onChange={(e) => setOrgao(e.target.value)} className="form-select" />
+                                <input type="text" placeholder="Ex: Comando da Marinha" value={p.orgao} onChange={(e) => p.setOrgao(e.target.value)} className="form-select" />
                             </div>
 
-                            <div style={{ gridColumn: '1 / -1' }}>
+                            <div className="col-span-full">
                                 <label className="form-label">Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)</label>
                                 <textarea
                                     placeholder="Cole aqui a lista de nomes de prefeituras/órgãos ou seus CNPJs que deseja buscar de uma vez, separados por vírgula ou quebra de linha... (Vai cruzar tudo numa lista só de uma vez!)"
-                                    value={orgaosLista}
-                                    onChange={(e) => setOrgaosLista(e.target.value)}
+                                    value={p.orgaosLista}
+                                    onChange={(e) => p.setOrgaosLista(e.target.value)}
                                     style={{
                                         minHeight: '60px',
                                         resize: 'vertical',
@@ -798,17 +225,17 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
                             <div>
                                 <label className="form-label">Publicado a partir de</label>
-                                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="form-select" />
+                                <input type="date" value={p.dataInicio} onChange={(e) => p.setDataInicio(e.target.value)} className="form-select" />
                             </div>
 
                             <div>
                                 <label className="form-label">Publicado até</label>
-                                <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="form-select" />
+                                <input type="date" value={p.dataFim} onChange={(e) => p.setDataFim(e.target.value)} className="form-select" />
                             </div>
 
                             <div>
                                 <label className="form-label">Vincular à Empresa</label>
-                                <select value={selectedSearchCompanyId} onChange={(e) => setSelectedSearchCompanyId(e.target.value)} className="form-select">
+                                <select value={p.selectedSearchCompanyId} onChange={(e) => p.setSelectedSearchCompanyId(e.target.value)} className="form-select">
                                     <option value="">(Nenhuma empresa)</option>
                                     {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
                                 </select>
@@ -825,18 +252,18 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             }}>
                 <div style={{ display: 'flex', gap: 'var(--space-6)' }}>
                     <button
-                        onClick={() => setShowFavoritosTab(false)}
-                        className={`tab-btn${!showFavoritosTab ? ' active' : ''}`}
+                        onClick={() => p.setShowFavoritosTab(false)}
+                        className={`tab-btn${!p.showFavoritosTab ? ' active' : ''}`}
                     >
-                        Resultados da Busca {results.length > 0 && `(${totalResults || results.length})`}
+                        Resultados da Busca {p.results.length > 0 && `(${p.totalResults || p.results.length})`}
                     </button>
                     <button
-                        onClick={() => setShowFavoritosTab(true)}
-                        className={`tab-btn${showFavoritosTab ? ' active-warning' : ''}`}
+                        onClick={() => p.setShowFavoritosTab(true)}
+                        className={`tab-btn${p.showFavoritosTab ? ' active-warning' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
                     >
-                        <Star size={16} fill={showFavoritosTab ? "currentColor" : "none"} color={showFavoritosTab ? "currentColor" : "currentColor"} />
-                        Favoritos {favoritos.length > 0 && `(${favoritos.length})`}
+                        <Star size={16} fill={p.showFavoritosTab ? "currentColor" : "none"} color={p.showFavoritosTab ? "currentColor" : "currentColor"} />
+                        Favoritos {p.favoritos.length > 0 && `(${p.favoritos.length})`}
                     </button>
                 </div>
             </div>
@@ -844,10 +271,10 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             {/* Results Table Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 'var(--space-4)', marginTop: 'var(--space-8)' }}>
                 <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', margin: 0 }}>
-                    {showFavoritosTab ? 'Licitações Favoritadas' : 'Resultados da Pesquisa'}
+                    {p.showFavoritosTab ? 'Licitações Favoritadas' : 'Resultados da Pesquisa'}
                 </h3>
-                {showFavoritosTab && favoritos.length > 0 && (
-                    <button className="btn btn-primary" onClick={exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)' }}>
+                {p.showFavoritosTab && p.favoritos.length > 0 && (
+                    <button className="btn btn-primary" onClick={p.exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)' }}>
                         <Download size={16} /> Exportar Relatório PDF
                     </button>
                 )}
@@ -867,24 +294,24 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         </tr>
                     </thead>
                     <tbody>
-                        {loading ? (
+                        {p.loading ? (
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '60px' }}>
                                     <Loader2 size={32} className="spinner" style={{ margin: '0 auto', color: 'var(--color-primary)' }} />
                                     <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>Consultando PNCP...</div>
                                 </td>
                             </tr>
-                        ) : displayItems.length === 0 ? (
+                        ) : p.displayItems.length === 0 ? (
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
-                                    {showFavoritosTab ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} /> : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
-                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>{showFavoritosTab ? 'Nenhum edital nos favoritos' : 'Nenhum edital encontrado'}</div>
-                                    <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>{showFavoritosTab ? 'Clique na estrela para favoritar resultados.' : 'Tente ajustar as palavras-chave ou filtros.'}</div>
+                                    {p.showFavoritosTab ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} /> : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
+                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>{p.showFavoritosTab ? 'Nenhum edital nos p.favoritos' : 'Nenhum edital encontrado'}</div>
+                                    <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>{p.showFavoritosTab ? 'Clique na estrela para favoritar resultados.' : 'Tente ajustar as palavras-chave ou filtros.'}</div>
                                 </td>
                             </tr>
                         ) : (
-                            displayItems.map((item) => {
-                                const isFavorito = favoritos.some(f => f.id === item.id);
+                            p.displayItems.map((item) => {
+                                const isFavorito = p.favoritos.some(f => f.id === item.id);
                                 const isOnKanban = items.some(p => p.link && p.link === item.link_sistema);
 
                                 return (
@@ -901,7 +328,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                         <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '4px', lineHeight: '1.3' }}>
                                                 {item.titulo}
-                                                {showFavoritosTab && isOnKanban && (
+                                                {p.showFavoritosTab && isOnKanban && (
                                                     <span style={{
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
@@ -967,7 +394,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                             <div style={{ display: 'flex', gap: '6px' }}>
                                                 <button
                                                     className="btn btn-ghost"
-                                                    onClick={() => toggleFavorito(item)}
+                                                    onClick={() => p.toggleFavorito(item)}
                                                     style={{ padding: '7px', borderRadius: 'var(--radius-md)', color: isFavorito ? 'var(--color-warning)' : 'var(--color-text-tertiary)', background: isFavorito ? 'var(--color-warning-bg)' : 'transparent' }}
                                                     title={isFavorito ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
                                                 >
@@ -976,7 +403,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                 {isFavorito && (
                                                     <button
                                                         className="btn btn-ghost"
-                                                        onClick={() => toggleFavorito(item)}
+                                                        onClick={() => p.toggleFavorito(item)}
                                                         style={{ padding: '7px', borderRadius: 'var(--radius-md)', color: 'var(--color-danger)', background: 'var(--color-danger-bg)' }}
                                                         title="Excluir dos Favoritos"
                                                     >
@@ -986,7 +413,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                 <button
                                                     className="btn btn-primary"
                                                     style={{ padding: '7px var(--space-3)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', gap: '4px', whiteSpace: 'nowrap' }}
-                                                    onClick={() => handleImportToFunnel(item)}
+                                                    onClick={() => p.handleImportToFunnel(item)}
                                                     title="Importar para o Funil de Licitações"
                                                 >
                                                     <Plus size={14} /> Importar
@@ -999,19 +426,19 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                         borderRadius: 'var(--radius-md)',
                                                         gap: '4px',
                                                         whiteSpace: 'nowrap',
-                                                        background: analyzingItemId === item.id ? 'linear-gradient(135deg, var(--color-ai), var(--color-primary))' : 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
+                                                        background: p.analyzingItemId === item.id ? 'linear-gradient(135deg, var(--color-ai), var(--color-primary))' : 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
                                                         color: 'white',
                                                         border: 'none',
-                                                        cursor: analyzingItemId ? 'not-allowed' : 'pointer',
-                                                        opacity: (analyzingItemId && analyzingItemId !== item.id) ? 0.5 : 1,
+                                                        cursor: p.analyzingItemId ? 'not-allowed' : 'pointer',
+                                                        opacity: (p.analyzingItemId && p.analyzingItemId !== item.id) ? 0.5 : 1,
                                                         boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
                                                         transition: 'var(--transition-fast)'
                                                     }}
-                                                    onClick={() => handlePncpAiAnalyze(item)}
-                                                    disabled={!!analyzingItemId}
+                                                    onClick={() => p.handlePncpAiAnalyze(item)}
+                                                    disabled={!!p.analyzingItemId}
                                                     title="Analisar edital com IA (busca PDFs do PNCP automaticamente)"
                                                 >
-                                                    {analyzingItemId === item.id ? (
+                                                    {p.analyzingItemId === item.id ? (
                                                         <><Loader2 size={14} className="spinner" /> Analisando...</>
                                                     ) : (
                                                         <><Brain size={14} /> IA</>
@@ -1037,33 +464,33 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 </table>
 
                 {/* Pagination Controls */}
-                {!showFavoritosTab && displayItems.length > 0 && totalResults > 0 && (() => {
-                    const totalPages = Math.ceil(totalResults / 10);
+                {!p.showFavoritosTab && p.displayItems.length > 0 && p.totalResults > 0 && (() => {
+                    const totalPages = Math.ceil(p.totalResults / 10);
                     const renderPageNumbers = () => {
                         const pages = [];
-                        let start = Math.max(1, page - 2);
-                        let end = Math.min(totalPages, page + 2);
+                        let start = Math.max(1, p.page - 2);
+                        let end = Math.min(totalPages, p.page + 2);
 
-                        if (page <= 3 && totalPages >= 5) end = 5;
-                        if (page >= totalPages - 2 && totalPages >= 5) start = totalPages - 4;
+                        if (p.page <= 3 && totalPages >= 5) end = 5;
+                        if (p.page >= totalPages - 2 && totalPages >= 5) start = totalPages - 4;
 
                         for (let i = start; i <= end; i++) {
                             pages.push(
                                 <button
                                     key={i}
-                                    onClick={() => setPage(i)}
+                                    onClick={() => p.setPage(i)}
                                     style={{
                                         padding: '6px 14px',
                                         borderRadius: 'var(--radius-md)',
-                                        border: i === page ? 'none' : '1px solid var(--color-border)',
-                                        background: i === page ? 'var(--color-primary)' : 'transparent',
-                                        color: i === page ? 'white' : 'var(--color-text)',
+                                        border: i === p.page ? 'none' : '1px solid var(--color-border)',
+                                        background: i === p.page ? 'var(--color-primary)' : 'transparent',
+                                        color: i === p.page ? 'white' : 'var(--color-text)',
                                         fontSize: 'var(--text-md)',
-                                        fontWeight: i === page ? 'var(--font-semibold)' : 'var(--font-normal)',
+                                        fontWeight: i === p.page ? 'var(--font-semibold)' : 'var(--font-normal)',
                                         cursor: 'pointer',
                                         transition: 'var(--transition-fast)'
                                     }}
-                                    disabled={loading}
+                                    disabled={p.loading}
                                 >
                                     {i}
                                 </button>
@@ -1082,14 +509,14 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             background: 'var(--color-bg-surface)'
                         }}>
                             <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
-                                Página {page} de {totalPages} ({totalResults} resultados)
+                                Página {p.page} de {totalPages} ({p.totalResults} resultados)
                             </span>
                             <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                 <button
                                     className="btn btn-outline"
                                     style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                                    disabled={page === 1 || loading}
+                                    onClick={() => p.setPage(p => Math.max(1, p - 1))}
+                                    disabled={p.page === 1 || p.loading}
                                 >
                                     Anterior
                                 </button>
@@ -1101,8 +528,8 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 <button
                                     className="btn btn-outline"
                                     style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
-                                    onClick={() => setPage(p => p + 1)}
-                                    disabled={page >= totalPages || loading}
+                                    onClick={() => p.setPage(p => p + 1)}
+                                    disabled={p.page >= totalPages || p.loading}
                                 >
                                     Próxima
                                 </button>
@@ -1112,46 +539,46 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 })()}
             </div>
 
-            {editingProcess && (
+            {p.editingProcess && (
                 <ProcessFormModal
-                    initialData={editingProcess as BiddingProcess}
+                    initialData={p.editingProcess as BiddingProcess}
                     companies={companies}
                     onClose={() => {
-                        setEditingProcess(null);
-                        setPendingAiAnalysis(null);
+                        p.setEditingProcess(null);
+                        p.setPendingAiAnalysis(null);
                     }}
                     onSave={(data, aiData) => {
-                        handleSaveProcess(data, aiData);
+                        p.handleSaveProcess(data, aiData);
                     }}
                 />
             )}
 
             {/* AI Report Modal for PNCP Analysis */}
-            {viewingAnalysisProcess && pncpAnalysis && (
+            {p.viewingAnalysisProcess && p.pncpAnalysis && (
                 <AiReportModal
-                    analysis={pncpAnalysis.analysis}
-                    process={viewingAnalysisProcess}
+                    analysis={p.pncpAnalysis.analysis}
+                    process={p.viewingAnalysisProcess}
                     onClose={() => {
-                        setViewingAnalysisProcess(null);
-                        setPncpAnalysis(null);
-                        setAnalyzedPncpItem(null);
+                        p.setViewingAnalysisProcess(null);
+                        p.setPncpAnalysis(null);
+                        p.setAnalyzedPncpItem(null);
                     }}
                     onUpdate={() => { }}
                     onImport={() => {
                         // Close report modal
-                        setViewingAnalysisProcess(null);
-                        // Store the AI analysis for saving with the process
-                        setPendingAiAnalysis(pncpAnalysis.analysis);
+                        p.setViewingAnalysisProcess(null);
+                        // Store the AI analysis for p.saving with the process
+                        p.setPendingAiAnalysis(p.pncpAnalysis!.analysis);
                         // Open form pre-filled with AI + PNCP data
-                        if (analyzedPncpItem) {
-                            handleImportToFunnel(analyzedPncpItem, pncpAnalysis);
+                        if (p.analyzedPncpItem) {
+                            p.handleImportToFunnel(p.analyzedPncpItem, p.pncpAnalysis!);
                         } else {
                             // Fallback: use AI process data directly  
-                            setEditingProcess({
-                                ...pncpAnalysis.process,
+                            p.setEditingProcess({
+                                ...p.pncpAnalysis!.process,
                                 portal: 'PNCP',
                                 status: 'Captado',
-                                companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
+                                companyProfileId: p.selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
                             });
                         }
                     }}
@@ -1159,13 +586,13 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             )}
         </div>
             <ConfirmDialog
-                open={!!confirmAction}
-                title={confirmAction?.type === 'deleteSearch' ? 'Excluir Pesquisa' : 'Aviso de Duplicidade'}
-                message={confirmAction?.type === 'deleteSearch' ? 'Excluir esta pesquisa salva?' : (confirmAction?.message || '')}
-                variant={confirmAction?.type === 'deleteSearch' ? 'danger' : 'warning'}
-                confirmLabel={confirmAction?.type === 'deleteSearch' ? 'Excluir' : 'Importar Mesmo Assim'}
-                onConfirm={() => confirmAction?.onConfirm()}
-                onCancel={() => setConfirmAction(null)}
+                open={!!p.confirmAction}
+                title={p.confirmAction?.type === 'deleteSearch' ? 'Excluir Pesquisa' : 'Aviso de Duplicidade'}
+                message={p.confirmAction?.type === 'deleteSearch' ? 'Excluir esta pesquisa salva?' : (p.confirmAction?.message || '')}
+                variant={p.confirmAction?.type === 'deleteSearch' ? 'danger' : 'warning'}
+                confirmLabel={p.confirmAction?.type === 'deleteSearch' ? 'Excluir' : 'Importar Mesmo Assim'}
+                onConfirm={() => p.confirmAction?.onConfirm()}
+                onCancel={() => p.setConfirmAction(null)}
             />
         </>
     );

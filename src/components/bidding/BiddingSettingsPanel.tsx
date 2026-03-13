@@ -93,7 +93,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
     return (
         <>
             {/* Campos Button */}
-            <div style={{ position: 'relative' }}>
+            <div className="pos-relative">
                 <button
                     className={`btn ${props.showCardConfig ? 'btn-primary' : 'btn-outline'}`}
                     onClick={() => { props.setShowCardConfig(!props.showCardConfig); props.onCloseOtherPanels(); }}
@@ -103,7 +103,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
             </div>
 
             {/* Export Button */}
-            <div style={{ position: 'relative' }}>
+            <div className="pos-relative">
                 <button
                     className={`btn ${showExportMenu ? 'btn-primary' : 'btn-outline'}`}
                     onClick={() => setShowExportMenu(!showExportMenu)}
@@ -140,7 +140,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
             </div>
 
             {/* Settings Button */}
-            <div style={{ position: 'relative' }}>
+            <div className="pos-relative">
                 <button
                     className={`btn ${showSettingsPanel ? 'btn-primary' : 'btn-outline'}`}
                     onClick={() => setShowSettingsPanel(!showSettingsPanel)}
@@ -225,8 +225,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
                             {/* Empresa Padrão */}
                             <div style={{ padding: '14px 16px' }}>
                                 <SettingSectionTitle>🏢 Empresa Padrão</SettingSectionTitle>
-                                <select className="config-input" value={props.defaultCompanyId} onChange={(e) => props.setDefaultCompanyId(e.target.value)}
-                                    style={{ cursor: 'pointer' }}>
+                                <select className="config-input cursor-pointer" value={props.defaultCompanyId} onChange={(e) => props.setDefaultCompanyId(e.target.value)}>
                                     <option value="">Nenhuma (selecionar manualmente)</option>
                                     {props.companies.map(c => (<option key={c.id} value={c.id}>{c.razaoSocial}</option>))}
                                 </select>
@@ -240,8 +239,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
                                 </div>
                                 <div style={{ marginBottom: '12px' }}>
                                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Idioma do Relatório</div>
-                                    <select className="config-input" value={props.aiLanguage} onChange={(e: any) => props.setAiLanguage(e.target.value)}
-                                        style={{ cursor: 'pointer' }}>
+                                    <select className="config-input cursor-pointer" value={props.aiLanguage} onChange={(e: any) => props.setAiLanguage(e.target.value)}>
                                         <option value="pt-br">Português (BR)</option>
                                         <option value="en">Inglês</option>
                                         <option value="es">Espanhol</option>
@@ -249,8 +247,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
                                 </div>
                                 <div style={{ marginBottom: '12px' }}>
                                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Foco de Análise</div>
-                                    <select className="config-input" value={props.aiFocus} onChange={(e: any) => props.setAiFocus(e.target.value)}
-                                        style={{ cursor: 'pointer' }}>
+                                    <select className="config-input cursor-pointer" value={props.aiFocus} onChange={(e: any) => props.setAiFocus(e.target.value)}>
                                         <option value="general">Geral (Padrão)</option>
                                         <option value="it">T.I e Software</option>
                                         <option value="engineering">Engenharia e Obras</option>

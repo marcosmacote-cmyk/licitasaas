@@ -191,7 +191,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 {/* Document Readiness */}
                                 <div className="report-card">
                                     <div className="flex-between mb-6">
-                                        <h3 className="ai-section-header" style={{ marginBottom: 0 }}><Award size={18} /> Habilitação Requerida</h3>
+                                        <h3 className="ai-section-header mb-0"><Award size={18} /> Habilitação Requerida</h3>
                                         {process?.companyProfileId && !report.isLoadingDocs && (
                                             <div className="flex-center gap-3" style={{ padding: 'var(--space-2) var(--space-4)',
                                                 backgroundColor: report.readinessScore > 70 ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',

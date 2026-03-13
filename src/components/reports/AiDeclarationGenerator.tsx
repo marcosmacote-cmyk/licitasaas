@@ -1,9 +1,8 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
 import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import { API_BASE_URL } from '../../config';
+import { ConfirmDialog } from '../ui';
+import { useAiDeclaration } from '../hooks/useAiDeclaration';
+import type { LayoutConfig } from '../hooks/useAiDeclaration';
 import type { BiddingProcess, CompanyProfile } from '../../types';
-import { useToast, ConfirmDialog } from '../ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -11,555 +10,9 @@ interface Props {
     onSave?: () => void;
 }
 
-interface LayoutConfig {
-    id: string;
-    name: string;
-    headerImage: string | null;
-    footerImage: string | null;
-    headerImageWidth: number;
-    headerImageHeight: number;
-    footerImageWidth: number;
-    footerImageHeight: number;
-    headerText: string;
-    footerText: string;
-    signatureCity: string;
-    signatureDate: string;
-    signatoryName: string;
-    signatoryRole: string;
-    signatoryCpf: string;
-    signatoryCompany: string;
-    signatoryCnpj: string;
-    addresseeName: string;
-    addresseeOrg: string;
-}
-
-const DEFAULT_LAYOUT: Omit<LayoutConfig, 'id' | 'name'> = {
-    headerImage: null,
-    footerImage: null,
-    headerImageWidth: 40,
-    headerImageHeight: 20,
-    footerImageWidth: 40,
-    footerImageHeight: 20,
-    headerText: '',
-    footerText: '',
-    signatureCity: '',
-    signatureDate: '', // Will be filled dynamically
-    signatoryName: '',
-    signatoryRole: '',
-    signatoryCpf: '',
-    signatoryCompany: '',
-    signatoryCnpj: '',
-    addresseeName: 'Agente de Contratação',
-    addresseeOrg: '',
-};
-
-const STORAGE_KEY = 'declaration_layouts';
-
-function loadLayouts(): LayoutConfig[] {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-
-        // Migrate old single config
-        const old = localStorage.getItem('declaration_layout_config');
-        if (old) {
-            const oldParsed = JSON.parse(old);
-            localStorage.removeItem('declaration_layout_config');
-            return [{ ...DEFAULT_LAYOUT, ...oldParsed, id: 'default', name: 'Layout Principal' }];
-        }
-    } catch { /* ignore */ }
-    return [{ ...DEFAULT_LAYOUT, id: 'default', name: 'Layout Principal' } as LayoutConfig];
-}
-
-function saveLayouts(layouts: LayoutConfig[]) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts)); } catch { /* ignore */ }
-}
-
-function extractDeclarationTypes(rawReq: any): string[] {
-    const declarations: string[] = [];
-    try {
-        const parsed = typeof rawReq === 'string' ? JSON.parse(rawReq) : rawReq;
-        let items: any[] = [];
-        if (Array.isArray(parsed)) items = parsed;
-        else if (typeof parsed === 'object') items = Object.values(parsed).flat();
-        items.forEach((d: any) => {
-            const text = typeof d === 'string' ? d : (d.description || '');
-            if (!text) return;
-            const lower = text.toLowerCase();
-            if (
-                lower.includes('declaraç') ||
-                lower.includes('declarac') ||
-                lower.includes('declare') ||
-                lower.includes('indicação do pessoal técnico') ||
-                lower.includes('indicacao do pessoal tecnico') ||
-                lower.includes('equipe técnica') ||
-                lower.includes('equipe tecnica')
-            ) {
-                declarations.push(text);
-            }
-        });
-    } catch { /* ignore */ }
-    return declarations;
-}
-
 export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
-    const toast = useToast();
-    const [selectedBiddingId, setSelectedBiddingId] = useState('');
-    const [selectedCompanyId, setSelectedCompanyId] = useState('');
-    const [declarationType, setDeclarationType] = useState('');
-    const [issuerType, setIssuerType] = useState<'company' | 'technical'>('company');
-    const [customPrompt, setCustomPrompt] = useState('');
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-    const [generatedText, setGeneratedText] = useState('');
-    const [saveSuccess, setSaveSuccess] = useState(false);
-    const [confirmAction, setConfirmAction] = useState<{ type: 'deleteLayout' | 'resetLayout'; onConfirm: () => void } | null>(null);
-    const [layoutSaved, setLayoutSaved] = useState(false);
-    const [layouts, setLayouts] = useState<LayoutConfig[]>(loadLayouts);
-    const [currentLayoutId, setCurrentLayoutId] = useState<string>(layouts[0]?.id || 'default');
-    const [layoutName, setLayoutName] = useState(layouts.find(l => l.id === currentLayoutId)?.name || 'Layout Principal');
+    const d = useAiDeclaration({ biddings, companies, onSave });
 
-    const layout = useMemo(() =>
-        layouts.find(l => l.id === currentLayoutId) || layouts[0] || { ...DEFAULT_LAYOUT, id: 'default', name: 'Layout Principal' }
-        , [layouts, currentLayoutId]);
-
-    const updateLayout = useCallback((patch: Partial<LayoutConfig>) => {
-        setLayouts(prev => prev.map(l => l.id === currentLayoutId ? { ...l, ...patch } : l));
-    }, [currentLayoutId]);
-
-    // Auto-save layouts
-    useEffect(() => {
-        saveLayouts(layouts);
-    }, [layouts]);
-
-    // Ensure date is always today on mount
-    useEffect(() => {
-        const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-        if (layout && !layout.signatureDate) {
-            updateLayout({ signatureDate: today });
-        }
-    }, [layout, updateLayout]);
-
-    const handleCreateLayout = () => {
-        const newId = `layout_${Date.now()}`;
-        const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-        const newLayout: LayoutConfig = { ...DEFAULT_LAYOUT, id: newId, name: 'Novo Layout', signatureDate: today };
-        setLayouts(prev => [...prev, newLayout]);
-        setCurrentLayoutId(newId);
-        setLayoutName('Novo Layout');
-    };
-
-    const handleDeleteLayout = () => {
-        if (layouts.length <= 1) return;
-        setConfirmAction({
-            type: 'deleteLayout',
-            onConfirm: () => {
-                const remaining = layouts.filter(l => l.id !== currentLayoutId);
-                setLayouts(remaining);
-                saveLayouts(remaining);
-                setCurrentLayoutId(remaining[0].id);
-                setLayoutName(remaining[0].name);
-                setConfirmAction(null);
-            }
-        });
-    };
-
-    const handleResetLayout = () => {
-        setConfirmAction({
-            type: 'resetLayout',
-            onConfirm: () => {
-                updateLayout({ ...DEFAULT_LAYOUT, name: layoutName });
-                setConfirmAction(null);
-            }
-        });
-    };
-
-    const biddingsWithAnalysis = useMemo(() =>
-        biddings.filter(b => b.status === 'Preparando Documentação' && (b.aiAnalysis || b.summary))
-        , [biddings]);
-
-    const declarationTypesFromEdital = useMemo(() => {
-        if (!selectedBiddingId) return [];
-        const b = biddings.find(b => b.id === selectedBiddingId);
-        if (!b?.aiAnalysis?.requiredDocuments) return [];
-        return extractDeclarationTypes(b.aiAnalysis.requiredDocuments);
-    }, [selectedBiddingId, biddings]);
-
-    const handleBiddingChange = (biddingId: string) => {
-        setSelectedBiddingId(biddingId);
-        setDeclarationType('');
-        const b = biddings.find(x => x.id === biddingId);
-        if (b) {
-            const mod = (b.modality || '').trim();
-            const tit = (b.title || '').trim();
-
-            // Evitar duplicação: se o título já contém a modalidade, extraímos apenas o número
-            // Ex: Modality="Pregão Eletrônico", Title="Pregão Eletrônico nº 004/26" -> Org="Pregão Eletrônico nº 004/26"
-            const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
-            const finalOrg = cleanTitle ? `${mod} nº ${cleanTitle}` : tit;
-
-            updateLayout({
-                addresseeOrg: finalOrg
-            });
-        }
-    };
-
-    // Auto-select first type
-    useMemo(() => {
-        if (declarationTypesFromEdital.length > 0 && !declarationType) {
-            setDeclarationType(declarationTypesFromEdital[0]);
-        }
-    }, [declarationTypesFromEdital]);
-
-    // Auto-populate company data on selection & issuer type change
-    useEffect(() => {
-        if (!selectedCompanyId) return;
-        const c = companies.find(x => x.id === selectedCompanyId);
-        if (!c) return;
-
-        const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
-        const qual = (c.qualification || '').trim();
-
-        // 1. Extração robusta do Local (Cidade/UF)
-        let city = '';
-        // Padrão comum: ", Cidade/UF," ou ", Cidade - UF,"
-        const cityMatch = qual.match(/,\s*([^,.(0-9\-]{3,30})\s*[/|-]\s*([A-Z]{2})(?=\s*,|\s+CEP|\s+inscrita|\s*neste|$)/i);
-        if (cityMatch) {
-            city = `${cityMatch[1].trim()}/${cityMatch[2].trim()}`;
-        } else {
-            // Fallback Cidade/UF no fim do addr
-            const cityFallback = addr.match(/,\s*([^,.(0-9\-]{3,25}(?:\/|-)[A-Z]{2})\s*$/);
-            if (cityFallback) city = cityFallback[1].trim();
-            else {
-                const munMatch = qual.match(/(?:município\s+de|cidade\s+de)\s+([^,.(0-9]{3,30})/i);
-                if (munMatch) city = munMatch[1].trim();
-            }
-        }
-
-        // 2. Extração robusta do CPF
-        let cpf = '';
-        const cpfMatch = qual.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
-        if (cpfMatch) {
-            cpf = `CPF nº: ${cpfMatch[0]}`;
-        }
-
-        // 3. Nome completo
-        let fullName = c.contactName || '';
-        const nameMatch = qual.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,.(0-9]{3,60})(?=\s*,\s*|,\s*brasileir|,\s*solteir|$)/i);
-        if (nameMatch && nameMatch[1]) {
-            const detectedName = nameMatch[1].trim();
-            if (detectedName.split(' ').length > (fullName.split(' ').length || 0)) {
-                fullName = detectedName;
-            }
-        }
-
-        if (issuerType === 'technical' && c.technicalQualification) {
-            const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
-            const techName = techLines[0]?.split(',')[0]?.trim() || fullName;
-            // CPF e Local do Técnico
-            const techCpfMatch = c.technicalQualification.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
-            const techCityMatch = c.technicalQualification.match(/(?:município\s+de|cidade\s+de|em)\s+([^,.]+)/i);
-
-            updateLayout({
-                signatoryName: techName,
-                signatoryRole: 'Responsável Técnico',
-                signatoryCpf: techCpfMatch ? `CPF nº: ${techCpfMatch[0]}` : '',
-                signatureCity: techCityMatch ? techCityMatch[1].trim() : city,
-                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
-            });
-        } else {
-            updateLayout({
-                headerText: `${c.razaoSocial}\nCNPJ: ${c.cnpj}`,
-                signatoryCompany: c.razaoSocial,
-                signatoryCnpj: `CNPJ: ${c.cnpj}`,
-                signatoryName: fullName,
-                signatoryCpf: cpf,
-                signatoryRole: 'Representante Legal',
-                signatureCity: city,
-                footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
-            });
-        }
-    }, [issuerType, selectedCompanyId, companies, updateLayout]);
-
-    const handleCompanyChange = (companyId: string) => {
-        setSelectedCompanyId(companyId);
-    };
-
-    const handleSaveLayout = () => {
-        saveLayouts(layouts);
-        setLayoutSaved(true);
-        setTimeout(() => setLayoutSaved(false), 2000);
-    };
-
-    const handleImageUpload = (target: 'headerImage' | 'footerImage', file: File) => {
-        const reader = new FileReader();
-        reader.onload = () => updateLayout({ [target]: reader.result as string });
-        reader.readAsDataURL(file);
-    };
-
-    const handleGenerate = async () => {
-        if (!selectedBiddingId || !selectedCompanyId || !declarationType) {
-            toast.warning('Selecione licitação, empresa e tipo de declaração.');
-            return;
-        }
-        setIsGenerating(true);
-        setSaveSuccess(false);
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/generate-declaration`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    biddingProcessId: selectedBiddingId,
-                    companyId: selectedCompanyId,
-                    declarationType,
-                    issuerType,
-                    customPrompt,
-                    signatureCity: layout.signatureCity,
-                    signatureDate: layout.signatureDate
-                })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.details || data.error || 'Falha ao gerar');
-            setGeneratedText(data.text);
-            if (data.title) setDeclarationType(data.title.toUpperCase());
-        } catch (error: any) {
-            toast.error(`Erro ao gerar declaração: ${error.message}`);
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    // ── PDF Builder ──
-    const buildPDF = () => {
-        const doc = new jsPDF();
-        const pw = doc.internal.pageSize.getWidth();
-        const ph = doc.internal.pageSize.getHeight();
-        const m = 20; // narrower margins
-        const mw = pw - m * 2;
-
-        // ── Calculate footer height for content area ──
-        let footerHeight = 0;
-        if (layout.footerImage) footerHeight += layout.footerImageHeight + 4;
-        if (layout.footerText) footerHeight += 8;
-        if (footerHeight > 0) footerHeight += 3; // extra padding
-        const footerY = ph - footerHeight - 3; // where footer starts
-
-        // ── Calculate header height ──
-        let headerHeight = 10;
-        if (layout.headerImage) headerHeight += layout.headerImageHeight + 3;
-        if (layout.headerText) headerHeight += 15; // approximate
-
-        // ── Helper: Draw header on current page ──
-        const drawHeader = () => {
-            let hy = 10;
-            if (layout.headerImage) {
-                const imgX = (pw - layout.headerImageWidth) / 2;
-                doc.addImage(layout.headerImage, 'PNG', imgX, hy, layout.headerImageWidth, layout.headerImageHeight);
-                hy += layout.headerImageHeight + 3;
-            }
-            if (layout.headerText) {
-                doc.setFontSize(9);
-                doc.setTextColor(60);
-                doc.setFont('helvetica', 'normal');
-                const hl = doc.splitTextToSize(layout.headerText, mw);
-                doc.text(hl, pw / 2, hy, { align: 'center' });
-                hy += hl.length * 3.5 + 2;
-                doc.setDrawColor(160);
-                doc.line(m, hy, pw - m, hy);
-                hy += 6;
-            }
-            return hy;
-        };
-
-        // ── Helper: Draw footer on current page ──
-        const drawFooter = () => {
-            let fy = ph;
-            if (layout.footerText) {
-                doc.setFontSize(7.5);
-                doc.setTextColor(100);
-                doc.setFont('helvetica', 'italic');
-                const ftLines = doc.splitTextToSize(layout.footerText, mw);
-                fy = ph - 6;
-                doc.text(ftLines, pw / 2, fy, { align: 'center' });
-                fy -= ftLines.length * 3 + 2;
-            }
-            if (layout.footerImage) {
-                const imgY = layout.footerText ? fy - layout.footerImageHeight : ph - layout.footerImageHeight - 5;
-                const imgX = (pw - layout.footerImageWidth) / 2;
-                doc.addImage(layout.footerImage, 'PNG', imgX, imgY, layout.footerImageWidth, layout.footerImageHeight);
-            }
-        };
-
-        // ── Helper: New page with header + footer ──
-        const newPage = () => {
-            drawFooter(); // footer on current page
-            doc.addPage();
-            return drawHeader(); // header on new page, returns y position
-        };
-
-        // Max Y for content before triggering page break
-        const contentMaxY = footerY - 8;
-
-        // ── PAGE 1: Header ──
-        let y = drawHeader();
-
-        // ── ADDRESSEE BLOCK ──
-        if (layout.addresseeName || layout.addresseeOrg) {
-            doc.setFontSize(10);
-            doc.setTextColor(0);
-            doc.setFont('helvetica', 'normal');
-            if (layout.addresseeName) { doc.text(`Ao ${layout.addresseeName}`, m, y); y += 5; }
-            if (layout.addresseeOrg) {
-                layout.addresseeOrg.split('\n').forEach(l => {
-                    if (l.trim()) { doc.text(l.trim(), m, y); y += 5; }
-                });
-            }
-            y += 6;
-        }
-
-        // ── TITLE ──
-        doc.setFontSize(12);
-        doc.setTextColor(0);
-        doc.setFont('helvetica', 'bold');
-        const tl = doc.splitTextToSize(declarationType.toUpperCase(), mw - 20);
-        tl.forEach((line: string) => {
-            doc.text(line, pw / 2, y, { align: 'center' });
-            y += 6;
-        });
-        y += 6;
-
-        // ── BODY – justified, paragraph-aware ──
-        doc.setFontSize(10.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0);
-
-        const paragraphs = generatedText.split(/\n\s*\n|\n/).filter(p => p.trim());
-        const lh = 5;
-
-        const resetBodyFont = () => {
-            doc.setFontSize(10.5);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(0);
-        };
-
-        for (const para of paragraphs) {
-            const trimmed = para.trim();
-            if (!trimmed) continue;
-
-            const isNumbered = /^\d+[\.\)]\s/.test(trimmed);
-            const indent = isNumbered ? 8 : 0;
-            const textWidth = mw - indent;
-
-            const paraLines = doc.splitTextToSize(trimmed, textWidth);
-            const paraHeight = paraLines.length * lh;
-
-            // Check if entire paragraph fits on current page
-            if (y + paraHeight <= contentMaxY) {
-                // Render entire paragraph as one block — jsPDF justifies correctly
-                doc.text(trimmed, m + indent, y, { align: 'justify', maxWidth: textWidth });
-                y += paraHeight;
-            } else {
-                // Paragraph spans pages — split into chunks
-                const linesAvailable = Math.floor((contentMaxY - y) / lh);
-
-                if (linesAvailable > 0) {
-                    // Render what fits on current page as a joined block
-                    const firstChunk = paraLines.slice(0, linesAvailable).join(' ');
-                    doc.text(firstChunk, m + indent, y, { align: 'justify', maxWidth: textWidth });
-                }
-
-                // New page
-                y = newPage();
-                resetBodyFont();
-
-                // Render remaining lines on new page
-                const remainingLines = paraLines.slice(linesAvailable > 0 ? linesAvailable : 0);
-                if (remainingLines.length > 0) {
-                    const rest = remainingLines.join(' ');
-                    doc.text(rest, m + indent, y, { align: 'justify', maxWidth: textWidth });
-                    y += remainingLines.length * lh;
-                }
-            }
-            y += 3;
-        }
-
-        y += 6;
-
-        // ── Check if signature block fits on current page ──
-        // signatoryName + city/date + line + other details
-        const sigBlockHeight = 55;
-
-        if (y + sigBlockHeight > contentMaxY) {
-            y = newPage();
-        } else {
-            y += 10; // Margin after text
-        }
-
-        // ── LOCATION & DATE ──
-        if (layout.signatureCity || layout.signatureDate) {
-            doc.setFontSize(10.5);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(0);
-            const dateLine = `${layout.signatureCity}${layout.signatureCity && layout.signatureDate ? ', ' : ''}${layout.signatureDate}.`;
-            doc.text(dateLine, pw - m, y, { align: 'right' });
-            y += 15;
-        }
-
-        // ── SIGNATURE ──
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        doc.text('__________________________________________', pw / 2, y, { align: 'center' });
-        y += 5;
-        if (layout.signatoryName) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(layout.signatoryName.toUpperCase(), pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryCpf) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryCpf, pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryRole) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryRole, pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryCompany) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(layout.signatoryCompany, pw / 2, y, { align: 'center' }); y += 4.5; }
-        if (layout.signatoryCnpj) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(layout.signatoryCnpj, pw / 2, y, { align: 'center' }); }
-
-        // ── FOOTER on last page ──
-        drawFooter();
-
-        return doc;
-    };
-
-    const handleExportPDF = () => {
-        if (!generatedText) return;
-        buildPDF().save(`Declaracao_${declarationType.replace(/\s+/g, '_').substring(0, 40)}_${Date.now()}.pdf`);
-    };
-
-    const handleAddToDocuments = async () => {
-        if (!generatedText) return;
-        setIsSaving(true);
-        try {
-            const blob = buildPDF().output('blob');
-            const fileName = `Declaracao_${declarationType.replace(/\s+/g, '_').substring(0, 40)}.pdf`;
-            const formData = new FormData();
-            formData.append('file', new File([blob], fileName, { type: 'application/pdf' }));
-            formData.append('companyProfileId', selectedCompanyId);
-            formData.append('docType', `Declaração: ${declarationType}`);
-            formData.append('expirationDate', new Date(Date.now() + 365 * 86400000).toISOString());
-            formData.append('status', 'Válido');
-            formData.append('docGroup', 'Declarações');
-            const res = await fetch(`${API_BASE_URL}/api/documents`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: formData
-            });
-            if (!res.ok) throw new Error('Falha ao salvar');
-            setSaveSuccess(true);
-            onSave?.();
-            setTimeout(() => setSaveSuccess(false), 3000);
-        } catch (e) { toast.error('Erro ao salvar declaração.'); }
-        finally { setIsSaving(false); }
-    };
-
-    // ── RENDER ──
     return (
         <>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) 2fr', gap: 'var(--space-7)', height: 'fit-content' }}>
@@ -573,160 +26,53 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         <Sparkles size={18} color="var(--color-primary)" /> Configuração da IA
                     </h3>
                     <Field label="Licitação Alvo">
-                        <select className="form-select" value={selectedBiddingId} onChange={(e) => handleBiddingChange(e.target.value)}>
+                        <select className="form-select" value={d.selectedBiddingId} onChange={(e) => d.handleBiddingChange(e.target.value)}>
                             <option value="">-- Selecione --</option>
-                            {biddingsWithAnalysis.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                            {d.biddingsWithAnalysis.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                         </select>
                     </Field>
                     <Field label="Empresa Emitente">
-                        <select className="form-select" value={selectedCompanyId} onChange={(e) => handleCompanyChange(e.target.value)}>
+                        <select className="form-select" value={d.selectedCompanyId} onChange={(e) => d.handleCompanyChange(e.target.value)}>
                             <option value="">-- Selecione --</option>
                             {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
                         </select>
                     </Field>
                     <Field label="Tipo de Declaração (do Edital)">
-                        {declarationTypesFromEdital.length === 0 ? (
-                            <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-sm)', background: selectedBiddingId ? 'var(--color-warning-bg)' : 'var(--color-bg-body)', border: '1px solid var(--color-border)', fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
-                                {selectedBiddingId ? 'Nenhuma declaração identificada neste edital.' : 'Selecione uma licitação.'}
+                        {d.declarationTypesFromEdital.length === 0 ? (
+                            <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-sm)', background: d.selectedBiddingId ? 'var(--color-warning-bg)' : 'var(--color-bg-body)', border: '1px solid var(--color-border)', fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
+                                {d.selectedBiddingId ? 'Nenhuma declaração identificada neste edital.' : 'Selecione uma licitação.'}
                             </div>
                         ) : (
-                            <select className="form-select" value={declarationType} onChange={(e) => setDeclarationType(e.target.value)}>
-                                {declarationTypesFromEdital.map((t, i) => <option key={i} value={t}>{t}</option>)}
+                            <select className="form-select" value={d.declarationType} onChange={(e) => d.setDeclarationType(e.target.value)}>
+                                {d.declarationTypesFromEdital.map((t, i) => <option key={i} value={t}>{t}</option>)}
                             </select>
                         )}
                     </Field>
-                    <Field label="Emitente da Declaração">
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: issuerType === 'company' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'company' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'company' ? 'var(--font-semibold)' : 'var(--font-normal)' }}>
-                                <input type="radio" name="issuerType" checked={issuerType === 'company'} onChange={() => setIssuerType('company')} style={{ accentColor: 'var(--color-primary)' }} />
-                                Empresa (Rep. Legal)
-                            </label>
-                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', cursor: selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification ? 'pointer' : 'not-allowed', border: issuerType === 'technical' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'technical' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'technical' ? 'var(--font-semibold)' : 'var(--font-normal)', opacity: selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification ? 1 : 0.4 }}>
-                                <input type="radio" name="issuerType" checked={issuerType === 'technical'} onChange={() => setIssuerType('technical')} disabled={!selectedCompanyId || !companies.find(c => c.id === selectedCompanyId)?.technicalQualification} style={{ accentColor: 'var(--color-primary)' }} />
-                                Profissional Técnico
-                            </label>
-                        </div>
-                        {issuerType === 'technical' && !companies.find(c => c.id === selectedCompanyId)?.technicalQualification && (
-                            <p style={{ color: 'var(--color-danger)', fontSize: '0.72rem', marginTop: '4px', marginBottom: 0 }}>Cadastre a qualificação técnica na aba Documentos → editar empresa.</p>
-                        )}
-                    </Field>
+                    <IssuerTypeSelector
+                        issuerType={d.issuerType}
+                        setIssuerType={d.setIssuerType}
+                        selectedCompanyId={d.selectedCompanyId}
+                        companies={companies}
+                    />
                     <Field label="Instruções Adicionais">
-                        <textarea className="form-select" style={{ minHeight: '60px', resize: 'vertical' }} placeholder="Opcional..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
+                        <textarea className="form-select" style={{ minHeight: '60px', resize: 'vertical' }} placeholder="Opcional..." value={d.customPrompt} onChange={(e) => d.setCustomPrompt(e.target.value)} />
                     </Field>
-                    <button className="btn btn-primary" style={{ width: '100%', height: '44px', gap: 'var(--space-2)', marginTop: '4px' }} onClick={handleGenerate} disabled={isGenerating || !selectedBiddingId || !selectedCompanyId || !declarationType}>
-                        {isGenerating ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
-                        {isGenerating ? 'Gerando...' : 'Gerar Declaração'}
+                    <button className="btn btn-primary" style={{ width: '100%', height: '44px', gap: 'var(--space-2)', marginTop: '4px' }} onClick={d.handleGenerate} disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType}>
+                        {d.isGenerating ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
+                        {d.isGenerating ? 'Gerando...' : 'Gerar Declaração'}
                     </button>
                 </div>
 
                 {/* Layout Settings */}
-                <div className="card" style={{ padding: 'var(--space-5)' }}>
-                    <div className="flex-between" style={{ marginBottom: 'var(--space-3)' }}>
-                        <h4 style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <Settings2 size={14} /> Layout & Assinatura
-                        </h4>
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px' }} onClick={handleSaveLayout}>
-                                {layoutSaved ? <CheckCircle2 size={12} color="var(--color-success)" /> : <Save size={12} />}
-                                {layoutSaved ? 'Salvo!' : 'Salvar'}
-                            </button>
-                            <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px' }} onClick={handleCreateLayout}>
-                                <Plus size={12} /> Novo
-                            </button>
-                            <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px', color: 'var(--color-danger)' }} onClick={handleResetLayout}>
-                                <X size={12} /> Limpar
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Layout Selector */}
-                    <div style={{ marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-2)' }}>
-                        <select className="form-select" style={{ flex: 1, fontSize: '0.8rem' }} value={currentLayoutId} onChange={(e) => {
-                            const found = layouts.find(l => l.id === e.target.value);
-                            setCurrentLayoutId(e.target.value);
-                            if (found) setLayoutName(found.name);
-                        }}>
-                            {layouts.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                        </select>
-                        <button className="icon-btn" style={{ color: 'var(--color-danger)', opacity: layouts.length > 1 ? 1 : 0.3 }} onClick={handleDeleteLayout} disabled={layouts.length <= 1}>
-                            <Trash2 size={14} />
-                        </button>
-                    </div>
-
-                    <div style={{ marginBottom: 'var(--space-4)' }}>
-                        <label className="decl-small-label">Nome do Layout</label>
-                        <input className="decl-small-input" value={layoutName} onChange={(e) => {
-                            setLayoutName(e.target.value);
-                            updateLayout({ name: e.target.value });
-                        }} placeholder="Ex: Layout Empresa A" />
-                    </div>
-
-                    {/* Addressee */}
-                    <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
-                        <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Destinatário</label>
-                        <input className="form-select" style={{ fontSize: '0.8rem', marginBottom: '6px' }} placeholder="Ex: Agente de Contratação" value={layout.addresseeName} onChange={(e) => updateLayout({ addresseeName: e.target.value })} />
-                        <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} placeholder="Órgão / Pregão nº..." value={layout.addresseeOrg} onChange={(e) => updateLayout({ addresseeOrg: e.target.value })} />
-                    </div>
-
-                    {/* City/Date */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                        <div><label className="decl-small-label">Local</label><input className="decl-small-input" value={layout.signatureCity} onChange={(e) => updateLayout({ signatureCity: e.target.value })} /></div>
-                        <div><label className="decl-small-label">Data</label><input className="decl-small-input" value={layout.signatureDate} onChange={(e) => updateLayout({ signatureDate: e.target.value })} /></div>
-                    </div>
-
-                    {/* Signatory block */}
-                    <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
-                        <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bloco de Assinatura</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                            <div><label className="decl-small-label">Nome</label><input className="decl-small-input" placeholder="NOME COMPLETO" value={layout.signatoryName} onChange={(e) => updateLayout({ signatoryName: e.target.value })} /></div>
-                            <div><label className="decl-small-label">CPF</label><input className="decl-small-input" placeholder="CPF nº: 000.000.000-00" value={layout.signatoryCpf} onChange={(e) => updateLayout({ signatoryCpf: e.target.value })} /></div>
-                            <div><label className="decl-small-label">Cargo</label><input className="decl-small-input" placeholder="Sócio Administrador" value={layout.signatoryRole} onChange={(e) => updateLayout({ signatoryRole: e.target.value })} /></div>
-                            <div><label className="decl-small-label">Empresa</label><input className="decl-small-input" value={layout.signatoryCompany} onChange={(e) => updateLayout({ signatoryCompany: e.target.value })} /></div>
-                        </div>
-                        <div style={{ marginTop: '6px' }}><label className="decl-small-label">CNPJ</label><input className="decl-small-input" value={layout.signatoryCnpj} onChange={(e) => updateLayout({ signatoryCnpj: e.target.value })} /></div>
-                    </div>
-
-                    {/* Images */}
-                    <ImageUploadSection label="Logotipo Cabeçalho" image={layout.headerImage} width={layout.headerImageWidth} height={layout.headerImageHeight}
-                        onUpload={(f) => handleImageUpload('headerImage', f)} onRemove={() => updateLayout({ headerImage: null })}
-                        onWidthChange={(w) => updateLayout({ headerImageWidth: w })} onHeightChange={(h) => updateLayout({ headerImageHeight: h })} />
-
-                    <Field label="Cabeçalho (Texto)">
-                        <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} value={layout.headerText} onChange={(e) => updateLayout({ headerText: e.target.value })} placeholder="Razão Social / CNPJ" />
-                    </Field>
-
-                    <ImageUploadSection label="Logotipo Rodapé" image={layout.footerImage} width={layout.footerImageWidth} height={layout.footerImageHeight}
-                        onUpload={(f) => handleImageUpload('footerImage', f)} onRemove={() => updateLayout({ footerImage: null })}
-                        onWidthChange={(w) => updateLayout({ footerImageWidth: w })} onHeightChange={(h) => updateLayout({ footerImageHeight: h })} />
-
-                    <Field label="Rodapé (Texto)">
-                        <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} value={layout.footerText} onChange={(e) => updateLayout({ footerText: e.target.value })} placeholder="Endereço / contato" />
-                    </Field>
-                </div>
+                <LayoutSettingsPanel d={d} />
             </div>
 
             {/* RIGHT: Editor & Preview */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <div className="card" style={{ flex: 1, minHeight: '600px', display: 'flex', flexDirection: 'column', padding: 'var(--space-5)' }}>
-                    <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
-                        <div className="flex-gap">
-                            <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <FileText size={16} color="var(--color-primary)" />
-                            </div>
-                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Editor da Declaração</h3>
-                        </div>
-                        <div className="flex-gap">
-                            {saveSuccess && <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-md)' }} className="flex-gap"><CheckCircle2 size={14} /> Salvo!</span>}
-                            <button className="btn btn-outline flex-gap" onClick={handleAddToDocuments} disabled={!generatedText || isSaving} style={{ fontSize: '0.8rem' }}>
-                                {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Vincular ao Dossiê
-                            </button>
-                            <button className="btn flex-gap" onClick={handleExportPDF} disabled={!generatedText} style={{ backgroundColor: 'var(--color-success)', color: 'white', fontSize: 'var(--text-md)' }}>
-                                <Download size={14} /> Baixar PDF
-                            </button>
-                        </div>
-                    </div>
+                    <EditorToolbar d={d} />
 
-                    {!generatedText && !isGenerating ? (
+                    {!d.generatedText && !d.isGenerating ? (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.4, textAlign: 'center' }}>
                             <Sparkles size={56} style={{ marginBottom: 'var(--space-3)' }} />
                             <h3>Pronto para gerar</h3>
@@ -734,85 +80,28 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                            <div className="decl-page-mockup">
-                                {/* Header */}
-                                {layout.headerImage && (
-                                    <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-                                        <img src={layout.headerImage} alt="Logo" style={{ maxWidth: `${layout.headerImageWidth * 2.5}px`, maxHeight: `${layout.headerImageHeight * 2.5}px`, objectFit: 'contain' }} />
-                                    </div>
-                                )}
-                                {layout.headerText && (
-                                    <div style={{ textAlign: 'center', borderBottom: '1px solid #ccc', paddingBottom: '8px', marginBottom: '16px', fontSize: '0.65rem', color: '#666', whiteSpace: 'pre-line', lineHeight: 1.3 }}>
-                                        {layout.headerText}
-                                    </div>
-                                )}
-
-                                {/* Addressee */}
-                                {(layout.addresseeName || layout.addresseeOrg) && (
-                                    <div style={{ fontSize: '0.75rem', color: '#444', marginBottom: '16px', lineHeight: 1.5 }}>
-                                        {layout.addresseeName && <div>Ao {layout.addresseeName}</div>}
-                                        {layout.addresseeOrg && <div style={{ whiteSpace: 'pre-line' }}>{layout.addresseeOrg}</div>}
-                                    </div>
-                                )}
-
-                                {/* Title */}
-                                <div style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: '20px', fontSize: '0.95rem', textTransform: 'uppercase', lineHeight: 1.3, wordBreak: 'break-word' }}>
-                                    {declarationType || 'DECLARAÇÃO'}
-                                </div>
-
-                                {/* Body */}
-                                <textarea className="decl-editor-text" value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} placeholder="Texto gerado aqui..." />
-
-                                {/* Location/Date */}
-                                {(layout.signatureCity || layout.signatureDate) && (
-                                    <div style={{ textAlign: 'right', marginTop: '20px', fontSize: '0.8rem', color: '#333', fontStyle: 'italic' }}>
-                                        {layout.signatureCity}{layout.signatureCity && layout.signatureDate ? ', ' : ''}{layout.signatureDate}.
-                                    </div>
-                                )}
-
-                                {/* Signature block */}
-                                <div style={{ textAlign: 'center', marginTop: '30px' }}>
-                                    <div style={{ color: '#333', marginBottom: '3px', fontSize: '0.8rem' }}>__________________________________________</div>
-                                    {layout.signatoryName && <div style={{ fontWeight: 'bold', fontSize: '0.78rem' }}>{layout.signatoryName.toUpperCase()}</div>}
-                                    {layout.signatoryCpf && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryCpf}</div>}
-                                    {layout.signatoryRole && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryRole}</div>}
-                                    {layout.signatoryCompany && <div style={{ fontWeight: 'bold', fontSize: '0.75rem' }}>{layout.signatoryCompany}</div>}
-                                    {layout.signatoryCnpj && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryCnpj}</div>}
-                                </div>
-
-                                {/* Footer */}
-                                <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
-                                    {layout.footerImage && (
-                                        <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-                                            <img src={layout.footerImage} alt="Rodapé" style={{ maxWidth: `${layout.footerImageWidth * 2.5}px`, maxHeight: `${layout.footerImageHeight * 2.5}px`, objectFit: 'contain' }} />
-                                        </div>
-                                    )}
-                                    {layout.footerText && (
-                                        <div style={{ textAlign: 'center', borderTop: '1px solid #ccc', paddingTop: '6px', fontSize: '0.6rem', color: '#999', whiteSpace: 'pre-line' }}>
-                                            {layout.footerText}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            <DeclarationPreview layout={d.layout} declarationType={d.declarationType} generatedText={d.generatedText} setGeneratedText={d.setGeneratedText} />
                         </div>
                     )}
                 </div>
             </div>
         </div>
             <ConfirmDialog
-                open={!!confirmAction}
-                title={confirmAction?.type === 'deleteLayout' ? 'Excluir Layout' : 'Limpar Layout'}
-                message={confirmAction?.type === 'deleteLayout' ? 'Excluir este layout permanentemente? Esta ação não pode ser desfeita.' : 'Limpar todos os campos deste layout?'}
-                variant={confirmAction?.type === 'deleteLayout' ? 'danger' : 'warning'}
-                confirmLabel={confirmAction?.type === 'deleteLayout' ? 'Excluir' : 'Limpar'}
-                onConfirm={() => confirmAction?.onConfirm()}
-                onCancel={() => setConfirmAction(null)}
+                open={!!d.confirmAction}
+                title={d.confirmAction?.type === 'deleteLayout' ? 'Excluir Layout' : 'Limpar Layout'}
+                message={d.confirmAction?.type === 'deleteLayout' ? 'Excluir este layout permanentemente? Esta ação não pode ser desfeita.' : 'Limpar todos os campos deste layout?'}
+                variant={d.confirmAction?.type === 'deleteLayout' ? 'danger' : 'warning'}
+                confirmLabel={d.confirmAction?.type === 'deleteLayout' ? 'Excluir' : 'Limpar'}
+                onConfirm={() => d.confirmAction?.onConfirm()}
+                onCancel={() => d.setConfirmAction(null)}
             />
         </>
     );
 }
 
+// ═════════════════════════════════════════
 // ── Sub-components ──
+// ═════════════════════════════════════════
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -851,3 +140,196 @@ function ImageUploadSection({ label, image, width, height, onUpload, onRemove, o
     );
 }
 
+function IssuerTypeSelector({ issuerType, setIssuerType, selectedCompanyId, companies }: {
+    issuerType: 'company' | 'technical'; setIssuerType: (v: 'company' | 'technical') => void;
+    selectedCompanyId: string; companies: CompanyProfile[];
+}) {
+    const hasTechQual = selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification;
+    return (
+        <Field label="Emitente da Declaração">
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: issuerType === 'company' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'company' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'company' ? 'var(--font-semibold)' : 'var(--font-normal)' }}>
+                    <input type="radio" name="issuerType" checked={issuerType === 'company'} onChange={() => setIssuerType('company')} style={{ accentColor: 'var(--color-primary)' }} />
+                    Empresa (Rep. Legal)
+                </label>
+                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', cursor: hasTechQual ? 'pointer' : 'not-allowed', border: issuerType === 'technical' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'technical' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'technical' ? 'var(--font-semibold)' : 'var(--font-normal)', opacity: hasTechQual ? 1 : 0.4 }}>
+                    <input type="radio" name="issuerType" checked={issuerType === 'technical'} onChange={() => setIssuerType('technical')} disabled={!hasTechQual} style={{ accentColor: 'var(--color-primary)' }} />
+                    Profissional Técnico
+                </label>
+            </div>
+            {issuerType === 'technical' && !hasTechQual && (
+                <p style={{ color: 'var(--color-danger)', fontSize: '0.72rem', marginTop: '4px', marginBottom: 0 }}>Cadastre a qualificação técnica na aba Documentos → editar empresa.</p>
+            )}
+        </Field>
+    );
+}
+
+function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
+    return (
+        <div className="card" style={{ padding: 'var(--space-5)' }}>
+            <div className="flex-between" style={{ marginBottom: 'var(--space-3)' }}>
+                <h4 style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <Settings2 size={14} /> Layout & Assinatura
+                </h4>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px' }} onClick={d.handleSaveLayout}>
+                        {d.layoutSaved ? <CheckCircle2 size={12} color="var(--color-success)" /> : <Save size={12} />}
+                        {d.layoutSaved ? 'Salvo!' : 'Salvar'}
+                    </button>
+                    <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px' }} onClick={d.handleCreateLayout}>
+                        <Plus size={12} /> Novo
+                    </button>
+                    <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px', color: 'var(--color-danger)' }} onClick={d.handleResetLayout}>
+                        <X size={12} /> Limpar
+                    </button>
+                </div>
+            </div>
+
+            {/* Layout Selector */}
+            <div style={{ marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-2)' }}>
+                <select className="form-select" style={{ flex: 1, fontSize: '0.8rem' }} value={d.currentLayoutId} onChange={(e) => d.handleSwitchLayout(e.target.value)}>
+                    {d.layouts.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                <button className="icon-btn" style={{ color: 'var(--color-danger)', opacity: d.layouts.length > 1 ? 1 : 0.3 }} onClick={d.handleDeleteLayout} disabled={d.layouts.length <= 1}>
+                    <Trash2 size={14} />
+                </button>
+            </div>
+
+            <div style={{ marginBottom: 'var(--space-4)' }}>
+                <label className="decl-small-label">Nome do Layout</label>
+                <input className="decl-small-input" value={d.layoutName} onChange={(e) => d.handleUpdateLayoutName(e.target.value)} placeholder="Ex: Layout Empresa A" />
+            </div>
+
+            {/* Addressee */}
+            <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
+                <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Destinatário</label>
+                <input className="form-select" style={{ fontSize: '0.8rem', marginBottom: '6px' }} placeholder="Ex: Agente de Contratação" value={d.layout.addresseeName} onChange={(e) => d.updateLayout({ addresseeName: e.target.value })} />
+                <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} placeholder="Órgão / Pregão nº..." value={d.layout.addresseeOrg} onChange={(e) => d.updateLayout({ addresseeOrg: e.target.value })} />
+            </div>
+
+            {/* City/Date */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                <div><label className="decl-small-label">Local</label><input className="decl-small-input" value={d.layout.signatureCity} onChange={(e) => d.updateLayout({ signatureCity: e.target.value })} /></div>
+                <div><label className="decl-small-label">Data</label><input className="decl-small-input" value={d.layout.signatureDate} onChange={(e) => d.updateLayout({ signatureDate: e.target.value })} /></div>
+            </div>
+
+            {/* Signatory block */}
+            <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
+                <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bloco de Assinatura</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                    <div><label className="decl-small-label">Nome</label><input className="decl-small-input" placeholder="NOME COMPLETO" value={d.layout.signatoryName} onChange={(e) => d.updateLayout({ signatoryName: e.target.value })} /></div>
+                    <div><label className="decl-small-label">CPF</label><input className="decl-small-input" placeholder="CPF nº: 000.000.000-00" value={d.layout.signatoryCpf} onChange={(e) => d.updateLayout({ signatoryCpf: e.target.value })} /></div>
+                    <div><label className="decl-small-label">Cargo</label><input className="decl-small-input" placeholder="Sócio Administrador" value={d.layout.signatoryRole} onChange={(e) => d.updateLayout({ signatoryRole: e.target.value })} /></div>
+                    <div><label className="decl-small-label">Empresa</label><input className="decl-small-input" value={d.layout.signatoryCompany} onChange={(e) => d.updateLayout({ signatoryCompany: e.target.value })} /></div>
+                </div>
+                <div style={{ marginTop: '6px' }}><label className="decl-small-label">CNPJ</label><input className="decl-small-input" value={d.layout.signatoryCnpj} onChange={(e) => d.updateLayout({ signatoryCnpj: e.target.value })} /></div>
+            </div>
+
+            {/* Images */}
+            <ImageUploadSection label="Logotipo Cabeçalho" image={d.layout.headerImage} width={d.layout.headerImageWidth} height={d.layout.headerImageHeight}
+                onUpload={(f) => d.handleImageUpload('headerImage', f)} onRemove={() => d.updateLayout({ headerImage: null })}
+                onWidthChange={(w) => d.updateLayout({ headerImageWidth: w })} onHeightChange={(h) => d.updateLayout({ headerImageHeight: h })} />
+
+            <Field label="Cabeçalho (Texto)">
+                <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} value={d.layout.headerText} onChange={(e) => d.updateLayout({ headerText: e.target.value })} placeholder="Razão Social / CNPJ" />
+            </Field>
+
+            <ImageUploadSection label="Logotipo Rodapé" image={d.layout.footerImage} width={d.layout.footerImageWidth} height={d.layout.footerImageHeight}
+                onUpload={(f) => d.handleImageUpload('footerImage', f)} onRemove={() => d.updateLayout({ footerImage: null })}
+                onWidthChange={(w) => d.updateLayout({ footerImageWidth: w })} onHeightChange={(h) => d.updateLayout({ footerImageHeight: h })} />
+
+            <Field label="Rodapé (Texto)">
+                <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} value={d.layout.footerText} onChange={(e) => d.updateLayout({ footerText: e.target.value })} placeholder="Endereço / contato" />
+            </Field>
+        </div>
+    );
+}
+
+function EditorToolbar({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
+    return (
+        <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
+            <div className="flex-gap">
+                <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <FileText size={16} color="var(--color-primary)" />
+                </div>
+                <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Editor da Declaração</h3>
+            </div>
+            <div className="flex-gap">
+                {d.saveSuccess && <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-md)' }} className="flex-gap"><CheckCircle2 size={14} /> Salvo!</span>}
+                <button className="btn btn-outline flex-gap" onClick={d.handleAddToDocuments} disabled={!d.generatedText || d.isSaving} style={{ fontSize: '0.8rem' }}>
+                    {d.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Vincular ao Dossiê
+                </button>
+                <button className="btn flex-gap" onClick={d.handleExportPDF} disabled={!d.generatedText} style={{ backgroundColor: 'var(--color-success)', color: 'white', fontSize: 'var(--text-md)' }}>
+                    <Download size={14} /> Baixar PDF
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function DeclarationPreview({ layout, declarationType, generatedText, setGeneratedText }: {
+    layout: LayoutConfig; declarationType: string; generatedText: string; setGeneratedText: (v: string) => void;
+}) {
+    return (
+        <div className="decl-page-mockup">
+            {/* Header */}
+            {layout.headerImage && (
+                <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+                    <img src={layout.headerImage} alt="Logo" style={{ maxWidth: `${layout.headerImageWidth * 2.5}px`, maxHeight: `${layout.headerImageHeight * 2.5}px`, objectFit: 'contain' }} />
+                </div>
+            )}
+            {layout.headerText && (
+                <div style={{ textAlign: 'center', borderBottom: '1px solid #ccc', paddingBottom: '8px', marginBottom: '16px', fontSize: '0.65rem', color: '#666', whiteSpace: 'pre-line', lineHeight: 1.3 }}>
+                    {layout.headerText}
+                </div>
+            )}
+
+            {/* Addressee */}
+            {(layout.addresseeName || layout.addresseeOrg) && (
+                <div style={{ fontSize: '0.75rem', color: '#444', marginBottom: '16px', lineHeight: 1.5 }}>
+                    {layout.addresseeName && <div>Ao {layout.addresseeName}</div>}
+                    {layout.addresseeOrg && <div style={{ whiteSpace: 'pre-line' }}>{layout.addresseeOrg}</div>}
+                </div>
+            )}
+
+            {/* Title */}
+            <div style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: '20px', fontSize: '0.95rem', textTransform: 'uppercase', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                {declarationType || 'DECLARAÇÃO'}
+            </div>
+
+            {/* Body */}
+            <textarea className="decl-editor-text" value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} placeholder="Texto gerado aqui..." />
+
+            {/* Location/Date */}
+            {(layout.signatureCity || layout.signatureDate) && (
+                <div style={{ textAlign: 'right', marginTop: '20px', fontSize: '0.8rem', color: '#333', fontStyle: 'italic' }}>
+                    {layout.signatureCity}{layout.signatureCity && layout.signatureDate ? ', ' : ''}{layout.signatureDate}.
+                </div>
+            )}
+
+            {/* Signature block */}
+            <div style={{ textAlign: 'center', marginTop: '30px' }}>
+                <div style={{ color: '#333', marginBottom: '3px', fontSize: '0.8rem' }}>__________________________________________</div>
+                {layout.signatoryName && <div style={{ fontWeight: 'bold', fontSize: '0.78rem' }}>{layout.signatoryName.toUpperCase()}</div>}
+                {layout.signatoryCpf && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryCpf}</div>}
+                {layout.signatoryRole && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryRole}</div>}
+                {layout.signatoryCompany && <div style={{ fontWeight: 'bold', fontSize: '0.75rem' }}>{layout.signatoryCompany}</div>}
+                {layout.signatoryCnpj && <div style={{ fontSize: '0.7rem', color: '#555' }}>{layout.signatoryCnpj}</div>}
+            </div>
+
+            {/* Footer */}
+            <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
+                {layout.footerImage && (
+                    <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+                        <img src={layout.footerImage} alt="Rodapé" style={{ maxWidth: `${layout.footerImageWidth * 2.5}px`, maxHeight: `${layout.footerImageHeight * 2.5}px`, objectFit: 'contain' }} />
+                    </div>
+                )}
+                {layout.footerText && (
+                    <div style={{ textAlign: 'center', borderTop: '1px solid #ccc', paddingTop: '6px', fontSize: '0.6rem', color: '#999', whiteSpace: 'pre-line' }}>
+                        {layout.footerText}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

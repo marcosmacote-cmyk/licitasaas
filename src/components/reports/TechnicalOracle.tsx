@@ -30,7 +30,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                 <div style={{ marginBottom: 'var(--space-5)', background: 'var(--color-bg-secondary)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                     <div className="mb-4">
                         <label className="form-label section-label">Vincular à Empresa</label>
-                        <div style={{ position: 'relative' }}>
+                        <div className="pos-relative">
                             <Building2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
                             <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px' }}
                                 value={o.selectedCompanyId} onChange={(e) => o.setSelectedCompanyId(e.target.value)}>
@@ -42,7 +42,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
 
                     <div className="mb-4">
                         <label className="form-label section-label">Categoria do Acervo</label>
-                        <div style={{ position: 'relative' }}>
+                        <div className="pos-relative">
                             <Layers size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
                             <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px' }}
                                 value={o.selectedCategory} onChange={(e) => o.setSelectedCategory(e.target.value)}>
@@ -63,7 +63,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         <input type="file" hidden onChange={o.handleFileUpload} disabled={o.isUploading || !o.selectedCompanyId} accept=".pdf" />
                     </label>
                     {o.uploadError && (
-                        <div style={{ color: 'var(--color-danger)', fontSize: 'var(--text-base)', marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)', borderRadius: 'var(--radius-md)', display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                        <div className="info-panel info-panel--danger mt-3">
                             <AlertTriangle size={14} /> {o.uploadError}
                         </div>
                     )}
@@ -72,7 +72,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                 {/* Search */}
                 <div style={{ marginBottom: 'var(--space-5)' }}>
                     <label className="form-label section-label">Busca por Objeto</label>
-                    <div className="input-group" style={{ position: 'relative' }}>
+                    <div className="input-group pos-relative">
                         <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
                         <input type="text" placeholder="Descreva o que procura no acervo..." className="form-control"
                             style={{ paddingLeft: '40px', height: '42px', fontSize: 'var(--text-base)', width: '100%' }}
@@ -277,8 +277,8 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         </div>
                     </div>
                 ) : (
-                    <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', padding: 'var(--space-12)', background: 'var(--color-bg-secondary)', borderStyle: 'dashed' }}>
-                        <FileText size={64} style={{ opacity: 0.1, marginBottom: 'var(--space-6)' }} />
+                    <div className="card empty-state--centered" style={{ background: 'var(--color-bg-secondary)', borderStyle: 'dashed' }}>
+                        <FileText size={64} style={{ opacity: 0.1 }} />
                         <h3 style={{ margin: 0, opacity: 0.5 }}>Detalhes do Acervo</h3>
                         <p style={{ marginTop: 'var(--space-2)', textAlign: 'center', opacity: 0.5, maxWidth: '300px' }}>
                             Escolha um atestado na lista para ver o detalhamento ou selecione vários para a análise de somatório.
