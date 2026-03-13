@@ -9,6 +9,7 @@ import type { CompanyProfile, CompanyDocument, DocumentStatus, CompanyCredential
 import { CompanyFormModal } from './CompanyFormModal';
 import { DocumentFormModal } from './DocumentFormModal';
 import { CredentialFormModal } from './CredentialFormModal';
+import { Badge, useToast, ConfirmDialog } from './ui';
 
 export const MOCK_COMPANIES: CompanyProfile[] = [
     { id: '1', cnpj: '12.345.678/0001-90', razaoSocial: 'Tech Solutions Matriz LTDA', isHeadquarters: true },
@@ -22,6 +23,8 @@ interface Props {
 }
 
 export function DocumentsPage({ companies, setCompanies }: Props) {
+    const toast = useToast();
+    const [confirmAction, setConfirmAction] = useState<{ type: 'company' | 'document' | 'credential'; id: string; label: string } | null>(null);
     const [documents, setDocuments] = useState<CompanyDocument[]>([]);
 
     useEffect(() => {
@@ -141,7 +144,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             });
 
             if (res.status === 401 || res.status === 403) {
-                alert('Sua sessão expirou. Recarregando a página para novo login...');
+                toast.error('Sua sessão expirou. Recarregando...');
                 window.location.reload();
                 return;
             }
@@ -156,9 +159,9 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                         const data = await resCompanies.json();
                         setCompanies(data);
                     }
-                    alert("Configuração de alertas salva com sucesso. Os prazos já foram aplicados aos documentos!");
+                    toast.success("Configuração salva! Prazos aplicados aos documentos.");
                 } else {
-                    alert("Configuração de alertas salva com sucesso!");
+                    toast.success("Configuração de alertas salva com sucesso!");
                 }
             } else {
                 let errorData: any = null;
@@ -167,11 +170,11 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 if (errorData) {
                     errorMsg = errorData.error || errorData.message || (Object.keys(errorData).length > 0 ? JSON.stringify(errorData) : "Erro de resposta vazia do servidor");
                 }
-                alert(`Erro ao salvar configuração: ${errorMsg}`);
+                toast.error(`Erro ao salvar configuração: ${errorMsg}`);
             }
         } catch (err: any) {
             console.error("Failed to save alert config", err);
-            alert(`Erro na requisição: ${err.message || String(err)}`);
+            toast.error(`Erro na requisição: ${err.message || String(err)}`);
         }
     };
 
@@ -188,29 +191,64 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
         setIsCompanyModalOpen(true);
     };
 
-    const handleDeleteCompany = async (companyId: string) => {
-        if (window.confirm('Tem certeza que deseja remover esta empresa e todos os seus documentos?')) {
+    const handleDeleteCompany = (companyId: string) => {
+        const comp = companies.find(c => c.id === companyId);
+        setConfirmAction({ type: 'company', id: companyId, label: comp?.razaoSocial || 'esta empresa' });
+    };
+
+    const executeDelete = async () => {
+        if (!confirmAction) return;
+        const { type, id } = confirmAction;
+        setConfirmAction(null);
+
+        if (type === 'company') {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/companies/${companyId}`, {
+                const res = await fetch(`${API_BASE_URL}/api/companies/${id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
-
-                if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Recarregando a página... ');
-                    window.location.reload();
-                    return;
-                }
-
-                if (!res.ok) throw new Error("Delete failed");
-                setCompanies((prev: CompanyProfile[]) => prev.filter((c: CompanyProfile) => c.id !== companyId));
-                setDocuments((prev: CompanyDocument[]) => prev.filter((d: CompanyDocument) => d.companyProfileId !== companyId));
-                if (selectedCompanyId === companyId) {
-                    setSelectedCompanyId('');
+                if (res.status === 401 || res.status === 403) { toast.error('Sessão expirada.'); window.location.reload(); return; }
+                if (!res.ok) throw new Error('Delete failed');
+                setCompanies((prev: CompanyProfile[]) => prev.filter((c: CompanyProfile) => c.id !== id));
+                setDocuments((prev: CompanyDocument[]) => prev.filter((d: CompanyDocument) => d.companyProfileId !== id));
+                if (selectedCompanyId === id) setSelectedCompanyId('');
+                toast.success('Empresa excluída com sucesso.');
+            } catch (err) {
+                console.error(err);
+                toast.error('Erro ao excluir empresa.');
+            }
+        } else if (type === 'document') {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/documents/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (res.status === 401 || res.status === 403) { toast.error('Sessão expirada.'); window.location.reload(); return; }
+                if (res.ok) {
+                    setDocuments(prev => prev.filter(d => d.id !== id));
+                    toast.success('Documento excluído.');
                 }
             } catch (err) {
                 console.error(err);
-                alert("Erro ao excluir empresa.");
+                toast.error('Erro ao excluir documento.');
+            }
+        } else if (type === 'credential') {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/credentials/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (res.status === 401 || res.status === 403) { toast.error('Sessão expirada.'); window.location.reload(); return; }
+                if (!res.ok) throw new Error('Failed to delete credential');
+                setCompanies(prev => prev.map(c =>
+                    c.id === selectedCompanyId
+                        ? { ...c, credentials: c.credentials?.filter(cr => cr.id !== id) }
+                        : c
+                ));
+                toast.success('Credencial excluída.');
+            } catch (err) {
+                console.error(err);
+                toast.error('Erro ao excluir credencial.');
             }
         }
     };
@@ -228,7 +266,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 });
 
                 if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Recarregue a página para um novo login.');
+                    toast.error('Sessão expirada.');
                     window.location.reload();
                     return;
                 }
@@ -248,7 +286,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 });
 
                 if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Recarregue a página para um novo login.');
+                    toast.error('Sessão expirada.');
                     window.location.reload();
                     return;
                 }
@@ -261,7 +299,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             setIsCompanyModalOpen(false);
         } catch (err) {
             console.error(err);
-            alert("Erro ao salvar empresa no servidor.");
+            toast.error('Erro ao salvar empresa no servidor.');
         }
     };
 
@@ -275,28 +313,9 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
         setIsDocumentModalOpen(true);
     };
 
-    const handleDeleteDocument = async (docId: string) => {
-        if (window.confirm('Tem certeza que deseja apagar este documento?')) {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/documents/${docId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-
-                if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Faça login novamente.');
-                    window.location.reload();
-                    return;
-                }
-
-                if (res.ok) {
-                    setDocuments(prev => prev.filter(d => d.id !== docId));
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Erro ao excluir arquivo.");
-            }
-        }
+    const handleDeleteDocument = (docId: string) => {
+        const doc = documents.find(d => d.id === docId);
+        setConfirmAction({ type: 'document', id: docId, label: doc?.docType || 'este documento' });
     };
 
     const handleSaveDocument = async (docData: Partial<CompanyDocument>, file?: File) => {
@@ -320,7 +339,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 });
 
                 if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Faça login novamente.');
+                    toast.error('Sessão expirada.');
                     window.location.reload();
                     return;
                 }
@@ -339,12 +358,12 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 setIsDocumentModalOpen(false);
             } catch (err) {
                 console.error(err);
-                alert("Erro ao atualizar documento no servidor.");
+                toast.error('Erro ao atualizar documento.');
             }
         } else {
             // Create New
             if (!file) {
-                alert("O arquivo PDF é obrigatório.");
+                toast.warning('O arquivo PDF é obrigatório.');
                 return;
             }
             try {
@@ -357,7 +376,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 });
 
                 if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Faça login novamente.');
+                    toast.error('Sessão expirada.');
                     window.location.reload();
                     return;
                 }
@@ -379,7 +398,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 setIsDocumentModalOpen(false);
             } catch (err) {
                 console.error(err);
-                alert(`Falha ao salvar documento: ${err instanceof Error ? err.message : String(err)}`);
+                toast.error(`Falha ao salvar documento: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
     };
@@ -408,7 +427,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 });
 
                 if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Faça login novamente.');
+                    toast.error('Sessão expirada.');
                     window.location.reload();
                     return;
                 }
@@ -433,7 +452,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 });
 
                 if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Faça login novamente.');
+                    toast.error('Sessão expirada.');
                     window.location.reload();
                     return;
                 }
@@ -450,36 +469,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             setIsCredentialModalOpen(false);
         } catch (err) {
             console.error(err);
-            alert("Erro ao salvar credencial no servidor.");
+            toast.error('Erro ao salvar credencial.');
         }
     };
 
-    const handleDeleteCredential = async (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir esta credencial?')) {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/credentials/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-
-                if (res.status === 401 || res.status === 403) {
-                    alert('Sua sessão expirou. Faça login novamente.');
-                    window.location.reload();
-                    return;
-                }
-
-                if (!res.ok) throw new Error("Failed to delete credential");
-
-                setCompanies(prev => prev.map(c =>
-                    c.id === selectedCompanyId
-                        ? { ...c, credentials: c.credentials?.filter(cr => cr.id !== id) }
-                        : c
-                ));
-            } catch (err) {
-                console.error(err);
-                alert("Erro ao excluir credencial.");
-            }
-        }
+    const handleDeleteCredential = (id: string) => {
+        const cred = activeCompany?.credentials?.find(c => c.id === id);
+        setConfirmAction({ type: 'credential', id, label: cred?.platform || 'esta credencial' });
     };
 
     const togglePasswordVisibility = (id: string) => {
@@ -507,7 +503,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             });
 
             if (res.status === 401 || res.status === 403) {
-                alert('Sua sessão expirou. Faça login novamente.');
+                toast.error('Sessão expirada.');
                 window.location.reload();
                 return;
             }
@@ -520,13 +516,14 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             setDocuments((prev: CompanyDocument[]) => [newDoc, ...prev]);
         } catch (err) {
             console.error(err);
-            alert(`Erro no upload rápido: ${err instanceof Error ? err.message : String(err)}`);
+            toast.error(`Erro no upload rápido: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
     return (
+        <>
         <div className="page-container" style={{ display: 'flex', flexDirection: 'row', gap: 'var(--space-6)', paddingRight: 'var(--space-6)' }}>
 
             {/* Sidebar: Companies List */}
@@ -927,29 +924,32 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 )
             }
         </div >
+
+            <ConfirmDialog
+                open={!!confirmAction}
+                title={confirmAction?.type === 'company' ? 'Excluir Empresa' : confirmAction?.type === 'document' ? 'Excluir Documento' : 'Excluir Credencial'}
+                message={`Tem certeza que deseja excluir "${confirmAction?.label}"? Esta ação não pode ser desfeita.`}
+                confirmLabel="Excluir"
+                cancelLabel="Cancelar"
+                variant="danger"
+                onConfirm={executeDelete}
+                onCancel={() => setConfirmAction(null)}
+            />
+        </>
     );
 }
 
 function StatusBadge({ status }: { status: DocumentStatus }) {
-    let icon;
-    let colorClass;
-
-    if (status === 'Válido') {
-        icon = <CheckCircle2 size={14} />;
-        colorClass = 'badge-green';
-    } else if (status === 'Vencendo') {
-        icon = <Clock size={14} />;
-        colorClass = 'badge-orange';
-    } else {
-        icon = <ShieldAlert size={14} />;
-        colorClass = 'badge-red';
-    }
+    const config = status === 'Válido'
+        ? { icon: <CheckCircle2 size={14} />, variant: 'success' as const }
+        : status === 'Vencendo'
+            ? { icon: <Clock size={14} />, variant: 'warning' as const }
+            : { icon: <ShieldAlert size={14} />, variant: 'danger' as const };
 
     return (
-        <span className={`badge ${colorClass}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            {icon}
+        <Badge variant={config.variant} icon={config.icon}>
             {status}
-        </span>
+        </Badge>
     );
 }
 

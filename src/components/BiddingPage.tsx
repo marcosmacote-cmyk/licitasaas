@@ -12,6 +12,7 @@ import { aiService } from '../services/ai';
 import { API_BASE_URL } from '../config';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../types';
 import { COLUMNS } from '../types';
+import { useToast, ConfirmDialog } from './ui';
 
 // export const INITIAL_DATA: BiddingProcess[] = [ ... ] (Removed for brevity, now fetched from API)
 
@@ -19,6 +20,8 @@ interface Props {
     items: BiddingProcess[];
     setItems: React.Dispatch<React.SetStateAction<BiddingProcess[]>>;
     companies: CompanyProfile[];
+    initialFilter?: { statuses?: string[]; highlight?: string } | null;
+    onFilterConsumed?: () => void;
 }
 
 // ===== SISTEMA DE FILTROS INTELIGENTES =====
@@ -61,7 +64,8 @@ const INITIAL_CARD_FIELDS: CardFieldConfig[] = [
     { key: 'monitoring', label: 'Monitor de Chat (PNCP)', visible: true },
 ];
 
-export function BiddingPage({ items, setItems, companies }: Props) {
+export function BiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed }: Props) {
+    const toast = useToast();
     const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
         return (localStorage.getItem('biddingViewMode') as 'kanban' | 'table') || 'kanban';
     });
@@ -92,6 +96,15 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     });
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [showCardConfig, setShowCardConfig] = useState(false);
+
+    // Apply initial filter from dashboard deep links
+    useEffect(() => {
+        if (initialFilter?.statuses && initialFilter.statuses.length > 0) {
+            setFilters(prev => ({ ...prev, statuses: initialFilter.statuses! }));
+            setShowFilterPanel(true);
+            onFilterConsumed?.();
+        }
+    }, [initialFilter]);
 
     // ===== CONFIGURAÇÕES DO PAINEL =====
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
@@ -259,6 +272,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
     const [pendingAnalysis, setPendingAnalysis] = useState<AiAnalysis | null>(null);
     const [isParsingAI, setIsParsingAI] = useState(false);
     const [viewingProcessForAnalysis, setViewingProcessForAnalysis] = useState<BiddingProcess | null>(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Interactive Notification State
@@ -438,7 +452,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
             }).catch(e => {
                 console.error("Update error:", e);
-                alert("Erro ao atualizar a licitação no servidor.");
+                toast.error("Erro ao atualizar a licitação no servidor.");
             });
 
         } else {
@@ -481,7 +495,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                 }
             }).catch(e => {
                 console.error("Creation error:", e);
-                alert(`Erro ao salvar a nova licitação: ${e instanceof Error ? e.message : String(e)}`);
+                    toast.error(`Erro ao salvar a nova licitação: ${e instanceof Error ? e.message : String(e)}`);
             });
         }
         setIsModalOpen(false);
@@ -506,7 +520,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
             console.log('[BiddingPage] After setItems (status change)');
         }).catch(e => {
             console.error("Status update error:", e);
-            alert("Erro ao salvar a movimentação no servidor. Verifique sua conexão.");
+            toast.error("Erro ao salvar a movimentação no servidor. Verifique sua conexão.");
             // Optional: Revert local state if needed
             refreshData();
         });
@@ -538,22 +552,28 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
 
     const handleDeleteProcess = async (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir esta licitação?')) {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/biddings/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-                if (res.ok) {
-                    setItems(prev => prev.filter(p => p.id !== id));
-                } else {
-                    const errPayload = await res.json().catch(() => ({}));
-                    throw new Error(errPayload.error || 'Failed to delete');
-                }
-            } catch (err) {
-                console.error(err);
-                alert(`Erro ao excluir licitação: ${err instanceof Error ? err.message : String(err)}`);
+        setConfirmDeleteId(id);
+    };
+
+    const confirmDelete = async () => {
+        const id = confirmDeleteId;
+        if (!id) return;
+        setConfirmDeleteId(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/biddings/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (res.ok) {
+                setItems(prev => prev.filter(p => p.id !== id));
+                toast.success('Licitação excluída com sucesso.');
+            } else {
+                const errPayload = await res.json().catch(() => ({}));
+                throw new Error(errPayload.error || 'Failed to delete');
             }
+        } catch (err) {
+            console.error(err);
+            toast.error(`Erro ao excluir licitação: ${err instanceof Error ? err.message : String(err)}`);
         }
     };
 
@@ -576,7 +596,7 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         } catch (error) {
             console.error('Failed to parse document with AI', error);
             const errorMessage = error instanceof Error ? error.message : 'Falha ao extrair dados do Edital. Tente novamente mais tarde.';
-            alert(errorMessage);
+            toast.error(errorMessage);
         } finally {
             setIsParsingAI(false);
             // Reset input
@@ -1156,6 +1176,16 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                     onUpdate={refreshData}
                 />
             )}
+
+            <ConfirmDialog
+                open={!!confirmDeleteId}
+                title="Excluir Licitação"
+                message="Tem certeza que deseja excluir esta licitação? Esta ação não pode ser desfeita."
+                confirmLabel="Excluir"
+                variant="danger"
+                onConfirm={confirmDelete}
+                onCancel={() => setConfirmDeleteId(null)}
+            />
         </div>
     );
 }

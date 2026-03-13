@@ -1,37 +1,58 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    Line, AreaChart, Area
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
     Target, DollarSign, Award,
     Calendar as CalendarIcon, ChevronLeft, ChevronRight,
     Bell, Clock, AlertTriangle, FileWarning,
-    ArrowRight, Briefcase, Timer, ChevronDown, ChevronUp,
-    BrainCircuit, Satellite, FileCheck
+    ArrowRight, Timer, ChevronDown, ChevronUp,
+    BrainCircuit, Satellite, FileCheck, ExternalLink, Eye,
+    FileText, CheckCircle, Zap, Building2, TrendingUp, Edit3
 } from 'lucide-react';
-import type { BiddingProcess } from '../types';
+import type { BiddingProcess, CompanyProfile } from '../types';
 import { API_BASE_URL } from '../config';
+import { CountdownBadge } from './ui';
 
 interface Props {
     items: BiddingProcess[];
+    companies?: CompanyProfile[];
+    onNavigate?: (tab: string, filter?: { statuses?: string[]; highlight?: string }) => void;
 }
 
-export function Dashboard({ items }: Props) {
-    // ── State ──
+export function Dashboard({ items, companies = [], onNavigate }: Props) {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [showAllAlerts, setShowAllAlerts] = useState(false);
-    const [expiringDocs, setExpiringDocs] = useState<{ name: string; docType: string; expirationDate: string; companyName: string; status: string }[]>([]);
+    const [expiringDocs, setExpiringDocs] = useState<{ name: string; docType: string; expirationDate: string; companyName: string; status: string; daysLeft?: number }[]>([]);
+    const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+    const [monthlyTarget, setMonthlyTarget] = useState<number>(() => {
+        const saved = localStorage.getItem('dashboard_monthly_target');
+        return saved ? Number(saved) : 0;
+    });
+    const [editingTarget, setEditingTarget] = useState(false);
+    const [targetInput, setTargetInput] = useState('');
+
+    // ── Filter items by company ──
+    const filteredItems = useMemo(() => {
+        if (!selectedCompanyId) return items;
+        return items.filter(i => i.companyProfileId === selectedCompanyId);
+    }, [items, selectedCompanyId]);
 
     // ── KPI Calculations ──
-    const totalValue = items.reduce((acc, curr) => acc + curr.estimatedValue, 0);
-    const wonItems = items.filter(i => i.status === 'Vencido');
+    const totalValue = filteredItems.reduce((acc, curr) => acc + curr.estimatedValue, 0);
+    const wonItems = filteredItems.filter(i => i.status === 'Vencido');
     const wonValue = wonItems.reduce((acc, curr) => acc + curr.estimatedValue, 0);
-    const lostItems = items.filter(i => i.status === 'Perdido');
-    const activeItems = items.filter(i => !['Vencido', 'Perdido', 'Sem Sucesso'].includes(i.status));
+    const lostItems = filteredItems.filter(i => i.status === 'Perdido');
+    const activeItems = filteredItems.filter(i => !['Vencido', 'Perdido', 'Sem Sucesso'].includes(i.status));
     const totalFinished = wonItems.length + lostItems.length;
     const winRate = totalFinished > 0 ? Math.round((wonItems.length / totalFinished) * 100) : 0;
+
+    // ── Specific status counts for actionable KPIs ──
+    const captadoItems = filteredItems.filter(i => i.status === 'Captado');
+    const emAnaliseItems = filteredItems.filter(i => i.status === 'Em Análise de Edital');
+    const preparandoItems = filteredItems.filter(i => i.status === 'Preparando Documentação');
+    const participandoItems = filteredItems.filter(i => i.status === 'Participando');
 
     // ── Fetch expiring documents ──
     useEffect(() => {
@@ -65,40 +86,40 @@ export function Dashboard({ items }: Props) {
         fetchDocs();
     }, []);
 
-    // ── Today's missions: sessions + reminders happening today ──
+    // ── Today's missions ──
     const today = new Date();
     const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
     const todaySessions = useMemo(() => {
-        return items.filter(item => {
+        return filteredItems.filter(item => {
             if (!item.sessionDate) return false;
             const d = new Date(item.sessionDate);
             const dateKey = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
             return dateKey === todayStr;
         }).sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime());
-    }, [items, todayStr]);
+    }, [filteredItems, todayStr]);
 
     const todayReminders = useMemo(() => {
-        return items.filter(item => {
+        return filteredItems.filter(item => {
             if (!item.reminderDate || item.reminderStatus !== 'pending') return false;
             const d = new Date(item.reminderDate);
             const dateKey = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
             return dateKey === todayStr;
         });
-    }, [items, todayStr]);
+    }, [filteredItems, todayStr]);
 
     // ── Upcoming sessions (next 7 days) ──
     const upcomingSessions = useMemo(() => {
         const now = new Date();
         const in7days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-        return items.filter(item => {
+        return filteredItems.filter(item => {
             if (!item.sessionDate) return false;
             const d = new Date(item.sessionDate);
             return d > now && d <= in7days;
         }).sort((a, b) => new Date(a.sessionDate).getTime() - new Date(b.sessionDate).getTime());
-    }, [items]);
+    }, [filteredItems]);
 
-    // ── Stalled processes (in funnel but no action for 7+ days) ──
+    // ── Stalled processes (7+ days without action) ──
     const stalledProcesses = useMemo(() => {
         const now = new Date();
         return activeItems.filter(item => {
@@ -108,9 +129,14 @@ export function Dashboard({ items }: Props) {
         });
     }, [activeItems]);
 
-    // ── Critical Alerts (aggregated) ──
+    // ── Items needing AI analysis ──
+    const needsAiAnalysis = useMemo(() => {
+        return emAnaliseItems.filter(i => !i.aiAnalysis);
+    }, [emAnaliseItems]);
+
+    // ── Critical Alerts ──
     const criticalAlerts = useMemo(() => {
-        const alerts: { type: 'danger' | 'warning' | 'urgency'; icon: React.ReactNode; message: string; count?: number }[] = [];
+        const alerts: { type: 'danger' | 'warning' | 'urgency'; icon: React.ReactNode; message: string; action: string; count?: number; dest?: string }[] = [];
 
         const vencidoDocs = expiringDocs.filter((d: any) => d.status === 'vencido');
         const alertaDocs = expiringDocs.filter((d: any) => d.status === 'critico' || d.status === 'alerta');
@@ -120,7 +146,19 @@ export function Dashboard({ items }: Props) {
                 type: 'danger',
                 icon: <FileWarning size={16} />,
                 message: `${vencidoDocs.length} documento${vencidoDocs.length > 1 ? 's' : ''} vencido${vencidoDocs.length > 1 ? 's' : ''} — impeditivo para participação`,
-                count: vencidoDocs.length
+                action: 'Renovar agora →',
+                count: vencidoDocs.length,
+                dest: 'companies'
+            });
+        }
+        if (todaySessions.length > 0) {
+            alerts.push({
+                type: 'urgency',
+                icon: <Timer size={16} />,
+                message: `${todaySessions.length} sessão${todaySessions.length > 1 ? 'ões' : ''} de licitação HOJE`,
+                action: 'Ver sessões →',
+                count: todaySessions.length,
+                dest: 'bidding'
             });
         }
         if (alertaDocs.length > 0) {
@@ -128,15 +166,9 @@ export function Dashboard({ items }: Props) {
                 type: 'warning',
                 icon: <Clock size={16} />,
                 message: `${alertaDocs.length} documento${alertaDocs.length > 1 ? 's' : ''} vencendo nos próximos 30 dias`,
-                count: alertaDocs.length
-            });
-        }
-        if (todaySessions.length > 0) {
-            alerts.push({
-                type: 'urgency',
-                icon: <Timer size={16} />,
-                message: `${todaySessions.length} sessão${todaySessions.length > 1 ? 'ões' : ''} de licitação hoje`,
-                count: todaySessions.length
+                action: 'Verificar →',
+                count: alertaDocs.length,
+                dest: 'companies'
             });
         }
         if (stalledProcesses.length > 0) {
@@ -144,11 +176,23 @@ export function Dashboard({ items }: Props) {
                 type: 'warning',
                 icon: <AlertTriangle size={16} />,
                 message: `${stalledProcesses.length} processo${stalledProcesses.length > 1 ? 's' : ''} parado${stalledProcesses.length > 1 ? 's' : ''} há mais de 7 dias`,
-                count: stalledProcesses.length
+                action: 'Mover no funil →',
+                count: stalledProcesses.length,
+                dest: 'bidding'
+            });
+        }
+        if (needsAiAnalysis.length > 0) {
+            alerts.push({
+                type: 'warning',
+                icon: <BrainCircuit size={16} />,
+                message: `${needsAiAnalysis.length} edital${needsAiAnalysis.length > 1 ? 'is' : ''} em análise sem parecer da IA`,
+                action: 'Analisar com IA →',
+                count: needsAiAnalysis.length,
+                dest: 'intelligence'
             });
         }
         return alerts;
-    }, [expiringDocs, todaySessions, stalledProcesses]);
+    }, [expiringDocs, todaySessions, stalledProcesses, needsAiAnalysis]);
 
     // ── Funnel Data ──
     const statusCounts = items.reduce((acc, curr) => {
@@ -163,16 +207,6 @@ export function Dashboard({ items }: Props) {
         { name: 'Participando', count: statusCounts['Participando'] || 0, fill: 'var(--color-warning)' },
         { name: 'Vencido', count: statusCounts['Vencido'] || 0, fill: 'var(--color-success)' },
         { name: 'Perdido', count: statusCounts['Perdido'] || 0, fill: 'var(--color-danger)' },
-    ];
-
-    // ── Historical Data ──
-    const historicalData = [
-        { month: 'Set', winRate: 35, wonValue: Math.max(0, wonValue * 0.2) },
-        { month: 'Out', winRate: 42, wonValue: Math.max(0, wonValue * 0.4) },
-        { month: 'Nov', winRate: 38, wonValue: Math.max(0, wonValue * 0.5) },
-        { month: 'Dez', winRate: 55, wonValue: Math.max(0, wonValue * 0.7) },
-        { month: 'Jan', winRate: 60, wonValue: Math.max(0, wonValue * 0.9) },
-        { month: 'Fev', winRate: winRate || 65, wonValue: wonValue },
     ];
 
     // ── Calendar Logic ──
@@ -208,37 +242,68 @@ export function Dashboard({ items }: Props) {
     const pncpCount = items.filter(i => i.portal?.toLowerCase().includes('pncp') || i.link?.toLowerCase().includes('pncp.gov.br')).length;
     const aiCount = items.filter(i => i.aiAnalysis).length;
 
+    // ── Quick action pipeline counts — with deep link filters ──
+    const pipelineSteps = [
+        { label: 'Captados', count: captadoItems.length, icon: <Satellite size={14} />, color: 'var(--color-neutral)', action: 'Triar', dest: 'bidding', statuses: ['Captado'] },
+        { label: 'Em Análise', count: emAnaliseItems.length, icon: <Eye size={14} />, color: 'var(--color-primary)', action: 'Analisar', dest: 'bidding', statuses: ['Em Análise de Edital'] },
+        { label: 'Preparando', count: preparandoItems.length, icon: <FileText size={14} />, color: 'var(--color-urgency)', action: 'Documentar', dest: 'bidding', statuses: ['Preparando Documentação'] },
+        { label: 'Participando', count: participandoItems.length, icon: <Zap size={14} />, color: 'var(--color-warning)', action: 'Acompanhar', dest: 'bidding', statuses: ['Participando'] },
+    ];
+
+    const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+
     return (
         <div className="page-container" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            {/* ═════════════════════════════
-                HEADER
-                ═════════════════════════════ */}
+            {/* HEADER */}
             <div className="breadcrumb">
                 <span className="breadcrumb-current">Painel</span>
             </div>
             <div className="page-header" style={{ marginBottom: 'var(--space-5)' }}>
                 <div>
-                    <h1 className="page-title">Command Center</h1>
+                    <h1 className="page-title">Painel de Licitações</h1>
                     <p className="page-subtitle">
                         {today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                 </div>
+                {/* Company filter */}
+                {companies.length > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <Building2 size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+                        <select
+                            value={selectedCompanyId}
+                            onChange={(e) => setSelectedCompanyId(e.target.value)}
+                            style={{
+                                padding: 'var(--space-2) var(--space-3)',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--color-border)',
+                                background: 'var(--color-bg-surface)',
+                                color: 'var(--color-text-primary)',
+                                fontSize: 'var(--text-sm)',
+                                cursor: 'pointer',
+                                minWidth: 180,
+                            }}
+                        >
+                            <option value="">Todas as empresas</option>
+                            {companies.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </div>
 
-            {/* ═════════════════════════════
-                CRITICAL ALERTS (top banner)
-                ═════════════════════════════ */}
+            {/* ═══ CRITICAL ALERTS — actionable banners ═══ */}
             {criticalAlerts.length > 0 && (
             <div className="animate-fade-in-down" style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'var(--space-2)',
-                    marginBottom: 'var(--space-5)',
+                    display: 'flex', flexDirection: 'column',
+                    gap: 'var(--space-2)', marginBottom: 'var(--space-5)',
                 }}>
-                    {(showAllAlerts ? criticalAlerts : criticalAlerts.slice(0, 2)).map((alert, i) => (
-                        <div key={i} style={{
-                            display: 'flex',
-                            alignItems: 'center',
+                    {(showAllAlerts ? criticalAlerts : criticalAlerts.slice(0, 3)).map((alert, i) => (
+                        <div
+                            key={i}
+                            onClick={() => alert.dest && onNavigate?.(alert.dest)}
+                            style={{
+                            display: 'flex', alignItems: 'center',
                             gap: 'var(--space-3)',
                             padding: 'var(--space-3) var(--space-4)',
                             borderRadius: 'var(--radius-md)',
@@ -247,6 +312,8 @@ export function Dashboard({ items }: Props) {
                             fontSize: 'var(--text-md)',
                             fontWeight: 'var(--font-medium)',
                             color: `var(--color-${alert.type}, var(--color-text-primary))`,
+                            cursor: alert.dest ? 'pointer' : undefined,
+                            transition: 'var(--transition-fast)',
                         }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -257,10 +324,13 @@ export function Dashboard({ items }: Props) {
                                 {alert.icon}
                             </div>
                             <span style={{ flex: 1 }}>{alert.message}</span>
-                            <ArrowRight size={14} style={{ opacity: 0.5 }} />
+                            <span style={{
+                                fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)',
+                                opacity: 0.8, whiteSpace: 'nowrap',
+                            }}>{alert.action}</span>
                         </div>
                     ))}
-                    {criticalAlerts.length > 2 && (
+                    {criticalAlerts.length > 3 && (
                         <button
                             onClick={() => setShowAllAlerts(!showAllAlerts)}
                             style={{
@@ -271,58 +341,98 @@ export function Dashboard({ items }: Props) {
                             }}
                         >
                             {showAllAlerts ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            {showAllAlerts ? 'Ocultar' : `Mais ${criticalAlerts.length - 2} alerta(s)`}
+                            {showAllAlerts ? 'Ocultar' : `Mais ${criticalAlerts.length - 3} alerta(s)`}
                         </button>
                     )}
                 </div>
             )}
 
-            {/* ═════════════════════════════
-                KPIs (compact strip)
-                ═════════════════════════════ */}
-            <div className="stagger-children grid-4" style={{
-                marginBottom: 'var(--space-5)',
-            }}>
+            {/* ═══ KPIs — clickable shortcuts ═══ */}
+            <div className="stagger-children grid-4" style={{ marginBottom: 'var(--space-5)' }}>
                 <KpiCard
                     title="Volume no Funil"
-                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(totalValue)}
+                    value={fmt(totalValue)}
                     icon={<DollarSign size={18} />}
                     color="var(--color-primary)"
                     bg="var(--color-primary-light)"
+                    subtitle={`${activeItems.length} processos ativos`}
+                    onClick={() => onNavigate?.('bidding', { statuses: ['Captado', 'Em Análise de Edital', 'Preparando Documentação', 'Participando'] })}
                 />
                 <KpiCard
                     title="Volume Ganho (YTD)"
-                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(wonValue)}
+                    value={fmt(wonValue)}
                     icon={<Award size={18} />}
                     color="var(--color-success)"
                     bg="var(--color-success-bg)"
+                    subtitle={`${wonItems.length} licitações vencidas`}
+                    onClick={() => onNavigate?.('bidding', { statuses: ['Vencido'] })}
                 />
                 <KpiCard
-                    title="Win Rate"
+                    title="Taxa de Sucesso"
                     value={`${winRate}%`}
                     icon={<Target size={18} />}
-                    color="var(--color-primary)"
-                    bg="var(--color-primary-light)"
+                    color={winRate >= 50 ? 'var(--color-success)' : winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'}
+                    bg={winRate >= 50 ? 'var(--color-success-bg)' : winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'}
                     subtitle={`${wonItems.length} de ${totalFinished} finalizados`}
+                    onClick={() => onNavigate?.('bidding', { statuses: ['Vencido', 'Perdido', 'Sem Sucesso'] })}
                 />
                 <KpiCard
-                    title="Processos Ativos"
-                    value={activeItems.length.toString()}
-                    icon={<Briefcase size={18} />}
-                    color="var(--color-urgency)"
-                    bg="var(--color-urgency-bg)"
-                    subtitle={`${items.length} total no sistema`}
+                    title="Próximas Sessões"
+                    value={(todaySessions.length + upcomingSessions.length).toString()}
+                    icon={<CalendarIcon size={18} />}
+                    color={todaySessions.length > 0 ? 'var(--color-danger)' : 'var(--color-primary)'}
+                    bg={todaySessions.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)'}
+                    subtitle={todaySessions.length > 0 ? `⚡ ${todaySessions.length} HOJE` : 'nos próximos 7 dias'}
+                    onClick={() => onNavigate?.('bidding')}
                 />
             </div>
 
-            {/* ═════════════════════════════
-                MAIN GRID: 2 columns
-                ═════════════════════════════ */}
+            {/* ═══ PIPELINE RÁPIDO — clickable step bar ═══ */}
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 'var(--space-2)', marginBottom: 'var(--space-5)',
+            }}>
+                {pipelineSteps.map((step, i) => (
+                    <button
+                        key={i}
+                        onClick={() => onNavigate?.(step.dest, { statuses: step.statuses })}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                            padding: 'var(--space-3) var(--space-4)',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid var(--color-border)',
+                            background: step.count > 0 ? 'var(--color-bg-surface)' : 'var(--color-bg-body)',
+                            cursor: 'pointer', transition: 'var(--transition-fast)',
+                            textAlign: 'left',
+                        }}
+                    >
+                        <div style={{
+                            color: step.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 28, height: 28, borderRadius: 'var(--radius-sm)',
+                            background: `color-mix(in srgb, ${step.color} 12%, transparent)`,
+                            flexShrink: 0,
+                        }}>{step.icon}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', lineHeight: 1 }}>
+                                {step.count}
+                            </div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{step.label}</div>
+                        </div>
+                        {step.count > 0 && (
+                            <span style={{ fontSize: 'var(--text-xs)', color: step.color, fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>
+                                {step.action} →
+                            </span>
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {/* ═══ MAIN GRID: 2 columns ═══ */}
             <div className="grid-2-1">
                 {/* ── LEFT COLUMN ── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
-                    {/* MISSÕES DO DIA */}
+                    {/* MISSÕES DO DIA — actionable */}
                     <div className="card" style={{ padding: 'var(--card-padding)' }}>
                         <div style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -340,11 +450,16 @@ export function Dashboard({ items }: Props) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                             {todaySessions.length === 0 && todayReminders.length === 0 && (
                                 <div style={{
-                                    textAlign: 'center', padding: 'var(--space-8) var(--space-4)',
+                                    textAlign: 'center', padding: 'var(--space-6) var(--space-4)',
                                     color: 'var(--color-text-tertiary)', fontSize: 'var(--text-md)',
                                 }}>
-                                    <CalendarIcon size={28} style={{ opacity: 0.2, marginBottom: 'var(--space-2)' }} />
-                                    <p>Nenhuma sessão ou lembrete para hoje.</p>
+                                    <CheckCircle size={28} style={{ opacity: 0.2, marginBottom: 'var(--space-2)', color: 'var(--color-success)' }} />
+                                    <p style={{ margin: 0 }}>Nenhuma sessão ou lembrete para hoje.</p>
+                                    {upcomingSessions.length > 0 && (
+                                        <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--text-sm)' }}>
+                                            Próxima sessão: <strong style={{ color: 'var(--color-text-primary)' }}>{new Date(upcomingSessions[0].sessionDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</strong>
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
@@ -353,9 +468,11 @@ export function Dashboard({ items }: Props) {
                                     key={`s-${i}`}
                                     type="session"
                                     time={new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    rawDate={item.sessionDate}
                                     title={item.title}
                                     subtitle={item.modality}
                                     value={item.estimatedValue}
+                                    onClick={() => onNavigate?.('bidding')}
                                 />
                             ))}
 
@@ -366,26 +483,37 @@ export function Dashboard({ items }: Props) {
                                     time={new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                     title={item.title}
                                     subtitle={'Lembrete'}
+                                    onClick={() => onNavigate?.('bidding')}
                                 />
                             ))}
                         </div>
                     </div>
 
-                    {/* PRÓXIMAS SESSÕES (7 dias) */}
+                    {/* PRÓXIMAS SESSÕES (7 dias) — with countdown */}
                     {upcomingSessions.length > 0 && (
                         <div className="card" style={{ padding: 'var(--card-padding)' }}>
-                            <h3 style={sectionTitleStyle}>
-                                <CalendarIcon size={18} color="var(--color-primary)" />
-                                Próximas Sessões (7 dias)
-                            </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                                <h3 style={sectionTitleStyle}>
+                                    <CalendarIcon size={18} color="var(--color-primary)" />
+                                    Próximas Sessões
+                                </h3>
+                                <button onClick={() => onNavigate?.('bidding')} style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 'var(--font-semibold)',
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                }}>
+                                    Ver todas <ExternalLink size={12} />
+                                </button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                 {upcomingSessions.slice(0, 5).map((item, i) => {
                                     const d = new Date(item.sessionDate);
                                     return (
-                                        <div key={i} style={{
+                                        <div key={i} onClick={() => onNavigate?.('bidding')} style={{
                                             display: 'flex', gap: 'var(--space-3)', alignItems: 'center',
                                             padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
-                                            background: 'var(--color-bg-surface-hover)',
+                                            background: 'var(--color-bg-surface-hover)', cursor: 'pointer',
+                                            transition: 'var(--transition-fast)',
                                         }}>
                                             <div style={{
                                                 minWidth: 48, textAlign: 'center',
@@ -393,8 +521,7 @@ export function Dashboard({ items }: Props) {
                                                 color: 'var(--color-primary)',
                                                 background: 'var(--color-primary-light)',
                                                 padding: 'var(--space-1) var(--space-2)',
-                                                borderRadius: 'var(--radius-sm)',
-                                                lineHeight: 1.3,
+                                                borderRadius: 'var(--radius-sm)', lineHeight: 1.3,
                                             }}>
                                                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>{d.getDate()}</div>
                                                 <div>{d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</div>
@@ -409,24 +536,15 @@ export function Dashboard({ items }: Props) {
                                                     {d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {item.modality || item.portal}
                                                 </div>
                                             </div>
-                                            {item.estimatedValue > 0 && (
-                                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success)', whiteSpace: 'nowrap' }}>
-                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(item.estimatedValue)}
-                                                </div>
-                                            )}
+                                            <CountdownBadge targetDate={item.sessionDate} compact />
                                         </div>
                                     );
                                 })}
-                                {upcomingSessions.length > 5 && (
-                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', textAlign: 'center', paddingTop: 'var(--space-2)' }}>
-                                        +{upcomingSessions.length - 5} mais sessões nos próximos 7 dias
-                                    </div>
-                                )}
                             </div>
                         </div>
                     )}
 
-                    {/* RADAR DO SISTEMA */}
+                    {/* RADAR DO SISTEMA — actionable cards */}
                     <div className="stagger-children grid-3">
                         <RadarCard
                             icon={<Satellite size={18} />}
@@ -435,14 +553,18 @@ export function Dashboard({ items }: Props) {
                             desc="no funil via PNCP"
                             color="var(--color-primary)"
                             bg="var(--color-primary-light)"
+                            action="Buscar novas"
+                            onClick={() => onNavigate?.('opportunities')}
                         />
                         <RadarCard
                             icon={<BrainCircuit size={18} />}
                             title="LicitIA"
                             value={aiCount.toString()}
-                            desc="editais analisados"
-                            color="var(--color-ai)"
-                            bg="var(--color-ai-bg)"
+                            desc={needsAiAnalysis.length > 0 ? `${needsAiAnalysis.length} sem análise` : 'editais analisados'}
+                            color={needsAiAnalysis.length > 0 ? 'var(--color-warning)' : 'var(--color-ai)'}
+                            bg={needsAiAnalysis.length > 0 ? 'var(--color-warning-bg)' : 'var(--color-ai-bg)'}
+                            action={needsAiAnalysis.length > 0 ? 'Analisar' : 'Ver relatórios'}
+                            onClick={() => onNavigate?.('intelligence')}
                         />
                         <RadarCard
                             icon={<FileCheck size={18} />}
@@ -451,13 +573,24 @@ export function Dashboard({ items }: Props) {
                             desc={expiringDocs.length > 0 ? 'requerem atenção' : 'tudo em dia'}
                             color={expiringDocs.length > 0 ? 'var(--color-danger)' : 'var(--color-success)'}
                             bg={expiringDocs.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'}
+                            action={expiringDocs.length > 0 ? 'Renovar' : 'Gerenciar'}
+                            onClick={() => onNavigate?.('companies')}
                         />
                     </div>
 
-                    {/* FUNIL */}
+                    {/* FUNIL — clickable bars */}
                     <div className="card" style={{ padding: 'var(--card-padding)' }}>
-                        <h3 style={sectionTitleStyle}>Distribuição por Fase do Funil</h3>
-                        <div style={{ width: '100%', height: 220 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                            <h3 style={sectionTitleStyle}>Distribuição por Fase</h3>
+                            <button onClick={() => onNavigate?.('bidding')} style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 'var(--font-semibold)',
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                            }}>
+                                Abrir funil <ExternalLink size={12} />
+                            </button>
+                        </div>
+                        <div style={{ width: '100%', height: 200 }}>
                             <ResponsiveContainer>
                                 <BarChart data={funnelData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
@@ -467,38 +600,109 @@ export function Dashboard({ items }: Props) {
                                         contentStyle={{ backgroundColor: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}
                                         itemStyle={{ color: 'var(--color-text-primary)' }}
                                     />
-                                    <Bar dataKey="count" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="count" fill="var(--color-primary)" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(_: any) => onNavigate?.('bidding')} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
 
-                    {/* CONVERSÃO HISTÓRICA */}
+                    {/* META MENSAL */}
                     <div className="card" style={{ padding: 'var(--card-padding)' }}>
-                        <h3 style={sectionTitleStyle}>Evolução de Conversão (6 meses)</h3>
-                        <div style={{ width: '100%', height: 220 }}>
-                            <ResponsiveContainer>
-                                <AreaChart data={historicalData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
-                                    <defs>
-                                        <linearGradient id="colorWinRate" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="var(--color-success)" stopOpacity={0.2} />
-                                            <stop offset="95%" stopColor="var(--color-success)" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-                                    <XAxis dataKey="month" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                                    <YAxis yAxisId="left" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                                    <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}
-                                        itemStyle={{ color: 'var(--color-text-primary)' }}
-                                    />
-                                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }} />
-                                    <Area yAxisId="left" type="monotone" dataKey="winRate" name="Win Rate (%)" stroke="var(--color-success)" fillOpacity={1} fill="url(#colorWinRate)" />
-                                    <Line yAxisId="right" type="monotone" dataKey="wonValue" name="Volume Ganho (R$)" stroke="var(--color-ai)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                            <h3 style={sectionTitleStyle}>
+                                <TrendingUp size={18} color="var(--color-success)" />
+                                Meta Mensal
+                            </h3>
+                            <button
+                                onClick={() => { setEditingTarget(!editingTarget); setTargetInput(monthlyTarget ? monthlyTarget.toString() : ''); }}
+                                style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)',
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                }}
+                            >
+                                <Edit3 size={12} /> {monthlyTarget > 0 ? 'Editar' : 'Definir meta'}
+                            </button>
                         </div>
+
+                        {editingTarget && (
+                            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                                <input
+                                    type="number"
+                                    value={targetInput}
+                                    onChange={(e) => setTargetInput(e.target.value)}
+                                    placeholder="Ex: 500000"
+                                    style={{
+                                        flex: 1, padding: 'var(--space-2) var(--space-3)',
+                                        borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+                                        background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)',
+                                        fontSize: 'var(--text-sm)',
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            const val = Number(targetInput);
+                                            setMonthlyTarget(val); localStorage.setItem('dashboard_monthly_target', val.toString());
+                                            setEditingTarget(false);
+                                        }
+                                    }}
+                                />
+                                <button
+                                    onClick={() => {
+                                        const val = Number(targetInput);
+                                        setMonthlyTarget(val); localStorage.setItem('dashboard_monthly_target', val.toString());
+                                        setEditingTarget(false);
+                                    }}
+                                    style={{
+                                        padding: 'var(--space-2) var(--space-3)',
+                                        borderRadius: 'var(--radius-md)', border: 'none',
+                                        background: 'var(--color-success)', color: 'white',
+                                        fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Salvar
+                                </button>
+                            </div>
+                        )}
+
+                        {monthlyTarget > 0 ? (() => {
+                            const progress = Math.min(100, Math.round((wonValue / monthlyTarget) * 100));
+                            const remaining = Math.max(0, monthlyTarget - wonValue);
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--space-2)' }}>
+                                        <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                                            {progress}%
+                                        </span>
+                                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                                            {fmt(wonValue)} / {fmt(monthlyTarget)}
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        height: 8, borderRadius: 'var(--radius-full)',
+                                        background: 'var(--color-bg-surface-hover)', overflow: 'hidden',
+                                        marginBottom: 'var(--space-2)',
+                                    }}>
+                                        <div style={{
+                                            height: '100%', borderRadius: 'var(--radius-full)',
+                                            width: `${progress}%`,
+                                            background: progress >= 100 ? 'var(--color-success)' : progress >= 60 ? 'var(--color-primary)' : 'var(--color-warning)',
+                                            transition: 'width 0.5s ease',
+                                        }} />
+                                    </div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                                        {progress >= 100
+                                            ? '🎉 Meta atingida! Parabéns!'
+                                            : `Faltam ${fmt(remaining)} para atingir a meta`}
+                                    </div>
+                                </>
+                            );
+                        })() : (
+                            <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
+                                <TrendingUp size={24} style={{ opacity: 0.2, marginBottom: 'var(--space-2)' }} />
+                                <p style={{ margin: 0 }}>Defina uma meta mensal de faturamento para acompanhar seu progresso.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -521,14 +725,12 @@ export function Dashboard({ items }: Props) {
                             </div>
                         </div>
 
-                        {/* Week headers */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', textAlign: 'center', marginBottom: 'var(--space-1)' }}>
                             {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
                                 <div key={i} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', padding: 'var(--space-1)' }}>{d}</div>
                             ))}
                         </div>
 
-                        {/* Days */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
                             {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`e-${i}`} />)}
                             {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -565,7 +767,7 @@ export function Dashboard({ items }: Props) {
                         </div>
                     </div>
 
-                    {/* AGENDA DO DIA SELECIONADO */}
+                    {/* AGENDA DO DIA SELECIONADO — actionable */}
                     <div className="card" style={{ padding: 'var(--card-padding)', flex: 1, display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                             <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>
@@ -585,30 +787,40 @@ export function Dashboard({ items }: Props) {
                             )}
 
                             {selectedEvents.sessions.map((item, i) => (
-                                <AgendaItem key={`s-${i}`} type="session" item={item} />
+                                <AgendaItem key={`s-${i}`} type="session" item={item} onClick={() => onNavigate?.('bidding')} />
                             ))}
                             {selectedEvents.reminders.map((item, i) => (
-                                <AgendaItem key={`r-${i}`} type="reminder" item={item} />
+                                <AgendaItem key={`r-${i}`} type="reminder" item={item} onClick={() => onNavigate?.('bidding')} />
                             ))}
                         </div>
                     </div>
 
-                    {/* PROCESSOS PARADOS */}
+                    {/* PROCESSOS PARADOS — actionable */}
                     {stalledProcesses.length > 0 && (
                         <div className="card" style={{ padding: 'var(--card-padding)' }}>
-                            <h3 style={sectionTitleStyle}>
-                                <AlertTriangle size={18} color="var(--color-warning)" />
-                                Processos Parados ({stalledProcesses.length})
-                            </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                                <h3 style={sectionTitleStyle}>
+                                    <AlertTriangle size={18} color="var(--color-warning)" />
+                                    Processos Parados ({stalledProcesses.length})
+                                </h3>
+                                <button onClick={() => onNavigate?.('bidding')} style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    fontSize: 'var(--text-xs)', color: 'var(--color-warning)', fontWeight: 'var(--font-semibold)',
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                }}>
+                                    Resolver <ArrowRight size={12} />
+                                </button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                 {stalledProcesses.slice(0, 4).map((item, i) => {
                                     const daysSince = Math.ceil((new Date().getTime() - new Date(item.sessionDate || new Date().toISOString()).getTime()) / (1000 * 60 * 60 * 24));
                                     return (
-                                        <div key={i} style={{
+                                        <div key={i} onClick={() => onNavigate?.('bidding')} style={{
                                             display: 'flex', gap: 'var(--space-3)', alignItems: 'center',
                                             padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
                                             background: 'var(--color-warning-bg)',
                                             border: '1px solid var(--color-warning-border)',
+                                            cursor: 'pointer', transition: 'var(--transition-fast)',
                                         }}>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{
@@ -620,6 +832,7 @@ export function Dashboard({ items }: Props) {
                                                     {item.status} · parado há {daysSince} dias
                                                 </div>
                                             </div>
+                                            <ArrowRight size={14} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
                                         </div>
                                     );
                                 })}
@@ -636,11 +849,11 @@ export function Dashboard({ items }: Props) {
 // SUB COMPONENTS
 // ═══════════════════════════
 
-function KpiCard({ title, value, icon, color, bg, subtitle }: {
-    title: string; value: string; icon: React.ReactNode; color: string; bg: string; subtitle?: string;
+function KpiCard({ title, value, icon, color, bg, subtitle, onClick }: {
+    title: string; value: string; icon: React.ReactNode; color: string; bg: string; subtitle?: string; onClick?: () => void;
 }) {
     return (
-        <div className="card" style={{ padding: 'var(--card-padding)' }}>
+        <div className="card card-interactive" style={{ padding: 'var(--card-padding)' }} onClick={onClick}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)', marginBottom: 'var(--space-2)' }}>{title}</div>
@@ -661,11 +874,11 @@ function KpiCard({ title, value, icon, color, bg, subtitle }: {
     );
 }
 
-function RadarCard({ title, value, desc, icon, color, bg }: {
-    title: string; value: string; desc: string; icon: React.ReactNode; color: string; bg: string;
+function RadarCard({ title, value, desc, icon, color, bg, action, onClick }: {
+    title: string; value: string; desc: string; icon: React.ReactNode; color: string; bg: string; action?: string; onClick?: () => void;
 }) {
     return (
-        <div className="card" style={{
+        <div className="card card-interactive" onClick={onClick} style={{
             padding: 'var(--space-4)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
             gap: 'var(--space-2)',
@@ -676,24 +889,31 @@ function RadarCard({ title, value, desc, icon, color, bg }: {
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{title}</div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>{value}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{desc}</div>
+            {action && (
+                <div style={{ fontSize: 'var(--text-xs)', color, fontWeight: 'var(--font-semibold)', marginTop: 'var(--space-1)' }}>
+                    {action} →
+                </div>
+            )}
         </div>
     );
 }
 
-function MissionCard({ type, time, title, subtitle, value: _value }: {
-    type: 'session' | 'reminder'; time: string; title: string; subtitle?: string; value?: number;
+function MissionCard({ type, time, rawDate, title, subtitle, value: _value, onClick }: {
+    type: 'session' | 'reminder'; time: string; rawDate?: string; title: string; subtitle?: string; value?: number; onClick?: () => void;
 }) {
     const isSession = type === 'session';
     const borderColor = isSession ? 'var(--color-urgency)' : 'var(--color-warning)';
     const tagColor = isSession ? 'var(--color-urgency)' : 'var(--color-warning)';
 
     return (
-        <div style={{
+        <div onClick={onClick} style={{
             display: 'flex', gap: 'var(--space-3)', alignItems: 'center',
             padding: 'var(--space-3) var(--space-4)',
             borderLeft: `3px solid ${borderColor}`,
             borderRadius: '0 var(--radius-md) var(--radius-md) 0',
             background: 'var(--color-bg-surface-hover)',
+            cursor: onClick ? 'pointer' : undefined,
+            transition: 'var(--transition-fast)',
         }}>
             <div style={{
                 fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)',
@@ -711,25 +931,29 @@ function MissionCard({ type, time, title, subtitle, value: _value }: {
                     <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>{subtitle}</div>
                 )}
             </div>
-            <span className={isSession ? 'badge badge-urgency' : 'badge badge-warning'} style={{ flexShrink: 0 }}>
-                {isSession ? 'SESSÃO' : 'LEMBRETE'}
-            </span>
+            {isSession && rawDate ? <CountdownBadge targetDate={rawDate} compact /> : (
+                <span className={isSession ? 'badge badge-urgency' : 'badge badge-warning'} style={{ flexShrink: 0 }}>
+                    {isSession ? 'SESSÃO' : 'LEMBRETE'}
+                </span>
+            )}
         </div>
     );
 }
 
-function AgendaItem({ type, item }: { type: 'session' | 'reminder'; item: BiddingProcess }) {
+function AgendaItem({ type, item, onClick }: { type: 'session' | 'reminder'; item: BiddingProcess; onClick?: () => void }) {
     const isSession = type === 'session';
     const time = isSession
         ? new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
         : new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     return (
-        <div style={{
+        <div onClick={onClick} style={{
             padding: 'var(--space-3)',
             borderLeft: `3px solid ${isSession ? 'var(--color-danger)' : 'var(--color-warning)'}`,
             borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
             background: isSession ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)',
+            cursor: onClick ? 'pointer' : undefined,
+            transition: 'var(--transition-fast)',
         }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '2px' }}>
                 {isSession ? <Clock size={12} color="var(--color-danger)" /> : <Bell size={12} color="var(--color-warning)" />}
@@ -739,6 +963,11 @@ function AgendaItem({ type, item }: { type: 'session' | 'reminder'; item: Biddin
                 }}>
                     {isSession ? 'SESSÃO' : 'LEMBRETE'} · {time}
                 </span>
+                {isSession && (
+                    <span style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 'var(--font-semibold)' }}>
+                        Abrir →
+                    </span>
+                )}
             </div>
             <div style={{
                 fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)',

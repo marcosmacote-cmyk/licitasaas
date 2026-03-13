@@ -3,6 +3,7 @@ import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Se
 import { jsPDF } from 'jspdf';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile } from '../../types';
+import { useToast, ConfirmDialog } from '../ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -105,6 +106,7 @@ function extractDeclarationTypes(rawReq: any): string[] {
 }
 
 export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
+    const toast = useToast();
     const [selectedBiddingId, setSelectedBiddingId] = useState('');
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [declarationType, setDeclarationType] = useState('');
@@ -114,6 +116,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
     const [isSaving, setIsSaving] = useState(false);
     const [generatedText, setGeneratedText] = useState('');
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<{ type: 'deleteLayout' | 'resetLayout'; onConfirm: () => void } | null>(null);
     const [layoutSaved, setLayoutSaved] = useState(false);
     const [layouts, setLayouts] = useState<LayoutConfig[]>(loadLayouts);
     const [currentLayoutId, setCurrentLayoutId] = useState<string>(layouts[0]?.id || 'default');
@@ -151,17 +154,27 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
     const handleDeleteLayout = () => {
         if (layouts.length <= 1) return;
-        if (!confirm('Excluir este layout permanentemente?')) return;
-        const remaining = layouts.filter(l => l.id !== currentLayoutId);
-        setLayouts(remaining);
-        saveLayouts(remaining); // Sync to storage
-        setCurrentLayoutId(remaining[0].id);
-        setLayoutName(remaining[0].name);
+        setConfirmAction({
+            type: 'deleteLayout',
+            onConfirm: () => {
+                const remaining = layouts.filter(l => l.id !== currentLayoutId);
+                setLayouts(remaining);
+                saveLayouts(remaining);
+                setCurrentLayoutId(remaining[0].id);
+                setLayoutName(remaining[0].name);
+                setConfirmAction(null);
+            }
+        });
     };
 
     const handleResetLayout = () => {
-        if (!confirm('Limpar todos os campos deste layout?')) return;
-        updateLayout({ ...DEFAULT_LAYOUT, name: layoutName });
+        setConfirmAction({
+            type: 'resetLayout',
+            onConfirm: () => {
+                updateLayout({ ...DEFAULT_LAYOUT, name: layoutName });
+                setConfirmAction(null);
+            }
+        });
     };
 
     const biddingsWithAnalysis = useMemo(() =>
@@ -289,7 +302,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
     const handleGenerate = async () => {
         if (!selectedBiddingId || !selectedCompanyId || !declarationType) {
-            alert('Selecione licitação, empresa e tipo de declaração.');
+            toast.warning('Selecione licitação, empresa e tipo de declaração.');
             return;
         }
         setIsGenerating(true);
@@ -316,7 +329,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             setGeneratedText(data.text);
             if (data.title) setDeclarationType(data.title.toUpperCase());
         } catch (error: any) {
-            alert(`Erro ao gerar declaração: ${error.message}`);
+            toast.error(`Erro ao gerar declaração: ${error.message}`);
         } finally {
             setIsGenerating(false);
         }
@@ -542,12 +555,13 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             setSaveSuccess(true);
             onSave?.();
             setTimeout(() => setSaveSuccess(false), 3000);
-        } catch (e) { alert('Erro ao salvar declaração.'); }
+        } catch (e) { toast.error('Erro ao salvar declaração.'); }
         finally { setIsSaving(false); }
     };
 
     // ── RENDER ──
     return (
+        <>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) 2fr', gap: 'var(--space-7)', height: 'fit-content' }}>
 
             {/* LEFT: Configuration */}
@@ -785,6 +799,16 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                 </div>
             </div>
         </div>
+            <ConfirmDialog
+                open={!!confirmAction}
+                title={confirmAction?.type === 'deleteLayout' ? 'Excluir Layout' : 'Limpar Layout'}
+                message={confirmAction?.type === 'deleteLayout' ? 'Excluir este layout permanentemente? Esta ação não pode ser desfeita.' : 'Limpar todos os campos deste layout?'}
+                variant={confirmAction?.type === 'deleteLayout' ? 'danger' : 'warning'}
+                confirmLabel={confirmAction?.type === 'deleteLayout' ? 'Excluir' : 'Limpar'}
+                onConfirm={() => confirmAction?.onConfirm()}
+                onCancel={() => setConfirmAction(null)}
+            />
+        </>
     );
 }
 

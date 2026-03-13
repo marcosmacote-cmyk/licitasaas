@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, Tag, Mail, Phone, Save, Info, MapPin } from 'lucide-react';
+import { Building2, Tag, Mail, Phone, Save, Info, MapPin } from 'lucide-react';
 import type { CompanyProfile } from '../types';
+import { Modal, FormField, Input, Textarea, Button } from './ui';
 
 interface Props {
     initialData?: CompanyProfile | null;
@@ -23,318 +24,195 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // Only send editable fields, strip out id/tenantId/relations
         const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state } = formData;
         onSave({ razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state });
     };
 
+    const footer = (
+        <>
+            <Button variant="outline" onClick={onClose} size="lg">
+                Cancelar
+            </Button>
+            <Button
+                variant="primary"
+                size="lg"
+                icon={<Save size={18} />}
+                onClick={handleSubmit}
+                style={{
+                    background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
+                    boxShadow: 'var(--shadow-md)',
+                }}
+            >
+                Salvar Empresa
+            </Button>
+        </>
+    );
+
     return (
-        <div className="modal-overlay" style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            backdropFilter: 'blur(4px)',
-            animation: 'fadeIn 0.2s ease-out',
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            zIndex: 1000,
-            padding: '20px'
-        }}>
-            <div className="modal-content" style={{
-                maxWidth: '600px',
-                width: '100%',
-                maxHeight: '90vh',
-                borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-xl)',
-                overflowY: 'auto',
-                backgroundColor: 'var(--color-bg-surface)',
-                border: '1px solid var(--color-border)',
-                animation: 'slideUp 0.3s ease-out'
-            }}>
-                <div style={{
-                    padding: 'var(--space-6) var(--space-8)',
-                    borderBottom: '1px solid var(--color-border)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: 'linear-gradient(to right, var(--color-bg-surface), var(--color-bg-surface-hover))'
-                }}>
-                    <div>
-                        <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-                            {initialData ? 'Editar Empresa' : 'Cadastrar Empresa'}
-                        </h2>
-                        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', marginTop: '4px' }}>
-                            Configure os dados cadastrais da proponente.
-                        </p>
+        <Modal
+            open={true}
+            onClose={onClose}
+            title={initialData ? 'Editar Empresa' : 'Cadastrar Empresa'}
+            subtitle="Configure os dados cadastrais da proponente."
+            maxWidth="600px"
+            footer={footer}
+        >
+            <form onSubmit={handleSubmit}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
+
+                    {/* Razão Social */}
+                    <FormField label="Razão Social" required fullWidth>
+                        <Input
+                            icon={<Building2 size={18} color="var(--color-text-secondary)" />}
+                            required
+                            placeholder="Ex: Tech Solutions LTDA"
+                            value={formData.razaoSocial || ''}
+                            onChange={(e) => setFormData({ ...formData, razaoSocial: e.target.value })}
+                        />
+                    </FormField>
+
+                    {/* CNPJ */}
+                    <FormField label="CNPJ" required>
+                        <Input
+                            icon={<Tag size={18} color="var(--color-text-secondary)" />}
+                            required
+                            placeholder="00.000.000/0000-00"
+                            value={formData.cnpj || ''}
+                            onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
+                        />
+                    </FormField>
+
+                    {/* Tipo de Unidade */}
+                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '14px' }}>
+                        <label style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            cursor: 'pointer',
+                            padding: '10px 16px',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: formData.isHeadquarters ? 'var(--color-primary-light)' : 'transparent',
+                            border: formData.isHeadquarters ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                            transition: 'var(--transition-fast)'
+                        }}>
+                            <input
+                                type="checkbox"
+                                checked={formData.isHeadquarters || false}
+                                onChange={(e) => setFormData({ ...formData, isHeadquarters: e.target.checked })}
+                                style={{ width: '18px', height: '18px', accentColor: 'var(--color-primary)' }}
+                            />
+                            <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-medium)', color: formData.isHeadquarters ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
+                                Empresa Matriz (Sede)
+                            </span>
+                        </label>
                     </div>
-                    <button
-                        className="icon-btn"
-                        onClick={onClose}
-                        style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-full)', padding: 'var(--space-3)', boxShadow: 'var(--shadow-sm)' }}
+
+                    {/* Qualificação e Representante */}
+                    <FormField label="Qualificação da Empresa e Representante Legal" required fullWidth>
+                        <Textarea
+                            icon={<Info size={18} color="var(--color-text-secondary)" />}
+                            required
+                            placeholder="Ex: Empresa sediada em [Endereço], representada por [Nome], [Cargo], portador do CPF [CPF]..."
+                            value={formData.qualification || ''}
+                            onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+                        />
+                    </FormField>
+
+                    {/* Qualificação do Responsável Técnico */}
+                    <FormField
+                        label="Qualificação do Responsável Técnico"
+                        hint="Usado para declarações que exigem anuência do profissional técnico (ex: acervo técnico, responsável técnico)."
+                        fullWidth
                     >
-                        <X size={20} />
-                    </button>
+                        <Textarea
+                            icon={<Info size={18} color="var(--color-text-secondary)" />}
+                            placeholder="Ex: [Nome], [nacionalidade], [estado civil], [profissão], inscrito no CREA/CAU sob nº [Nº], CPF nº [CPF], residente em [Endereço]..."
+                            minHeight="60px"
+                            value={formData.technicalQualification || ''}
+                            onChange={(e) => setFormData({ ...formData, technicalQualification: e.target.value })}
+                        />
+                    </FormField>
+
+                    {/* Canais de Contato */}
+                    <div style={{ gridColumn: '1 / -1' }}>
+                        <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
+                                <Phone size={16} />
+                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Canais de Contato</span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
+                                <FormField label="Nome do Contato (Repr. Legal)">
+                                    <Input
+                                        placeholder="Nome Completo"
+                                        value={formData.contactName || ''}
+                                        onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                                    />
+                                </FormField>
+                                <FormField label="CPF do Repr. Legal">
+                                    <Input
+                                        placeholder="000.000.000-00"
+                                        value={formData.contactCpf || ''}
+                                        onChange={(e) => setFormData({ ...formData, contactCpf: e.target.value })}
+                                    />
+                                </FormField>
+                                <FormField label="E-mail">
+                                    <Input
+                                        icon={<Mail size={16} color="var(--color-text-tertiary)" />}
+                                        placeholder="email@empresa.com"
+                                        value={formData.contactEmail || ''}
+                                        onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                                    />
+                                </FormField>
+                                <FormField label="Telefone">
+                                    <Input
+                                        icon={<Phone size={16} color="var(--color-text-tertiary)" />}
+                                        placeholder="(00) 00000-0000"
+                                        value={formData.contactPhone || ''}
+                                        onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                                    />
+                                </FormField>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Endereço */}
+                    <div style={{ gridColumn: '1 / -1' }}>
+                        <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
+                                <MapPin size={16} />
+                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Endereço da Sede</span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-3)' }}>
+                                <FormField label="Endereço Completo">
+                                    <Input
+                                        placeholder="Rua X, nº 123, Bairro Y"
+                                        value={formData.address || ''}
+                                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                    />
+                                </FormField>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 'var(--space-3)' }}>
+                                    <FormField label="Cidade">
+                                        <Input
+                                            placeholder="Fortaleza"
+                                            value={formData.city || ''}
+                                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                        />
+                                    </FormField>
+                                    <FormField label="UF">
+                                        <Input
+                                            placeholder="CE"
+                                            maxLength={2}
+                                            value={formData.state || ''}
+                                            onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
+                                        />
+                                    </FormField>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
-
-                <form onSubmit={handleSubmit} style={{ padding: 'var(--space-8)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
-
-                        {/* Razão Social */}
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <label style={labelStyle}>Razão Social *</label>
-                            <div style={inputContainerStyle}>
-                                <Building2 size={18} color="var(--color-text-secondary)" />
-                                <input
-                                    type="text"
-                                    style={inputInnerStyle}
-                                    required
-                                    placeholder="Ex: Tech Solutions LTDA"
-                                    value={formData.razaoSocial || ''}
-                                    onChange={(e) => setFormData({ ...formData, razaoSocial: e.target.value })}
-                                />
-                            </div>
-                        </div>
-
-                        {/* CNPJ */}
-                        <div>
-                            <label style={labelStyle}>CNPJ *</label>
-                            <div style={inputContainerStyle}>
-                                <Tag size={18} color="var(--color-text-secondary)" />
-                                <input
-                                    type="text"
-                                    style={inputInnerStyle}
-                                    required
-                                    placeholder="00.000.000/0000-00"
-                                    value={formData.cnpj || ''}
-                                    onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Tipo de Unidade */}
-                        <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '14px' }}>
-                            <label style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                                cursor: 'pointer',
-                                padding: '10px 16px',
-                                borderRadius: 'var(--radius-md)',
-                                backgroundColor: formData.isHeadquarters ? 'var(--color-primary-light)' : 'transparent',
-                                border: formData.isHeadquarters ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                transition: 'var(--transition-fast)'
-                            }}>
-                                <input
-                                    type="checkbox"
-                                    checked={formData.isHeadquarters || false}
-                                    onChange={(e) => setFormData({ ...formData, isHeadquarters: e.target.checked })}
-                                    style={{ width: '18px', height: '18px', accentColor: 'var(--color-primary)' }}
-                                />
-                                <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-medium)', color: formData.isHeadquarters ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
-                                    Empresa Matriz (Sede)
-                                </span>
-                            </label>
-                        </div>
-
-                        {/* Qualificação e Representante */}
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <label style={labelStyle}>Qualificação da Empresa e Representante Legal *</label>
-                            <div style={{ ...inputContainerStyle, alignItems: 'flex-start' }}>
-                                <Info size={18} color="var(--color-text-secondary)" style={{ marginTop: '4px' }} />
-                                <textarea
-                                    style={{ ...inputInnerStyle, minHeight: '80px', resize: 'vertical' }}
-                                    required
-                                    placeholder="Ex: Empresa sediada em [Endereço], representada por [Nome], [Cargo], portador do CPF [CPF]..."
-                                    value={formData.qualification || ''}
-                                    onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Qualificação do Responsável Técnico */}
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <label style={labelStyle}>Qualificação do Responsável Técnico <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400, fontSize: '0.75rem' }}>(opcional)</span></label>
-                            <div style={{ ...inputContainerStyle, alignItems: 'flex-start' }}>
-                                <Info size={18} color="var(--color-text-secondary)" style={{ marginTop: '4px' }} />
-                                <textarea
-                                    style={{ ...inputInnerStyle, minHeight: '60px', resize: 'vertical' }}
-                                    placeholder="Ex: [Nome], [nacionalidade], [estado civil], [profissão], inscrito no CREA/CAU sob nº [Nº], CPF nº [CPF], residente em [Endereço]..."
-                                    value={formData.technicalQualification || ''}
-                                    onChange={(e) => setFormData({ ...formData, technicalQualification: e.target.value })}
-                                />
-                            </div>
-                            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '6px', marginBottom: 0 }}>
-                                Usado para declarações que exigem anuência do profissional técnico (ex: acervo técnico, responsável técnico).
-                            </p>
-                        </div>
-
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-                                    <Phone size={16} />
-                                    <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Canais de Contato</span>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
-                                    <div>
-                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Nome do Contato (Repr. Legal)</label>
-                                        <div style={inputContainerStyle}>
-                                            <input
-                                                style={inputInnerStyle}
-                                                placeholder="Nome Completo"
-                                                value={formData.contactName || ''}
-                                                onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>CPF do Repr. Legal</label>
-                                        <div style={inputContainerStyle}>
-                                            <input
-                                                style={inputInnerStyle}
-                                                placeholder="000.000.000-00"
-                                                value={formData.contactCpf || ''}
-                                                onChange={(e) => setFormData({ ...formData, contactCpf: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>E-mail</label>
-                                        <div style={inputContainerStyle}>
-                                            <Mail size={16} color="var(--color-text-tertiary)" />
-                                            <input
-                                                style={inputInnerStyle}
-                                                placeholder="email@empresa.com"
-                                                value={formData.contactEmail || ''}
-                                                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Telefone</label>
-                                        <div style={inputContainerStyle}>
-                                            <Phone size={16} color="var(--color-text-tertiary)" />
-                                            <input
-                                                style={inputInnerStyle}
-                                                placeholder="(00) 00000-0000"
-                                                value={formData.contactPhone || ''}
-                                                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Endereço */}
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-                                    <MapPin size={16} />
-                                    <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Endereço da Sede</span>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
-                                    <div>
-                                        <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Endereço Completo</label>
-                                        <div style={inputContainerStyle}>
-                                            <input
-                                                style={inputInnerStyle}
-                                                placeholder="Rua X, nº 123, Bairro Y"
-                                                value={formData.address || ''}
-                                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '12px' }}>
-                                        <div>
-                                            <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Cidade</label>
-                                            <div style={inputContainerStyle}>
-                                                <input
-                                                    style={inputInnerStyle}
-                                                    placeholder="Fortaleza"
-                                                    value={formData.city || ''}
-                                                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label style={{ ...labelStyle, fontSize: '0.75rem' }}>UF</label>
-                                            <div style={inputContainerStyle}>
-                                                <input
-                                                    style={inputInnerStyle}
-                                                    placeholder="CE"
-                                                    maxLength={2}
-                                                    value={formData.state || ''}
-                                                    onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div style={{
-                        marginTop: 'var(--space-10)',
-                        display: 'flex',
-                        gap: 'var(--space-3)',
-                        justifyContent: 'flex-end',
-                        paddingTop: 'var(--space-6)',
-                        borderTop: '1px solid var(--color-border)'
-                    }}>
-                        <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: 'var(--space-3) var(--space-6)' }}>
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            className="btn btn-primary"
-                            style={{
-                                padding: 'var(--space-3) var(--space-8)',
-                                background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
-                                boxShadow: 'var(--shadow-md)',
-                                fontWeight: 'var(--font-semibold)'
-                            }}
-                        >
-                            <Save size={18} /> Salvar Empresa
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <style>{`
-                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-            `}</style>
-        </div>
+            </form>
+        </Modal>
     );
 }
-
-const labelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: 'var(--text-md)',
-    fontWeight: 'var(--font-semibold)',
-    color: 'var(--color-text-secondary)',
-    marginBottom: 'var(--space-3)'
-};
-
-const inputContainerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--space-3)',
-    padding: 'var(--space-3) var(--space-4)',
-    backgroundColor: 'var(--color-bg-base)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
-    transition: 'var(--transition-fast)',
-};
-
-const inputInnerStyle: React.CSSProperties = {
-    border: 'none',
-    background: 'transparent',
-    outline: 'none',
-    width: '100%',
-    color: 'var(--color-text-primary)',
-    fontSize: 'var(--text-base)',
-};

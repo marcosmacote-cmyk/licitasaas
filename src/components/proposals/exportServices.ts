@@ -62,7 +62,7 @@ export function generateProposalPdf(
 ) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-        alert('Por favor, permita pop-ups para gerar o PDF.');
+        console.warn('Pop-up blocked by browser. Please allow pop-ups to generate the PDF.');
         return;
     }
 

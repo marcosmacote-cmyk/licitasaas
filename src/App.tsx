@@ -29,6 +29,7 @@ import { ResultadosPage } from './components/ResultadosPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ToastProvider } from './components/ui';
 
 type AppTab = 'dashboard' | 'opportunities' | 'bidding' | 'intelligence' | 'companies' | 'production' | 'monitoring' | 'results' | 'settings';
 
@@ -42,6 +43,7 @@ function App() {
   const lastLogIdRef = useRef<string | null>(null);
   const [alertCount, setAlertCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string } | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -249,6 +251,7 @@ function App() {
   const currentPageLabel = navGroups.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Painel';
 
   return (
+    <ToastProvider>
     <ErrorBoundary>
       <div className="app-container">
         {/* ═══════════════════════════
@@ -387,9 +390,9 @@ function App() {
           </header>
 
           {/* ── Page Content ── */}
-          {activeTab === 'dashboard' && <Dashboard items={items} />}
+          {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { setNavFilter(filter || null); setActiveTab(tab as AppTab); }} />}
           {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
-          {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
+          {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)} />}
           {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} />}
           {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
           {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} />}
@@ -399,6 +402,7 @@ function App() {
         </main>
       </div>
     </ErrorBoundary>
+    </ToastProvider>
   );
 }
 

@@ -3,6 +3,7 @@ import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, Ale
 import type { BiddingProcess, CompanyProfile, TechnicalCertificate } from '../../types';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
+import { useToast, ConfirmDialog } from '../ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -26,6 +27,7 @@ interface AnalysisResult {
 }
 
 export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
+    const toast = useToast();
     const [certificates, setCertificates] = useState<TechnicalCertificate[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -34,6 +36,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     // Selected bidding for comparison
     const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(null);
@@ -138,7 +141,13 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
     };
 
     const handleDeleteCert = async (id: string) => {
-        if (!confirm('Tem certeza que deseja excluir este acervo?')) return;
+        setConfirmDeleteId(id);
+    };
+
+    const executeDeleteCert = async () => {
+        if (!confirmDeleteId) return;
+        const id = confirmDeleteId;
+        setConfirmDeleteId(null);
         try {
             await axios.delete(`${API_BASE_URL}/api/technical-certificates/${id}`, getAuthHeaders());
             fetchCertificates();
@@ -176,7 +185,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
             setAnalysisResult(res.data);
         } catch (error) {
             console.error('Failed to analyze compatibility:', error);
-            alert('Erro ao realizar a análise de compatibilidade.');
+            toast.error('Erro ao realizar a análise de compatibilidade.');
         } finally {
             setIsAnalyzing(false);
         }
@@ -203,7 +212,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
         });
 
         localStorage.setItem(`oracle_evidence_${selectedBiddingId}`, JSON.stringify(evidence));
-        alert('Evidências vinculadas ao Dossiê com sucesso! ✅');
+        toast.success('Evidências vinculadas ao Dossiê com sucesso!');
     };
 
     const filteredCertificates = useMemo(() => {
@@ -258,6 +267,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
 
 
     return (
+        <>
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 250px)' }}>
             {/* Left Column: List and Upload */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: 'var(--space-4)', overflow: 'hidden' }}>
@@ -690,5 +700,15 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                 )}
             </div>
         </div>
+            <ConfirmDialog
+                open={!!confirmDeleteId}
+                title="Excluir Acervo"
+                message="Tem certeza que deseja excluir este acervo? Esta ação não pode ser desfeita."
+                variant="danger"
+                confirmLabel="Excluir"
+                onConfirm={executeDeleteCert}
+                onCancel={() => setConfirmDeleteId(null)}
+            />
+        </>
     );
 }

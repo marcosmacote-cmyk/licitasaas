@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
+import { useToast, ConfirmDialog } from '../ui';
 import { calculateItem, calculateTotals } from './engine';
 import type { RoundingMode } from './engine';
 import { exportExcelProposal, generateProposalPdf } from './exportServices';
@@ -21,6 +22,7 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const fmtNum = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function ProposalGeneratorPage({ biddings, companies }: Props) {
+    const toast = useToast();
     const [selectedBiddingId, setSelectedBiddingId] = useState('');
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [proposal, setProposal] = useState<PriceProposal | null>(null);
@@ -34,6 +36,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
+    const [confirmDeleteItemId, setConfirmDeleteItemId] = useState<string | null>(null);
     const [isBulkEditing, setIsBulkEditing] = useState(false);
     const [showConfig, setShowConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
@@ -100,7 +103,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     // Create new proposal
     const handleCreateProposal = async () => {
         if (!selectedBiddingId || !selectedCompanyId) {
-            alert('Selecione uma licitação e uma empresa.');
+            toast.warning('Selecione uma licitação e uma empresa.');
             return;
         }
         setIsLoading(true);
@@ -136,7 +139,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 showSaveMsg('Proposta criada com sucesso!');
             }
         } catch (e) {
-            alert('Erro ao criar proposta.');
+            toast.error('Erro ao criar proposta.');
         } finally {
             setIsLoading(false);
         }
@@ -193,14 +196,14 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         }, 1000);
                     }
                 } else {
-                    alert('A IA não encontrou itens neste edital.');
+                    toast.warning('A IA não encontrou itens neste edital.');
                 }
             } else {
                 const err = await res.json();
-                alert(err.error || 'Erro ao popular itens com IA.');
+                toast.error(err.error || 'Erro ao popular itens com IA.');
             }
         } catch (e) {
-            alert('Erro ao consultar IA.');
+            toast.error('Erro ao consultar IA.');
         } finally {
             setIsAiLoading(false);
         }
@@ -264,7 +267,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 setIsBulkEditing(false);
             }
         } catch (e) {
-            alert('Erro ao salvar os itens.');
+            toast.error('Erro ao salvar os itens.');
         } finally {
             setIsSaving(false);
         }
@@ -288,7 +291,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 showSaveMsg('Template padrão da empresa salvo!');
             }
         } catch (e) {
-            alert('Erro ao salvar template da empresa.');
+            toast.error('Erro ao salvar template da empresa.');
         } finally {
             setIsSavingTemplate(false);
         }
@@ -301,7 +304,13 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             return;
         }
         if (!proposal) return;
-        if (!confirm('Remover este item?')) return;
+        setConfirmDeleteItemId(itemId);
+    };
+
+    const executeDeleteItem = async () => {
+        if (!confirmDeleteItemId || !proposal) return;
+        const itemId = confirmDeleteItemId;
+        setConfirmDeleteItemId(null);
         try {
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items/${itemId}`, {
                 method: 'DELETE', headers,
@@ -309,7 +318,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             await loadProposals();
             showSaveMsg('Item removido.');
         } catch (e) {
-            alert('Erro ao remover item.');
+            toast.error('Erro ao remover item.');
         }
     };
 
@@ -336,7 +345,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             await loadProposals();
             showSaveMsg('Configurações salvas!');
         } catch (e) {
-            alert('Erro ao salvar configurações.');
+            toast.error('Erro ao salvar configurações.');
         } finally {
             setIsSaving(false);
         }
@@ -386,10 +395,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 setLetterContent(data.letterContent);
                 showSaveMsg('Carta proposta rascunhada pela IA!');
             } else {
-                alert('Erro ao gerar carta pela IA.');
+                toast.error('Erro ao gerar carta pela IA.');
             }
         } catch (e) {
-            alert('Erro ao conectar com a IA.');
+            toast.error('Erro ao conectar com a IA.');
         } finally {
             setIsLetterLoading(false);
         }
@@ -406,7 +415,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             showSaveMsg('Carta proposta salva!');
             await loadProposals();
         } catch (e) {
-            alert('Erro ao salvar carta.');
+            toast.error('Erro ao salvar carta.');
         } finally {
             setIsSaving(false);
         }
@@ -414,7 +423,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
     const handlePrintProposal = (type: 'FULL' | 'LETTER' | 'SPREADSHEET' = 'FULL') => {
         if (!proposal || !selectedBidding || !selectedCompanyId) {
-            alert('Carregue os dados da proposta primeiro.');
+            toast.warning('Carregue os dados da proposta primeiro.');
             return;
         }
 
@@ -448,6 +457,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     };
 
     return (
+        <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
             {/* ── Top Config Bar ── */}
@@ -1207,6 +1217,16 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 </div>
             )}
         </div>
+            <ConfirmDialog
+                open={!!confirmDeleteItemId}
+                title="Remover Item"
+                message="Tem certeza que deseja remover este item da proposta?"
+                variant="danger"
+                confirmLabel="Remover"
+                onConfirm={executeDeleteItem}
+                onCancel={() => setConfirmDeleteItemId(null)}
+            />
+        </>
     );
 }
 

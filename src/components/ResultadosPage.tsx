@@ -4,6 +4,7 @@ import type { BiddingProcess, CompanyProfile } from '../types';
 import { PerformanceDashboard } from './reports/PerformanceDashboard';
 import { BiddingListExporter } from './reports/BiddingListExporter';
 import { DocumentExpirationList } from './reports/DocumentExpirationList';
+import { TabNav } from './ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -31,11 +32,11 @@ export function ResultadosPage({ biddings, companies }: Props) {
             </div>
 
             {/* Page Header */}
-            <div className="page-header" style={{ marginBottom: '24px' }}>
+            <div className="page-header" style={{ marginBottom: 'var(--space-6)' }}>
                 <div>
-                    <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                         <div style={{
-                            padding: '8px',
+                            padding: 'var(--space-2)',
                             borderRadius: 'var(--radius-md)',
                             background: 'var(--color-success-bg)',
                             color: 'var(--color-success)',
@@ -50,37 +51,11 @@ export function ResultadosPage({ biddings, companies }: Props) {
             </div>
 
             {/* Tabs */}
-            <div style={{
-                display: 'flex',
-                gap: '4px',
-                marginBottom: '24px',
-                borderBottom: '1px solid var(--color-border)',
-                paddingBottom: '0',
-            }}>
-                {tabs.map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        style={{
-                            padding: '10px 16px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: 'var(--text-md)',
-                            fontWeight: activeTab === tab.key ? 'var(--font-semibold)' : 'var(--font-medium)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                            borderBottom: activeTab === tab.key ? '2px solid var(--color-primary)' : '2px solid transparent',
-                            transition: 'all 150ms',
-                            marginBottom: '-1px',
-                        }}
-                    >
-                        {tab.icon} {tab.label}
-                    </button>
-                ))}
-            </div>
+            <TabNav
+                tabs={tabs}
+                active={activeTab}
+                onChange={(key) => setActiveTab(key as ResultadosTab)}
+            />
 
             {/* Content */}
             <div>

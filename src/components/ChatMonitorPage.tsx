@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot, Star, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, Zap, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { useToast } from './ui';
 
 type TabFilter = 'all' | 'unread' | 'important' | 'archived';
 
@@ -89,6 +90,7 @@ function portalBadge(portal: string) {
 }
 
 export function ChatMonitorPage({ companies }: Props) {
+  const toast = useToast();
   // ── State: Process List (left panel) ──
   const [processes, setProcesses] = useState<ProcessSummary[]>([]);
   const [loadingProcesses, setLoadingProcesses] = useState(true);
@@ -407,8 +409,8 @@ export function ChatMonitorPage({ companies }: Props) {
                     else if (data.results?.telegram === false) parts.push('❌ Telegram falhou');
                     if (data.results?.whatsapp === true) parts.push('✅ WhatsApp OK');
                     else if (data.results?.whatsapp === false) parts.push('❌ WhatsApp falhou');
-                    alert(parts.length > 0 ? parts.join('\n') : data.message);
-                  } catch { alert('Falha no teste.'); }
+                    toast.info(parts.length > 0 ? parts.join(' | ') : data.message);
+                  } catch { toast.error('Falha no teste.'); }
                   finally { setTestingNotif(false); }
                 }}
               >
@@ -423,9 +425,9 @@ export function ChatMonitorPage({ companies }: Props) {
                   setSavingConfig(true);
                   try {
                     const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, { method: 'POST', headers, body: JSON.stringify(monitorConfig) });
-                    if (res.ok) alert('✅ Configurações salvas!');
-                    else alert('❌ Erro ao salvar');
-                  } catch { alert('❌ Falha na conexão.'); }
+                    if (res.ok) toast.success('Configurações salvas!');
+                    else toast.error('Erro ao salvar');
+                  } catch { toast.error('Falha na conexão.'); }
                   finally { setSavingConfig(false); }
                 }}
               >

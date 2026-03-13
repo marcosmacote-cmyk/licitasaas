@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile } from '../../types';
+import { useToast, ConfirmDialog } from '../ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -22,6 +23,7 @@ const PETITION_TYPES = [
 ];
 
 export function PetitionGenerator({ biddings, companies }: Props) {
+    const toast = useToast();
     const [selectedBiddingId, setSelectedBiddingId] = useState('');
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [petitionTypeId, setPetitionTypeId] = useState('recurso');
@@ -36,6 +38,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     const [footerImage, setFooterImage] = useState('');
     const [headerImageHeight, setHeaderImageHeight] = useState(80);
     const [footerImageHeight, setFooterImageHeight] = useState(60);
+    const [confirmAction, setConfirmAction] = useState<{ type: string; onConfirm: () => void } | null>(null);
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [showStyles, setShowStyles] = useState(false);
     const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
@@ -93,7 +96,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
     const handleSaveCompanyTemplate = async () => {
         if (!selectedCompanyId) {
-            alert('Por favor, selecione uma empresa primeiro.');
+            toast.warning('Por favor, selecione uma empresa primeiro.');
             return;
         }
         setIsSavingTemplate(true);
@@ -107,10 +110,10 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                     footerHeight: footerImageHeight,
                 })
             });
-            if (res.ok) alert(`Configurações salvas como padrão para ${selectedCompany?.razaoSocial}!`);
+            if (res.ok) toast.success(`Configurações salvas como padrão para ${selectedCompany?.razaoSocial}!`);
             else throw new Error('Falha ao salvar');
         } catch (e) {
-            alert('Erro ao salvar template.');
+            toast.error('Erro ao salvar template.');
         } finally {
             setIsSavingTemplate(false);
         }
@@ -140,9 +143,10 @@ export function PetitionGenerator({ biddings, companies }: Props) {
     };
 
     const handleNew = () => {
-        if (confirm('Deseja iniciar uma nova petição? Todos os dados atuais serão perdidos.')) {
-            handleClear();
-        }
+        setConfirmAction({
+            type: 'new',
+            onConfirm: () => { handleClear(); setConfirmAction(null); }
+        });
     };
 
     const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,7 +178,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
     const handleGenerate = async () => {
         if (!selectedBiddingId || !selectedCompanyId || (!factsSummary && attachments.length === 0)) {
-            alert('Por favor, selecione o processo, a empresa e descreva os fatos ou anexe documentos.');
+            toast.warning('Por favor, selecione o processo, a empresa e descreva os fatos ou anexe documentos.');
             return;
         }
 
@@ -213,7 +217,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             setEditorKey(prev => prev + 1);
         } catch (error: any) {
             console.error(error);
-            alert(`Erro: ${error.message}`);
+            toast.error(`Erro: ${error.message}`);
         } finally {
             setIsGenerating(false);
         }
@@ -249,7 +253,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
     const applyImageStyle = (style: React.CSSProperties) => {
         if (!selectedImg) {
-            alert('Dica: Primeiro clique na imagem desejada dentro do texto para selecioná-la.');
+            toast.info('Dica: Primeiro clique na imagem desejada dentro do texto para selecioná-la.');
             return;
         }
 
@@ -281,23 +285,27 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
     const handleDeleteImage = () => {
         if (!selectedImg) return;
-        if (confirm('Deseja remover esta imagem?')) {
-            const img = selectedImg;
-            const wrapper = img.parentElement;
+        setConfirmAction({
+            type: 'deleteImage',
+            onConfirm: () => {
+                const img = selectedImg;
+                const wrapper = img.parentElement;
 
-            if (wrapper && wrapper.tagName === 'DIV' && wrapper.childNodes.length === 1 && wrapper.id !== 'petition-editable-content') {
-                wrapper.remove();
-            } else {
-                img.remove();
-            }
+                if (wrapper && wrapper.tagName === 'DIV' && wrapper.childNodes.length === 1 && wrapper.id !== 'petition-editable-content') {
+                    wrapper.remove();
+                } else {
+                    img.remove();
+                }
 
-            setSelectedImg(null);
-            if (editorRef.current) {
-                const newHtml = editorRef.current.innerHTML;
-                lastAiResult.current = newHtml;
-                setGeneratedDraft(newHtml);
+                setSelectedImg(null);
+                if (editorRef.current) {
+                    const newHtml = editorRef.current.innerHTML;
+                    lastAiResult.current = newHtml;
+                    setGeneratedDraft(newHtml);
+                }
+                setConfirmAction(null);
             }
-        }
+        });
     };
 
     const handleExportPDF = () => {
@@ -308,7 +316,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
         const printWindow = window.open('', '_blank');
         if (!printWindow) {
-            alert('Por favor, permita pop-ups para gerar o PDF.');
+            toast.warning('Por favor, permita pop-ups para gerar o PDF.');
             return;
         }
 
@@ -426,6 +434,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
 
     return (
+        <>
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 200px)' }}>
             {/* Left: Configuration */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
@@ -805,5 +814,15 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                 </div>
             </div>
         </div>
+            <ConfirmDialog
+                open={!!confirmAction}
+                title={confirmAction?.type === 'new' ? 'Nova Petição' : 'Remover Imagem'}
+                message={confirmAction?.type === 'new' ? 'Deseja iniciar uma nova petição? Todos os dados atuais serão perdidos.' : 'Deseja remover esta imagem?'}
+                variant={confirmAction?.type === 'new' ? 'warning' : 'danger'}
+                confirmLabel={confirmAction?.type === 'new' ? 'Iniciar Nova' : 'Remover'}
+                onConfirm={() => confirmAction?.onConfirm()}
+                onCancel={() => setConfirmAction(null)}
+            />
+    </>
     );
 }

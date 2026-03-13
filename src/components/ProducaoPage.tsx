@@ -5,6 +5,7 @@ import { ProposalGeneratorPage } from './proposals/ProposalGeneratorPage';
 import { DossierExporter } from './reports/DossierExporter';
 import { AiDeclarationGenerator } from './reports/AiDeclarationGenerator';
 import { PetitionGenerator } from './reports/PetitionGenerator';
+import { TabNav } from './ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -53,39 +54,11 @@ export function ProducaoPage({ biddings, companies, onRefresh }: Props) {
             </div>
 
             {/* Tabs */}
-            <div style={{
-                display: 'flex',
-                gap: 'var(--space-1)',
-                marginBottom: 'var(--space-6)',
-                borderBottom: '1px solid var(--color-border)',
-                paddingBottom: '0',
-                overflowX: 'auto',
-            }}>
-                {tabs.map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        style={{
-                            padding: 'var(--space-3) var(--space-4)',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: 'var(--text-md)',
-                            fontWeight: activeTab === tab.key ? 'var(--font-semibold)' : 'var(--font-medium)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-2)',
-                            color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                            borderBottom: activeTab === tab.key ? '2px solid var(--color-primary)' : '2px solid transparent',
-                            transition: 'var(--transition-fast)',
-                            marginBottom: '-1px',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
-                        {tab.icon} {tab.label}
-                    </button>
-                ))}
-            </div>
+            <TabNav
+                tabs={tabs.map(t => ({ key: t.key, label: t.label, icon: t.icon }))}
+                active={activeTab}
+                onChange={(key) => setActiveTab(key as ProducaoTab)}
+            />
 
             {/* Content */}
             <div>

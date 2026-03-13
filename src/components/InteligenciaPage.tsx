@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BrainCircuit } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { TechnicalOracle } from './reports/TechnicalOracle';
+import { TabNav } from './ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -47,37 +48,12 @@ export function InteligenciaPage({ biddings, companies, onRefresh }: Props) {
             </div>
 
             {/* Tabs */}
-            <div style={{
-                display: 'flex',
-                gap: 'var(--space-1)',
-                marginBottom: 'var(--space-6)',
-                borderBottom: '1px solid var(--color-border)',
-                paddingBottom: '0'
-            }}>
-                {tabs.map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        style={{
-                            padding: '10px 16px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: 'var(--text-md)',
-                            fontWeight: activeTab === tab.key ? 'var(--font-semibold)' : 'var(--font-medium)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            color: activeTab === tab.key ? 'var(--color-ai)' : 'var(--color-text-tertiary)',
-                            borderBottom: activeTab === tab.key ? '2px solid var(--color-ai)' : '2px solid transparent',
-                            transition: 'all 150ms',
-                            marginBottom: '-1px',
-                        }}
-                    >
-                        {tab.icon} {tab.label}
-                    </button>
-                ))}
-            </div>
+            <TabNav
+                tabs={tabs.map(t => ({ key: t.key, label: t.label, icon: t.icon }))}
+                active={activeTab}
+                onChange={(key) => setActiveTab(key as InteligenciaTab)}
+                color="var(--color-ai)"
+            />
 
             {/* Content */}
             <div>

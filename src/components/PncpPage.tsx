@@ -6,6 +6,7 @@ import { API_BASE_URL } from '../config';
 import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
+import { useToast, ConfirmDialog } from './ui';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
@@ -50,6 +51,7 @@ const STATUS_OPTIONS = [
 ];
 
 export function PncpPage({ companies, onRefresh, items = [] }: Props) {
+    const toast = useToast();
     const [savedSearches, setSavedSearches] = useState<PncpSavedSearch[]>([]);
     const [results, setResults] = useState<PncpBiddingItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -86,6 +88,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
         return saved ? JSON.parse(saved) : [];
     });
     const [showFavoritosTab, setShowFavoritosTab] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<{ type: string; message?: string; onConfirm: () => void } | null>(null);
 
     useEffect(() => {
         localStorage.setItem('pncp_favoritos', JSON.stringify(favoritos));
@@ -127,7 +130,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
     const exportFavoritesToPdf = () => {
         if (favoritos.length === 0) {
-            alert("Não há licitações favoritadas.");
+            toast.warning('Não há licitações favoritadas.');
             return;
         }
 
@@ -238,7 +241,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             }
         } catch (e) {
             console.error(e);
-            alert("Falha ao buscar editais. Tente novamente.");
+            toast.error('Falha ao buscar editais. Tente novamente.');
         } finally {
             setLoading(false);
         }
@@ -281,7 +284,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             }
         } catch (e) {
             console.error(e);
-            alert("Erro ao salvar pesquisa.");
+            toast.error('Erro ao salvar pesquisa.');
         } finally {
             setSaving(false);
         }
@@ -348,17 +351,19 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
     const deleteSavedSearch = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("Excluir pesquisa salva?")) return;
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/searches/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) fetchSavedSearches();
-        } catch (e) {
-            console.error(e);
-        }
+        setConfirmAction({ type: 'deleteSearch', onConfirm: async () => {
+            setConfirmAction(null);
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE_URL}/api/pncp/searches/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) fetchSavedSearches();
+            } catch (e) {
+                console.error(e);
+            }
+        }});
     };
 
     const clearSearch = () => {
@@ -384,12 +389,21 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             if (existingProcess) {
                 const isCaptado = existingProcess.status === 'Captado';
                 const locationStr = isCaptado ? 'na coluna "Captada"' : `na coluna "${existingProcess.status}"`;
-                if (!window.confirm(`⚠️ AVISO DE DUPLICIDADE\n\nEsta licitação aparentemente já está no seu funil (${locationStr}).\n\nTem certeza que deseja importar novamente e criar uma duplicidade?`)) {
-                    return;
-                }
+                setConfirmAction({
+                    type: 'duplicate',
+                    message: `Esta licitação aparentemente já está no seu funil (${locationStr}). Tem certeza que deseja importar novamente e criar uma duplicidade?`,
+                    onConfirm: () => {
+                        setConfirmAction(null);
+                        doImport(item, aiData);
+                    }
+                });
+                return;
             }
         }
+        doImport(item, aiData);
+    };
 
+    const doImport = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
         let bestPortalName = "PNCP";
         if (companies.length > 0) {
             const allCreds = companies.flatMap(c => c.credentials || []);
@@ -513,7 +527,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
         } catch (error: any) {
             console.error('PNCP AI Analysis error:', error);
-            alert(`Erro na análise IA: ${error.message}`);
+            toast.error(`Erro na análise IA: ${error.message}`);
         } finally {
             setAnalyzingItemId(null);
         }
@@ -545,7 +559,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         body: JSON.stringify({ ...analysisToSave, biddingProcessId: savedProcess.id })
                     });
                 }
-                alert("Licitação importada com sucesso para o Funil!" + (analysisToSave ? " (com análise IA)" : ""));
+                toast.success('Licitação importada com sucesso!' + (analysisToSave ? ' (com análise IA)' : ''));
                 setEditingProcess(null);
                 setPendingAiAnalysis(null);
                 setPncpAnalysis(null);
@@ -557,7 +571,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             }
         } catch (e) {
             console.error(e);
-            alert("Erro ao importar licitação.");
+            toast.error('Erro ao importar licitação.');
         }
     };
 
@@ -583,6 +597,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     };
 
     return (
+        <>
         <div className="page-container" style={{ paddingBottom: '32px' }}>
             {/* Page Header */}
             <div className="page-header" style={{ marginBottom: 'var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
@@ -1164,5 +1179,15 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 />
             )}
         </div>
+            <ConfirmDialog
+                open={!!confirmAction}
+                title={confirmAction?.type === 'deleteSearch' ? 'Excluir Pesquisa' : 'Aviso de Duplicidade'}
+                message={confirmAction?.type === 'deleteSearch' ? 'Excluir esta pesquisa salva?' : (confirmAction?.message || '')}
+                variant={confirmAction?.type === 'deleteSearch' ? 'danger' : 'warning'}
+                confirmLabel={confirmAction?.type === 'deleteSearch' ? 'Excluir' : 'Importar Mesmo Assim'}
+                onConfirm={() => confirmAction?.onConfirm()}
+                onCancel={() => setConfirmAction(null)}
+            />
+        </>
     );
 }

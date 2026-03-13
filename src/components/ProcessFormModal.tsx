@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, Save, UploadCloud, Loader2, MessageSquare, Bell, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, KeyRound, Copy, Eye, EyeOff, RefreshCw, ExternalLink, Bot, Brain } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { X, Save, UploadCloud, Loader2, MessageSquare, Bell, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, KeyRound, Copy, Eye, EyeOff, RefreshCw, ExternalLink, Bot, Brain, Scale, Sparkles, FileArchive, ArrowRight, CheckCircle, AlertTriangle, Shield, Monitor, FileText, ChevronRight } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { v4 as uuidv4 } from 'uuid';
 import { AiReportModal } from './AiReportModal';
+import { CountdownBadge, useToast } from './ui';
 import type { BiddingProcess, RiskTag, CompanyProfile, ObservationLog, CompanyCredential, AiAnalysis } from '../types';
 
 interface Props {
@@ -11,9 +12,11 @@ interface Props {
     onClose: () => void;
     onSave: (data: Partial<BiddingProcess>, aiData?: any) => void;
     onRequestAiAnalysis?: () => void;
+    onNavigateToModule?: (module: string, processId?: string) => void;
 }
 
-export function ProcessFormModal({ initialData, companies, onClose, onSave, onRequestAiAnalysis }: Props) {
+export function ProcessFormModal({ initialData, companies, onClose, onSave, onRequestAiAnalysis, onNavigateToModule }: Props) {
+    const toast = useToast();
     const [showAiModal, setShowAiModal] = useState(false);
     const [aiAnalysisData, setAiAnalysisData] = useState<any>(null);
     const [isCheckingAi, setIsCheckingAi] = useState(false);
@@ -36,6 +39,10 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
     const [newObservation, setNewObservation] = useState('');
     const [observations, setObservations] = useState<ObservationLog[]>([]);
+    const [companyDocs, setCompanyDocs] = useState<{ name: string; docType: string; status: string; expirationDate: string; daysLeft?: number }[]>([]);
+    const [hubTab, setHubTab] = useState<'hub' | 'form'>('hub');
+
+    const isEditMode = !!initialData?.id;
 
     useEffect(() => {
         if (initialData) {
@@ -71,6 +78,64 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
             }
         }
     }, [initialData]);
+
+    // Fetch company documents for readiness check
+    useEffect(() => {
+        if (formData.companyProfileId) {
+            fetch(`${API_BASE_URL}/api/documents?companyId=${formData.companyProfileId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            })
+                .then(res => res.ok ? res.json() : [])
+                .then(data => {
+                    const docs = (Array.isArray(data) ? data : []).map((d: any) => {
+                        const exp = new Date(d.expirationDate);
+                        const now = new Date();
+                        const daysLeft = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                        return { name: d.fileName || d.docType, docType: d.docType, status: d.status, expirationDate: d.expirationDate, daysLeft };
+                    });
+                    setCompanyDocs(docs);
+                })
+                .catch(() => setCompanyDocs([]));
+        } else {
+            setCompanyDocs([]);
+        }
+    }, [formData.companyProfileId]);
+
+    // ── Next step recommendation based on status ──
+    const nextStep = useMemo(() => {
+        const status = initialData?.status;
+        const hasAnalysis = !!initialData?.aiAnalysis;
+        const hasPdf = (formData.link || '').includes('.pdf') || (formData.link || '').includes('/uploads/');
+        const expiredDocs = companyDocs.filter(d => d.status === 'Vencido' || d.status === 'Crítico');
+        const expiringDocs = companyDocs.filter(d => d.status === 'Vencendo' || d.status === 'Alerta');
+
+        if (!isEditMode) return { label: 'Salvar', desc: 'Salve a licitação para desbloquear os módulos operacionais', icon: <Save size={18} />, color: 'var(--color-primary)', action: undefined };
+
+        if (status === 'Captado') {
+            if (!hasPdf) return { label: 'Anexar Edital', desc: 'Envie o PDF do edital para habilitar a análise com IA', icon: <UploadCloud size={18} />, color: 'var(--color-warning)', action: () => setHubTab('form') };
+            if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise inteligente do edital para identificar riscos e oportunidades', icon: <Brain size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
+            return { label: 'Mover para Análise', desc: 'O edital foi analisado. Avalie os resultados e avance no pipeline', icon: <ArrowRight size={18} />, color: 'var(--color-primary)', action: undefined };
+        }
+        if (status === 'Em Análise de Edital') {
+            if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise do edital para prosseguir', icon: <Brain size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
+            if (expiredDocs.length > 0) return { label: 'Regularizar Documentos', desc: `${expiredDocs.length} documento(s) vencido(s) precisam ser renovados`, icon: <AlertTriangle size={18} />, color: 'var(--color-danger)', action: () => { onClose(); onNavigateToModule?.('companies'); } };
+            return { label: 'Preparar Documentação', desc: 'Análise concluída. Inicie a preparação de proposta e documentos', icon: <FileText size={18} />, color: 'var(--color-urgency)', action: undefined };
+        }
+        if (status === 'Preparando Documentação') {
+            if (expiredDocs.length > 0) return { label: 'Regularizar Documentos', desc: `${expiredDocs.length} documento(s) vencido(s) impedem a participação`, icon: <AlertTriangle size={18} />, color: 'var(--color-danger)', action: () => { onClose(); onNavigateToModule?.('companies'); } };
+            return { label: 'Gerar Proposta', desc: 'Monte a proposta comercial para este processo', icon: <DollarSign size={18} />, color: 'var(--color-primary)', action: () => { onClose(); onNavigateToModule?.('production-proposal', initialData?.id); } };
+        }
+        if (status === 'Participando') {
+            return { label: 'Monitorar Sessão', desc: 'Acompanhe a sessão de disputa em tempo real', icon: <Monitor size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('monitoring'); } };
+        }
+        if (status === 'Monitorando' || status === 'Recurso') {
+            return { label: 'Gerar Petição', desc: 'Prepare uma petição ou impugnação se necessário', icon: <Scale size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('production-petition', initialData?.id); } };
+        }
+        if (expiringDocs.length > 0) {
+            return { label: 'Atenção Documental', desc: `${expiringDocs.length} documento(s) próximo(s) do vencimento`, icon: <AlertTriangle size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('companies'); } };
+        }
+        return { label: 'Processo atualizado', desc: 'Todas as ações estão em dia. Continue acompanhando.', icon: <CheckCircle size={18} />, color: 'var(--color-success)', action: undefined };
+    }, [initialData, formData.link, companyDocs, isEditMode]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -171,7 +236,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
         const hasUploadedFile = fileNames.some(f => f.includes('.pdf') || f.includes('/uploads/'));
 
         if (!hasUploadedFile) {
-            alert("Adicione um anexo PDF (Edital) para habilitar o preenchimento automático via IA.");
+            toast.warning('Adicione um anexo PDF (Edital) para habilitar o preenchimento automático via IA.');
             return;
         }
 
@@ -237,10 +302,10 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                     analyzedAt: new Date().toISOString()
                 };
                 setAiAnalysisData(analysisObj);
-                alert("Campos extraídos com sucesso via IA! ✅\nVocê já pode conferir o Relatório Analítico clicando no ícone do cérebro abaixo, ou salvar a licitação.");
+                toast.success('Campos extraídos com sucesso via IA! Confira o Relatório Analítico.');
             }
         } catch (e: any) {
-            alert(`Erro na Extração IA: ${e.message}`);
+            toast.error(`Erro na Extração IA: ${e.message}`);
         } finally {
             setIsCheckingAi(false);
         }
@@ -250,7 +315,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
         e.preventDefault();
 
         if (!formData.title?.trim() || !formData.portal?.trim() || !formData.modality?.trim() || !formData.sessionDate) {
-            alert("Por favor, preencha todos os campos obrigatórios marcados com * (Título, Portal, Modalidade e Data da Sessão).");
+            toast.warning('Preencha todos os campos obrigatórios marcados com * (Título, Portal, Modalidade e Data da Sessão).');
             return;
         }
 
@@ -279,7 +344,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                 animation: 'fadeIn 0.2s ease-out'
             }}>
                 <div className="modal-content" style={{
-                    maxWidth: '800px',
+                    maxWidth: isEditMode ? '1100px' : '800px',
                     width: '100%',
                     maxHeight: '90vh',
                     borderRadius: 'var(--radius-xl)',
@@ -291,37 +356,412 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                     display: 'flex',
                     flexDirection: 'column'
                 }}>
+                    {/* ═══ HEADER ═══ */}
                     <div style={{
-                        padding: 'var(--space-6) var(--space-8)',
+                        padding: 'var(--space-5) var(--space-8)',
                         borderBottom: '1px solid var(--color-border)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
                         background: 'linear-gradient(to right, var(--color-bg-surface), var(--color-bg-surface-hover))'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                            <div style={{ padding: 'var(--space-3)', background: 'var(--color-primary-light)', borderRadius: 'var(--radius-lg)', color: 'var(--color-primary)' }}>
-                                <Briefcase size={24} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flex: 1 }}>
+                                <div style={{ padding: 'var(--space-3)', background: 'var(--color-primary-light)', borderRadius: 'var(--radius-lg)', color: 'var(--color-primary)' }}>
+                                    <Briefcase size={24} />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                                        <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+                                            {initialData ? (formData.title || 'Editar Licitação') : 'Nova Oportunidade'}
+                                        </h2>
+                                        {initialData?.status && (
+                                            <span style={{
+                                                padding: '2px 10px', borderRadius: 'var(--radius-full)',
+                                                fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)',
+                                                background: initialData.status === 'Vencido' ? 'var(--color-success-bg)' : initialData.status === 'Perdido' ? 'var(--color-danger-bg)' : 'var(--color-primary-light)',
+                                                color: initialData.status === 'Vencido' ? 'var(--color-success)' : initialData.status === 'Perdido' ? 'var(--color-danger)' : 'var(--color-primary)',
+                                            }}>
+                                                {initialData.status}
+                                            </span>
+                                        )}
+                                        {initialData?.sessionDate && (
+                                            <CountdownBadge targetDate={initialData.sessionDate} />
+                                        )}
+                                    </div>
+                                    {isEditMode && formData.companyProfileId && (
+                                        <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)', margin: '2px 0 0 0' }}>
+                                            {companies.find(c => c.id === formData.companyProfileId)?.razaoSocial || ''}
+                                            {formData.modality ? ` · ${formData.modality}` : ''}
+                                            {formData.portal ? ` · ${formData.portal}` : ''}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
-                            <div>
-                                <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-                                    {initialData ? 'Editar Licitação' : 'Nova Oportunidade'}
-                                </h2>
-                                <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-md)', marginTop: '2px' }}>
-                                    Gerencie os detalhes da disputa e acompanhe o progresso.
-                                </p>
-                            </div>
+                            <button
+                                className="icon-btn"
+                                onClick={onClose}
+                                style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-full)', padding: 'var(--space-2)', boxShadow: 'var(--shadow-sm)', flexShrink: 0 }}
+                            >
+                                <X size={20} />
+                            </button>
                         </div>
-                        <button
-                            className="icon-btn"
-                            onClick={onClose}
-                            style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-full)', padding: 'var(--space-2)', boxShadow: 'var(--shadow-sm)' }}
-                        >
-                            <X size={20} />
-                        </button>
+
+                        {/* Next Step Recommendation */}
+                        {isEditMode && nextStep && (
+                            <div
+                                onClick={nextStep.action}
+                                style={{
+                                    marginTop: 'var(--space-3)',
+                                    padding: 'var(--space-3) var(--space-4)',
+                                    borderRadius: 'var(--radius-lg)',
+                                    background: `color-mix(in srgb, ${nextStep.color} 8%, transparent)`,
+                                    border: `1px solid color-mix(in srgb, ${nextStep.color} 25%, transparent)`,
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                                    cursor: nextStep.action ? 'pointer' : 'default',
+                                    transition: 'var(--transition-fast)',
+                                }}
+                            >
+                                <div style={{ color: nextStep.color, flexShrink: 0 }}>{nextStep.icon}</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: nextStep.color }}>
+                                        Próximo passo: {nextStep.label}
+                                    </div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '1px' }}>
+                                        {nextStep.desc}
+                                    </div>
+                                </div>
+                                {nextStep.action && <ChevronRight size={16} style={{ color: nextStep.color, flexShrink: 0 }} />}
+                            </div>
+                        )}
+
+                        {/* Tab switcher for edit mode */}
+                        {isEditMode && (
+                            <div style={{ display: 'flex', gap: '2px', marginTop: 'var(--space-3)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-md)', padding: '2px' }}>
+                                <button type="button" onClick={() => setHubTab('hub')} style={{
+                                    flex: 1, padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                                    fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', transition: 'var(--transition-fast)',
+                                    background: hubTab === 'hub' ? 'var(--color-bg-surface)' : 'transparent',
+                                    color: hubTab === 'hub' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                    boxShadow: hubTab === 'hub' ? 'var(--shadow-sm)' : 'none',
+                                }}>🎯 Hub Operacional</button>
+                                <button type="button" onClick={() => setHubTab('form')} style={{
+                                    flex: 1, padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                                    fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', transition: 'var(--transition-fast)',
+                                    background: hubTab === 'form' ? 'var(--color-bg-surface)' : 'transparent',
+                                    color: hubTab === 'form' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                    boxShadow: hubTab === 'form' ? 'var(--shadow-sm)' : 'none',
+                                }}>📝 Dados do Processo</button>
+                            </div>
+                        )}
                     </div>
 
-                    <form onSubmit={handleSubmit} style={{ padding: 'var(--space-8)', overflowY: 'auto', flex: 1 }}>
+                    {/* ═══ HUB OPERACIONAL ═══ */}
+                    {isEditMode && hubTab === 'hub' && (
+                        <div style={{ padding: 'var(--space-6) var(--space-8)', overflowY: 'auto', flex: 1 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
+
+                                {/* ── LicitIA Integration ── */}
+                                <div style={{
+                                    gridColumn: '1 / -1',
+                                    padding: 'var(--space-5)',
+                                    borderRadius: 'var(--radius-xl)',
+                                    background: initialData?.aiAnalysis ? 'var(--color-ai-bg)' : 'var(--color-bg-body)',
+                                    border: `1px solid ${initialData?.aiAnalysis ? 'var(--color-ai-border)' : 'var(--color-border)'}`,
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                            <Brain size={18} color={initialData?.aiAnalysis ? 'var(--color-ai)' : 'var(--color-text-tertiary)'} />
+                                            <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-base)', color: initialData?.aiAnalysis ? 'var(--color-ai)' : 'var(--color-text-secondary)' }}>
+                                                LicitIA — Análise de Edital
+                                            </span>
+                                            {initialData?.aiAnalysis?.overallConfidence && (
+                                                <span style={{
+                                                    padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)',
+                                                    background: initialData.aiAnalysis.overallConfidence === 'alta' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                                                    color: initialData.aiAnalysis.overallConfidence === 'alta' ? 'var(--color-success)' : 'var(--color-warning)',
+                                                }}>
+                                                    Confiança: {initialData.aiAnalysis.overallConfidence}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                            {!initialData?.aiAnalysis && (
+                                                <button type="button" onClick={handleAiExtract} disabled={isCheckingAi} className="btn btn-primary" style={{
+                                                    padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-sm)',
+                                                    background: 'var(--color-ai)', borderColor: 'var(--color-ai)',
+                                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                                }}>
+                                                    {isCheckingAi ? <Loader2 size={14} className="spinner" /> : <Bot size={14} />}
+                                                    {isCheckingAi ? 'Analisando...' : 'Analisar Edital'}
+                                                </button>
+                                            )}
+                                            {(onRequestAiAnalysis || initialData?.aiAnalysis) && (
+                                                <button type="button" onClick={() => {
+                                                    if (onRequestAiAnalysis) onRequestAiAnalysis();
+                                                    else if (aiAnalysisData) setShowAiModal(true);
+                                                }} className="btn btn-outline" style={{
+                                                    padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-sm)',
+                                                    color: 'var(--color-ai)', borderColor: 'var(--color-ai-border)',
+                                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                                }}>
+                                                    <Eye size={14} /> Ver Relatório
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {initialData?.aiAnalysis ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
+                                            {(() => {
+                                                const a = initialData.aiAnalysis;
+                                                let docsCount = 0;
+                                                try { docsCount = (typeof a.requiredDocuments === 'string' ? JSON.parse(a.requiredDocuments) : a.requiredDocuments || []).length; } catch { docsCount = 0; }
+                                                let flagsCount = 0;
+                                                try { flagsCount = (typeof a.irregularitiesFlags === 'string' ? JSON.parse(a.irregularitiesFlags) : a.irregularitiesFlags || []).length; } catch { flagsCount = 0; }
+                                                let deadlinesCount = 0;
+                                                try { deadlinesCount = (typeof a.deadlines === 'string' ? JSON.parse(a.deadlines) : a.deadlines || []).length; } catch { deadlinesCount = 0; }
+                                                return (
+                                                    <>
+                                                        <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-surface)', textAlign: 'center' }}>
+                                                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)' }}>{docsCount}</div>
+                                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Docs exigidos</div>
+                                                        </div>
+                                                        <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-surface)', textAlign: 'center' }}>
+                                                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: flagsCount > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>{flagsCount}</div>
+                                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Alertas / Red flags</div>
+                                                        </div>
+                                                        <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-surface)', textAlign: 'center' }}>
+                                                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning)' }}>{deadlinesCount}</div>
+                                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Prazos identificados</div>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    ) : (
+                                        <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                                            Nenhuma análise realizada. Anexe o edital (PDF) e clique em "Analisar Edital" para obter insights automáticos.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* ── Document Readiness ── */}
+                                <div style={{
+                                    padding: 'var(--space-5)',
+                                    borderRadius: 'var(--radius-xl)',
+                                    background: 'var(--color-bg-body)',
+                                    border: '1px solid var(--color-border)',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                            <FileText size={16} color="var(--color-text-tertiary)" />
+                                            <span style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)' }}>Pendências Documentais</span>
+                                        </div>
+                                        <button type="button" onClick={() => { onClose(); onNavigateToModule?.('companies'); }} style={{
+                                            background: 'none', border: 'none', cursor: 'pointer',
+                                            fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 'var(--font-semibold)',
+                                        }}>Gerenciar →</button>
+                                    </div>
+                                    {formData.companyProfileId ? (
+                                        companyDocs.length > 0 ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', maxHeight: 180, overflowY: 'auto' }}>
+                                                {companyDocs
+                                                    .filter(d => d.status !== 'Válido')
+                                                    .sort((a, b) => (a.daysLeft || 999) - (b.daysLeft || 999))
+                                                    .slice(0, 6)
+                                                    .map((doc, i) => (
+                                                        <div key={i} style={{
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                            padding: 'var(--space-2) var(--space-3)',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            background: doc.status === 'Vencido' || doc.status === 'Crítico' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)',
+                                                            fontSize: 'var(--text-sm)',
+                                                        }}>
+                                                            <span style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--font-medium)' }}>{doc.docType}</span>
+                                                            <span style={{
+                                                                fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)',
+                                                                color: doc.status === 'Vencido' || doc.status === 'Crítico' ? 'var(--color-danger)' : 'var(--color-warning)',
+                                                            }}>
+                                                                {doc.status === 'Vencido' ? '⛔ Vencido' : doc.status === 'Crítico' ? '🔴 Crítico' : `⚠️ ${doc.daysLeft}d`}
+                                                            </span>
+                                                        </div>
+                                                    ))
+                                                }
+                                                {companyDocs.filter(d => d.status !== 'Válido').length === 0 && (
+                                                    <div style={{ textAlign: 'center', padding: 'var(--space-3)', color: 'var(--color-success)', fontSize: 'var(--text-sm)' }}>
+                                                        <CheckCircle size={20} style={{ marginBottom: 4 }} />
+                                                        <p style={{ margin: 0 }}>Todos os documentos estão válidos</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', textAlign: 'center', padding: 'var(--space-3)' }}>
+                                                Nenhum documento registrado para esta empresa.
+                                            </p>
+                                        )
+                                    ) : (
+                                        <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', textAlign: 'center', padding: 'var(--space-3)' }}>
+                                            Selecione uma empresa para verificar documentos.
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* ── Company Aptitude ── */}
+                                <div style={{
+                                    padding: 'var(--space-5)',
+                                    borderRadius: 'var(--radius-xl)',
+                                    background: 'var(--color-bg-body)',
+                                    border: '1px solid var(--color-border)',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                                        <Shield size={16} color="var(--color-text-tertiary)" />
+                                        <span style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)' }}>Aptidão da Empresa</span>
+                                    </div>
+                                    {(() => {
+                                        const company = companies.find(c => c.id === formData.companyProfileId);
+                                        if (!company) return <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', textAlign: 'center', padding: 'var(--space-3)' }}>Selecione uma empresa.</p>;
+                                        const expiredCount = companyDocs.filter(d => d.status === 'Vencido' || d.status === 'Crítico').length;
+                                        const totalDocs = companyDocs.length;
+                                        const validCount = companyDocs.filter(d => d.status === 'Válido').length;
+                                        const hasQual = !!company.qualification;
+                                        const hasTechQual = !!company.technicalQualification;
+                                        const checks = [
+                                            { label: 'Habilitação jurídica', ok: hasQual, detail: hasQual ? 'Cadastrada' : 'Não informada' },
+                                            { label: 'Qualificação técnica', ok: hasTechQual, detail: hasTechQual ? 'Cadastrada' : 'Não informada' },
+                                            { label: 'Documentos vigentes', ok: expiredCount === 0 && totalDocs > 0, detail: totalDocs > 0 ? `${validCount}/${totalDocs} válidos` : 'Nenhum' },
+                                            { label: 'Credenciais de portal', ok: credentials.length > 0, detail: credentials.length > 0 ? `${credentials.length} cadastrada(s)` : 'Nenhuma' },
+                                        ];
+                                        const readyCount = checks.filter(c => c.ok).length;
+                                        return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                {checks.map((check, i) => (
+                                                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-2) 0' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                            {check.ok
+                                                                ? <CheckCircle size={14} color="var(--color-success)" />
+                                                                : <AlertTriangle size={14} color="var(--color-warning)" />}
+                                                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}>{check.label}</span>
+                                                        </div>
+                                                        <span style={{ fontSize: 'var(--text-xs)', color: check.ok ? 'var(--color-success)' : 'var(--color-warning)', fontWeight: 'var(--font-semibold)' }}>
+                                                            {check.detail}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                <div style={{
+                                                    marginTop: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)',
+                                                    borderRadius: 'var(--radius-md)', textAlign: 'center',
+                                                    fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)',
+                                                    background: readyCount === 4 ? 'var(--color-success-bg)' : readyCount >= 2 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)',
+                                                    color: readyCount === 4 ? 'var(--color-success)' : readyCount >= 2 ? 'var(--color-warning)' : 'var(--color-danger)',
+                                                }}>
+                                                    {readyCount === 4 ? '✅ Empresa apta para licitar' : readyCount >= 2 ? '⚠️ Parcialmente apta' : '❌ Empresa com pendências críticas'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+
+                                {/* ── Quick Actions Grid ── */}
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ ...labelStyle, marginBottom: 'var(--space-3)' }}>Ações Rápidas</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)' }}>
+                                        {[
+                                            { label: 'Análise IA', desc: 'Relatório inteligente do edital', icon: <Brain size={20} />, color: 'var(--color-ai)', border: 'var(--color-ai-border)', module: 'intelligence', hasAnalysis: !!initialData?.aiAnalysis },
+                                            { label: 'Proposta', desc: 'Planilha e carta comercial', icon: <DollarSign size={20} />, color: 'var(--color-primary)', border: 'var(--color-border)', module: 'production-proposal' },
+                                            { label: 'Dossiê', desc: 'Montagem documental completa', icon: <FileArchive size={20} />, color: 'var(--color-urgency)', border: 'var(--color-border)', module: 'production-dossier' },
+                                            { label: 'Declarações', desc: 'Gerar declarações legais', icon: <Sparkles size={20} />, color: 'var(--color-success)', border: 'var(--color-border)', module: 'production-declaration' },
+                                            { label: 'Petição', desc: 'Impugnação ou recurso', icon: <Scale size={20} />, color: 'var(--color-warning)', border: 'var(--color-border)', module: 'production-petition' },
+                                            { label: 'Monitor Chat', desc: 'Sessão em tempo real', icon: <Monitor size={20} />, color: 'var(--color-text-secondary)', border: 'var(--color-border)', module: 'monitoring' },
+                                        ].map((action, i) => (
+                                            <button
+                                                key={i}
+                                                type="button"
+                                                className="card card-interactive"
+                                                onClick={() => {
+                                                    onClose();
+                                                    onNavigateToModule?.(action.module, initialData?.id);
+                                                }}
+                                                style={{
+                                                    padding: 'var(--space-4)',
+                                                    display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)',
+                                                    border: `1px solid ${action.border}`,
+                                                    textAlign: 'left',
+                                                }}
+                                            >
+                                                <div style={{ color: action.color, flexShrink: 0 }}>{action.icon}</div>
+                                                <div>
+                                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>{action.label}</div>
+                                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>{action.desc}</div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* ── Observações inline (resumo) ── */}
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
+                                        <label style={labelStyle}>
+                                            <MessageSquare size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                                            Observações ({observations.length})
+                                        </label>
+                                        <button type="button" onClick={() => setHubTab('form')} style={{
+                                            background: 'none', border: 'none', cursor: 'pointer',
+                                            fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 'var(--font-semibold)',
+                                        }}>Ver todas →</button>
+                                    </div>
+                                    {observations.length > 0 ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', maxHeight: 120, overflowY: 'auto' }}>
+                                            {observations.slice(-3).reverse().map(obs => (
+                                                <div key={obs.id} style={{
+                                                    padding: 'var(--space-2) var(--space-3)',
+                                                    background: 'var(--color-bg-body)', borderRadius: 'var(--radius-md)',
+                                                    fontSize: 'var(--text-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                }}>
+                                                    <span style={{ color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{obs.text}</span>
+                                                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
+                                                        {new Date(obs.timestamp).toLocaleDateString('pt-BR')}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Nenhuma observação registrada.</p>
+                                    )}
+                                    <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+                                        <div style={{ ...inputContainerStyle, flex: 1, backgroundColor: 'var(--color-bg-body)' }}>
+                                            <input
+                                                value={newObservation}
+                                                onChange={(e) => setNewObservation(e.target.value)}
+                                                style={inputInnerStyle}
+                                                placeholder="Adicionar observação rápida..."
+                                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddObservation())}
+                                            />
+                                        </div>
+                                        <button type="button" className="btn btn-primary" onClick={handleAddObservation}
+                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)' }}>
+                                            <PlusCircle size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            {/* Footer - Save from Hub */}
+                            <div style={{
+                                marginTop: 'var(--space-6)', display: 'flex', gap: 'var(--space-3)',
+                                justifyContent: 'flex-end', paddingTop: 'var(--space-4)',
+                                borderTop: '1px solid var(--color-border)',
+                            }}>
+                                <button type="button" className="btn btn-outline" onClick={() => setHubTab('form')} style={{ padding: 'var(--space-3) var(--space-6)' }}>
+                                    📝 Editar dados
+                                </button>
+                                <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: 'var(--space-3) var(--space-6)' }}>
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ═══ FORM TAB ═══ */}
+                    <form onSubmit={handleSubmit} style={{ padding: 'var(--space-8)', overflowY: 'auto', flex: 1, display: (!isEditMode || hubTab === 'form') ? undefined : 'none' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                             {/* Título */}
@@ -1068,6 +1508,8 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Ações rápidas movidas para o Hub Operacional */}
 
                         </div>
 

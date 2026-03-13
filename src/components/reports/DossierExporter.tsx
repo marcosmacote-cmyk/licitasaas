@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, CompanyDocument } from '../../types';
+import { useToast } from '../ui';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -440,6 +441,7 @@ function RequirementCard({
 // Main Component
 // ──────────────────────────────────────────────────────────────────────
 export function DossierExporter({ biddings, companies }: Props) {
+    const toast = useToast();
     const [selectedBiddingId, setSelectedBiddingId] = useState('');
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [isExporting, setIsExporting] = useState(false);
@@ -630,7 +632,7 @@ export function DossierExporter({ biddings, companies }: Props) {
 
     const handleExportZip = async () => {
         if (matchedDocs.length === 0) {
-            alert("Não há documentos vinculados para exportar. Vincule ao menos um documento.");
+            toast.warning('Não há documentos vinculados para exportar. Vincule ao menos um documento.');
             return;
         }
 
@@ -681,13 +683,13 @@ export function DossierExporter({ biddings, companies }: Props) {
             }
 
             if (failures.length > 0) {
-                alert(`Aviso: ${failures.length} arquivo(s) falharam, mas o ZIP foi gerado com ${filesAddedCount} documento(s).`);
+                toast.warning(`${failures.length} arquivo(s) falharam, mas o ZIP foi gerado com ${filesAddedCount} documento(s).`);
             }
 
             const content = await zip.generateAsync({ type: 'blob' });
             saveAs(content, `${folderName}.zip`);
         } catch (error: any) {
-            alert(`Erro ao exportar: ${error.message}`);
+            toast.error(`Erro ao exportar: ${error.message}`);
         } finally {
             setIsExporting(false);
         }
