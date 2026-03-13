@@ -2,33 +2,40 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Briefcase,
   LayoutDashboard,
-  Files,
+  Building2,
   Settings,
   Bell,
   Sun,
   Moon,
-  Building2,
-  PieChart,
   Loader2,
-  Search,
-  Satellite
+  Radar,
+  BrainCircuit,
+  FileOutput,
+  Satellite,
+  BarChart3,
+  LogOut,
+  Gavel
 } from 'lucide-react';
 import { PncpPage } from './components/PncpPage';
 import { BiddingPage } from './components/BiddingPage';
 import { Dashboard } from './components/Dashboard';
 import { DocumentsPage } from './components/DocumentsPage';
-import { ReportsPage } from './components/ReportsPage';
 import { LoginPage } from './components/LoginPage';
 import { SettingsPage } from './components/SettingsPage';
 import { ChatMonitorPage } from './components/ChatMonitorPage';
+import { InteligenciaPage } from './components/InteligenciaPage';
+import { ProducaoPage } from './components/ProducaoPage';
+import { ResultadosPage } from './components/ResultadosPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
 
+type AppTab = 'dashboard' | 'opportunities' | 'bidding' | 'intelligence' | 'companies' | 'production' | 'monitoring' | 'results' | 'settings';
+
 function App() {
   const [user, setUser] = useState<any>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'bidding' | 'documents' | 'reports' | 'pncp' | 'chat-monitor' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [items, setItems] = useState<BiddingProcess[]>([]);
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +73,6 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to load companies', err);
-      // Don't clear companies on network error to allow offline/slow loading
     }
   };
 
@@ -104,7 +110,6 @@ function App() {
     }
 
     // Interval to check for Chat Monitor Logs (Sound Alert)
-    // Uses useRef to avoid re-creating the interval on every new log
     const checkChatLogs = async () => {
       const token = localStorage.getItem('token');
       if (!token) return;
@@ -118,10 +123,8 @@ function App() {
           const logs = data.logs || [];
           if (logs.length > 0) {
             const latestLog = logs[0];
-            // If it's a new log and matches a keyword
             if (lastLogIdRef.current && latestLog.id !== lastLogIdRef.current && latestLog.detectedKeyword) {
               setAlertCount(prev => prev + 1);
-              // Play Sound
               try {
                 const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
                 const oscillator = audioCtx.createOscillator();
@@ -138,7 +141,6 @@ function App() {
                 console.error("Audio alert failed:", audioErr);
               }
 
-              // Browser Notification
               if (Notification.permission === "granted") {
                 new Notification("Alerta de Chat PNCP", {
                   body: `Palavra-chave "${latestLog.detectedKeyword}" detectada!`,
@@ -154,8 +156,8 @@ function App() {
       }
     };
 
-    const interval = setInterval(checkChatLogs, 30000); // Check every 30 seconds
-    checkChatLogs(); // Initial check
+    const interval = setInterval(checkChatLogs, 30000);
+    checkChatLogs();
 
     // Poll unread count for sidebar badge
     const fetchUnreadCount = async () => {
@@ -197,8 +199,8 @@ function App() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#f8fafc' }}>
-        <Loader2 size={48} className="spinner" color="#2563eb" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: 'var(--color-bg-base)' }}>
+        <Loader2 size={48} className="spinner" color="var(--color-primary)" />
       </div>
     );
   }
@@ -207,100 +209,192 @@ function App() {
     return <LoginPage onLoginSuccess={(u: any) => setUser(u)} />;
   }
 
+  // ── Navigation Structure ──
+  const navGroups: {
+    label?: string;
+    items: {
+      key: AppTab;
+      label: string;
+      icon: React.ReactNode;
+      badge?: number;
+      badgeType?: 'red' | 'blue' | 'ai';
+    }[];
+  }[] = [
+    {
+      label: 'Visão Geral',
+      items: [
+        { key: 'dashboard', label: 'Painel', icon: <LayoutDashboard size={18} /> },
+      ],
+    },
+    {
+      label: 'Operação',
+      items: [
+        { key: 'opportunities', label: 'Oportunidades', icon: <Radar size={18} /> },
+        { key: 'bidding', label: 'Licitações', icon: <Briefcase size={18} /> },
+        { key: 'intelligence', label: 'Inteligência', icon: <BrainCircuit size={18} /> },
+        { key: 'companies', label: 'Empresas', icon: <Building2 size={18} /> },
+      ],
+    },
+    {
+      label: 'Produtividade',
+      items: [
+        { key: 'production', label: 'Produção', icon: <FileOutput size={18} /> },
+        { key: 'monitoring', label: 'Monitoramento', icon: <Satellite size={18} />, badge: chatUnreadCount || undefined, badgeType: 'red' },
+        { key: 'results', label: 'Resultados', icon: <BarChart3 size={18} /> },
+      ],
+    },
+  ];
+
+  // Get current page title for header
+  const currentPageLabel = navGroups.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Painel';
+
   return (
     <ErrorBoundary>
       <div className="app-container">
-        {/* Sidebar */}
+        {/* ═══════════════════════════
+            SIDEBAR — Nova Navegação
+            ═══════════════════════════ */}
         <aside className="sidebar">
+          {/* Logo */}
           <div className="sidebar-header">
-            <Building2 size={24} />
-            <span>LicitaSaaS</span>
+            <div style={{
+              padding: '6px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-primary-light)',
+              color: 'var(--color-primary)',
+              display: 'flex',
+            }}>
+              <Gavel size={20} />
+            </div>
+            <span style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>LicitaSaaS</span>
           </div>
-          <nav className="sidebar-nav">
-            <a href="#" className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('dashboard'); }}>
-              <LayoutDashboard size={20} />
-              <span>Dashboard</span>
-            </a>
 
-            <a href="#" className={`nav-item ${activeTab === 'bidding' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('bidding'); }}>
-              <Briefcase size={20} />
-              <span>Licitações</span>
-            </a>
-            <a href="#" className={`nav-item ${activeTab === 'documents' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('documents'); }}>
-              <Files size={20} />
-              <span>Documentos</span>
-            </a>
-            <a href="#" className={`nav-item ${activeTab === 'pncp' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('pncp'); }}>
-              <Search size={20} />
-              <span>Busca PNCP</span>
-            </a>
-            <a href="#" className={`nav-item ${activeTab === 'chat-monitor' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('chat-monitor'); }}>
-              <div style={{ position: 'relative' }}>
-                <Satellite size={20} />
-                {chatUnreadCount > 0 && <span className="badge badge-red" style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '0.6rem', padding: '2px 5px', minWidth: '15px' }}>{chatUnreadCount}</span>}
+          <nav className="sidebar-nav">
+            {navGroups.map((group, gi) => (
+              <div key={gi}>
+                {group.label && (
+                  <div className="nav-section-label">{group.label}</div>
+                )}
+                {group.items.map(item => (
+                  <a
+                    key={item.key}
+                    href="#"
+                    className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab(item.key);
+                      if (item.key === 'settings') setAlertCount(0);
+                    }}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                    {item.badge && item.badge > 0 && (
+                      <span className={`nav-badge nav-badge-${item.badgeType || 'blue'}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </a>
+                ))}
               </div>
-              <span>Monitor Chat</span>
-            </a>
-            <a href="#" className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('reports'); }}>
-              <PieChart size={20} />
-              <span>Relatórios</span>
-            </a>
-            <div style={{ flex: 1 }}></div>
-            <a href="#" className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveTab('settings'); setAlertCount(0); }}>
-              <div style={{ position: 'relative' }}>
-                <Settings size={20} />
-                {alertCount > 0 && <span className="badge badge-red" style={{ position: 'absolute', top: '-8px', right: '-8px', fontSize: '0.6rem', padding: '2px 5px', minWidth: '15px' }}>{alertCount}</span>}
-              </div>
+            ))}
+
+            {/* Spacer */}
+            <div style={{ flex: 1 }} />
+
+            {/* Divider before settings */}
+            <div className="nav-divider" />
+
+            {/* Settings */}
+            <a
+              href="#"
+              className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={(e) => { e.preventDefault(); setActiveTab('settings'); setAlertCount(0); }}
+            >
+              <Settings size={18} />
               <span>Configurações</span>
+              {alertCount > 0 && (
+                <span className="nav-badge nav-badge-red">{alertCount}</span>
+              )}
             </a>
           </nav>
         </aside>
 
-        {/* Main Content */}
+        {/* ═══════════════════════════
+            MAIN CONTENT
+            ═══════════════════════════ */}
         <main className="main-content">
           {/* Header */}
           <header className="header">
-            <div className="flex-gap" style={{ width: '300px' }}>
+            {/* Left: Page context */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <span style={{
+                fontSize: 'var(--text-lg)',
+                fontWeight: 'var(--font-semibold)',
+                color: 'var(--color-text-primary)'
+              }}>
+                {currentPageLabel}
+              </span>
             </div>
 
+            {/* Right: Actions + User */}
             <div className="flex-gap">
               <button className="icon-btn" onClick={toggleTheme} title="Alternar Tema">
-                {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </button>
               <button className="icon-btn" style={{ position: 'relative' }}>
-                <Bell size={20} />
-                <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, background: 'var(--color-danger)', borderRadius: '50%' }}></span>
+                <Bell size={18} />
+                {alertCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 7, height: 7,
+                    background: 'var(--color-danger)',
+                    borderRadius: '50%',
+                    border: '2px solid var(--color-bg-surface)'
+                  }} />
+                )}
               </button>
-              <div className="flex-gap" style={{ marginLeft: 16 }}>
+
+              <div style={{ width: '1px', height: '24px', background: 'var(--color-border)', margin: '0 var(--space-2)' }} />
+
+              <div className="flex-gap" style={{ gap: 'var(--space-3)' }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{user.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{user.tenantName}</div>
+                  <div style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)', lineHeight: 1.3 }}>{user.name}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{user.tenantName}</div>
                 </div>
                 <div
-                  style={{ width: 32, height: 32, background: 'var(--color-primary)', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.875rem' }}
+                  style={{
+                    width: 32, height: 32,
+                    background: 'var(--color-primary)',
+                    borderRadius: 'var(--radius-full)',
+                    color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)'
+                  }}
                   title={user.email}
                 >
-                  {user.name.split(' ').map((n: string) => n[0]).join('')}
+                  {user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
                 </div>
                 <button
-                  className="btn btn-ghost"
-                  style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                  className="icon-btn"
                   onClick={handleLogout}
+                  title="Sair"
+                  style={{ color: 'var(--color-text-tertiary)' }}
                 >
-                  Sair
+                  <LogOut size={16} />
                 </button>
               </div>
             </div>
           </header>
 
-          {/* Page Content */}
+          {/* ── Page Content ── */}
           {activeTab === 'dashboard' && <Dashboard items={items} />}
-          {activeTab === 'documents' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
-
+          {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} />}
-          {activeTab === 'reports' && <ReportsPage biddings={items} companies={companies} onRefresh={refreshData} />}
-          {activeTab === 'pncp' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
-          {activeTab === 'chat-monitor' && <ChatMonitorPage companies={companies} />}
+          {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} />}
+          {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
+          {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} />}
+          {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} />}
+          {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}
           {activeTab === 'settings' && <SettingsPage />}
         </main>
       </div>

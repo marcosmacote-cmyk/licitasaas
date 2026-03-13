@@ -426,52 +426,52 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px', height: 'calc(100vh - 200px)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 200px)' }}>
             {/* Left: Configuration */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: '16px', border: '1px solid var(--color-border)' }}>
-                <div style={{ padding: '20px', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-primary)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
+                <div style={{ padding: 'var(--space-5)', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                        <h3 style={{ margin: 0, fontSize: 'var(--text-xl)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-primary)' }}>
                             <Scale size={20} color="var(--color-primary)" />
                             Mestre de Petições
                         </h3>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                             <button onClick={handleNew} className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: '0.7rem' }}>Novo</button>
                             <button onClick={handleClear} className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: '0.7rem', color: 'var(--color-danger)' }}>Limpar</button>
                         </div>
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-tertiary)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
                         Inteligência Jurídica Especializada Lei 14.133.
                     </p>
                 </div>
 
-                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
                     {/* Estilo do Relatório Toggle */}
                     <button
                         onClick={() => setShowStyles(!showStyles)}
                         style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            width: '100%', padding: '12px', borderRadius: '12px',
-                            background: showStyles ? 'rgba(37,99,235,0.08)' : 'var(--color-bg-secondary)',
+                            width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                            background: showStyles ? 'var(--color-primary-light)' : 'var(--color-bg-secondary)',
                             border: `1px solid ${showStyles ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                            cursor: 'pointer', transition: 'all 0.2s'
+                            cursor: 'pointer', transition: 'var(--transition-fast)'
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '0.85rem', color: showStyles ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)', color: showStyles ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
                             <Settings2 size={16} /> Estilizar Relatório (Premium)
                         </div>
                         <ChevronRight size={16} style={{ transform: showStyles ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
                     </button>
 
                     {showStyles && (
-                        <div style={{ padding: '16px', borderRadius: '12px', background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '8px', color: 'var(--color-text-secondary)' }}>
+                                <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
                                     CABEÇALHO (BANNER PNG/JPG)
                                 </label>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                     <div style={{
-                                        flex: 1, height: '40px', border: '1px dashed var(--color-border)', borderRadius: '8px',
+                                        flex: 1, height: '40px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'white'
                                     }}>
                                         {headerImage ? <img src={headerImage} alt="Header" style={{ height: '100%', width: 'auto' }} /> : <ImageIcon size={20} opacity={0.3} />}
@@ -487,12 +487,12 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                             </div>
 
                             <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '8px', color: 'var(--color-text-secondary)' }}>
+                                <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
                                     RODAPÉ (BANNER PNG/JPG)
                                 </label>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                     <div style={{
-                                        flex: 1, height: '40px', border: '1px dashed var(--color-border)', borderRadius: '8px',
+                                        flex: 1, height: '40px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'white'
                                     }}>
                                         {footerImage ? <img src={footerImage} alt="Footer" style={{ height: '100%', width: 'auto' }} /> : <ImageIcon size={20} opacity={0.3} />}
@@ -526,7 +526,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                             className="form-control"
                             value={selectedBiddingId}
                             onChange={(e) => setSelectedBiddingId(e.target.value)}
-                            style={{ borderRadius: '12px', padding: '12px' }}
+                            style={{ borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)' }}
                         >
                             <option value="">-- Selecione um processo --</option>
                             {biddingsInRecurso.map(b => (
@@ -547,7 +547,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                             className="form-control"
                             value={selectedCompanyId}
                             onChange={(e) => setSelectedCompanyId(e.target.value)}
-                            style={{ borderRadius: '12px', padding: '12px' }}
+                            style={{ borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)' }}
                         >
                             <option value="">-- Selecione a empresa --</option>
                             {companies.map(c => (
@@ -558,18 +558,18 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
                     <div className="form-group">
                         <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Tipo de Peça</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-2)' }}>
                             {PETITION_TYPES.map(type => (
                                 <div
                                     key={type.id}
                                     onClick={() => setPetitionTypeId(type.id)}
                                     style={{
-                                        padding: '12px',
-                                        borderRadius: '12px',
+                                        padding: 'var(--space-3)',
+                                        borderRadius: 'var(--radius-lg)',
                                         border: `1.5px solid ${petitionTypeId === type.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                                        background: petitionTypeId === type.id ? 'rgba(37, 99, 235, 0.05)' : 'white',
+                                        background: petitionTypeId === type.id ? 'var(--color-primary-light)' : 'white',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
+                                        transition: 'var(--transition-fast)',
                                         display: 'flex',
                                         justifyContent: 'space-between',
                                         alignItems: 'center',
@@ -577,7 +577,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                                     }}
                                 >
                                     <div>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: petitionTypeId === type.id ? 'var(--color-primary)' : 'var(--color-text-primary)' }}>
+                                        <div style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-bold)', color: petitionTypeId === type.id ? 'var(--color-primary)' : 'var(--color-text-primary)' }}>
                                             {type.label}
                                         </div>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>{type.law}</div>
@@ -590,15 +590,15 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         </div>
                     </div>
 
-                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                         <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0' }}>Fatos e Argumentos (IA usará como base)</label>
                         <textarea
                             className="form-control"
                             style={{
                                 minHeight: '120px',
                                 fontSize: '0.875rem',
-                                borderRadius: '12px',
-                                padding: '16px',
+                                borderRadius: 'var(--radius-lg)',
+                                padding: 'var(--space-4)',
                                 border: '1.5px solid var(--color-border)',
                                 lineHeight: '1.5',
                                 boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
@@ -612,11 +612,11 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
                     <div className="form-group">
                         <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Anexos de Corroboração (Atas, Provas...)</label>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
                             {attachments.map((att, idx) => (
                                 <span key={idx} style={{
-                                    padding: '4px 10px', background: 'rgba(37,99,235,0.1)',
-                                    color: 'var(--color-primary)', borderRadius: '20px', fontSize: '0.75rem',
+                                    padding: '4px var(--space-3)', background: 'var(--color-primary-light)',
+                                    color: 'var(--color-primary)', borderRadius: 'var(--radius-xl)', fontSize: 'var(--text-sm)',
                                     display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid rgba(37,99,235,0.2)'
                                 }}>
                                     <ScrollText size={12} /> {att.name}
@@ -632,7 +632,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
 
                     <button
                         className="btn btn-primary"
-                        style={{ width: '100%', height: '52px', gap: '10px', fontSize: '1rem', borderRadius: '14px', fontWeight: 700, boxShadow: '0 4px 14px rgba(37,99,235,0.25)' }}
+                        style={{ width: '100%', height: '52px', gap: 'var(--space-3)', fontSize: 'var(--text-lg)', borderRadius: 'var(--radius-xl)', fontWeight: 'var(--font-bold)', boxShadow: '0 4px 14px rgba(37,99,235,0.25)' }}
                         disabled={isGenerating || !selectedBiddingId || !selectedCompanyId || (!factsSummary && attachments.length === 0)}
                         onClick={handleGenerate}
                     >
@@ -643,27 +643,27 @@ export function PetitionGenerator({ biddings, companies }: Props) {
             </div>
 
             {/* Right: Draft Preview */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: '16px', border: '1px solid var(--color-border)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
                 <div style={{
-                    padding: '16px 24px',
+                    padding: 'var(--space-4) var(--space-6)',
                     borderBottom: '1px solid var(--color-border)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     background: 'white'
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ScrollText size={20} color="var(--color-primary)" />
                         </div>
                         <div>
-                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Minuta Jurídica</h3>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Clique abaixo para editar o texto</span>
+                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>Minuta Jurídica</h3>
+                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Clique abaixo para editar o texto</span>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
                         {selectedImg && (
-                            <div className="image-toolbar" style={{ display: 'flex', gap: '4px', padding: '6px', background: 'var(--color-primary-light)', border: '1px solid var(--color-primary)', boxShadow: '0 4px 12px rgba(37,99,235,0.15)', borderRadius: '12px', marginRight: '10px', animation: 'fadeIn 0.2s ease-out' }}>
+                            <div className="image-toolbar" style={{ display: 'flex', gap: '4px', padding: '6px', background: 'var(--color-primary-light)', border: '1px solid var(--color-primary)', boxShadow: '0 4px 12px rgba(37,99,235,0.15)', borderRadius: 'var(--radius-lg)', marginRight: 'var(--space-3)', animation: 'fadeIn 0.2s ease-out' }}>
                                 <div style={{ fontSize: '0.65rem', fontWeight: 800, padding: '0 8px', color: 'var(--color-primary)', textTransform: 'uppercase', alignSelf: 'center' }}>Imagem</div>
                                 <button title="Alinhar Esquerda" onClick={() => applyImageStyle({ textAlign: 'left' })} className="btn btn-sm btn-ghost" style={{ padding: '6px' }}>
                                     <div style={{ width: '12px', height: '2px', background: 'currentColor', marginBottom: '2px', marginRight: '4px' }}></div>
@@ -693,7 +693,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         <input type="file" id="content-image-up" hidden accept="image/*" onChange={handleInsertImage} />
                         <button
                             className="btn btn-outline"
-                            style={{ padding: '8px 16px', fontSize: '0.875rem', borderRadius: '10px', gap: '6px' }}
+                            style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-base)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)' }}
                             disabled={!generatedDraft}
                             onClick={() => document.getElementById('content-image-up')?.click()}
                         >
@@ -701,7 +701,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         </button>
                         <button
                             className="btn btn-outline"
-                            style={{ padding: '8px 16px', fontSize: '0.875rem', borderRadius: '10px' }}
+                            style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-base)', borderRadius: 'var(--radius-lg)' }}
                             disabled={!generatedDraft}
                             onClick={handleCopy}
                         >
@@ -710,7 +710,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                         </button>
                         <button
                             className="btn btn-primary"
-                            style={{ padding: '8px 20px', fontSize: '0.875rem', background: '#111', borderColor: '#111', borderRadius: '10px', fontWeight: 600 }}
+                            style={{ padding: 'var(--space-2) var(--space-5)', fontSize: 'var(--text-base)', background: '#111', borderColor: '#111', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}
                             disabled={!generatedDraft}
                             onClick={handleExportPDF}
                         >
@@ -719,7 +719,7 @@ export function PetitionGenerator({ biddings, companies }: Props) {
                     </div>
                 </div>
 
-                <div style={{ flex: 1, padding: '40px', overflowY: 'auto', background: '#f8f9fa', display: 'flex', justifyContent: 'center' }}>
+                <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', background: '#f8f9fa', display: 'flex', justifyContent: 'center' }}>
                     {!generatedDraft && !isGenerating ? (
                         <div style={{
                             height: '100%',

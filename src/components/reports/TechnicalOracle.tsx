@@ -258,29 +258,29 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
 
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px', height: 'calc(100vh - 250px)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 250px)' }}>
             {/* Left Column: List and Upload */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '16px', overflow: 'hidden' }}>
-                <div style={{ marginBottom: '20px' }}>
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: 'var(--space-4)', overflow: 'hidden' }}>
+                <div style={{ marginBottom: 'var(--space-5)' }}>
+                    <h3 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--text-xl)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <FileBadge size={20} color="var(--color-primary)" />
                         Acervo Técnico
                     </h3>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-tertiary)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>
                         Selecione os atestados para somatório e análise.
                     </p>
                 </div>
 
-                <div style={{ marginBottom: '20px', background: 'var(--color-bg-secondary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.05em' }}>
+                <div style={{ marginBottom: 'var(--space-5)', background: 'var(--color-bg-secondary)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                    <div style={{ marginBottom: 'var(--space-4)' }}>
+                        <label style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: 'var(--space-2)', display: 'block', letterSpacing: '0.05em' }}>
                             Vincular à Empresa
                         </label>
                         <div style={{ position: 'relative' }}>
                             <Building2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
                             <select
                                 className="form-control"
-                                style={{ width: '100%', paddingLeft: '36px', fontSize: '0.85rem', height: '42px' }}
+                                style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px' }}
                                 value={selectedCompanyId}
                                 onChange={(e) => setSelectedCompanyId(e.target.value)}
                             >
@@ -292,15 +292,15 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         </div>
                     </div>
 
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.05em' }}>
+                    <div style={{ marginBottom: 'var(--space-4)' }}>
+                        <label style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: 'var(--space-2)', display: 'block', letterSpacing: '0.05em' }}>
                             Categoria do Acervo
                         </label>
                         <div style={{ position: 'relative' }}>
                             <Layers size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
                             <select
                                 className="form-control"
-                                style={{ width: '100%', paddingLeft: '36px', fontSize: '0.85rem', height: '42px' }}
+                                style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px' }}
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
                             >
@@ -317,7 +317,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         </div>
                     </div>
 
-                    <label className="btn btn-primary w-full" style={{ justifyContent: 'center', height: '42px', opacity: (isUploading || !selectedCompanyId) ? 0.7 : 1, cursor: (isUploading || !selectedCompanyId) ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                    <label className="btn btn-primary w-full" style={{ justifyContent: 'center', height: '42px', opacity: (isUploading || !selectedCompanyId) ? 0.7 : 1, cursor: (isUploading || !selectedCompanyId) ? 'not-allowed' : 'pointer', fontWeight: 'var(--font-bold)' }}>
                         {isUploading ? 'Processando IA...' : 'Enviar Novo Atestado'}
                         <Upload size={18} />
                         <input
@@ -329,15 +329,15 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         />
                     </label>
                     {uploadError && (
-                        <div style={{ color: 'var(--color-danger)', fontSize: '0.8rem', marginTop: '10px', padding: '10px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ color: 'var(--color-danger)', fontSize: 'var(--text-base)', marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)', borderRadius: 'var(--radius-md)', display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                             <AlertTriangle size={14} />
                             {uploadError}
                         </div>
                     )}
                 </div>
 
-                <div style={{ marginBottom: '20px' }}>
-                    <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: '6px', display: 'block', letterSpacing: '0.05em' }}>
+                <div style={{ marginBottom: 'var(--space-5)' }}>
+                    <label style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: 'var(--space-2)', display: 'block', letterSpacing: '0.05em' }}>
                         Busca por Objeto
                     </label>
                     <div className="input-group" style={{ position: 'relative' }}>
@@ -346,7 +346,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                             type="text"
                             placeholder="Descreva o que procura no acervo..."
                             className="form-control"
-                            style={{ paddingLeft: '40px', height: '42px', fontSize: '0.85rem', width: '100%' }}
+                            style={{ paddingLeft: '40px', height: '42px', fontSize: 'var(--text-base)', width: '100%' }}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -366,18 +366,18 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                 <div
                                     onClick={() => toggleCompanyExpansion(companyName)}
                                     style={{
-                                        padding: '10px 12px',
+                                        padding: 'var(--space-3)',
                                         background: 'var(--color-bg-secondary)',
-                                        borderRadius: '8px',
+                                        borderRadius: 'var(--radius-md)',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '8px',
+                                        gap: 'var(--space-2)',
                                         cursor: 'pointer',
-                                        fontWeight: 600,
-                                        fontSize: '0.85rem',
+                                        fontWeight: 'var(--font-semibold)',
+                                        fontSize: 'var(--text-base)',
                                         color: 'var(--color-text-primary)',
                                         border: '1px solid var(--color-border)',
-                                        transition: 'all 0.2s ease'
+                                        transition: 'var(--transition-fast)'
                                     }}
                                 >
                                     <Building2 size={16} color="var(--color-primary)" />
@@ -402,12 +402,12 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                                 key={cert.id}
                                                 onClick={() => setViewingCert(cert)}
                                                 style={{
-                                                    padding: '12px',
-                                                    borderRadius: '8px',
+                                                    padding: 'var(--space-3)',
+                                                    borderRadius: 'var(--radius-md)',
                                                     border: `1px solid ${viewingCert?.id === cert.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                                                    background: viewingCert?.id === cert.id ? 'rgba(37, 99, 235, 0.05)' : 'white',
+                                                    background: viewingCert?.id === cert.id ? 'var(--color-primary-light)' : 'var(--color-bg-surface)',
                                                     cursor: 'pointer',
-                                                    transition: 'all 0.2s ease',
+                                                    transition: 'var(--transition-fast)',
                                                     position: 'relative',
                                                     boxShadow: selectedCertIds.has(cert.id) ? '0 0 0 2px var(--color-primary)' : 'none'
                                                 }}
@@ -435,10 +435,10 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                                         {cert.category && (
                                                             <span style={{
                                                                 fontSize: '0.65rem',
-                                                                background: '#eff6ff',
+                                                                background: 'var(--color-primary-light)',
                                                                 padding: '2px 6px',
-                                                                borderRadius: '4px',
-                                                                fontWeight: 700,
+                                                                borderRadius: 'var(--radius-sm)',
+                                                                fontWeight: 'var(--font-bold)',
                                                                 color: 'var(--color-primary)',
                                                                 border: '1px solid #dbeafe'
                                                             }}>
@@ -453,10 +453,10 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                                                         <Trash2 size={14} />
                                                     </button>
                                                 </div>
-                                                <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                                <h4 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                                                     {cert.title}
                                                 </h4>
-                                                <p style={{ margin: '4px 0 0 0', fontSize: '0.7rem', color: 'var(--color-text-tertiary)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <p style={{ margin: '4px 0 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {cert.issuer}
                                                 </p>
                                             </div>
@@ -470,23 +470,23 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
             </div>
 
             {/* Right Column: Details and Analysis */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto', paddingBottom: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', overflowY: 'auto', paddingBottom: 'var(--space-6)' }}>
 
                 {/* Comparison Header always visible if something is selected */}
-                <div className="card" style={{ padding: '20px', border: '1px solid var(--color-border)', background: 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <HardHat size={22} color="#f59e0b" />
+                <div className="card" style={{ padding: 'var(--space-5)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                        <h3 style={{ margin: 0, fontSize: 'var(--text-xl)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <HardHat size={22} color="var(--color-warning)" />
                             Oráculo de Somatório
                         </h3>
                         {selectedCertIds.size > 0 && (
-                            <span style={{ fontSize: '0.8rem', background: '#fffbeb', color: '#92400e', padding: '4px 10px', borderRadius: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid #f59e0b' }}>
+                            <span style={{ fontSize: 'var(--text-base)', background: 'var(--color-warning-bg)', color: '#92400e', padding: 'var(--space-1) var(--space-3)', borderRadius: 'var(--radius-full)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', border: '1px solid var(--color-warning-border)' }}>
                                 <Layers size={14} /> {selectedCertIds.size} atestado(s) selecionado(s) para soma
                             </span>
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
                             <select
                                 className="form-control"
@@ -531,7 +531,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         )}
                     </div>
                     {selectedCertIds.size === 0 && !analysisResult && (
-                        <p style={{ marginTop: '12px', fontSize: '0.8rem', color: 'var(--color-danger)', fontWeight: 500 }}>
+                        <p style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-base)', color: 'var(--color-danger)', fontWeight: 'var(--font-medium)' }}>
                             ⚠️ Selecione ao menos um atestado na lista lateral para iniciar a análise.
                         </p>
                     )}
@@ -539,63 +539,63 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
 
                 {/* Analysis Results */}
                 {analysisResult && (
-                    <div className="card" style={{ padding: '24px', border: `2px solid ${analysisResult.overallStatus === 'Apto' ? '#10b981' : analysisResult.overallStatus === 'Risco' ? '#f59e0b' : '#ef4444'}`, background: 'white' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-                            {analysisResult.overallStatus === 'Apto' ? <CheckCircle2 color="#10b981" size={36} /> :
-                                analysisResult.overallStatus === 'Risco' ? <AlertTriangle color="#f59e0b" size={36} /> :
-                                    <XCircle color="#ef4444" size={36} />}
+                    <div className="card" style={{ padding: 'var(--space-6)', border: `2px solid ${analysisResult.overallStatus === 'Apto' ? 'var(--color-success)' : analysisResult.overallStatus === 'Risco' ? 'var(--color-warning)' : 'var(--color-danger)'}`, background: 'var(--color-bg-surface)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+                            {analysisResult.overallStatus === 'Apto' ? <CheckCircle2 color="var(--color-success)" size={36} /> :
+                                analysisResult.overallStatus === 'Risco' ? <AlertTriangle color="var(--color-warning)" size={36} /> :
+                                    <XCircle color="var(--color-danger)" size={36} />}
                             <div>
-                                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 700 }}>Parecer do Oráculo: {analysisResult.overallStatus}</h3>
-                                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-text-tertiary)' }}>Análise fundamentada considerando o somatório do acervo técnico.</p>
+                                <h3 style={{ margin: 0, fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)' }}>Parecer do Oráculo: {analysisResult.overallStatus}</h3>
+                                <p style={{ margin: 0, fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>Análise fundamentada considerando o somatório do acervo técnico.</p>
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                             {analysisResult.analysis.map((item, idx) => (
-                                <div key={idx} style={{ padding: '20px', background: 'var(--color-bg-secondary)', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                                        <div style={{ flex: 1, paddingRight: '20px' }}>
-                                            <h4 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em' }}>Exigência do Edital</h4>
-                                            <p style={{ margin: 0, fontSize: '1rem', color: 'var(--color-text-primary)', fontWeight: 600, lineHeight: '1.4' }}>{item.requirement}</p>
+                                <div key={idx} style={{ padding: 'var(--space-5)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
+                                        <div style={{ flex: 1, paddingRight: 'var(--space-5)' }}>
+                                            <h4 style={{ margin: '0 0 6px 0', fontSize: 'var(--text-sm)', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em' }}>Exigência do Edital</h4>
+                                            <p style={{ margin: 0, fontSize: 'var(--text-lg)', color: 'var(--color-text-primary)', fontWeight: 'var(--font-semibold)', lineHeight: '1.4' }}>{item.requirement}</p>
                                         </div>
                                         <span style={{
-                                            padding: '6px 14px',
-                                            borderRadius: '20px',
-                                            fontSize: '0.8rem',
-                                            fontWeight: 800,
+                                            padding: 'var(--space-2) var(--space-4)',
+                                            borderRadius: 'var(--radius-full)',
+                                            fontSize: 'var(--text-base)',
+                                            fontWeight: 'var(--font-bold)',
                                             textTransform: 'uppercase',
-                                            background: item.status === 'Atende' ? '#ecfdf5' : item.status === 'Similar' ? '#fffbeb' : '#fef2f2',
+                                            background: item.status === 'Atende' ? 'var(--color-success-bg)' : item.status === 'Similar' ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)',
                                             color: item.status === 'Atende' ? '#065f46' : item.status === 'Similar' ? '#92400e' : '#991b1b',
-                                            border: `1px solid ${item.status === 'Atende' ? '#10b981' : item.status === 'Similar' ? '#f59e0b' : '#ef4444'}`
+                                            border: `1px solid ${item.status === 'Atende' ? 'var(--color-success)' : item.status === 'Similar' ? 'var(--color-warning)' : 'var(--color-danger)'}`
                                         }}>
                                             {item.status}
                                         </span>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px', fontSize: '0.9rem' }}>
-                                        <div style={{ background: 'white', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
-                                            <div style={{ color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 'var(--space-5)', fontSize: 'var(--text-base)' }}>
+                                        <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                            <div style={{ color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
                                                 <FileBadge size={14} /> COMPROVAÇÃO INTEGRADA
                                             </div>
-                                            <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: 'var(--color-primary)' }}>{item.foundExperience}</p>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: '8px' }}>
-                                                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Total Somado:</span>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>{item.foundQuantity?.toLocaleString()}</span>
+                                            <p style={{ margin: '0 0 var(--space-2) 0', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)' }}>{item.foundExperience}</p>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--color-border)', paddingTop: 'var(--space-2)' }}>
+                                                <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>Total Somado:</span>
+                                                <span style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)' }}>{item.foundQuantity?.toLocaleString()}</span>
                                             </div>
-                                            <div style={{ marginTop: '12px', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                                            <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
                                                 <strong>Atestados utilizados:</strong> {item.matchingCertificate}
                                             </div>
                                         </div>
-                                        <div style={{ background: 'rgba(37, 99, 235, 0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(37, 99, 235, 0.1)' }}>
-                                            <div style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                        <div style={{ background: 'var(--color-primary-light)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(37, 99, 235, 0.1)' }}>
+                                            <div style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)' }}>
                                                 <Info size={14} /> FUNDAMENTAÇÃO
                                             </div>
-                                            <p style={{ margin: 0, fontSize: '0.85rem', lineHeight: '1.5', color: 'var(--color-text-secondary)' }}>{item.justification}</p>
+                                            <p style={{ margin: 0, fontSize: 'var(--text-base)', lineHeight: '1.5', color: 'var(--color-text-secondary)' }}>{item.justification}</p>
                                         </div>
                                     </div>
 
                                     {item.missing && (
-                                        <div style={{ marginTop: '16px', padding: '10px 14px', background: '#fff1f2', borderRadius: '8px', border: '1px solid #fecaca', fontSize: '0.85rem', color: '#991b1b', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-danger-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-danger-border)', fontSize: 'var(--text-base)', color: '#991b1b', display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                             <AlertTriangle size={16} />
                                             <span><strong>Déficit de Qualificação:</strong> {item.missing}</span>
                                         </div>
@@ -608,22 +608,22 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
 
                 {/* Individual Certificate Details */}
                 {viewingCert ? (
-                    <div className="card" style={{ padding: '24px', background: 'white', border: '1px solid var(--color-border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                    <div className="card" style={{ padding: 'var(--space-6)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-6)' }}>
                             <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                    <span style={{ fontSize: '0.7rem', background: 'var(--color-primary)', color: 'white', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>{viewingCert.type}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
+                                    <span style={{ fontSize: 'var(--text-sm)', background: 'var(--color-primary)', color: 'white', padding: '2px var(--space-2)', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)' }}>{viewingCert.type}</span>
                                     {viewingCert.category && (
-                                        <span style={{ fontSize: '0.7rem', background: '#eff6ff', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, border: '1px solid #dbeafe' }}>
+                                        <span style={{ fontSize: 'var(--text-sm)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '2px var(--space-2)', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', border: '1px solid #dbeafe' }}>
                                             {viewingCert.category}
                                         </span>
                                     )}
-                                    <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{viewingCert.title}</h2>
+                                    <h2 style={{ margin: 0, fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)' }}>{viewingCert.title}</h2>
                                 </div>
-                                <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: '0.9rem', fontWeight: 500 }}>
+                                <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-medium)' }}>
                                     <strong>Emissor:</strong> {viewingCert.issuer} {viewingCert.issueDate && `• ${new Date(viewingCert.issueDate).toLocaleDateString()}`}
                                 </p>
-                                <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '0.85rem' }}>
+                                <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 'var(--text-base)' }}>
                                     <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
                                         <strong>Empresa Executora:</strong> {viewingCert.executingCompany || viewingCert.company?.razaoSocial || '-'}
                                     </p>
@@ -645,29 +645,29 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                             </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
                             <div>
-                                <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 700 }}>
+                                <h4 style={{ fontSize: 'var(--text-base)', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: 'var(--space-3)', fontWeight: 'var(--font-bold)' }}>
                                     Objeto do Documento
                                 </h4>
-                                <div style={{ background: 'var(--color-bg-secondary)', padding: '16px', borderRadius: '8px', fontSize: '0.9rem', lineHeight: '1.6', whiteSpace: 'pre-wrap', border: '1px solid var(--color-border)' }}>
+                                <div style={{ background: 'var(--color-bg-secondary)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-base)', lineHeight: '1.6', whiteSpace: 'pre-wrap', border: '1px solid var(--color-border)' }}>
                                     {viewingCert.object || 'Objeto não extraído.'}
                                 </div>
                             </div>
                             <div>
-                                <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 700 }}>
+                                <h4 style={{ fontSize: 'var(--text-base)', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: 'var(--space-3)', fontWeight: 'var(--font-bold)' }}>
                                     Experiências Técnicas (Granular)
                                 </h4>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     {viewingCert.experiences?.map((exp, idx) => (
-                                        <div key={exp.id || idx} style={{ padding: '12px', background: 'white', border: '1px solid var(--color-border)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+                                        <div key={exp.id || idx} style={{ padding: 'var(--space-3)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{exp.description}</div>
-                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: '2px', fontWeight: 600 }}>{exp.category}</div>
+                                                <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{exp.description}</div>
+                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '2px', fontWeight: 'var(--font-semibold)' }}>{exp.category}</div>
                                             </div>
-                                            <div style={{ textAlign: 'right', marginLeft: '16px' }}>
-                                                <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                                                    {exp.quantity?.toLocaleString() || '-'} <span style={{ fontSize: '0.75rem', fontWeight: 500 }}>{exp.unit}</span>
+                                            <div style={{ textAlign: 'right', marginLeft: 'var(--space-4)' }}>
+                                                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-primary)' }}>
+                                                    {exp.quantity?.toLocaleString() || '-'} <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{exp.unit}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -680,10 +680,10 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                         </div>
                     </div>
                 ) : (
-                    <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', padding: '48px', background: 'rgba(255,255,255,0.5)', borderStyle: 'dashed' }}>
-                        <FileText size={64} style={{ opacity: 0.1, marginBottom: '24px' }} />
+                    <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', padding: 'var(--space-12)', background: 'var(--color-bg-secondary)', borderStyle: 'dashed' }}>
+                        <FileText size={64} style={{ opacity: 0.1, marginBottom: 'var(--space-6)' }} />
                         <h3 style={{ margin: 0, opacity: 0.5 }}>Detalhes do Acervo</h3>
-                        <p style={{ marginTop: '8px', textAlign: 'center', opacity: 0.5, maxWidth: '300px' }}>
+                        <p style={{ marginTop: 'var(--space-2)', textAlign: 'center', opacity: 0.5, maxWidth: '300px' }}>
                             Escolha um atestado na lista para ver o detalhamento ou selecione vários para a análise de somatório.
                         </p>
                     </div>

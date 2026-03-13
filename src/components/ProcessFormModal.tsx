@@ -282,8 +282,8 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                     maxWidth: '800px',
                     width: '100%',
                     maxHeight: '90vh',
-                    borderRadius: '1.5rem',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    borderRadius: 'var(--radius-xl)',
+                    boxShadow: 'var(--shadow-xl)',
                     overflow: 'hidden',
                     backgroundColor: 'var(--color-bg-surface)',
                     border: '1px solid var(--color-border)',
@@ -292,22 +292,22 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                     flexDirection: 'column'
                 }}>
                     <div style={{
-                        padding: '24px 36px',
+                        padding: 'var(--space-6) var(--space-8)',
                         borderBottom: '1px solid var(--color-border)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         background: 'linear-gradient(to right, var(--color-bg-surface), var(--color-bg-surface-hover))'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <div style={{ padding: '10px', background: 'rgba(37, 99, 235, 0.1)', borderRadius: '12px', color: 'var(--color-primary)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                            <div style={{ padding: 'var(--space-3)', background: 'var(--color-primary-light)', borderRadius: 'var(--radius-lg)', color: 'var(--color-primary)' }}>
                                 <Briefcase size={24} />
                             </div>
                             <div>
-                                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                                <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
                                     {initialData ? 'Editar Licitação' : 'Nova Oportunidade'}
                                 </h2>
-                                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginTop: '2px' }}>
+                                <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-md)', marginTop: '2px' }}>
                                     Gerencie os detalhes da disputa e acompanhe o progresso.
                                 </p>
                             </div>
@@ -315,14 +315,14 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                         <button
                             className="icon-btn"
                             onClick={onClose}
-                            style={{ background: 'var(--color-bg-surface)', borderRadius: '50%', padding: '8px', boxShadow: 'var(--shadow-sm)' }}
+                            style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-full)', padding: 'var(--space-2)', boxShadow: 'var(--shadow-sm)' }}
                         >
                             <X size={20} />
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit} style={{ padding: '32px', overflowY: 'auto', flex: 1 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                    <form onSubmit={handleSubmit} style={{ padding: 'var(--space-8)', overflowY: 'auto', flex: 1 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                             {/* Título */}
                             <div style={{ gridColumn: '1 / -1' }}>
@@ -406,11 +406,11 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             {/* Valor, Data e Risco */}
                             {/* ComprasNet Fields — only when portal indicates comprasnet */}
                             {(formData.portal?.toLowerCase().includes('compras') || formData.portal?.toLowerCase().includes('cnet') || formData.link?.toLowerCase().includes('comprasnet') || formData.link?.toLowerCase().includes('cnetmobile')) && (
-                                <div style={{ gridColumn: '1 / -1', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', padding: '16px', border: '1px solid var(--color-border)' }}>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <div style={{ gridColumn: '1 / -1', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--color-border)' }}>
+                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         📡 Dados ComprasNet (para monitoramento de chat)
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-3)' }}>
                                         <div>
                                             <label style={{ ...labelStyle, fontSize: '0.7rem' }}>UASG</label>
                                             <input type="text" name="uasg" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
@@ -479,18 +479,18 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             onClick={() => setFormData(p => ({ ...p, risk: level as RiskTag }))}
                                             style={{
                                                 flex: 1,
-                                                padding: '10px',
+                                                padding: 'var(--space-3)',
                                                 borderRadius: 'var(--radius-md)',
                                                 border: '1px solid var(--color-border)',
                                                 background: formData.risk === level ? 'var(--color-bg-surface-hover)' : 'var(--color-bg-surface)',
                                                 color: formData.risk === level ? (
                                                     level === 'Crítico' ? 'var(--color-danger)' :
-                                                        level === 'Alto' ? '#ef4444' :
-                                                            level === 'Médio' ? '#f59e0b' : 'var(--color-success)'
+                                                        level === 'Alto' ? 'var(--color-danger)' :
+                                                            level === 'Médio' ? 'var(--color-warning)' : 'var(--color-success)'
                                                 ) : 'var(--color-text-secondary)',
-                                                fontWeight: formData.risk === level ? 600 : 400,
+                                                fontWeight: formData.risk === level ? 'var(--font-semibold)' : 'var(--font-normal)',
                                                 boxShadow: formData.risk === level ? 'inset 0 2px 4px rgba(0,0,0,0.05)' : 'none',
-                                                transition: 'all 0.2s ease',
+                                                transition: 'var(--transition-fast)',
                                                 borderColor: formData.risk === level ? 'currentColor' : 'var(--color-border)'
                                             }}
                                         >
@@ -687,58 +687,58 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                     return (
                                         <div style={{
-                                            marginTop: '12px',
-                                            padding: '16px 20px',
-                                            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.04), rgba(139, 92, 246, 0.04))',
-                                            borderRadius: '1rem',
-                                            border: '1px solid rgba(99, 102, 241, 0.15)'
+                                            marginTop: 'var(--space-3)',
+                                            padding: 'var(--space-4) var(--space-5)',
+                                            background: 'var(--color-ai-bg)',
+                                            borderRadius: 'var(--radius-xl)',
+                                            border: '1px solid var(--color-ai-border)'
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6366f1', marginBottom: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-ai)', marginBottom: 'var(--space-3)' }}>
                                                 <KeyRound size={16} />
-                                                <span style={{ fontWeight: 600, fontSize: '0.8125rem' }}>Credenciais de Acesso ao Portal</span>
+                                                <span style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-base)' }}>Credenciais de Acesso ao Portal</span>
                                                 {bestMatch && (
                                                     <span style={{
                                                         marginLeft: 'auto', padding: '3px 10px',
-                                                        background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                                                        color: '#fff', borderRadius: '12px',
-                                                        fontSize: '0.65rem', fontWeight: 700,
+                                                        background: 'linear-gradient(135deg, var(--color-ai), var(--color-ai-hover))',
+                                                        color: '#fff', borderRadius: 'var(--radius-lg)',
+                                                        fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)',
                                                         display: 'flex', alignItems: 'center', gap: '4px'
                                                     }}>
                                                         ✨ IA identificou a credencial
                                                     </span>
                                                 )}
                                             </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                                 {scored.map(({ cred, score: _score }) => {
                                                     const isMatch = cred.id === bestMatch;
                                                     return (
                                                         <div key={cred.id} style={{
-                                                            padding: isMatch ? '14px 16px' : '10px 14px',
-                                                            background: isMatch ? 'rgba(99, 102, 241, 0.06)' : 'white',
-                                                            borderRadius: '0.75rem',
-                                                            border: isMatch ? '2px solid #6366f1' : '1px solid var(--color-border)',
+                                                            padding: isMatch ? 'var(--space-4)' : 'var(--space-3)',
+                                                            background: isMatch ? 'var(--color-ai-bg)' : 'var(--color-bg-surface)',
+                                                            borderRadius: 'var(--radius-lg)',
+                                                            border: isMatch ? '2px solid var(--color-ai)' : '1px solid var(--color-border)',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: '16px',
+                                                            gap: 'var(--space-4)',
                                                             flexWrap: 'wrap',
-                                                            transition: 'all 0.2s ease',
+                                                            transition: 'var(--transition-fast)',
                                                             position: 'relative'
                                                         }}>
                                                             {isMatch && (
                                                                 <span style={{
                                                                     position: 'absolute', top: -8, right: 12,
-                                                                    padding: '2px 8px', background: '#22c55e',
-                                                                    color: '#fff', borderRadius: '8px',
-                                                                    fontSize: '0.6rem', fontWeight: 700
+                                                                    padding: '2px 8px', background: 'var(--color-success)',
+                                                                    color: '#fff', borderRadius: 'var(--radius-md)',
+                                                                    fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)'
                                                                 }}>
                                                                     ✓ RECOMENDADA
                                                                 </span>
                                                             )}
                                                             <div style={{ flex: '1 1 120px', minWidth: '120px' }}>
                                                                 <span style={{
-                                                                    fontSize: '0.6875rem', fontWeight: 700,
+                                                                    fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)',
                                                                     textTransform: 'uppercase',
-                                                                    color: isMatch ? '#6366f1' : '#94a3b8',
+                                                                    color: isMatch ? 'var(--color-ai)' : 'var(--color-text-tertiary)',
                                                                     letterSpacing: '0.05em'
                                                                 }}>
                                                                     {cred.platform}
@@ -755,16 +755,16 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                             </div>
                                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                                 <div style={{
-                                                                    padding: '6px 12px', background: '#f8fafc', borderRadius: '8px',
-                                                                    border: '1px solid #e2e8f0', fontSize: '0.8125rem',
-                                                                    fontFamily: 'monospace', color: '#334155'
+                                                                    padding: '6px 12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)',
+                                                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-base)',
+                                                                    fontFamily: 'monospace', color: 'var(--color-text-primary)'
                                                                 }}>
                                                                     {cred.login}
                                                                 </div>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleCopy(cred.login, `login-${cred.id}`)}
-                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: copiedField === `login-${cred.id}` ? '#22c55e' : '#94a3b8' }}
+                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: copiedField === `login-${cred.id}` ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
                                                                     title="Copiar login"
                                                                 >
                                                                     <Copy size={14} />
@@ -772,16 +772,16 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                             </div>
                                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                                 <div style={{
-                                                                    padding: '6px 12px', background: '#f8fafc', borderRadius: '8px',
-                                                                    border: '1px solid #e2e8f0', fontSize: '0.8125rem',
-                                                                    fontFamily: 'monospace', color: '#334155', minWidth: '80px'
+                                                                    padding: '6px 12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)',
+                                                                    border: '1px solid var(--color-border)', fontSize: '0.8125rem',
+                                                                    fontFamily: 'monospace', color: 'var(--color-text-primary)', minWidth: '80px'
                                                                 }}>
                                                                     {showPassword[cred.id] ? (cred.password || '***') : '••••••••'}
                                                                 </div>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setShowPassword(prev => ({ ...prev, [cred.id]: !prev[cred.id] }))}
-                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#94a3b8' }}
+                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--color-text-tertiary)' }}
                                                                     title={showPassword[cred.id] ? 'Ocultar senha' : 'Mostrar senha'}
                                                                 >
                                                                     {showPassword[cred.id] ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -789,7 +789,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleCopy(cred.password || '', `pass-${cred.id}`)}
-                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: copiedField === `pass-${cred.id}` ? '#22c55e' : '#94a3b8' }}
+                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: copiedField === `pass-${cred.id}` ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}
                                                                     title="Copiar senha"
                                                                 >
                                                                     <Copy size={14} />
@@ -807,34 +807,34 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             {/* Sistema de Lembrete Inteligente */}
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <div style={{
-                                    padding: '24px',
+                                    padding: 'var(--space-6)',
                                     background: formData.reminderType === 'weekdays'
-                                        ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.04), rgba(249, 115, 22, 0.04))'
-                                        : 'rgba(245, 158, 11, 0.03)',
-                                    borderRadius: '1rem',
-                                    border: `1px solid ${formData.reminderType === 'weekdays' ? 'rgba(249, 115, 22, 0.25)' : 'rgba(245, 158, 11, 0.2)'}`,
-                                    transition: 'all 0.3s'
+                                        ? 'var(--color-urgency-bg)'
+                                        : 'var(--color-warning-bg)',
+                                    borderRadius: 'var(--radius-xl)',
+                                    border: `1px solid ${formData.reminderType === 'weekdays' ? 'var(--color-urgency-border)' : 'var(--color-warning-border)'}`,
+                                    transition: 'var(--transition-normal)'
                                 }}>
                                     {/* Header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#b45309' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-warning-hover)' }}>
                                             <Bell size={18} />
-                                            <span style={{ fontWeight: 600 }}>Lembrete Inteligente</span>
+                                            <span style={{ fontWeight: 'var(--font-semibold)' }}>Lembrete Inteligente</span>
                                         </div>
                                         {/* Tipo toggle */}
-                                        <div style={{ display: 'flex', gap: '4px', padding: '3px', background: '#f1f5f9', borderRadius: '10px' }}>
+                                        <div style={{ display: 'flex', gap: '4px', padding: '3px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)' }}>
                                             <button
                                                 type="button"
                                                 onClick={() => setFormData(p => ({ ...p, reminderType: 'once' }))}
                                                 style={{
                                                     padding: '5px 14px',
-                                                    borderRadius: '8px',
+                                                    borderRadius: 'var(--radius-md)',
                                                     border: 'none',
-                                                    background: formData.reminderType === 'once' ? 'white' : 'transparent',
-                                                    boxShadow: formData.reminderType === 'once' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                    color: formData.reminderType === 'once' ? '#1e293b' : '#94a3b8',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 600,
+                                                    background: formData.reminderType === 'once' ? 'var(--color-bg-surface)' : 'transparent',
+                                                    boxShadow: formData.reminderType === 'once' ? 'var(--shadow-sm)' : 'none',
+                                                    color: formData.reminderType === 'once' ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                                    fontSize: 'var(--text-sm)',
+                                                    fontWeight: 'var(--font-semibold)',
                                                     cursor: 'pointer',
                                                     transition: 'all 0.2s'
                                                 }}
@@ -846,13 +846,13 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                 onClick={() => setFormData(p => ({ ...p, reminderType: 'weekdays' }))}
                                                 style={{
                                                     padding: '5px 14px',
-                                                    borderRadius: '8px',
+                                                    borderRadius: 'var(--radius-md)',
                                                     border: 'none',
-                                                    background: formData.reminderType === 'weekdays' ? 'white' : 'transparent',
-                                                    boxShadow: formData.reminderType === 'weekdays' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                    color: formData.reminderType === 'weekdays' ? '#ea580c' : '#94a3b8',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 600,
+                                                    background: formData.reminderType === 'weekdays' ? 'var(--color-bg-surface)' : 'transparent',
+                                                    boxShadow: formData.reminderType === 'weekdays' ? 'var(--shadow-sm)' : 'none',
+                                                    color: formData.reminderType === 'weekdays' ? 'var(--color-urgency)' : 'var(--color-text-tertiary)',
+                                                    fontSize: 'var(--text-sm)',
+                                                    fontWeight: 'var(--font-semibold)',
                                                     cursor: 'pointer',
                                                     transition: 'all 0.2s'
                                                 }}
@@ -866,8 +866,8 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                     {/* Date/Time row */}
                                     <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: formData.reminderType === 'weekdays' ? '16px' : '0' }}>
-                                        <div style={{ ...inputContainerStyle, flex: 1, backgroundColor: 'white' }}>
-                                            <Calendar size={16} color="#b45309" />
+                                        <div style={{ ...inputContainerStyle, flex: 1, backgroundColor: 'var(--color-bg-surface)' }}>
+                                            <Calendar size={16} color="var(--color-warning-hover)" />
                                             <input
                                                 type={formData.reminderType === 'weekdays' ? 'time' : 'datetime-local'}
                                                 name="reminderDate"
@@ -890,7 +890,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                 }}
                                             />
                                         </div>
-                                        <p style={{ margin: 0, fontSize: '0.8125rem', color: '#92400e', maxWidth: '260px', lineHeight: 1.4 }}>
+                                        <p style={{ margin: 0, fontSize: 'var(--text-base)', color: 'var(--color-warning-hover)', maxWidth: '260px', lineHeight: 1.4 }}>
                                             {formData.reminderType === 'weekdays'
                                                 ? 'Horário do alarme nos dias selecionados abaixo.'
                                                 : 'Um aviso será disparado para toda a equipe no horário configurado.'
@@ -935,16 +935,16 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                             style={{
                                                                 flex: 1,
                                                                 padding: '8px 0',
-                                                                borderRadius: '10px',
-                                                                border: `2px solid ${selectedDays.includes(day.num) ? '#f59e0b' : '#e2e8f0'}`,
+                                                                borderRadius: 'var(--radius-lg)',
+                                                                border: `2px solid ${selectedDays.includes(day.num) ? 'var(--color-warning)' : 'var(--color-border)'}`,
                                                                 background: selectedDays.includes(day.num)
-                                                                    ? 'linear-gradient(135deg, #fbbf24, #f59e0b)'
-                                                                    : 'white',
-                                                                color: selectedDays.includes(day.num) ? 'white' : '#94a3b8',
+                                                                    ? 'linear-gradient(135deg, var(--color-warning), var(--color-warning-hover))'
+                                                                    : 'var(--color-bg-surface)',
+                                                                color: selectedDays.includes(day.num) ? 'white' : 'var(--color-text-tertiary)',
                                                                 fontSize: '0.75rem',
                                                                 fontWeight: 700,
                                                                 cursor: 'pointer',
-                                                                transition: 'all 0.15s',
+                                                                transition: 'var(--transition-fast)',
                                                                 boxShadow: selectedDays.includes(day.num) ? '0 2px 8px rgba(245, 158, 11, 0.3)' : 'none'
                                                             }}
                                                         >
@@ -959,10 +959,10 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                         onClick={() => setFormData(prev => ({ ...prev, reminderDays: JSON.stringify(weekdaysOnly) }))}
                                                         style={{
                                                             padding: '4px 12px',
-                                                            borderRadius: '6px',
-                                                            border: `1px solid ${isWeekdaysSelected ? '#f59e0b' : '#e2e8f0'}`,
-                                                            background: isWeekdaysSelected ? 'rgba(245, 158, 11, 0.1)' : 'white',
-                                                            color: isWeekdaysSelected ? '#b45309' : '#64748b',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            border: `1px solid ${isWeekdaysSelected ? 'var(--color-warning)' : 'var(--color-border)'}`,
+                                                            background: isWeekdaysSelected ? 'var(--color-warning-bg)' : 'var(--color-bg-surface)',
+                                                            color: isWeekdaysSelected ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
                                                             fontSize: '0.6875rem',
                                                             fontWeight: 600,
                                                             cursor: 'pointer'
@@ -975,10 +975,10 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                         onClick={() => setFormData(prev => ({ ...prev, reminderDays: JSON.stringify(allDays) }))}
                                                         style={{
                                                             padding: '4px 12px',
-                                                            borderRadius: '6px',
-                                                            border: `1px solid ${isAllSelected ? '#f59e0b' : '#e2e8f0'}`,
-                                                            background: isAllSelected ? 'rgba(245, 158, 11, 0.1)' : 'white',
-                                                            color: isAllSelected ? '#b45309' : '#64748b',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            border: `1px solid ${isAllSelected ? 'var(--color-warning)' : 'var(--color-border)'}`,
+                                                            background: isAllSelected ? 'var(--color-warning-bg)' : 'var(--color-bg-surface)',
+                                                            color: isAllSelected ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
                                                             fontSize: '0.6875rem',
                                                             fontWeight: 600,
                                                             cursor: 'pointer'
@@ -991,10 +991,10 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                         onClick={() => setFormData(prev => ({ ...prev, reminderDays: '[]' }))}
                                                         style={{
                                                             padding: '4px 12px',
-                                                            borderRadius: '6px',
-                                                            border: '1px solid #e2e8f0',
-                                                            background: 'white',
-                                                            color: '#94a3b8',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            border: '1px solid var(--color-border)',
+                                                            background: 'var(--color-bg-surface)',
+                                                            color: 'var(--color-text-tertiary)',
                                                             fontSize: '0.6875rem',
                                                             fontWeight: 600,
                                                             cursor: 'pointer'
@@ -1014,9 +1014,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 <label style={labelStyle}>Historico de Observações</label>
                                 <div style={{
                                     background: 'var(--color-bg-base)',
-                                    borderRadius: '1rem',
+                                    borderRadius: 'var(--radius-xl)',
                                     border: '1px solid var(--color-border)',
-                                    padding: '20px',
+                                    padding: 'var(--space-5)',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     gap: '16px'
@@ -1072,11 +1072,11 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                         </div>
 
                         <div style={{
-                            marginTop: '40px',
+                            marginTop: 'var(--space-10)',
                             display: 'flex',
-                            gap: '12px',
+                            gap: 'var(--space-3)',
                             justifyContent: 'flex-end',
-                            paddingTop: '28px',
+                            paddingTop: 'var(--space-6)',
                             borderTop: '1px solid var(--color-border)'
                         }}>
                             {(onRequestAiAnalysis || aiAnalysisData) && (
@@ -1091,13 +1091,13 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                         }
                                     }}
                                     style={{
-                                        padding: '12px 24px',
+                                        padding: 'var(--space-3) var(--space-6)',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '8px',
-                                        color: '#8b5cf6',
-                                        borderColor: 'rgba(139, 92, 246, 0.4)',
-                                        background: 'rgba(139, 92, 246, 0.05)'
+                                        gap: 'var(--space-2)',
+                                        color: 'var(--color-ai)',
+                                        borderColor: 'var(--color-ai-border)',
+                                        background: 'var(--color-ai-bg)'
                                     }}
                                 >
                                     <Brain size={18} /> Ver Relatório IA
@@ -1108,30 +1108,30 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 className="btn btn-primary"
                                 onClick={handleAiExtract}
                                 style={{
-                                    padding: '12px 24px',
+                                    padding: 'var(--space-3) var(--space-6)',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '8px',
+                                    gap: 'var(--space-2)',
                                     marginRight: 'auto',
-                                    backgroundColor: '#8b5cf6',
-                                    borderColor: '#8b5cf6'
+                                    backgroundColor: 'var(--color-ai)',
+                                    borderColor: 'var(--color-ai)'
                                 }}
                                 disabled={isCheckingAi}
                             >
                                 {isCheckingAi ? <Loader2 size={18} className="spinner" /> : <Bot size={18} />}
                                 {isCheckingAi ? 'Analisando PDF...' : 'IA: Extrair edital'}
                             </button>
-                            <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: '12px 24px' }}>
+                            <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: 'var(--space-3) var(--space-6)' }}>
                                 Cancelar
                             </button>
                             <button
                                 type="submit"
                                 className="btn btn-primary"
                                 style={{
-                                    padding: '12px 40px',
+                                    padding: 'var(--space-3) var(--space-10)',
                                     background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
-                                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
-                                    fontWeight: 600
+                                    boxShadow: 'var(--shadow-md)',
+                                    fontWeight: 'var(--font-semibold)'
                                 }}
                             >
                                 <Save size={18} /> Salvar Licitação
@@ -1163,21 +1163,21 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
 const labelStyle: React.CSSProperties = {
     display: 'block',
-    fontSize: '0.875rem',
-    fontWeight: 600,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-semibold)',
     color: 'var(--color-text-secondary)',
-    marginBottom: '10px'
+    marginBottom: 'var(--space-3)'
 };
 
 const inputContainerStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '12px 16px',
+    gap: 'var(--space-3)',
+    padding: 'var(--space-3) var(--space-4)',
     backgroundColor: 'var(--color-bg-base)',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-md)',
-    transition: 'all 0.2s ease',
+    transition: 'var(--transition-fast)',
 };
 
 const inputInnerStyle: React.CSSProperties = {
@@ -1186,5 +1186,5 @@ const inputInnerStyle: React.CSSProperties = {
     outline: 'none',
     width: '100%',
     color: 'var(--color-text-primary)',
-    fontSize: '0.9375rem',
+    fontSize: 'var(--text-base)',
 };

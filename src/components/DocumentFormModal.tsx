@@ -12,11 +12,11 @@ interface Props {
 }
 
 const DOCUMENT_GROUPS = [
-    { id: 'Habilitação Jurídica', icon: <ShieldCheck size={18} />, color: '#3b82f6' },
-    { id: 'Regularidade Fiscal, Social e Trabalhista', icon: <FileSearch size={18} />, color: '#10b981' },
-    { id: 'Qualificação Técnica', icon: <Briefcase size={18} />, color: '#8b5cf6' },
-    { id: 'Qualificação Econômica Financeira', icon: <FileText size={18} />, color: '#f59e0b' },
-    { id: 'Outros', icon: <HelpCircle size={18} />, color: '#64748b' },
+    { id: 'Habilitação Jurídica', icon: <ShieldCheck size={18} />, color: 'var(--color-primary)' },
+    { id: 'Regularidade Fiscal, Social e Trabalhista', icon: <FileSearch size={18} />, color: 'var(--color-success)' },
+    { id: 'Qualificação Técnica', icon: <Briefcase size={18} />, color: 'var(--color-ai)' },
+    { id: 'Qualificação Econômica Financeira', icon: <FileText size={18} />, color: 'var(--color-warning)' },
+    { id: 'Outros', icon: <HelpCircle size={18} />, color: 'var(--color-neutral)' },
 ];
 
 export function DocumentFormModal({ initialData, companyProfileId, onClose, onSave, groupAlertDays, defaultAlertDays }: Props) {
@@ -108,15 +108,15 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                 maxWidth: '650px',
                 width: '100%',
                 maxHeight: '90vh',
-                borderRadius: '1.25rem',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: 'var(--shadow-xl)',
                 overflowY: 'auto',
                 backgroundColor: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border)',
                 animation: 'slideUp 0.3s ease-out'
             }}>
                 <div style={{
-                    padding: '24px 32px',
+                    padding: 'var(--space-6) var(--space-8)',
                     borderBottom: '1px solid var(--color-border)',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -124,24 +124,24 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                     background: 'linear-gradient(to right, var(--color-bg-surface), var(--color-bg-surface-hover))'
                 }}>
                     <div>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                        <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
                             {initialData ? 'Atualizar Documento' : 'Novo Documento'}
                         </h2>
-                        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginTop: '4px' }}>
+                        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-md)', marginTop: '4px' }}>
                             Preencha os dados abaixo para manter o compliance da empresa.
                         </p>
                     </div>
                     <button
                         className="icon-btn"
                         onClick={onClose}
-                        style={{ background: 'var(--color-bg-surface)', borderRadius: '50%', padding: '8px', boxShadow: 'var(--shadow-sm)' }}
+                        style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-full)', padding: 'var(--space-2)', boxShadow: 'var(--shadow-sm)' }}
                     >
                         <X size={20} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '32px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                <form onSubmit={handleSubmit} style={{ padding: 'var(--space-8)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                         {/* Nome do Documento */}
                         <div style={{ gridColumn: '1 / -1' }}>
@@ -174,13 +174,13 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                                             gap: '8px',
                                             padding: '10px 14px',
                                             borderRadius: 'var(--radius-md)',
-                                            fontSize: '0.8125rem',
-                                            fontWeight: 500,
+                                            fontSize: 'var(--text-base)',
+                                            fontWeight: 'var(--font-medium)',
                                             border: '1px solid',
                                             borderColor: formData.docGroup === group.id ? group.color : 'var(--color-border)',
                                             backgroundColor: formData.docGroup === group.id ? group.color + '15' : 'transparent',
                                             color: formData.docGroup === group.id ? group.color : 'var(--color-text-secondary)',
-                                            transition: 'all 0.2s ease',
+                                            transition: 'var(--transition-fast)',
                                         }}
                                     >
                                         {group.icon}
@@ -243,12 +243,12 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                             </label>
                             <div style={{
                                 border: '2px dashed var(--color-border)',
-                                borderRadius: '1rem',
-                                padding: '32px',
+                                borderRadius: 'var(--radius-xl)',
+                                padding: 'var(--space-8)',
                                 textAlign: 'center',
                                 backgroundColor: 'var(--color-bg-surface-hover)',
                                 cursor: 'pointer',
-                                transition: 'all 0.2s ease',
+                                transition: 'var(--transition-fast)',
                                 position: 'relative',
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -269,7 +269,7 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                                     width: '48px',
                                     height: '48px',
                                     borderRadius: '50%',
-                                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                                    backgroundColor: 'var(--color-primary-light)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -278,7 +278,7 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                                     <Upload size={24} />
                                 </div>
                                 <div>
-                                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                    <p style={{ margin: 0, fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                                         {selectedFile ? selectedFile.name : initialData ? 'Clique para substituir o arquivo atual' : 'Escolher arquivo ou arrastar e soltar'}
                                     </p>
                                     <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
@@ -287,7 +287,7 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                                 </div>
                             </div>
                             {initialData && !selectedFile && (
-                                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
+                                <div style={{ marginTop: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)' }}>
                                     <Info size={14} />
                                     <span>Arquivo atual: <strong>{initialData.fileName}</strong></span>
                                 </div>
@@ -296,18 +296,18 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                     </div>
 
                     <div style={{
-                        marginTop: '40px',
+                        marginTop: 'var(--space-10)',
                         display: 'flex',
-                        gap: '12px',
+                        gap: 'var(--space-3)',
                         justifyContent: 'flex-end',
-                        paddingTop: '24px',
+                        paddingTop: 'var(--space-6)',
                         borderTop: '1px solid var(--color-border)'
                     }}>
                         <button
                             type="button"
                             className="btn btn-outline"
                             onClick={onClose}
-                            style={{ padding: '12px 24px', borderRadius: 'var(--radius-md)' }}
+                            style={{ padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-md)' }}
                         >
                             Cancelar
                         </button>
@@ -315,10 +315,10 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
                             type="submit"
                             className="btn btn-primary"
                             style={{
-                                padding: '12px 32px',
+                                padding: 'var(--space-3) var(--space-8)',
                                 borderRadius: 'var(--radius-md)',
                                 background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
-                                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+                                boxShadow: 'var(--shadow-md)'
                             }}
                         >
                             {initialData ? 'Confirmar Atualização' : 'Cadastrar Documento'}
@@ -337,21 +337,21 @@ export function DocumentFormModal({ initialData, companyProfileId, onClose, onSa
 
 const labelStyle: React.CSSProperties = {
     display: 'block',
-    fontSize: '0.875rem',
-    fontWeight: 600,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-semibold)',
     color: 'var(--color-text-secondary)',
-    marginBottom: '8px'
+    marginBottom: 'var(--space-2)'
 };
 
 const inputContainerStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '12px 16px',
+    gap: 'var(--space-3)',
+    padding: 'var(--space-3) var(--space-4)',
     backgroundColor: 'var(--color-bg-base)',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-md)',
-    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+    transition: 'var(--transition-fast)',
 };
 
 const inputInnerStyle: React.CSSProperties = {
@@ -360,5 +360,5 @@ const inputInnerStyle: React.CSSProperties = {
     outline: 'none',
     width: '100%',
     color: 'var(--color-text-primary)',
-    fontSize: '0.9375rem',
+    fontSize: 'var(--text-base)',
 };

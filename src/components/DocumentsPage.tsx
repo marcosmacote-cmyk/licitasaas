@@ -527,35 +527,35 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
     };
 
     return (
-        <div className="page-container" style={{ display: 'flex', flexDirection: 'row', gap: '24px', paddingRight: '24px' }}>
+        <div className="page-container" style={{ display: 'flex', flexDirection: 'row', gap: 'var(--space-6)', paddingRight: 'var(--space-6)' }}>
 
             {/* Sidebar: Companies List */}
-            <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <div className="flex-between">
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Empresas</h2>
+                    <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>Empresas</h2>
                     <button className="icon-btn" onClick={handleCreateCompany} title="Cadastrar Nova Empresa" style={{ background: 'var(--color-primary)', color: 'white', padding: '6px' }}>
                         <Plus size={16} />
                     </button>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                     {companies.map((company: CompanyProfile) => (
                         <div
                             key={company.id}
                             onClick={() => setSelectedCompanyId(company.id)}
                             style={{
-                                padding: '16px',
+                                padding: 'var(--space-4)',
                                 backgroundColor: selectedCompanyId === company.id ? 'var(--color-primary-light)' : 'var(--color-bg-surface)',
                                 border: `1px solid ${selectedCompanyId === company.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
                                 borderRadius: 'var(--radius-lg)',
                                 cursor: 'pointer',
-                                transition: 'all 0.2s',
+                                transition: 'var(--transition-fast)',
                             }}
                         >
                             <div className="flex-between" style={{ marginBottom: '8px' }}>
                                 <div className="flex-gap" style={{ color: selectedCompanyId === company.id ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
                                     <Building2 size={16} />
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>
+                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', textTransform: 'uppercase' }}>
                                         {company.isHeadquarters ? 'Matriz' : 'Filial'}
                                     </span>
                                 </div>
@@ -568,10 +568,10 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                     </button>
                                 </div>
                             </div>
-                            <div style={{ fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '4px', fontSize: '0.9rem' }}>
+                            <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', marginBottom: '4px', fontSize: 'var(--text-base)' }}>
                                 {company.razaoSocial}
                             </div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>
+                            <div style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>
                                 CNPJ: {company.cnpj}
                             </div>
                         </div>
@@ -588,13 +588,13 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             <div style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column' }}>
                 {activeCompany ? (
                     <>
-                        <div style={{ padding: '24px', borderBottom: '1px solid var(--color-border)' }}>
-                            <div className="flex-between" style={{ marginBottom: '24px' }}>
+                        <div style={{ padding: 'var(--space-6)', borderBottom: '1px solid var(--color-border)' }}>
+                            <div className="flex-between" style={{ marginBottom: 'var(--space-6)' }}>
                                 <div>
-                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                    <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                                         {activeCompany.razaoSocial}
                                     </h2>
-                                    <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+                                    <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-md)' }}>
                                         CNPJ: {activeCompany.cnpj}
                                     </p>
                                 </div>
@@ -623,7 +623,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                         <input
                                             type="text"
                                             placeholder="Buscar por tipo de documento..."
-                                            style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--color-text-primary)', flex: 1, fontSize: '0.875rem' }}
+                                            style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--color-text-primary)', flex: 1, fontSize: 'var(--text-md)' }}
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                         />
@@ -654,7 +654,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                             {activeTab === 'credentials' && (
                                 <div className="flex-between">
                                     <div></div>
-                                    <button className="btn btn-primary" onClick={handleCreateCredential} style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}>
+                                    <button className="btn btn-primary" onClick={handleCreateCredential} style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}>
                                         <Plus size={16} /> Nova Credencial
                                     </button>
                                 </div>
@@ -856,31 +856,31 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
             {
                 isAlertConfigOpen && (
                     <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease-out', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}>
-                        <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '32px', maxHeight: '90vh', overflowY: 'auto', backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: '1.25rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', animation: 'slideUp 0.3s ease-out' }}>
-                            <h3 style={{ marginBottom: '8px', fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Configurar Alertas</h3>
-                            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', marginBottom: '24px' }}>
+                        <div className="card" style={{ maxWidth: '450px', width: '100%', padding: 'var(--space-8)', maxHeight: '90vh', overflowY: 'auto', backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-xl)', animation: 'slideUp 0.3s ease-out' }}>
+                            <h3 style={{ marginBottom: 'var(--space-2)', fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>Configurar Alertas</h3>
+                            <p style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-6)' }}>
                                 A Regra Padrão é predominante para todos os documentos. Caso você defina prazos específicos por categoria, eles se tornarão a nova regra dominante sobre aquela categoria, revertendo a lógica.
                             </p>
 
-                            <div style={{ marginBottom: '20px', backgroundColor: 'var(--color-bg-base)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary)' }}>
-                                <label style={{ display: 'block', fontSize: '1rem', marginBottom: '8px', fontWeight: 600, color: 'var(--color-primary)' }}>Alerta Padrão Dominante (Dias)</label>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '12px' }}>Aplica-se a todos os documentos do sistema se não houver regra específica.</p>
+                            <div style={{ marginBottom: 'var(--space-5)', backgroundColor: 'var(--color-bg-base)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary)' }}>
+                                <label style={{ display: 'block', fontSize: 'var(--text-lg)', marginBottom: 'var(--space-2)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)' }}>Alerta Padrão Dominante (Dias)</label>
+                                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-3)' }}>Aplica-se a todos os documentos do sistema se não houver regra específica.</p>
                                 <input
                                     type="number"
                                     className="input-inner"
                                     value={defaultAlertDays}
                                     onChange={(e) => setDefaultAlertDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                                    style={{ width: '100%', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-surface)', padding: '10px 14px', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', outline: 'none', fontWeight: 600, fontSize: '1.125rem' }}
+                                    style={{ width: '100%', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', outline: 'none', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xl)' }}
                                 />
                             </div>
 
-                            <div style={{ marginBottom: '24px', borderTop: '1px solid var(--color-border)', paddingTop: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '4px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Alerta Específico por Categoria (Opcional)</label>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginBottom: '16px' }}>Ao informar um valor abaixo, ele se sobressai e ignora o padrão para aquela opção.</p>
+                            <div style={{ marginBottom: 'var(--space-6)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-5)' }}>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', marginBottom: '4px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>Alerta Específico por Categoria (Opcional)</label>
+                                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-4)' }}>Ao informar um valor abaixo, ele se sobressai e ignora o padrão para aquela opção.</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {DOCUMENT_GROUPS.map((group) => (
                                         <div key={group} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)', flex: 1 }}>{group}</span>
+                                            <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', flex: 1 }}>{group}</span>
                                             <input
                                                 type="number"
                                                 className="input-inner"
@@ -905,7 +905,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 </div>
                             </div>
 
-                            <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--color-bg-base)', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-light)' }}>
+                            <div style={{ marginBottom: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', backgroundColor: 'var(--color-bg-base)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-light)' }}>
                                 <input
                                     type="checkbox"
                                     id="applyToExistingDocs"
@@ -913,7 +913,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                     onChange={(e) => setApplyToExisting(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
                                 />
-                                <label htmlFor="applyToExistingDocs" style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 500 }}>
+                                <label htmlFor="applyToExistingDocs" style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', cursor: 'pointer', fontWeight: 'var(--font-medium)' }}>
                                     Aplicar estes novos prazos a todos os documentos existentes nesta empresa
                                 </label>
                             </div>
@@ -954,17 +954,17 @@ function StatusBadge({ status }: { status: DocumentStatus }) {
 }
 
 const thStyle: React.CSSProperties = {
-    padding: '12px 24px',
-    fontSize: '0.75rem',
-    fontWeight: 600,
+    padding: 'var(--space-3) var(--space-6)',
+    fontSize: 'var(--text-sm)',
+    fontWeight: 'var(--font-semibold)',
     color: 'var(--color-text-secondary)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em'
 };
 
 const tdStyle: React.CSSProperties = {
-    padding: '16px 24px',
-    fontSize: '0.875rem',
+    padding: 'var(--space-4) var(--space-6)',
+    fontSize: 'var(--text-md)',
     color: 'var(--color-text-primary)',
     verticalAlign: 'middle'
 };

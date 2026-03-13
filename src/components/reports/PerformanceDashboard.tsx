@@ -71,17 +71,17 @@ export function PerformanceDashboard({ biddings }: Props) {
         return { modalities, statuses };
     }, [filteredBiddings]);
 
-    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+    const COLORS = ['var(--color-primary)', 'var(--color-success)', 'var(--color-warning)', 'var(--color-danger)', 'var(--color-ai)', 'var(--color-neutral)'];
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
     };
 
     return (
-        <div className="performance-dashboard" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="performance-dashboard" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
             {/* Filters */}
-            <div className="flex-between" style={{ background: 'var(--color-bg-surface)', padding: '16px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Filtros de Período</h3>
+            <div className="flex-between" style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>Filtros de Período</h3>
                 <div className="flex-gap">
                     <select
                         className="select-input"
@@ -98,11 +98,11 @@ export function PerformanceDashboard({ biddings }: Props) {
             </div>
 
             {/* KPI Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-5)' }}>
                 <div style={kpiCardStyle}>
-                    <div className="flex-between" style={{ marginBottom: '16px' }}>
+                    <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <span style={kpiLabelStyle}>Taxa de Conversão (Win Rate)</span>
-                        <div style={{ ...iconWrapperStyle, background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e' }}>
+                        <div style={{ ...iconWrapperStyle, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
                             <Target size={20} />
                         </div>
                     </div>
@@ -113,9 +113,9 @@ export function PerformanceDashboard({ biddings }: Props) {
                 </div>
 
                 <div style={kpiCardStyle}>
-                    <div className="flex-between" style={{ marginBottom: '16px' }}>
+                    <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <span style={kpiLabelStyle}>Montante Ganho</span>
-                        <div style={{ ...iconWrapperStyle, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+                        <div style={{ ...iconWrapperStyle, background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
                             <Trophy size={20} />
                         </div>
                     </div>
@@ -124,9 +124,9 @@ export function PerformanceDashboard({ biddings }: Props) {
                 </div>
 
                 <div style={kpiCardStyle}>
-                    <div className="flex-between" style={{ marginBottom: '16px' }}>
+                    <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <span style={kpiLabelStyle}>Total em Jogo (Pipeline)</span>
-                        <div style={{ ...iconWrapperStyle, background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
+                        <div style={{ ...iconWrapperStyle, background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
                             <DollarSign size={20} />
                         </div>
                     </div>
@@ -136,7 +136,7 @@ export function PerformanceDashboard({ biddings }: Props) {
             </div>
 
             {/* Charts Section */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-5)' }}>
                 {/* Modality Chart */}
                 <div style={chartCardStyle}>
                     <div className="flex-between" style={{ marginBottom: '24px' }}>
@@ -203,7 +203,7 @@ export function PerformanceDashboard({ biddings }: Props) {
 
 const chartCardStyle: React.CSSProperties = {
     background: 'var(--color-bg-surface)',
-    padding: '24px',
+    padding: 'var(--space-6)',
     borderRadius: 'var(--radius-lg)',
     border: '1px solid var(--color-border)',
     boxShadow: 'var(--shadow-sm)'
@@ -211,41 +211,41 @@ const chartCardStyle: React.CSSProperties = {
 
 const chartTitleStyle: React.CSSProperties = {
     margin: 0,
-    fontSize: '0.95rem',
-    fontWeight: 600,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-semibold)',
     color: 'var(--color-text-primary)'
 };
 
 const kpiCardStyle: React.CSSProperties = {
     background: 'var(--color-bg-surface)',
-    padding: '24px',
+    padding: 'var(--space-6)',
     borderRadius: 'var(--radius-lg)',
     border: '1px solid var(--color-border)',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+    boxShadow: 'var(--shadow-sm)'
 };
 
 const kpiLabelStyle: React.CSSProperties = {
     color: 'var(--color-text-secondary)',
-    fontSize: '0.875rem',
-    fontWeight: 500
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-medium)'
 };
 
 const kpiValueStyle: React.CSSProperties = {
-    fontSize: '2rem',
-    fontWeight: 700,
+    fontSize: 'var(--text-4xl)',
+    fontWeight: 'var(--font-bold)',
     color: 'var(--color-text-primary)',
-    marginBottom: '8px'
+    marginBottom: 'var(--space-2)'
 };
 
 const kpiSubStyle: React.CSSProperties = {
-    fontSize: '0.875rem',
+    fontSize: 'var(--text-md)',
     color: 'var(--color-text-tertiary)'
 };
 
 const iconWrapperStyle: React.CSSProperties = {
     width: '40px',
     height: '40px',
-    borderRadius: '8px',
+    borderRadius: 'var(--radius-md)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center'

@@ -572,10 +572,10 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     ].filter(Boolean).length;
 
     const selectStyle: React.CSSProperties = {
-        padding: '10px 14px',
-        borderRadius: '10px',
+        padding: 'var(--space-3) var(--space-4)',
+        borderRadius: 'var(--radius-lg)',
         border: '1px solid var(--color-border)',
-        fontSize: '0.875rem',
+        fontSize: 'var(--text-md)',
         background: 'var(--color-bg-surface)',
         color: 'var(--color-text-primary)',
         width: '100%',
@@ -585,32 +585,32 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     return (
         <div className="page-container" style={{ paddingBottom: '32px' }}>
             {/* Page Header */}
-            <div className="page-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div className="page-header" style={{ marginBottom: 'var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
                 <div>
                     <h1 className="page-title">Busca PNCP</h1>
                     <p className="page-subtitle">Pesquise editais diretamente no Portal Nacional de Contratações Públicas.</p>
                 </div>
                 {/* ── Dashboard Indicators ── */}
-                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><BarChart2 size={12} /> Descobertos</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>{totalResults.toLocaleString('pt-BR')}</div>
+                <div style={{ display: 'flex', gap: 'var(--space-3)', overflowX: 'auto', paddingBottom: '4px' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
+                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><BarChart2 size={12} /> Descobertos</div>
+                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>{totalResults.toLocaleString('pt-BR')}</div>
                     </div>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Bookmark size={12} /> No Funil</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-primary)' }}>{items?.length || 0}</div>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
+                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Bookmark size={12} /> No Funil</div>
+                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)' }}>{items?.length || 0}</div>
                     </div>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Star size={12} /> Favoritos</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-warning)' }}>{favoritos.length}</div>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
+                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Star size={12} /> Favoritos</div>
+                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning)' }}>{favoritos.length}</div>
                     </div>
                 </div>
             </div>
 
             {/* Saved Searches as Chips */}
             {savedSearches.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-tertiary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-5)', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>
                         <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
                         Pesquisas Salvas:
                     </span>
@@ -621,16 +621,16 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '6px 14px',
+                                gap: 'var(--space-2)',
+                                padding: 'var(--space-2) var(--space-4)',
                                 background: 'var(--color-bg-surface)',
                                 border: '1px solid var(--color-border)',
-                                borderRadius: '20px',
-                                fontSize: '0.8125rem',
+                                borderRadius: 'var(--radius-xl)',
+                                fontSize: 'var(--text-md)',
                                 color: 'var(--color-text-primary)',
                                 cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                fontWeight: 500,
+                                transition: 'var(--transition-fast)',
+                                fontWeight: 'var(--font-medium)',
                             }}
                             onMouseEnter={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.background = 'rgba(37, 99, 235, 0.06)'; }}
                             onMouseLeave={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
@@ -649,12 +649,12 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             )}
 
             {/* Search Card */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px', background: 'var(--color-bg-surface)' }}>
+            <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)', background: 'var(--color-bg-surface)' }}>
                 <form onSubmit={handleSearch}>
                     {/* Main Search Row */}
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'end', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'end', flexWrap: 'wrap' }}>
                         <div style={{ flex: 2, minWidth: '280px' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Palavras-chave (Objeto)</label>
+                            <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Palavras-chave (Objeto)</label>
                             <div style={{ position: 'relative' }}>
                                 <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
                                 <input
@@ -672,14 +672,14 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         </div>
 
                         <div style={{ flex: 1, minWidth: '180px' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Status</label>
+                            <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Status</label>
                             <select value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle}>
                                 {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                         </div>
 
                         <div style={{ minWidth: '120px' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Estado (UF)</label>
+                            <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Estado (UF)</label>
                             <select value={selectedUf} onChange={(e) => setSelectedUf(e.target.value)} style={selectStyle}>
                                 <option value="">Brasil (Todas as UFs)</option>
                                 <optgroup label="Agrupamento por Região">
@@ -695,8 +695,8 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             </select>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'end' }}>
-                            <button type="submit" className="btn btn-primary" disabled={loading} style={{ padding: '10px 20px', borderRadius: '10px', gap: '8px', fontSize: '0.9375rem', fontWeight: 600, height: '44px' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'end' }}>
+                            <button type="submit" className="btn btn-primary" disabled={loading} style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', height: '44px' }}>
                                 {loading ? <Loader2 size={18} className="spinner" /> : <Search size={18} />}
                                 Buscar
                             </button>
@@ -704,14 +704,14 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     </div>
 
                     {/* Action Buttons Row */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                             <button
                                 type="button"
                                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                                 style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    fontSize: '0.8125rem', fontWeight: 600,
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                    fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
                                     color: showAdvancedFilters ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                                     background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
                                 }}
@@ -720,15 +720,15 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 Filtros Avançados
                                 {activeFilterCount > 0 && (
                                     <span style={{
-                                        background: 'var(--color-primary)', color: '#fff', borderRadius: '10px',
-                                        padding: '1px 8px', fontSize: '0.7rem', fontWeight: 700,
+                                        background: 'var(--color-primary)', color: '#fff', borderRadius: 'var(--radius-lg)',
+                                        padding: '1px var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)',
                                     }}>{activeFilterCount}</span>
                                 )}
                                 {showAdvancedFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </button>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                             <button type="button" className="btn btn-ghost" onClick={clearSearch} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
                                 <X size={14} /> Limpar
                             </button>
@@ -741,37 +741,37 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     {/* Advanced Filters (Collapsible) */}
                     {showAdvancedFilters && (
                         <div style={{
-                            marginTop: '16px',
-                            padding: '20px',
+                            marginTop: 'var(--space-4)',
+                            padding: 'var(--space-5)',
                             background: 'var(--color-bg-base)',
                             borderRadius: 'var(--radius-md)',
                             border: '1px solid var(--color-border)',
                             display: 'grid',
                             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                            gap: '16px',
+                            gap: 'var(--space-4)',
                             animation: 'slideDown 0.2s ease-out',
                         }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Modalidade</label>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Modalidade</label>
                                 <select value={modalidade} onChange={(e) => setModalidade(e.target.value)} style={selectStyle}>
                                     {MODALIDADES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                                 </select>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Esfera de Governo</label>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Esfera de Governo</label>
                                 <select value={esfera} onChange={(e) => setEsfera(e.target.value)} style={selectStyle}>
                                     {ESFERAS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
                                 </select>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Órgão (Nome ou CNPJ)</label>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Órgão (Nome ou CNPJ)</label>
                                 <input type="text" placeholder="Ex: Comando da Marinha" value={orgao} onChange={(e) => setOrgao(e.target.value)} style={selectStyle} />
                             </div>
 
                             <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)</label>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)</label>
                                 <textarea
                                     placeholder="Cole aqui a lista de nomes de prefeituras/órgãos ou seus CNPJs que deseja buscar de uma vez, separados por vírgula ou quebra de linha... (Vai cruzar tudo numa lista só de uma vez!)"
                                     value={orgaosLista}
@@ -791,17 +791,17 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Publicado a partir de</label>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Publicado a partir de</label>
                                 <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} style={selectStyle} />
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Publicado até</label>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Publicado até</label>
                                 <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} style={selectStyle} />
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>Vincular à Empresa</label>
+                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Vincular à Empresa</label>
                                 <select value={selectedSearchCompanyId} onChange={(e) => setSelectedSearchCompanyId(e.target.value)} style={selectStyle}>
                                     <option value="">(Nenhuma empresa)</option>
                                     {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
@@ -815,17 +815,17 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             {/* Results Summary and Tabs */}
             <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                marginBottom: '16px', padding: '0 4px', borderBottom: '1px solid var(--color-border)', paddingBottom: '0'
+                marginBottom: 'var(--space-4)', padding: '0 4px', borderBottom: '1px solid var(--color-border)', paddingBottom: '0'
             }}>
-                <div style={{ display: 'flex', gap: '24px' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-6)' }}>
                     <button
                         onClick={() => setShowFavoritosTab(false)}
                         style={{
                             background: 'none', border: 'none', cursor: 'pointer',
-                            fontSize: '0.875rem', fontWeight: !showFavoritosTab ? 600 : 500,
+                            fontSize: 'var(--text-md)', fontWeight: !showFavoritosTab ? 'var(--font-semibold)' : 'var(--font-medium)',
                             color: !showFavoritosTab ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                             borderBottom: !showFavoritosTab ? '2px solid var(--color-primary)' : '2px solid transparent',
-                            paddingBottom: '12px', transition: 'all 0.2s', margin: 0
+                            paddingBottom: 'var(--space-3)', transition: 'var(--transition-fast)', margin: 0
                         }}
                     >
                         Resultados da Busca {results.length > 0 && `(${totalResults || results.length})`}
@@ -833,12 +833,12 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     <button
                         onClick={() => setShowFavoritosTab(true)}
                         style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
+                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                             background: 'none', border: 'none', cursor: 'pointer',
-                            fontSize: '0.875rem', fontWeight: showFavoritosTab ? 600 : 500,
+                            fontSize: 'var(--text-md)', fontWeight: showFavoritosTab ? 'var(--font-semibold)' : 'var(--font-medium)',
                             color: showFavoritosTab ? 'var(--color-warning)' : 'var(--color-text-secondary)',
                             borderBottom: showFavoritosTab ? '2px solid var(--color-warning)' : '2px solid transparent',
-                            paddingBottom: '12px', transition: 'all 0.2s', margin: 0
+                            paddingBottom: 'var(--space-3)', transition: 'var(--transition-fast)', margin: 0
                         }}
                     >
                         <Star size={16} fill={showFavoritosTab ? "currentColor" : "none"} color={showFavoritosTab ? "currentColor" : "currentColor"} />
@@ -848,12 +848,12 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             </div>
 
             {/* Results Table Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px', marginTop: '32px' }}>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 'var(--space-4)', marginTop: 'var(--space-8)' }}>
+                <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', margin: 0 }}>
                     {showFavoritosTab ? 'Licitações Favoritadas' : 'Resultados da Pesquisa'}
                 </h3>
                 {showFavoritosTab && favoritos.length > 0 && (
-                    <button className="btn btn-primary" onClick={exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}>
+                    <button className="btn btn-primary" onClick={exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)' }}>
                         <Download size={16} /> Exportar Relatório PDF
                     </button>
                 )}
@@ -912,13 +912,13 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
                                                         gap: '4px',
-                                                        marginLeft: '8px',
-                                                        padding: '3px 8px',
-                                                        background: 'rgba(16, 185, 129, 0.1)',
+                                                        marginLeft: 'var(--space-2)',
+                                                        padding: '3px var(--space-2)',
+                                                        background: 'var(--color-success-bg)',
                                                         color: 'var(--color-success)',
-                                                        borderRadius: '12px',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 700,
+                                                        borderRadius: 'var(--radius-lg)',
+                                                        fontSize: 'var(--text-sm)',
+                                                        fontWeight: 'var(--font-bold)',
                                                         verticalAlign: 'middle'
                                                     }} title="Esta licitação já foi captada para o Kanban.">
                                                         <CheckCircle2 size={12} />
@@ -934,12 +934,12 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                             {item.modalidade_nome ? (
                                                 <span style={{
                                                     display: 'inline-block',
-                                                    padding: '3px 10px',
-                                                    borderRadius: '6px',
-                                                    background: 'rgba(37, 99, 235, 0.1)',
+                                                    padding: '3px var(--space-3)',
+                                                    borderRadius: 'var(--radius-sm)',
+                                                    background: 'var(--color-primary-light)',
                                                     color: 'var(--color-primary)',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 600,
+                                                    fontSize: 'var(--text-sm)',
+                                                    fontWeight: 'var(--font-semibold)',
                                                 }}>{item.modalidade_nome}</span>
                                             ) : (
                                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
@@ -974,7 +974,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                 <button
                                                     className="btn btn-ghost"
                                                     onClick={() => toggleFavorito(item)}
-                                                    style={{ padding: '7px', borderRadius: '8px', color: isFavorito ? 'var(--color-warning)' : 'var(--color-text-tertiary)', background: isFavorito ? 'rgba(245, 158, 11, 0.1)' : 'transparent' }}
+                                                    style={{ padding: '7px', borderRadius: 'var(--radius-md)', color: isFavorito ? 'var(--color-warning)' : 'var(--color-text-tertiary)', background: isFavorito ? 'var(--color-warning-bg)' : 'transparent' }}
                                                     title={isFavorito ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
                                                 >
                                                     <Star size={15} fill={isFavorito ? "currentColor" : "none"} />
@@ -983,7 +983,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                     <button
                                                         className="btn btn-ghost"
                                                         onClick={() => toggleFavorito(item)}
-                                                        style={{ padding: '7px', borderRadius: '8px', color: 'var(--color-danger)', background: 'rgba(239, 68, 68, 0.05)' }}
+                                                        style={{ padding: '7px', borderRadius: 'var(--radius-md)', color: 'var(--color-danger)', background: 'var(--color-danger-bg)' }}
                                                         title="Excluir dos Favoritos"
                                                     >
                                                         <Trash2 size={15} />
@@ -991,7 +991,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                 )}
                                                 <button
                                                     className="btn btn-primary"
-                                                    style={{ padding: '7px 12px', fontSize: '0.75rem', borderRadius: '8px', gap: '4px', whiteSpace: 'nowrap' }}
+                                                    style={{ padding: '7px var(--space-3)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', gap: '4px', whiteSpace: 'nowrap' }}
                                                     onClick={() => handleImportToFunnel(item)}
                                                     title="Importar para o Funil de Licitações"
                                                 >
@@ -1000,18 +1000,18 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                 <button
                                                     className="btn"
                                                     style={{
-                                                        padding: '7px 12px',
-                                                        fontSize: '0.75rem',
-                                                        borderRadius: '8px',
+                                                        padding: '7px var(--space-3)',
+                                                        fontSize: 'var(--text-sm)',
+                                                        borderRadius: 'var(--radius-md)',
                                                         gap: '4px',
                                                         whiteSpace: 'nowrap',
-                                                        background: analyzingItemId === item.id ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                                                        background: analyzingItemId === item.id ? 'linear-gradient(135deg, #6366f1, var(--color-ai))' : 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
                                                         color: 'white',
                                                         border: 'none',
                                                         cursor: analyzingItemId ? 'not-allowed' : 'pointer',
                                                         opacity: (analyzingItemId && analyzingItemId !== item.id) ? 0.5 : 1,
                                                         boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
-                                                        transition: 'all 0.2s'
+                                                        transition: 'var(--transition-fast)'
                                                     }}
                                                     onClick={() => handlePncpAiAnalyze(item)}
                                                     disabled={!!analyzingItemId}
@@ -1028,7 +1028,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className="btn btn-ghost"
-                                                    style={{ padding: '7px', borderRadius: '8px' }}
+                                                    style={{ padding: '7px', borderRadius: 'var(--radius-md)' }}
                                                     title="Abrir no PNCP"
                                                 >
                                                     <ExternalLink size={15} />
@@ -1060,14 +1060,14 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                     onClick={() => setPage(i)}
                                     style={{
                                         padding: '6px 14px',
-                                        borderRadius: '8px',
+                                        borderRadius: 'var(--radius-md)',
                                         border: i === page ? 'none' : '1px solid var(--color-border)',
                                         background: i === page ? 'var(--color-primary)' : 'transparent',
                                         color: i === page ? 'white' : 'var(--color-text)',
-                                        fontSize: '0.875rem',
-                                        fontWeight: i === page ? 600 : 400,
+                                        fontSize: 'var(--text-md)',
+                                        fontWeight: i === page ? 'var(--font-semibold)' : 'var(--font-normal)',
                                         cursor: 'pointer',
-                                        transition: 'all 0.15s'
+                                        transition: 'var(--transition-fast)'
                                     }}
                                     disabled={loading}
                                 >
@@ -1083,17 +1083,17 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
-                            padding: '16px 24px',
+                            padding: 'var(--space-4) var(--space-6)',
                             borderTop: '1px solid var(--color-border)',
                             background: 'var(--color-bg-surface)'
                         }}>
-                            <span style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)' }}>
+                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
                                 Página {page} de {totalPages} ({totalResults} resultados)
                             </span>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                 <button
                                     className="btn btn-outline"
-                                    style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                    style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
                                     onClick={() => setPage(p => Math.max(1, p - 1))}
                                     disabled={page === 1 || loading}
                                 >
@@ -1106,7 +1106,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
                                 <button
                                     className="btn btn-outline"
-                                    style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '0.875rem' }}
+                                    style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
                                     onClick={() => setPage(p => p + 1)}
                                     disabled={page >= totalPages || loading}
                                 >

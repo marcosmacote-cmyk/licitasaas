@@ -81,7 +81,7 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                                 {analysis && (
                                                     <button
                                                         className="icon-btn"
-                                                        style={{ color: '#8b5cf6', background: 'rgba(139, 92, 246, 0.1)' }}
+                                                        style={{ color: 'var(--color-ai)', background: 'var(--color-ai-bg)' }}
                                                         onClick={() => onViewAnalysis(analysis, item)}
                                                         title="Ver Relatório da IA"
                                                     >

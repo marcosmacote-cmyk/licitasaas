@@ -45,7 +45,7 @@ export function LoginPage({ onLoginSuccess }: Props) {
             <div style={cardStyle}>
                 <div style={headerStyle}>
                     <div style={logoContainerStyle}>
-                        <Building2 size={32} color="#2563eb" />
+                        <Building2 size={32} color="var(--color-primary)" />
                     </div>
                     <h1 style={titleStyle}>LicitaSaaS</h1>
                     <p style={subtitleStyle}>Gestão Inteligente de Licitações</p>
@@ -112,65 +112,65 @@ const containerStyle: React.CSSProperties = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    backgroundColor: '#f8fafc',
-    padding: '24px',
+    backgroundColor: 'var(--color-bg-base)',
+    padding: 'var(--space-6)',
 };
 
 const cardStyle: React.CSSProperties = {
     width: '100%',
     maxWidth: '400px',
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-    padding: '40px',
+    backgroundColor: 'var(--color-bg-surface)',
+    borderRadius: 'var(--radius-xl)',
+    boxShadow: 'var(--shadow-xl)',
+    padding: 'var(--space-10)',
     display: 'flex',
     flexDirection: 'column',
 };
 
 const headerStyle: React.CSSProperties = {
     textAlign: 'center',
-    marginBottom: '32px',
+    marginBottom: 'var(--space-8)',
 };
 
 const logoContainerStyle: React.CSSProperties = {
     width: '64px',
     height: '64px',
-    backgroundColor: '#eff6ff',
-    borderRadius: '16px',
+    backgroundColor: 'var(--color-primary-light)',
+    borderRadius: 'var(--radius-xl)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: '0 auto 16px',
+    margin: '0 auto var(--space-4)',
 };
 
 const titleStyle: React.CSSProperties = {
-    fontSize: '1.875rem',
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: '8px',
+    fontSize: 'var(--text-3xl)',
+    fontWeight: 'var(--font-bold)',
+    color: 'var(--color-text-primary)',
+    marginBottom: 'var(--space-2)',
 };
 
 const subtitleStyle: React.CSSProperties = {
-    fontSize: '0.875rem',
-    color: '#64748b',
+    fontSize: 'var(--text-base)',
+    color: 'var(--color-text-secondary)',
 };
 
 const formStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    gap: '20px',
+    gap: 'var(--space-5)',
 };
 
 const inputGroupStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: 'var(--space-2)',
 };
 
 const labelStyle: React.CSSProperties = {
-    fontSize: '0.875rem',
-    fontWeight: 500,
-    color: '#334155',
+    fontSize: 'var(--text-base)',
+    fontWeight: 'var(--font-medium)',
+    color: 'var(--color-text-secondary)',
 };
 
 const inputWrapperStyle: React.CSSProperties = {
@@ -181,59 +181,59 @@ const inputWrapperStyle: React.CSSProperties = {
 
 const iconStyle: React.CSSProperties = {
     position: 'absolute',
-    left: '12px',
-    color: '#94a3b8',
+    left: 'var(--space-3)',
+    color: 'var(--color-text-tertiary)',
 };
 
 const inputStyle: React.CSSProperties = {
     width: '100%',
-    padding: '10px 12px 10px 40px',
-    borderRadius: '8px',
-    border: '1px solid #e2e8f0',
-    fontSize: '0.875rem',
+    padding: 'var(--space-3) var(--space-3) var(--space-3) var(--space-10)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--color-border)',
+    fontSize: 'var(--text-base)',
     outline: 'none',
-    transition: 'border-color 0.2s',
+    transition: 'var(--transition-fast)',
 };
 
 const buttonStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '8px',
-    padding: '12px',
-    backgroundColor: '#2563eb',
+    gap: 'var(--space-2)',
+    padding: 'var(--space-3)',
+    backgroundColor: 'var(--color-primary)',
     color: '#ffffff',
     border: 'none',
-    borderRadius: '8px',
-    fontSize: '1rem',
-    fontWeight: 600,
+    borderRadius: 'var(--radius-md)',
+    fontSize: 'var(--text-lg)',
+    fontWeight: 'var(--font-semibold)',
     cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    marginTop: '8px',
+    transition: 'var(--transition-fast)',
+    marginTop: 'var(--space-2)',
 };
 
 const errorStyle: React.CSSProperties = {
-    padding: '12px',
-    backgroundColor: '#fef2f2',
-    color: '#b91c1c',
-    borderRadius: '8px',
-    fontSize: '0.875rem',
+    padding: 'var(--space-3)',
+    backgroundColor: 'var(--color-danger-bg)',
+    color: 'var(--color-danger-hover)',
+    borderRadius: 'var(--radius-md)',
+    fontSize: 'var(--text-base)',
     textAlign: 'center',
-    border: '1px solid #fee2e2',
+    border: '1px solid var(--color-danger-border)',
 };
 
 const footerStyle: React.CSSProperties = {
-    marginTop: '32px',
+    marginTop: 'var(--space-8)',
     textAlign: 'center',
 };
 
 const footerTextStyle: React.CSSProperties = {
-    fontSize: '0.875rem',
-    color: '#64748b',
+    fontSize: 'var(--text-base)',
+    color: 'var(--color-text-secondary)',
 };
 
 const linkStyle: React.CSSProperties = {
-    color: '#2563eb',
+    color: 'var(--color-primary)',
     textDecoration: 'none',
-    fontWeight: 500,
+    fontWeight: 'var(--font-medium)',
 };

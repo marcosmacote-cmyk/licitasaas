@@ -30,10 +30,10 @@ class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: "20px", background: "#fee2e2", color: "#991b1b", margin: "20px", borderRadius: "8px", border: "1px solid #f87171" }}>
+        <div style={{ padding: "var(--space-5)", background: "var(--color-danger-bg)", color: "var(--color-danger-hover)", margin: "var(--space-5)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-danger-border)" }}>
           <h2>Algo deu muito errado no React (Tela Branca)</h2>
           <p><strong>Error:</strong> {this.state.error?.toString()}</p>
-          <details style={{ whiteSpace: "pre-wrap", marginTop: "10px", padding: "10px", background: "#fef2f2", fontSize: "12px" }}>
+          <details style={{ whiteSpace: "pre-wrap", marginTop: "var(--space-3)", padding: "var(--space-3)", background: "var(--color-danger-bg)", fontSize: "12px" }}>
             {this.state.errorInfo?.componentStack}
           </details>
         </div>

@@ -584,303 +584,350 @@ export function BiddingPage({ items, setItems, companies }: Props) {
         }
     };
 
+    // ── Pipeline Status Counters ──
+    const statusCounters = useMemo(() => {
+        const counts = {
+            captado: items.filter(i => i.status === 'Captado').length,
+            analise: items.filter(i => i.status === 'Em Análise de Edital').length,
+            preparando: items.filter(i => i.status === 'Preparando Documentação').length,
+            participando: items.filter(i => i.status === 'Participando').length,
+            vencido: items.filter(i => i.status === 'Vencido').length,
+            perdido: items.filter(i => i.status === 'Perdido').length,
+        };
+        return counts;
+    }, [items]);
+
     return (
         <div className="page-container">
-            {/* Interactive Notification Banner */}
+            {/* Interactive Notification Modal */}
             {activeNotification && (
                 <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 9999,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(0, 0, 0, 0.6)',
-                    backdropFilter: 'blur(8px)',
-                    animation: 'fadeIn 0.3s ease-out'
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0, 0, 0, 0.6)', animation: 'fadeIn 0.3s ease-out'
                 }}>
-                    <div style={{
-                        width: '100%',
-                        maxWidth: '500px',
-                        padding: '32px',
-                        background: 'linear-gradient(145deg, rgba(30, 41, 59, 1), rgba(15, 23, 42, 1))',
-                        borderRadius: '1.5rem',
-                        boxShadow: '0 0 80px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
-                        color: 'white',
-                        border: '2px solid rgba(245, 158, 11, 0.5)',
+                    <div className="card" style={{
+                        width: '100%', maxWidth: '460px', padding: 'var(--space-8)',
+                        border: '2px solid var(--color-warning-border)',
                         animation: 'scaleUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                     }}>
-                        {/* Header */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px', marginBottom: '32px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                             <div style={{
-                                background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                                borderRadius: '50%',
-                                padding: '16px',
-                                animation: 'pulseRing 2s infinite',
-                                boxShadow: '0 0 30px rgba(245, 158, 11, 0.6)'
+                                background: 'var(--color-warning-bg)', borderRadius: 'var(--radius-full)',
+                                padding: 'var(--space-4)', animation: 'pulseRing 2s infinite',
+                                border: '2px solid var(--color-warning)'
                             }}>
-                                <Bell size={40} color="white" />
+                                <Bell size={36} color="var(--color-warning)" />
                             </div>
                             <div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#f87171', marginBottom: '8px' }}>
+                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-urgency)', marginBottom: 'var(--space-2)' }}>
                                     Lembrete {activeNotification.item.reminderType === 'weekdays' ? 'Recorrente' : ''}
                                 </div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fcd34d', lineHeight: 1.3, marginBottom: '12px' }}>
+                                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', lineHeight: 1.3, marginBottom: 'var(--space-3)' }}>
                                     {activeNotification.item.title}
                                 </div>
-                                <div style={{ fontSize: '1rem', color: '#cbd5e1', background: 'rgba(0,0,0,0.3)', padding: '8px 16px', borderRadius: '20px', display: 'inline-block' }}>
+                                <span className="badge badge-warning" style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) var(--space-4)' }}>
                                     ⏰ {new Date(activeNotification.item.reminderDate!).toLocaleString('pt-BR')}
-                                </div>
+                                </span>
                                 {activeNotification.item.reminderType === 'weekdays' && (() => {
                                     try {
                                         const days: number[] = JSON.parse(activeNotification.item.reminderDays || '[]');
                                         const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                                        return <div style={{ marginTop: '12px', color: '#fbbf24', fontSize: '0.875rem', fontWeight: 600 }}>
+                                        return <div style={{ marginTop: 'var(--space-3)', color: 'var(--color-warning)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
                                             Repete às: {days.map(d => labels[d]).join(', ')}
                                         </div>;
                                     } catch { return null; }
                                 })()}
                             </div>
                         </div>
-
-                        {/* Action Buttons */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <button
-                                onClick={() => handleReminderAction('ok')}
-                                style={{
-                                    width: '100%',
-                                    padding: '14px',
-                                    borderRadius: '12px',
-                                    border: 'none',
-                                    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                                    color: 'white',
-                                    fontWeight: 700,
-                                    fontSize: '1rem',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 4px 15px rgba(37, 99, 235, 0.4)',
-                                    transition: 'all 0.2s',
-                                }}
-                                onMouseEnter={(e: any) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                                onMouseLeave={(e: any) => (e.currentTarget.style.transform = 'translateY(0)')}
-                            >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                            <button className="btn btn-primary" style={{ width: '100%', padding: 'var(--space-3)' }}
+                                onClick={() => handleReminderAction('ok')}>
                                 ✅ {activeNotification.item.reminderType === 'weekdays' ? 'Ciente (Agendar próximo)' : 'Estou Ciente'}
                             </button>
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                                <button
-                                    onClick={() => handleReminderAction('tomorrow')}
-                                    style={{
-                                        flex: 1,
-                                        padding: '12px',
-                                        borderRadius: '12px',
-                                        border: '1px solid rgba(245, 158, 11, 0.4)',
-                                        background: 'rgba(245, 158, 11, 0.1)',
-                                        color: '#fcd34d',
-                                        fontWeight: 600,
-                                        fontSize: '0.9rem',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                    }}
-                                    onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)')}
-                                    onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)')}
-                                >
-                                    📅 Adiar Amanhã
-                                </button>
-                                <button
-                                    onClick={() => handleReminderAction('dismiss')}
-                                    style={{
-                                        flex: 1,
-                                        padding: '12px',
-                                        borderRadius: '12px',
-                                        border: '1px solid rgba(239, 68, 68, 0.4)',
-                                        background: 'rgba(239, 68, 68, 0.1)',
-                                        color: '#fca5a5',
-                                        fontWeight: 600,
-                                        fontSize: '0.9rem',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                    }}
-                                    onMouseEnter={(e: any) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)')}
-                                    onMouseLeave={(e: any) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)')}
-                                >
-                                    🔕 Desativar Alarme
-                                </button>
+                            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                                <button className="btn btn-outline" style={{ flex: 1, color: 'var(--color-warning)' }}
+                                    onClick={() => handleReminderAction('tomorrow')}>📅 Adiar Amanhã</button>
+                                <button className="btn btn-outline" style={{ flex: 1, color: 'var(--color-danger)' }}
+                                    onClick={() => handleReminderAction('dismiss')}>🔕 Desativar</button>
                             </div>
                         </div>
                     </div>
                     <style>{`
                         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                         @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-                        @keyframes pulseRing { 
-                            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); } 
-                            70% { box-shadow: 0 0 0 20px rgba(245, 158, 11, 0); } 
-                            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } 
+                        @keyframes pulseRing {
+                            0% { box-shadow: 0 0 0 0 var(--color-warning-bg); }
+                            70% { box-shadow: 0 0 0 15px transparent; }
+                            100% { box-shadow: 0 0 0 0 transparent; }
                         }
                     `}</style>
                 </div>
             )}
-            <div className="page-header flex-between">
-                <div>
-                    <h1 className="page-title">Processos Licitatórios</h1>
-                    <p className="page-subtitle">Acompanhe o funil de licitações da sua empresa.</p>
+
+            {/* ═══ BREADCRUMB ═══ */}
+            <div className="breadcrumb">
+                <span>Licitações</span>
+                <span className="breadcrumb-sep">›</span>
+                <span className="breadcrumb-current">{viewMode === 'kanban' ? 'Pipeline Kanban' : 'Visão em Tabela'}</span>
+            </div>
+
+            {/* ═══ PAGE HEADER ═══ */}
+            <div style={{ marginBottom: 'var(--space-5)' }}>
+                <div className="page-header flex-between" style={{ marginBottom: 'var(--space-4)' }}>
+                    <div>
+                        <h1 className="page-title">Pipeline de Licitações</h1>
+                        <p className="page-subtitle">
+                            {items.length} processo{items.length !== 1 ? 's' : ''} no funil
+                            {hasActiveFilters && <> · <strong style={{ color: 'var(--color-primary)' }}>{filteredItems.length}</strong> com filtros ativos</>}
+                        </p>
+                    </div>
+                    <div className="flex-gap">
+                        <input
+                            type="file"
+                            accept="application/pdf"
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            onChange={handleFileUpload}
+                            multiple
+                        />
+                        <button
+                            className="btn btn-ai"
+                            onClick={handleAIAssistClick}
+                            disabled={isParsingAI}
+                        >
+                            {isParsingAI ? <Loader2 size={16} className="spinner" /> : <Bot size={16} />}
+                            {isParsingAI ? 'Analisando...' : 'IA: Extrair Edital'}
+                        </button>
+                        <button className="btn btn-primary" onClick={handleCreateNew}>
+                            <Plus size={16} />
+                            Nova Licitação
+                        </button>
+                    </div>
                 </div>
-                <div className="flex-gap">
-                    {/* View Toggle */}
-                    <div className="flex-gap" style={{ background: 'var(--color-bg-surface)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                        <button
-                            className={`icon-btn ${viewMode === 'kanban' ? 'active' : ''}`}
-                            style={{ background: viewMode === 'kanban' ? 'var(--color-bg-surface-hover)' : 'transparent' }}
-                            onClick={() => setViewMode('kanban')}
-                            title="Visão Kanban"
-                        >
-                            <LayoutGrid size={16} />
-                        </button>
-                        <button
-                            className={`icon-btn ${viewMode === 'table' ? 'active' : ''}`}
-                            style={{ background: viewMode === 'table' ? 'var(--color-bg-surface-hover)' : 'transparent' }}
-                            onClick={() => setViewMode('table')}
-                            title="Visão Tabela"
-                        >
-                            <List size={16} />
-                        </button>
-                    </div>
 
-                    <div style={{ position: 'relative' }}>
-                        <button
-                            className={`btn ${showExportMenu ? 'btn-primary' : 'btn-outline'}`}
-                            onClick={() => setShowExportMenu(!showExportMenu)}
-                        >
-                            <Download size={16} />
-                            Exportar
-                            <ChevronDown size={14} style={{ marginLeft: 4, transform: showExportMenu ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
-                        </button>
-                        {showExportMenu && (
+                {/* ═══ PIPELINE STATUS COUNTERS ═══ */}
+                <div style={{
+                    display: 'flex', gap: 'var(--space-1)', padding: 'var(--space-1)',
+                    background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--color-border)',
+                }}>
+                    {[
+                        { label: 'Captado', count: statusCounters.captado, color: 'var(--color-neutral)' },
+                        { label: 'Análise', count: statusCounters.analise, color: 'var(--color-primary)' },
+                        { label: 'Preparando', count: statusCounters.preparando, color: 'var(--color-urgency)' },
+                        { label: 'Participando', count: statusCounters.participando, color: 'var(--color-warning)' },
+                        { label: 'Vencido', count: statusCounters.vencido, color: 'var(--color-success)' },
+                        { label: 'Perdido', count: statusCounters.perdido, color: 'var(--color-danger)' },
+                    ].map(s => (
+                        <div key={s.label} style={{
+                            flex: 1, textAlign: 'center',
+                            padding: 'var(--space-2) var(--space-3)',
+                            borderRadius: 'var(--radius-md)',
+                            transition: 'all 150ms',
+                        }}>
                             <div style={{
-                                position: 'absolute', top: '44px', right: 0, width: '180px',
-                                background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                                borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
-                                overflow: 'hidden'
-                            }}>
-                                <div style={{ padding: '6px' }}>
-                                    <button
-                                        onClick={exportToCsv}
-                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', color: 'var(--color-text-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
-                                        onMouseEnter={(e: any) => e.currentTarget.style.backgroundColor = 'var(--color-bg-base)'}
-                                        onMouseLeave={(e: any) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        📥 Arquivo CSV
-                                    </button>
-                                    <button
-                                        onClick={exportToExcel}
-                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', color: 'var(--color-text-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
-                                        onMouseEnter={(e: any) => e.currentTarget.style.backgroundColor = 'var(--color-bg-base)'}
-                                        onMouseLeave={(e: any) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        📊 Planilha Excel
-                                    </button>
-                                    <button
-                                        onClick={exportToPdf}
-                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', color: 'var(--color-text-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}
-                                        onMouseEnter={(e: any) => e.currentTarget.style.backgroundColor = 'var(--color-bg-base)'}
-                                        onMouseLeave={(e: any) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        📄 Documento PDF
-                                    </button>
-                                </div>
-                            </div>
+                                fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)',
+                                color: s.count > 0 ? s.color : 'var(--color-text-tertiary)',
+                                lineHeight: 1.2,
+                            }}>{s.count}</div>
+                            <div style={{
+                                fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)',
+                                fontWeight: 'var(--font-medium)', marginTop: '2px',
+                            }}>{s.label}</div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* ═══ TOOLBAR ═══ */}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                marginBottom: 'var(--space-4)', flexWrap: 'wrap',
+            }}>
+                {/* View Toggle */}
+                <div className="flex-gap" style={{
+                    background: 'var(--color-bg-surface)', padding: '3px',
+                    borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)',
+                    gap: '2px',
+                }}>
+                    <button
+                        className={`icon-btn ${viewMode === 'kanban' ? 'active' : ''}`}
+                        style={{ background: viewMode === 'kanban' ? 'var(--color-primary-light)' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }}
+                        onClick={() => setViewMode('kanban')}
+                        title="Visão Kanban"
+                    >
+                        <LayoutGrid size={16} />
+                    </button>
+                    <button
+                        className={`icon-btn ${viewMode === 'table' ? 'active' : ''}`}
+                        style={{ background: viewMode === 'table' ? 'var(--color-primary-light)' : 'transparent', color: viewMode === 'table' ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }}
+                        onClick={() => setViewMode('table')}
+                        title="Visão Tabela"
+                    >
+                        <List size={16} />
+                    </button>
+                </div>
+
+                {/* Search */}
+                <div style={{ position: 'relative', flex: '1', maxWidth: '360px' }}>
+                    <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+                    <input
+                        type="text"
+                        value={filters.searchText}
+                        onChange={e => setFilters({ ...filters, searchText: e.target.value })}
+                        placeholder="Buscar título, objeto, empresa..."
+                        style={{
+                            width: '100%', padding: '8px 32px 8px 34px', fontSize: 'var(--text-md)',
+                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                            background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)',
+                            outline: 'none', transition: 'border-color 150ms',
+                        }}
+                    />
+                    {filters.searchText && (
+                        <button onClick={() => setFilters({ ...filters, searchText: '' })} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: '4px' }}>
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+
+                {/* Filters Button */}
+                <div style={{ position: 'relative' }}>
+                    <button
+                        className={`btn ${showFilterPanel || hasActiveFilters ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => { setShowFilterPanel(!showFilterPanel); setShowCardConfig(false); }}
+                    >
+                        <Filter size={14} />
+                        Filtros
+                        {activeFilterCount > 0 && (
+                            <span style={{
+                                background: 'rgba(255,255,255,0.3)', color: 'white',
+                                fontSize: 'var(--text-xs)', padding: '1px 6px',
+                                borderRadius: 'var(--radius-full)', fontWeight: 'var(--font-bold)', marginLeft: '4px'
+                            }}>{activeFilterCount}</span>
                         )}
-                    </div>
+                    </button>
+                </div>
 
-                    <div style={{ position: 'relative' }}>
-                        <button
-                            className={`btn ${showSettingsPanel ? 'btn-primary' : 'btn-outline'}`}
-                            style={showSettingsPanel ? { backgroundColor: '#059669', borderColor: '#059669' } : {}}
-                            onClick={() => setShowSettingsPanel(!showSettingsPanel)}
-                        >
-                            <Settings size={16} />
-                            Configurar
-                        </button>
+                {/* Spacer */}
+                <div style={{ flex: '1' }} />
 
-                        {showSettingsPanel && (
+                {/* Campos */}
+                <div style={{ position: 'relative' }}>
+                    <button
+                        className={`btn ${showCardConfig ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => { setShowCardConfig(!showCardConfig); setShowFilterPanel(false); }}
+                    >
+                        <SlidersHorizontal size={14} /> Campos
+                    </button>
+                </div>
+
+                {/* Export */}
+                <div style={{ position: 'relative' }}>
+                    <button
+                        className={`btn ${showExportMenu ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => setShowExportMenu(!showExportMenu)}
+                    >
+                        <Download size={14} /> Exportar
+                        <ChevronDown size={12} style={{ marginLeft: 2, transform: showExportMenu ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+                    </button>
+                    {showExportMenu && (
+                        <div style={{
+                            position: 'absolute', top: '40px', right: 0, width: '180px',
+                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{ padding: 'var(--space-1)' }}>
+                                {[
+                                    { label: '📥 Arquivo CSV', onClick: exportToCsv },
+                                    { label: '📊 Planilha Excel', onClick: exportToExcel },
+                                    { label: '📄 Documento PDF', onClick: exportToPdf },
+                                ].map((item, i) => (
+                                    <button key={i} onClick={item.onClick}
+                                        style={{
+                                            display: 'block', width: '100%', textAlign: 'left',
+                                            padding: 'var(--space-2) var(--space-3)', background: 'transparent',
+                                            color: 'var(--color-text-primary)', border: 'none',
+                                            borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                                            fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)',
+                                        }}
+                                        onMouseEnter={(e: any) => e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-hover)'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >{item.label}</button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Settings */}
+                <div style={{ position: 'relative' }}>
+                    <button
+                        className={`btn ${showSettingsPanel ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => setShowSettingsPanel(!showSettingsPanel)}
+                    >
+                        <Settings size={14} /> Configurar
+                    </button>
+                    {showSettingsPanel && (
                             <div style={{
-                                position: 'absolute', top: '44px', right: 0, width: '340px',
+                                position: 'absolute', top: '40px', right: 0, width: '340px',
                                 background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                                borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
+                                borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
                                 overflow: 'hidden'
                             }}>
-                                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(16, 185, 129, 0.05))' }}>
-                                    <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>⚙️ Configurações</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '2px' }}>Personalize o painel de licitações</div>
+                                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)' }}>
+                                    <div style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)' }}>⚙️ Configurações</div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>Personalize o painel de licitações</div>
                                 </div>
                                 <div style={{ maxHeight: '450px', overflowY: 'auto' }}>
 
                                     {/* === SEÇÃO 1: Colunas do Kanban === */}
                                     <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)' }}>
-                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>📋 Colunas do Kanban</h4>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Mostre/esconda fases do processo</div>
+                                        <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>📋 Colunas do Kanban</h4>
                                         {(COLUMNS as string[]).map(col => (
-                                            <label key={col} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
+                                            <label key={col} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)' }}
                                                 onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
                                                 onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'transparent')}
                                             >
                                                 <span style={{ color: 'var(--color-text-primary)' }}>{col}</span>
                                                 <div
-                                                    onClick={(e: React.MouseEvent) => {
-                                                        e.preventDefault();
-                                                        if (visibleColumns.includes(col)) {
-                                                            if (visibleColumns.length > 1) setVisibleColumns(visibleColumns.filter(c => c !== col));
-                                                        } else {
-                                                            setVisibleColumns([...visibleColumns, col]);
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
-                                                        background: visibleColumns.includes(col) ? '#059669' : 'var(--color-border)',
-                                                    }}
+                                                    onClick={(e: React.MouseEvent) => { e.preventDefault(); if (visibleColumns.includes(col)) { if (visibleColumns.length > 1) setVisibleColumns(visibleColumns.filter(c => c !== col)); } else { setVisibleColumns([...visibleColumns, col]); } }}
+                                                    style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: visibleColumns.includes(col) ? 'var(--color-success)' : 'var(--color-border)' }}
                                                 >
-                                                    <div style={{
-                                                        position: 'absolute', top: '2px', left: visibleColumns.includes(col) ? '16px' : '2px',
-                                                        width: '14px', height: '14px', borderRadius: '50%', background: 'white',
-                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s',
-                                                    }} />
+                                                    <div style={{ position: 'absolute', top: '2px', left: visibleColumns.includes(col) ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
                                                 </div>
                                             </label>
                                         ))}
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: '6px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '6px', textAlign: 'center' }}>
                                             {visibleColumns.length} de {COLUMNS.length} visíveis
                                         </div>
                                     </div>
 
                                     {/* === SEÇÃO 2: Ordenação Padrão === */}
                                     <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)' }}>
-                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>📊 Ordenação dos Cards</h4>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Como os cards são ordenados dentro de cada coluna</div>
+                                        <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>📊 Ordenação dos Cards</h4>
                                         {[
-                                            { value: 'default', label: '📌 Ordem manual (padrão)', icon: '' },
-                                            { value: 'date-asc', label: '📅 Sessão mais próxima primeiro', icon: '' },
-                                            { value: 'date-desc', label: '📅 Sessão mais distante primeiro', icon: '' },
-                                            { value: 'value-desc', label: '💰 Maior valor primeiro', icon: '' },
-                                            { value: 'value-asc', label: '💰 Menor valor primeiro', icon: '' },
-                                            { value: 'risk', label: '⚠️ Maior risco primeiro', icon: '' },
+                                            { value: 'default', label: '📌 Ordem manual (padrão)' },
+                                            { value: 'date-asc', label: '📅 Sessão mais próxima primeiro' },
+                                            { value: 'date-desc', label: '📅 Sessão mais distante primeiro' },
+                                            { value: 'value-desc', label: '💰 Maior valor primeiro' },
+                                            { value: 'value-asc', label: '💰 Menor valor primeiro' },
+                                            { value: 'risk', label: '⚠️ Maior risco primeiro' },
                                         ].map(opt => (
                                             <label key={opt.value} style={{
                                                 display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer',
-                                                borderRadius: '4px', fontSize: '0.8125rem',
-                                                background: sortBy === opt.value ? 'rgba(5, 150, 105, 0.08)' : 'transparent',
-                                                color: sortBy === opt.value ? '#059669' : 'var(--color-text-primary)',
-                                                fontWeight: sortBy === opt.value ? 600 : 400,
+                                                borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)',
+                                                background: sortBy === opt.value ? 'var(--color-success-bg)' : 'transparent',
+                                                color: sortBy === opt.value ? 'var(--color-success)' : 'var(--color-text-primary)',
+                                                fontWeight: sortBy === opt.value ? 'var(--font-semibold)' : 'var(--font-regular)',
                                             }}
                                                 onClick={() => setSortBy(opt.value as typeof sortBy)}
                                                 onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => { if (sortBy !== opt.value) e.currentTarget.style.background = 'var(--color-bg-surface-hover)'; }}
-                                                onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => { if (sortBy !== opt.value) e.currentTarget.style.background = 'transparent'; }}
+                                                onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => { if (sortBy !== opt.value) e.currentTarget.style.background = sortBy === opt.value ? 'var(--color-success-bg)' : 'transparent'; }}
                                             >
-                                                <div style={{
-                                                    width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${sortBy === opt.value ? '#059669' : 'var(--color-border)'}`,
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                                                }}>
-                                                    {sortBy === opt.value && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#059669' }} />}
+                                                <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${sortBy === opt.value ? 'var(--color-success)' : 'var(--color-border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    {sortBy === opt.value && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-success)' }} />}
                                                 </div>
                                                 {opt.label}
                                             </label>
@@ -889,31 +936,18 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
                                     {/* === SEÇÃO 3: Aparência dos Cards === */}
                                     <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)' }}>
-                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>🎨 Aparência dos Cards</h4>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Personalize o visual no Kanban</div>
-
-                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
-                                            onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
-                                            onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'transparent')}
-                                        >
+                                        <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>🎨 Aparência dos Cards</h4>
+                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)' }}>
                                             <span style={{ color: 'var(--color-text-primary)' }}>Cards Compactos</span>
-                                            <div
-                                                onClick={(e: React.MouseEvent) => { e.preventDefault(); setCompactMode(!compactMode); }}
-                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: compactMode ? '#059669' : 'var(--color-border)' }}
-                                            >
+                                            <div onClick={(e: React.MouseEvent) => { e.preventDefault(); setCompactMode(!compactMode); }}
+                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: compactMode ? 'var(--color-success)' : 'var(--color-border)' }}>
                                                 <div style={{ position: 'absolute', top: '2px', left: compactMode ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
                                             </div>
                                         </label>
-
-                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
-                                            onMouseEnter={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
-                                            onMouseLeave={(e: React.MouseEvent<HTMLLabelElement>) => (e.currentTarget.style.background = 'transparent')}
-                                        >
+                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)' }}>
                                             <span style={{ color: 'var(--color-text-primary)' }}>Destaque em Vencimentos Próximos</span>
-                                            <div
-                                                onClick={(e: React.MouseEvent) => { e.preventDefault(); setHighlightExpiring(!highlightExpiring); }}
-                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: highlightExpiring ? '#059669' : 'var(--color-border)' }}
-                                            >
+                                            <div onClick={(e: React.MouseEvent) => { e.preventDefault(); setHighlightExpiring(!highlightExpiring); }}
+                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: highlightExpiring ? 'var(--color-success)' : 'var(--color-border)' }}>
                                                 <div style={{ position: 'absolute', top: '2px', left: highlightExpiring ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
                                             </div>
                                         </label>
@@ -921,57 +955,33 @@ export function BiddingPage({ items, setItems, companies }: Props) {
 
                                     {/* === SEÇÃO 4: Empresa Padrão === */}
                                     <div style={{ padding: '14px 16px' }}>
-                                        <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>🏢 Empresa Padrão</h4>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>Pré-selecionada ao criar novo processo</div>
-                                        <select
-                                            value={defaultCompanyId}
-                                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDefaultCompanyId(e.target.value)}
-                                            style={{
-                                                width: '100%', padding: '8px 12px', fontSize: '0.8125rem',
-                                                border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                                                background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)',
-                                                cursor: 'pointer', outline: 'none',
-                                            }}
-                                        >
+                                        <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>🏢 Empresa Padrão</h4>
+                                        <select value={defaultCompanyId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDefaultCompanyId(e.target.value)}
+                                            style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)', cursor: 'pointer', outline: 'none' }}>
                                             <option value="">Nenhuma (selecionar manualmente)</option>
-                                            {companies.map(c => (
-                                                <option key={c.id} value={c.id}>{c.razaoSocial}</option>
-                                            ))}
+                                            {companies.map(c => (<option key={c.id} value={c.id}>{c.razaoSocial}</option>))}
                                         </select>
-                                        {defaultCompanyId && (
-                                            <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#059669', fontWeight: 500 }}>
-                                                ✅ {companies.find(c => c.id === defaultCompanyId)?.razaoSocial} será pré-selecionada
-                                            </div>
-                                        )}
                                     </div>
 
                                     {/* === SEÇÃO 5: Preferências da IA === */}
                                     <div style={{ padding: '14px 16px', borderTop: '1px solid var(--color-border)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                            <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🤖 Preferências da IA</h4>
-                                            <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-brand-hover)', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>PREMIUM</span>
+                                            <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🤖 Preferências da IA</h4>
+                                            <span className="badge badge-ai" style={{ fontSize: 'var(--text-xs)' }}>PREMIUM</span>
                                         </div>
-
                                         <div style={{ marginBottom: '12px' }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Idioma do Relatório</div>
-                                            <select
-                                                value={aiLanguage}
-                                                onChange={(e: any) => setAiLanguage(e.target.value)}
-                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)' }}
-                                            >
+                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Idioma do Relatório</div>
+                                            <select value={aiLanguage} onChange={(e: any) => setAiLanguage(e.target.value)}
+                                                style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)' }}>
                                                 <option value="pt-br">Português (BR)</option>
                                                 <option value="en">Inglês</option>
                                                 <option value="es">Espanhol</option>
                                             </select>
                                         </div>
-
                                         <div style={{ marginBottom: '12px' }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Foco de Análise</div>
-                                            <select
-                                                value={aiFocus}
-                                                onChange={(e: any) => setAiFocus(e.target.value)}
-                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)' }}
-                                            >
+                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Foco de Análise</div>
+                                            <select value={aiFocus} onChange={(e: any) => setAiFocus(e.target.value)}
+                                                style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface)' }}>
                                                 <option value="general">Geral (Padrão)</option>
                                                 <option value="it">T.I e Software</option>
                                                 <option value="engineering">Engenharia e Obras</option>
@@ -986,246 +996,106 @@ export function BiddingPage({ items, setItems, companies }: Props) {
                                                 <option value="consulting">Assessoria e Consultoria</option>
                                             </select>
                                         </div>
-
-                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: '4px', fontSize: '0.8125rem' }}
-                                            onMouseEnter={(e: any) => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
-                                            onMouseLeave={(e: any) => (e.currentTarget.style.background = 'transparent')}
-                                        >
+                                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 4px', cursor: 'pointer', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)' }}>
                                             <div>
                                                 <span style={{ color: 'var(--color-text-primary)', display: 'block' }}>Auto-Análise de PDF</span>
-                                                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Extrair dados ao fazer upload</span>
+                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Extrair dados ao fazer upload</span>
                                             </div>
-                                            <div
-                                                onClick={(e: any) => { e.preventDefault(); setAiAutoAnalyze(!aiAutoAnalyze); }}
-                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: aiAutoAnalyze ? '#059669' : 'var(--color-border)' }}
-                                            >
+                                            <div onClick={(e: any) => { e.preventDefault(); setAiAutoAnalyze(!aiAutoAnalyze); }}
+                                                style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: aiAutoAnalyze ? 'var(--color-success)' : 'var(--color-border)' }}>
                                                 <div style={{ position: 'absolute', top: '2px', left: aiAutoAnalyze ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
                                             </div>
                                         </label>
                                     </div>
-
-                                    {/* === SEÇÃO 6: Equipe e Permissões === */}
-                                    <div style={{ padding: '14px 16px', borderTop: '1px solid var(--color-border)' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                            <h4 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>👥 Equipe e Permissões</h4>
-                                            <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-brand-hover)', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>PREMIUM</span>
-                                        </div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginBottom: '12px' }}>
-                                            Compartilhe o Kanban com seu time, defina permissões de leitura/edição e acompanhe a auditoria de acessos.
-                                        </div>
-                                        <button
-                                            className="btn btn-outline"
-                                            style={{ width: '100%', fontSize: '0.8125rem', padding: '6px' }}
-                                            onClick={(e: any) => {
-                                                e.stopPropagation();
-                                                alert("O recurso de gestão de Equipe estará disponível em breve no plano Premium!");
-                                            }}
-                                        >
-                                            + Convidar Membro
-                                        </button>
-                                    </div>
-
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    <input
-                        type="file"
-                        accept="application/pdf"
-                        ref={fileInputRef}
-                        style={{ display: 'none' }}
-                        onChange={handleFileUpload}
-                        multiple
-                    />
-
-                    <button
-                        className="btn btn-primary"
-                        style={{ backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' }}
-                        onClick={handleAIAssistClick}
-                        disabled={isParsingAI}
-                    >
-                        {isParsingAI ? <Loader2 size={16} className="spinner" /> : <Bot size={16} />}
-                        {isParsingAI ? 'Analisando PDF...' : 'IA: Extrair Edital'}
-                    </button>
-
-                    <button className="btn btn-primary" onClick={handleCreateNew}>
-                        <Plus size={16} />
-                        Nova Licitação
-                    </button>
-                </div>
-            </div>
-
-            {/* ===== BARRA DE FILTROS INTELIGENTES + CONFIG DE CAMPOS ===== */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                {/* Botão Filtros */}
-                <div style={{ position: 'relative' }}>
-                    <button
-                        className={`btn ${showFilterPanel || hasActiveFilters ? 'btn-primary' : 'btn-outline'}`}
-                        style={showFilterPanel || hasActiveFilters ? { backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)' } : {}}
-                        onClick={() => { setShowFilterPanel(!showFilterPanel); setShowCardConfig(false); }}
-                    >
-                        <Filter size={14} />
-                        Filtros
-                        {activeFilterCount > 0 && (
-                            <span style={{
-                                background: hasActiveFilters && !showFilterPanel ? 'rgba(255,255,255,0.3)' : 'var(--color-primary)',
-                                color: 'white',
-                                fontSize: '0.65rem',
-                                padding: '1px 6px',
-                                borderRadius: '999px',
-                                fontWeight: 700,
-                                marginLeft: '4px'
-                            }}>{activeFilterCount}</span>
-                        )}
-                    </button>
-
-                    {showFilterPanel && (
-                        <div style={{
-                            position: 'absolute', top: '44px', left: 0, width: '300px',
-                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                            borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
-                            overflow: 'hidden'
-                        }}>
-                            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>Filtros Inteligentes</span>
-                                {hasActiveFilters && <button onClick={() => setFilters(EMPTY_FILTERS)} style={{ fontSize: '0.75rem', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Limpar</button>}
-                            </div>
-                            <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
-                                {/* Filtro Empresa */}
-                                <FilterSection title="🏢 Empresa">
-                                    {filterOptions.companies.map(compId => {
-                                        const comp = companies.find(c => c.id === compId);
-                                        return (
-                                            <FilterCheckbox key={compId} label={comp?.razaoSocial || 'Desconhecida'}
-                                                checked={filters.companies.includes(compId)}
-                                                onChange={() => setFilters({ ...filters, companies: filters.companies.includes(compId) ? filters.companies.filter(x => x !== compId) : [...filters.companies, compId] })} />
-                                        );
-                                    })}
-                                </FilterSection>
-                                {/* Filtro Modalidade */}
-                                <FilterSection title="📄 Modalidade">
-                                    {filterOptions.modalities.map(m => (
-                                        <FilterCheckbox key={m} label={m} checked={filters.modalities.includes(m)}
-                                            onChange={() => setFilters({ ...filters, modalities: filters.modalities.includes(m) ? filters.modalities.filter(x => x !== m) : [...filters.modalities, m] })} />
-                                    ))}
-                                </FilterSection>
-                                {/* Filtro Portal */}
-                                <FilterSection title="🌐 Portal">
-                                    {filterOptions.portals.map(p => (
-                                        <FilterCheckbox key={p} label={p} checked={filters.portals.includes(p)}
-                                            onChange={() => setFilters({ ...filters, portals: filters.portals.includes(p) ? filters.portals.filter(x => x !== p) : [...filters.portals, p] })} />
-                                    ))}
-                                </FilterSection>
-                                {/* Filtro Fase */}
-                                <FilterSection title="🔄 Fase / Status">
-                                    {filterOptions.statuses.map(s => (
-                                        <FilterCheckbox key={s} label={s} checked={filters.statuses.includes(s)}
-                                            onChange={() => setFilters({ ...filters, statuses: filters.statuses.includes(s) ? filters.statuses.filter(x => x !== s) : [...filters.statuses, s] })} />
-                                    ))}
-                                </FilterSection>
-                                {/* Filtro Risco */}
-                                <FilterSection title="⚠️ Risco IA">
-                                    {filterOptions.risks.map(r => (
-                                        <FilterCheckbox key={r} label={r} checked={filters.risks.includes(r)}
-                                            onChange={() => setFilters({ ...filters, risks: filters.risks.includes(r) ? filters.risks.filter(x => x !== r) : [...filters.risks, r] })} />
-                                    ))}
-                                </FilterSection>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Busca Textual */}
-                <div style={{ position: 'relative', flex: '1', maxWidth: '340px' }}>
-                    <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-                    <input
-                        type="text"
-                        value={filters.searchText}
-                        onChange={e => setFilters({ ...filters, searchText: e.target.value })}
-                        placeholder="Buscar por título, objeto, empresa..."
-                        style={{
-                            width: '100%', padding: '8px 32px 8px 34px', fontSize: '0.8125rem',
-                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                            background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)',
-                            outline: 'none'
-                        }}
-                    />
-                    {filters.searchText && (
-                        <button onClick={() => setFilters({ ...filters, searchText: '' })} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: '4px' }}>
-                            <X size={14} />
-                        </button>
-                    )}
-                </div>
-
-                {/* Configuração de Campos */}
-                <div style={{ position: 'relative', marginLeft: 'auto' }}>
-                    <button
-                        className={`btn ${showCardConfig ? 'btn-primary' : 'btn-outline'}`}
-                        style={showCardConfig ? { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' } : {}}
-                        onClick={() => { setShowCardConfig(!showCardConfig); setShowFilterPanel(false); }}
-                    >
-                        <SlidersHorizontal size={14} />
-                        Campos
-                    </button>
-
-                    {showCardConfig && (
-                        <div style={{
-                            position: 'absolute', top: '44px', right: 0, width: '260px',
-                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                            borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', zIndex: 100,
-                            overflow: 'hidden'
-                        }}>
-                            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(99, 102, 241, 0.05))' }}>
-                                <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>Campos Visíveis</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Escolha o que aparece nos cards</div>
-                            </div>
-                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                {cardFields.map(field => (
-                                    <label key={field.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
-                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                        onClick={e => { e.preventDefault(); setCardFields(cardFields.map(f => f.key === field.key ? { ...f, visible: !f.visible } : f)); }}
-                                    >
-                                        <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}>{field.label}</span>
-                                        <div
-                                            style={{
-                                                width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
-                                                background: field.visible ? '#8b5cf6' : 'var(--color-border)',
-                                            }}
-                                        >
-                                            <div style={{
-                                                position: 'absolute', top: '2px', left: field.visible ? '16px' : '2px',
-                                                width: '14px', height: '14px', borderRadius: '50%', background: 'white',
-                                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s',
-                                            }} />
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
-                            <div style={{ padding: '8px 16px', borderTop: '1px solid var(--color-border)', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                                {cardFields.filter(f => f.visible).length} de {cardFields.length} visíveis
-                            </div>
-                        </div>
-                    )}
-                </div>
-
                 {/* Contagem */}
                 {hasActiveFilters && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{filteredItems.length} de {items.length}</span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{filteredItems.length} de {items.length}</span>
                 )}
             </div>
 
+            {/* Filter Panel Dropdown */}
+            {showFilterPanel && (
+                <div style={{
+                    position: 'relative', marginBottom: 'var(--space-3)', zIndex: 50,
+                }}>
+                    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                        <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)' }}>Filtros Inteligentes</span>
+                            {hasActiveFilters && <button onClick={() => setFilters(EMPTY_FILTERS)} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'var(--font-semibold)' }}>Limpar</button>}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0 }}>
+                            <FilterSection title="🏢 Empresa">
+                                {filterOptions.companies.map(compId => {
+                                    const comp = companies.find(c => c.id === compId);
+                                    return (<FilterCheckbox key={compId} label={comp?.razaoSocial || 'Desconhecida'} checked={filters.companies.includes(compId)}
+                                        onChange={() => setFilters({ ...filters, companies: filters.companies.includes(compId) ? filters.companies.filter(x => x !== compId) : [...filters.companies, compId] })} />);
+                                })}
+                            </FilterSection>
+                            <FilterSection title="📄 Modalidade">
+                                {filterOptions.modalities.map(m => (<FilterCheckbox key={m} label={m} checked={filters.modalities.includes(m)}
+                                    onChange={() => setFilters({ ...filters, modalities: filters.modalities.includes(m) ? filters.modalities.filter(x => x !== m) : [...filters.modalities, m] })} />))}
+                            </FilterSection>
+                            <FilterSection title="🌐 Portal">
+                                {filterOptions.portals.map(p => (<FilterCheckbox key={p} label={p} checked={filters.portals.includes(p)}
+                                    onChange={() => setFilters({ ...filters, portals: filters.portals.includes(p) ? filters.portals.filter(x => x !== p) : [...filters.portals, p] })} />))}
+                            </FilterSection>
+                            <FilterSection title="🔄 Fase / Status">
+                                {filterOptions.statuses.map(s => (<FilterCheckbox key={s} label={s} checked={filters.statuses.includes(s)}
+                                    onChange={() => setFilters({ ...filters, statuses: filters.statuses.includes(s) ? filters.statuses.filter(x => x !== s) : [...filters.statuses, s] })} />))}
+                            </FilterSection>
+                            <FilterSection title="⚠️ Risco IA">
+                                {filterOptions.risks.map(r => (<FilterCheckbox key={r} label={r} checked={filters.risks.includes(r)}
+                                    onChange={() => setFilters({ ...filters, risks: filters.risks.includes(r) ? filters.risks.filter(x => x !== r) : [...filters.risks, r] })} />))}
+                            </FilterSection>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Card Config Dropdown */}
+            {showCardConfig && (
+                <div style={{ position: 'relative', marginBottom: 'var(--space-3)', zIndex: 50 }}>
+                    <div className="card" style={{ padding: 0, overflow: 'hidden', maxWidth: '400px', marginLeft: 'auto' }}>
+                        <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)' }}>
+                            <div style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)' }}>Campos Visíveis</div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Escolha o que aparece nos cards</div>
+                        </div>
+                        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                            {cardFields.map(field => (
+                                <label key={field.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid var(--color-border)' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                    onClick={e => { e.preventDefault(); setCardFields(cardFields.map(f => f.key === field.key ? { ...f, visible: !f.visible } : f)); }}
+                                >
+                                    <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}>{field.label}</span>
+                                    <div style={{ width: '32px', height: '18px', borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', background: field.visible ? 'var(--color-ai)' : 'var(--color-border)' }}>
+                                        <div style={{ position: 'absolute', top: '2px', left: field.visible ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--color-border)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                            {cardFields.filter(f => f.visible).length} de {cardFields.length} visíveis
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Chips de Filtros Ativos */}
             {hasActiveFilters && (
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-1)', flexWrap: 'wrap', marginBottom: 'var(--space-3)', alignItems: 'center' }}>
                     {filters.searchText && <FilterChip label={`"${filters.searchText}"`} onRemove={() => setFilters({ ...filters, searchText: '' })} />}
-                    {filters.companies.map(compId => { const name = companies.find(c => c.id === compId)?.razaoSocial || compId; return <FilterChip key={compId} label={`🏢 ${name}`} color="#3b82f6" onRemove={() => setFilters({ ...filters, companies: filters.companies.filter(x => x !== compId) })} />; })}
-                    {filters.modalities.map(m => <FilterChip key={m} label={m} color="#8b5cf6" onRemove={() => setFilters({ ...filters, modalities: filters.modalities.filter(x => x !== m) })} />)}
-                    {filters.portals.map(p => <FilterChip key={p} label={`🌐 ${p}`} color="#10b981" onRemove={() => setFilters({ ...filters, portals: filters.portals.filter(x => x !== p) })} />)}
-                    {filters.statuses.map(s => <FilterChip key={s} label={s} color="#f59e0b" onRemove={() => setFilters({ ...filters, statuses: filters.statuses.filter(x => x !== s) })} />)}
-                    {filters.risks.map(r => <FilterChip key={r} label={`⚠️ ${r}`} color="#ef4444" onRemove={() => setFilters({ ...filters, risks: filters.risks.filter(x => x !== r) })} />)}
-                    <button onClick={() => setFilters(EMPTY_FILTERS)} style={{ fontSize: '0.75rem', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Limpar tudo</button>
+                    {filters.companies.map(compId => { const name = companies.find(c => c.id === compId)?.razaoSocial || compId; return <FilterChip key={compId} label={`🏢 ${name}`} color="var(--color-primary)" onRemove={() => setFilters({ ...filters, companies: filters.companies.filter(x => x !== compId) })} />; })}
+                    {filters.modalities.map(m => <FilterChip key={m} label={m} color="var(--color-ai)" onRemove={() => setFilters({ ...filters, modalities: filters.modalities.filter(x => x !== m) })} />)}
+                    {filters.portals.map(p => <FilterChip key={p} label={`🌐 ${p}`} color="var(--color-success)" onRemove={() => setFilters({ ...filters, portals: filters.portals.filter(x => x !== p) })} />)}
+                    {filters.statuses.map(s => <FilterChip key={s} label={s} color="var(--color-warning)" onRemove={() => setFilters({ ...filters, statuses: filters.statuses.filter(x => x !== s) })} />)}
+                    {filters.risks.map(r => <FilterChip key={r} label={`⚠️ ${r}`} color="var(--color-danger)" onRemove={() => setFilters({ ...filters, risks: filters.risks.filter(x => x !== r) })} />)}
+                    <button onClick={() => setFilters(EMPTY_FILTERS)} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'var(--font-semibold)' }}>Limpar tudo</button>
                 </div>
             )}
 
@@ -1307,7 +1177,7 @@ function FilterCheckbox({ label, checked, onChange }: { label: string; checked: 
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
         >
             <input type="checkbox" checked={checked} onChange={onChange}
-                style={{ width: '14px', height: '14px', accentColor: '#10b981', cursor: 'pointer' }} />
+                style={{ width: '14px', height: '14px', accentColor: 'var(--color-success)', cursor: 'pointer' }} />
             <span>{label}</span>
         </label>
     );

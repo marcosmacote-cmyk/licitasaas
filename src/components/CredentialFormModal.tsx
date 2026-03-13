@@ -47,15 +47,15 @@ export function CredentialFormModal({ companyId, initialData, onClose, onSave }:
                 maxWidth: '550px',
                 width: '100%',
                 maxHeight: '90vh',
-                borderRadius: '1.25rem',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: 'var(--shadow-xl)',
                 overflowY: 'auto',
                 backgroundColor: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border)',
                 animation: 'slideUp 0.3s ease-out'
             }}>
                 <div style={{
-                    padding: '24px 32px',
+                    padding: 'var(--space-6) var(--space-8)',
                     borderBottom: '1px solid var(--color-border)',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -63,24 +63,24 @@ export function CredentialFormModal({ companyId, initialData, onClose, onSave }:
                     background: 'linear-gradient(to right, var(--color-bg-surface), var(--color-bg-surface-hover))'
                 }}>
                     <div>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                        <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
                             {initialData ? 'Editar Acesso' : 'Nova Credencial'}
                         </h2>
-                        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginTop: '4px' }}>
+                        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-md)', marginTop: '4px' }}>
                             Gerencie as chaves de acesso para portais de licitação.
                         </p>
                     </div>
                     <button
                         className="icon-btn"
                         onClick={onClose}
-                        style={{ background: 'var(--color-bg-surface)', borderRadius: '50%', padding: '8px', boxShadow: 'var(--shadow-sm)' }}
+                        style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-full)', padding: 'var(--space-2)', boxShadow: 'var(--shadow-sm)' }}
                     >
                         <X size={20} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '32px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <form onSubmit={handleSubmit} style={{ padding: 'var(--space-8)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
 
                         {/* Plataforma */}
                         <div style={{ gridColumn: '1 / -1' }}>
@@ -158,30 +158,30 @@ export function CredentialFormModal({ companyId, initialData, onClose, onSave }:
                             </div>
                         </div>
 
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)' }}>
                             <Info size={14} />
                             <span>A senha será exibida em texto plano para facilitar a cópia rápida.</span>
                         </div>
                     </div>
 
                     <div style={{
-                        marginTop: '32px',
+                        marginTop: 'var(--space-8)',
                         display: 'flex',
-                        gap: '12px',
+                        gap: 'var(--space-3)',
                         justifyContent: 'flex-end',
-                        paddingTop: '24px',
+                        paddingTop: 'var(--space-6)',
                         borderTop: '1px solid var(--color-border)'
                     }}>
-                        <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: '10px 20px' }}>
+                        <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: 'var(--space-3) var(--space-5)' }}>
                             Cancelar
                         </button>
                         <button
                             type="submit"
                             className="btn btn-primary"
                             style={{
-                                padding: '10px 24px',
+                                padding: 'var(--space-3) var(--space-6)',
                                 background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
-                                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+                                boxShadow: 'var(--shadow-md)'
                             }}
                         >
                             <Save size={18} /> Salvar Credencial
@@ -200,21 +200,21 @@ export function CredentialFormModal({ companyId, initialData, onClose, onSave }:
 
 const labelStyle: React.CSSProperties = {
     display: 'block',
-    fontSize: '0.875rem',
-    fontWeight: 600,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-semibold)',
     color: 'var(--color-text-secondary)',
-    marginBottom: '8px'
+    marginBottom: 'var(--space-2)'
 };
 
 const inputContainerStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '12px 16px',
+    gap: 'var(--space-3)',
+    padding: 'var(--space-3) var(--space-4)',
     backgroundColor: 'var(--color-bg-base)',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-md)',
-    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+    transition: 'var(--transition-fast)',
 };
 
 const inputInnerStyle: React.CSSProperties = {
@@ -223,5 +223,5 @@ const inputInnerStyle: React.CSSProperties = {
     outline: 'none',
     width: '100%',
     color: 'var(--color-text-primary)',
-    fontSize: '0.9375rem',
+    fontSize: 'var(--text-base)',
 };

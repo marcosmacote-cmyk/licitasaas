@@ -548,14 +548,14 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
     // ── RENDER ──
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) 2fr', gap: '28px', height: 'fit-content' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1fr) 2fr', gap: 'var(--space-7)', height: 'fit-content' }}>
 
             {/* LEFT: Configuration */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
                 {/* AI Config */}
                 <div style={cardStyle}>
-                    <h3 style={{ margin: '0 0 16px', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <Sparkles size={18} color="var(--color-primary)" /> Configuração da IA
                     </h3>
                     <Field label="Licitação Alvo">
@@ -572,7 +572,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                     </Field>
                     <Field label="Tipo de Declaração (do Edital)">
                         {declarationTypesFromEdital.length === 0 ? (
-                            <div style={{ padding: '10px', borderRadius: '6px', background: selectedBiddingId ? 'rgba(245,158,11,0.08)' : 'var(--color-bg-body)', border: '1px solid var(--color-border)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>
+                            <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-sm)', background: selectedBiddingId ? 'var(--color-warning-bg)' : 'var(--color-bg-body)', border: '1px solid var(--color-border)', fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
                                 {selectedBiddingId ? 'Nenhuma declaração identificada neste edital.' : 'Selecione uma licitação.'}
                             </div>
                         ) : (
@@ -582,12 +582,12 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         )}
                     </Field>
                     <Field label="Emitente da Declaração">
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', border: issuerType === 'company' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'company' ? 'rgba(59,130,246,0.05)' : 'var(--color-bg-body)', fontSize: '0.78rem', fontWeight: issuerType === 'company' ? 600 : 400 }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: issuerType === 'company' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'company' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'company' ? 'var(--font-semibold)' : 'var(--font-normal)' }}>
                                 <input type="radio" name="issuerType" checked={issuerType === 'company'} onChange={() => setIssuerType('company')} style={{ accentColor: 'var(--color-primary)' }} />
                                 Empresa (Rep. Legal)
                             </label>
-                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '6px', cursor: selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification ? 'pointer' : 'not-allowed', border: issuerType === 'technical' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'technical' ? 'rgba(59,130,246,0.05)' : 'var(--color-bg-body)', fontSize: '0.78rem', fontWeight: issuerType === 'technical' ? 600 : 400, opacity: selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification ? 1 : 0.4 }}>
+                            <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', cursor: selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification ? 'pointer' : 'not-allowed', border: issuerType === 'technical' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'technical' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'technical' ? 'var(--font-semibold)' : 'var(--font-normal)', opacity: selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification ? 1 : 0.4 }}>
                                 <input type="radio" name="issuerType" checked={issuerType === 'technical'} onChange={() => setIssuerType('technical')} disabled={!selectedCompanyId || !companies.find(c => c.id === selectedCompanyId)?.technicalQualification} style={{ accentColor: 'var(--color-primary)' }} />
                                 Profissional Técnico
                             </label>
@@ -599,7 +599,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                     <Field label="Instruções Adicionais">
                         <textarea style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }} placeholder="Opcional..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
                     </Field>
-                    <button className="btn btn-primary" style={{ width: '100%', height: '44px', gap: '8px', marginTop: '4px' }} onClick={handleGenerate} disabled={isGenerating || !selectedBiddingId || !selectedCompanyId || !declarationType}>
+                    <button className="btn btn-primary" style={{ width: '100%', height: '44px', gap: 'var(--space-2)', marginTop: '4px' }} onClick={handleGenerate} disabled={isGenerating || !selectedBiddingId || !selectedCompanyId || !declarationType}>
                         {isGenerating ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
                         {isGenerating ? 'Gerando...' : 'Gerar Declaração'}
                     </button>
@@ -607,26 +607,26 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
                 {/* Layout Settings */}
                 <div style={cardStyle}>
-                    <div className="flex-between" style={{ marginBottom: '12px' }}>
-                        <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div className="flex-between" style={{ marginBottom: 'var(--space-3)' }}>
+                        <h4 style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                             <Settings2 size={14} /> Layout & Assinatura
                         </h4>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: '4px' }} onClick={handleSaveLayout}>
-                                {layoutSaved ? <CheckCircle2 size={12} color="#10b981" /> : <Save size={12} />}
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px' }} onClick={handleSaveLayout}>
+                                {layoutSaved ? <CheckCircle2 size={12} color="var(--color-success)" /> : <Save size={12} />}
                                 {layoutSaved ? 'Salvo!' : 'Salvar'}
                             </button>
-                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: '4px' }} onClick={handleCreateLayout}>
+                            <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px' }} onClick={handleCreateLayout}>
                                 <Plus size={12} /> Novo
                             </button>
-                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: '4px', color: 'var(--color-danger)' }} onClick={handleResetLayout}>
+                            <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px', color: 'var(--color-danger)' }} onClick={handleResetLayout}>
                                 <X size={12} /> Limpar
                             </button>
                         </div>
                     </div>
 
                     {/* Layout Selector */}
-                    <div style={{ marginBottom: '16px', display: 'flex', gap: '6px' }}>
+                    <div style={{ marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-2)' }}>
                         <select style={{ ...inputStyle, flex: 1, fontSize: '0.8rem' }} value={currentLayoutId} onChange={(e) => {
                             const found = layouts.find(l => l.id === e.target.value);
                             setCurrentLayoutId(e.target.value);
@@ -639,7 +639,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         </button>
                     </div>
 
-                    <div style={{ marginBottom: '16px' }}>
+                    <div style={{ marginBottom: 'var(--space-4)' }}>
                         <label style={smallLabel}>Nome do Layout</label>
                         <input style={smallInput} value={layoutName} onChange={(e) => {
                             setLayoutName(e.target.value);
@@ -648,22 +648,22 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                     </div>
 
                     {/* Addressee */}
-                    <div style={{ padding: '10px', backgroundColor: 'var(--color-bg-body)', borderRadius: '6px', border: '1px solid var(--color-border)', marginBottom: '12px' }}>
+                    <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
                         <label style={{ ...labelStyle, fontSize: '0.7rem', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Destinatário</label>
                         <input style={{ ...inputStyle, fontSize: '0.8rem', marginBottom: '6px' }} placeholder="Ex: Agente de Contratação" value={layout.addresseeName} onChange={(e) => updateLayout({ addresseeName: e.target.value })} />
                         <textarea style={{ ...inputStyle, fontSize: '0.8rem', minHeight: '40px' }} placeholder="Órgão / Pregão nº..." value={layout.addresseeOrg} onChange={(e) => updateLayout({ addresseeOrg: e.target.value })} />
                     </div>
 
                     {/* City/Date */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
                         <div><label style={smallLabel}>Local</label><input style={smallInput} value={layout.signatureCity} onChange={(e) => updateLayout({ signatureCity: e.target.value })} /></div>
                         <div><label style={smallLabel}>Data</label><input style={smallInput} value={layout.signatureDate} onChange={(e) => updateLayout({ signatureDate: e.target.value })} /></div>
                     </div>
 
                     {/* Signatory block */}
-                    <div style={{ padding: '10px', backgroundColor: 'var(--color-bg-body)', borderRadius: '6px', border: '1px solid var(--color-border)', marginBottom: '12px' }}>
+                    <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
                         <label style={{ ...labelStyle, fontSize: '0.7rem', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bloco de Assinatura</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
                             <div><label style={smallLabel}>Nome</label><input style={smallInput} placeholder="NOME COMPLETO" value={layout.signatoryName} onChange={(e) => updateLayout({ signatoryName: e.target.value })} /></div>
                             <div><label style={smallLabel}>CPF</label><input style={smallInput} placeholder="CPF nº: 000.000.000-00" value={layout.signatoryCpf} onChange={(e) => updateLayout({ signatoryCpf: e.target.value })} /></div>
                             <div><label style={smallLabel}>Cargo</label><input style={smallInput} placeholder="Sócio Administrador" value={layout.signatoryRole} onChange={(e) => updateLayout({ signatoryRole: e.target.value })} /></div>
@@ -692,21 +692,21 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             </div>
 
             {/* RIGHT: Editor & Preview */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <div style={{ ...cardStyle, flex: 1, minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
-                    <div className="flex-between" style={{ marginBottom: '16px' }}>
+                    <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <div className="flex-gap">
-                            <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <FileText size={16} color="var(--color-primary)" />
                             </div>
-                            <h3 style={{ margin: 0, fontSize: '1rem' }}>Editor da Declaração</h3>
+                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Editor da Declaração</h3>
                         </div>
                         <div className="flex-gap">
-                            {saveSuccess && <span style={{ color: '#10b981', fontSize: '0.8rem' }} className="flex-gap"><CheckCircle2 size={14} /> Salvo!</span>}
+                            {saveSuccess && <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-md)' }} className="flex-gap"><CheckCircle2 size={14} /> Salvo!</span>}
                             <button className="btn btn-outline flex-gap" onClick={handleAddToDocuments} disabled={!generatedText || isSaving} style={{ fontSize: '0.8rem' }}>
                                 {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Vincular ao Dossiê
                             </button>
-                            <button className="btn flex-gap" onClick={handleExportPDF} disabled={!generatedText} style={{ backgroundColor: '#10b981', color: '#fff', fontSize: '0.8rem' }}>
+                            <button className="btn flex-gap" onClick={handleExportPDF} disabled={!generatedText} style={{ backgroundColor: 'var(--color-success)', color: '#fff', fontSize: 'var(--text-md)' }}>
                                 <Download size={14} /> Baixar PDF
                             </button>
                         </div>
@@ -714,7 +714,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
                     {!generatedText && !isGenerating ? (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.4, textAlign: 'center' }}>
-                            <Sparkles size={56} style={{ marginBottom: '12px' }} />
+                            <Sparkles size={56} style={{ marginBottom: 'var(--space-3)' }} />
                             <h3>Pronto para gerar</h3>
                             <p style={{ fontSize: '0.9rem' }}>Selecione uma licitação com Relatório Analítico.</p>
                         </div>
@@ -829,10 +829,10 @@ function ImageUploadSection({ label, image, width, height, onUpload, onRemove, o
 
 // ── Styles ──
 
-const cardStyle: React.CSSProperties = { background: 'var(--color-bg-surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' };
-const labelStyle: React.CSSProperties = { display: 'block', marginBottom: '6px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)' };
-const smallLabel: React.CSSProperties = { display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-tertiary)' };
-const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)', color: 'var(--color-text-primary)', fontSize: '0.9rem', outline: 'none' };
-const smallInput: React.CSSProperties = { width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)', color: 'var(--color-text-primary)', fontSize: '0.8rem', outline: 'none' };
-const pageMockupStyle: React.CSSProperties = { background: 'white', padding: '50px', borderRadius: '4px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', flex: 1, display: 'flex', flexDirection: 'column', color: '#333', minHeight: '700px' };
-const editorTextStyle: React.CSSProperties = { flex: 1, width: '100%', border: 'none', outline: 'none', fontSize: '0.85rem', lineHeight: '1.7', color: '#333', resize: 'none', background: 'transparent', fontFamily: 'serif', textAlign: 'justify' };
+const cardStyle: React.CSSProperties = { background: 'var(--color-bg-surface)', padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' };
+const labelStyle: React.CSSProperties = { display: 'block', marginBottom: 'var(--space-2)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' };
+const smallLabel: React.CSSProperties = { display: 'block', marginBottom: '4px', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' };
+const inputStyle: React.CSSProperties = { width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)', color: 'var(--color-text-primary)', fontSize: 'var(--text-base)', outline: 'none' };
+const smallInput: React.CSSProperties = { width: '100%', padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)', color: 'var(--color-text-primary)', fontSize: 'var(--text-md)', outline: 'none' };
+const pageMockupStyle: React.CSSProperties = { background: 'white', padding: '50px', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md)', flex: 1, display: 'flex', flexDirection: 'column', color: '#333', minHeight: '700px' };
+const editorTextStyle: React.CSSProperties = { flex: 1, width: '100%', border: 'none', outline: 'none', fontSize: 'var(--text-md)', lineHeight: '1.7', color: '#333', resize: 'none', background: 'transparent', fontFamily: 'serif', textAlign: 'justify' };

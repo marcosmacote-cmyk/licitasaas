@@ -300,10 +300,10 @@ export function DocumentExpirationList({ companies }: Props) {
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
             {/* ── Summary Cards ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
                 <SummaryCard
                     label="Vencidos" value={stats.expired} total={stats.total}
                     color="var(--color-danger)" bg="rgba(239, 68, 68, 0.06)"
@@ -335,9 +335,9 @@ export function DocumentExpirationList({ companies }: Props) {
             </div>
 
             {/* ── Toolbar: Search + Filters Toggle + Export ── */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', background: 'var(--color-bg-surface)', padding: '12px 16px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                 {/* Search */}
-                <div style={{ flex: 1, maxWidth: '360px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--color-bg-body)', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <div style={{ flex: 1, maxWidth: '360px', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', background: 'var(--color-bg-body)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                     <Search size={16} color="var(--color-text-secondary)" />
                     <input
                         type="text"
@@ -353,7 +353,7 @@ export function DocumentExpirationList({ companies }: Props) {
                 <button
                     onClick={() => setShowFilters(!showFilters)}
                     className="btn btn-secondary"
-                    style={{ padding: '8px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', position: 'relative' }}
+                    style={{ padding: 'var(--space-2) var(--space-4)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', position: 'relative' }}
                 >
                     <Filter size={14} /> Filtros
                     {activeFilterCount > 0 && (
@@ -373,10 +373,10 @@ export function DocumentExpirationList({ companies }: Props) {
                 <div style={{ flex: 1 }} />
 
                 {/* Export buttons */}
-                <button onClick={exportCSV} className="btn btn-secondary" style={{ padding: '8px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button onClick={exportCSV} className="btn btn-secondary" style={{ padding: 'var(--space-2) var(--space-4)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <FileSpreadsheet size={14} /> CSV
                 </button>
-                <button onClick={exportPDF} className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button onClick={exportPDF} className="btn btn-primary" style={{ padding: 'var(--space-2) var(--space-4)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <FileText size={14} /> PDF
                 </button>
             </div>
@@ -384,8 +384,8 @@ export function DocumentExpirationList({ companies }: Props) {
             {/* ── Filter Panel (Collapsible) ── */}
             {showFilters && (
                 <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px',
-                    background: 'var(--color-bg-surface)', padding: '16px',
+                    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)',
+                    background: 'var(--color-bg-surface)', padding: 'var(--space-4)',
                     borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)',
                     animation: 'slideDown 0.2s ease-out'
                 }}>
@@ -441,7 +441,7 @@ export function DocumentExpirationList({ companies }: Props) {
                     {filteredDocuments.length} de {allDocuments.length} documentos
                     {activeFilterCount > 0 && <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}> (filtrado)</span>}
                 </span>
-                <div className="flex-gap" style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', gap: '12px' }}>
+                <div className="flex-gap" style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', gap: 'var(--space-3)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-danger)', display: 'inline-block' }} /> Vencido</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-warning)', display: 'inline-block' }} /> Atenção</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-success)', display: 'inline-block' }} /> Válido</span>
@@ -464,7 +464,7 @@ export function DocumentExpirationList({ companies }: Props) {
                         {filteredDocuments.length === 0 ? (
                             <tr>
                                 <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-tertiary)' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)' }}>
                                         <Search size={32} color="var(--color-border)" />
                                         <span>Nenhum documento encontrado{activeFilterCount > 0 ? ' com os filtros aplicados' : ''}.</span>
                                         {activeFilterCount > 0 && (
@@ -532,11 +532,11 @@ function SummaryCard({ label, value, total, color, bg, icon, active, onClick }: 
         <button
             onClick={onClick}
             style={{
-                padding: '16px', borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
                 border: active ? `2px solid ${color}` : '1px solid var(--color-border)',
                 background: active ? bg : 'var(--color-bg-surface)',
                 cursor: 'pointer', textAlign: 'left',
-                transition: 'all 0.2s ease',
+                transition: 'var(--transition-fast)',
                 boxShadow: active ? `0 0 0 3px ${bg}` : 'none'
             }}
         >

@@ -45,15 +45,15 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                 maxWidth: '600px',
                 width: '100%',
                 maxHeight: '90vh',
-                borderRadius: '1.5rem',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: 'var(--shadow-xl)',
                 overflowY: 'auto',
                 backgroundColor: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border)',
                 animation: 'slideUp 0.3s ease-out'
             }}>
                 <div style={{
-                    padding: '28px 36px',
+                    padding: 'var(--space-6) var(--space-8)',
                     borderBottom: '1px solid var(--color-border)',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -61,24 +61,24 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                     background: 'linear-gradient(to right, var(--color-bg-surface), var(--color-bg-surface-hover))'
                 }}>
                     <div>
-                        <h2 style={{ fontSize: '1.625rem', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
+                        <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
                             {initialData ? 'Editar Empresa' : 'Cadastrar Empresa'}
                         </h2>
-                        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9375rem', marginTop: '4px' }}>
+                        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', marginTop: '4px' }}>
                             Configure os dados cadastrais da proponente.
                         </p>
                     </div>
                     <button
                         className="icon-btn"
                         onClick={onClose}
-                        style={{ background: 'var(--color-bg-surface)', borderRadius: '50%', padding: '10px', boxShadow: 'var(--shadow-sm)' }}
+                        style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-full)', padding: 'var(--space-3)', boxShadow: 'var(--shadow-sm)' }}
                     >
                         <X size={20} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '36px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                <form onSubmit={handleSubmit} style={{ padding: 'var(--space-8)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                         {/* Razão Social */}
                         <div style={{ gridColumn: '1 / -1' }}>
@@ -121,9 +121,9 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                                 cursor: 'pointer',
                                 padding: '10px 16px',
                                 borderRadius: 'var(--radius-md)',
-                                backgroundColor: formData.isHeadquarters ? 'rgba(37, 99, 235, 0.05)' : 'transparent',
+                                backgroundColor: formData.isHeadquarters ? 'var(--color-primary-light)' : 'transparent',
                                 border: formData.isHeadquarters ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                transition: 'all 0.2s ease'
+                                transition: 'var(--transition-fast)'
                             }}>
                                 <input
                                     type="checkbox"
@@ -131,7 +131,7 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                                     onChange={(e) => setFormData({ ...formData, isHeadquarters: e.target.checked })}
                                     style={{ width: '18px', height: '18px', accentColor: 'var(--color-primary)' }}
                                 />
-                                <span style={{ fontSize: '0.9375rem', fontWeight: 500, color: formData.isHeadquarters ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
+                                <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-medium)', color: formData.isHeadquarters ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}>
                                     Empresa Matriz (Sede)
                                 </span>
                             </label>
@@ -170,12 +170,12 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                         </div>
 
                         <div style={{ gridColumn: '1 / -1' }}>
-                            <div style={{ padding: '24px', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
+                            <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                     <Phone size={16} />
-                                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Canais de Contato</span>
+                                    <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Canais de Contato</span>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div>
                                         <label style={{ ...labelStyle, fontSize: '0.75rem' }}>Nome do Contato (Repr. Legal)</label>
                                         <div style={inputContainerStyle}>
@@ -228,10 +228,10 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
                         {/* Endereço */}
                         <div style={{ gridColumn: '1 / -1' }}>
-                            <div style={{ padding: '24px', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
+                            <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                     <MapPin size={16} />
-                                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Endereço da Sede</span>
+                                    <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Endereço da Sede</span>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
                                     <div>
@@ -277,24 +277,24 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                     </div>
 
                     <div style={{
-                        marginTop: '40px',
+                        marginTop: 'var(--space-10)',
                         display: 'flex',
-                        gap: '12px',
+                        gap: 'var(--space-3)',
                         justifyContent: 'flex-end',
-                        paddingTop: '28px',
+                        paddingTop: 'var(--space-6)',
                         borderTop: '1px solid var(--color-border)'
                     }}>
-                        <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: '12px 24px' }}>
+                        <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: 'var(--space-3) var(--space-6)' }}>
                             Cancelar
                         </button>
                         <button
                             type="submit"
                             className="btn btn-primary"
                             style={{
-                                padding: '12px 32px',
+                                padding: 'var(--space-3) var(--space-8)',
                                 background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))',
-                                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
-                                fontWeight: 600
+                                boxShadow: 'var(--shadow-md)',
+                                fontWeight: 'var(--font-semibold)'
                             }}
                         >
                             <Save size={18} /> Salvar Empresa
@@ -313,21 +313,21 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
 const labelStyle: React.CSSProperties = {
     display: 'block',
-    fontSize: '0.875rem',
-    fontWeight: 600,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-semibold)',
     color: 'var(--color-text-secondary)',
-    marginBottom: '10px'
+    marginBottom: 'var(--space-3)'
 };
 
 const inputContainerStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '12px 16px',
+    gap: 'var(--space-3)',
+    padding: 'var(--space-3) var(--space-4)',
     backgroundColor: 'var(--color-bg-base)',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-md)',
-    transition: 'all 0.2s ease',
+    transition: 'var(--transition-fast)',
 };
 
 const inputInnerStyle: React.CSSProperties = {
@@ -336,5 +336,5 @@ const inputInnerStyle: React.CSSProperties = {
     outline: 'none',
     width: '100%',
     color: 'var(--color-text-primary)',
-    fontSize: '0.9375rem',
+    fontSize: 'var(--text-base)',
 };

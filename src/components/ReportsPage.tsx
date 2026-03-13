@@ -22,14 +22,14 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
 
     return (
         <div className="page-container">
-            <div className="page-header flex-between" style={{ marginBottom: '24px' }}>
+            <div className="page-header flex-between" style={{ marginBottom: 'var(--space-6)' }}>
                 <div>
                     <h1 className="page-title">Relatórios e Inteligência</h1>
                     <p className="page-subtitle">Acompanhe métricas, exporte dossiês e controle validades.</p>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-6)', marginBottom: 'var(--space-6)', borderBottom: '1px solid var(--color-border)' }}>
                 <button
                     onClick={() => setActiveTab('dashboard')}
                     style={{
@@ -44,8 +44,8 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                     onClick={() => setActiveTab('proposal')}
                     style={{
                         ...tabStyle,
-                        color: activeTab === 'proposal' ? '#7c3aed' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'proposal' ? '2px solid #7c3aed' : '2px solid transparent'
+                        color: activeTab === 'proposal' ? 'var(--color-ai)' : 'var(--color-text-tertiary)',
+                        borderBottom: activeTab === 'proposal' ? '2px solid var(--color-ai)' : '2px solid transparent'
                     }}
                 >
                     <DollarSign size={16} /> Proposta de Preços
@@ -74,8 +74,8 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                     onClick={() => setActiveTab('oracle')}
                     style={{
                         ...tabStyle,
-                        color: activeTab === 'oracle' ? '#059669' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'oracle' ? '2px solid #059669' : '2px solid transparent'
+                        color: activeTab === 'oracle' ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                        borderBottom: activeTab === 'oracle' ? '2px solid var(--color-success)' : '2px solid transparent'
                     }}
                 >
                     <BrainCircuit size={16} /> Oráculo (Acervos)
@@ -84,8 +84,8 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                     onClick={() => setActiveTab('petitions')}
                     style={{
                         ...tabStyle,
-                        color: activeTab === 'petitions' ? '#2563eb' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'petitions' ? '2px solid #2563eb' : '2px solid transparent'
+                        color: activeTab === 'petitions' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                        borderBottom: activeTab === 'petitions' ? '2px solid var(--color-primary)' : '2px solid transparent'
                     }}
                 >
                     <Scale size={16} /> Elaboração de Petições
@@ -127,15 +127,15 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
 }
 
 const tabStyle: React.CSSProperties = {
-    padding: '12px 16px',
+    padding: 'var(--space-3) var(--space-4)',
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    fontSize: '0.95rem',
-    fontWeight: 500,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-medium)',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    transition: 'all 0.2s ease',
+    gap: 'var(--space-2)',
+    transition: 'var(--transition-fast)',
     outline: 'none'
 };

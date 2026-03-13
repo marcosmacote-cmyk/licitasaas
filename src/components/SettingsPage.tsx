@@ -54,72 +54,72 @@ export function SettingsPage() {
 
     return (
         <div className="page-container">
-            <div className="page-header" style={{ marginBottom: '32px' }}>
+            <div className="page-header" style={{ marginBottom: 'var(--space-8)' }}>
                 <h1 className="page-title">Configurações do Sistema</h1>
                 <p className="page-subtitle">Gerencie preferências e visualize a saúde do Agente Local.</p>
             </div>
 
-            <div style={{ maxWidth: '1000px', display: 'grid', gap: '24px' }}>
+            <div style={{ maxWidth: '1000px', display: 'grid', gap: 'var(--space-6)' }}>
                 {/* Saúde do Agente (Fase 4) */}
                 <div className="card">
                     <div style={{ 
-                        padding: '24px', 
+                        padding: 'var(--space-6)', 
                         borderBottom: '1px solid var(--color-border)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                             <div style={{ 
-                                padding: '10px', 
-                                background: 'rgba(56, 189, 248, 0.1)', 
-                                color: '#38bdf8',
-                                borderRadius: '12px' 
+                                padding: 'var(--space-3)', 
+                                background: 'var(--color-primary-light)', 
+                                color: 'var(--color-primary)',
+                                borderRadius: 'var(--radius-lg)' 
                             }}>
                                 <Activity size={24} />
                             </div>
                             <div>
-                                <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: 'var(--color-text-primary)' }}>
+                                <h3 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                                     Saúde do Agente Local
                                 </h3>
-                                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
+                                <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', marginTop: '4px' }}>
                                     Histórico de capturas recentes e mensagens monitoradas
                                 </p>
                             </div>
                         </div>
-                        <button onClick={fetchAgentLogs} className="btn btn-secondary btn-sm" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button onClick={fetchAgentLogs} className="btn btn-secondary btn-sm" style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                             <Loader2 size={16} /> Atualizar Log
                         </button>
                     </div>
 
                     <div style={{ padding: '24px' }}>
                         {logs.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-tertiary)', background: 'var(--color-background-elevated)', borderRadius: '12px' }}>
-                                <Server size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-                                <p style={{ fontWeight: 500 }}>Nenhum log de captura encontrado ainda.</p>
-                                <p style={{ fontSize: '0.9rem', marginTop: '8px' }}>As mensagens do ComprasNet aparecerão aqui assim que o Agente Local começar a trabalhar.</p>
+                            <div style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)' }}>
+                                <Server size={48} style={{ margin: '0 auto var(--space-4)', opacity: 0.5 }} />
+                                <p style={{ fontWeight: 'var(--font-medium)' }}>Nenhum log de captura encontrado ainda.</p>
+                                <p style={{ fontSize: 'var(--text-base)', marginTop: 'var(--space-2)' }}>As mensagens do ComprasNet aparecerão aqui assim que o Agente Local começar a trabalhar.</p>
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                                 {logs.map((log) => (
                                     <div key={log.id} style={{
-                                        background: 'var(--color-background-elevated)',
+                                        background: 'var(--color-bg-surface)',
                                         border: '1px solid var(--color-border)',
-                                        borderRadius: '12px',
-                                        padding: '16px',
+                                        borderRadius: 'var(--radius-lg)',
+                                        padding: 'var(--space-4)',
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        gap: '12px'
+                                        gap: 'var(--space-3)'
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                                 <span style={{ 
-                                                    fontSize: '0.75rem', 
-                                                    fontWeight: 600, 
-                                                    background: log.detectedKeyword ? 'rgba(74, 222, 128, 0.1)' : 'var(--color-background-accent)',
-                                                    color: log.detectedKeyword ? '#4ade80' : 'var(--color-text-secondary)',
-                                                    padding: '4px 10px',
-                                                    borderRadius: '20px'
+                                                    fontSize: 'var(--text-sm)', 
+                                                    fontWeight: 'var(--font-semibold)', 
+                                                    background: log.detectedKeyword ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)',
+                                                    color: log.detectedKeyword ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                                                    padding: '4px var(--space-3)',
+                                                    borderRadius: 'var(--radius-xl)'
                                                 }}>
                                                     {log.detectedKeyword ? `Alerta: ${log.detectedKeyword}` : 'Captura Comum'}
                                                 </span>
@@ -132,7 +132,7 @@ export function SettingsPage() {
                                             </span>
                                         </div>
                                         
-                                        <div style={{ fontSize: '0.9rem', background: 'var(--color-background)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid var(--color-border)' }}>
+                                        <div style={{ fontSize: 'var(--text-base)', background: 'var(--color-bg-base)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--color-border)' }}>
                                             {log.content}
                                         </div>
 
@@ -149,11 +149,11 @@ export function SettingsPage() {
                 </div>
 
                 {/* Segurança e Acesso */}
-                <div className="card" style={{ padding: '24px', opacity: 0.6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--color-text-tertiary)' }}>
+                <div className="card" style={{ padding: 'var(--space-6)', opacity: 0.6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', color: 'var(--color-text-tertiary)' }}>
                         <Shield size={20} />
-                        <span style={{ fontWeight: 600 }}>Segurança e Acesso</span>
-                        <span style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '2px 8px', background: 'var(--color-border)', borderRadius: '12px' }}>Em breve</span>
+                        <span style={{ fontWeight: 'var(--font-semibold)' }}>Segurança e Acesso</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', padding: '2px var(--space-2)', background: 'var(--color-border)', borderRadius: 'var(--radius-lg)' }}>Em breve</span>
                     </div>
                 </div>
             </div>

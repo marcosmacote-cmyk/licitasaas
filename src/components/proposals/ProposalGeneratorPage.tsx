@@ -443,22 +443,22 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
     const cardStyle: React.CSSProperties = {
         background: 'var(--color-bg-surface)',
         border: '1px solid var(--color-border)',
-        borderRadius: '16px',
-        padding: '24px',
+        borderRadius: 'var(--radius-xl)',
+        padding: 'var(--space-6)',
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
             {/* ── Top Config Bar ── */}
             <div style={{
                 ...cardStyle,
                 background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(139,92,246,0.03))',
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                         <DollarSign size={22} color="var(--color-primary)" />
-                        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                             Gerador de Proposta de Preços
                         </h2>
                     </div>
@@ -471,10 +471,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 </div>
 
                 {showConfig && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                         {/* Licitação */}
                         <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>
                                 <Briefcase size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
                                 Licitação (com Análise IA)
                             </label>
@@ -482,8 +482,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 value={selectedBiddingId}
                                 onChange={e => setSelectedBiddingId(e.target.value)}
                                 style={{
-                                    width: '100%', padding: '10px 12px', borderRadius: '10px',
-                                    border: '1px solid var(--color-border)', fontSize: '0.875rem',
+                                    width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-base)',
                                     background: 'var(--color-bg-base)',
                                 }}
                             >
@@ -498,7 +498,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
                         {/* Empresa */}
                         <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>
                                 <Package size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
                                 Empresa Proponente
                             </label>
@@ -506,8 +506,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 value={selectedCompanyId}
                                 onChange={e => setSelectedCompanyId(e.target.value)}
                                 style={{
-                                    width: '100%', padding: '10px 12px', borderRadius: '10px',
-                                    border: '1px solid var(--color-border)', fontSize: '0.875rem',
+                                    width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-base)',
                                     background: 'var(--color-bg-base)',
                                 }}
                             >
@@ -520,31 +520,31 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
 
 
-                        <div style={{ display: 'flex', alignItems: 'end', gap: '10px', marginTop: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'end', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
                             <button
                                 className="btn btn-primary"
                                 onClick={handleCreateProposal}
                                 disabled={isLoading || !selectedBiddingId || !selectedCompanyId}
-                                style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: 600 }}
+                                style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}
                             >
                                 {isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
                                 Nova Proposta
                             </button>
                             {proposal && (
-                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                                     <button
                                         className="btn btn-outline"
                                         onClick={handleSaveConfig}
                                         disabled={isSaving}
-                                        style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: 600 }}
+                                        style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}
                                     >
                                         <Save size={16} /> Salvar Proposta em Dossiê
                                     </button>
 
                                     {/* Orientação de Impressão moved here */}
                                     <label style={{
-                                        display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                                        padding: '10px 14px', borderRadius: '10px',
+                                        display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
+                                        padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
                                         backgroundColor: 'var(--color-bg-base)',
                                         border: '1px solid var(--color-border)',
                                     }}>
@@ -554,17 +554,17 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                             onChange={(e) => setPrintLandscape(e.target.checked)}
                                             style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
                                         />
-                                        <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                                        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
                                             Paisagem
                                         </span>
                                     </label>
 
-                                    <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg-base)', padding: '2px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
+                                    <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg-base)', padding: '2px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                                         <button
                                             className="btn"
                                             onClick={() => handlePrintProposal('LETTER')}
                                             title="Exportar Apenas Carta"
-                                            style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
+                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
                                         >
                                             <FileText size={14} /> Carta
                                         </button>
@@ -572,7 +572,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                             className="btn"
                                             onClick={() => handlePrintProposal('SPREADSHEET')}
                                             title="Exportar Apenas Planilha"
-                                            style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
+                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
                                         >
                                             <Package size={14} /> Planilha
                                         </button>
@@ -580,7 +580,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                         <button
                                             className="btn btn-primary"
                                             onClick={() => handlePrintProposal('FULL')}
-                                            style={{ padding: '8px 16px', borderRadius: '8px', fontWeight: 700, background: '#111', fontSize: '0.8rem' }}
+                                            style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', background: '#111', fontSize: 'var(--text-md)' }}
                                         >
                                             <Printer size={16} /> Exportar Completa
                                         </button>
@@ -594,13 +594,13 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 {/* AI Loading badge */}
                 {isAiLoading && (
                     <div style={{
-                        marginTop: '12px', padding: '10px 16px', borderRadius: '10px',
+                        marginTop: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
                         background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.06))',
                         border: '1px solid rgba(139,92,246,0.2)',
-                        display: 'flex', alignItems: 'center', gap: '8px',
+                        display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                     }}>
-                        <Loader2 size={14} color="#8b5cf6" className="spin" />
-                        <span style={{ fontSize: '0.8rem', color: '#7c3aed', fontWeight: 600 }}>
+                        <Loader2 size={14} color="var(--color-primary)" className="spin" />
+                        <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-primary)', fontWeight: 'var(--font-semibold)' }}>
                             Gemini analisando itens do edital...
                         </span>
                     </div>
@@ -610,9 +610,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             {/* ── Save Message ── */}
             {saveMessage && (
                 <div style={{
-                    padding: '10px 18px', borderRadius: '10px',
-                    background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)',
-                    color: '#16a34a', fontWeight: 600, fontSize: '0.85rem',
+                    padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)',
+                    background: 'var(--color-success-bg)', border: '1px solid rgba(34,197,94,0.3)',
+                    color: 'var(--color-success)', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)',
                 }}>
                     ✓ {saveMessage}
                 </div>
@@ -621,19 +621,19 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             {/* ── Proposal Info ── */}
             {proposal && (
                 <div style={{
-                    display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 16px',
-                    borderRadius: '10px', background: 'rgba(37,99,235,0.05)',
+                    display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-2) var(--space-4)',
+                    borderRadius: 'var(--radius-lg)', background: 'var(--color-primary-light)',
                     border: '1px solid rgba(37,99,235,0.15)',
                 }}>
                     <FileText size={16} color="var(--color-primary)" />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                    <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)' }}>
                         Proposta v{proposal.version}
                     </span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>
+                    <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
                         — {proposal.status} — {items.length} item(ns) — Total: {fmt(total)}
                     </span>
                     {proposals.length > 1 && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
                             ({proposals.length} versões)
                         </span>
                     )}
@@ -643,16 +643,16 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
             {/* ── TABS ── */}
             {proposal && (
-                <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid var(--color-border)', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '2px solid var(--color-border)', marginBottom: '4px' }}>
                     <button
                         onClick={() => setActiveTab('items')}
                         style={{
-                            padding: '10px 20px', background: 'none', border: 'none',
+                            padding: 'var(--space-3) var(--space-5)', background: 'none', border: 'none',
                             borderBottom: activeTab === 'items' ? '3px solid var(--color-primary)' : '3px solid transparent',
                             color: activeTab === 'items' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                            fontWeight: activeTab === 'items' ? 700 : 500,
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
-                            transform: 'translateY(2px)' // align borders
+                            fontWeight: activeTab === 'items' ? 'var(--font-bold)' : 'var(--font-medium)',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                            transform: 'translateY(2px)', transition: 'var(--transition-fast)'
                         }}
                     >
                         <Package size={16} /> Planilha de Preços
@@ -660,12 +660,12 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     <button
                         onClick={() => setActiveTab('letter')}
                         style={{
-                            padding: '10px 20px', background: 'none', border: 'none',
+                            padding: 'var(--space-3) var(--space-5)', background: 'none', border: 'none',
                             borderBottom: activeTab === 'letter' ? '3px solid var(--color-primary)' : '3px solid transparent',
                             color: activeTab === 'letter' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                            fontWeight: activeTab === 'letter' ? 700 : 500,
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
-                            transform: 'translateY(2px)'
+                            fontWeight: activeTab === 'letter' ? 'var(--font-bold)' : 'var(--font-medium)',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                            transform: 'translateY(2px)', transition: 'var(--transition-fast)'
                         }}
                     >
                         <FileText size={16} /> Carta Proposta Redigida
@@ -676,34 +676,34 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             {/* ── Items Tab ── */}
             {activeTab === 'items' && (proposal || items.length > 0) && (
                 <div style={cardStyle}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                        <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                             Itens da Proposta ({items.length})
                         </h3>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                             {/* Rounding Mode Toggle */}
-                            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-base)', padding: '2px', borderRadius: '8px', border: '1px solid var(--color-border)', marginRight: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-base)', padding: '2px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginRight: '4px' }}>
                                 <button
                                     onClick={() => setRoundingMode('ROUND')}
                                     style={{
-                                        padding: '4px 8px', fontSize: '0.7rem', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                        padding: '4px var(--space-2)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
                                         background: roundingMode === 'ROUND' ? 'var(--color-primary)' : 'transparent',
                                         color: roundingMode === 'ROUND' ? 'white' : 'var(--color-text-secondary)',
-                                        fontWeight: 600
+                                        fontWeight: 'var(--font-semibold)'
                                     }}>Arredondar</button>
                                 <button
                                     onClick={() => setRoundingMode('TRUNCATE')}
                                     style={{
-                                        padding: '4px 8px', fontSize: '0.7rem', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                        padding: '4px var(--space-2)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
                                         background: roundingMode === 'TRUNCATE' ? 'var(--color-primary)' : 'transparent',
                                         color: roundingMode === 'TRUNCATE' ? 'white' : 'var(--color-text-secondary)',
-                                        fontWeight: 600
+                                        fontWeight: 'var(--font-semibold)'
                                     }}>Truncar</button>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--color-bg-base)', padding: '6px 12px', borderRadius: '10px', border: '1px solid var(--color-border)', marginRight: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>BDI:</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-bg-base)', padding: '6px var(--space-3)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', marginRight: 'var(--space-2)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>BDI:</span>
                                     <input
                                         type="number"
                                         value={bdi}
@@ -713,8 +713,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                                 <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }}></div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Desc. Linear:</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>Desc. Linear:</span>
                                     <input
                                         type="number"
                                         value={discount}
@@ -731,10 +731,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 onClick={handleAiPopulate}
                                 disabled={isAiLoading}
                                 style={{
-                                    padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600,
+                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
                                     background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
                                     color: 'white', border: 'none',
-                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                                 }}
                             >
                                 {isAiLoading ? <Loader2 size={14} className="spin" /> : <Brain size={14} />}
@@ -746,7 +746,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     className="btn btn-primary"
                                     onClick={handleSaveAllItems}
                                     disabled={isSaving}
-                                    style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px', background: '#22c55e', color: 'white', border: 'none' }}
+                                    style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)', background: 'var(--color-success)', color: 'white', border: 'none' }}
                                 >
                                     {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
                                 </button>
@@ -755,7 +755,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     className="btn btn-primary"
                                     onClick={handleSaveAllItems}
                                     disabled={isSaving}
-                                    style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px', background: '#22c55e', color: 'white', border: 'none' }}
+                                    style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)', background: 'var(--color-success)', color: 'white', border: 'none' }}
                                 >
                                     {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
                                 </button>
@@ -763,10 +763,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             <button
                                 onClick={handleExportExcel}
                                 style={{
-                                    padding: '6px 14px', borderRadius: '8px',
+                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
                                     background: '#15803d', color: 'white', border: 'none',
-                                    fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '6px'
+                                    fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
                                 }}
                             >
                                 <Save size={14} /> Exportar Planilha
@@ -775,14 +775,14 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             <button
                                 className="btn btn-outline"
                                 onClick={handleAddItem}
-                                style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px' }}
+                                style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)' }}
                             >
                                 <Plus size={14} /> Novo Item
                             </button>
                         </div>
                     </div>
 
-                    <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
+                    <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                             <thead>
                                 <tr style={{ background: 'var(--color-bg-surface-hover)', borderBottom: '2px solid var(--color-border)' }}>
@@ -935,7 +935,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                                 {item.referencePrice ? (
                                                     <span style={{
                                                         fontSize: '0.7rem',
-                                                        color: overRef ? '#ef4444' : '#22c55e',
+                                                        color: overRef ? 'var(--color-danger)' : 'var(--color-success)',
                                                         fontWeight: 600,
                                                     }}>
                                                         {overRef && <AlertTriangle size={10} />}
@@ -953,7 +953,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                                                 style={iconBtnStyle}
                                                                 title="Salvar"
                                                             >
-                                                                {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} color="#22c55e" />}
+                                                                {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} color="var(--color-success)" />}
                                                             </button>
                                                         )
                                                     ) : (
@@ -970,7 +970,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                                         style={iconBtnStyle}
                                                         title="Remover"
                                                     >
-                                                        <Trash2 size={14} color="#ef4444" />
+                                                        <Trash2 size={14} color="var(--color-danger)" />
                                                     </button>
                                                 </div>
                                             </td>
@@ -980,8 +980,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 {items.length === 0 && (
                                     <tr>
                                         <td colSpan={9} style={{
-                                            textAlign: 'center', padding: '40px', color: 'var(--color-text-tertiary)',
-                                            fontSize: '0.9rem',
+                                            textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)',
+                                            fontSize: 'var(--text-base)',
                                         }}>
                                             <Sparkles size={32} color="var(--color-text-tertiary)" style={{ marginBottom: '8px' }} />
                                             <br />
@@ -996,11 +996,11 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     {/* ── Totals ── */}
                     {items.length > 0 && (
                         <div style={{
-                            marginTop: '16px', display: 'flex', justifyContent: 'flex-end',
+                            marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'flex-end',
                         }}>
                             <div style={{
-                                minWidth: '280px', padding: '16px 20px',
-                                borderRadius: '12px',
+                                minWidth: '280px', padding: 'var(--space-4) var(--space-5)',
+                                borderRadius: 'var(--radius-lg)',
                                 background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(139,92,246,0.04))',
                                 border: '1px solid rgba(37,99,235,0.15)',
                             }}>
@@ -1023,7 +1023,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 {selectedBidding && selectedBidding.estimatedValue > 0 && (
                                     <div style={{
                                         marginTop: '8px', fontSize: '0.75rem',
-                                        color: total > selectedBidding.estimatedValue ? '#ef4444' : '#22c55e',
+                                        color: total > selectedBidding.estimatedValue ? 'var(--color-danger)' : 'var(--color-success)',
                                         fontWeight: 600, textAlign: 'right',
                                     }}>
                                         {total > selectedBidding.estimatedValue
@@ -1041,19 +1041,19 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             {/* ── Letter Tab ── */}
             {activeTab === 'letter' && (
                 <div style={cardStyle}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                         <div>
-                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                 <FileText size={18} color="var(--color-primary)" /> Texto Principal da Carta
                             </h3>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>Recomendamos pedir para a IA escrever o texto formal baseado no edital e nos itens.</span>
+                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>Recomendamos pedir para a IA escrever o texto formal baseado no edital e nos itens.</span>
                         </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                             <button
                                 className="btn btn-outline"
                                 onClick={handleSaveLetter}
                                 disabled={isSaving}
-                                style={{ padding: '8px 16px', borderRadius: '10px', fontSize: '0.85rem' }}
+                                style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)' }}
                             >
                                 {isSaving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Salvar Rascunho
                             </button>
@@ -1062,10 +1062,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 onClick={handleGenerateLetter}
                                 disabled={isLetterLoading}
                                 style={{
-                                    padding: '8px 16px', borderRadius: '10px', fontSize: '0.85rem',
+                                    padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)',
                                     background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
                                     color: 'white', border: 'none',
-                                    display: 'flex', alignItems: 'center', gap: '6px'
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
                                 }}
                             >
                                 {isLetterLoading ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
@@ -1076,17 +1076,17 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
                     {/* Proposal Configs */}
                     <div style={{
-                        background: 'rgba(37, 99, 235, 0.03)',
-                        padding: '16px',
-                        borderRadius: '12px',
+                        background: 'var(--color-primary-light)',
+                        padding: 'var(--space-4)',
+                        borderRadius: 'var(--radius-lg)',
                         border: '1px solid rgba(37, 99, 235, 0.1)',
-                        marginBottom: '16px',
+                        marginBottom: 'var(--space-4)',
                         display: 'grid',
                         gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '20px'
+                        gap: 'var(--space-5)'
                     }}>
                         <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>Validade da Proposta (dias)</label>
+                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Validade da Proposta (dias)</label>
                             <input
                                 type="number"
                                 value={validityDays}
@@ -1098,7 +1098,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             />
                         </div>
                         <div>
-                            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>Modelo de Assinatura</label>
+                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Modelo de Assinatura</label>
                             <select
                                 value={signatureMode}
                                 onChange={e => {
@@ -1116,44 +1116,44 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
                     {/* Image Uploads UI with Previews */}
                     <div style={{
-                        background: 'rgba(37, 99, 235, 0.03)',
-                        padding: '16px',
-                        borderRadius: '12px',
+                        background: 'var(--color-primary-light)',
+                        padding: 'var(--space-4)',
+                        borderRadius: 'var(--radius-lg)',
                         border: '1px solid rgba(37, 99, 235, 0.1)',
-                        marginBottom: '16px',
+                        marginBottom: 'var(--space-4)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '16px'
+                        gap: 'var(--space-4)'
                     }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
                             <div>
-                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Cabeçalho (Timbrado Topo)</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Cabeçalho (Timbrado Topo)</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                                     <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span style={{ fontSize: '0.7rem' }}>Alt:</span>
                                         <input type="number" value={headerImageHeight} onChange={e => setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
                                     </div>
-                                    {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                    {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
                                 {headerImage && (
-                                    <div style={{ marginTop: '10px', border: '1px dashed #ccc', padding: '4px', borderRadius: '4px', maxHeight: '100px', overflow: 'hidden', background: '#fff' }}>
+                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '100px', overflow: 'hidden', background: '#fff' }}>
                                         <img src={headerImage} alt="Header Preview" style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'contain' }} />
                                     </div>
                                 )}
                             </div>
                             <div>
-                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>Rodapé (Timbrado Base)</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Rodapé (Timbrado Base)</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                                     <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span style={{ fontSize: '0.7rem' }}>Alt:</span>
                                         <input type="number" value={footerImageHeight} onChange={e => setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
                                     </div>
-                                    {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: '0.7rem', color: '#e11d48', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                    {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
                                 {footerImage && (
-                                    <div style={{ marginTop: '10px', border: '1px dashed #ccc', padding: '4px', borderRadius: '4px', maxHeight: '80px', overflow: 'hidden', background: '#fff' }}>
+                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '80px', overflow: 'hidden', background: '#fff' }}>
                                         <img src={footerImage} alt="Footer Preview" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
                                     </div>
                                 )}
@@ -1165,9 +1165,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 onClick={handleSaveCompanyTemplate}
                                 disabled={isSavingTemplate || !selectedCompanyId}
                                 style={{
-                                    padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600,
+                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
                                     background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
-                                    color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px',
+                                    color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -1182,9 +1182,9 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         onChange={e => setLetterContent(e.target.value)}
                         placeholder="Nenhuma carta gerada ainda. Clique em 'Gerar com IA' ou digite seu texto."
                         style={{
-                            width: '100%', minHeight: '400px', padding: '16px',
-                            borderRadius: '12px', border: '1px solid var(--color-border)',
-                            fontSize: '0.9rem', lineHeight: 1.6, background: 'var(--color-bg-base)',
+                            width: '100%', minHeight: '400px', padding: 'var(--space-4)',
+                            borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)',
+                            fontSize: 'var(--text-base)', lineHeight: 1.6, background: 'var(--color-bg-base)',
                             color: 'var(--color-text-primary)'
                         }}
                     />
@@ -1194,14 +1194,14 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             {/* ── Empty State ── */}
             {!proposal && items.length === 0 && (
                 <div style={{
-                    ...cardStyle, textAlign: 'center', padding: '60px',
+                    ...cardStyle, textAlign: 'center', padding: 'var(--space-16)',
                     color: 'var(--color-text-tertiary)',
                 }}>
-                    <DollarSign size={48} strokeWidth={1.5} style={{ marginBottom: '16px', opacity: 0.3 }} />
-                    <h3 style={{ margin: '0 0 8px 0', fontWeight: 600, fontSize: '1.1rem' }}>
+                    <DollarSign size={48} strokeWidth={1.5} style={{ marginBottom: 'var(--space-4)', opacity: 0.3 }} />
+                    <h3 style={{ margin: '0 0 var(--space-2) 0', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xl)' }}>
                         Nenhuma proposta selecionada
                     </h3>
-                    <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--text-base)' }}>
                         Selecione uma licitação com análise IA e uma empresa para criar uma proposta de preços.
                     </p>
                 </div>
@@ -1212,23 +1212,23 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
 // Styles
 const thStyle: React.CSSProperties = {
-    padding: '10px 12px', fontWeight: 700, fontSize: '0.75rem',
+    padding: 'var(--space-3)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)',
     color: 'var(--color-text-secondary)', textAlign: 'center',
     textTransform: 'uppercase', letterSpacing: '0.5px',
 };
 const tdStyle: React.CSSProperties = {
-    padding: '8px 12px', verticalAlign: 'middle',
+    padding: 'var(--space-2) var(--space-3)', verticalAlign: 'middle',
 };
 const tdCenterStyle: React.CSSProperties = {
     ...tdStyle, textAlign: 'center',
 };
 const inputStyle: React.CSSProperties = {
-    padding: '4px 8px', borderRadius: '6px',
+    padding: '4px var(--space-2)', borderRadius: 'var(--radius-sm)',
     border: '1px solid var(--color-primary)',
-    fontSize: '0.8rem', width: '100%',
+    fontSize: 'var(--text-md)', width: '100%',
     background: 'var(--color-bg-base)',
 };
 const iconBtnStyle: React.CSSProperties = {
     background: 'none', border: 'none', cursor: 'pointer',
-    padding: '4px', borderRadius: '4px',
+    padding: '4px', borderRadius: 'var(--radius-sm)',
 };

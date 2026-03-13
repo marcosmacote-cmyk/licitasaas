@@ -13,12 +13,12 @@ interface Props {
 }
 
 const DOCUMENT_GROUP_META: Record<string, { icon: any; color: string; priority: number }> = {
-    'Habilitação Jurídica': { icon: Shield, color: '#3b82f6', priority: 1 },
-    'Regularidade Fiscal, Social e Trabalhista': { icon: FileSearch, color: '#10b981', priority: 2 },
-    'Qualificação Técnica': { icon: Briefcase, color: '#8b5cf6', priority: 3 },
-    'Qualificação Econômica Financeira': { icon: FileText, color: '#f59e0b', priority: 4 },
+    'Habilitação Jurídica': { icon: Shield, color: 'var(--color-primary)', priority: 1 },
+    'Regularidade Fiscal, Social e Trabalhista': { icon: FileSearch, color: 'var(--color-success)', priority: 2 },
+    'Qualificação Técnica': { icon: Briefcase, color: 'var(--color-ai)', priority: 3 },
+    'Qualificação Econômica Financeira': { icon: FileText, color: 'var(--color-warning)', priority: 4 },
     'Declarações': { icon: Sparkles, color: '#ec4899', priority: 5 },
-    'Outros': { icon: HelpCircle, color: '#64748b', priority: 99 },
+    'Outros': { icon: HelpCircle, color: 'var(--color-neutral)', priority: 99 },
 };
 
 function getGroupMeta(group: string) {
@@ -223,19 +223,19 @@ function RequirementCard({
 
     return (
         <div style={{
-            borderRadius: '12px',
+            borderRadius: 'var(--radius-lg)',
             border: `1px solid ${isIgnored ? 'var(--color-border)' : isSatisfied ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.25)'}`,
             background: statusBg,
             overflow: 'hidden',
-            transition: 'all 0.2s ease',
+            transition: 'var(--transition-fast)',
         }}>
             {/* Header */}
             <div
                 style={{
-                    padding: '14px 18px',
+                    padding: 'var(--space-4) var(--space-5)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
+                    gap: 'var(--space-3)',
                     cursor: 'pointer',
                     userSelect: 'none',
                 }}
@@ -258,17 +258,17 @@ function RequirementCard({
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         {reqItem && (
                             <span style={{
-                                padding: '2px 8px', borderRadius: '4px',
+                                padding: '2px var(--space-2)', borderRadius: 'var(--radius-sm)',
                                 background: 'var(--color-primary)', color: 'white',
-                                fontSize: '0.65rem', fontWeight: 700, flexShrink: 0,
+                                fontSize: '0.65rem', fontWeight: 'var(--font-bold)', flexShrink: 0,
                                 letterSpacing: '0.05em',
                             }}>{reqItem}</span>
                         )}
                         <span style={{
-                            fontSize: '0.875rem', fontWeight: 600,
+                            fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
                             color: isIgnored ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
                             textDecoration: isIgnored ? 'line-through' : 'none',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -277,12 +277,12 @@ function RequirementCard({
                         </span>
                     </div>
                     {isSatisfied && !isIgnored && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                             {note && (
                                 <span style={{
-                                    padding: '2px 10px', borderRadius: '12px',
+                                    padding: '2px var(--space-3)', borderRadius: 'var(--radius-lg)',
                                     background: 'rgba(56, 189, 248, 0.15)', color: '#0369a1',
-                                    fontSize: '0.65rem', fontWeight: 800,
+                                    fontSize: '0.65rem', fontWeight: 'var(--font-bold)',
                                     display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid rgba(56, 189, 248, 0.3)'
                                 }}>
                                     <Sparkles size={10} /> {note}
@@ -290,9 +290,9 @@ function RequirementCard({
                             )}
                             {selectedDocs.map(doc => (
                                 <span key={doc.docId} style={{
-                                    padding: '2px 10px', borderRadius: '12px',
+                                    padding: '2px var(--space-3)', borderRadius: 'var(--radius-lg)',
                                     background: 'rgba(34,197,94,0.1)', color: '#16a34a',
-                                    fontSize: '0.7rem', fontWeight: 600,
+                                    fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)',
                                     display: 'flex', alignItems: 'center', gap: '4px',
                                     maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                 }}>
@@ -303,9 +303,9 @@ function RequirementCard({
                     )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
                     <label
-                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: 500, cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: '4px 8px', borderRadius: '6px', background: isIgnored ? 'rgba(148,163,184,0.12)' : 'transparent', border: '1px solid var(--color-border)' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: '4px var(--space-2)', borderRadius: 'var(--radius-sm)', background: isIgnored ? 'rgba(148,163,184,0.12)' : 'transparent', border: '1px solid var(--color-border)' }}
                         onClick={e => e.stopPropagation()}
                     >
                         <input
@@ -324,16 +324,16 @@ function RequirementCard({
             {isExpanded && !isIgnored && (
                 <div style={{
                     borderTop: '1px solid var(--color-border)',
-                    padding: '14px 18px',
+                    padding: 'var(--space-4) var(--space-5)',
                     background: 'var(--color-bg-surface)',
                 }}>
                     {/* Search */}
                     <div style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '8px 12px', borderRadius: '8px',
+                        display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
                         border: '1px solid var(--color-border)',
                         background: 'var(--color-bg-body)',
-                        marginBottom: '12px',
+                        marginBottom: 'var(--space-3)',
                     }}>
                         <Search size={14} color="var(--color-text-tertiary)" />
                         <input
@@ -366,9 +366,9 @@ function RequirementCard({
                                 return (
                                     <div key={group} style={{ marginBottom: '10px' }}>
                                         <div style={{
-                                            display: 'flex', alignItems: 'center', gap: '6px',
-                                            padding: '4px 8px', marginBottom: '4px',
-                                            fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+                                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                            padding: '4px var(--space-2)', marginBottom: '4px',
+                                            fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', textTransform: 'uppercase',
                                             color: meta.color, letterSpacing: '0.05em',
                                         }}>
                                             <Icon size={12} />
@@ -381,8 +381,8 @@ function RequirementCard({
                                                 <label
                                                     key={doc.id}
                                                     style={{
-                                                        display: 'flex', alignItems: 'center', gap: '10px',
-                                                        padding: '8px 10px', borderRadius: '8px',
+                                                        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                                                        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
                                                         cursor: 'pointer', marginBottom: '2px',
                                                         background: isSelected ? `${meta.color}0A` : 'transparent',
                                                         border: `1px solid ${isSelected ? meta.color + '40' : 'transparent'}`,
@@ -408,7 +408,7 @@ function RequirementCard({
                                                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                                                         }}>
                                                             {doc.fileName}
-                                                            {isExpired && <span style={{ color: '#ef4444', fontWeight: 700, marginLeft: '6px' }}>⚠ Vencido</span>}
+                                                            {isExpired && <span style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-bold)', marginLeft: 'var(--space-2)' }}>⚠ Vencido</span>}
                                                         </div>
                                                     </div>
                                                     <a
@@ -989,13 +989,13 @@ export function DossierExporter({ biddings, companies }: Props) {
     const pendingCount = requiredList.length - satisfiedCount - ignoredCount;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
 
             {/* ── Top Bar: Config ── */}
             <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr auto',
-                gap: '16px', alignItems: 'end',
-                padding: '24px', borderRadius: '16px',
+                gap: 'var(--space-4)', alignItems: 'end',
+                padding: 'var(--space-6)', borderRadius: 'var(--radius-xl)',
                 background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(139,92,246,0.03))',
                 border: '1px solid var(--color-border)',
             }}>
@@ -1015,7 +1015,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                         ))}
                     </select>
                     {biddingsWithAnalysis.length === 0 && (
-                        <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px' }}>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                             Apenas licitações na coluna "Preparando Documentação" com Análise IA aparecem aqui.
                         </p>
                     )}
@@ -1039,9 +1039,9 @@ export function DossierExporter({ biddings, companies }: Props) {
                     </select>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                     <label style={{ ...labelStyle, marginBottom: 0 }}>Situação</label>
-                    <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
                         {(['active', 'expired', 'all'] as const).map(filter => (
                             <button
                                 key={filter}
@@ -1066,11 +1066,11 @@ export function DossierExporter({ biddings, companies }: Props) {
             {selectedBidding && selectedCompany && (
                 <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '16px 24px', borderRadius: '12px',
+                    padding: 'var(--space-4) var(--space-6)', borderRadius: 'var(--radius-lg)',
                     background: readinessScore >= 100 ? 'rgba(34,197,94,0.06)' : readinessScore >= 50 ? 'rgba(245,158,11,0.06)' : 'rgba(239,68,68,0.06)',
                     border: `1px solid ${readinessScore >= 100 ? 'rgba(34,197,94,0.25)' : readinessScore >= 50 ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)'}`,
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
                         {/* Circular Score */}
                         <div style={{
                             position: 'relative', width: '56px', height: '56px',
@@ -1095,28 +1095,28 @@ export function DossierExporter({ biddings, companies }: Props) {
 
                         {/* Stats */}
                         <div>
-                            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                                 Índice de Prontidão
                             </div>
-                            <div style={{ display: 'flex', gap: '16px', marginTop: '4px', fontSize: '0.75rem' }}>
-                                <span style={{ color: '#22c55e', fontWeight: 600 }}>✅ {satisfiedCount} vinculados</span>
-                                <span style={{ color: '#ef4444', fontWeight: 600 }}>❌ {pendingCount} pendentes</span>
-                                {ignoredCount > 0 && <span style={{ color: '#94a3b8', fontWeight: 600 }}>⏭ {ignoredCount} ignorados</span>}
+                            <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: '4px', fontSize: 'var(--text-sm)' }}>
+                                <span style={{ color: 'var(--color-success)', fontWeight: 'var(--font-semibold)' }}>✅ {satisfiedCount} vinculados</span>
+                                <span style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-semibold)' }}>❌ {pendingCount} pendentes</span>
+                                {ignoredCount > 0 && <span style={{ color: 'var(--color-neutral)', fontWeight: 'var(--font-semibold)' }}>⏭ {ignoredCount} ignorados</span>}
                             </div>
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                         <button
                             className="btn btn-outline"
                             onClick={handleExportPdfReport}
                             disabled={requiredList.length === 0}
                             style={{
-                                padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px',
-                                borderRadius: '12px', fontWeight: 600, fontSize: '0.8125rem',
+                                padding: 'var(--space-3) var(--space-5)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)',
                                 border: '1px solid rgba(139,92,246,0.3)',
-                                color: '#7c3aed',
-                                background: 'rgba(139,92,246,0.05)',
+                                color: 'var(--color-ai)',
+                                background: 'var(--color-ai-bg)',
                             }}
                             title="Exportar relatório PDF de conformidade documental"
                         >
@@ -1129,9 +1129,9 @@ export function DossierExporter({ biddings, companies }: Props) {
                             onClick={handleExportZip}
                             disabled={isExporting || matchedDocs.length === 0}
                             style={{
-                                padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '10px',
+                                padding: 'var(--space-3) var(--space-7)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
                                 background: matchedDocs.length > 0 ? 'linear-gradient(135deg, var(--color-primary), #4f46e5)' : undefined,
-                                borderRadius: '12px', fontWeight: 700, fontSize: '0.875rem',
+                                borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)',
                                 boxShadow: matchedDocs.length > 0 ? '0 4px 12px rgba(37,99,235,0.25)' : undefined,
                             }}
                         >
@@ -1145,8 +1145,8 @@ export function DossierExporter({ biddings, companies }: Props) {
             {/* ── AI Badge ── */}
             {selectedBidding && selectedCompany && (isAiLoading || aiApplied) && (
                 <div style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 18px', borderRadius: '10px',
+                    display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                    padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)',
                     background: isAiLoading
                         ? 'linear-gradient(135deg, rgba(245,158,11,0.06), rgba(139,92,246,0.06))'
                         : 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.06))',
@@ -1178,11 +1178,11 @@ export function DossierExporter({ biddings, companies }: Props) {
 
             {/* ── Requirements List ── */}
             {selectedBidding && selectedCompany ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                     <h3 style={{
-                        margin: '0 0 4px 0', fontSize: '1rem', fontWeight: 700,
+                        margin: '0 0 4px 0', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)',
                         color: 'var(--color-text-primary)',
-                        display: 'flex', alignItems: 'center', gap: '8px',
+                        display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                     }}>
                         <FileArchive size={18} color="var(--color-primary)" />
                         Exigências do Edital ({requiredList.length})
@@ -1216,15 +1216,15 @@ export function DossierExporter({ biddings, companies }: Props) {
                 </div>
             ) : (
                 <div style={{
-                    padding: '80px 40px', borderRadius: '16px',
+                    padding: 'var(--space-20) var(--space-10)', borderRadius: 'var(--radius-xl)',
                     background: 'var(--color-bg-surface)',
                     border: '2px dashed var(--color-border)',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     color: 'var(--color-text-tertiary)', textAlign: 'center',
                 }}>
-                    <FileArchive size={56} style={{ marginBottom: '16px', opacity: 0.25 }} />
-                    <h3 style={{ margin: '0 0 8px 0', color: 'var(--color-text-secondary)', fontWeight: 700 }}>Montador Inteligente de Dossiê</h3>
-                    <p style={{ margin: 0, maxWidth: '400px', lineHeight: 1.5, fontSize: '0.875rem' }}>
+                    <FileArchive size={56} style={{ marginBottom: 'var(--space-4)', opacity: 0.25 }} />
+                    <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-bold)' }}>Montador Inteligente de Dossiê</h3>
+                    <p style={{ margin: 0, maxWidth: '400px', lineHeight: 1.5, fontSize: 'var(--text-md)' }}>
                         Selecione uma Licitação e uma Empresa acima. A IA irá pré-vincular automaticamente os documentos corretos a cada exigência do edital.
                     </p>
                 </div>
@@ -1242,21 +1242,21 @@ export function DossierExporter({ biddings, companies }: Props) {
 
 const labelStyle: React.CSSProperties = {
     display: 'flex',
-    fontSize: '0.8125rem',
-    fontWeight: 600,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-semibold)',
     color: 'var(--color-text-secondary)',
-    marginBottom: '8px',
+    marginBottom: 'var(--space-2)',
     alignItems: 'center',
-    gap: '6px',
+    gap: 'var(--space-2)',
 };
 
 const selectStyle: React.CSSProperties = {
     width: '100%',
-    padding: '10px 14px',
-    borderRadius: '10px',
+    padding: 'var(--space-3) var(--space-4)',
+    borderRadius: 'var(--radius-lg)',
     border: '1px solid var(--color-border)',
     background: 'var(--color-bg-surface)',
     color: 'var(--color-text-primary)',
-    fontSize: '0.875rem',
-    fontWeight: 500,
+    fontSize: 'var(--text-md)',
+    fontWeight: 'var(--font-medium)',
 };

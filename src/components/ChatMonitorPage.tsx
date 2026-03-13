@@ -53,7 +53,7 @@ function highlightKeywords(text: string, keyword: string | null) {
   const parts = text.split(regex);
   return parts.map((part, i) =>
     regex.test(part)
-      ? <mark key={i} style={{ background: '#fef08a', padding: '1px 3px', borderRadius: '3px', fontWeight: 600 }}>{part}</mark>
+      ? <mark key={i} style={{ background: 'var(--color-warning-bg)', padding: '1px 3px', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-semibold)' }}>{part}</mark>
       : part
   );
 }
@@ -74,18 +74,18 @@ function authorLabel(type: string | null) {
 }
 
 function authorColor(type: string | null) {
-  if (type === 'pregoeiro') return { bg: 'rgba(37, 99, 235, 0.08)', border: 'rgba(37, 99, 235, 0.15)', text: '#2563eb' };
-  if (type === 'sistema') return { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.15)', text: '#d97706' };
-  if (type === 'fornecedor') return { bg: 'rgba(100, 116, 139, 0.06)', border: 'rgba(100, 116, 139, 0.12)', text: '#64748b' };
+  if (type === 'pregoeiro') return { bg: 'var(--color-primary-light)', border: 'rgba(37, 99, 235, 0.15)', text: 'var(--color-primary)' };
+  if (type === 'sistema') return { bg: 'var(--color-warning-bg)', border: 'rgba(245, 158, 11, 0.15)', text: 'var(--color-warning)' };
+  if (type === 'fornecedor') return { bg: 'var(--color-neutral-bg)', border: 'rgba(100, 116, 139, 0.12)', text: 'var(--color-neutral)' };
   return { bg: 'var(--color-bg-surface)', border: 'var(--color-border)', text: 'var(--color-text-secondary)' };
 }
 
 function portalBadge(portal: string) {
   const p = (portal || '').toLowerCase();
-  if (p.includes('compras') || p.includes('cnet')) return { label: 'ComprasNet', color: '#059669', bg: 'rgba(5, 150, 105, 0.1)' };
-  if (p.includes('pncp')) return { label: 'PNCP', color: '#2563eb', bg: 'rgba(37, 99, 235, 0.08)' };
-  if (p.includes('bll')) return { label: 'BLL', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' };
-  return { label: portal || 'Outro', color: '#64748b', bg: 'rgba(100, 116, 139, 0.06)' };
+  if (p.includes('compras') || p.includes('cnet')) return { label: 'ComprasNet', color: 'var(--color-success)', bg: 'var(--color-success-bg)' };
+  if (p.includes('pncp')) return { label: 'PNCP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' };
+  if (p.includes('bll')) return { label: 'BLL', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' };
+  return { label: portal || 'Outro', color: 'var(--color-neutral)', bg: 'var(--color-neutral-bg)' };
 }
 
 export function ChatMonitorPage({ companies }: Props) {
@@ -312,30 +312,30 @@ export function ChatMonitorPage({ companies }: Props) {
   return (
     <div className="page-container" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
       {/* ── Top Bar ── */}
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Satellite size={22} color="#059669" />
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Monitor de Chat</h1>
+      <div style={{ padding: 'var(--space-4) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <Satellite size={22} color="var(--color-success)" />
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', margin: 0 }}>Monitor de Chat</h1>
         </div>
 
         {/* Stats */}
-        <div style={{ display: 'flex', gap: '16px', marginLeft: '24px' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-4)', marginLeft: 'var(--space-6)' }}>
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
             {totalProcesses} {totalProcesses === 1 ? 'processo' : 'processos'} · {totalMessages} {totalMessages === 1 ? 'mensagem' : 'mensagens'}
           </span>
           {importantCount > 0 && (
-            <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning)', fontWeight: 'var(--font-semibold)' }}>
               ⚡ {importantCount} com alertas
             </span>
           )}
         </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
           {refreshing && <Loader2 size={14} className="spinner" color="var(--color-text-tertiary)" />}
 
           {/* ComprasNet Watcher Status Indicator */}
           {watcherStatus && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.6875rem', color: watcherStatus.isOnline ? '#10b981' : 'var(--color-text-tertiary)', padding: '4px 10px', borderRadius: '6px', background: watcherStatus.isOnline ? 'rgba(16, 185, 129, 0.08)' : 'var(--color-bg-surface-hover)', border: '1px solid ' + (watcherStatus.isOnline ? 'rgba(16, 185, 129, 0.2)' : 'var(--color-border)') }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: watcherStatus.isOnline ? 'var(--color-success)' : 'var(--color-text-tertiary)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-sm)', background: watcherStatus.isOnline ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)', border: '1px solid ' + (watcherStatus.isOnline ? 'rgba(16, 185, 129, 0.2)' : 'var(--color-border)') }}>
               {watcherStatus.isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
               {watcherStatus.isOnline ? `Agente ativo (${watcherStatus.activeSessions || 0} abas)` : 'Agente offline'}
             </div>
@@ -352,10 +352,10 @@ export function ChatMonitorPage({ companies }: Props) {
 
       {/* ── Config Panel (collapsible) ── */}
       {showConfig && (
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-base)', flexShrink: 0, display: 'grid', gap: '16px', maxHeight: '300px', overflowY: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', alignItems: 'end' }}>
+        <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-base)', flexShrink: 0, display: 'grid', gap: 'var(--space-4)', maxHeight: '300px', overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
                 <Bell size={12} /> Palavras-chave de Alerta
               </label>
               <input
@@ -363,11 +363,11 @@ export function ChatMonitorPage({ companies }: Props) {
                 value={monitorConfig.keywords}
                 onChange={(e) => setMonitorConfig({...monitorConfig, keywords: e.target.value})}
                 placeholder="suspensa, reaberta, vencedora..."
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+                style={{ width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}
               />
             </div>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
                 <Phone size={12} color="#10b981" /> WhatsApp
               </label>
               <input
@@ -375,11 +375,11 @@ export function ChatMonitorPage({ companies }: Props) {
                 value={monitorConfig.phoneNumber}
                 onChange={(e) => setMonitorConfig({...monitorConfig, phoneNumber: e.target.value})}
                 placeholder="+5585999999999"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+                style={{ width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}
               />
             </div>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, marginBottom: '6px', color: 'var(--color-text-secondary)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
                 <Send size={12} color="#0088cc" /> Telegram Chat ID
               </label>
               <input
@@ -387,15 +387,15 @@ export function ChatMonitorPage({ companies }: Props) {
                 value={monitorConfig.telegramChatId}
                 onChange={(e) => setMonitorConfig({...monitorConfig, telegramChatId: e.target.value})}
                 placeholder="Chat ID ou @usuario"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}
+                style={{ width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}
               />
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
               <button
                 className="btn btn-ghost"
-                style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '0.75rem', gap: '6px', border: '1px solid var(--color-border)' }}
+                style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', border: '1px solid var(--color-border)' }}
                 disabled={testingNotif}
                 onClick={async () => {
                   setTestingNotif(true);
@@ -417,7 +417,7 @@ export function ChatMonitorPage({ companies }: Props) {
               </button>
               <button
                 className="btn btn-primary"
-                style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '0.75rem', gap: '6px' }}
+                style={{ padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)' }}
                 disabled={savingConfig}
                 onClick={async () => {
                   setSavingConfig(true);
@@ -434,7 +434,7 @@ export function ChatMonitorPage({ companies }: Props) {
               </button>
             </div>
             {health && (
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+              <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   {health.lastPollStatus === 'success' ? <CheckCircle size={12} color="var(--color-success)" /> : health.lastPollStatus === 'error' ? <XCircle size={12} color="var(--color-danger)" /> : <AlertTriangle size={12} color="var(--color-warning)" />}
                   {health.lastPollTime ? new Date(health.lastPollTime).toLocaleString('pt-BR') : 'Aguardando...'}
@@ -445,14 +445,14 @@ export function ChatMonitorPage({ companies }: Props) {
             )}
           </div>
           {/* ComprasNet Watcher Status */}
-          <div style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.15)', background: 'rgba(16, 185, 129, 0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {watcherStatus?.isOnline ? <Wifi size={14} color="#10b981" /> : <WifiOff size={14} color="var(--color-text-tertiary)" />}
+          <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16, 185, 129, 0.15)', background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              {watcherStatus?.isOnline ? <Wifi size={14} color="var(--color-success)" /> : <WifiOff size={14} color="var(--color-text-tertiary)" />}
               <div>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                   Agente Local (ComprasNet)
                 </div>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
                   {watcherStatus?.isOnline
                     ? `Sincronizado: ${watcherStatus.machineName} (${watcherStatus.activeSessions || 0} abas)`
                     : 'Offline — inicie o agente na sua máquina'}
@@ -460,7 +460,7 @@ export function ChatMonitorPage({ companies }: Props) {
               </div>
             </div>
           </div>
-          <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Info size={10} /> Ative o ícone 📻 no Kanban para que o agente local (ou o servidor PNCP) monitore o processo.
           </div>
         </div>
@@ -473,7 +473,7 @@ export function ChatMonitorPage({ companies }: Props) {
         <div style={{ width: '380px', minWidth: '320px', borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', background: 'var(--color-bg-base)' }}>
 
           {/* Filters */}
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {/* Search */}
             <div style={{ position: 'relative' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
@@ -482,16 +482,16 @@ export function ChatMonitorPage({ companies }: Props) {
                 placeholder="Buscar por edital, nº processo, UASG..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px 8px 32px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.8125rem', color: 'var(--color-text-primary)', outline: 'none' }}
+                style={{ width: '100%', padding: 'var(--space-2) var(--space-3) var(--space-2) var(--space-8)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none' }}
               />
             </div>
 
             {/* Dropdowns Row */}
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
               <select
                 value={companyFilter}
                 onChange={(e) => setCompanyFilter(e.target.value)}
-                style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
               >
                 <option value="all">Todas empresas</option>
                 {companies.map(c => (
@@ -501,7 +501,7 @@ export function ChatMonitorPage({ companies }: Props) {
               <select
                 value={platformFilter}
                 onChange={(e) => setPlatformFilter(e.target.value)}
-                style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: '0.75rem', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
               >
                 <option value="all">Todas plataformas</option>
                 <option value="comprasnet">ComprasNet</option>
@@ -523,15 +523,15 @@ export function ChatMonitorPage({ companies }: Props) {
                   onClick={() => setActiveTab(tab.key)}
                   style={{
                     flex: 1,
-                    padding: '6px 10px',
-                    borderRadius: '6px',
+                    padding: '6px var(--space-3)',
+                    borderRadius: 'var(--radius-sm)',
                     border: 'none',
-                    fontSize: '0.75rem',
-                    fontWeight: activeTab === tab.key ? 600 : 400,
+                    fontSize: 'var(--text-sm)',
+                    fontWeight: activeTab === tab.key ? 'var(--font-semibold)' : 'var(--font-normal)',
                     background: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-bg-surface)',
                     color: activeTab === tab.key ? 'white' : 'var(--color-text-secondary)',
                     cursor: 'pointer',
-                    transition: 'all 150ms',
+                    transition: 'var(--transition-fast)',
                   }}
                 >
                   {tab.label} {tab.count > 0 && <span style={{ opacity: 0.7 }}>({tab.count})</span>}
@@ -543,8 +543,8 @@ export function ChatMonitorPage({ companies }: Props) {
           {/* Process List */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {filteredProcesses.length === 0 ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
-                <MessageSquare size={32} style={{ marginBottom: '12px', opacity: 0.3 }} />
+              <div style={{ padding: 'var(--space-10) var(--space-5)', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-md)' }}>
+                <MessageSquare size={32} style={{ marginBottom: 'var(--space-3)', opacity: 0.3 }} />
                 <p>Nenhuma mensagem capturada ainda.</p>
                 <p style={{ fontSize: '0.75rem', marginTop: '8px' }}>Ative o monitoramento nos cards de licitação.</p>
               </div>
@@ -561,18 +561,18 @@ export function ChatMonitorPage({ companies }: Props) {
                     key={proc.id}
                     onClick={() => handleSelectProcess(proc.id)}
                     style={{
-                      padding: '14px 16px',
+                      padding: 'var(--space-4) var(--space-4)',
                       borderBottom: '1px solid var(--color-border)',
                       cursor: 'pointer',
                       background: isSelected ? 'var(--color-primary-light, rgba(37, 99, 235, 0.06))' : 'transparent',
                       borderLeft: isSelected ? '3px solid var(--color-primary)' : '3px solid transparent',
-                      transition: 'all 150ms',
+                      transition: 'var(--transition-fast)',
                     }}
                   >
                     {/* Title + Badge */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
                       <span style={{ fontSize: '0.8125rem', fontWeight: proc.unreadCount > 0 ? 700 : 600, color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>
-                        {proc.isImportant && <span style={{ color: '#f59e0b', marginRight: '4px' }}>⚡</span>}
+                        {proc.isImportant && <span style={{ color: 'var(--color-warning)', marginRight: '4px' }}>⚡</span>}
                         {proc.title.substring(0, 70)}{proc.title.length > 70 ? '...' : ''}
                       </span>
                       <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: badge.bg, color: badge.color, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -607,15 +607,15 @@ export function ChatMonitorPage({ companies }: Props) {
 
                     {/* Message count + unread badge + link warning */}
                     <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center' }}>
-                      {(proc as any).hasPncpLink === false && proc.totalMessages === 0 ? (
-                        <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        {(proc as any).hasPncpLink === false && proc.totalMessages === 0 ? (
+                          <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <AlertTriangle size={10} /> Sem link PNCP — edite o processo
                         </span>
                       ) : (
                         <>
                           <span>📨 {proc.totalMessages} msgs</span>
                           {proc.unreadCount > 0 && (
-                            <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'var(--color-primary)', color: 'white', fontWeight: 600, fontSize: '0.625rem' }}>
+                            <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
                               {proc.unreadCount} novas
                             </span>
                           )}
@@ -634,40 +634,40 @@ export function ChatMonitorPage({ companies }: Props) {
           {selectedProc ? (
             <>
               {/* Process Header */}
-              <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', flexShrink: 0 }}>
+              <div style={{ padding: 'var(--space-4) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--color-text-primary)' }}>
+                    <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', margin: '0 0 4px 0', color: 'var(--color-text-primary)' }}>
                       {selectedProc.title}
                     </h2>
-                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
                       {selectedProc.uasg && <span>UASG: {selectedProc.uasg}</span>}
                       {selectedProc.modality && <span>{selectedProc.modality}</span>}
                       <span>{portalBadge(selectedProc.portal).label}</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', background: 'var(--color-bg-surface-hover)', color: 'var(--color-text-secondary)' }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                    <span style={{ fontSize: 'var(--text-sm)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface-hover)', color: 'var(--color-text-secondary)' }}>
                       {selectedProc.totalMessages} mensagens
                     </span>
                     <button
                       title={selectedProc.isImportant ? 'Remover destaque' : 'Marcar como importante'}
                       onClick={(e) => { e.stopPropagation(); toggleProcessImportant(selectedProc.id, selectedProc.isImportant); }}
-                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: selectedProc.isImportant ? 'rgba(245, 158, 11, 0.15)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: 'none', background: selectedProc.isImportant ? 'var(--color-warning-bg)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
-                      <Star size={16} fill={selectedProc.isImportant ? '#f59e0b' : 'none'} color={selectedProc.isImportant ? '#f59e0b' : 'var(--color-text-tertiary)'} />
+                      <Star size={16} fill={selectedProc.isImportant ? 'var(--color-warning)' : 'none'} color={selectedProc.isImportant ? 'var(--color-warning)' : 'var(--color-text-tertiary)'} />
                     </button>
                     <button
                       title={selectedProc.isArchived ? 'Desarquivar' : 'Arquivar'}
                       onClick={(e) => { e.stopPropagation(); toggleProcessArchive(selectedProc.id, selectedProc.isArchived); }}
-                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
                       {selectedProc.isArchived ? <ArchiveRestore size={16} color="var(--color-text-tertiary)" /> : <Archive size={16} color="var(--color-text-tertiary)" />}
                     </button>
                     <button
                       title="Marcar tudo como lido"
                       onClick={() => markProcessRead(selectedProc.id)}
-                      style={{ padding: '4px', borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
                       <CheckCheck size={16} color="var(--color-text-tertiary)" />
                     </button>
@@ -676,16 +676,16 @@ export function ChatMonitorPage({ companies }: Props) {
               </div>
 
               {/* Messages Area */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4) var(--space-6)' }}>
                 {loadingMessages ? (
-                  <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-10)' }}>
                     <Loader2 size={24} className="spinner" color="var(--color-text-tertiary)" />
                   </div>
                 ) : (
-                  <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                     {selectedMessages.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>
-                        <MessageSquare size={32} style={{ marginBottom: '8px', opacity: 0.3 }} />
+                      <div style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-md)' }}>
+                        <MessageSquare size={32} style={{ marginBottom: 'var(--space-2)', opacity: 0.3 }} />
                         <p>Nenhuma mensagem capturada para este processo.</p>
                       </div>
                     ) : (
@@ -697,25 +697,25 @@ export function ChatMonitorPage({ companies }: Props) {
                           <div
                             key={msg.id}
                             style={{
-                              padding: '14px 18px',
-                              borderRadius: '12px',
+                              padding: 'var(--space-4) var(--space-5)',
+                              borderRadius: 'var(--radius-lg)',
                               background: colors.bg,
                               border: `1px solid ${hasKeyword ? 'rgba(245, 158, 11, 0.3)' : colors.border}`,
                               boxShadow: hasKeyword ? '0 0 0 1px rgba(245, 158, 11, 0.1)' : 'none',
                             }}
                           >
                             {/* Author Header */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.text, fontSize: '0.75rem', fontWeight: 600 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: colors.text, fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
                                 <AuthorIcon type={msg.authorType} />
                                 <span>{authorLabel(msg.authorType)}</span>
                                 {msg.itemRef && (
-                                  <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', fontSize: '0.6875rem', fontWeight: 400 }}>
+                                  <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.05)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-normal)' }}>
                                     Item {msg.itemRef}
                                   </span>
                                 )}
                                 {hasKeyword && (
-                                  <span style={{ padding: '1px 8px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', fontSize: '0.6875rem', fontWeight: 600 }}>
+                                  <span style={{ padding: '1px var(--space-2)', borderRadius: 'var(--radius-lg)', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
                                     ⚡ {msg.detectedKeyword}
                                   </span>
                                 )}
@@ -726,14 +726,14 @@ export function ChatMonitorPage({ companies }: Props) {
                             </div>
 
                             {/* Message Content */}
-                            <div style={{ fontSize: '0.8125rem', lineHeight: 1.6, color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>
+                            <div style={{ fontSize: 'var(--text-md)', lineHeight: 1.6, color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>
                               {highlightKeywords(msg.content, msg.detectedKeyword)}
                             </div>
 
                             {/* Source badge */}
                             {msg.captureSource && (
-                              <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
+                              <div style={{ marginTop: 'var(--space-2)', display: 'flex', justifyContent: 'flex-end' }}>
+                                <span style={{ fontSize: 'var(--text-xs)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
                                   via {msg.captureSource === 'comprasnet-xhr' ? 'ComprasNet' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
                                 </span>
                               </div>
@@ -748,11 +748,11 @@ export function ChatMonitorPage({ companies }: Props) {
               </div>
             </>
           ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', gap: '16px' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', gap: 'var(--space-4)' }}>
               <Satellite size={48} style={{ opacity: 0.2 }} />
               <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Selecione um processo</p>
-                <p style={{ fontSize: '0.8125rem' }}>Escolha um processo na lista à esquerda para ver as mensagens do chat.</p>
+                <p style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Selecione um processo</p>
+                <p style={{ fontSize: 'var(--text-md)' }}>Escolha um processo na lista à esquerda para ver as mensagens do chat.</p>
               </div>
             </div>
           )}
