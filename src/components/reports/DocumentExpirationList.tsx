@@ -284,13 +284,13 @@ export function DocumentExpirationList({ companies }: Props) {
     const getStatusBadge = (status: string, daysR: number | null) => {
         switch (status) {
             case 'expired':
-                return <span style={{ ...badgeStyle, background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>Expirado há {Math.abs(daysR || 0)} dias</span>;
+                return <span className="doc-badge" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>Expirado há {Math.abs(daysR || 0)} dias</span>;
             case 'warning':
-                return <span style={{ ...badgeStyle, background: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning)' }}>Vence em {daysR} dias</span>;
+                return <span className="doc-badge" style={{ background: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning)' }}>Vence em {daysR} dias</span>;
             case 'valid':
-                return <span style={{ ...badgeStyle, background: 'rgba(34, 197, 94, 0.1)', color: 'var(--color-success)' }}>Válido</span>;
+                return <span className="doc-badge" style={{ background: 'rgba(34, 197, 94, 0.1)', color: 'var(--color-success)' }}>Válido</span>;
             default:
-                return <span style={{ ...badgeStyle, background: 'var(--color-bg-body)', color: 'var(--color-text-tertiary)' }}>Sem Validade</span>;
+                return <span className="doc-badge" style={{ background: 'var(--color-bg-body)', color: 'var(--color-text-tertiary)' }}>Sem Validade</span>;
         }
     };
 
@@ -335,7 +335,7 @@ export function DocumentExpirationList({ companies }: Props) {
             </div>
 
             {/* ── Toolbar: Search + Filters Toggle + Export ── */}
-            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+            <div className="card" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-4)' }}>
                 {/* Search */}
                 <div style={{ flex: 1, maxWidth: '360px', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', background: 'var(--color-bg-body)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                     <Search size={16} color="var(--color-text-secondary)" />
@@ -390,22 +390,22 @@ export function DocumentExpirationList({ companies }: Props) {
                     animation: 'slideDown 0.2s ease-out'
                 }}>
                     <div>
-                        <label style={filterLabelStyle}>Empresa</label>
+                        <label className="form-label">Empresa</label>
                         <select
                             value={filterCompany}
                             onChange={e => setFilterCompany(e.target.value)}
-                            style={filterInputStyle}
+                            className="form-select"
                         >
                             <option value="">Todas as empresas</option>
                             {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label style={filterLabelStyle}>Status</label>
+                        <label className="form-label">Status</label>
                         <select
                             value={filterStatus}
                             onChange={e => setFilterStatus(e.target.value as DocStatus | '')}
-                            style={filterInputStyle}
+                            className="form-select"
                         >
                             <option value="">Todos os status</option>
                             <option value="expired">🔴 Vencido</option>
@@ -415,21 +415,21 @@ export function DocumentExpirationList({ companies }: Props) {
                         </select>
                     </div>
                     <div>
-                        <label style={filterLabelStyle}>Vencimento a partir de</label>
+                        <label className="form-label">Vencimento a partir de</label>
                         <input
                             type="date"
                             value={filterDateFrom}
                             onChange={e => setFilterDateFrom(e.target.value)}
-                            style={filterInputStyle}
+                            className="form-select"
                         />
                     </div>
                     <div>
-                        <label style={filterLabelStyle}>Vencimento até</label>
+                        <label className="form-label">Vencimento até</label>
                         <input
                             type="date"
                             value={filterDateTo}
                             onChange={e => setFilterDateTo(e.target.value)}
-                            style={filterInputStyle}
+                            className="form-select"
                         />
                     </div>
                 </div>
@@ -550,30 +550,3 @@ function SummaryCard({ label, value, total, color, bg, icon, active, onClick }: 
     );
 }
 
-// ── Styles ──
-const badgeStyle: React.CSSProperties = {
-    padding: '4px 8px',
-    borderRadius: '12px',
-    fontSize: '0.75rem',
-    fontWeight: 500,
-    whiteSpace: 'nowrap'
-};
-
-const filterLabelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    color: 'var(--color-text-secondary)',
-    marginBottom: '6px'
-};
-
-const filterInputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '8px 10px',
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--color-border)',
-    background: 'var(--color-bg-body)',
-    color: 'var(--color-text-primary)',
-    fontSize: '0.8rem',
-    outline: 'none'
-};

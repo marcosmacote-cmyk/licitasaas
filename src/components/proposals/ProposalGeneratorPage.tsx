@@ -1,15 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
 import {
     Sparkles, Plus, Trash2, Save, FileText, Loader2,
     DollarSign, Package, AlertTriangle, Edit3,
     ChevronDown, ChevronUp, Brain, Briefcase, Printer
 } from 'lucide-react';
-import { API_BASE_URL } from '../../config';
-import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
-import { useToast, ConfirmDialog } from '../ui';
-import { calculateItem, calculateTotals } from './engine';
-import type { RoundingMode } from './engine';
-import { exportExcelProposal, generateProposalPdf } from './exportServices';
+import type { BiddingProcess, CompanyProfile } from '../../types';
+import { ConfirmDialog } from '../ui';
+import { useProposal } from '../hooks/useProposal';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -22,447 +18,15 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const fmtNum = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function ProposalGeneratorPage({ biddings, companies }: Props) {
-    const toast = useToast();
-    const [selectedBiddingId, setSelectedBiddingId] = useState('');
-    const [selectedCompanyId, setSelectedCompanyId] = useState('');
-    const [proposal, setProposal] = useState<PriceProposal | null>(null);
-    const [proposals, setProposals] = useState<PriceProposal[]>([]);
-    const [items, setItems] = useState<ProposalItem[]>([]);
-    const [bdi, setBdi] = useState(0);
-    const [discount, setDiscount] = useState(0);
-    const [roundingMode, setRoundingMode] = useState<RoundingMode>('ROUND');
-    const [validityDays, setValidityDays] = useState(60);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isAiLoading, setIsAiLoading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-    const [editingItemId, setEditingItemId] = useState<string | null>(null);
-    const [confirmDeleteItemId, setConfirmDeleteItemId] = useState<string | null>(null);
-    const [isBulkEditing, setIsBulkEditing] = useState(false);
-    const [showConfig, setShowConfig] = useState(true);
-    const [saveMessage, setSaveMessage] = useState('');
-
-    // New tab state
-    const [activeTab, setActiveTab] = useState<'items' | 'letter'>('items');
-    const [letterContent, setLetterContent] = useState('');
-    const [isLetterLoading, setIsLetterLoading] = useState(false);
-
-    // Config states
-    const [headerImage, setHeaderImage] = useState('');
-    const [footerImage, setFooterImage] = useState('');
-    const [signatureMode, setSignatureMode] = useState<'LEGAL' | 'TECH' | 'BOTH'>('LEGAL');
-    const [headerImageHeight, setHeaderImageHeight] = useState(150);
-    const [footerImageHeight, setFooterImageHeight] = useState(100);
-    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-    const [printLandscape, setPrintLandscape] = useState(false);
-
-    const token = localStorage.getItem('token');
-    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-    // Filter biddings with AI analysis
-    const availableBiddings = useMemo(() =>
-        biddings.filter(b => b.status === "Preparando Documentação")
-        , [biddings]);
-
-    const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
-    const selectedCompany = companies.find(c => c.id === selectedCompanyId);
-
-    // Load proposals when bidding changes
-    useEffect(() => {
-        if (!selectedBiddingId) { setProposals([]); setProposal(null); setItems([]); return; }
-        loadProposals();
-    }, [selectedBiddingId]);
-
-    const loadProposals = async () => {
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/proposals/${selectedBiddingId}`, { headers });
-            if (res.ok) {
-                const data = await res.json();
-                setProposals(data);
-                if (data.length > 0) {
-                    const latest = data[0]; // Already ordered by version desc
-                    setProposal(latest);
-                    setItems(latest.items || []);
-                    setBdi(latest.bdiPercentage || 0);
-                    setDiscount(latest.taxPercentage || 0);
-                    setRoundingMode(latest.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
-                    setValidityDays(latest.validityDays || 60);
-                    if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
-                    setLetterContent(latest.letterContent || '');
-                    setHeaderImage(latest.headerImage || '');
-                    setFooterImage(latest.footerImage || '');
-                    setSignatureMode(latest.signatureMode || 'LEGAL');
-                    setHeaderImageHeight(latest.headerImageHeight || 150);
-                    setFooterImageHeight(latest.footerImageHeight || 100);
-                }
-            }
-        } catch (e) {
-            console.error('Failed to load proposals', e);
-        }
-    };
-
-    // Create new proposal
-    const handleCreateProposal = async () => {
-        if (!selectedBiddingId || !selectedCompanyId) {
-            toast.warning('Selecione uma licitação e uma empresa.');
-            return;
-        }
-        setIsLoading(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/proposals`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
-                    biddingProcessId: selectedBiddingId,
-                    companyProfileId: selectedCompanyId,
-                    bdiPercentage: bdi,
-                    validityDays,
-                    headerImage: selectedCompany?.defaultProposalHeader || '',
-                    footerImage: selectedCompany?.defaultProposalFooter || '',
-                    headerImageHeight: selectedCompany?.defaultProposalHeaderHeight || 80,
-                    footerImageHeight: selectedCompany?.defaultProposalFooterHeight || 60,
-                }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setProposal(data);
-                setItems(data.items || []);
-                setProposals(prev => [data, ...prev]);
-                // Set images and letter from company default if present
-                if (selectedCompany) {
-                    setHeaderImage(selectedCompany.defaultProposalHeader || '');
-                    setFooterImage(selectedCompany.defaultProposalFooter || '');
-                    setHeaderImageHeight(selectedCompany.defaultProposalHeaderHeight || 80);
-                    setFooterImageHeight(selectedCompany.defaultProposalFooterHeight || 60);
-                    if (selectedCompany.defaultLetterContent) {
-                        setLetterContent(selectedCompany.defaultLetterContent);
-                    }
-                }
-                showSaveMsg('Proposta criada com sucesso!');
-            }
-        } catch (e) {
-            toast.error('Erro ao criar proposta.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // AI Populate items from edital
-    const handleAiPopulate = async () => {
-        if (!selectedBiddingId) return;
-        setIsAiLoading(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/proposals/ai-populate`, {
-                method: 'POST', headers,
-                body: JSON.stringify({ biddingProcessId: selectedBiddingId }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.items && data.items.length > 0) {
-                    if (proposal) {
-                        const itemsToSave = data.items.map((it: any) => {
-                            const rawItem = { ...it, unitCost: it.referencePrice || 0, multiplier: 1, quantity: it.quantity || 1 };
-                            const calc = calculateItem(rawItem, bdi, discount, roundingMode);
-                            return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
-                        });
-                        const saveRes = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
-                            method: 'POST', headers,
-                            body: JSON.stringify({ items: itemsToSave, replaceAll: true }),
-                        });
-                        if (saveRes.ok) {
-                            await loadProposals();
-                            showSaveMsg(`${data.items.length} itens extraídos pela IA!`);
-                        }
-                    } else {
-                        // Create proposal first
-                        await handleCreateProposal();
-                        // Then try again
-                        setTimeout(async () => {
-                            const latestRes = await fetch(`${API_BASE_URL}/api/proposals/${selectedBiddingId}`, { headers });
-                            if (latestRes.ok) {
-                                const latestData = await latestRes.json();
-                                if (latestData[0]) {
-                                    const itemsToSave = data.items.map((it: any) => {
-                                        const rawItem = { ...it, unitCost: it.referencePrice || 0, multiplier: 1, quantity: it.quantity || 1 };
-                                        const calc = calculateItem(rawItem, bdi, discount, roundingMode);
-                                        return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
-                                    });
-                                    await fetch(`${API_BASE_URL}/api/proposals/${latestData[0].id}/items`, {
-                                        method: 'POST', headers,
-                                        body: JSON.stringify({ items: itemsToSave, replaceAll: true }),
-                                    });
-                                    await loadProposals();
-                                    showSaveMsg(`${data.items.length} itens extraídos pela IA!`);
-                                }
-                            }
-                        }, 1000);
-                    }
-                } else {
-                    toast.warning('A IA não encontrou itens neste edital.');
-                }
-            } else {
-                const err = await res.json();
-                toast.error(err.error || 'Erro ao popular itens com IA.');
-            }
-        } catch (e) {
-            toast.error('Erro ao consultar IA.');
-        } finally {
-            setIsAiLoading(false);
-        }
-    };
-
-    // Add manual item
-    const handleAddItem = () => {
-        const newItem: ProposalItem = {
-            id: `temp-${Date.now()}`,
-            proposalId: proposal?.id || '',
-            itemNumber: String(items.length + 1),
-            description: '',
-            unit: 'UN',
-            quantity: 1,
-            multiplier: 1,
-            unitCost: 0,
-            unitPrice: 0,
-            totalPrice: 0,
-            sortOrder: items.length,
-        };
-        setItems(prev => [...prev, newItem]);
-        setIsBulkEditing(true);
-    };
-
-    // Update item locally
-    const updateItem = (itemId: string, field: string, value: any) => {
-        setItems(prev => prev.map(it => {
-            if (it.id !== itemId) return it;
-            const updated = { ...it, [field]: value };
-            const calc = calculateItem(updated, bdi, discount, roundingMode);
-            updated.unitPrice = calc.unitPrice;
-            updated.totalPrice = calc.totalPrice;
-            return updated;
-        }));
-    };
-
-    const handleRecalculateAll = () => {
-        const updatedItems = items.map(it => {
-            const calc = calculateItem(it, bdi, discount, roundingMode);
-            return { ...it, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
-        });
-        setItems(updatedItems);
-    };
-
-    // Effect to recalculate when configs change (local only)
-    useEffect(() => {
-        if (proposal) handleRecalculateAll();
-    }, [bdi, discount, roundingMode]);
-
-    const handleSaveAllItems = async () => {
-        if (!proposal) return;
-        setIsSaving(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
-                method: 'POST', headers,
-                body: JSON.stringify({ items, replaceAll: true }),
-            });
-            if (res.ok) {
-                await loadProposals();
-                showSaveMsg('Todos os itens foram salvos!');
-                setIsBulkEditing(false);
-            }
-        } catch (e) {
-            toast.error('Erro ao salvar os itens.');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleSaveCompanyTemplate = async () => {
-        if (!selectedCompanyId) return;
-        setIsSavingTemplate(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/companies/${selectedCompanyId}/proposal-template`, {
-                method: 'PUT', headers,
-                body: JSON.stringify({
-                    headerImage,
-                    footerImage,
-                    headerHeight: headerImageHeight,
-                    footerHeight: footerImageHeight,
-                    defaultLetterContent: letterContent
-                })
-            });
-            if (res.ok) {
-                showSaveMsg('Template padrão da empresa salvo!');
-            }
-        } catch (e) {
-            toast.error('Erro ao salvar template da empresa.');
-        } finally {
-            setIsSavingTemplate(false);
-        }
-    };
-
-    // Delete item
-    const handleDeleteItem = async (itemId: string) => {
-        if (itemId.startsWith('temp-')) {
-            setItems(prev => prev.filter(it => it.id !== itemId));
-            return;
-        }
-        if (!proposal) return;
-        setConfirmDeleteItemId(itemId);
-    };
-
-    const executeDeleteItem = async () => {
-        if (!confirmDeleteItemId || !proposal) return;
-        const itemId = confirmDeleteItemId;
-        setConfirmDeleteItemId(null);
-        try {
-            await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items/${itemId}`, {
-                method: 'DELETE', headers,
-            });
-            await loadProposals();
-            showSaveMsg('Item removido.');
-        } catch (e) {
-            toast.error('Erro ao remover item.');
-        }
-    };
-
-    // Save BDI and config
-    const handleSaveConfig = async () => {
-        if (!proposal) return;
-        setIsSaving(true);
-        try {
-            await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
-                method: 'PUT', headers,
-                body: JSON.stringify({
-                    bdiPercentage: bdi,
-                    taxPercentage: discount, // Using taxPercentage for discount
-                    socialCharges: roundingMode === 'TRUNCATE' ? 1 : 0, // Using socialCharges for rounding mode
-                    validityDays,
-                    headerImage,
-                    footerImage,
-                    headerImageHeight,
-                    footerImageHeight,
-                    signatureMode
-                }),
-            });
-            // Reload to recalculate prices with new BDI
-            await loadProposals();
-            showSaveMsg('Configurações salvas!');
-        } catch (e) {
-            toast.error('Erro ao salvar configurações.');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const showSaveMsg = (msg: string) => {
-        setSaveMessage(msg);
-        setTimeout(() => setSaveMessage(''), 3000);
-    };
-
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            if (ev.target?.result) setter(ev.target.result as string);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    // --- Export Excel ---
-    const handleExportExcel = () => {
-        if (!proposal || items.length === 0) return;
-        exportExcelProposal(selectedBiddingId, items, bdi);
-    };
-
-    // --- AI Letter Generation ---
-    const handleGenerateLetter = async () => {
-        if (!proposal || !selectedBiddingId || !selectedCompanyId) return;
-        setIsLetterLoading(true);
-        try {
-            // Build summary of items for the prompt
-            const itemsSummary = items.map(it => `${it.quantity}x ${it.unit} - ${it.description} - Unit: ${fmt(it.unitPrice)} - Total: ${fmt(it.totalPrice)}`).join('\n');
-
-            const res = await fetch(`${API_BASE_URL}/api/proposals/ai-letter`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
-                    biddingProcessId: selectedBiddingId,
-                    companyProfileId: selectedCompanyId,
-                    totalValue: total,
-                    validityDays,
-                    itemsSummary
-                }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setLetterContent(data.letterContent);
-                showSaveMsg('Carta proposta rascunhada pela IA!');
-            } else {
-                toast.error('Erro ao gerar carta pela IA.');
-            }
-        } catch (e) {
-            toast.error('Erro ao conectar com a IA.');
-        } finally {
-            setIsLetterLoading(false);
-        }
-    };
-
-    const handleSaveLetter = async () => {
-        if (!proposal) return;
-        setIsSaving(true);
-        try {
-            await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
-                method: 'PUT', headers,
-                body: JSON.stringify({ letterContent }),
-            });
-            showSaveMsg('Carta proposta salva!');
-            await loadProposals();
-        } catch (e) {
-            toast.error('Erro ao salvar carta.');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handlePrintProposal = (type: 'FULL' | 'LETTER' | 'SPREADSHEET' = 'FULL') => {
-        if (!proposal || !selectedBidding || !selectedCompanyId) {
-            toast.warning('Carregue os dados da proposta primeiro.');
-            return;
-        }
-
-        generateProposalPdf(
-            selectedBidding,
-            selectedCompany,
-            items,
-            validityDays,
-            letterContent,
-            headerImage,
-            footerImage,
-            headerImageHeight,
-            footerImageHeight,
-            signatureMode,
-            printLandscape,
-            discount,
-            type
-        );
-    };
-
-    // Totals - Sum items
-    const totalsCalculated = useMemo(() => calculateTotals(items), [items]);
-    const { subtotal, total } = totalsCalculated;
-
-    // Style consts
-    const cardStyle: React.CSSProperties = {
-        background: 'var(--color-bg-surface)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-xl)',
-        padding: 'var(--space-6)',
-    };
+    const p = useProposal({ biddings, companies });
 
     return (
         <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
             {/* ── Top Config Bar ── */}
-            <div style={{
-                ...cardStyle,
+            <div className="card" style={{
+                padding: 'var(--space-6)',
                 background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(139,92,246,0.03))',
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
@@ -472,33 +36,22 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             Gerador de Proposta de Preços
                         </h2>
                     </div>
-                    <button
-                        onClick={() => setShowConfig(!showConfig)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
-                    >
-                        {showConfig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    <button onClick={() => p.setShowConfig(!p.showConfig)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}>
+                        {p.showConfig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
                 </div>
 
-                {showConfig && (
+                {p.showConfig && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                         {/* Licitação */}
                         <div>
-                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>
+                            <label className="form-label">
                                 <Briefcase size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
                                 Licitação (com Análise IA)
                             </label>
-                            <select
-                                value={selectedBiddingId}
-                                onChange={e => setSelectedBiddingId(e.target.value)}
-                                style={{
-                                    width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
-                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-base)',
-                                    background: 'var(--color-bg-base)',
-                                }}
-                            >
+                            <select value={p.selectedBiddingId} onChange={e => p.setSelectedBiddingId(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
                                 <option value="">Selecione uma licitação...</option>
-                                {availableBiddings.map(b => (
+                                {p.availableBiddings.map(b => (
                                     <option key={b.id} value={b.id}>
                                         {b.title?.substring(0, 80)} {b.estimatedValue > 0 ? `— ${fmt(b.estimatedValue)}` : ''}
                                     </option>
@@ -508,19 +61,11 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
                         {/* Empresa */}
                         <div>
-                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>
+                            <label className="form-label">
                                 <Package size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
                                 Empresa Proponente
                             </label>
-                            <select
-                                value={selectedCompanyId}
-                                onChange={e => setSelectedCompanyId(e.target.value)}
-                                style={{
-                                    width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
-                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-base)',
-                                    background: 'var(--color-bg-base)',
-                                }}
-                            >
+                            <select value={p.selectedCompanyId} onChange={e => p.setSelectedCompanyId(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
                                 <option value="">Selecione a empresa...</option>
                                 {companies.map(c => (
                                     <option key={c.id} value={c.id}>{c.razaoSocial} — {c.cnpj}</option>
@@ -528,70 +73,41 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             </select>
                         </div>
 
-
-
                         <div style={{ display: 'flex', alignItems: 'end', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleCreateProposal}
-                                disabled={isLoading || !selectedBiddingId || !selectedCompanyId}
-                                style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}
-                            >
-                                {isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
+                            <button className="btn btn-primary" onClick={p.handleCreateProposal} disabled={p.isLoading || !p.selectedBiddingId || !p.selectedCompanyId}
+                                style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}>
+                                {p.isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
                                 Nova Proposta
                             </button>
-                            {proposal && (
+                            {p.proposal && (
                                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                                    <button
-                                        className="btn btn-outline"
-                                        onClick={handleSaveConfig}
-                                        disabled={isSaving}
-                                        style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}
-                                    >
+                                    <button className="btn btn-outline" onClick={p.handleSaveConfig} disabled={p.isSaving}
+                                        style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}>
                                         <Save size={16} /> Salvar Proposta em Dossiê
                                     </button>
 
-                                    {/* Orientação de Impressão moved here */}
                                     <label style={{
                                         display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
                                         padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                        backgroundColor: 'var(--color-bg-base)',
-                                        border: '1px solid var(--color-border)',
+                                        backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
                                     }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={printLandscape}
-                                            onChange={(e) => setPrintLandscape(e.target.checked)}
-                                            style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
-                                        />
-                                        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
-                                            Paisagem
-                                        </span>
+                                        <input type="checkbox" checked={p.printLandscape} onChange={(e) => p.setPrintLandscape(e.target.checked)}
+                                            style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
+                                        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>Paisagem</span>
                                     </label>
 
                                     <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg-base)', padding: '2px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-                                        <button
-                                            className="btn"
-                                            onClick={() => handlePrintProposal('LETTER')}
-                                            title="Exportar Apenas Carta"
-                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
-                                        >
+                                        <button className="btn" onClick={() => p.handlePrintProposal('LETTER')} title="Exportar Apenas Carta"
+                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}>
                                             <FileText size={14} /> Carta
                                         </button>
-                                        <button
-                                            className="btn"
-                                            onClick={() => handlePrintProposal('SPREADSHEET')}
-                                            title="Exportar Apenas Planilha"
-                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}
-                                        >
+                                        <button className="btn" onClick={() => p.handlePrintProposal('SPREADSHEET')} title="Exportar Apenas Planilha"
+                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}>
                                             <Package size={14} /> Planilha
                                         </button>
                                         <div style={{ width: '1px', background: 'var(--color-border)', margin: '4px 2px' }}></div>
-                                        <button
-                                            className="btn btn-primary"
-                                            onClick={() => handlePrintProposal('FULL')}
-                                            style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', background: 'var(--color-text-primary)', fontSize: 'var(--text-md)' }}
-                                        >
+                                        <button className="btn btn-primary" onClick={() => p.handlePrintProposal('FULL')}
+                                            style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', background: 'var(--color-text-primary)', fontSize: 'var(--text-md)' }}>
                                             <Printer size={16} /> Exportar Completa
                                         </button>
                                     </div>
@@ -602,7 +118,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 )}
 
                 {/* AI Loading badge */}
-                {isAiLoading && (
+                {p.isAiLoading && (
                     <div style={{
                         marginTop: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
                         background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.06))',
@@ -618,18 +134,18 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             </div>
 
             {/* ── Save Message ── */}
-            {saveMessage && (
+            {p.saveMessage && (
                 <div style={{
                     padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)',
                     background: 'var(--color-success-bg)', border: '1px solid rgba(34,197,94,0.3)',
                     color: 'var(--color-success)', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)',
                 }}>
-                    ✓ {saveMessage}
+                    ✓ {p.saveMessage}
                 </div>
             )}
 
             {/* ── Proposal Info ── */}
-            {proposal && (
+            {p.proposal && (
                 <div style={{
                     display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-2) var(--space-4)',
                     borderRadius: 'var(--radius-lg)', background: 'var(--color-primary-light)',
@@ -637,156 +153,94 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 }}>
                     <FileText size={16} color="var(--color-primary)" />
                     <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)' }}>
-                        Proposta v{proposal.version}
+                        Proposta v{p.proposal.version}
                     </span>
                     <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
-                        — {proposal.status} — {items.length} item(ns) — Total: {fmt(total)}
+                        — {p.proposal.status} — {p.items.length} item(ns) — Total: {fmt(p.total)}
                     </span>
-                    {proposals.length > 1 && (
+                    {p.proposals.length > 1 && (
                         <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                            ({proposals.length} versões)
+                            ({p.proposals.length} versões)
                         </span>
                     )}
-
                 </div>
             )}
 
             {/* ── TABS ── */}
-            {proposal && (
+            {p.proposal && (
                 <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '2px solid var(--color-border)', marginBottom: '4px' }}>
-                    <button
-                        onClick={() => setActiveTab('items')}
-                        style={{
-                            padding: 'var(--space-3) var(--space-5)', background: 'none', border: 'none',
-                            borderBottom: activeTab === 'items' ? '3px solid var(--color-primary)' : '3px solid transparent',
-                            color: activeTab === 'items' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                            fontWeight: activeTab === 'items' ? 'var(--font-bold)' : 'var(--font-medium)',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                            transform: 'translateY(2px)', transition: 'var(--transition-fast)'
-                        }}
-                    >
+                    <button onClick={() => p.setActiveTab('items')} className={`tab-btn${p.activeTab === 'items' ? ' active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
                         <Package size={16} /> Planilha de Preços
                     </button>
-                    <button
-                        onClick={() => setActiveTab('letter')}
-                        style={{
-                            padding: 'var(--space-3) var(--space-5)', background: 'none', border: 'none',
-                            borderBottom: activeTab === 'letter' ? '3px solid var(--color-primary)' : '3px solid transparent',
-                            color: activeTab === 'letter' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                            fontWeight: activeTab === 'letter' ? 'var(--font-bold)' : 'var(--font-medium)',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                            transform: 'translateY(2px)', transition: 'var(--transition-fast)'
-                        }}
-                    >
+                    <button onClick={() => p.setActiveTab('letter')} className={`tab-btn${p.activeTab === 'letter' ? ' active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
                         <FileText size={16} /> Carta Proposta Redigida
                     </button>
                 </div>
             )}
 
             {/* ── Items Tab ── */}
-            {activeTab === 'items' && (proposal || items.length > 0) && (
-                <div style={cardStyle}>
+            {p.activeTab === 'items' && (p.proposal || p.items.length > 0) && (
+                <div className="card" style={{ padding: 'var(--space-6)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                         <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            Itens da Proposta ({items.length})
+                            Itens da Proposta ({p.items.length})
                         </h3>
                         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                             {/* Rounding Mode Toggle */}
                             <div style={{ display: 'flex', alignItems: 'center', background: 'var(--color-bg-base)', padding: '2px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginRight: '4px' }}>
-                                <button
-                                    onClick={() => setRoundingMode('ROUND')}
-                                    style={{
-                                        padding: '4px var(--space-2)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
-                                        background: roundingMode === 'ROUND' ? 'var(--color-primary)' : 'transparent',
-                                        color: roundingMode === 'ROUND' ? 'white' : 'var(--color-text-secondary)',
-                                        fontWeight: 'var(--font-semibold)'
-                                    }}>Arredondar</button>
-                                <button
-                                    onClick={() => setRoundingMode('TRUNCATE')}
-                                    style={{
-                                        padding: '4px var(--space-2)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
-                                        background: roundingMode === 'TRUNCATE' ? 'var(--color-primary)' : 'transparent',
-                                        color: roundingMode === 'TRUNCATE' ? 'white' : 'var(--color-text-secondary)',
-                                        fontWeight: 'var(--font-semibold)'
-                                    }}>Truncar</button>
+                                <button onClick={() => p.setRoundingMode('ROUND')} style={{
+                                    padding: '4px var(--space-2)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                                    background: p.roundingMode === 'ROUND' ? 'var(--color-primary)' : 'transparent',
+                                    color: p.roundingMode === 'ROUND' ? 'white' : 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)'
+                                }}>Arredondar</button>
+                                <button onClick={() => p.setRoundingMode('TRUNCATE')} style={{
+                                    padding: '4px var(--space-2)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                                    background: p.roundingMode === 'TRUNCATE' ? 'var(--color-primary)' : 'transparent',
+                                    color: p.roundingMode === 'TRUNCATE' ? 'white' : 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)'
+                                }}>Truncar</button>
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-bg-base)', padding: '6px var(--space-3)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', marginRight: 'var(--space-2)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>BDI:</span>
-                                    <input
-                                        type="number"
-                                        value={bdi}
-                                        onChange={e => setBdi(parseFloat(e.target.value) || 0)}
-                                        style={{ ...inputStyle, width: '55px', height: '28px' }}
-                                    />
+                                    <input type="number" value={p.bdi} onChange={e => p.setBdi(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                                 <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }}></div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>Desc. Linear:</span>
-                                    <input
-                                        type="number"
-                                        value={discount}
-                                        onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
-                                        style={{ ...inputStyle, width: '55px', height: '28px' }}
-                                    />
+                                    <input type="number" value={p.discount} onChange={e => p.setDiscount(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                             </div>
 
-                            {/* Renamed and Moved AI Button */}
-                            <button
-                                className="btn"
-                                onClick={handleAiPopulate}
-                                disabled={isAiLoading}
-                                style={{
-                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
-                                    background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
-                                    color: 'white', border: 'none',
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                                }}
-                            >
-                                {isAiLoading ? <Loader2 size={14} className="spin" /> : <Brain size={14} />}
+                            <button className="btn" onClick={p.handleAiPopulate} disabled={p.isAiLoading} style={{
+                                padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
+                                background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))', color: 'white', border: 'none',
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                            }}>
+                                {p.isAiLoading ? <Loader2 size={14} className="spin" /> : <Brain size={14} />}
                                 Orçamento IA
                             </button>
 
-                            {isBulkEditing ? (
-                                <button
-                                    className="btn btn-primary"
-                                    onClick={handleSaveAllItems}
-                                    disabled={isSaving}
-                                    style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)', background: 'var(--color-success)', color: 'white', border: 'none' }}
-                                >
-                                    {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
-                                </button>
-                            ) : (
-                                <button
-                                    className="btn btn-primary"
-                                    onClick={handleSaveAllItems}
-                                    disabled={isSaving}
-                                    style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)', background: 'var(--color-success)', color: 'white', border: 'none' }}
-                                >
-                                    {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
-                                </button>
-                            )}
-                            <button
-                                onClick={handleExportExcel}
-                                style={{
-                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
-                                    background: 'var(--color-success-hover)', color: 'white', border: 'none',
-                                    fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-                                }}
-                            >
+                            <button className="btn btn-primary" onClick={p.handleSaveAllItems} disabled={p.isSaving}
+                                style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)', background: 'var(--color-success)', color: 'white', border: 'none' }}>
+                                {p.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
+                            </button>
+
+                            <button onClick={p.handleExportExcel} style={{
+                                padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
+                                background: 'var(--color-success-hover)', color: 'white', border: 'none',
+                                fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
+                            }}>
                                 <Save size={14} /> Exportar Planilha
                             </button>
 
-                            <button
-                                className="btn btn-outline"
-                                onClick={handleAddItem}
-                                style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)' }}
-                            >
+                            <button className="btn btn-outline" onClick={p.handleAddItem}
+                                style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)' }}>
                                 <Plus size={14} /> Novo Item
                             </button>
                         </div>
@@ -796,25 +250,25 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                             <thead>
                                 <tr style={{ background: 'var(--color-bg-surface-hover)', borderBottom: '2px solid var(--color-border)' }}>
-                                    <th style={thStyle}>#</th>
-                                    <th style={{ ...thStyle, textAlign: 'left', minWidth: '200px' }}>Descrição</th>
-                                    <th style={thStyle}>Marca</th>
-                                    <th style={thStyle}>Modelo</th>
-                                    <th style={thStyle}>Unid</th>
-                                    <th style={thStyle}>Qtd</th>
-                                    <th style={thStyle}>Multiplicador</th>
-                                    <th style={thStyle}>Desc. (%)</th>
-                                    <th style={thStyle}>Custo Unit.</th>
-                                    <th style={thStyle}>Preço Unit.</th>
-                                    <th style={thStyle}>Total</th>
-                                    <th style={thStyle}>% Peso</th>
-                                    <th style={{ ...thStyle, width: '50px' }}>Ref.</th>
-                                    <th style={{ ...thStyle, width: '60px' }}></th>
+                                    <th className="prop-th">#</th>
+                                    <th className="prop-th" style={{ textAlign: 'left', minWidth: '200px' }}>Descrição</th>
+                                    <th className="prop-th">Marca</th>
+                                    <th className="prop-th">Modelo</th>
+                                    <th className="prop-th">Unid</th>
+                                    <th className="prop-th">Qtd</th>
+                                    <th className="prop-th">Multiplicador</th>
+                                    <th className="prop-th">Desc. (%)</th>
+                                    <th className="prop-th">Custo Unit.</th>
+                                    <th className="prop-th">Preço Unit.</th>
+                                    <th className="prop-th">Total</th>
+                                    <th className="prop-th">% Peso</th>
+                                    <th className="prop-th" style={{ width: '50px' }}>Ref.</th>
+                                    <th className="prop-th" style={{ width: '60px' }}></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {items.map((item) => {
-                                    const isEditing = isBulkEditing || editingItemId === item.id;
+                                {p.items.map((item) => {
+                                    const isEditing = p.isBulkEditing || p.editingItemId === item.id;
                                     const overRef = item.referencePrice && item.unitPrice > item.referencePrice;
 
                                     return (
@@ -822,84 +276,37 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                             borderBottom: '1px solid var(--color-border)',
                                             background: overRef ? 'rgba(239,68,68,0.03)' : undefined,
                                         }}>
-                                            <td style={tdCenterStyle}>{item.itemNumber}</td>
-                                            <td style={tdStyle}>
+                                            <td className="prop-td-center">{item.itemNumber}</td>
+                                            <td className="prop-td">
                                                 {isEditing ? (
-                                                    <input
-                                                        value={item.description}
-                                                        onChange={e => updateItem(item.id, 'description', e.target.value)}
-                                                        style={inputStyle}
-                                                        autoFocus
-                                                    />
+                                                    <input value={item.description} onChange={e => p.updateItem(item.id, 'description', e.target.value)} className="prop-input" autoFocus />
                                                 ) : (
-                                                    <span
-                                                        onClick={() => setEditingItemId(item.id)}
-                                                        style={{ cursor: 'pointer' }}
-                                                        title="Clique para editar"
-                                                    >
+                                                    <span onClick={() => p.setEditingItemId(item.id)} style={{ cursor: 'pointer' }} title="Clique para editar">
                                                         {item.description || '(sem descrição)'}
                                                     </span>
                                                 )}
                                             </td>
-                                            <td style={tdCenterStyle}>
-                                                {isEditing ? (
-                                                    <input
-                                                        value={item.brand || ''}
-                                                        onChange={e => updateItem(item.id, 'brand', e.target.value)}
-                                                        style={{ ...inputStyle, width: '80px', textAlign: 'center' }}
-                                                        placeholder="Marca"
-                                                    />
-                                                ) : item.brand || '-'}
+                                            <td className="prop-td-center">
+                                                {isEditing ? <input value={item.brand || ''} onChange={e => p.updateItem(item.id, 'brand', e.target.value)} style={{ width: '80px', textAlign: 'center' }} className="prop-input" placeholder="Marca" /> : item.brand || '-'}
                                             </td>
-                                            <td style={tdCenterStyle}>
-                                                {isEditing ? (
-                                                    <input
-                                                        value={item.model || ''}
-                                                        onChange={e => updateItem(item.id, 'model', e.target.value)}
-                                                        style={{ ...inputStyle, width: '100px', textAlign: 'center' }}
-                                                        placeholder="Modelo"
-                                                    />
-                                                ) : item.model || '-'}
+                                            <td className="prop-td-center">
+                                                {isEditing ? <input value={item.model || ''} onChange={e => p.updateItem(item.id, 'model', e.target.value)} className="prop-input" style={{ width: '100px', textAlign: 'center' }} placeholder="Modelo" /> : item.model || '-'}
                                             </td>
-                                            <td style={tdCenterStyle}>
+                                            <td className="prop-td-center">
                                                 {isEditing ? (
-                                                    <select
-                                                        value={item.unit}
-                                                        onChange={e => updateItem(item.id, 'unit', e.target.value)}
-                                                        style={{ ...inputStyle, width: '70px', textAlign: 'center' }}
-                                                    >
+                                                    <select value={item.unit} onChange={e => p.updateItem(item.id, 'unit', e.target.value)} className="prop-input" style={{ width: '70px', textAlign: 'center' }}>
                                                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                                     </select>
                                                 ) : item.unit}
                                             </td>
-                                            <td style={tdCenterStyle}>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        value={item.quantity}
-                                                        onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                                        style={{ ...inputStyle, width: '60px', textAlign: 'right' }}
-                                                        step="0.01"
-                                                    />
-                                                ) : fmtNum(item.quantity)}
+                                            <td className="prop-td-center">
+                                                {isEditing ? <input type="number" value={item.quantity} onChange={e => p.updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '60px', textAlign: 'right' }} step="0.01" /> : fmtNum(item.quantity)}
                                             </td>
-                                            <td style={tdCenterStyle}>
+                                            <td className="prop-td-center">
                                                 {isEditing ? (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                                                        <input
-                                                            type="number"
-                                                            value={item.multiplier}
-                                                            onChange={e => updateItem(item.id, 'multiplier', parseFloat(e.target.value) || 1)}
-                                                            style={{ ...inputStyle, width: '50px', textAlign: 'center' }}
-                                                            title="Multiplicador (ex: 12 meses)"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            value={item.multiplierLabel || ''}
-                                                            onChange={e => updateItem(item.id, 'multiplierLabel', e.target.value)}
-                                                            placeholder="Rótulo (ex: Meses)"
-                                                            style={{ ...inputStyle, width: '70px', fontSize: '0.7rem' }}
-                                                        />
+                                                        <input type="number" value={item.multiplier} onChange={e => p.updateItem(item.id, 'multiplier', parseFloat(e.target.value) || 1)} className="prop-input" style={{ width: '50px', textAlign: 'center' }} title="Multiplicador (ex: 12 meses)" />
+                                                        <input type="text" value={item.multiplierLabel || ''} onChange={e => p.updateItem(item.id, 'multiplierLabel', e.target.value)} placeholder="Rótulo (ex: Meses)" className="prop-input" style={{ width: '70px', fontSize: '0.7rem' }} />
                                                     </div>
                                                 ) : (
                                                     item.multiplier !== 1 ? (
@@ -910,76 +317,39 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                                     ) : '-'
                                                 )}
                                             </td>
-                                            <td style={tdCenterStyle}>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        value={item.discountPercentage || 0}
-                                                        onChange={e => updateItem(item.id, 'discountPercentage', parseFloat(e.target.value) || 0)}
-                                                        style={{ ...inputStyle, width: '50px', textAlign: 'center' }}
-                                                        step="0.1"
-                                                    />
-                                                ) : (item.discountPercentage ? `${item.discountPercentage}%` : '-')}
+                                            <td className="prop-td-center">
+                                                {isEditing ? <input type="number" value={item.discountPercentage || 0} onChange={e => p.updateItem(item.id, 'discountPercentage', parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '50px', textAlign: 'center' }} step="0.1" /> : (item.discountPercentage ? `${item.discountPercentage}%` : '-')}
                                             </td>
-                                            <td style={tdCenterStyle}>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        value={item.unitCost}
-                                                        onChange={e => updateItem(item.id, 'unitCost', parseFloat(e.target.value) || 0)}
-                                                        style={{ ...inputStyle, width: '90px', textAlign: 'right' }}
-                                                        step="0.01"
-                                                    />
-                                                ) : fmt(item.unitCost)}
+                                            <td className="prop-td-center">
+                                                {isEditing ? <input type="number" value={item.unitCost} onChange={e => p.updateItem(item.id, 'unitCost', parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '90px', textAlign: 'right' }} step="0.01" /> : fmt(item.unitCost)}
                                             </td>
-                                            <td style={{ ...tdCenterStyle, fontWeight: 600, color: 'var(--color-primary)' }}>
-                                                {fmt(item.unitPrice)}
+                                            <td className="prop-td-center" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{fmt(item.unitPrice)}</td>
+                                            <td className="prop-td-center" style={{ fontWeight: 700 }}>{fmt(item.totalPrice)}</td>
+                                            <td className="prop-td-center" style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                                                {p.total > 0 ? ((item.totalPrice / p.total) * 100).toFixed(1) + '%' : '0%'}
                                             </td>
-                                            <td style={{ ...tdCenterStyle, fontWeight: 700 }}>
-                                                {fmt(item.totalPrice)}
-                                            </td>
-                                            <td style={{ ...tdCenterStyle, fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-                                                {total > 0 ? ((item.totalPrice / total) * 100).toFixed(1) + '%' : '0%'}
-                                            </td>
-                                            <td style={tdCenterStyle}>
+                                            <td className="prop-td-center">
                                                 {item.referencePrice ? (
-                                                    <span style={{
-                                                        fontSize: '0.7rem',
-                                                        color: overRef ? 'var(--color-danger)' : 'var(--color-success)',
-                                                        fontWeight: 600,
-                                                    }}>
+                                                    <span style={{ fontSize: '0.7rem', color: overRef ? 'var(--color-danger)' : 'var(--color-success)', fontWeight: 600 }}>
                                                         {overRef && <AlertTriangle size={10} />}
                                                         {fmt(item.referencePrice)}
                                                     </span>
                                                 ) : '-'}
                                             </td>
-                                            <td style={tdCenterStyle}>
+                                            <td className="prop-td-center">
                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                     {isEditing ? (
-                                                        !isBulkEditing && (
-                                                            <button
-                                                                onClick={() => handleSaveAllItems()}
-                                                                disabled={isSaving}
-                                                                style={iconBtnStyle}
-                                                                title="Salvar"
-                                                            >
-                                                                {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} color="var(--color-success)" />}
+                                                        !p.isBulkEditing && (
+                                                            <button onClick={() => p.handleSaveAllItems()} disabled={p.isSaving} className="prop-icon-btn" title="Salvar">
+                                                                {p.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} color="var(--color-success)" />}
                                                             </button>
                                                         )
                                                     ) : (
-                                                        <button
-                                                            onClick={() => setIsBulkEditing(true)}
-                                                            style={iconBtnStyle}
-                                                            title="Editar"
-                                                        >
+                                                        <button onClick={() => p.setIsBulkEditing(true)} className="prop-icon-btn" title="Editar">
                                                             <Edit3 size={14} color="var(--color-text-tertiary)" />
                                                         </button>
                                                     )}
-                                                    <button
-                                                        onClick={() => handleDeleteItem(item.id)}
-                                                        style={iconBtnStyle}
-                                                        title="Remover"
-                                                    >
+                                                    <button onClick={() => p.handleDeleteItem(item.id)} className="prop-icon-btn" title="Remover">
                                                         <Trash2 size={14} color="var(--color-danger)" />
                                                     </button>
                                                 </div>
@@ -987,14 +357,10 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                         </tr>
                                     );
                                 })}
-                                {items.length === 0 && (
+                                {p.items.length === 0 && (
                                     <tr>
-                                        <td colSpan={9} style={{
-                                            textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)',
-                                            fontSize: 'var(--text-base)',
-                                        }}>
-                                            <Sparkles size={32} color="var(--color-text-tertiary)" style={{ marginBottom: '8px' }} />
-                                            <br />
+                                        <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)' }}>
+                                            <Sparkles size={32} color="var(--color-text-tertiary)" style={{ marginBottom: '8px' }} /><br />
                                             Nenhum item na proposta. Use o botão <strong>"Preencher com IA"</strong> para extrair os itens automaticamente do edital.
                                         </td>
                                     </tr>
@@ -1004,23 +370,20 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     </div>
 
                     {/* ── Totals ── */}
-                    {items.length > 0 && (
-                        <div style={{
-                            marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'flex-end',
-                        }}>
+                    {p.items.length > 0 && (
+                        <div style={{ marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'flex-end' }}>
                             <div style={{
-                                minWidth: '280px', padding: 'var(--space-4) var(--space-5)',
-                                borderRadius: 'var(--radius-lg)',
+                                minWidth: '280px', padding: 'var(--space-4) var(--space-5)', borderRadius: 'var(--radius-lg)',
                                 background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(139,92,246,0.04))',
                                 border: '1px solid rgba(37,99,235,0.15)',
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
                                     <span style={{ color: 'var(--color-text-secondary)' }}>Subtotal (custo)</span>
-                                    <span style={{ fontWeight: 500 }}>{fmt(subtotal)}</span>
+                                    <span style={{ fontWeight: 500 }}>{fmt(p.subtotal)}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
                                     <span style={{ color: 'var(--color-text-secondary)' }}>Status Arredondamento</span>
-                                    <span style={{ fontWeight: 500 }}>{roundingMode === 'ROUND' ? 'Arredondar' : 'Truncar'}</span>
+                                    <span style={{ fontWeight: 500 }}>{p.roundingMode === 'ROUND' ? 'Arredondar' : 'Truncar'}</span>
                                 </div>
                                 <div style={{
                                     display: 'flex', justifyContent: 'space-between',
@@ -1028,17 +391,17 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                     fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)',
                                 }}>
                                     <span>TOTAL GLOBAL</span>
-                                    <span>{fmt(total)}</span>
+                                    <span>{fmt(p.total)}</span>
                                 </div>
-                                {selectedBidding && selectedBidding.estimatedValue > 0 && (
+                                {p.selectedBidding && p.selectedBidding.estimatedValue > 0 && (
                                     <div style={{
                                         marginTop: '8px', fontSize: '0.75rem',
-                                        color: total > selectedBidding.estimatedValue ? 'var(--color-danger)' : 'var(--color-success)',
+                                        color: p.total > p.selectedBidding.estimatedValue ? 'var(--color-danger)' : 'var(--color-success)',
                                         fontWeight: 600, textAlign: 'right',
                                     }}>
-                                        {total > selectedBidding.estimatedValue
-                                            ? `⚠ Acima do estimado (${fmt(selectedBidding.estimatedValue)})`
-                                            : `✓ Abaixo do estimado (${fmt(selectedBidding.estimatedValue)})`
+                                        {p.total > p.selectedBidding.estimatedValue
+                                            ? `⚠ Acima do estimado (${fmt(p.selectedBidding.estimatedValue)})`
+                                            : `✓ Abaixo do estimado (${fmt(p.selectedBidding.estimatedValue)})`
                                         }
                                     </div>
                                 )}
@@ -1049,8 +412,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             )}
 
             {/* ── Letter Tab ── */}
-            {activeTab === 'letter' && (
-                <div style={cardStyle}>
+            {p.activeTab === 'letter' && (
+                <div className="card" style={{ padding: 'var(--space-6)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -1059,26 +422,16 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                             <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>Recomendamos pedir para a IA escrever o texto formal baseado no edital e nos itens.</span>
                         </div>
                         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                            <button
-                                className="btn btn-outline"
-                                onClick={handleSaveLetter}
-                                disabled={isSaving}
-                                style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)' }}
-                            >
-                                {isSaving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Salvar Rascunho
+                            <button className="btn btn-outline" onClick={p.handleSaveLetter} disabled={p.isSaving}
+                                style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)' }}>
+                                {p.isSaving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Salvar Rascunho
                             </button>
-                            <button
-                                className="btn"
-                                onClick={handleGenerateLetter}
-                                disabled={isLetterLoading}
-                                style={{
-                                    padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)',
-                                    background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
-                                    color: 'white', border: 'none',
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-                                }}
-                            >
-                                {isLetterLoading ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
+                            <button className="btn" onClick={p.handleGenerateLetter} disabled={p.isLetterLoading} style={{
+                                padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)',
+                                background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))', color: 'white', border: 'none',
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
+                            }}>
+                                {p.isLetterLoading ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
                                 Gerar com IA
                             </button>
                         </div>
@@ -1086,37 +439,18 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
                     {/* Proposal Configs */}
                     <div style={{
-                        background: 'var(--color-primary-light)',
-                        padding: 'var(--space-4)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid rgba(37, 99, 235, 0.1)',
-                        marginBottom: 'var(--space-4)',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: 'var(--space-5)'
+                        background: 'var(--color-primary-light)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                        border: '1px solid rgba(37, 99, 235, 0.1)', marginBottom: 'var(--space-4)',
+                        display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-5)'
                     }}>
                         <div>
-                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Validade da Proposta (dias)</label>
-                            <input
-                                type="number"
-                                value={validityDays}
-                                onChange={e => {
-                                    setValidityDays(parseInt(e.target.value) || 60);
-                                }}
-                                onBlur={handleSaveConfig}
-                                style={inputStyle}
-                            />
+                            <label className="form-label">Validade da Proposta (dias)</label>
+                            <input type="number" value={p.validityDays} onChange={e => p.setValidityDays(parseInt(e.target.value) || 60)} onBlur={p.handleSaveConfig} className="prop-input" />
                         </div>
                         <div>
-                            <label style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Modelo de Assinatura</label>
-                            <select
-                                value={signatureMode}
-                                onChange={e => {
-                                    setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH');
-                                    setTimeout(handleSaveConfig, 100);
-                                }}
-                                style={{ ...inputStyle, padding: '6px 8px' }}
-                            >
+                            <label className="form-label">Modelo de Assinatura</label>
+                            <select value={p.signatureMode} onChange={e => { p.setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH'); setTimeout(p.handleSaveConfig, 100); }}
+                                className="prop-input" style={{ padding: '6px 8px' }}>
                                 <option value="LEGAL">Representante Legal</option>
                                 <option value="TECH">Responsável Técnico</option>
                                 <option value="BOTH">Ambos</option>
@@ -1124,72 +458,60 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                         </div>
                     </div>
 
-                    {/* Image Uploads UI with Previews */}
+                    {/* Image Uploads UI */}
                     <div style={{
-                        background: 'var(--color-primary-light)',
-                        padding: 'var(--space-4)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid rgba(37, 99, 235, 0.1)',
-                        marginBottom: 'var(--space-4)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 'var(--space-4)'
+                        background: 'var(--color-primary-light)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                        border: '1px solid rgba(37, 99, 235, 0.1)', marginBottom: 'var(--space-4)',
+                        display: 'flex', flexDirection: 'column', gap: 'var(--space-4)'
                     }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
                             <div>
-                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Cabeçalho (Timbrado Topo)</span>
+                                <span className="form-label">Cabeçalho (Timbrado Topo)</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                    <input type="file" accept="image/*" onChange={e => p.handleImageUpload(e, p.setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span style={{ fontSize: '0.7rem' }}>Alt:</span>
-                                        <input type="number" value={headerImageHeight} onChange={e => setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                        <input type="number" value={p.headerImageHeight} onChange={e => p.setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
                                     </div>
-                                    {headerImage && <button type="button" onClick={() => setHeaderImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                    {p.headerImage && <button type="button" onClick={() => p.setHeaderImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
-                                {headerImage && (
+                                {p.headerImage && (
                                     <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '100px', overflow: 'hidden', background: 'white' }}>
-                                        <img src={headerImage} alt="Header Preview" style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'contain' }} />
+                                        <img src={p.headerImage} alt="Header Preview" style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'contain' }} />
                                     </div>
                                 )}
                             </div>
                             <div>
-                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-2)' }}>Rodapé (Timbrado Base)</span>
+                                <span className="form-label">Rodapé (Timbrado Base)</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                    <input type="file" accept="image/*" onChange={e => handleImageUpload(e, setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                    <input type="file" accept="image/*" onChange={e => p.handleImageUpload(e, p.setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span style={{ fontSize: '0.7rem' }}>Alt:</span>
-                                        <input type="number" value={footerImageHeight} onChange={e => setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                        <input type="number" value={p.footerImageHeight} onChange={e => p.setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
                                     </div>
-                                    {footerImage && <button type="button" onClick={() => setFooterImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                    {p.footerImage && <button type="button" onClick={() => p.setFooterImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
                                 </div>
-                                {footerImage && (
+                                {p.footerImage && (
                                     <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '80px', overflow: 'hidden', background: 'white' }}>
-                                        <img src={footerImage} alt="Footer Preview" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
+                                        <img src={p.footerImage} alt="Footer Preview" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
                                     </div>
                                 )}
                             </div>
                         </div>
 
                         <div style={{ borderTop: '1px solid rgba(37, 99, 235, 0.1)', paddingTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                            <button
-                                onClick={handleSaveCompanyTemplate}
-                                disabled={isSavingTemplate || !selectedCompanyId}
-                                style={{
-                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
-                                    background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
-                                    color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                {isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+                            <button onClick={p.handleSaveCompanyTemplate} disabled={p.isSavingTemplate || !p.selectedCompanyId} style={{
+                                padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
+                                background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
+                                color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer'
+                            }}>
+                                {p.isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                                 Salvar como Padrão da Empresa
                             </button>
                         </div>
                     </div>
 
-                    <textarea
-                        value={letterContent}
-                        onChange={e => setLetterContent(e.target.value)}
+                    <textarea value={p.letterContent} onChange={e => p.setLetterContent(e.target.value)}
                         placeholder="Nenhuma carta gerada ainda. Clique em 'Gerar com IA' ou digite seu texto."
                         style={{
                             width: '100%', minHeight: '400px', padding: 'var(--space-4)',
@@ -1202,11 +524,8 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             )}
 
             {/* ── Empty State ── */}
-            {!proposal && items.length === 0 && (
-                <div style={{
-                    ...cardStyle, textAlign: 'center', padding: 'var(--space-16)',
-                    color: 'var(--color-text-tertiary)',
-                }}>
+            {!p.proposal && p.items.length === 0 && (
+                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-16)', color: 'var(--color-text-tertiary)' }}>
                     <DollarSign size={48} strokeWidth={1.5} style={{ marginBottom: 'var(--space-4)', opacity: 0.3 }} />
                     <h3 style={{ margin: '0 0 var(--space-2) 0', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xl)' }}>
                         Nenhuma proposta selecionada
@@ -1218,37 +537,14 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
             )}
         </div>
             <ConfirmDialog
-                open={!!confirmDeleteItemId}
+                open={!!p.confirmDeleteItemId}
                 title="Remover Item"
                 message="Tem certeza que deseja remover este item da proposta?"
                 variant="danger"
                 confirmLabel="Remover"
-                onConfirm={executeDeleteItem}
-                onCancel={() => setConfirmDeleteItemId(null)}
+                onConfirm={p.executeDeleteItem}
+                onCancel={() => p.setConfirmDeleteItemId(null)}
             />
         </>
     );
 }
-
-// Styles
-const thStyle: React.CSSProperties = {
-    padding: 'var(--space-3)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)',
-    color: 'var(--color-text-secondary)', textAlign: 'center',
-    textTransform: 'uppercase', letterSpacing: '0.5px',
-};
-const tdStyle: React.CSSProperties = {
-    padding: 'var(--space-2) var(--space-3)', verticalAlign: 'middle',
-};
-const tdCenterStyle: React.CSSProperties = {
-    ...tdStyle, textAlign: 'center',
-};
-const inputStyle: React.CSSProperties = {
-    padding: '4px var(--space-2)', borderRadius: 'var(--radius-sm)',
-    border: '1px solid var(--color-primary)',
-    fontSize: 'var(--text-md)', width: '100%',
-    background: 'var(--color-bg-base)',
-};
-const iconBtnStyle: React.CSSProperties = {
-    background: 'none', border: 'none', cursor: 'pointer',
-    padding: '4px', borderRadius: 'var(--radius-sm)',
-};

@@ -597,16 +597,16 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 </div>
                                 <div className="flex-gap" style={{ background: 'var(--color-bg-surface-hover)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
                                     <button
-                                        className={`btn ${activeTab === 'documents' ? 'btn-primary' : 'btn-ghost'}`}
+                                        className={`tab-btn${activeTab === 'documents' ? ' active' : ''}`}
                                         onClick={() => setActiveTab('documents')}
-                                        style={{ background: activeTab === 'documents' ? 'var(--color-bg-surface)' : 'transparent', color: activeTab === 'documents' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: activeTab === 'documents' ? '1px solid var(--color-border)' : 'none', boxShadow: 'none' }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                                     >
                                         <FileText size={16} /> Documentos
                                     </button>
                                     <button
-                                        className={`btn ${activeTab === 'credentials' ? 'btn-primary' : 'btn-ghost'}`}
+                                        className={`tab-btn${activeTab === 'credentials' ? ' active' : ''}`}
                                         onClick={() => setActiveTab('credentials')}
-                                        style={{ background: activeTab === 'credentials' ? 'var(--color-bg-surface)' : 'transparent', color: activeTab === 'credentials' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: activeTab === 'credentials' ? '1px solid var(--color-border)' : 'none', boxShadow: 'none' }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                                     >
                                         <KeyRound size={16} /> Acessos e Senhas
                                     </button>
@@ -663,18 +663,18 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: 'var(--color-bg-surface-hover)', borderBottom: '1px solid var(--color-border)' }}>
-                                            <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleToggleSort('docType')}>
+                                            <th className="docs-th" style={{ cursor: 'pointer' }} onClick={() => handleToggleSort('docType')}>
                                                 <div className="flex-gap">Documento {sortField === 'docType' && (sortOrder === 'asc' ? '↑' : '↓')}</div>
                                             </th>
-                                            <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleToggleSort('status')}>
+                                            <th className="docs-th" style={{ cursor: 'pointer' }} onClick={() => handleToggleSort('status')}>
                                                 <div className="flex-gap">Status {sortField === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}</div>
                                             </th>
-                                            <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleToggleSort('expirationDate')}>
+                                            <th className="docs-th" style={{ cursor: 'pointer' }} onClick={() => handleToggleSort('expirationDate')}>
                                                 <div className="flex-gap">Vencimento {sortField === 'expirationDate' && (sortOrder === 'asc' ? '↑' : '↓')}</div>
                                             </th>
-                                            <th style={thStyle}>Órgão / Link</th>
-                                            <th style={thStyle}>Arquivo</th>
-                                            <th style={thStyle}></th>
+                                            <th className="docs-th">Órgão / Link</th>
+                                            <th className="docs-th">Arquivo</th>
+                                            <th className="docs-th"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -687,22 +687,22 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                         ) : (
                                             filteredDocs.map((doc: CompanyDocument) => (
                                                 <tr key={doc.id} style={{ borderBottom: '1px solid var(--color-border)' }} className="table-row-hover">
-                                                    <td style={tdStyle}>
+                                                    <td className="docs-td">
                                                         <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{doc.docType}</div>
                                                         <div style={{ fontSize: '0.7rem', display: 'inline-block', padding: '2px 6px', borderRadius: '4px', backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)', marginTop: '4px', color: 'var(--color-text-secondary)' }}>
                                                             {doc.docGroup}
                                                         </div>
                                                     </td>
-                                                    <td style={tdStyle}>
+                                                    <td className="docs-td">
                                                         <StatusBadge status={doc.status} />
                                                     </td>
-                                                    <td style={tdStyle}>
+                                                    <td className="docs-td">
                                                         <div className="flex-gap" style={{ color: doc.status === 'Vencido' ? 'var(--color-danger)' : 'var(--color-text-primary)' }}>
                                                             <Clock size={16} />
                                                             {new Date(doc.expirationDate).toLocaleDateString('pt-BR')}
                                                         </div>
                                                     </td>
-                                                    <td style={tdStyle}>
+                                                    <td className="docs-td">
                                                         {doc.issuerLink ? (
                                                             <a href={doc.issuerLink} target="_blank" rel="noopener noreferrer" className="flex-gap" style={{ color: 'var(--color-primary)', fontSize: '0.875rem' }}>
                                                                 <ExternalLink size={14} />
@@ -712,7 +712,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                             <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>-</span>
                                                         )}
                                                     </td>
-                                                    <td style={tdStyle}>
+                                                    <td className="docs-td">
                                                         <a
                                                             href={doc.fileUrl.startsWith('http') ? doc.fileUrl : `${API_BASE_URL}${doc.fileUrl}`}
                                                             target="_blank"
@@ -724,7 +724,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                             <span style={{ fontSize: '0.875rem', textDecoration: 'underline' }}>{doc.fileName}</span>
                                                         </a>
                                                     </td>
-                                                    <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                    <td className="docs-td" style={{ textAlign: 'right' }}>
                                                         <div className="flex-gap" style={{ justifyContent: 'flex-end' }}>
                                                             <button className="icon-btn" onClick={() => handleEditDocument(doc)} title="Editar Documento">
                                                                 <Edit2 size={16} color="var(--color-text-secondary)" />
@@ -745,11 +745,11 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: 'var(--color-bg-surface-hover)', borderBottom: '1px solid var(--color-border)' }}>
-                                            <th style={thStyle}>Plataforma</th>
-                                            <th style={thStyle}>Login / Usuário</th>
-                                            <th style={thStyle}>Senha</th>
-                                            <th style={thStyle}>Observações</th>
-                                            <th style={thStyle}></th>
+                                            <th className="docs-th">Plataforma</th>
+                                            <th className="docs-th">Login / Usuário</th>
+                                            <th className="docs-th">Senha</th>
+                                            <th className="docs-th">Observações</th>
+                                            <th className="docs-th"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -762,7 +762,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                         ) : (
                                             activeCompany.credentials.map((cred: CompanyCredential) => (
                                                 <tr key={cred.id} style={{ borderBottom: '1px solid var(--color-border)' }} className="table-row-hover">
-                                                    <td style={tdStyle}>
+                                                    <td className="docs-td">
                                                         <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{cred.platform}</div>
                                                         {cred.url && (
                                                             <a href={cred.url} target="_blank" rel="noopener noreferrer" className="flex-gap" style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginTop: '4px', textDecoration: 'none' }}>
@@ -770,10 +770,10 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                             </a>
                                                         )}
                                                     </td>
-                                                    <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '1rem' }}>
+                                                    <td className="docs-td" style={{ fontFamily: 'monospace', fontSize: '1rem' }}>
                                                         {cred.login}
                                                     </td>
-                                                    <td style={tdStyle}>
+                                                    <td className="docs-td">
                                                         <div className="flex-gap">
                                                             <span style={{ fontFamily: 'monospace', fontSize: '1rem', letterSpacing: showPasswords[cred.id] ? 'normal' : '0.15em' }}>
                                                                 {showPasswords[cred.id] ? cred.password : '••••••••'}
@@ -788,10 +788,10 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                             </button>
                                                         </div>
                                                     </td>
-                                                    <td style={{ ...tdStyle, color: 'var(--color-text-secondary)', fontSize: '0.8rem', maxWidth: '200px' }}>
+                                                    <td className="docs-td" style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem', maxWidth: '200px' }}>
                                                         {cred.notes || '-'}
                                                     </td>
-                                                    <td style={{ ...tdStyle, textAlign: 'right' }}>
+                                                    <td className="docs-td" style={{ textAlign: 'right' }}>
                                                         <div className="flex-gap" style={{ justifyContent: 'flex-end' }}>
                                                             <button className="icon-btn" onClick={() => handleEditCredential(cred)} title="Editar">
                                                                 <Edit2 size={16} color="var(--color-text-secondary)" />
@@ -864,10 +864,10 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-3)' }}>Aplica-se a todos os documentos do sistema se não houver regra específica.</p>
                                 <input
                                     type="number"
-                                    className="input-inner"
+                                    className="form-select"
                                     value={defaultAlertDays}
                                     onChange={(e) => setDefaultAlertDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                                    style={{ width: '100%', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', outline: 'none', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xl)' }}
+                                    style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xl)' }}
                                 />
                             </div>
 
@@ -878,9 +878,9 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                     {DOCUMENT_GROUPS.map((group) => (
                                         <div key={group} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                                             <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', flex: 1 }}>{group}</span>
-                                            <input
+                                                <input
                                                 type="number"
-                                                className="input-inner"
+                                                className="form-select"
                                                 placeholder={`${defaultAlertDays || 0} (Herdado)`}
                                                 value={groupAlertDays[group] !== undefined ? groupAlertDays[group] : ''}
                                                 onChange={(e) => {
@@ -895,7 +895,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                         return newGroup;
                                                     });
                                                 }}
-                                                style={{ width: '120px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-base)', padding: '6px 10px', borderRadius: 'var(--radius-md)', textAlign: 'center', color: 'var(--color-text-primary)', outline: 'none' }}
+                                                style={{ width: '120px', textAlign: 'center' }}
                                             />
                                         </div>
                                     ))}
@@ -952,19 +952,3 @@ function StatusBadge({ status }: { status: DocumentStatus }) {
         </Badge>
     );
 }
-
-const thStyle: React.CSSProperties = {
-    padding: 'var(--space-3) var(--space-6)',
-    fontSize: 'var(--text-sm)',
-    fontWeight: 'var(--font-semibold)',
-    color: 'var(--color-text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em'
-};
-
-const tdStyle: React.CSSProperties = {
-    padding: 'var(--space-4) var(--space-6)',
-    fontSize: 'var(--text-md)',
-    color: 'var(--color-text-primary)',
-    verticalAlign: 'middle'
-};

@@ -135,10 +135,10 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
                     {/* Canais de Contato */}
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
+                        <div className="card" style={{ padding: 'var(--space-6)' }}>
+                            <div className="flex-gap" style={{ gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                 <Phone size={16} />
-                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Canais de Contato</span>
+                                <span className="form-label" style={{ marginBottom: 0 }}>Canais de Contato</span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
                                 <FormField label="Nome do Contato (Repr. Legal)">
@@ -177,10 +177,10 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
                     {/* Endereço */}
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <div style={{ padding: 'var(--space-6)', backgroundColor: 'var(--color-bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
+                        <div className="card" style={{ padding: 'var(--space-6)' }}>
+                            <div className="flex-gap" style={{ gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                 <MapPin size={16} />
-                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' }}>Endereço da Sede</span>
+                                <span className="form-label" style={{ marginBottom: 0 }}>Endereço da Sede</span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-3)' }}>
                                 <FormField label="Endereço Completo">

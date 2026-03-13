@@ -1,6 +1,6 @@
-// ════════════════════════════════════════════
+// ════════════════════════════════════════
 //  LicitaSaaS Design System — Component Index
-// ════════════════════════════════════════════
+// ════════════════════════════════════════
 
 // Feedback
 export { ToastProvider, useToast } from './Toast';
@@ -22,4 +22,29 @@ export type { BadgeVariant } from './Badge';
 export { Table, Thead, Tbody, Tr, Th, Td } from './Table';
 
 // Patterns
-export { SectionHeader, EmptyState, TabNav, Skeleton, CountdownBadge, StatusDot } from './Components';
+export { SectionHeader, EmptyState, TabNav, Skeleton, StatusDot } from './Components';
+
+// Domain Components — LicitaSaaS-specific
+export {
+  StatusBadge,
+  MetricCard,
+  AlertCard,
+  PipelineStep,
+  RadarCard,
+  MissionCard,
+  AgendaItem,
+  DocumentStatusRow,
+  ReadinessPanel,
+  NextStepBanner,
+  QuickAction,
+  LiveCountdown,
+  CountdownBadge,
+  RiskIndicator,
+  SessionStatusChip,
+  DeadlineIndicator,
+  ProcessActionBar,
+  TimelineEvent,
+  SectionDivider,
+  AiMetric,
+  ProgressBar,
+} from './domain';

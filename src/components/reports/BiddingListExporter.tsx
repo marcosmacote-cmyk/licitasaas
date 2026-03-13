@@ -158,13 +158,8 @@ export function BiddingListExporter({ biddings, companies }: Props) {
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                                style={{
-                                    padding: '10px',
-                                    borderRadius: 'var(--radius-md)',
-                                    border: '1px solid var(--color-border)',
-                                    fontSize: 'var(--text-base)',
-                                    background: 'var(--color-bg-base)'
-                                }}
+                                className="form-select"
+                                style={{ background: 'var(--color-bg-base)' }}
                             >
                                 <option value="Todos">Todos os Status</option>
                                 {COLUMNS.map(col => (
@@ -223,11 +218,11 @@ export function BiddingListExporter({ biddings, companies }: Props) {
                 </div>
 
                 <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-base)' }}>
+                    <table className="table" style={{ width: '100%', fontSize: 'var(--text-base)' }}>
                         <thead>
-                            <tr style={{ background: 'var(--color-bg-surface-hover)', borderBottom: '1px solid var(--color-border)' }}>
+                            <tr>
                                 {availableColumns.filter(col => visibleColumns.includes(col.id)).map(col => (
-                                    <th key={col.id} style={{ padding: '12px 16px' }}>{col.label}</th>
+                                    <th key={col.id}>{col.label}</th>
                                 ))}
                             </tr>
                         </thead>

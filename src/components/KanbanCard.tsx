@@ -2,6 +2,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { Calendar, DollarSign, Brain, Building2, Trash2, MessageSquare, Bell, Radio } from 'lucide-react';
 import { format } from 'date-fns';
 import type { BiddingProcess, CompanyProfile, ObservationLog } from '../types';
+import { RiskIndicator } from './ui';
 
 interface CardFieldConfig {
     key: string;
@@ -146,15 +147,15 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
             )}
 
             {isVisible('summary') && item.summary && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '8px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'pre-wrap' }}>
+                <div className="kanban-card-summary">
                     {item.summary}
                 </div>
             )}
 
             {isVisible('company') && item.companyProfileId && companies && (
-                <div className="flex-gap kanban-card-company" style={{ fontSize: '0.75rem', color: 'var(--color-primary)', marginBottom: '8px', fontWeight: 500 }}>
+                <div className="kanban-card-company">
                     <Building2 size={12} />
-                    <span className="kanban-card-company">
+                    <span>
                         {companies.find(c => c.id === item.companyProfileId)?.razaoSocial || 'Empresa Desconhecida'}
                     </span>
                 </div>
@@ -162,13 +163,11 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
 
             {isVisible('risk') && item.risk && (
                 <div style={{ marginBottom: '8px' }}>
-                    <span className={`badge ${item.risk === 'Alto' || item.risk === 'Crítico' ? 'badge-red' : item.risk === 'Médio' ? 'badge-orange' : 'badge-green'}`} style={{ fontSize: '0.65rem' }}>
-                        ⚠️ {item.risk}
-                    </span>
+                    <RiskIndicator risk={item.risk} compact />
                 </div>
             )}
 
-            <div className="flex-gap" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <div className="kanban-card-meta">
                 {isVisible('value') && (
                     <div className="flex-gap">
                         <DollarSign size={14} />

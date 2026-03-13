@@ -65,17 +65,11 @@ export function SettingsPage() {
                     <div style={{ 
                         padding: 'var(--space-6)', 
                         borderBottom: '1px solid var(--color-border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                            <div style={{ 
-                                padding: 'var(--space-3)', 
-                                background: 'var(--color-primary-light)', 
-                                color: 'var(--color-primary)',
-                                borderRadius: 'var(--radius-lg)' 
-                            }}>
+                    }}
+                        className="flex-between"
+                    >
+                        <div className="flex-gap" style={{ gap: 'var(--space-3)' }}>
+                            <div className="indicator-card" style={{ padding: 'var(--space-3)', minWidth: 'auto', border: 'none', boxShadow: 'none', background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
                                 <Activity size={24} />
                             </div>
                             <div>
@@ -102,10 +96,7 @@ export function SettingsPage() {
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                                 {logs.map((log) => (
-                                    <div key={log.id} style={{
-                                        background: 'var(--color-bg-surface)',
-                                        border: '1px solid var(--color-border)',
-                                        borderRadius: 'var(--radius-lg)',
+                                    <div key={log.id} className="card" style={{
                                         padding: 'var(--space-4)',
                                         display: 'flex',
                                         flexDirection: 'column',

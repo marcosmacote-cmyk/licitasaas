@@ -99,50 +99,50 @@ export function PerformanceDashboard({ biddings }: Props) {
 
             {/* KPI Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-5)' }}>
-                <div style={kpiCardStyle}>
+                <div className="card" style={{ padding: 'var(--space-6)' }}>
                     <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
-                        <span style={kpiLabelStyle}>Taxa de Conversão (Win Rate)</span>
-                        <div style={{ ...iconWrapperStyle, background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
+                        <span className="kpi-label">Taxa de Conversão (Win Rate)</span>
+                        <div className="kpi-icon" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
                             <Target size={20} />
                         </div>
                     </div>
-                    <div style={kpiValueStyle}>{metrics.winRate}%</div>
-                    <div style={kpiSubStyle}>
+                    <div className="kpi-value">{metrics.winRate}%</div>
+                    <div className="kpi-sub">
                         <span style={{ color: 'var(--color-success)', fontWeight: 500 }}>{metrics.wonCount} Ganhos</span> / {metrics.lostCount} Perdidos
                     </div>
                 </div>
 
-                <div style={kpiCardStyle}>
+                <div className="card" style={{ padding: 'var(--space-6)' }}>
                     <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
-                        <span style={kpiLabelStyle}>Montante Ganho</span>
-                        <div style={{ ...iconWrapperStyle, background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
+                        <span className="kpi-label">Montante Ganho</span>
+                        <div className="kpi-icon" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
                             <Trophy size={20} />
                         </div>
                     </div>
-                    <div style={kpiValueStyle}>{formatCurrency(metrics.totalWonValue)}</div>
-                    <div style={kpiSubStyle}>Valor consolidado dos processos "Vencidos"</div>
+                    <div className="kpi-value">{formatCurrency(metrics.totalWonValue)}</div>
+                    <div className="kpi-sub">Valor consolidado dos processos "Vencidos"</div>
                 </div>
 
-                <div style={kpiCardStyle}>
+                <div className="card" style={{ padding: 'var(--space-6)' }}>
                     <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
-                        <span style={kpiLabelStyle}>Total em Jogo (Pipeline)</span>
-                        <div style={{ ...iconWrapperStyle, background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
+                        <span className="kpi-label">Total em Jogo (Pipeline)</span>
+                        <div className="kpi-icon" style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
                             <DollarSign size={20} />
                         </div>
                     </div>
-                    <div style={kpiValueStyle}>{formatCurrency(metrics.totalInPlayValue)}</div>
-                    <div style={kpiSubStyle}>{metrics.ongoingCount} processos em andamento</div>
+                    <div className="kpi-value">{formatCurrency(metrics.totalInPlayValue)}</div>
+                    <div className="kpi-sub">{metrics.ongoingCount} processos em andamento</div>
                 </div>
             </div>
 
             {/* Charts Section */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-5)' }}>
                 {/* Modality Chart */}
-                <div style={chartCardStyle}>
+                <div className="card" style={{ padding: 'var(--space-6)' }}>
                     <div className="flex-between" style={{ marginBottom: '24px' }}>
                         <div className="flex-gap">
                             <FileStack size={18} color="var(--color-primary)" />
-                            <h3 style={chartTitleStyle}>Processos por Modalidade</h3>
+                            <h3 className="kpi-label" style={{ margin: 0 }}>Processos por Modalidade</h3>
                         </div>
                     </div>
                     <div style={{ height: '300px', width: '100%' }}>
@@ -166,11 +166,11 @@ export function PerformanceDashboard({ biddings }: Props) {
                 </div>
 
                 {/* Status Chart */}
-                <div style={chartCardStyle}>
+                <div className="card" style={{ padding: 'var(--space-6)' }}>
                     <div className="flex-between" style={{ marginBottom: '24px' }}>
                         <div className="flex-gap">
                             <PieIcon size={18} color="var(--color-primary)" />
-                            <h3 style={chartTitleStyle}>Distribuição por Status</h3>
+                            <h3 className="kpi-label" style={{ margin: 0 }}>Distribuição por Status</h3>
                         </div>
                     </div>
                     <div style={{ height: '300px', width: '100%' }}>
@@ -200,53 +200,3 @@ export function PerformanceDashboard({ biddings }: Props) {
         </div>
     );
 }
-
-const chartCardStyle: React.CSSProperties = {
-    background: 'var(--color-bg-surface)',
-    padding: 'var(--space-6)',
-    borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--color-border)',
-    boxShadow: 'var(--shadow-sm)'
-};
-
-const chartTitleStyle: React.CSSProperties = {
-    margin: 0,
-    fontSize: 'var(--text-md)',
-    fontWeight: 'var(--font-semibold)',
-    color: 'var(--color-text-primary)'
-};
-
-const kpiCardStyle: React.CSSProperties = {
-    background: 'var(--color-bg-surface)',
-    padding: 'var(--space-6)',
-    borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--color-border)',
-    boxShadow: 'var(--shadow-sm)'
-};
-
-const kpiLabelStyle: React.CSSProperties = {
-    color: 'var(--color-text-secondary)',
-    fontSize: 'var(--text-md)',
-    fontWeight: 'var(--font-medium)'
-};
-
-const kpiValueStyle: React.CSSProperties = {
-    fontSize: 'var(--text-4xl)',
-    fontWeight: 'var(--font-bold)',
-    color: 'var(--color-text-primary)',
-    marginBottom: 'var(--space-2)'
-};
-
-const kpiSubStyle: React.CSSProperties = {
-    fontSize: 'var(--text-md)',
-    color: 'var(--color-text-tertiary)'
-};
-
-const iconWrapperStyle: React.CSSProperties = {
-    width: '40px',
-    height: '40px',
-    borderRadius: 'var(--radius-md)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-};

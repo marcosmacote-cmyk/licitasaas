@@ -568,18 +568,18 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
                 {/* AI Config */}
-                <div style={cardStyle}>
+                <div className="card" style={{ padding: 'var(--space-5)' }}>
                     <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <Sparkles size={18} color="var(--color-primary)" /> Configuração da IA
                     </h3>
                     <Field label="Licitação Alvo">
-                        <select style={inputStyle} value={selectedBiddingId} onChange={(e) => handleBiddingChange(e.target.value)}>
+                        <select className="form-select" value={selectedBiddingId} onChange={(e) => handleBiddingChange(e.target.value)}>
                             <option value="">-- Selecione --</option>
                             {biddingsWithAnalysis.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                         </select>
                     </Field>
                     <Field label="Empresa Emitente">
-                        <select style={inputStyle} value={selectedCompanyId} onChange={(e) => handleCompanyChange(e.target.value)}>
+                        <select className="form-select" value={selectedCompanyId} onChange={(e) => handleCompanyChange(e.target.value)}>
                             <option value="">-- Selecione --</option>
                             {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
                         </select>
@@ -590,7 +590,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                                 {selectedBiddingId ? 'Nenhuma declaração identificada neste edital.' : 'Selecione uma licitação.'}
                             </div>
                         ) : (
-                            <select style={inputStyle} value={declarationType} onChange={(e) => setDeclarationType(e.target.value)}>
+                            <select className="form-select" value={declarationType} onChange={(e) => setDeclarationType(e.target.value)}>
                                 {declarationTypesFromEdital.map((t, i) => <option key={i} value={t}>{t}</option>)}
                             </select>
                         )}
@@ -611,7 +611,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         )}
                     </Field>
                     <Field label="Instruções Adicionais">
-                        <textarea style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }} placeholder="Opcional..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
+                        <textarea className="form-select" style={{ minHeight: '60px', resize: 'vertical' }} placeholder="Opcional..." value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} />
                     </Field>
                     <button className="btn btn-primary" style={{ width: '100%', height: '44px', gap: 'var(--space-2)', marginTop: '4px' }} onClick={handleGenerate} disabled={isGenerating || !selectedBiddingId || !selectedCompanyId || !declarationType}>
                         {isGenerating ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
@@ -620,7 +620,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                 </div>
 
                 {/* Layout Settings */}
-                <div style={cardStyle}>
+                <div className="card" style={{ padding: 'var(--space-5)' }}>
                     <div className="flex-between" style={{ marginBottom: 'var(--space-3)' }}>
                         <h4 style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                             <Settings2 size={14} /> Layout & Assinatura
@@ -641,7 +641,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
                     {/* Layout Selector */}
                     <div style={{ marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-2)' }}>
-                        <select style={{ ...inputStyle, flex: 1, fontSize: '0.8rem' }} value={currentLayoutId} onChange={(e) => {
+                        <select className="form-select" style={{ flex: 1, fontSize: '0.8rem' }} value={currentLayoutId} onChange={(e) => {
                             const found = layouts.find(l => l.id === e.target.value);
                             setCurrentLayoutId(e.target.value);
                             if (found) setLayoutName(found.name);
@@ -654,8 +654,8 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                     </div>
 
                     <div style={{ marginBottom: 'var(--space-4)' }}>
-                        <label style={smallLabel}>Nome do Layout</label>
-                        <input style={smallInput} value={layoutName} onChange={(e) => {
+                        <label className="decl-small-label">Nome do Layout</label>
+                        <input className="decl-small-input" value={layoutName} onChange={(e) => {
                             setLayoutName(e.target.value);
                             updateLayout({ name: e.target.value });
                         }} placeholder="Ex: Layout Empresa A" />
@@ -663,27 +663,27 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
                     {/* Addressee */}
                     <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
-                        <label style={{ ...labelStyle, fontSize: '0.7rem', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Destinatário</label>
-                        <input style={{ ...inputStyle, fontSize: '0.8rem', marginBottom: '6px' }} placeholder="Ex: Agente de Contratação" value={layout.addresseeName} onChange={(e) => updateLayout({ addresseeName: e.target.value })} />
-                        <textarea style={{ ...inputStyle, fontSize: '0.8rem', minHeight: '40px' }} placeholder="Órgão / Pregão nº..." value={layout.addresseeOrg} onChange={(e) => updateLayout({ addresseeOrg: e.target.value })} />
+                        <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Destinatário</label>
+                        <input className="form-select" style={{ fontSize: '0.8rem', marginBottom: '6px' }} placeholder="Ex: Agente de Contratação" value={layout.addresseeName} onChange={(e) => updateLayout({ addresseeName: e.target.value })} />
+                        <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} placeholder="Órgão / Pregão nº..." value={layout.addresseeOrg} onChange={(e) => updateLayout({ addresseeOrg: e.target.value })} />
                     </div>
 
                     {/* City/Date */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                        <div><label style={smallLabel}>Local</label><input style={smallInput} value={layout.signatureCity} onChange={(e) => updateLayout({ signatureCity: e.target.value })} /></div>
-                        <div><label style={smallLabel}>Data</label><input style={smallInput} value={layout.signatureDate} onChange={(e) => updateLayout({ signatureDate: e.target.value })} /></div>
+                        <div><label className="decl-small-label">Local</label><input className="decl-small-input" value={layout.signatureCity} onChange={(e) => updateLayout({ signatureCity: e.target.value })} /></div>
+                        <div><label className="decl-small-label">Data</label><input className="decl-small-input" value={layout.signatureDate} onChange={(e) => updateLayout({ signatureDate: e.target.value })} /></div>
                     </div>
 
                     {/* Signatory block */}
                     <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-body)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-3)' }}>
-                        <label style={{ ...labelStyle, fontSize: '0.7rem', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bloco de Assinatura</label>
+                        <label className="form-label" style={{ fontSize: '0.7rem', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bloco de Assinatura</label>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                            <div><label style={smallLabel}>Nome</label><input style={smallInput} placeholder="NOME COMPLETO" value={layout.signatoryName} onChange={(e) => updateLayout({ signatoryName: e.target.value })} /></div>
-                            <div><label style={smallLabel}>CPF</label><input style={smallInput} placeholder="CPF nº: 000.000.000-00" value={layout.signatoryCpf} onChange={(e) => updateLayout({ signatoryCpf: e.target.value })} /></div>
-                            <div><label style={smallLabel}>Cargo</label><input style={smallInput} placeholder="Sócio Administrador" value={layout.signatoryRole} onChange={(e) => updateLayout({ signatoryRole: e.target.value })} /></div>
-                            <div><label style={smallLabel}>Empresa</label><input style={smallInput} value={layout.signatoryCompany} onChange={(e) => updateLayout({ signatoryCompany: e.target.value })} /></div>
+                            <div><label className="decl-small-label">Nome</label><input className="decl-small-input" placeholder="NOME COMPLETO" value={layout.signatoryName} onChange={(e) => updateLayout({ signatoryName: e.target.value })} /></div>
+                            <div><label className="decl-small-label">CPF</label><input className="decl-small-input" placeholder="CPF nº: 000.000.000-00" value={layout.signatoryCpf} onChange={(e) => updateLayout({ signatoryCpf: e.target.value })} /></div>
+                            <div><label className="decl-small-label">Cargo</label><input className="decl-small-input" placeholder="Sócio Administrador" value={layout.signatoryRole} onChange={(e) => updateLayout({ signatoryRole: e.target.value })} /></div>
+                            <div><label className="decl-small-label">Empresa</label><input className="decl-small-input" value={layout.signatoryCompany} onChange={(e) => updateLayout({ signatoryCompany: e.target.value })} /></div>
                         </div>
-                        <div style={{ marginTop: '6px' }}><label style={smallLabel}>CNPJ</label><input style={smallInput} value={layout.signatoryCnpj} onChange={(e) => updateLayout({ signatoryCnpj: e.target.value })} /></div>
+                        <div style={{ marginTop: '6px' }}><label className="decl-small-label">CNPJ</label><input className="decl-small-input" value={layout.signatoryCnpj} onChange={(e) => updateLayout({ signatoryCnpj: e.target.value })} /></div>
                     </div>
 
                     {/* Images */}
@@ -692,7 +692,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         onWidthChange={(w) => updateLayout({ headerImageWidth: w })} onHeightChange={(h) => updateLayout({ headerImageHeight: h })} />
 
                     <Field label="Cabeçalho (Texto)">
-                        <textarea style={{ ...inputStyle, fontSize: '0.8rem', minHeight: '40px' }} value={layout.headerText} onChange={(e) => updateLayout({ headerText: e.target.value })} placeholder="Razão Social / CNPJ" />
+                        <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} value={layout.headerText} onChange={(e) => updateLayout({ headerText: e.target.value })} placeholder="Razão Social / CNPJ" />
                     </Field>
 
                     <ImageUploadSection label="Logotipo Rodapé" image={layout.footerImage} width={layout.footerImageWidth} height={layout.footerImageHeight}
@@ -700,14 +700,14 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         onWidthChange={(w) => updateLayout({ footerImageWidth: w })} onHeightChange={(h) => updateLayout({ footerImageHeight: h })} />
 
                     <Field label="Rodapé (Texto)">
-                        <textarea style={{ ...inputStyle, fontSize: '0.8rem', minHeight: '40px' }} value={layout.footerText} onChange={(e) => updateLayout({ footerText: e.target.value })} placeholder="Endereço / contato" />
+                        <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '40px' }} value={layout.footerText} onChange={(e) => updateLayout({ footerText: e.target.value })} placeholder="Endereço / contato" />
                     </Field>
                 </div>
             </div>
 
             {/* RIGHT: Editor & Preview */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                <div style={{ ...cardStyle, flex: 1, minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
+                <div className="card" style={{ flex: 1, minHeight: '600px', display: 'flex', flexDirection: 'column', padding: 'var(--space-5)' }}>
                     <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
                         <div className="flex-gap">
                             <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -734,7 +734,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                            <div style={pageMockupStyle}>
+                            <div className="decl-page-mockup">
                                 {/* Header */}
                                 {layout.headerImage && (
                                     <div style={{ textAlign: 'center', marginBottom: '6px' }}>
@@ -761,7 +761,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                                 </div>
 
                                 {/* Body */}
-                                <textarea style={editorTextStyle} value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} placeholder="Texto gerado aqui..." />
+                                <textarea className="decl-editor-text" value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} placeholder="Texto gerado aqui..." />
 
                                 {/* Location/Date */}
                                 {(layout.signatureCity || layout.signatureDate) && (
@@ -817,7 +817,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div style={{ marginBottom: '12px' }}>
-            <label style={labelStyle}>{label}</label>
+            <label className="form-label">{label}</label>
             {children}
         </div>
     );
@@ -829,15 +829,15 @@ function ImageUploadSection({ label, image, width, height, onUpload, onRemove, o
 }) {
     return (
         <div style={{ marginBottom: '12px' }}>
-            <label style={smallLabel}>{label}</label>
+            <label className="decl-small-label">{label}</label>
             {image ? (
                 <div style={{ border: '1px dashed var(--color-border)', borderRadius: '6px', padding: '8px', backgroundColor: 'var(--color-bg-body)' }}>
                     <div style={{ textAlign: 'center', marginBottom: '6px', background: 'white', padding: '6px', borderRadius: '4px' }}>
                         <img src={image} alt={label} style={{ maxWidth: `${width * 3}px`, maxHeight: `${height * 3}px`, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '6px', alignItems: 'end' }}>
-                        <div><label style={{ ...smallLabel, marginBottom: '2px' }}>Largura (mm)</label><input type="number" style={smallInput} value={width} onChange={(e) => onWidthChange(parseInt(e.target.value) || 10)} min={5} max={180} /></div>
-                        <div><label style={{ ...smallLabel, marginBottom: '2px' }}>Altura (mm)</label><input type="number" style={smallInput} value={height} onChange={(e) => onHeightChange(parseInt(e.target.value) || 5)} min={5} max={80} /></div>
+                        <div><label className="decl-small-label" style={{ marginBottom: '2px' }}>Largura (mm)</label><input type="number" className="decl-small-input" value={width} onChange={(e) => onWidthChange(parseInt(e.target.value) || 10)} min={5} max={180} /></div>
+                        <div><label className="decl-small-label" style={{ marginBottom: '2px' }}>Altura (mm)</label><input type="number" className="decl-small-input" value={height} onChange={(e) => onHeightChange(parseInt(e.target.value) || 5)} min={5} max={80} /></div>
                         <button className="icon-btn" onClick={onRemove} title="Remover" style={{ padding: '4px', color: 'var(--color-danger)' }}><X size={14} /></button>
                     </div>
                 </div>
@@ -851,12 +851,3 @@ function ImageUploadSection({ label, image, width, height, onUpload, onRemove, o
     );
 }
 
-// ── Styles ──
-
-const cardStyle: React.CSSProperties = { background: 'var(--color-bg-surface)', padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' };
-const labelStyle: React.CSSProperties = { display: 'block', marginBottom: 'var(--space-2)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' };
-const smallLabel: React.CSSProperties = { display: 'block', marginBottom: '4px', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' };
-const inputStyle: React.CSSProperties = { width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)', color: 'var(--color-text-primary)', fontSize: 'var(--text-base)', outline: 'none' };
-const smallInput: React.CSSProperties = { width: '100%', padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)', color: 'var(--color-text-primary)', fontSize: 'var(--text-md)', outline: 'none' };
-const pageMockupStyle: React.CSSProperties = { background: 'white', padding: '50px', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md)', flex: 1, display: 'flex', flexDirection: 'column', color: '#333', minHeight: '700px' };
-const editorTextStyle: React.CSSProperties = { flex: 1, width: '100%', border: 'none', outline: 'none', fontSize: 'var(--text-md)', lineHeight: '1.7', color: '#333', resize: 'none', background: 'transparent', fontFamily: 'serif', textAlign: 'justify' };

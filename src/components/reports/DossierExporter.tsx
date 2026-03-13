@@ -1002,14 +1002,13 @@ export function DossierExporter({ biddings, companies }: Props) {
                 border: '1px solid var(--color-border)',
             }}>
                 <div>
-                    <label style={labelStyle}>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <FileArchive size={14} style={{ verticalAlign: '-2px' }} /> Licitação em Preparação
                     </label>
                     <select
-                        className="select-input"
+                        className="form-select"
                         value={selectedBiddingId}
                         onChange={e => setSelectedBiddingId(e.target.value)}
-                        style={selectStyle}
                     >
                         <option value="">— Selecione uma Licitação —</option>
                         {biddingsWithAnalysis.map(b => (
@@ -1024,14 +1023,13 @@ export function DossierExporter({ biddings, companies }: Props) {
                 </div>
 
                 <div>
-                    <label style={labelStyle}>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <Shield size={14} style={{ verticalAlign: '-2px' }} /> Empresa Participante
                     </label>
                     <select
-                        className="select-input"
+                        className="form-select"
                         value={selectedCompanyId}
                         onChange={e => setSelectedCompanyId(e.target.value)}
-                        style={selectStyle}
                         disabled={!selectedBiddingId}
                     >
                         <option value="">— Selecione a Empresa —</option>
@@ -1042,7 +1040,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                    <label style={{ ...labelStyle, marginBottom: 0 }}>Situação</label>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 0 }}>Situação</label>
                     <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
                         {(['active', 'expired', 'all'] as const).map(filter => (
                             <button
@@ -1242,23 +1240,3 @@ export function DossierExporter({ biddings, companies }: Props) {
     );
 }
 
-const labelStyle: React.CSSProperties = {
-    display: 'flex',
-    fontSize: 'var(--text-md)',
-    fontWeight: 'var(--font-semibold)',
-    color: 'var(--color-text-secondary)',
-    marginBottom: 'var(--space-2)',
-    alignItems: 'center',
-    gap: 'var(--space-2)',
-};
-
-const selectStyle: React.CSSProperties = {
-    width: '100%',
-    padding: 'var(--space-3) var(--space-4)',
-    borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--color-border)',
-    background: 'var(--color-bg-surface)',
-    color: 'var(--color-text-primary)',
-    fontSize: 'var(--text-md)',
-    fontWeight: 'var(--font-medium)',
-};

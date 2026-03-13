@@ -29,84 +29,52 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 'var(--space-6)', marginBottom: 'var(--space-6)', borderBottom: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-6)', marginBottom: 'var(--space-6)', borderBottom: '1px solid var(--color-border)', overflowX: 'auto' }}>
                 <button
                     onClick={() => setActiveTab('dashboard')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'dashboard' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'dashboard' ? '2px solid var(--color-primary)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'dashboard' ? ' active' : ''}`}
                 >
                     <BarChart size={16} /> Dashboard de Performance
                 </button>
                 <button
                     onClick={() => setActiveTab('proposal')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'proposal' ? 'var(--color-ai)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'proposal' ? '2px solid var(--color-ai)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'proposal' ? ' active' : ''}`}
                 >
                     <DollarSign size={16} /> Proposta de Preços
                 </button>
                 <button
                     onClick={() => setActiveTab('exporter')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'exporter' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'exporter' ? '2px solid var(--color-primary)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'exporter' ? ' active' : ''}`}
                 >
                     <FileArchive size={16} /> Exportador de Dossiê (ZIP)
                 </button>
                 <button
                     onClick={() => setActiveTab('declarations')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'declarations' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'declarations' ? '2px solid var(--color-primary)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'declarations' ? ' active' : ''}`}
                 >
                     <Sparkles size={16} /> Gerador de Declarações (IA)
                 </button>
                 <button
                     onClick={() => setActiveTab('oracle')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'oracle' ? 'var(--color-success)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'oracle' ? '2px solid var(--color-success)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'oracle' ? ' active' : ''}`}
                 >
                     <BrainCircuit size={16} /> Oráculo (Acervos)
                 </button>
                 <button
                     onClick={() => setActiveTab('petitions')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'petitions' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'petitions' ? '2px solid var(--color-primary)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'petitions' ? ' active' : ''}`}
                 >
                     <Scale size={16} /> Elaboração de Petições
                 </button>
                 <button
                     onClick={() => setActiveTab('expiration')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'expiration' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'expiration' ? '2px solid var(--color-primary)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'expiration' ? ' active' : ''}`}
                 >
                     <Clock size={16} /> Validade de Documentos
                 </button>
                 <button
                     onClick={() => setActiveTab('biddingList')}
-                    style={{
-                        ...tabStyle,
-                        color: activeTab === 'biddingList' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                        borderBottom: activeTab === 'biddingList' ? '2px solid var(--color-primary)' : '2px solid transparent'
-                    }}
+                    className={`tab-btn${activeTab === 'biddingList' ? ' active' : ''}`}
                 >
                     <FileText size={16} /> Exportar Lista
                 </button>
@@ -125,17 +93,3 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
         </div>
     );
 }
-
-const tabStyle: React.CSSProperties = {
-    padding: 'var(--space-3) var(--space-4)',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 'var(--text-md)',
-    fontWeight: 'var(--font-medium)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--space-2)',
-    transition: 'var(--transition-fast)',
-    outline: 'none'
-};

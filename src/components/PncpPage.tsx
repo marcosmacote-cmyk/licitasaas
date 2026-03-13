@@ -585,16 +585,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
         selectedSearchCompanyId !== ''
     ].filter(Boolean).length;
 
-    const selectStyle: React.CSSProperties = {
-        padding: 'var(--space-3) var(--space-4)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--color-border)',
-        fontSize: 'var(--text-md)',
-        background: 'var(--color-bg-surface)',
-        color: 'var(--color-text-primary)',
-        width: '100%',
-        outline: 'none',
-    };
+
 
     return (
         <>
@@ -607,17 +598,17 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 </div>
                 {/* ── Dashboard Indicators ── */}
                 <div style={{ display: 'flex', gap: 'var(--space-3)', overflowX: 'auto', paddingBottom: '4px' }}>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
-                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><BarChart2 size={12} /> Descobertos</div>
-                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>{totalResults.toLocaleString('pt-BR')}</div>
+                    <div className="indicator-card">
+                        <div className="indicator-label"><BarChart2 size={12} /> Descobertos</div>
+                        <div className="indicator-value">{totalResults.toLocaleString('pt-BR')}</div>
                     </div>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
-                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Bookmark size={12} /> No Funil</div>
-                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)' }}>{items?.length || 0}</div>
+                    <div className="indicator-card">
+                        <div className="indicator-label"><Bookmark size={12} /> No Funil</div>
+                        <div className="indicator-value" style={{ color: 'var(--color-primary)' }}>{items?.length || 0}</div>
                     </div>
-                    <div style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)', minWidth: '120px' }}>
-                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}><Star size={12} /> Favoritos</div>
-                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning)' }}>{favoritos.length}</div>
+                    <div className="indicator-card">
+                        <div className="indicator-label"><Star size={12} /> Favoritos</div>
+                        <div className="indicator-value" style={{ color: 'var(--color-warning)' }}>{favoritos.length}</div>
                     </div>
                 </div>
             </div>
@@ -669,7 +660,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     {/* Main Search Row */}
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'end', flexWrap: 'wrap' }}>
                         <div style={{ flex: 2, minWidth: '280px' }}>
-                            <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Palavras-chave (Objeto)</label>
+                            <label className="form-label">Palavras-chave (Objeto)</label>
                             <div style={{ position: 'relative' }}>
                                 <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
                                 <input
@@ -678,24 +669,24 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                     value={keywords}
                                     onChange={(e) => setKeywords(e.target.value)}
                                     style={{
-                                        ...selectStyle,
                                         paddingLeft: '42px',
                                         fontSize: '0.9375rem',
                                     }}
+                                    className="form-select"
                                 />
                             </div>
                         </div>
 
                         <div style={{ flex: 1, minWidth: '180px' }}>
-                            <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Status</label>
-                            <select value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle}>
+                            <label className="form-label">Status</label>
+                            <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-select">
                                 {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                         </div>
 
                         <div style={{ minWidth: '120px' }}>
-                            <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Estado (UF)</label>
-                            <select value={selectedUf} onChange={(e) => setSelectedUf(e.target.value)} style={selectStyle}>
+                            <label className="form-label">Estado (UF)</label>
+                            <select value={selectedUf} onChange={(e) => setSelectedUf(e.target.value)} className="form-select">
                                 <option value="">Brasil (Todas as UFs)</option>
                                 <optgroup label="Agrupamento por Região">
                                     <option value="AC,AP,AM,PA,RO,RR,TO">Região Norte</option>
@@ -767,37 +758,37 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             animation: 'slideDown 0.2s ease-out',
                         }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Modalidade</label>
-                                <select value={modalidade} onChange={(e) => setModalidade(e.target.value)} style={selectStyle}>
+                                <label className="form-label">Modalidade</label>
+                                <select value={modalidade} onChange={(e) => setModalidade(e.target.value)} className="form-select">
                                     {MODALIDADES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                                 </select>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Esfera de Governo</label>
-                                <select value={esfera} onChange={(e) => setEsfera(e.target.value)} style={selectStyle}>
+                                <label className="form-label">Esfera de Governo</label>
+                                <select value={esfera} onChange={(e) => setEsfera(e.target.value)} className="form-select">
                                     {ESFERAS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
                                 </select>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Órgão (Nome ou CNPJ)</label>
-                                <input type="text" placeholder="Ex: Comando da Marinha" value={orgao} onChange={(e) => setOrgao(e.target.value)} style={selectStyle} />
+                                <label className="form-label">Órgão (Nome ou CNPJ)</label>
+                                <input type="text" placeholder="Ex: Comando da Marinha" value={orgao} onChange={(e) => setOrgao(e.target.value)} className="form-select" />
                             </div>
 
                             <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)</label>
+                                <label className="form-label">Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)</label>
                                 <textarea
                                     placeholder="Cole aqui a lista de nomes de prefeituras/órgãos ou seus CNPJs que deseja buscar de uma vez, separados por vírgula ou quebra de linha... (Vai cruzar tudo numa lista só de uma vez!)"
                                     value={orgaosLista}
                                     onChange={(e) => setOrgaosLista(e.target.value)}
                                     style={{
-                                        ...selectStyle,
                                         minHeight: '60px',
                                         resize: 'vertical',
                                         fontFamily: 'monospace',
                                         fontSize: '0.8125rem'
                                     }}
+                                    className="form-select"
                                 />
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                                     Pode misturar exato (CNPJ com ou sem pontuação) ou nomes aproximados (ex: Prefeitura Municipal de Limoeiro do Norte).
@@ -806,18 +797,18 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
 
                             <div>
-                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Publicado a partir de</label>
-                                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} style={selectStyle} />
+                                <label className="form-label">Publicado a partir de</label>
+                                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="form-select" />
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Publicado até</label>
-                                <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} style={selectStyle} />
+                                <label className="form-label">Publicado até</label>
+                                <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="form-select" />
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>Vincular à Empresa</label>
-                                <select value={selectedSearchCompanyId} onChange={(e) => setSelectedSearchCompanyId(e.target.value)} style={selectStyle}>
+                                <label className="form-label">Vincular à Empresa</label>
+                                <select value={selectedSearchCompanyId} onChange={(e) => setSelectedSearchCompanyId(e.target.value)} className="form-select">
                                     <option value="">(Nenhuma empresa)</option>
                                     {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
                                 </select>
@@ -835,26 +826,14 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 <div style={{ display: 'flex', gap: 'var(--space-6)' }}>
                     <button
                         onClick={() => setShowFavoritosTab(false)}
-                        style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            fontSize: 'var(--text-md)', fontWeight: !showFavoritosTab ? 'var(--font-semibold)' : 'var(--font-medium)',
-                            color: !showFavoritosTab ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                            borderBottom: !showFavoritosTab ? '2px solid var(--color-primary)' : '2px solid transparent',
-                            paddingBottom: 'var(--space-3)', transition: 'var(--transition-fast)', margin: 0
-                        }}
+                        className={`tab-btn${!showFavoritosTab ? ' active' : ''}`}
                     >
                         Resultados da Busca {results.length > 0 && `(${totalResults || results.length})`}
                     </button>
                     <button
                         onClick={() => setShowFavoritosTab(true)}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            fontSize: 'var(--text-md)', fontWeight: showFavoritosTab ? 'var(--font-semibold)' : 'var(--font-medium)',
-                            color: showFavoritosTab ? 'var(--color-warning)' : 'var(--color-text-secondary)',
-                            borderBottom: showFavoritosTab ? '2px solid var(--color-warning)' : '2px solid transparent',
-                            paddingBottom: 'var(--space-3)', transition: 'var(--transition-fast)', margin: 0
-                        }}
+                        className={`tab-btn${showFavoritosTab ? ' active-warning' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
                     >
                         <Star size={16} fill={showFavoritosTab ? "currentColor" : "none"} color={showFavoritosTab ? "currentColor" : "currentColor"} />
                         Favoritos {favoritos.length > 0 && `(${favoritos.length})`}

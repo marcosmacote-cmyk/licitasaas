@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { ExternalLink, Edit2, Brain, Building2, Radio } from 'lucide-react';
 import type { BiddingProcess, AiAnalysis, CompanyProfile } from '../types';
+import { RiskIndicator } from './ui';
 
 interface Props {
     items: BiddingProcess[];
@@ -22,18 +23,18 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
     return (
         <div style={{ backgroundColor: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <table className="table" style={{ width: '100%' }}>
                     <thead>
-                        <tr style={{ backgroundColor: 'var(--color-bg-surface-hover)', borderBottom: '1px solid var(--color-border)' }}>
-                            <th style={thStyle}>Título / Objeto</th>
-                            <th style={thStyle}>Portal</th>
-                            <th style={thStyle}>Modalidade</th>
-                            <th style={thStyle}>Fase (Status)</th>
-                            <th style={thStyle}>Empresa</th>
-                            <th style={thStyle}>Data Sessão</th>
-                            <th style={thStyle}>Risco</th>
-                            <th style={thStyle}>Valor Est.</th>
-                            <th style={thStyle}>Ações</th>
+                        <tr>
+                            <th>Título / Objeto</th>
+                            <th>Portal</th>
+                            <th>Modalidade</th>
+                            <th>Fase (Status)</th>
+                            <th>Empresa</th>
+                            <th>Data Sessão</th>
+                            <th>Risco</th>
+                            <th>Valor Est.</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -47,17 +48,17 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                             items.map(item => {
                                 const analysis = analyses.find(a => a.biddingProcessId === item.id);
                                 return (
-                                    <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border)' }} className="table-row-hover">
-                                        <td style={tdStyle} onDoubleClick={() => onEditProcess(item)}>
+                                    <tr key={item.id} className="table-row-hover" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                        <td onDoubleClick={() => onEditProcess(item)}>
                                             <div style={{ fontWeight: 500 }}>{item.title}</div>
-                                            {item.summary && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.summary}</div>}
+                                            {item.summary && <div className="text-truncate" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px', maxWidth: '300px' }}>{item.summary}</div>}
                                         </td>
-                                        <td style={tdStyle}>
+                                        <td>
                                             <span className="badge badge-blue">{item.portal}</span>
                                         </td>
-                                        <td style={tdStyle}>{item.modality}</td>
-                                        <td style={tdStyle}>{item.status}</td>
-                                        <td style={tdStyle}>
+                                        <td>{item.modality}</td>
+                                        <td>{item.status}</td>
+                                        <td>
                                             {item.companyProfileId ? (
                                                 <div className="flex-gap" style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 500 }}>
                                                     <Building2 size={12} />
@@ -67,16 +68,16 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>Não definida</span>
                                             )}
                                         </td>
-                                        <td style={tdStyle}>
+                                        <td>
                                             {renderDate(item.sessionDate)}
                                         </td>
-                                        <td style={tdStyle}>
-                                            <RiskBadge risk={item.risk} />
+                                        <td>
+                                            {item.risk ? <RiskIndicator risk={item.risk} compact /> : <span style={{ color: 'var(--color-text-tertiary)' }}>-</span>}
                                         </td>
-                                        <td style={tdStyle}>
+                                        <td>
                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.estimatedValue)}
                                         </td>
-                                        <td style={tdStyle}>
+                                        <td>
                                             <div className="flex-gap">
                                                 {analysis && (
                                                     <button
@@ -122,29 +123,3 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
         </div>
     );
 }
-
-function RiskBadge({ risk }: { risk?: string }) {
-    if (!risk) return <span style={{ color: 'var(--color-text-tertiary)' }}>-</span>;
-    let colorClass = 'badge-blue';
-    if (risk === 'Alto' || risk === 'Crítico') colorClass = 'badge-red';
-    if (risk === 'Médio') colorClass = 'badge-orange';
-    if (risk === 'Baixo') colorClass = 'badge-green';
-
-    return <span className={`badge ${colorClass}`}>{risk}</span>;
-}
-
-const thStyle: React.CSSProperties = {
-    padding: '12px 16px',
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    color: 'var(--color-text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em'
-};
-
-const tdStyle: React.CSSProperties = {
-    padding: '16px',
-    fontSize: '0.875rem',
-    color: 'var(--color-text-primary)',
-    verticalAlign: 'middle'
-};

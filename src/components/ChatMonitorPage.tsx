@@ -314,7 +314,7 @@ export function ChatMonitorPage({ companies }: Props) {
   return (
     <div className="page-container" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
       {/* ── Top Bar ── */}
-      <div style={{ padding: 'var(--space-4) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexShrink: 0 }}>
+      <div className="chat-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
           <Satellite size={22} color="var(--color-success)" />
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', margin: 0 }}>Monitor de Chat</h1>
@@ -357,39 +357,39 @@ export function ChatMonitorPage({ companies }: Props) {
         <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-base)', flexShrink: 0, display: 'grid', gap: 'var(--space-4)', maxHeight: '300px', overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
+              <label className="config-label">
                 <Bell size={12} /> Palavras-chave de Alerta
               </label>
               <input
                 type="text"
+                className="config-input"
                 value={monitorConfig.keywords}
                 onChange={(e) => setMonitorConfig({...monitorConfig, keywords: e.target.value})}
                 placeholder="suspensa, reaberta, vencedora..."
-                style={{ width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}
               />
             </div>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
+              <label className="config-label">
                 <Phone size={12} color="var(--color-success)" /> WhatsApp
               </label>
               <input
                 type="text"
+                className="config-input"
                 value={monitorConfig.phoneNumber}
                 onChange={(e) => setMonitorConfig({...monitorConfig, phoneNumber: e.target.value})}
                 placeholder="+5585999999999"
-                style={{ width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}
               />
             </div>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
+              <label className="config-label">
                 <Send size={12} color="var(--color-primary)" /> Telegram Chat ID
               </label>
               <input
                 type="text"
+                className="config-input"
                 value={monitorConfig.telegramChatId}
                 onChange={(e) => setMonitorConfig({...monitorConfig, telegramChatId: e.target.value})}
                 placeholder="Chat ID ou @usuario"
-                style={{ width: '100%', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}
               />
             </div>
           </div>
@@ -469,10 +469,10 @@ export function ChatMonitorPage({ companies }: Props) {
       )}
 
       {/* ── Split Panel ── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="chat-split-panel">
 
         {/* ── LEFT: Process List ── */}
-        <div style={{ width: '380px', minWidth: '320px', borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', background: 'var(--color-bg-base)' }}>
+        <div className="chat-sidebar">
 
           {/* Filters */}
           <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -562,14 +562,7 @@ export function ChatMonitorPage({ companies }: Props) {
                   <div
                     key={proc.id}
                     onClick={() => handleSelectProcess(proc.id)}
-                    style={{
-                      padding: 'var(--space-4) var(--space-4)',
-                      borderBottom: '1px solid var(--color-border)',
-                      cursor: 'pointer',
-                      background: isSelected ? 'var(--color-primary-light, rgba(37, 99, 235, 0.06))' : 'transparent',
-                      borderLeft: isSelected ? '3px solid var(--color-primary)' : '3px solid transparent',
-                      transition: 'var(--transition-fast)',
-                    }}
+                    className={`chat-process-item${isSelected ? ' active' : ''}`}
                   >
                     {/* Title + Badge */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
@@ -632,11 +625,11 @@ export function ChatMonitorPage({ companies }: Props) {
         </div>
 
         {/* ── RIGHT: Chat Messages ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--color-bg-base)', overflow: 'hidden' }}>
+        <div className="chat-main">
           {selectedProc ? (
             <>
               {/* Process Header */}
-              <div style={{ padding: 'var(--space-4) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', flexShrink: 0 }}>
+              <div className="chat-topbar">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', margin: '0 0 4px 0', color: 'var(--color-text-primary)' }}>
