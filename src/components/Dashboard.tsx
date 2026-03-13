@@ -4,13 +4,13 @@ import {
     Line, AreaChart, Area
 } from 'recharts';
 import {
-    Target, TrendingUp, DollarSign, Award,
+    Target, DollarSign, Award,
     Calendar as CalendarIcon, ChevronLeft, ChevronRight,
-    Bell, Clock, Search, Zap, AlertTriangle, FileWarning,
-    ArrowRight, Briefcase, Building2, Timer, ChevronDown, ChevronUp,
+    Bell, Clock, AlertTriangle, FileWarning,
+    ArrowRight, Briefcase, Timer, ChevronDown, ChevronUp,
     BrainCircuit, Satellite, FileCheck
 } from 'lucide-react';
-import type { BiddingProcess, CompanyProfile } from '../types';
+import type { BiddingProcess } from '../types';
 import { API_BASE_URL } from '../config';
 
 interface Props {
@@ -102,7 +102,7 @@ export function Dashboard({ items }: Props) {
     const stalledProcesses = useMemo(() => {
         const now = new Date();
         return activeItems.filter(item => {
-            const updated = new Date(item.updatedAt || item.createdAt);
+            const updated = new Date(item.sessionDate || new Date().toISOString());
             const daysSinceUpdate = Math.ceil((now.getTime() - updated.getTime()) / (1000 * 60 * 60 * 24));
             return daysSinceUpdate >= 7 && !['Captado'].includes(item.status);
         });
@@ -372,7 +372,7 @@ export function Dashboard({ items }: Props) {
                                     type="reminder"
                                     time={new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                     title={item.title}
-                                    subtitle={item.reminderNote || 'Lembrete'}
+                                    subtitle={'Lembrete'}
                                 />
                             ))}
                         </div>
@@ -609,7 +609,7 @@ export function Dashboard({ items }: Props) {
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
                                 {stalledProcesses.slice(0, 4).map((item, i) => {
-                                    const daysSince = Math.ceil((new Date().getTime() - new Date(item.updatedAt || item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+                                    const daysSince = Math.ceil((new Date().getTime() - new Date(item.sessionDate || new Date().toISOString()).getTime()) / (1000 * 60 * 60 * 24));
                                     return (
                                         <div key={i} style={{
                                             display: 'flex', gap: 'var(--space-3)', alignItems: 'center',
@@ -687,12 +687,11 @@ function RadarCard({ title, value, desc, icon, color, bg }: {
     );
 }
 
-function MissionCard({ type, time, title, subtitle, value }: {
+function MissionCard({ type, time, title, subtitle, value: _value }: {
     type: 'session' | 'reminder'; time: string; title: string; subtitle?: string; value?: number;
 }) {
     const isSession = type === 'session';
     const borderColor = isSession ? 'var(--color-urgency)' : 'var(--color-warning)';
-    const tagBg = isSession ? 'var(--color-urgency-bg)' : 'var(--color-warning-bg)';
     const tagColor = isSession ? 'var(--color-urgency)' : 'var(--color-warning)';
 
     return (
