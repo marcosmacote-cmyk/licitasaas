@@ -9,10 +9,11 @@ interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onSave?: () => void;
+    initialBiddingId?: string;
 }
 
-export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
-    const d = useAiDeclaration({ biddings, companies, onSave });
+export function AiDeclarationGenerator({ biddings, companies, onSave, initialBiddingId }: Props) {
+    const d = useAiDeclaration({ biddings, companies, onSave, initialBiddingId });
 
     return (
         <>

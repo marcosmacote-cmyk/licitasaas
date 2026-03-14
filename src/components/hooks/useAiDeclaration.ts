@@ -83,13 +83,14 @@ interface UseAiDeclarationParams {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onSave?: () => void;
+    initialBiddingId?: string;
 }
 
-export function useAiDeclaration({ biddings, companies, onSave }: UseAiDeclarationParams) {
+export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId }: UseAiDeclarationParams) {
     const toast = useToast();
 
     // ── State ──
-    const [selectedBiddingId, setSelectedBiddingId] = useState('');
+    const [selectedBiddingId, setSelectedBiddingId] = useState(initialBiddingId || '');
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [declarationType, setDeclarationType] = useState('');
     const [issuerType, setIssuerType] = useState<'company' | 'technical'>('company');

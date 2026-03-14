@@ -15,13 +15,14 @@ interface UsePetitionParams {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onSave?: () => void;
+    initialBiddingId?: string;
 }
 
-export function usePetition({ biddings, companies }: UsePetitionParams) {
+export function usePetition({ biddings, companies, initialBiddingId }: UsePetitionParams) {
     const toast = useToast();
 
     // ── State ──
-    const [selectedBiddingId, setSelectedBiddingId] = useState('');
+    const [selectedBiddingId, setSelectedBiddingId] = useState(initialBiddingId || '');
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [petitionTypeId, setPetitionTypeId] = useState('recurso');
     const [factsSummary, setFactsSummary] = useState('');

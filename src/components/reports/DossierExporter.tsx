@@ -9,6 +9,7 @@ const ICON_MAP: Record<string, any> = { Shield, FileSearch, Briefcase, FileText,
 interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
+    initialBiddingId?: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -157,8 +158,8 @@ function RequirementCard({
 // ──────────────────────────────────────────────────────────────────────
 // Main Component
 // ──────────────────────────────────────────────────────────────────────
-export function DossierExporter({ biddings, companies }: Props) {
-    const d = useDossierExporter({ biddings, companies });
+export function DossierExporter({ biddings, companies, initialBiddingId }: Props) {
+    const d = useDossierExporter({ biddings, companies, initialBiddingId });
 
     return (
         <div className="flex-col gap-6">

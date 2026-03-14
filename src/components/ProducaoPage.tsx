@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DollarSign, FolderArchive, Cpu, Gavel, FileOutput } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { ProposalGeneratorPage } from './proposals/ProposalGeneratorPage';
@@ -11,12 +11,28 @@ interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onRefresh?: () => void;
+    initialContext?: { subTab?: string; processId?: string } | null;
+    onContextConsumed?: () => void;
 }
 
 type ProducaoTab = 'proposal' | 'declarations' | 'petitions' | 'dossier';
 
-export function ProducaoPage({ biddings, companies, onRefresh }: Props) {
+export function ProducaoPage({ biddings, companies, onRefresh, initialContext, onContextConsumed }: Props) {
     const [activeTab, setActiveTab] = useState<ProducaoTab>('proposal');
+    const [initialProcessId, setInitialProcessId] = useState<string | undefined>(undefined);
+
+    // Consume context on mount
+    useEffect(() => {
+        if (initialContext) {
+            if (initialContext.subTab && ['proposal', 'declarations', 'petitions', 'dossier'].includes(initialContext.subTab)) {
+                setActiveTab(initialContext.subTab as ProducaoTab);
+            }
+            if (initialContext.processId) {
+                setInitialProcessId(initialContext.processId);
+            }
+            onContextConsumed?.();
+        }
+    }, [initialContext]);
 
     const tabs: { key: ProducaoTab; label: string; icon: React.ReactNode }[] = [
         { key: 'proposal', label: 'Proposta de Preços', icon: <DollarSign size={16} /> },
@@ -70,11 +86,12 @@ export function ProducaoPage({ biddings, companies, onRefresh }: Props) {
 
             {/* Content */}
             <div>
-                {activeTab === 'proposal' && <ProposalGeneratorPage biddings={biddings} companies={companies} />}
-                {activeTab === 'declarations' && <AiDeclarationGenerator biddings={biddings} companies={companies} onSave={onRefresh} />}
-                {activeTab === 'petitions' && <PetitionGenerator biddings={biddings} companies={companies} onSave={onRefresh} />}
-                {activeTab === 'dossier' && <DossierExporter biddings={biddings} companies={companies} />}
+                {activeTab === 'proposal' && <ProposalGeneratorPage biddings={biddings} companies={companies} initialBiddingId={initialProcessId} />}
+                {activeTab === 'declarations' && <AiDeclarationGenerator biddings={biddings} companies={companies} onSave={onRefresh} initialBiddingId={initialProcessId} />}
+                {activeTab === 'petitions' && <PetitionGenerator biddings={biddings} companies={companies} onSave={onRefresh} initialBiddingId={initialProcessId} />}
+                {activeTab === 'dossier' && <DossierExporter biddings={biddings} companies={companies} initialBiddingId={initialProcessId} />}
             </div>
         </div>
     );
 }
+

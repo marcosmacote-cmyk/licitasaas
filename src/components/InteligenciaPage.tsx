@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ScanSearch } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { TechnicalOracle } from './reports/TechnicalOracle';
@@ -8,12 +8,20 @@ interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onRefresh?: () => void;
+    initialProcessId?: string;
+    onContextConsumed?: () => void;
 }
 
 type InteligenciaTab = 'oracle';
 
-export function InteligenciaPage({ biddings, companies, onRefresh }: Props) {
+export function InteligenciaPage({ biddings, companies, onRefresh, initialProcessId, onContextConsumed }: Props) {
     const [activeTab, setActiveTab] = useState<InteligenciaTab>('oracle');
+
+    useEffect(() => {
+        if (initialProcessId) {
+            onContextConsumed?.();
+        }
+    }, [initialProcessId]);
 
     const tabs: { key: InteligenciaTab; label: string; icon: React.ReactNode; description: string }[] = [
         { key: 'oracle', label: 'Oráculo Técnico', icon: <ScanSearch size={16} />, description: 'Compare exigências técnicas com acervos da empresa' },

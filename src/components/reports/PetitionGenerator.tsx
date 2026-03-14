@@ -11,10 +11,11 @@ interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onSave?: () => void;
+    initialBiddingId?: string;
 }
 
-export function PetitionGenerator({ biddings, companies, onSave }: Props) {
-    const p = usePetition({ biddings, companies, onSave });
+export function PetitionGenerator({ biddings, companies, onSave, initialBiddingId }: Props) {
+    const p = usePetition({ biddings, companies, onSave, initialBiddingId });
 
     return (
         <>

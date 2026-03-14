@@ -11,6 +11,7 @@ import { useProposal } from '../hooks/useProposal';
 interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
+    initialBiddingId?: string;
 }
 
 const UNITS = ['UN', 'KG', 'M²', 'M³', 'ML', 'HORA', 'MÊS', 'DIA', 'DIÁRIA', 'KM', 'LITRO', 'CJ', 'PCT', 'VB', 'SV'];
@@ -18,8 +19,8 @@ const UNITS = ['UN', 'KG', 'M²', 'M³', 'ML', 'HORA', 'MÊS', 'DIA', 'DIÁRIA',
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtNum = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function ProposalGeneratorPage({ biddings, companies }: Props) {
-    const p = useProposal({ biddings, companies });
+export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }: Props) {
+    const p = useProposal({ biddings, companies, initialBiddingId });
 
     return (
         <>

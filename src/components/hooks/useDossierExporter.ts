@@ -146,11 +146,12 @@ function findBestMatches(docs: CompanyDocument[], reqText: string, maxResults: n
 interface UseDossierExporterParams {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
+    initialBiddingId?: string;
 }
 
-export function useDossierExporter({ biddings, companies }: UseDossierExporterParams) {
+export function useDossierExporter({ biddings, companies, initialBiddingId }: UseDossierExporterParams) {
     const toast = useToast();
-    const [selectedBiddingId, setSelectedBiddingId] = useState('');
+    const [selectedBiddingId, setSelectedBiddingId] = useState(initialBiddingId || '');
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [isExporting, setIsExporting] = useState(false);
     const [dateFilter, setDateFilter] = useState<'all' | 'active' | 'expired'>('active');

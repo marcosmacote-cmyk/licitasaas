@@ -47,6 +47,7 @@ function App() {
   const [alertCount, setAlertCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string } | null>(null);
+  const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string } | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -408,23 +409,26 @@ function App() {
           {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { setNavFilter(filter || null); setActiveTab(tab as AppTab); }} />}
           {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)}
-            onNavigateToModule={(module) => {
-              const moduleMap: Record<string, AppTab> = {
-                'intelligence': 'intelligence',
-                'production-proposal': 'production',
-                'production-dossier': 'production',
-                'production-declaration': 'production',
-                'production-petition': 'production',
-                'monitoring': 'monitoring',
-                'companies': 'companies',
+            onNavigateToModule={(module, processId) => {
+              const subTabMap: Record<string, { tab: AppTab; subTab?: string }> = {
+                'intelligence':             { tab: 'intelligence' },
+                'production-proposal':      { tab: 'production', subTab: 'proposal' },
+                'production-dossier':       { tab: 'production', subTab: 'dossier' },
+                'production-declaration':   { tab: 'production', subTab: 'declarations' },
+                'production-petition':      { tab: 'production', subTab: 'petitions' },
+                'monitoring':               { tab: 'monitoring' },
+                'companies':                { tab: 'companies' },
               };
-              const tab = moduleMap[module];
-              if (tab) setActiveTab(tab);
+              const mapping = subTabMap[module];
+              if (mapping) {
+                setModuleContext({ subTab: mapping.subTab, processId });
+                setActiveTab(mapping.tab);
+              }
             }}
           />}
-          {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} />}
+          {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} initialProcessId={moduleContext?.processId} onContextConsumed={() => setModuleContext(null)} />}
           {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
-          {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} />}
+          {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} initialContext={moduleContext} onContextConsumed={() => setModuleContext(null)} />}
           {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} />}
           {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}
           {activeTab === 'settings' && <SettingsPage />}
