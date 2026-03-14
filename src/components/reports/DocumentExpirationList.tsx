@@ -408,7 +408,7 @@ export function DocumentExpirationList({ companies }: Props) {
                             className="form-select"
                         >
                             <option value="">Todos os status</option>
-                            <option value="expired">🔴 Vencido</option>
+                            <option value="expired">Vencido</option>
                             <option value="warning">🟡 Próx. Vencimento</option>
                             <option value="valid">🟢 Válido</option>
                             <option value="unknown">⚪ Sem Validade</option>

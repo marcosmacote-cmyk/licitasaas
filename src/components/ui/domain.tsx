@@ -217,7 +217,7 @@ interface DocumentStatusRowProps {
 
 export function DocumentStatusRow({ docType, status, daysLeft, onClick }: DocumentStatusRowProps) {
   const isDanger = status === 'Vencido' || status === 'Crítico';
-  const label = status === 'Vencido' ? '⛔ Vencido' : status === 'Crítico' ? '🔴 Crítico' : `⚠️ ${daysLeft}d`;
+  const label = status === 'Vencido' ? 'Vencido' : status === 'Crítico' ? 'Crítico' : `${daysLeft}d restantes`;
 
   return (
     <div onClick={onClick} className={`dom-docrow dom-docrow--${isDanger ? 'danger' : 'warning'}${onClick ? ' dom-docrow--clickable' : ''}`}>

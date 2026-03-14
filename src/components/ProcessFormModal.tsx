@@ -89,7 +89,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     background: form.hubTab === 'hub' ? 'var(--color-bg-surface)' : 'transparent',
                                     color: form.hubTab === 'hub' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
                                     boxShadow: form.hubTab === 'hub' ? 'var(--shadow-sm)' : 'none',
-                                }}>🎯 Hub Operacional</button>
+                                }}>Hub Operacional</button>
                                 <button type="button" onClick={() => form.setHubTab('form')} style={{
                                     flex: 1, padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
                                     fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', transition: 'var(--transition-fast)',
@@ -190,7 +190,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             {(form.formData.portal?.toLowerCase().includes('compras') || form.formData.portal?.toLowerCase().includes('cnet') || form.formData.link?.toLowerCase().includes('comprasnet') || form.formData.link?.toLowerCase().includes('cnetmobile')) && (
                                 <div style={{ gridColumn: '1 / -1', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--color-border)' }}>
                                     <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        📡 Dados ComprasNet (para monitoramento de chat)
+                                        Dados ComprasNet (para monitoramento de chat)
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-3)' }}>
                                         <div>
@@ -341,7 +341,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                             background: isViewing ? 'rgba(59,130,246,0.06)' : 'var(--color-bg-body)',
                                                             fontSize: '0.75rem', fontWeight: 500
                                                         }}>
-                                                            <span style={{ color: 'var(--color-danger)' }}>📄</span>
+                                                            <span style={{ color: 'var(--color-danger)', fontSize: '0.7rem', fontWeight: 700 }}>PDF</span>
                                                             <span style={{ color: 'var(--color-text-primary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shortName}</span>
                                                             <button type="button" onClick={() => form.setViewingPdf(isViewing ? null : file)}
                                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: isViewing ? 'var(--color-primary)' : 'var(--color-text-tertiary)', fontWeight: 600, fontSize: '0.7rem' }}
@@ -359,7 +359,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             {form.viewingPdf && (
                                                 <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--color-text-secondary)', position: 'relative' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border)', fontSize: '0.75rem' }}>
-                                                        <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>📄 Visualizador de Documento</span>
+                                                        <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Visualizador de Documento</span>
                                                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                             <a href={`${API_BASE_URL}${form.viewingPdf}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.7rem' }}>
                                                                 Abrir em Nova Aba ↗

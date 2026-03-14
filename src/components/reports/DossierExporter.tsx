@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
-import { CheckCircle2, FileArchive, Loader2, Search, ChevronDown, ChevronUp, XCircle, Sparkles, Shield, FileSearch, Briefcase, FileText, HelpCircle, AlertTriangle, Eye, Package, ClipboardList } from 'lucide-react';
+import { CheckCircle2, FileArchive, Loader2, Search, ChevronDown, ChevronUp, XCircle, ScanSearch, Shield, FileSearch, Briefcase, FileText, HelpCircle, AlertTriangle, Eye, Package, ClipboardList } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, CompanyDocument } from '../../types';
 import { useDossierExporter, getGroupMeta } from '../hooks/useDossierExporter';
 
-const ICON_MAP: Record<string, any> = { Shield, FileSearch, Briefcase, FileText, Sparkles, HelpCircle };
+const ICON_MAP: Record<string, any> = { Shield, FileSearch, Briefcase, FileText, ScanSearch, HelpCircle };
 
 interface Props {
     biddings: BiddingProcess[];
@@ -77,7 +77,7 @@ function RequirementCard({
                         <div className="flex-wrap gap-2 mt-2" style={{ display: 'flex' }}>
                             {note && (
                                 <span className="flex-center gap-1" style={{ padding: '2px var(--space-3)', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary-light)', color: 'var(--color-primary)', fontSize: '0.65rem', fontWeight: 'var(--font-bold)', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                                    <Sparkles size={10} /> {note}
+                                    <ScanSearch size={10} /> {note}
                                 </span>
                             )}
                             {selectedDocs.map(doc => (
@@ -133,7 +133,7 @@ function RequirementCard({
                                                         <div style={{ fontSize: '0.8125rem', fontWeight: isSelected ? 600 : 500, color: isSelected ? meta.color : 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.docType}</div>
                                                         <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                             {doc.fileName}
-                                                            {isExpiredDoc && <span style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-bold)', marginLeft: 'var(--space-2)' }}>⚠ Vencido</span>}
+                                                            {isExpiredDoc && <span style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-bold)', marginLeft: 'var(--space-2)' }}>Vencido</span>}
                                                         </div>
                                                     </div>
                                                     <a href={`${API_BASE_URL}${doc.fileUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-tertiary)', display: 'flex', padding: '4px', flexShrink: 0 }} onClick={e => e.stopPropagation()} title="Visualizar">
@@ -195,7 +195,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                         {(['active', 'expired', 'all'] as const).map(filter => (
                             <button key={filter} onClick={() => d.setDateFilter(filter)}
                                 style={{ padding: '9px 14px', fontSize: '0.75rem', fontWeight: 600, background: d.dateFilter === filter ? 'var(--color-primary)' : 'var(--color-bg-surface)', color: d.dateFilter === filter ? 'white' : 'var(--color-text-secondary)', border: 'none', cursor: 'pointer', borderRight: filter !== 'all' ? '1px solid var(--color-border)' : 'none', transition: 'all 0.15s' }}>
-                                {filter === 'active' ? '✅ Válidos' : filter === 'expired' ? '⚠ Vencidos' : '📋 Todos'}
+                                {filter === 'active' ? 'Válidos' : filter === 'expired' ? 'Vencidos' : 'Todos'}
                             </button>
                         ))}
                     </div>
@@ -218,9 +218,9 @@ export function DossierExporter({ biddings, companies }: Props) {
                         <div>
                             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>Índice de Prontidão</div>
                             <div className="flex-center gap-4" style={{ marginTop: '4px', fontSize: 'var(--text-sm)' }}>
-                                <span style={{ color: 'var(--color-success)', fontWeight: 'var(--font-semibold)' }}>✅ {d.satisfiedCount} vinculados</span>
-                                <span style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-semibold)' }}>❌ {d.pendingCount} pendentes</span>
-                                {d.ignoredCount > 0 && <span style={{ color: 'var(--color-neutral)', fontWeight: 'var(--font-semibold)' }}>⏭ {d.ignoredCount} ignorados</span>}
+                                <span style={{ color: 'var(--color-success)', fontWeight: 'var(--font-semibold)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><CheckCircle2 size={13} /> {d.satisfiedCount} vinculados</span>
+                                <span style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-semibold)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><XCircle size={13} /> {d.pendingCount} pendentes</span>
+                                {d.ignoredCount > 0 && <span style={{ color: 'var(--color-neutral)', fontWeight: 'var(--font-semibold)' }}>{d.ignoredCount} ignorados</span>}
                             </div>
                         </div>
                     </div>
@@ -251,7 +251,7 @@ export function DossierExporter({ biddings, companies }: Props) {
                         </>
                     ) : (
                         <>
-                            <Sparkles size={16} color="var(--color-ai)" />
+                            <ScanSearch size={16} color="var(--color-ai)" />
                             <span style={{ fontSize: '0.8125rem', color: 'var(--color-ai)', fontWeight: 600 }}>Correspondência Inteligente (Gemini) aplicada</span>
                             <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>— A IA pré-selecionou {d.satisfiedCount} documento(s) automaticamente. Revise e ajuste conforme necessário.</span>
                         </>

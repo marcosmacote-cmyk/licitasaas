@@ -160,7 +160,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                 <MetricCard title="Volume no Funil" value={fmt(m.totalValue)} icon={<DollarSign size={18} />} color="var(--color-primary)" bg="var(--color-primary-light)" subtitle={`${m.activeItems.length} processos ativos`} onClick={() => onNavigate?.('bidding', { statuses: ['Captado', 'Em Análise de Edital', 'Preparando Documentação', 'Participando'] })} />
                 <MetricCard title="Volume Ganho (YTD)" value={fmt(m.wonValue)} icon={<BadgeCheck size={18} />} color="var(--color-success)" bg="var(--color-success-bg)" subtitle={`${m.wonItems.length} licitações vencidas`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido'] })} />
                 <MetricCard title="Taxa de Sucesso" value={`${m.winRate}%`} icon={<Crosshair size={18} />} color={m.winRate >= 50 ? 'var(--color-success)' : m.winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} bg={m.winRate >= 50 ? 'var(--color-success-bg)' : m.winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'} subtitle={`${m.wonItems.length} de ${m.totalFinished} finalizados`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido', 'Perdido', 'Sem Sucesso'] })} />
-                <MetricCard title="Próximas Sessões" value={(m.todaySessions.length + m.upcomingSessions.length).toString()} icon={<CalendarIcon size={18} />} color={m.todaySessions.length > 0 ? 'var(--color-danger)' : 'var(--color-primary)'} bg={m.todaySessions.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)'} subtitle={m.todaySessions.length > 0 ? `⚡ ${m.todaySessions.length} HOJE` : 'nos próximos 7 dias'} onClick={() => onNavigate?.('bidding')} />
+                <MetricCard title="Próximas Sessões" value={(m.todaySessions.length + m.upcomingSessions.length).toString()} icon={<CalendarIcon size={18} />} color={m.todaySessions.length > 0 ? 'var(--color-danger)' : 'var(--color-primary)'} bg={m.todaySessions.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)'} subtitle={m.todaySessions.length > 0 ? `${m.todaySessions.length} SESSÃO(ES) HOJE` : 'nos próximos 7 dias'} onClick={() => onNavigate?.('bidding')} />
             </div>
 
             {/* ═══ PIPELINE ═══ */}
@@ -285,7 +285,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                         <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>{progress}%</span>
                                         <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>{fmt(m.wonValue)} / {fmt(monthlyTarget)}</span>
                                     </div>
-                                    <ProgressBar value={m.wonValue} max={monthlyTarget} label={progress >= 100 ? '🎉 Meta atingida! Parabéns!' : `Faltam ${fmt(remaining)} para atingir a meta`} />
+                                    <ProgressBar value={m.wonValue} max={monthlyTarget} label={progress >= 100 ? 'Meta atingida!' : `Faltam ${fmt(remaining)} para atingir a meta`} />
                                 </>
                             );
                         })() : (

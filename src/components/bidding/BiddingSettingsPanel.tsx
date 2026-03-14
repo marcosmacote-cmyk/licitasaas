@@ -120,9 +120,9 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
                     }}>
                         <div style={{ padding: 'var(--space-1)' }}>
                             {[
-                                { label: '📥 Arquivo CSV', onClick: () => { props.onExportCsv(); setShowExportMenu(false); } },
-                                { label: '📊 Planilha Excel', onClick: () => { props.onExportExcel(); setShowExportMenu(false); } },
-                                { label: '📄 Documento PDF', onClick: () => { props.onExportPdf(); setShowExportMenu(false); } },
+                                { label: 'Arquivo CSV', onClick: () => { props.onExportCsv(); setShowExportMenu(false); } },
+                                { label: 'Planilha Excel', onClick: () => { props.onExportExcel(); setShowExportMenu(false); } },
+                                { label: 'Documento PDF', onClick: () => { props.onExportPdf(); setShowExportMenu(false); } },
                             ].map((item, i) => (
                                 <button key={i} onClick={item.onClick} className="row-hover"
                                     style={{
@@ -155,13 +155,13 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
                         overflow: 'hidden',
                     }}>
                         <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                            <div style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)' }}>⚙️ Configurações</div>
+                            <div style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)' }}>Configurações</div>
                             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>Personalize o painel de licitações</div>
                         </div>
                         <div style={{ maxHeight: '450px', overflowY: 'auto' }}>
                             {/* Colunas do Kanban */}
                             <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                                <SettingSectionTitle>📋 Colunas do Kanban</SettingSectionTitle>
+                                <SettingSectionTitle>Colunas do Kanban</SettingSectionTitle>
                                 {(COLUMNS as string[]).map(col => (
                                     <SettingRow key={col} label={col}>
                                         <ToggleSwitch
@@ -183,14 +183,14 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
 
                             {/* Ordenação */}
                             <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                                <SettingSectionTitle>📊 Ordenação dos Cards</SettingSectionTitle>
+                                <SettingSectionTitle>Ordenação dos Cards</SettingSectionTitle>
                                 {[
-                                    { value: 'default', label: '📌 Ordem manual (padrão)' },
-                                    { value: 'date-asc', label: '📅 Sessão mais próxima primeiro' },
-                                    { value: 'date-desc', label: '📅 Sessão mais distante primeiro' },
-                                    { value: 'value-desc', label: '💰 Maior valor primeiro' },
-                                    { value: 'value-asc', label: '💰 Menor valor primeiro' },
-                                    { value: 'risk', label: '⚠️ Maior risco primeiro' },
+                                    { value: 'default', label: 'Ordem manual (padrão)' },
+                                    { value: 'date-asc', label: 'Sessão mais próxima primeiro' },
+                                    { value: 'date-desc', label: 'Sessão mais distante primeiro' },
+                                    { value: 'value-desc', label: 'Maior valor primeiro' },
+                                    { value: 'value-asc', label: 'Menor valor primeiro' },
+                                    { value: 'risk', label: 'Maior risco primeiro' },
                                 ].map(opt => (
                                     <label key={opt.value} className="row-hover" style={{
                                         display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer',
@@ -213,7 +213,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
 
                             {/* Aparência */}
                             <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                                <SettingSectionTitle>🎨 Aparência dos Cards</SettingSectionTitle>
+                                <SettingSectionTitle>Aparência dos Cards</SettingSectionTitle>
                                 <SettingRow label="Cards Compactos">
                                     <ToggleSwitch checked={props.compactMode} onChange={() => props.setCompactMode(!props.compactMode)} />
                                 </SettingRow>
@@ -224,7 +224,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
 
                             {/* Empresa Padrão */}
                             <div style={{ padding: '14px 16px' }}>
-                                <SettingSectionTitle>🏢 Empresa Padrão</SettingSectionTitle>
+                                <SettingSectionTitle>Empresa Padrão</SettingSectionTitle>
                                 <select className="config-input cursor-pointer" value={props.defaultCompanyId} onChange={(e) => props.setDefaultCompanyId(e.target.value)}>
                                     <option value="">Nenhuma (selecionar manualmente)</option>
                                     {props.companies.map(c => (<option key={c.id} value={c.id}>{c.razaoSocial}</option>))}
@@ -234,7 +234,7 @@ export function BiddingSettingsPanel(props: BiddingSettingsProps) {
                             {/* Preferências IA */}
                             <div style={{ padding: '14px 16px', borderTop: '1px solid var(--color-border)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                    <SettingSectionTitle>🤖 Preferências da IA</SettingSectionTitle>
+                                    <SettingSectionTitle>Preferências da IA</SettingSectionTitle>
                                     <span className="badge badge-ai" style={{ fontSize: 'var(--text-xs)' }}>PREMIUM</span>
                                 </div>
                                 <div style={{ marginBottom: '12px' }}>

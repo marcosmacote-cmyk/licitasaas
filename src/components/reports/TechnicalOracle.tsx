@@ -161,7 +161,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
                     </div>
                     {o.selectedCertIds.size === 0 && !o.analysisResult && (
                         <p style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-base)', color: 'var(--color-danger)', fontWeight: 'var(--font-medium)' }}>
-                            ⚠️ Selecione ao menos um atestado na lista lateral para iniciar a análise.
+                            Selecione ao menos um atestado na lista lateral para iniciar a análise.
                         </p>
                     )}
                 </div>

@@ -75,7 +75,7 @@ export function ChatMonitorPage({ companies }: Props) {
           </span>
           {c.importantCount > 0 && (
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning)', fontWeight: 'var(--font-semibold)' }}>
-              ⚡ {c.importantCount} com alertas
+              {c.importantCount} com alertas
             </span>
           )}
         </div>
@@ -144,8 +144,8 @@ export function ChatMonitorPage({ companies }: Props) {
                   {c.health.lastPollStatus === 'success' ? <CheckCircle size={12} color="var(--color-success)" /> : c.health.lastPollStatus === 'error' ? <XCircle size={12} color="var(--color-danger)" /> : <AlertTriangle size={12} color="var(--color-warning)" />}
                   {c.health.lastPollTime ? new Date(c.health.lastPollTime).toLocaleString('pt-BR') : 'Aguardando...'}
                 </div>
-                <span>📡 {c.health.monitoredProcesses || 0} monitorados</span>
-                <span>🚨 {c.health.totalAlerts || 0} alertas</span>
+                <span>{c.health.monitoredProcesses || 0} monitorados</span>
+                <span>{c.health.totalAlerts || 0} alertas</span>
               </div>
             )}
           </div>
@@ -166,7 +166,7 @@ export function ChatMonitorPage({ companies }: Props) {
             </div>
           </div>
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Info size={10} /> Ative o ícone 📻 no Kanban para que o agente local (ou o servidor PNCP) monitore o processo.
+            <Info size={10} /> Ative o monitoramento [SignalHigh] no Kanban para que o agente local (ou o servidor PNCP) monitore o processo.
           </div>
         </div>
       )}
@@ -247,7 +247,7 @@ export function ChatMonitorPage({ companies }: Props) {
                     {/* Title + Badge */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
                       <span style={{ fontSize: '0.8125rem', fontWeight: proc.unreadCount > 0 ? 700 : 600, color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>
-                        {proc.isImportant && <span style={{ color: 'var(--color-warning)', marginRight: '4px' }}>⚡</span>}
+                        {proc.isImportant && <span style={{ color: 'var(--color-warning)', marginRight: '4px', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>ALERTA</span>}
                         {proc.title.substring(0, 70)}{proc.title.length > 70 ? '...' : ''}
                       </span>
                       <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: badge.bg, color: badge.color, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -288,7 +288,7 @@ export function ChatMonitorPage({ companies }: Props) {
                         </span>
                       ) : (
                         <>
-                          <span>📨 {proc.totalMessages} msgs</span>
+                          <span>{proc.totalMessages} msgs</span>
                           {proc.unreadCount > 0 && (
                             <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
                               {proc.unreadCount} novas
@@ -380,7 +380,7 @@ export function ChatMonitorPage({ companies }: Props) {
                                 )}
                                 {hasKeyword && (
                                   <span style={{ padding: '1px var(--space-2)', borderRadius: 'var(--radius-lg)', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
-                                    ⚡ {msg.detectedKeyword}
+                                    {msg.detectedKeyword}
                                   </span>
                                 )}
                               </div>

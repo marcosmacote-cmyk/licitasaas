@@ -1,4 +1,4 @@
-import { Plus, LayoutGrid, List, Bot, Loader2, Bell, Search, Filter, X } from 'lucide-react';
+import { Plus, LayoutGrid, List, Cpu, Loader2, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -45,7 +45,7 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                                     {b.activeNotification.item.title}
                                 </div>
                                 <span className="badge badge-warning" style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) var(--space-4)' }}>
-                                    ⏰ {new Date(b.activeNotification.item.reminderDate!).toLocaleString('pt-BR')}
+                                    {new Date(b.activeNotification.item.reminderDate!).toLocaleString('pt-BR')}
                                 </span>
                                 {b.activeNotification.item.reminderType === 'weekdays' && (() => {
                                     try {
@@ -60,11 +60,11 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                         </div>
                         <div className="flex-col gap-3">
                             <button className="btn btn-primary" style={{ width: '100%', padding: 'var(--space-3)' }} onClick={() => b.handleReminderAction('ok')}>
-                                ✅ {b.activeNotification.item.reminderType === 'weekdays' ? 'Ciente (Agendar próximo)' : 'Estou Ciente'}
+                                <CheckCircle2 size={16} /> {b.activeNotification.item.reminderType === 'weekdays' ? 'Ciente (Agendar próximo)' : 'Estou Ciente'}
                             </button>
                             <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                                <button className="btn btn-outline" style={{ flex: 1, color: 'var(--color-warning)' }} onClick={() => b.handleReminderAction('tomorrow')}>📅 Adiar Amanhã</button>
-                                <button className="btn btn-outline" style={{ flex: 1, color: 'var(--color-danger)' }} onClick={() => b.handleReminderAction('dismiss')}>🔕 Desativar</button>
+                                <button className="btn btn-outline" style={{ flex: 1, color: 'var(--color-warning)' }} onClick={() => b.handleReminderAction('tomorrow')}><CalendarDays size={14} /> Adiar Amanhã</button>
+                                <button className="btn btn-outline" style={{ flex: 1, color: 'var(--color-danger)' }} onClick={() => b.handleReminderAction('dismiss')}><BellOff size={14} /> Desativar</button>
                             </div>
                         </div>
                     </div>
@@ -96,7 +96,7 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                     <div className="flex-gap">
                         <input type="file" accept="application/pdf" ref={b.fileInputRef} style={{ display: 'none' }} onChange={b.handleFileUpload} multiple />
                         <button className="btn btn-ai" onClick={b.handleAIAssistClick} disabled={b.isParsingAI}>
-                            {b.isParsingAI ? <Loader2 size={16} className="spinner" /> : <Bot size={16} />}
+                            {b.isParsingAI ? <Loader2 size={16} className="spinner" /> : <Cpu size={16} />}
                             {b.isParsingAI ? 'Analisando...' : 'IA: Extrair Edital'}
                         </button>
                         <button className="btn btn-primary" onClick={b.handleCreateNew}>
@@ -195,26 +195,26 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                             {b.hasActiveFilters && <button onClick={() => b.setFilters(EMPTY_FILTERS)} className="btn-link btn-link--danger">Limpar</button>}
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0 }}>
-                            <FilterSection title="🏢 Empresa">
+                            <FilterSection title="Empresa">
                                 {b.filterOptions.companies.map(compId => {
                                     const comp = companies.find(c => c.id === compId);
                                     return (<FilterCheckbox key={compId} label={comp?.razaoSocial || 'Desconhecida'} checked={b.filters.companies.includes(compId)}
                                         onChange={() => b.setFilters({ ...b.filters, companies: b.filters.companies.includes(compId) ? b.filters.companies.filter(x => x !== compId) : [...b.filters.companies, compId] })} />);
                                 })}
                             </FilterSection>
-                            <FilterSection title="📄 Modalidade">
+                            <FilterSection title="Modalidade">
                                 {b.filterOptions.modalities.map(m => (<FilterCheckbox key={m} label={m} checked={b.filters.modalities.includes(m)}
                                     onChange={() => b.setFilters({ ...b.filters, modalities: b.filters.modalities.includes(m) ? b.filters.modalities.filter(x => x !== m) : [...b.filters.modalities, m] })} />))}
                             </FilterSection>
-                            <FilterSection title="🌐 Portal">
+                            <FilterSection title="Portal">
                                 {b.filterOptions.portals.map(p => (<FilterCheckbox key={p} label={p} checked={b.filters.portals.includes(p)}
                                     onChange={() => b.setFilters({ ...b.filters, portals: b.filters.portals.includes(p) ? b.filters.portals.filter(x => x !== p) : [...b.filters.portals, p] })} />))}
                             </FilterSection>
-                            <FilterSection title="🔄 Fase / Status">
+                            <FilterSection title="Fase / Status">
                                 {b.filterOptions.statuses.map(s => (<FilterCheckbox key={s} label={s} checked={b.filters.statuses.includes(s)}
                                     onChange={() => b.setFilters({ ...b.filters, statuses: b.filters.statuses.includes(s) ? b.filters.statuses.filter(x => x !== s) : [...b.filters.statuses, s] })} />))}
                             </FilterSection>
-                            <FilterSection title="⚠️ Risco IA">
+                            <FilterSection title="Risco IA">
                                 {b.filterOptions.risks.map(r => (<FilterCheckbox key={r} label={r} checked={b.filters.risks.includes(r)}
                                     onChange={() => b.setFilters({ ...b.filters, risks: b.filters.risks.includes(r) ? b.filters.risks.filter(x => x !== r) : [...b.filters.risks, r] })} />))}
                             </FilterSection>
@@ -255,11 +255,11 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
             {b.hasActiveFilters && (
                 <div className="flex-center flex-wrap gap-1 mb-3">
                     {b.filters.searchText && <FilterChip label={`"${b.filters.searchText}"`} onRemove={() => b.setFilters({ ...b.filters, searchText: '' })} />}
-                    {b.filters.companies.map(compId => { const name = companies.find(c => c.id === compId)?.razaoSocial || compId; return <FilterChip key={compId} label={`🏢 ${name}`} color="var(--color-primary)" onRemove={() => b.setFilters({ ...b.filters, companies: b.filters.companies.filter(x => x !== compId) })} />; })}
+                    {b.filters.companies.map(compId => { const name = companies.find(c => c.id === compId)?.razaoSocial || compId; return <FilterChip key={compId} label={name} color="var(--color-primary)" onRemove={() => b.setFilters({ ...b.filters, companies: b.filters.companies.filter(x => x !== compId) })} />; })}
                     {b.filters.modalities.map(m => <FilterChip key={m} label={m} color="var(--color-ai)" onRemove={() => b.setFilters({ ...b.filters, modalities: b.filters.modalities.filter(x => x !== m) })} />)}
-                    {b.filters.portals.map(p => <FilterChip key={p} label={`🌐 ${p}`} color="var(--color-success)" onRemove={() => b.setFilters({ ...b.filters, portals: b.filters.portals.filter(x => x !== p) })} />)}
+                    {b.filters.portals.map(p => <FilterChip key={p} label={p} color="var(--color-success)" onRemove={() => b.setFilters({ ...b.filters, portals: b.filters.portals.filter(x => x !== p) })} />)}
                     {b.filters.statuses.map(s => <FilterChip key={s} label={s} color="var(--color-warning)" onRemove={() => b.setFilters({ ...b.filters, statuses: b.filters.statuses.filter(x => x !== s) })} />)}
-                    {b.filters.risks.map(r => <FilterChip key={r} label={`⚠️ ${r}`} color="var(--color-danger)" onRemove={() => b.setFilters({ ...b.filters, risks: b.filters.risks.filter(x => x !== r) })} />)}
+                    {b.filters.risks.map(r => <FilterChip key={r} label={r} color="var(--color-danger)" onRemove={() => b.setFilters({ ...b.filters, risks: b.filters.risks.filter(x => x !== r) })} />)}
                     <button onClick={() => b.setFilters(EMPTY_FILTERS)} className="btn-link btn-link--danger" style={{ fontSize: 'var(--text-xs)' }}>Limpar tudo</button>
                 </div>
             )}

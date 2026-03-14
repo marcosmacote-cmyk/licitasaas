@@ -400,7 +400,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                         fontWeight: 600, textAlign: 'right',
                                     }}>
                                         {p.total > p.selectedBidding.estimatedValue
-                                            ? `⚠ Acima do estimado (${fmt(p.selectedBidding.estimatedValue)})`
+                                            ? `Acima do estimado (${fmt(p.selectedBidding.estimatedValue)})`
                                             : `✓ Abaixo do estimado (${fmt(p.selectedBidding.estimatedValue)})`
                                         }
                                     </div>

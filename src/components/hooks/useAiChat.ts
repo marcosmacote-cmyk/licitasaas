@@ -87,7 +87,7 @@ export function useAiChat({ analysis, process, onUpdate }: UseAiChatParams) {
             const errorMsg: ChatMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
-                text: `❌ Erro ao se comunicar com o consultor: ${error.message}`
+                text: `[Falha] Erro ao se comunicar com o consultor: ${error.message}`
             };
             setMessages(prev => [...prev, errorMsg]);
         } finally {

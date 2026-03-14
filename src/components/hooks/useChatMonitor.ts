@@ -205,10 +205,10 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
       const res = await fetch(`${API_BASE_URL}/api/chat-monitor/test`, { method: 'POST', headers });
       const data = await res.json();
       const parts: string[] = [];
-      if (data.results?.telegram === true) parts.push('✅ Telegram OK');
-      else if (data.results?.telegram === false) parts.push('❌ Telegram falhou');
-      if (data.results?.whatsapp === true) parts.push('✅ WhatsApp OK');
-      else if (data.results?.whatsapp === false) parts.push('❌ WhatsApp falhou');
+      if (data.results?.telegram === true) parts.push('Telegram OK — ✓');
+      else if (data.results?.telegram === false) parts.push('Telegram: falha');
+      if (data.results?.whatsapp === true) parts.push('WhatsApp OK — ✓');
+      else if (data.results?.whatsapp === false) parts.push('WhatsApp: falha');
       toast.info(parts.length > 0 ? parts.join(' | ') : data.message);
     } catch { toast.error('Falha no teste.'); }
     finally { setTestingNotif(false); }
