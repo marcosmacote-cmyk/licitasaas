@@ -407,7 +407,21 @@ function App() {
           <Suspense fallback={<div className="flex-center" style={{ padding: 'var(--space-20)', justifyContent: 'center' }}><Loader2 size={32} className="spinner" color="var(--color-primary)" /></div>}>
           {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { setNavFilter(filter || null); setActiveTab(tab as AppTab); }} />}
           {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
-          {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)} />}
+          {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)}
+            onNavigateToModule={(module) => {
+              const moduleMap: Record<string, AppTab> = {
+                'intelligence': 'intelligence',
+                'production-proposal': 'production',
+                'production-dossier': 'production',
+                'production-declaration': 'production',
+                'production-petition': 'production',
+                'monitoring': 'monitoring',
+                'companies': 'companies',
+              };
+              const tab = moduleMap[module];
+              if (tab) setActiveTab(tab);
+            }}
+          />}
           {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} />}
           {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
           {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} />}

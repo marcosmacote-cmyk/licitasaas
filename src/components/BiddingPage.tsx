@@ -14,9 +14,10 @@ interface Props {
     companies: CompanyProfile[];
     initialFilter?: { statuses?: string[]; highlight?: string } | null;
     onFilterConsumed?: () => void;
+    onNavigateToModule?: (module: string, processId?: string) => void;
 }
 
-export function BiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed }: Props) {
+export function BiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed, onNavigateToModule }: Props) {
     const b = useBiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed });
 
     return (
@@ -287,6 +288,7 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                         b.setIsModalOpen(false);
                         b.setViewingProcessForAnalysis(b.editingProcess as BiddingProcess);
                     } : undefined}
+                    onNavigateToModule={onNavigateToModule}
                 />
             )}
 

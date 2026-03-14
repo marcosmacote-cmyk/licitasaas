@@ -434,7 +434,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                         <div style={{ ...inputContainerStyle, flex: 1, backgroundColor: 'var(--color-bg-surface)' }}>
                                             <input value={form.newObservation} onChange={(e) => form.setNewObservation(e.target.value)}
                                                 style={inputInnerStyle} placeholder="Adicionar atualização..."
-                                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), form.handleAddObservation())} />
+                                                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), form.handleAddObservation())} />
                                         </div>
                                         <button type="button" className="btn btn-primary" onClick={form.handleAddObservation}
                                             style={{ padding: '12px', borderRadius: 'var(--radius-md)' }}>

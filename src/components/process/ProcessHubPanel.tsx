@@ -387,7 +387,7 @@ export function ProcessHubPanel({
                         value={newObservation}
                         onChange={e => setNewObservation(e.target.value)}
                         placeholder={observations.length > 0 ? `Última: ${observations[observations.length - 1]?.text?.slice(0, 40)}...` : 'Registrar observação...'}
-                        onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddObservation())}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddObservation())}
                         style={{
                             flex: 1, padding: '5px 10px', fontSize: 'var(--text-sm)',
                             border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',

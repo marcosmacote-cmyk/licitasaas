@@ -457,7 +457,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
         preparando: items.filter(i => i.status === 'Preparando Documentação').length,
         participando: items.filter(i => i.status === 'Participando').length,
         vencido: items.filter(i => i.status === 'Vencido').length,
-        perdido: items.filter(i => i.status === 'Perdido').length,
+        perdido: items.filter(i => i.status === 'Perdido' || i.status === 'Sem Sucesso').length,
     }), [items]);
 
     return {

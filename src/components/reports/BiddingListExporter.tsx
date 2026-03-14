@@ -135,10 +135,13 @@ export function BiddingListExporter({ biddings, companies }: Props) {
     const getStatusBadgeStyle = (status: string): React.CSSProperties => {
         const s = status.toLowerCase();
         if (s === 'vencido') return { background: 'rgba(34,197,94,0.1)', color: 'var(--color-success)', border: '1px solid rgba(34,197,94,0.25)' };
-        if (s === 'perdido') return { background: 'rgba(239,68,68,0.08)', color: 'var(--color-danger)', border: '1px solid rgba(239,68,68,0.2)' };
+        if (s === 'perdido' || s === 'sem sucesso') return { background: 'rgba(239,68,68,0.08)', color: 'var(--color-danger)', border: '1px solid rgba(239,68,68,0.2)' };
         if (s === 'participando') return { background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', border: '1px solid rgba(37,99,235,0.2)' };
         if (s === 'em análise de edital') return { background: 'rgba(99,102,241,0.08)', color: 'rgba(99,102,241,0.9)', border: '1px solid rgba(99,102,241,0.2)' };
         if (s === 'preparando documentação') return { background: 'rgba(245,158,11,0.08)', color: 'var(--color-warning)', border: '1px solid rgba(245,158,11,0.2)' };
+        if (s === 'captado') return { background: 'var(--color-bg-body)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' };
+        if (s === 'monitorando') return { background: 'rgba(37,99,235,0.06)', color: 'var(--color-primary)', border: '1px solid rgba(37,99,235,0.15)' };
+        if (s === 'recurso') return { background: 'rgba(245,158,11,0.08)', color: '#d97706', border: '1px solid rgba(245,158,11,0.2)' };
         if (s === 'desclassificado') return { background: 'rgba(239,68,68,0.06)', color: 'var(--color-danger)', border: '1px solid rgba(239,68,68,0.15)' };
         return { background: 'var(--color-bg-body)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' };
     };

@@ -29,7 +29,7 @@ export function PerformanceDashboard({ biddings }: Props) {
             if (b.status === 'Vencido') {
                 wonCount++;
                 totalWonValue += b.estimatedValue;
-            } else if (b.status === 'Perdido') {
+            } else if (b.status === 'Perdido' || b.status === 'Sem Sucesso') {
                 lostCount++;
             } else if (['Captado', 'Em Análise de Edital', 'Preparando Documentação', 'Participando'].includes(b.status)) {
                 ongoingCount++;
