@@ -112,7 +112,7 @@ export function ProcessHubPanel({
     ];
 
     return (
-        <div style={{ padding: 'var(--space-5) var(--space-7)', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div style={{ padding: 'var(--space-5) var(--space-8)', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
             {/* ═══ FAIXA DE DECISÃO ═══ */}
             {company && (
@@ -308,7 +308,7 @@ export function ProcessHubPanel({
             </div>
 
             {/* ═══ OBSERVAÇÕES — nível rebaixado ═══ */}
-            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)' }}>
+            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', paddingLeft: 'var(--space-1)', paddingRight: 'var(--space-1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <MessageSquare size={12} color="var(--color-text-tertiary)" />
@@ -325,12 +325,17 @@ export function ProcessHubPanel({
 
                 {observations.length > 0 && (
                     <div style={{ marginBottom: 'var(--space-2)', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 80, overflowY: 'auto' }}>
-                        {observations.slice(-2).reverse().map(obs => (
-                            <div key={obs.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}>{obs.text}</span>
-                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', flexShrink: 0 }}>{new Date(obs.timestamp).toLocaleDateString('pt-BR')}</span>
-                            </div>
-                        ))}
+                        {observations.slice(-2).reverse().map(obs => {
+                            const ts = obs.timestamp;
+                            const d = ts ? new Date(typeof ts === 'number' ? ts : String(ts)) : null;
+                            const dateLabel = d && !isNaN(d.getTime()) ? d.toLocaleDateString('pt-BR') : '—';
+                            return (
+                                <div key={obs.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', gap: 12 }}>
+                                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{obs.text}</span>
+                                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', flexShrink: 0 }}>{dateLabel}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
 
