@@ -7,10 +7,11 @@ interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onRefresh?: () => void;
+    initialBiddingId?: string;
 }
 
-export function TechnicalOracle({ biddings, companies, onRefresh }: Props) {
-    const o = useTechnicalOracle({ biddings, onRefresh });
+export function TechnicalOracle({ biddings, companies, onRefresh, initialBiddingId }: Props) {
+    const o = useTechnicalOracle({ biddings, onRefresh, initialBiddingId });
 
     return (
         <>

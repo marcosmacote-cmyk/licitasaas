@@ -65,9 +65,10 @@ export const CATEGORIES_HIERARCHY: Record<string, string[]> = {
 interface UseTechnicalOracleOptions {
     biddings: BiddingProcess[];
     onRefresh?: () => void;
+    initialBiddingId?: string;
 }
 
-export function useTechnicalOracle({ biddings, onRefresh }: UseTechnicalOracleOptions) {
+export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: UseTechnicalOracleOptions) {
     const toast = useToast();
     const [certificates, setCertificates] = useState<TechnicalCertificate[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -78,7 +79,7 @@ export function useTechnicalOracle({ biddings, onRefresh }: UseTechnicalOracleOp
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-    const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(null);
+    const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(initialBiddingId || null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -207,7 +208,7 @@ export function useTechnicalOracle({ biddings, onRefresh }: UseTechnicalOracleOp
     }, [certificates, searchTerm]);
 
     const biddingsWithAnalysis = useMemo(() =>
-        biddings.filter(b => b.status === 'Preparando Documentação' && (b.aiAnalysis || b.summary))
+        biddings.filter(b => b.aiAnalysis || b.summary)
     , [biddings]);
 
     const groupedCertificates = useMemo(() => {

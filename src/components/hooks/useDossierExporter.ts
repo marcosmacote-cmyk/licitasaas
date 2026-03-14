@@ -160,9 +160,19 @@ export function useDossierExporter({ biddings, companies, initialBiddingId }: Us
     const [aiApplied, setAiApplied] = useState(false);
     const [isAiLoading, setIsAiLoading] = useState(false);
 
-    const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis && b.status === 'Preparando Documentação'), [biddings]);
+    const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis), [biddings]);
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
     const selectedCompany = companies.find(c => c.id === selectedCompanyId);
+
+    // Auto-infer company from selected bidding
+    useEffect(() => {
+        if (selectedBiddingId && !selectedCompanyId) {
+            const bidding = biddings.find(b => b.id === selectedBiddingId);
+            if (bidding?.companyProfileId) {
+                setSelectedCompanyId(bidding.companyProfileId);
+            }
+        }
+    }, [selectedBiddingId]);
 
     const requiredList = useMemo(() => {
         if (!selectedBidding?.aiAnalysis) return [];

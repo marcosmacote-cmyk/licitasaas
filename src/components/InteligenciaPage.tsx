@@ -65,7 +65,7 @@ export function InteligenciaPage({ biddings, companies, onRefresh, initialProces
 
             {/* Content */}
             <div>
-                {activeTab === 'oracle' && <TechnicalOracle biddings={biddings} companies={companies} onRefresh={onRefresh} />}
+                {activeTab === 'oracle' && <TechnicalOracle biddings={biddings} companies={companies} onRefresh={onRefresh} initialBiddingId={initialProcessId} />}
             </div>
         </div>
     );

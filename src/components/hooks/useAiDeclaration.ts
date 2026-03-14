@@ -116,6 +116,16 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     // Auto-save layouts
     useEffect(() => { saveLayouts(layouts); }, [layouts]);
 
+    // Auto-infer company from selected bidding
+    useEffect(() => {
+        if (selectedBiddingId && !selectedCompanyId) {
+            const bidding = biddings.find(b => b.id === selectedBiddingId);
+            if (bidding?.companyProfileId) {
+                setSelectedCompanyId(bidding.companyProfileId);
+            }
+        }
+    }, [selectedBiddingId]);
+
     // Ensure date is always today on mount
     useEffect(() => {
         const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });

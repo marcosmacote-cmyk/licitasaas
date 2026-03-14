@@ -63,6 +63,16 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
         }
     }, [selectedCompany]);
 
+    // Auto-infer company from selected bidding
+    useEffect(() => {
+        if (selectedBiddingId && !selectedCompanyId) {
+            const bidding = biddings.find(b => b.id === selectedBiddingId);
+            if (bidding?.companyProfileId) {
+                setSelectedCompanyId(bidding.companyProfileId);
+            }
+        }
+    }, [selectedBiddingId]);
+
     // Click handler for image selection in editor
     useEffect(() => {
         const el = editorRef.current;

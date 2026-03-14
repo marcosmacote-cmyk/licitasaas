@@ -1,5 +1,5 @@
 import {
-    Sparkles, Download, Loader2, Scale, ScrollText, AlertCircle,
+    Sparkles, Download, Loader2, Scale, ScrollText,
     ChevronRight, Copy, Check, Image as ImageIcon, Settings2,
     Trash2, Save
 } from 'lucide-react';
@@ -45,17 +45,11 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
 
                     {/* Process Selection */}
                     <div className="form-group">
-                        <label className="form-label form-label--sm">Processo (na coluna Recurso)</label>
+                        <label className="form-label form-label--sm">Processo</label>
                         <select className="form-control" value={p.selectedBiddingId} onChange={(e) => p.setSelectedBiddingId(e.target.value)} style={{ borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)' }}>
                             <option value="">-- Selecione um processo --</option>
-                            {p.biddingsInRecurso.map(b => (<option key={b.id} value={b.id}>{b.title} ({b.portal})</option>))}
+                            {biddings.map(b => (<option key={b.id} value={b.id}>{b.title} ({b.portal})</option>))}
                         </select>
-                        {p.biddingsInRecurso.length === 0 && (
-                            <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--color-danger)' }}>
-                                <AlertCircle size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-                                Nenhum processo na coluna "Recurso".
-                            </p>
-                        )}
                     </div>
 
                     {/* Company Selection */}
