@@ -18,21 +18,19 @@ interface Props {
 type ProducaoTab = 'proposal' | 'declarations' | 'petitions' | 'dossier';
 
 export function ProducaoPage({ biddings, companies, onRefresh, initialContext, onContextConsumed }: Props) {
-    const [activeTab, setActiveTab] = useState<ProducaoTab>('proposal');
-    const [initialProcessId, setInitialProcessId] = useState<string | undefined>(undefined);
+    const [activeTab, setActiveTab] = useState<ProducaoTab>(
+        initialContext?.subTab && ['proposal', 'declarations', 'petitions', 'dossier'].includes(initialContext.subTab)
+            ? initialContext.subTab as ProducaoTab
+            : 'proposal'
+    );
+    const [initialProcessId] = useState<string | undefined>(initialContext?.processId);
 
     // Consume context on mount
     useEffect(() => {
         if (initialContext) {
-            if (initialContext.subTab && ['proposal', 'declarations', 'petitions', 'dossier'].includes(initialContext.subTab)) {
-                setActiveTab(initialContext.subTab as ProducaoTab);
-            }
-            if (initialContext.processId) {
-                setInitialProcessId(initialContext.processId);
-            }
             onContextConsumed?.();
         }
-    }, [initialContext]);
+    }, []);
 
     const tabs: { key: ProducaoTab; label: string; icon: React.ReactNode }[] = [
         { key: 'proposal', label: 'Proposta de Preços', icon: <DollarSign size={16} /> },
