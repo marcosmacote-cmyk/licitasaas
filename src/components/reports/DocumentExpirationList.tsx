@@ -409,9 +409,9 @@ export function DocumentExpirationList({ companies }: Props) {
                         >
                             <option value="">Todos os status</option>
                             <option value="expired">Vencido</option>
-                            <option value="warning">🟡 Próx. Vencimento</option>
-                            <option value="valid">🟢 Válido</option>
-                            <option value="unknown">⚪ Sem Validade</option>
+                            <option value="warning">Próx. Vencimento</option>
+                            <option value="valid">Válido</option>
+                            <option value="unknown">Sem Validade</option>
                         </select>
                     </div>
                     <div>
@@ -478,11 +478,13 @@ export function DocumentExpirationList({ companies }: Props) {
                         ) : (
                             filteredDocuments.map(doc => (
                                 <tr key={doc.id} style={{
-                                    background: doc.status === 'expired' ? 'rgba(239, 68, 68, 0.03)' : doc.status === 'warning' ? 'rgba(245, 158, 11, 0.03)' : 'inherit',
                                     borderBottom: '1px solid var(--color-border)',
-                                    transition: 'background 0.15s ease'
+                                    transition: 'background 0.15s ease',
                                 }}>
-                                    <td style={{ padding: '12px 16px' }}>
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        borderLeft: doc.status === 'expired' ? '3px solid var(--color-danger)' : doc.status === 'warning' ? '3px solid var(--color-warning)' : doc.status === 'valid' ? '3px solid var(--color-success)' : '3px solid transparent',
+                                    }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             {getStatusIcon(doc.status)}
                                             {getStatusBadge(doc.status, doc.daysRemaining)}
@@ -532,20 +534,25 @@ function SummaryCard({ label, value, total, color, bg, icon, active, onClick }: 
         <button
             onClick={onClick}
             style={{
-                padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-4) var(--space-5)', borderRadius: 'var(--radius-xl)',
                 border: active ? `2px solid ${color}` : '1px solid var(--color-border)',
                 background: active ? bg : 'var(--color-bg-surface)',
                 cursor: 'pointer', textAlign: 'left',
                 transition: 'var(--transition-fast)',
-                boxShadow: active ? `0 0 0 3px ${bg}` : 'none'
+                boxShadow: active ? `0 4px 16px ${bg}` : '0 1px 4px rgba(0,0,0,0.04)',
             }}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <span style={{ color, opacity: 0.8 }}>{icon}</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pct}%</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)' }}>{label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: color, opacity: 0.7 }}>{pct}%</span>
+                    <span style={{ color, opacity: active ? 1 : 0.6 }}>{icon}</span>
+                </div>
             </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px', fontWeight: 500 }}>{label}</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color, lineHeight: 1, letterSpacing: '-0.03em', marginBottom: 4 }}>{value}</div>
+            <div style={{ height: 3, borderRadius: 9999, background: 'var(--color-bg-body)', overflow: 'hidden', marginTop: 'var(--space-2)' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 9999, transition: 'width 0.5s ease' }} />
+            </div>
         </button>
     );
 }
