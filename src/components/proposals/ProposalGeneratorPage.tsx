@@ -1,7 +1,8 @@
 import {
     Plus, Trash2, Save, FileText, Loader2,
     DollarSign, Package, AlertTriangle, Edit3,
-    ChevronDown, ChevronUp, Briefcase, Printer, Cpu, ScanSearch
+    ChevronDown, ChevronUp, Briefcase, Printer, Cpu, ScanSearch,
+    Building2, TrendingUp, ClipboardList,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
@@ -24,114 +25,152 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
+            {/* ────────── CONFIG BLOCK ────────── */}
             <div style={{
                 borderRadius: 'var(--radius-xl)',
-                border: '1px solid var(--color-border)',
+                border: '1px solid rgba(37,99,235,0.18)',
                 overflow: 'hidden',
                 background: 'var(--color-bg-surface)',
-                marginBottom: 0,
+                boxShadow: '0 2px 12px rgba(37,99,235,0.06)',
             }}>
-                {/* Header bar */}
+                {/* Title bar */}
                 <div style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: 'var(--space-4) var(--space-6)',
-                    borderBottom: p.showConfig ? '1px solid var(--color-border)' : 'none',
-                    background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(139,92,246,0.03))',
+                    padding: 'var(--space-5) var(--space-6)',
+                    background: 'linear-gradient(135deg, rgba(37,99,235,0.07) 0%, rgba(99,102,241,0.04) 60%, rgba(139,92,246,0.03) 100%)',
+                    borderBottom: '1px solid rgba(37,99,235,0.1)',
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <DollarSign size={18} color="var(--color-primary)" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                        <div style={{
+                            width: 44, height: 44, borderRadius: 'var(--radius-lg)',
+                            background: 'linear-gradient(135deg, rgba(37,99,235,0.15), rgba(99,102,241,0.1))',
+                            border: '1px solid rgba(37,99,235,0.2)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                            <DollarSign size={22} color="var(--color-primary)" strokeWidth={2} />
                         </div>
                         <div>
-                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Gerador de Proposta de Preços</div>
-                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 1 }}>Configure a licitação e empresa para iniciar</div>
+                            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                                Elaboração de Proposta de Preços
+                            </div>
+                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 3 }}>
+                                {p.proposal
+                                    ? `Proposta v${p.proposal.version} · ${p.items.length} item(ns) · configurada e pronta`
+                                    : 'Selecione a licitação e empresa proponente para iniciar'}
+                            </div>
                         </div>
                     </div>
-                    <button onClick={() => p.setShowConfig(!p.showConfig)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 4, borderRadius: 'var(--radius-sm)' }}>
-                        {p.showConfig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    <button onClick={() => p.setShowConfig(!p.showConfig)} style={{
+                        background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.12)',
+                        cursor: 'pointer', color: 'var(--color-primary)', padding: '6px 10px',
+                        borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 6,
+                        fontSize: 'var(--text-sm)', fontWeight: 600,
+                    }}>
+                        {p.showConfig ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        {p.showConfig ? 'Recolher' : 'Configurar'}
                     </button>
                 </div>
 
+                {/* Config body */}
                 {p.showConfig && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-                        {/* Licitação */}
-                        <div>
-                            <label className="form-label">
-                                <Briefcase size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-                                Licitação (com Análise IA)
-                            </label>
-                            <select value={p.selectedBiddingId} onChange={e => p.setSelectedBiddingId(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
-                                <option value="">Selecione uma licitação...</option>
-                                {p.availableBiddings.map(b => (
-                                    <option key={b.id} value={b.id}>
-                                        {b.title?.substring(0, 80)} {b.estimatedValue > 0 ? `— ${fmt(b.estimatedValue)}` : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Empresa */}
-                        <div>
-                            <label className="form-label">
-                                <Package size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
-                                Empresa Proponente
-                            </label>
-                            <select value={p.selectedCompanyId} onChange={e => p.setSelectedCompanyId(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
-                                <option value="">Selecione a empresa...</option>
-                                {companies.map(c => (
-                                    <option key={c.id} value={c.id}>{c.razaoSocial} — {c.cnpj}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'end', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
-                            <button className="btn btn-primary" onClick={p.handleCreateProposal} disabled={p.isLoading || !p.selectedBiddingId || !p.selectedCompanyId}
-                                style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}>
-                                {p.isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
-                                Nova Proposta
-                            </button>
-                            {p.proposal && (
-                                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                                    <button className="btn btn-outline" onClick={p.handleSaveConfig} disabled={p.isSaving}
-                                        style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }}>
-                                        <Save size={16} /> Salvar Proposta em Dossiê
-                                    </button>
-
-                                    <label style={{
-                                        display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
-                                        padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                        backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
-                                    }}>
-                                        <input type="checkbox" checked={p.printLandscape} onChange={(e) => p.setPrintLandscape(e.target.checked)}
-                                            style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }} />
-                                        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>Paisagem</span>
-                                    </label>
-
-                                    <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg-base)', padding: '2px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-                                        <button className="btn" onClick={() => p.handlePrintProposal('LETTER')} title="Exportar Apenas Carta"
-                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}>
-                                            <FileText size={14} /> Carta
-                                        </button>
-                                        <button className="btn" onClick={() => p.handlePrintProposal('SPREADSHEET')} title="Exportar Apenas Planilha"
-                                            style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', border: 'none', background: 'none', color: 'var(--color-text-secondary)' }}>
-                                            <Package size={14} /> Planilha
-                                        </button>
-                                        <div style={{ width: '1px', background: 'var(--color-border)', margin: '4px 2px' }}></div>
-                                        <button className="btn btn-primary" onClick={() => p.handlePrintProposal('FULL')}
-                                            style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', background: 'var(--color-text-primary)', fontSize: 'var(--text-md)' }}>
-                                            <Printer size={16} /> Exportar Completa
-                                        </button>
+                    <div style={{ padding: 'var(--space-5) var(--space-6)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-4)', alignItems: 'end' }}>
+                            {/* Licitação */}
+                            <div>
+                                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)' }}>
+                                    <Briefcase size={11} /> Licitação Alvo
+                                </label>
+                                <select value={p.selectedBiddingId} onChange={e => p.setSelectedBiddingId(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
+                                    <option value="">Selecione uma licitação com análise IA...</option>
+                                    {p.availableBiddings.map(b => (
+                                        <option key={b.id} value={b.id}>
+                                            {b.title?.substring(0, 80)} {b.estimatedValue > 0 ? `— ${fmt(b.estimatedValue)}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                {p.availableBiddings.length === 0 && (
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--color-warning)', marginTop: 4 }}>
+                                        Nenhuma licitação com análise IA disponível.
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
+
+                            {/* Empresa */}
+                            <div>
+                                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)' }}>
+                                    <Building2 size={11} /> Empresa Proponente
+                                </label>
+                                <select value={p.selectedCompanyId} onChange={e => p.setSelectedCompanyId(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
+                                    <option value="">Selecione a empresa...</option>
+                                    {companies.map(c => (
+                                        <option key={c.id} value={c.id}>{c.razaoSocial} — {c.cnpj}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* CTA Principal */}
+                            <button className="btn btn-primary" onClick={p.handleCreateProposal}
+                                disabled={p.isLoading || !p.selectedBiddingId || !p.selectedCompanyId}
+                                style={{
+                                    height: 40, padding: '0 var(--space-5)', borderRadius: 'var(--radius-lg)',
+                                    fontWeight: 700, whiteSpace: 'nowrap',
+                                    background: 'linear-gradient(135deg, var(--color-primary), rgba(99,102,241,0.9))',
+                                    boxShadow: (!p.isLoading && p.selectedBiddingId && p.selectedCompanyId) ? '0 4px 14px rgba(37,99,235,0.3)' : undefined,
+                                    border: 'none', display: 'flex', alignItems: 'center', gap: 8,
+                                }}>
+                                {p.isLoading ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
+                                {p.proposal ? 'Nova Versão' : 'Iniciar Proposta'}
+                            </button>
                         </div>
+
+                        {/* Secondary actions — only when proposal exists */}
+                        {p.proposal && (
+                            <div style={{
+                                display: 'flex', gap: 'var(--space-3)', alignItems: 'center',
+                                marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)',
+                                borderTop: '1px solid var(--color-border)',
+                                flexWrap: 'wrap',
+                            }}>
+                                <button className="btn btn-outline" onClick={p.handleSaveConfig} disabled={p.isSaving}
+                                    style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+                                    <Save size={14} /> Salvar em Dossiê
+                                </button>
+
+                                <label style={{
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
+                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                                    backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
+                                    fontSize: 'var(--text-sm)',
+                                }}>
+                                    <input type="checkbox" checked={p.printLandscape} onChange={(e) => p.setPrintLandscape(e.target.checked)}
+                                        style={{ width: '14px', height: '14px', accentColor: 'var(--color-primary)' }} />
+                                    <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Paisagem</span>
+                                </label>
+
+                                <div style={{ marginLeft: 'auto', display: 'flex', gap: '3px', background: 'var(--color-bg-base)', padding: '3px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                                    <button className="btn" onClick={() => p.handlePrintProposal('LETTER')} title="Exportar Apenas Carta"
+                                        style={{ padding: '5px 10px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <FileText size={13} /> Carta
+                                    </button>
+                                    <button className="btn" onClick={() => p.handlePrintProposal('SPREADSHEET')} title="Exportar Apenas Planilha"
+                                        style={{ padding: '5px 10px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Package size={13} /> Planilha
+                                    </button>
+                                    <div style={{ width: '1px', background: 'var(--color-border)', margin: '4px 2px' }}></div>
+                                    <button className="btn btn-primary" onClick={() => p.handlePrintProposal('FULL')}
+                                        style={{ padding: '5px var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 700, background: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Printer size={14} /> Exportar Completa
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* AI Loading badge */}
                 {p.isAiLoading && (
                     <div style={{
-                        marginTop: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
+                        margin: 'var(--space-4) var(--space-6)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
                         background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(59,130,246,0.06))',
                         border: '1px solid rgba(139,92,246,0.2)',
                         display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
@@ -535,22 +574,86 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                 </div>
             )}
 
-            {/* ── Empty State ── */}
+            {/* ────────── EMPTY STATE ────────── */}
             {!p.proposal && p.items.length === 0 && (
                 <div style={{
-                    textAlign: 'center', padding: 'var(--space-16)',
-                    borderRadius: 'var(--radius-xl)', border: '2px dashed var(--color-border)',
+                    borderRadius: 'var(--radius-xl)',
+                    border: '1px solid var(--color-border)',
                     background: 'var(--color-bg-surface)',
+                    overflow: 'hidden',
+                    display: 'grid', gridTemplateColumns: '1fr 1.1fr',
+                    minHeight: 320,
                 }}>
-                    <div style={{ width: 72, height: 72, borderRadius: 'var(--radius-xl)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-4)' }}>
-                        <DollarSign size={32} color="var(--color-primary)" strokeWidth={1.5} />
+                    {/* LEFT: editorial copy */}
+                    <div style={{
+                        padding: 'var(--space-12) var(--space-10)',
+                        display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'var(--space-5)',
+                        borderRight: '1px solid var(--color-border)',
+                        background: 'linear-gradient(160deg, rgba(37,99,235,0.03) 0%, transparent 60%)',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                            <div style={{
+                                width: 52, height: 52, borderRadius: 'var(--radius-xl)',
+                                background: 'linear-gradient(135deg, rgba(37,99,235,0.12), rgba(99,102,241,0.08))',
+                                border: '1px solid rgba(37,99,235,0.18)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <DollarSign size={24} color="var(--color-primary)" strokeWidth={1.75} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-primary)', marginBottom: 2 }}>Estágio ativo</div>
+                                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Composição de Proposta</div>
+                            </div>
+                        </div>
+
+                        <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', lineHeight: 1.65, maxWidth: 320 }}>
+                            Selecione a <strong>licitação</strong> e a <strong>empresa proponente</strong> acima, e
+                            clique em <strong>Iniciar Proposta</strong> para abrir a planilha de preços com os itens do edital.
+                        </p>
+
+                        {/* Feature list */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                            {[
+                                { icon: <Cpu size={13} />, text: 'Orçamento automático via IA a partir do edital' },
+                                { icon: <TrendingUp size={13} />, text: 'Composição com BDI, desconto e multiplicadores' },
+                                { icon: <FileText size={13} />, text: 'Carta proposta redigida com suporte da IA' },
+                                { icon: <ClipboardList size={13} />, text: 'Exportação completa: planilha + carta em PDF' },
+                            ].map((f, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                                    <span style={{ color: 'var(--color-primary)', opacity: 0.7, display: 'flex' }}>{f.icon}</span>
+                                    {f.text}
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <h3 style={{ margin: '0 0 var(--space-2) 0', fontWeight: 700, fontSize: 'var(--text-xl)', color: 'var(--color-text-primary)' }}>
-                        Nenhuma proposta selecionada
-                    </h3>
-                    <p style={{ margin: '0 auto', fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)', maxWidth: 380, lineHeight: 1.6 }}>
-                        Selecione uma licitação com análise IA e uma empresa proponente para iniciar a elaboração da proposta de preços.
-                    </p>
+
+                    {/* RIGHT: ghost spreadsheet preview */}
+                    <div style={{ padding: 'var(--space-8)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', justifyContent: 'center' }}>
+                        {/* Fake table header */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '2rem 3fr 1fr 1fr 1fr 1fr', gap: 4, marginBottom: 4, opacity: 0.35 }}>
+                            {['#', 'Descrição do Item', 'Qtd.', 'Custo Unit.', 'Preço Unit.', 'Total'].map((h) => (
+                                <div key={h} style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: h !== 'Descrição do Item' ? 'right' : 'left', paddingBottom: 6, borderBottom: '2px solid var(--color-border)' }}>{h}</div>
+                            ))}
+                        </div>
+                        {/* Fake rows */}
+                        {[0.8, 1, 0.65, 0.9, 0.75, 0.55].map((op, i) => (
+                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2rem 3fr 1fr 1fr 1fr 1fr', gap: 4, opacity: op * 0.28 }}>
+                                <div style={{ height: 16, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                <div style={{ height: 16, borderRadius: 3, background: 'var(--color-text-tertiary)', width: `${55 + i * 7}%` }} />
+                                <div style={{ height: 16, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                <div style={{ height: 16, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                <div style={{ height: 16, borderRadius: 3, background: 'var(--color-primary)', opacity: 0.4 }} />
+                                <div style={{ height: 16, borderRadius: 3, background: 'var(--color-primary)', opacity: 0.6 }} />
+                            </div>
+                        ))}
+                        {/* Total stub */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-3)', opacity: 0.2 }}>
+                            <div style={{ width: 180, padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ height: 12, width: 60, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                                <div style={{ height: 16, width: 70, borderRadius: 3, background: 'var(--color-primary)' }} />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
