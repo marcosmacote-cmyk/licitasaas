@@ -25,6 +25,14 @@ export function ProducaoPage({ biddings, companies, onRefresh }: Props) {
         { key: 'dossier', label: 'Dossiê ZIP', icon: <FolderArchive size={16} /> },
     ];
 
+    const tabMeta: Record<ProducaoTab, { color: string; desc: string }> = {
+        proposal:     { color: 'var(--color-primary)',   desc: 'Elabore e precifique propostas com suporte da IA' },
+        declarations: { color: 'var(--color-ai)',        desc: 'Gere declarações formais a partir do edital analisado' },
+        petitions:    { color: 'var(--color-warning)',   desc: 'Redija petições e recursos com inteligência jurídica especializada' },
+        dossier:      { color: 'var(--color-urgency)',   desc: 'Monte o dossiê de habilitação e exporte o pacote ZIP' },
+    };
+    const meta = tabMeta[activeTab];
+
     return (
         <div className="page-container">
             {/* Breadcrumb */}
@@ -49,7 +57,7 @@ export function ProducaoPage({ biddings, companies, onRefresh }: Props) {
                         </div>
                         Produção Documental
                     </h1>
-                    <p className="page-subtitle">Gere propostas, declarações, petições e dossiês para licitações.</p>
+                    <p className="page-subtitle" style={{ marginBottom: 0 }}>{meta.desc}</p>
                 </div>
             </div>
 

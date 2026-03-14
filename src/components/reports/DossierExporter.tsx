@@ -204,37 +204,65 @@ export function DossierExporter({ biddings, companies }: Props) {
 
             {/* ── Score + Export Bar ── */}
             {d.selectedBidding && d.selectedCompany && (
-                <div className="flex-between" style={{ padding: 'var(--space-4) var(--space-6)', borderRadius: 'var(--radius-lg)', background: d.readinessScore >= 100 ? 'rgba(34,197,94,0.06)' : d.readinessScore >= 50 ? 'rgba(245,158,11,0.06)' : 'rgba(239,68,68,0.06)', border: `1px solid ${d.readinessScore >= 100 ? 'rgba(34,197,94,0.25)' : d.readinessScore >= 50 ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)'}` }}>
-                    <div className="flex-center gap-5">
-                        <div style={{ position: 'relative', width: '56px', height: '56px' }}>
-                            <svg width="56" height="56" viewBox="0 0 56 56">
-                                <circle cx="28" cy="28" r="24" fill="none" stroke="var(--color-border)" strokeWidth="4" />
-                                <circle cx="28" cy="28" r="24" fill="none" stroke={d.readinessScore >= 100 ? 'var(--color-success)' : d.readinessScore >= 50 ? 'var(--color-warning)' : 'var(--color-danger)'} strokeWidth="4" strokeLinecap="round" strokeDasharray={`${(d.readinessScore / 100) * 150.8} 150.8`} transform="rotate(-90 28 28)" />
+                <div style={{
+                    padding: 'var(--space-5) var(--space-6)',
+                    borderRadius: 'var(--radius-xl)',
+                    background: d.readinessScore >= 100 ? 'rgba(34,197,94,0.05)' : d.readinessScore >= 50 ? 'rgba(245,158,11,0.05)' : 'rgba(239,68,68,0.05)',
+                    border: `1px solid ${d.readinessScore >= 100 ? 'rgba(34,197,94,0.2)' : d.readinessScore >= 50 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-6)',
+                }}>
+                    {/* Score Ring */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexShrink: 0 }}>
+                        <div style={{ position: 'relative', width: '72px', height: '72px' }}>
+                            <svg width="72" height="72" viewBox="0 0 72 72">
+                                <circle cx="36" cy="36" r="31" fill="none" stroke="var(--color-border)" strokeWidth="5" />
+                                <circle cx="36" cy="36" r="31" fill="none"
+                                    stroke={d.readinessScore >= 100 ? 'var(--color-success)' : d.readinessScore >= 50 ? 'var(--color-warning)' : 'var(--color-danger)'}
+                                    strokeWidth="5" strokeLinecap="round"
+                                    strokeDasharray={`${(Math.min(d.readinessScore, 100) / 100) * 194.8} 194.8`}
+                                    transform="rotate(-90 36 36)"
+                                />
                             </svg>
-                            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 800, color: d.readinessScore >= 100 ? 'var(--color-success)' : d.readinessScore >= 50 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
+                            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 800, color: d.readinessScore >= 100 ? 'var(--color-success)' : d.readinessScore >= 50 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
                                 {Math.round(d.readinessScore)}%
                             </span>
                         </div>
                         <div>
-                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>Índice de Prontidão</div>
-                            <div className="flex-center gap-4" style={{ marginTop: '4px', fontSize: 'var(--text-sm)' }}>
-                                <span style={{ color: 'var(--color-success)', fontWeight: 'var(--font-semibold)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><CheckCircle2 size={13} /> {d.satisfiedCount} vinculados</span>
-                                <span style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-semibold)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><XCircle size={13} /> {d.pendingCount} pendentes</span>
-                                {d.ignoredCount > 0 && <span style={{ color: 'var(--color-neutral)', fontWeight: 'var(--font-semibold)' }}>{d.ignoredCount} ignorados</span>}
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Índice de Prontidão</div>
+                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                                {d.readinessScore >= 100 ? 'Dossiê completo — pronto para exportar' : d.readinessScore >= 50 ? `${d.pendingCount} exigência(s) pendente(s)` : 'Atenção: maioria das exigências pendente'}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginTop: 6, fontSize: 'var(--text-sm)' }}>
+                                <span style={{ color: 'var(--color-success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}><CheckCircle2 size={13} /> {d.satisfiedCount} vinculados</span>
+                                <span style={{ color: 'var(--color-danger)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}><XCircle size={13} /> {d.pendingCount} pendentes</span>
+                                {d.ignoredCount > 0 && <span style={{ color: 'var(--color-neutral)', fontWeight: 600 }}>{d.ignoredCount} N/A</span>}
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-center gap-3">
-                        <button className="btn btn-outline" onClick={d.handleExportPdfReport} disabled={d.requiredList.length === 0}
-                            style={{ padding: 'var(--space-3) var(--space-5)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)', border: '1px solid rgba(139,92,246,0.3)', color: 'var(--color-ai)', background: 'var(--color-ai-bg)' }}
-                            title="Exportar relatório PDF de conformidade documental">
-                            <ClipboardList size={16} /> Relatório PDF
-                        </button>
-                        <button className="btn btn-primary" onClick={d.handleExportZip} disabled={d.isExporting || d.matchedDocs.length === 0}
-                            style={{ padding: 'var(--space-3) var(--space-7)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', background: d.matchedDocs.length > 0 ? 'linear-gradient(135deg, var(--color-primary), var(--color-ai))' : undefined, borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-md)', boxShadow: d.matchedDocs.length > 0 ? '0 4px 12px rgba(37,99,235,0.25)' : undefined }}>
+                    {/* Export CTAs */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'flex-end' }}>
+                        <button className="btn btn-primary" onClick={d.handleExportZip}
+                            disabled={d.isExporting || d.matchedDocs.length === 0}
+                            style={{
+                                padding: 'var(--space-3) var(--space-7)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                                background: d.matchedDocs.length > 0 ? 'linear-gradient(135deg, var(--color-primary), var(--color-ai))' : undefined,
+                                borderRadius: 'var(--radius-lg)', fontWeight: 700, fontSize: 'var(--text-md)',
+                                boxShadow: d.matchedDocs.length > 0 ? '0 4px 14px rgba(37,99,235,0.3)' : undefined,
+                                minWidth: 200,
+                            }}>
                             {d.isExporting ? <Loader2 size={18} className="spin" /> : <Package size={18} />}
                             {d.isExporting ? 'Gerando ZIP...' : `Exportar Dossiê (${d.matchedDocs.length} doc${d.matchedDocs.length !== 1 ? 's' : ''})`}
+                        </button>
+                        <button className="btn btn-outline" onClick={d.handleExportPdfReport}
+                            disabled={d.requiredList.length === 0}
+                            style={{
+                                padding: 'var(--space-2) var(--space-5)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-sm)', fontWeight: 600,
+                                border: '1px solid rgba(139,92,246,0.3)', color: 'var(--color-ai)', background: 'var(--color-ai-bg)',
+                                minWidth: 200, justifyContent: 'center',
+                            }}>
+                            <ClipboardList size={14} /> Relatório PDF de Conformidade
                         </button>
                     </div>
                 </div>
@@ -262,10 +290,15 @@ export function DossierExporter({ biddings, companies }: Props) {
             {/* ── Requirements List ── */}
             {d.selectedBidding && d.selectedCompany ? (
                 <div className="flex-col gap-2">
-                    <h3 className="flex-center gap-2" style={{ margin: '0 0 4px 0', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 var(--space-3) 0' }}>
+                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <FileArchive size={18} color="var(--color-primary)" />
-                        Exigências do Edital ({d.requiredList.length})
+                        Exigências do Edital
                     </h3>
+                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-primary)', padding: '3px 10px', borderRadius: 'var(--radius-full)', background: 'var(--color-primary-light)', border: '1px solid rgba(37,99,235,0.2)' }}>
+                        {d.requiredList.length} exigência{d.requiredList.length !== 1 ? 's' : ''}
+                    </span>
+                </div>
                     {d.requiredList.map((reqObj, idx) => {
                         const reqText = reqObj.description;
                         const manualIds = d.manualMatches[reqText] || [];
@@ -281,11 +314,17 @@ export function DossierExporter({ biddings, companies }: Props) {
                     })}
                 </div>
             ) : (
-                <div className="empty-state" style={{ padding: 'var(--space-20) var(--space-10)', borderRadius: 'var(--radius-xl)', border: '2px dashed var(--color-border)' }}>
-                    <FileArchive size={56} style={{ marginBottom: 'var(--space-4)', opacity: 0.25 }} />
-                    <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-bold)' }}>Montador Inteligente de Dossiê</h3>
-                    <p style={{ margin: 0, maxWidth: '400px', lineHeight: 1.5, fontSize: 'var(--text-md)' }}>
-                        Selecione uma Licitação e uma Empresa acima. A IA irá pré-vincular automaticamente os documentos corretos a cada exigência do edital.
+                <div style={{
+                    textAlign: 'center', padding: 'var(--space-20) var(--space-10)',
+                    borderRadius: 'var(--radius-xl)', border: '2px dashed var(--color-border)',
+                    background: 'var(--color-bg-surface)',
+                }}>
+                    <div style={{ width: 80, height: 80, borderRadius: 'var(--radius-xl)', background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-4)' }}>
+                        <FileArchive size={36} color="var(--color-primary)" strokeWidth={1.5} />
+                    </div>
+                    <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 'var(--text-xl)' }}>Montador Inteligente de Dossiê</h3>
+                    <p style={{ margin: '0 auto', maxWidth: '420px', lineHeight: 1.6, fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
+                        Selecione uma Licitação e uma Empresa acima. A IA pré-vinculará automaticamente os documentos corretos a cada exigência do edital.
                     </p>
                 </div>
             )}

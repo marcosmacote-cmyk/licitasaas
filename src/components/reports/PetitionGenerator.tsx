@@ -83,7 +83,13 @@ export function PetitionGenerator({ biddings, companies, onSave }: Props) {
 
                     {/* Generate Button */}
                     <button className="btn btn-primary"
-                        style={{ width: '100%', height: '52px', gap: 'var(--space-3)', fontSize: 'var(--text-lg)', borderRadius: 'var(--radius-xl)', fontWeight: 'var(--font-bold)', boxShadow: '0 4px 14px rgba(37,99,235,0.25)' }}
+                        style={{
+                            width: '100%', height: '52px', gap: 'var(--space-3)', fontSize: 'var(--text-lg)',
+                            borderRadius: 'var(--radius-xl)', fontWeight: 700,
+                            background: 'linear-gradient(135deg, var(--color-primary), rgba(99,102,241,0.9))',
+                            boxShadow: '0 6px 20px rgba(37,99,235,0.3)',
+                            border: 'none',
+                        }}
                         disabled={p.isGenerating || !p.selectedBiddingId || !p.selectedCompanyId || (!p.factsSummary && p.attachments.length === 0)}
                         onClick={p.handleGenerate}>
                         {p.isGenerating ? <Loader2 size={20} className="spin" /> : <Sparkles size={20} />}
@@ -160,19 +166,25 @@ export function PetitionGenerator({ biddings, companies, onSave }: Props) {
 
 function PetitionSidebarHeader({ onNew, onClear }: { onNew: () => void; onClear: () => void }) {
     return (
-        <div style={{ padding: 'var(--space-5)', borderBottom: '1px solid var(--color-border)', background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                <h3 style={{ margin: 0, fontSize: 'var(--text-xl)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-primary)' }}>
-                    <Scale size={20} color="var(--color-primary)" /> Mestre de Petições
-                </h3>
+        <div style={{
+            padding: 'var(--space-5)', borderBottom: '1px solid var(--color-border)',
+            background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(139,92,246,0.04))'
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(37,99,235,0.12), rgba(99,102,241,0.08))', border: '1px solid rgba(37,99,235,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Scale size={18} color="var(--color-primary)" />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Peças Jurídicas</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 1 }}>Inteligência jurídica especializada — Lei 14.133</div>
+                    </div>
+                </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                     <button onClick={onNew} className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: '0.7rem' }}>Novo</button>
                     <button onClick={onClear} className="btn btn-sm btn-outline" style={{ padding: '4px 8px', fontSize: '0.7rem', color: 'var(--color-danger)' }}>Limpar</button>
                 </div>
             </div>
-            <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
-                Inteligência Jurídica Especializada Lei 14.133.
-            </p>
         </div>
     );
 }
@@ -288,28 +300,32 @@ function AttachmentSection({ attachments, setAttachments, handleAttachmentUpload
 
 function EditorHeader({ p }: { p: ReturnType<typeof usePetition> }) {
     return (
-        <div style={{ padding: 'var(--space-4) var(--space-6)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white' }}>
+        <div style={{
+            padding: 'var(--space-4) var(--space-6)', borderBottom: '1px solid var(--color-border)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: 'linear-gradient(135deg, rgba(15,23,42,0.97), rgba(30,27,75,0.95))',
+        }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ScrollText size={20} color="var(--color-primary)" />
+                <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ScrollText size={18} color="rgba(255,255,255,0.8)" />
                 </div>
                 <div>
-                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>Minuta Jurídica</h3>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Clique abaixo para editar o texto</span>
+                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700, color: 'white' }}>Minuta Jurídica</h3>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.45)' }}>Clique no documento para editar o texto</span>
                 </div>
             </div>
             <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
                 {p.selectedImg && <ImageToolbar applyImageStyle={p.applyImageStyle} handleDeleteImage={p.handleDeleteImage} />}
                 <input type="file" id="content-image-up" hidden accept="image/*" onChange={p.handleInsertImage} />
-                <button className="btn btn-outline" style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-base)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)' }} disabled={!p.generatedDraft} onClick={() => document.getElementById('content-image-up')?.click()}>
+                <button className="btn btn-outline" style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-base)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }} disabled={!p.generatedDraft} onClick={() => document.getElementById('content-image-up')?.click()}>
                     <ImageIcon size={16} /> Inserir Imagem
                 </button>
-                <button className="btn btn-outline" style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-base)', borderRadius: 'var(--radius-lg)' }} disabled={!p.generatedDraft} onClick={p.handleCopy}>
+                <button className="btn btn-outline" style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-base)', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }} disabled={!p.generatedDraft} onClick={p.handleCopy}>
                     {p.isCopied ? <Check size={16} /> : <Copy size={16} />}
                     {p.isCopied ? 'Copiado!' : 'Copiar'}
                 </button>
-                <button className="btn btn-primary" style={{ padding: 'var(--space-2) var(--space-5)', fontSize: 'var(--text-base)', background: '#111', borderColor: '#111', borderRadius: 'var(--radius-lg)', fontWeight: 'var(--font-semibold)' }} disabled={!p.generatedDraft} onClick={p.handleExportPDF}>
-                    <Download size={18} /> Exportar Relatório Premium
+                <button className="btn btn-primary" style={{ padding: 'var(--space-2) var(--space-5)', fontSize: 'var(--text-base)', background: 'linear-gradient(135deg, #1e3a5f, #111827)', borderColor: '#1e3a5f', borderRadius: 'var(--radius-lg)', fontWeight: 700, boxShadow: '0 3px 10px rgba(0,0,0,0.3)' }} disabled={!p.generatedDraft} onClick={p.handleExportPDF}>
+                    <Download size={18} /> Exportar PDF
                 </button>
             </div>
         </div>
@@ -347,12 +363,12 @@ function ImageToolbar({ applyImageStyle, handleDeleteImage }: { applyImageStyle:
 
 function EmptyState() {
     return (
-        <div className="empty-state--centered" style={{ textAlign: 'center' }}>
-            <div style={{ width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
-                <ScrollText size={48} style={{ opacity: 0.2 }} />
+        <div className="empty-state--centered" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
+            <div style={{ width: 100, height: 100, borderRadius: '50%', background: 'rgba(37,99,235,0.05)', border: '1px solid rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'var(--space-5)', margin: '0 auto var(--space-5)' }}>
+                <ScrollText size={40} color="var(--color-primary)" strokeWidth={1.2} />
             </div>
-            <h4 style={{ margin: '0 0 8px 0', color: 'var(--color-text-secondary)' }}>Peça pronta em instantes</h4>
-            <p style={{ maxWidth: '300px', fontSize: '0.9rem' }}>Selecione um processo ao lado e deixe nossa IA especialista elaborar sua petição.</p>
+            <h4 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 'var(--text-lg)' }}>Peça pronta em instantes</h4>
+            <p style={{ maxWidth: '300px', fontSize: '0.875rem', color: 'var(--color-text-tertiary)', lineHeight: 1.6, margin: '0 auto' }}>Selecione um processo ao lado e deixe nossa IA especialista elaborar sua petição.</p>
         </div>
     );
 }

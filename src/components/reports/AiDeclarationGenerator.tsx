@@ -22,9 +22,15 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
 
                 {/* AI Config */}
                 <div className="card" style={{ padding: 'var(--space-5)' }}>
-                    <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                        <Sparkles size={18} color="var(--color-primary)" /> Configuração da IA
-                    </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(37,99,235,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Sparkles size={16} color="var(--color-ai)" />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Configuração da IA</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>Gere declarações a partir do edital analisado</div>
+                    </div>
+                </div>
                     <Field label="Licitação Alvo">
                         <select className="form-select" value={d.selectedBiddingId} onChange={(e) => d.handleBiddingChange(e.target.value)}>
                             <option value="">-- Selecione --</option>
@@ -57,7 +63,13 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                     <Field label="Instruções Adicionais">
                         <textarea className="form-select" style={{ minHeight: '60px', resize: 'vertical' }} placeholder="Opcional..." value={d.customPrompt} onChange={(e) => d.setCustomPrompt(e.target.value)} />
                     </Field>
-                    <button className="btn btn-primary" style={{ width: '100%', height: '44px', gap: 'var(--space-2)', marginTop: '4px' }} onClick={d.handleGenerate} disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType}>
+                    <button className="btn btn-primary" style={{
+                        width: '100%', height: '46px', gap: 'var(--space-2)', marginTop: 'var(--space-2)',
+                        background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
+                        border: 'none', borderRadius: 'var(--radius-lg)',
+                        boxShadow: '0 4px 14px rgba(139,92,246,0.25)',
+                        fontSize: 'var(--text-md)', fontWeight: 700,
+                    }} onClick={d.handleGenerate} disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType}>
                         {d.isGenerating ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
                         {d.isGenerating ? 'Gerando...' : 'Gerar Declaração'}
                     </button>
@@ -73,10 +85,12 @@ export function AiDeclarationGenerator({ biddings, companies, onSave }: Props) {
                     <EditorToolbar d={d} />
 
                     {!d.generatedText && !d.isGenerating ? (
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.4, textAlign: 'center' }}>
-                            <Sparkles size={56} style={{ marginBottom: 'var(--space-3)' }} />
-                            <h3>Pronto para gerar</h3>
-                            <p style={{ fontSize: '0.9rem' }}>Selecione uma licitação com Relatório Analítico.</p>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-12)' }}>
+                            <div style={{ width: 72, height: 72, borderRadius: 'var(--radius-xl)', background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(37,99,235,0.06))', border: '1px solid rgba(139,92,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'var(--space-4)' }}>
+                                <Sparkles size={28} color="var(--color-ai)" strokeWidth={1.5} />
+                            </div>
+                            <h4 style={{ margin: '0 0 var(--space-2)', fontWeight: 700, color: 'var(--color-text-primary)', fontSize: 'var(--text-lg)' }}>Estúdio de Declarações</h4>
+                            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', maxWidth: 280, lineHeight: 1.6 }}>Configure a licitação e tipo de declaração ao lado e clique em <strong>Gerar Declaração</strong>.</p>
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -167,10 +181,13 @@ function IssuerTypeSelector({ issuerType, setIssuerType, selectedCompanyId, comp
 function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
     return (
         <div className="card" style={{ padding: 'var(--space-5)' }}>
-            <div className="flex-between" style={{ marginBottom: 'var(--space-3)' }}>
-                <h4 style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <Settings2 size={14} /> Layout & Assinatura
-                </h4>
+            <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 'var(--radius-sm)', background: 'rgba(37,99,235,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Settings2 size={14} color="var(--color-primary)" />
+                    </div>
+                    <h4 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}>Layout &amp; Assinatura</h4>
+                </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                     <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', padding: '3px var(--space-2)', gap: '4px' }} onClick={d.handleSaveLayout}>
                         {d.layoutSaved ? <CheckCircle2 size={12} color="var(--color-success)" /> : <Save size={12} />}
@@ -249,17 +266,24 @@ function EditorToolbar({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
     return (
         <div className="flex-between" style={{ marginBottom: 'var(--space-4)' }}>
             <div className="flex-gap">
-                <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, rgba(37,99,235,0.08), rgba(99,102,241,0.06))', border: '1px solid rgba(37,99,235,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <FileText size={16} color="var(--color-primary)" />
                 </div>
-                <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Editor da Declaração</h3>
+                <div>
+                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700 }}>Editor da Declaração</h3>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Edite o texto gerado pela IA diretamente no documento</span>
+                </div>
             </div>
             <div className="flex-gap">
                 {d.saveSuccess && <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-md)' }} className="flex-gap"><CheckCircle2 size={14} /> Salvo!</span>}
                 <button className="btn btn-outline flex-gap" onClick={d.handleAddToDocuments} disabled={!d.generatedText || d.isSaving} style={{ fontSize: '0.8rem' }}>
                     {d.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Vincular ao Dossiê
                 </button>
-                <button className="btn flex-gap" onClick={d.handleExportPDF} disabled={!d.generatedText} style={{ backgroundColor: 'var(--color-success)', color: 'white', fontSize: 'var(--text-md)' }}>
+                <button className="btn flex-gap" onClick={d.handleExportPDF} disabled={!d.generatedText} style={{
+                    background: 'linear-gradient(135deg, var(--color-success), rgba(21,128,61,0.9))',
+                    color: 'white', fontSize: 'var(--text-md)',
+                    boxShadow: '0 3px 10px rgba(34,197,94,0.25)',
+                }}>
                     <Download size={14} /> Baixar PDF
                 </button>
             </div>

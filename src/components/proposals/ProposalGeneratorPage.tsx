@@ -1,7 +1,7 @@
 import {
-    Sparkles, Plus, Trash2, Save, FileText, Loader2,
+    Plus, Trash2, Save, FileText, Loader2,
     DollarSign, Package, AlertTriangle, Edit3,
-    ChevronDown, ChevronUp, Brain, Briefcase, Printer
+    ChevronDown, ChevronUp, Briefcase, Printer, Cpu, ScanSearch
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
@@ -24,19 +24,30 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
         <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
-            {/* ── Top Config Bar ── */}
-            <div className="card" style={{
-                padding: 'var(--space-6)',
-                background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(139,92,246,0.03))',
+            <div style={{
+                borderRadius: 'var(--radius-xl)',
+                border: '1px solid var(--color-border)',
+                overflow: 'hidden',
+                background: 'var(--color-bg-surface)',
+                marginBottom: 0,
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                {/* Header bar */}
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: 'var(--space-4) var(--space-6)',
+                    borderBottom: p.showConfig ? '1px solid var(--color-border)' : 'none',
+                    background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(139,92,246,0.03))',
+                }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <DollarSign size={22} color="var(--color-primary)" />
-                        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                            Gerador de Proposta de Preços
-                        </h2>
+                        <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <DollarSign size={18} color="var(--color-primary)" />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Gerador de Proposta de Preços</div>
+                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 1 }}>Configure a licitação e empresa para iniciar</div>
+                        </div>
                     </div>
-                    <button onClick={() => p.setShowConfig(!p.showConfig)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}>
+                    <button onClick={() => p.setShowConfig(!p.showConfig)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 4, borderRadius: 'var(--radius-sm)' }}>
                         {p.showConfig ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
                 </div>
@@ -146,23 +157,21 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
             {/* ── Proposal Info ── */}
             {p.proposal && (
-                <div style={{
-                    display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-2) var(--space-4)',
-                    borderRadius: 'var(--radius-lg)', background: 'var(--color-primary-light)',
-                    border: '1px solid rgba(37,99,235,0.15)',
-                }}>
-                    <FileText size={16} color="var(--color-primary)" />
-                    <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)' }}>
-                        Proposta v{p.proposal.version}
-                    </span>
-                    <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
-                        — {p.proposal.status} — {p.items.length} item(ns) — Total: {fmt(p.total)}
-                    </span>
-                    {p.proposals.length > 1 && (
-                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                            ({p.proposals.length} versões)
-                        </span>
-                    )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <FileText size={14} color="var(--color-primary)" />
+                        </div>
+                        <div>
+                            <span style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-primary)' }}>Proposta v{p.proposal.version}</span>
+                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginLeft: 8 }}>{p.proposal.status} · {p.items.length} item(ns) · Total: <strong style={{ color: 'var(--color-text-primary)' }}>{fmt(p.total)}</strong></span>
+                        </div>
+                        {p.proposals.length > 1 && (
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', padding: '2px 8px', borderRadius: 'var(--radius-full)', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)' }}>
+                                {p.proposals.length} versões
+                            </span>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -221,7 +230,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))', color: 'white', border: 'none',
                                 display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                             }}>
-                                {p.isAiLoading ? <Loader2 size={14} className="spin" /> : <Brain size={14} />}
+                                {p.isAiLoading ? <Loader2 size={14} className="spin" /> : <Cpu size={14} />}
                                 Orçamento IA
                             </button>
 
@@ -249,20 +258,20 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                             <thead>
-                                <tr style={{ background: 'var(--color-bg-surface-hover)', borderBottom: '2px solid var(--color-border)' }}>
-                                    <th className="prop-th">#</th>
-                                    <th className="prop-th" style={{ textAlign: 'left', minWidth: '200px' }}>Descrição</th>
+                                <tr style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(99,102,241,0.04))', borderBottom: '2px solid var(--color-border)' }}>
+                                    <th className="prop-th" style={{ width: 32, color: 'var(--color-text-tertiary)' }}>#</th>
+                                    <th className="prop-th" style={{ textAlign: 'left', minWidth: '200px', color: 'var(--color-text-primary)', fontWeight: 700 }}>Descrição do Item</th>
                                     <th className="prop-th">Marca</th>
                                     <th className="prop-th">Modelo</th>
-                                    <th className="prop-th">Unid</th>
-                                    <th className="prop-th">Qtd</th>
-                                    <th className="prop-th">Multiplicador</th>
+                                    <th className="prop-th">Unid.</th>
+                                    <th className="prop-th">Qtd.</th>
+                                    <th className="prop-th">Mult.</th>
                                     <th className="prop-th">Desc. (%)</th>
                                     <th className="prop-th">Custo Unit.</th>
-                                    <th className="prop-th">Preço Unit.</th>
-                                    <th className="prop-th">Total</th>
+                                    <th className="prop-th" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>Preço Unit.</th>
+                                    <th className="prop-th" style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>Total</th>
                                     <th className="prop-th">% Peso</th>
-                                    <th className="prop-th" style={{ width: '50px' }}>Ref.</th>
+                                    <th className="prop-th" style={{ width: '50px' }}>Ref. Est.</th>
                                     <th className="prop-th" style={{ width: '60px' }}></th>
                                 </tr>
                             </thead>
@@ -359,9 +368,12 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 })}
                                 {p.items.length === 0 && (
                                     <tr>
-                                        <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)' }}>
-                                            <Sparkles size={32} color="var(--color-text-tertiary)" style={{ marginBottom: '8px' }} /><br />
-                                            Nenhum item na proposta. Use o botão <strong>"Preencher com IA"</strong> para extrair os itens automaticamente do edital.
+                                        <td colSpan={14} style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-tertiary)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                                <ScanSearch size={28} color="var(--color-text-tertiary)" strokeWidth={1.5} />
+                                                <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Planilha vazia</span>
+                                                <span style={{ fontSize: 'var(--text-sm)' }}>Use <strong>"Orçamento IA"</strong> para extrair os itens automaticamente do edital.</span>
+                                            </div>
                                         </td>
                                     </tr>
                                 )}
@@ -373,36 +385,36 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                     {p.items.length > 0 && (
                         <div style={{ marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'flex-end' }}>
                             <div style={{
-                                minWidth: '280px', padding: 'var(--space-4) var(--space-5)', borderRadius: 'var(--radius-lg)',
-                                background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(139,92,246,0.04))',
-                                border: '1px solid rgba(37,99,235,0.15)',
+                                minWidth: '300px', borderRadius: 'var(--radius-xl)',
+                                overflow: 'hidden', border: '1px solid var(--color-border)',
                             }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
+                                <div style={{ padding: 'var(--space-3) var(--space-5)', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                                     <span style={{ color: 'var(--color-text-secondary)' }}>Subtotal (custo)</span>
                                     <span style={{ fontWeight: 500 }}>{fmt(p.subtotal)}</span>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
-                                    <span style={{ color: 'var(--color-text-secondary)' }}>Status Arredondamento</span>
-                                    <span style={{ fontWeight: 500 }}>{p.roundingMode === 'ROUND' ? 'Arredondar' : 'Truncar'}</span>
+                                <div style={{ padding: 'var(--space-3) var(--space-5)', background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                    <span style={{ color: 'var(--color-text-secondary)' }}>Arredondamento</span>
+                                    <span style={{ fontWeight: 500, color: 'var(--color-text-tertiary)' }}>{p.roundingMode === 'ROUND' ? 'Arredondar' : 'Truncar'}</span>
                                 </div>
                                 <div style={{
-                                    display: 'flex', justifyContent: 'space-between',
-                                    borderTop: '2px solid var(--color-border)', paddingTop: '8px', marginTop: '4px',
-                                    fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)',
+                                    padding: 'var(--space-4) var(--space-5)',
+                                    background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))',
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 }}>
-                                    <span>TOTAL GLOBAL</span>
-                                    <span>{fmt(p.total)}</span>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Global</span>
+                                    <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>{fmt(p.total)}</span>
                                 </div>
                                 {p.selectedBidding && p.selectedBidding.estimatedValue > 0 && (
                                     <div style={{
-                                        marginTop: '8px', fontSize: '0.75rem',
+                                        padding: 'var(--space-2) var(--space-5)',
+                                        background: p.total > p.selectedBidding.estimatedValue ? 'var(--color-danger-bg)' : 'var(--color-success-bg)',
+                                        borderTop: `1px solid ${p.total > p.selectedBidding.estimatedValue ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}`,
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                        fontSize: '0.8rem', fontWeight: 600,
                                         color: p.total > p.selectedBidding.estimatedValue ? 'var(--color-danger)' : 'var(--color-success)',
-                                        fontWeight: 600, textAlign: 'right',
                                     }}>
-                                        {p.total > p.selectedBidding.estimatedValue
-                                            ? `Acima do estimado (${fmt(p.selectedBidding.estimatedValue)})`
-                                            : `✓ Abaixo do estimado (${fmt(p.selectedBidding.estimatedValue)})`
-                                        }
+                                        <span>{p.total > p.selectedBidding.estimatedValue ? 'Acima do estimado' : 'Abaixo do estimado'}</span>
+                                        <span>{fmt(p.selectedBidding.estimatedValue)}</span>
                                     </div>
                                 )}
                             </div>
@@ -431,7 +443,7 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
                                 background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))', color: 'white', border: 'none',
                                 display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
                             }}>
-                                {p.isLetterLoading ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
+                                {p.isLetterLoading ? <Loader2 size={16} className="spin" /> : <Cpu size={16} />}
                                 Gerar com IA
                             </button>
                         </div>
@@ -525,13 +537,19 @@ export function ProposalGeneratorPage({ biddings, companies }: Props) {
 
             {/* ── Empty State ── */}
             {!p.proposal && p.items.length === 0 && (
-                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-16)', color: 'var(--color-text-tertiary)' }}>
-                    <DollarSign size={48} strokeWidth={1.5} style={{ marginBottom: 'var(--space-4)', opacity: 0.3 }} />
-                    <h3 style={{ margin: '0 0 var(--space-2) 0', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xl)' }}>
+                <div style={{
+                    textAlign: 'center', padding: 'var(--space-16)',
+                    borderRadius: 'var(--radius-xl)', border: '2px dashed var(--color-border)',
+                    background: 'var(--color-bg-surface)',
+                }}>
+                    <div style={{ width: 72, height: 72, borderRadius: 'var(--radius-xl)', background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-4)' }}>
+                        <DollarSign size={32} color="var(--color-primary)" strokeWidth={1.5} />
+                    </div>
+                    <h3 style={{ margin: '0 0 var(--space-2) 0', fontWeight: 700, fontSize: 'var(--text-xl)', color: 'var(--color-text-primary)' }}>
                         Nenhuma proposta selecionada
                     </h3>
-                    <p style={{ margin: 0, fontSize: 'var(--text-base)' }}>
-                        Selecione uma licitação com análise IA e uma empresa para criar uma proposta de preços.
+                    <p style={{ margin: '0 auto', fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)', maxWidth: 380, lineHeight: 1.6 }}>
+                        Selecione uma licitação com análise IA e uma empresa proponente para iniciar a elaboração da proposta de preços.
                     </p>
                 </div>
             )}
