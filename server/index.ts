@@ -207,6 +207,24 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'LicitaSaaS API is running' });
 });
 
+// TEMPORARY: Password reset endpoint (remove after use)
+app.post('/api/admin/reset-password', async (req, res) => {
+    try {
+        const { email, newPassword, secretKey } = req.body;
+        if (secretKey !== 'licitasaas-reset-2026-temp') {
+            return res.status(403).json({ error: 'Invalid secret key' });
+        }
+        const hash = await bcrypt.hash(newPassword, 10);
+        const user = await prisma.user.update({
+            where: { email },
+            data: { passwordHash: hash }
+        });
+        res.json({ success: true, email: user.email });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Debug endpoint to check DB contents
 app.get('/api/debug-db', async (req, res) => {
     try {
