@@ -3,13 +3,13 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-    Target, DollarSign, Award,
+    DollarSign,
     Calendar as CalendarIcon, ChevronLeft, ChevronRight,
     AlertTriangle, FileWarning,
     ArrowRight, Timer, ChevronDown, ChevronUp,
-    BrainCircuit, Satellite, FileCheck, ExternalLink, Eye,
-    FileText, CheckCircle, Zap, Building2, TrendingUp, Edit3,
-    Clock,
+    ScanSearch, RadioTower, FileCheck, ExternalLink, Eye,
+    FileText, CheckCircle, TrendingUp, Building2, Edit3,
+    Clock, BadgeCheck, Crosshair,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import {
@@ -57,7 +57,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             alerts.push({ type: 'warning', icon: <AlertTriangle size={16} />, message: `${m.stalledProcesses.length} processo${m.stalledProcesses.length > 1 ? 's' : ''} parado${m.stalledProcesses.length > 1 ? 's' : ''} há mais de 7 dias`, action: 'Mover no funil →', count: m.stalledProcesses.length, dest: 'bidding' });
         }
         if (m.needsAiAnalysis.length > 0) {
-            alerts.push({ type: 'warning', icon: <BrainCircuit size={16} />, message: `${m.needsAiAnalysis.length} edital${m.needsAiAnalysis.length > 1 ? 'is' : ''} em análise sem parecer da IA`, action: 'Analisar com IA →', count: m.needsAiAnalysis.length, dest: 'intelligence' });
+            alerts.push({ type: 'warning', icon: <ScanSearch size={16} />, message: `${m.needsAiAnalysis.length} edital${m.needsAiAnalysis.length > 1 ? 'is' : ''} em análise sem parecer da IA`, action: 'Analisar com IA →', count: m.needsAiAnalysis.length, dest: 'intelligence' });
         }
         return alerts;
     }, [m.expiringDocs, m.todaySessions, m.stalledProcesses, m.needsAiAnalysis]);
@@ -103,10 +103,10 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
     const pipelineSteps = [
-        { label: 'Captados', count: m.captadoItems.length, icon: <Satellite size={14} />, color: 'var(--color-neutral)', action: 'Triar', statuses: ['Captado'] },
+        { label: 'Captados', count: m.captadoItems.length, icon: <RadioTower size={14} />, color: 'var(--color-neutral)', action: 'Triar', statuses: ['Captado'] },
         { label: 'Em Análise', count: m.emAnaliseItems.length, icon: <Eye size={14} />, color: 'var(--color-primary)', action: 'Analisar', statuses: ['Em Análise de Edital'] },
         { label: 'Preparando', count: m.preparandoItems.length, icon: <FileText size={14} />, color: 'var(--color-urgency)', action: 'Documentar', statuses: ['Preparando Documentação'] },
-        { label: 'Participando', count: m.participandoItems.length, icon: <Zap size={14} />, color: 'var(--color-warning)', action: 'Acompanhar', statuses: ['Participando'] },
+        { label: 'Participando', count: m.participandoItems.length, icon: <TrendingUp size={14} />, color: 'var(--color-warning)', action: 'Acompanhar', statuses: ['Participando'] },
     ];
 
     const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
@@ -158,8 +158,8 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             {/* ═══ KPIs ═══ */}
             <div className="stagger-children grid-4" style={{ marginBottom: 'var(--space-5)' }}>
                 <MetricCard title="Volume no Funil" value={fmt(m.totalValue)} icon={<DollarSign size={18} />} color="var(--color-primary)" bg="var(--color-primary-light)" subtitle={`${m.activeItems.length} processos ativos`} onClick={() => onNavigate?.('bidding', { statuses: ['Captado', 'Em Análise de Edital', 'Preparando Documentação', 'Participando'] })} />
-                <MetricCard title="Volume Ganho (YTD)" value={fmt(m.wonValue)} icon={<Award size={18} />} color="var(--color-success)" bg="var(--color-success-bg)" subtitle={`${m.wonItems.length} licitações vencidas`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido'] })} />
-                <MetricCard title="Taxa de Sucesso" value={`${m.winRate}%`} icon={<Target size={18} />} color={m.winRate >= 50 ? 'var(--color-success)' : m.winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} bg={m.winRate >= 50 ? 'var(--color-success-bg)' : m.winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'} subtitle={`${m.wonItems.length} de ${m.totalFinished} finalizados`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido', 'Perdido', 'Sem Sucesso'] })} />
+                <MetricCard title="Volume Ganho (YTD)" value={fmt(m.wonValue)} icon={<BadgeCheck size={18} />} color="var(--color-success)" bg="var(--color-success-bg)" subtitle={`${m.wonItems.length} licitações vencidas`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido'] })} />
+                <MetricCard title="Taxa de Sucesso" value={`${m.winRate}%`} icon={<Crosshair size={18} />} color={m.winRate >= 50 ? 'var(--color-success)' : m.winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} bg={m.winRate >= 50 ? 'var(--color-success-bg)' : m.winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'} subtitle={`${m.wonItems.length} de ${m.totalFinished} finalizados`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido', 'Perdido', 'Sem Sucesso'] })} />
                 <MetricCard title="Próximas Sessões" value={(m.todaySessions.length + m.upcomingSessions.length).toString()} icon={<CalendarIcon size={18} />} color={m.todaySessions.length > 0 ? 'var(--color-danger)' : 'var(--color-primary)'} bg={m.todaySessions.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)'} subtitle={m.todaySessions.length > 0 ? `⚡ ${m.todaySessions.length} HOJE` : 'nos próximos 7 dias'} onClick={() => onNavigate?.('bidding')} />
             </div>
 
@@ -234,8 +234,8 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
                     {/* RADAR DO SISTEMA */}
                     <div className="stagger-children grid-3">
-                        <RadarCard icon={<Satellite size={18} />} title="Captação PNCP" value={m.pncpCount.toString()} desc="no funil via PNCP" color="var(--color-primary)" bg="var(--color-primary-light)" action="Buscar novas" onClick={() => onNavigate?.('opportunities')} />
-                        <RadarCard icon={<BrainCircuit size={18} />} title="LicitIA" value={m.aiCount.toString()} desc={m.needsAiAnalysis.length > 0 ? `${m.needsAiAnalysis.length} sem análise` : 'editais analisados'} color={m.needsAiAnalysis.length > 0 ? 'var(--color-warning)' : 'var(--color-ai)'} bg={m.needsAiAnalysis.length > 0 ? 'var(--color-warning-bg)' : 'var(--color-ai-bg)'} action={m.needsAiAnalysis.length > 0 ? 'Analisar' : 'Ver relatórios'} onClick={() => onNavigate?.('intelligence')} />
+                        <RadarCard icon={<RadioTower size={18} />} title="Captação PNCP" value={m.pncpCount.toString()} desc="no funil via PNCP" color="var(--color-primary)" bg="var(--color-primary-light)" action="Buscar novas" onClick={() => onNavigate?.('opportunities')} />
+                        <RadarCard icon={<ScanSearch size={18} />} title="LicitIA" value={m.aiCount.toString()} desc={m.needsAiAnalysis.length > 0 ? `${m.needsAiAnalysis.length} sem análise` : 'editais analisados'} color={m.needsAiAnalysis.length > 0 ? 'var(--color-warning)' : 'var(--color-ai)'} bg={m.needsAiAnalysis.length > 0 ? 'var(--color-warning-bg)' : 'var(--color-ai-bg)'} action={m.needsAiAnalysis.length > 0 ? 'Analisar' : 'Ver relatórios'} onClick={() => onNavigate?.('intelligence')} />
                         <RadarCard icon={<FileCheck size={18} />} title="Documentos" value={m.expiringDocs.length > 0 ? `${m.expiringDocs.length} alerta${m.expiringDocs.length > 1 ? 's' : ''}` : 'OK'} desc={m.expiringDocs.length > 0 ? 'requerem atenção' : 'tudo em dia'} color={m.expiringDocs.length > 0 ? 'var(--color-danger)' : 'var(--color-success)'} bg={m.expiringDocs.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'} action={m.expiringDocs.length > 0 ? 'Renovar' : 'Gerenciar'} onClick={() => onNavigate?.('companies')} />
                     </div>
 

@@ -1,5 +1,5 @@
 import { useDraggable } from '@dnd-kit/core';
-import { Calendar, DollarSign, Brain, Building2, Trash2, MessageSquare, Bell, Radio } from 'lucide-react';
+import { Calendar, DollarSign, ScanSearch, Building2, Trash2, MessageSquare, Bell, SignalHigh } from 'lucide-react';
 import { format } from 'date-fns';
 import type { BiddingProcess, CompanyProfile, ObservationLog } from '../types';
 import { RiskIndicator } from './ui';
@@ -114,7 +114,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                             onClick={(e) => { e.stopPropagation(); onToggleMonitor?.(item.id); }}
                             title={item.isMonitored ? "Monitoramento Ativo (Radar PNCP)" : "Ativar Monitor de Status (Radar PNCP)"}
                         >
-                            <Radio size={14} className={item.isMonitored ? "pulse-animation" : ""} />
+                            <SignalHigh size={14} className={item.isMonitored ? "pulse-animation" : ""} />
                         </button>
                     )}
                     {hasAnalysis && (
@@ -124,7 +124,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                             onClick={(e) => { e.stopPropagation(); onViewAnalysis?.(); }}
                             title="Ver Relatório da IA"
                         >
-                            <Brain size={14} />
+                            <ScanSearch size={14} />
                         </button>
                     )}
                     {onDelete && (

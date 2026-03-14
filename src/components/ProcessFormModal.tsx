@@ -1,4 +1,4 @@
-import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Bot, Brain } from 'lucide-react';
+import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Cpu, ScanSearch } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { AiReportModal } from './AiReportModal';
 import { LiveCountdown, StatusBadge, NextStepBanner } from './ui';
@@ -457,14 +457,14 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     padding: 'var(--space-3) var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                                     color: 'var(--color-ai)', borderColor: 'var(--color-ai-border)', background: 'var(--color-ai-bg)'
                                 }}>
-                                    <Brain size={18} /> Ver Relatório IA
+                                    <ScanSearch size={18} /> Ver Relatório IA
                                 </button>
                             )}
                             <button type="button" className="btn btn-primary" onClick={form.handleAiExtract} disabled={form.isCheckingAi} style={{
                                 padding: 'var(--space-3) var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                                 marginRight: 'auto', backgroundColor: 'var(--color-ai)', borderColor: 'var(--color-ai)'
                             }}>
-                                {form.isCheckingAi ? <Loader2 size={18} className="spinner" /> : <Bot size={18} />}
+                                {form.isCheckingAi ? <Loader2 size={18} className="spinner" /> : <Cpu size={18} />}
                                 {form.isCheckingAi ? 'Analisando PDF...' : 'IA: Extrair edital'}
                             </button>
                             <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: 'var(--space-3) var(--space-6)' }}>

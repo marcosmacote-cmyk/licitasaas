@@ -8,13 +8,13 @@ import {
   Sun,
   Moon,
   Loader2,
-  Radar,
-  BrainCircuit,
+  Signal,
+  ScanSearch,
   FileOutput,
-  Satellite,
+  RadioTower,
   BarChart3,
   LogOut,
-  Gavel
+  Scale
 } from 'lucide-react';
 // Static imports — core pages that load on startup
 import { BiddingPage } from './components/BiddingPage';
@@ -234,9 +234,9 @@ function App() {
     {
       label: 'Operação',
       items: [
-        { key: 'opportunities', label: 'Oportunidades', icon: <Radar size={18} /> },
+        { key: 'opportunities', label: 'Oportunidades', icon: <Signal size={18} /> },
         { key: 'bidding', label: 'Licitações', icon: <Briefcase size={18} /> },
-        { key: 'intelligence', label: 'Inteligência', icon: <BrainCircuit size={18} /> },
+        { key: 'intelligence', label: 'Inteligência', icon: <ScanSearch size={18} /> },
         { key: 'companies', label: 'Empresas', icon: <Building2 size={18} /> },
       ],
     },
@@ -244,7 +244,7 @@ function App() {
       label: 'Produtividade',
       items: [
         { key: 'production', label: 'Produção', icon: <FileOutput size={18} /> },
-        { key: 'monitoring', label: 'Monitoramento', icon: <Satellite size={18} />, badge: chatUnreadCount || undefined, badgeType: 'red' },
+        { key: 'monitoring', label: 'Monitoramento', icon: <RadioTower size={18} />, badge: chatUnreadCount || undefined, badgeType: 'red' },
         { key: 'results', label: 'Resultados', icon: <BarChart3 size={18} /> },
       ],
     },
@@ -275,7 +275,7 @@ function App() {
               boxShadow: '0 2px 8px rgba(99,102,241,0.45)',
               flexShrink: 0,
             }}>
-              <Gavel size={18} />
+              <Scale size={18} />
             </div>
             <span style={{
               fontSize: 'var(--text-lg)',

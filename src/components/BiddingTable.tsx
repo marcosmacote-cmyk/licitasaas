@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { ExternalLink, Edit2, Brain, Building2, Radio } from 'lucide-react';
+import { ExternalLink, Edit2, ScanSearch, Building2, SignalHigh } from 'lucide-react';
 import type { BiddingProcess, AiAnalysis, CompanyProfile } from '../types';
 import { RiskIndicator } from './ui';
 
@@ -86,7 +86,7 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                                         onClick={() => onViewAnalysis(analysis, item)}
                                                         title="Ver Relatório da IA"
                                                     >
-                                                        <Brain size={16} />
+                                                        <ScanSearch size={16} />
                                                     </button>
                                                 )}
                                                  {(item.portal?.toLowerCase().includes('pncp') || item.link?.toLowerCase().includes('pncp.gov.br')) && (
@@ -100,7 +100,7 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                                         onClick={() => onToggleMonitor?.(item.id)}
                                                         title={item.isMonitored ? "Monitoramento Ativo (Radar)" : "Ativar Monitor de Chat (Radar)"}
                                                     >
-                                                        <Radio size={16} className={item.isMonitored ? "pulse-animation" : ""} />
+                                                        <SignalHigh size={16} className={item.isMonitored ? "pulse-animation" : ""} />
                                                     </button>
                                                 )}
                                                 {item.link && (

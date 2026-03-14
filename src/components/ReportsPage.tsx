@@ -1,7 +1,7 @@
 import { useState, lazy, Suspense } from 'react';
-import { BarChart, FileArchive, Clock, FileText, Sparkles, DollarSign } from 'lucide-react';
+import { BarChart3, Clock, FileText, Cpu, DollarSign, FileArchive } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
-import { BrainCircuit, Scale, Loader2 } from 'lucide-react';
+import { ScanSearch, Gavel, Loader2 } from 'lucide-react';
 
 // ── Lazy-loaded report modules ──
 const PerformanceDashboard = lazy(() => import('./reports/PerformanceDashboard').then(m => ({ default: m.PerformanceDashboard })));
@@ -41,7 +41,7 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
 
             <div style={{ display: 'flex', gap: 'var(--space-6)', marginBottom: 'var(--space-6)', borderBottom: '1px solid var(--color-border)', overflowX: 'auto' }}>
                 <button onClick={() => setActiveTab('dashboard')} className={`tab-btn${activeTab === 'dashboard' ? ' active' : ''}`}>
-                    <BarChart size={16} /> Dashboard de Performance
+                    <BarChart3 size={16} /> Dashboard de Performance
                 </button>
                 <button onClick={() => setActiveTab('proposal')} className={`tab-btn${activeTab === 'proposal' ? ' active' : ''}`}>
                     <DollarSign size={16} /> Proposta de Preços
@@ -50,13 +50,13 @@ export function ReportsPage({ biddings, companies, onRefresh }: Props) {
                     <FileArchive size={16} /> Exportador de Dossiê (ZIP)
                 </button>
                 <button onClick={() => setActiveTab('declarations')} className={`tab-btn${activeTab === 'declarations' ? ' active' : ''}`}>
-                    <Sparkles size={16} /> Gerador de Declarações (IA)
+                    <Cpu size={16} /> Gerador de Declarações (IA)
                 </button>
                 <button onClick={() => setActiveTab('oracle')} className={`tab-btn${activeTab === 'oracle' ? ' active' : ''}`}>
-                    <BrainCircuit size={16} /> Oráculo (Acervos)
+                    <ScanSearch size={16} /> Oráculo (Acervos)
                 </button>
                 <button onClick={() => setActiveTab('petitions')} className={`tab-btn${activeTab === 'petitions' ? ' active' : ''}`}>
-                    <Scale size={16} /> Elaboração de Petições
+                    <Gavel size={16} /> Elaboração de Petições
                 </button>
                 <button onClick={() => setActiveTab('expiration')} className={`tab-btn${activeTab === 'expiration' ? ' active' : ''}`}>
                     <Clock size={16} /> Validade de Documentos

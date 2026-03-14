@@ -1,4 +1,4 @@
-import { MessageSquare, Search, RefreshCw, Loader2, Satellite, Gavel, Building2, User, Bot, Star, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, Zap, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff } from 'lucide-react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
 
@@ -17,7 +17,7 @@ function highlightKeywords(text: string, keyword: string | null) {
 // ── Author icon helper ──
 function AuthorIcon({ type }: { type: string | null }) {
   if (type === 'pregoeiro') return <Gavel size={14} />;
-  if (type === 'sistema') return <Bot size={14} />;
+  if (type === 'sistema') return <Cpu size={14} />;
   if (type === 'fornecedor') return <User size={14} />;
   return <MessageSquare size={14} />;
 }
@@ -64,7 +64,7 @@ export function ChatMonitorPage({ companies }: Props) {
       {/* ── Top Bar ── */}
       <div className="chat-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <Satellite size={22} color="var(--color-success)" />
+          <RadioTower size={22} color="var(--color-success)" />
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', margin: 0 }}>Monitor de Chat</h1>
         </div>
 
@@ -128,7 +128,7 @@ export function ChatMonitorPage({ companies }: Props) {
               <button className="btn btn-ghost"
                 style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', border: '1px solid var(--color-border)' }}
                 disabled={c.testingNotif} onClick={c.handleTestNotification}>
-                {c.testingNotif ? <Loader2 size={12} className="spinner" /> : <Zap size={12} />}
+                {c.testingNotif ? <Loader2 size={12} className="spinner" /> : <SignalHigh size={12} />}
                 Testar
               </button>
               <button className="btn btn-primary"
@@ -328,7 +328,7 @@ export function ChatMonitorPage({ companies }: Props) {
                     <button title={c.selectedProc.isImportant ? 'Remover destaque' : 'Marcar como importante'}
                       onClick={(e) => { e.stopPropagation(); c.toggleProcessImportant(c.selectedProc!.id, c.selectedProc!.isImportant); }}
                       style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: 'none', background: c.selectedProc.isImportant ? 'var(--color-warning-bg)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                      <Star size={16} fill={c.selectedProc.isImportant ? 'var(--color-warning)' : 'none'} color={c.selectedProc.isImportant ? 'var(--color-warning)' : 'var(--color-text-tertiary)'} />
+                      <Pin size={16} fill={c.selectedProc.isImportant ? 'var(--color-warning)' : 'none'} color={c.selectedProc.isImportant ? 'var(--color-warning)' : 'var(--color-text-tertiary)'} />
                     </button>
                     <button title={c.selectedProc.isArchived ? 'Desarquivar' : 'Arquivar'}
                       onClick={(e) => { e.stopPropagation(); c.toggleProcessArchive(c.selectedProc!.id, c.selectedProc!.isArchived); }}
@@ -413,7 +413,7 @@ export function ChatMonitorPage({ companies }: Props) {
             </>
           ) : (
             <div className="empty-state--centered">
-              <Satellite size={48} style={{ opacity: 0.2 }} />
+              <RadioTower size={48} style={{ opacity: 0.2 }} />
               <div style={{ textAlign: 'center' }}>
                 <p style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Selecione um processo</p>
                 <p style={{ fontSize: 'var(--text-md)' }}>Escolha um processo na lista à esquerda para ver as mensagens do chat.</p>

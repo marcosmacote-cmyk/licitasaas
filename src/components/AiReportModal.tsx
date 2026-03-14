@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Brain, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, Award, FileX, CheckCircle2, ChevronRight, Sparkles, Plus } from 'lucide-react';
+import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, ChevronRight, FileSearch2, Plus } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
@@ -94,7 +94,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
                             <div style={{ padding: 'var(--space-3)', background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))', borderRadius: 'var(--radius-xl)', boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)' }}>
-                                <Brain size={28} color="white" />
+                                <ScanSearch size={28} color="white" />
                             </div>
                             <div>
                                 <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, margin: 0, letterSpacing: '-0.025em' }}>
@@ -148,7 +148,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
                                 {/* Executive Summary */}
                                 <div className="report-card">
-                                    <h3 className="ai-section-header"><Sparkles size={18} /> Resumo Executivo</h3>
+                                    <h3 className="ai-section-header"><FileSearch2 size={18} /> Resumo Executivo</h3>
                                     <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
                                         {report.renderTextValue(process?.summary) || report.renderTextValue(analysis?.fullSummary) || 'Resumo executivo não disponível para este edital.'}
                                     </p>
@@ -157,7 +157,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 {/* Technical-Legal Opinion */}
                                 {analysis?.fullSummary && process?.summary && analysis?.fullSummary !== process?.summary && (
                                     <div className="report-card">
-                                        <h3 className="ai-section-header"><Brain size={18} /> Parecer Técnico-Jurídico</h3>
+                                        <h3 className="ai-section-header"><ScanSearch size={18} /> Parecer Técnico-Jurídico</h3>
                                         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
                                             {report.renderTextValue(analysis?.fullSummary)}
                                         </p>
@@ -179,7 +179,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 {/* Technical Qualification */}
                                 {analysis?.qualificationRequirements && (
                                     <div className="report-card">
-                                        <h3 className="ai-section-header"><Award size={18} /> Qualificação Técnica Exigida</h3>
+                                        <h3 className="ai-section-header"><BadgeCheck size={18} /> Qualificação Técnica Exigida</h3>
                                         <div style={{ padding: 'var(--space-5)', backgroundColor: 'var(--color-warning-bg)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-warning-border)' }}>
                                             <p style={{ color: 'var(--color-warning-hover)', fontSize: 'var(--text-base)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
                                                 {report.renderTextValue(analysis?.qualificationRequirements)}
@@ -191,7 +191,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 {/* Document Readiness */}
                                 <div className="report-card">
                                     <div className="flex-between mb-6">
-                                        <h3 className="ai-section-header mb-0"><Award size={18} /> Habilitação Requerida</h3>
+                                        <h3 className="ai-section-header mb-0"><BadgeCheck size={18} /> Habilitação Requerida</h3>
                                         {process?.companyProfileId && !report.isLoadingDocs && (
                                             <div className="flex-center gap-3" style={{ padding: 'var(--space-2) var(--space-4)',
                                                 backgroundColor: report.readinessScore > 70 ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
@@ -305,7 +305,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 'var(--space-3)' }}>
                                         {msg.role === 'model' && (
                                             <div style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                <Brain size={18} color="white" />
+                                                <ScanSearch size={18} color="white" />
                                             </div>
                                         )}
                                         <div style={{

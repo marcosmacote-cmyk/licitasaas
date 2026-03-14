@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Loader2, Activity, Server, Clock } from 'lucide-react';
+import { Shield, Loader2, LineChart, Server, Clock } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -70,7 +70,7 @@ export function SettingsPage() {
                     >
                         <div className="flex-gap" style={{ gap: 'var(--space-3)' }}>
                             <div className="indicator-card" style={{ padding: 'var(--space-3)', minWidth: 'auto', border: 'none', boxShadow: 'none', background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
-                                <Activity size={24} />
+                                <LineChart size={24} />
                             </div>
                             <div>
                                 <h3 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Save, UploadCloud, Brain, ArrowRight, CheckCircle, AlertTriangle, DollarSign, Monitor, Scale, FileText } from 'lucide-react';
+import { Save, UploadCloud, ScanSearch, ArrowRight, CheckCircle, AlertTriangle, DollarSign, Monitor, Gavel, FileText } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '../ui';
@@ -140,11 +140,11 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
         if (status === 'Captado') {
             if (!hasPdf) return { label: 'Anexar Edital', desc: 'Envie o PDF do edital para habilitar a análise com IA', icon: <UploadCloud size={18} />, color: 'var(--color-warning)', action: () => setHubTab('form') };
-            if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise inteligente do edital para identificar riscos e oportunidades', icon: <Brain size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
+            if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise inteligente do edital para identificar riscos e oportunidades', icon: <ScanSearch size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
             return { label: 'Mover para Análise', desc: 'O edital foi analisado. Avalie os resultados e avance no pipeline', icon: <ArrowRight size={18} />, color: 'var(--color-primary)', action: undefined };
         }
         if (status === 'Em Análise de Edital') {
-            if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise do edital para prosseguir', icon: <Brain size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
+            if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise do edital para prosseguir', icon: <ScanSearch size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
             if (expiredDocs.length > 0) return { label: 'Regularizar Documentos', desc: `${expiredDocs.length} documento(s) vencido(s) precisam ser renovados`, icon: <AlertTriangle size={18} />, color: 'var(--color-danger)', action: () => { onClose(); onNavigateToModule?.('companies'); } };
             return { label: 'Preparar Documentação', desc: 'Análise concluída. Inicie a preparação de proposta e documentos', icon: <FileText size={18} />, color: 'var(--color-urgency)', action: undefined };
         }
@@ -156,7 +156,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             return { label: 'Monitorar Sessão', desc: 'Acompanhe a sessão de disputa em tempo real', icon: <Monitor size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('monitoring'); } };
         }
         if (status === 'Monitorando' || status === 'Recurso') {
-            return { label: 'Gerar Petição', desc: 'Prepare uma petição ou impugnação se necessário', icon: <Scale size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('production-petition', initialData?.id); } };
+            return { label: 'Gerar Petição', desc: 'Prepare uma petição ou impugnação se necessário', icon: <Gavel size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('production-petition', initialData?.id); } };
         }
         if (expiringDocs.length > 0) {
             return { label: 'Atenção Documental', desc: `${expiringDocs.length} documento(s) próximo(s) do vencimento`, icon: <AlertTriangle size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('companies'); } };

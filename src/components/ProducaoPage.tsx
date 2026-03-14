@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DollarSign, FileArchive, Sparkles, Scale, FileOutput } from 'lucide-react';
+import { DollarSign, FolderArchive, Cpu, Gavel, FileOutput } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { ProposalGeneratorPage } from './proposals/ProposalGeneratorPage';
 import { DossierExporter } from './reports/DossierExporter';
@@ -20,9 +20,9 @@ export function ProducaoPage({ biddings, companies, onRefresh }: Props) {
 
     const tabs: { key: ProducaoTab; label: string; icon: React.ReactNode }[] = [
         { key: 'proposal', label: 'Proposta de Preços', icon: <DollarSign size={16} /> },
-        { key: 'declarations', label: 'Declarações (IA)', icon: <Sparkles size={16} /> },
-        { key: 'petitions', label: 'Petições e Recursos', icon: <Scale size={16} /> },
-        { key: 'dossier', label: 'Dossiê ZIP', icon: <FileArchive size={16} /> },
+        { key: 'declarations', label: 'Declarações (IA)', icon: <Cpu size={16} /> },
+        { key: 'petitions', label: 'Petições e Recursos', icon: <Gavel size={16} /> },
+        { key: 'dossier', label: 'Dossiê ZIP', icon: <FolderArchive size={16} /> },
     ];
 
     return (

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrainCircuit } from 'lucide-react';
+import { ScanSearch } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { TechnicalOracle } from './reports/TechnicalOracle';
 import { TabNav } from './ui';
@@ -16,7 +16,7 @@ export function InteligenciaPage({ biddings, companies, onRefresh }: Props) {
     const [activeTab, setActiveTab] = useState<InteligenciaTab>('oracle');
 
     const tabs: { key: InteligenciaTab; label: string; icon: React.ReactNode; description: string }[] = [
-        { key: 'oracle', label: 'Oráculo Técnico', icon: <BrainCircuit size={16} />, description: 'Compare exigências técnicas com acervos da empresa' },
+        { key: 'oracle', label: 'Oráculo Técnico', icon: <ScanSearch size={16} />, description: 'Compare exigências técnicas com acervos da empresa' },
     ];
 
     return (
@@ -39,7 +39,7 @@ export function InteligenciaPage({ biddings, companies, onRefresh }: Props) {
                             color: 'var(--color-ai)',
                             display: 'flex'
                         }}>
-                            <BrainCircuit size={24} />
+                            <ScanSearch size={24} />
                         </div>
                         Inteligência
                     </h1>
