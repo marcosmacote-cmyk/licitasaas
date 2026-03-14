@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../config';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '../ui';
 import type { BiddingProcess, RiskTag, CompanyProfile, ObservationLog, CompanyCredential, AiAnalysis } from '../../types';
+import { resolveStage } from '../../governance';
 
 interface UseProcessFormOptions {
     initialData: BiddingProcess | null;
@@ -128,9 +129,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
     const [isUploading, setIsUploading] = useState(false);
     const [viewingPdf, setViewingPdf] = useState<string | null>(null);
 
-    // ── Next step recommendation based on status ──
     const nextStep = useMemo(() => {
-        const status = initialData?.status;
+        const stage = resolveStage(initialData?.status || 'Captado');
         const hasAnalysis = !!initialData?.aiAnalysis;
         const hasPdf = (formData.link || '').includes('.pdf') || (formData.link || '').includes('/uploads/');
         const expiredDocs = companyDocs.filter(d => d.status === 'Vencido' || d.status === 'Crítico');
@@ -138,24 +138,24 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
         if (!isEditMode) return { label: 'Salvar', desc: 'Salve a licitação para desbloquear os módulos operacionais', icon: <Save size={18} />, color: 'var(--color-primary)', action: undefined };
 
-        if (status === 'Captado') {
+        if (stage === 'Captado') {
             if (!hasPdf) return { label: 'Anexar Edital', desc: 'Envie o PDF do edital para habilitar a análise com IA', icon: <UploadCloud size={18} />, color: 'var(--color-warning)', action: () => setHubTab('form') };
             if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise inteligente do edital para identificar riscos e oportunidades', icon: <ScanSearch size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
             return { label: 'Mover para Análise', desc: 'O edital foi analisado. Avalie os resultados e avance no pipeline', icon: <ArrowRight size={18} />, color: 'var(--color-primary)', action: undefined };
         }
-        if (status === 'Em Análise de Edital') {
+        if (stage === 'Em Análise' || stage === 'Aprovado para Participação') {
             if (!hasAnalysis) return { label: 'Analisar com LicitIA', desc: 'Execute a análise do edital para prosseguir', icon: <ScanSearch size={18} />, color: 'var(--color-ai)', action: handleAiExtract };
             if (expiredDocs.length > 0) return { label: 'Regularizar Documentos', desc: `${expiredDocs.length} documento(s) vencido(s) precisam ser renovados`, icon: <AlertTriangle size={18} />, color: 'var(--color-danger)', action: () => { onClose(); onNavigateToModule?.('companies'); } };
             return { label: 'Preparar Documentação', desc: 'Análise concluída. Inicie a preparação de proposta e documentos', icon: <FileText size={18} />, color: 'var(--color-urgency)', action: undefined };
         }
-        if (status === 'Preparando Documentação') {
+        if (stage === 'Preparando Documentação' || stage === 'Preparando Proposta') {
             if (expiredDocs.length > 0) return { label: 'Regularizar Documentos', desc: `${expiredDocs.length} documento(s) vencido(s) impedem a participação`, icon: <AlertTriangle size={18} />, color: 'var(--color-danger)', action: () => { onClose(); onNavigateToModule?.('companies'); } };
             return { label: 'Gerar Proposta', desc: 'Monte a proposta comercial para este processo', icon: <DollarSign size={18} />, color: 'var(--color-primary)', action: () => { onClose(); onNavigateToModule?.('production-proposal', initialData?.id); } };
         }
-        if (status === 'Participando') {
-            return { label: 'Monitorar Sessão', desc: 'Acompanhe a sessão de disputa em tempo real', icon: <Monitor size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('monitoring'); } };
+        if (stage === 'Em Sessão') {
+            return { label: 'Monitorar Sessão', desc: 'Acompanhe a sessão de disputa em tempo real', icon: <Monitor size={18} />, color: 'var(--color-danger)', action: () => { onClose(); onNavigateToModule?.('monitoring'); } };
         }
-        if (status === 'Monitorando' || status === 'Recurso') {
+        if (stage === 'Pós-Sessão' || stage === 'Recurso') {
             return { label: 'Gerar Petição', desc: 'Prepare uma petição ou impugnação se necessário', icon: <Gavel size={18} />, color: 'var(--color-warning)', action: () => { onClose(); onNavigateToModule?.('production-petition', initialData?.id); } };
         }
         if (expiringDocs.length > 0) {

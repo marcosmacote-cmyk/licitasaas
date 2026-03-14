@@ -3,6 +3,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui';
 import type { BiddingProcess, TechnicalCertificate } from '../../types';
+import { resolveStage, isModuleAllowed } from '../../governance';
 
 export interface AnalysisItem {
     requirement: string;
@@ -208,7 +209,10 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
     }, [certificates, searchTerm]);
 
     const biddingsWithAnalysis = useMemo(() =>
-        biddings.filter(b => b.aiAnalysis || b.summary)
+        biddings.filter(b => {
+            const stage = resolveStage(b.status);
+            return isModuleAllowed(stage, b.substage, 'oracle') && (b.aiAnalysis || b.summary);
+        })
     , [biddings]);
 
     const groupedCertificates = useMemo(() => {

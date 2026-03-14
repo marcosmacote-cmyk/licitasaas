@@ -14,14 +14,24 @@ import {
 // Mapeia status de licitação para variantes visuais automáticas
 
 const STATUS_MAP: Record<string, { variant: string }> = {
+  // ── New Governance Stages (12) ──
   'Captado':                    { variant: 'neutral' },
-  'Em Análise de Edital':       { variant: 'primary' },
+  'Em Análise':                 { variant: 'primary' },
+  'Aprovado para Participação': { variant: 'ai' },
   'Preparando Documentação':    { variant: 'urgency' },
+  'Preparando Proposta':        { variant: 'primary' },
+  'Em Sessão':                  { variant: 'danger' },
+  'Pós-Sessão':                 { variant: 'warning' },
+  'Recurso':                    { variant: 'danger' },
+  'Ganho':                      { variant: 'success' },
+  'Não Participar':             { variant: 'neutral' },
+  'Perdido':                    { variant: 'danger' },
+  'Arquivado':                  { variant: 'neutral' },
+  // ── Legacy (backward compatibility) ──
+  'Em Análise de Edital':       { variant: 'primary' },
   'Participando':               { variant: 'warning' },
   'Monitorando':                { variant: 'ai' },
-  'Recurso':                    { variant: 'danger' },
   'Vencido':                    { variant: 'success' },
-  'Perdido':                    { variant: 'danger' },
   'Sem Sucesso':                { variant: 'danger' },
 };
 

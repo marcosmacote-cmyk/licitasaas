@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Target, Trophy, DollarSign, FileStack, PieChart as PieIcon, TrendingUp, BarChart2 } from 'lucide-react';
 import { BarChart as RBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RPieChart, Pie, Legend } from 'recharts';
 import type { BiddingProcess } from '../../types';
+import { resolveStage } from '../../governance';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -26,12 +27,13 @@ export function PerformanceDashboard({ biddings }: Props) {
         let ongoingCount = 0;
 
         filteredBiddings.forEach(b => {
-            if (b.status === 'Vencido') {
+            const stage = resolveStage(b.status);
+            if (stage === 'Ganho') {
                 wonCount++;
                 totalWonValue += b.estimatedValue;
-            } else if (b.status === 'Perdido' || b.status === 'Sem Sucesso') {
+            } else if (stage === 'Perdido' || stage === 'Não Participar') {
                 lostCount++;
-            } else if (['Captado', 'Em Análise de Edital', 'Preparando Documentação', 'Participando'].includes(b.status)) {
+            } else if (!['Ganho', 'Perdido', 'Não Participar', 'Arquivado'].includes(stage)) {
                 ongoingCount++;
                 totalInPlayValue += b.estimatedValue;
             }

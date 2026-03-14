@@ -1,4 +1,17 @@
-export type BiddingStatus = 'Captado' | 'Em Análise de Edital' | 'Preparando Documentação' | 'Participando' | 'Monitorando' | 'Recurso' | 'Vencido' | 'Sem Sucesso' | 'Perdido';
+export type BiddingStatus =
+    | 'Captado'
+    | 'Em Análise'
+    | 'Aprovado para Participação'
+    | 'Preparando Documentação'
+    | 'Preparando Proposta'
+    | 'Em Sessão'
+    | 'Pós-Sessão'
+    | 'Recurso'
+    | 'Ganho'
+    | 'Não Participar'
+    | 'Perdido'
+    | 'Arquivado';
+
 export type RiskTag = 'Bairro' | 'Baixo' | 'Médio' | 'Alto' | 'Crítico';
 
 export interface ObservationLog {
@@ -12,6 +25,7 @@ export interface BiddingProcess {
     title: string;
     summary?: string; // Objeto resumido
     status: BiddingStatus;
+    substage?: string | null; // Subfase operacional interna
     estimatedValue: number;
     sessionDate: string;
     modality: string; // Tipo de disputa
@@ -55,13 +69,17 @@ export interface AiAnalysis {
 }
 export const COLUMNS: BiddingStatus[] = [
     'Captado',
-    'Em Análise de Edital',
+    'Em Análise',
+    'Aprovado para Participação',
     'Preparando Documentação',
-    'Participando',
-    'Monitorando',
+    'Preparando Proposta',
+    'Em Sessão',
+    'Pós-Sessão',
     'Recurso',
-    'Vencido',
-    'Sem Sucesso',
+    'Ganho',
+    'Não Participar',
+    'Perdido',
+    'Arquivado',
 ];
 
 export interface CompanyProfile {

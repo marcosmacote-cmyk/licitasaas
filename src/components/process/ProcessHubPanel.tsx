@@ -1,5 +1,6 @@
 import { ScanSearch, Cpu, Loader2, Eye, ChevronRight, CheckCircle2, AlertTriangle, XCircle, FileText, DollarSign, FolderArchive, Gavel, Monitor, MessageSquare, PlusCircle, Edit3, Shield, FileWarning } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, CompanyCredential, ObservationLog } from '../../types';
+import { getGovernance, resolveStage, isModuleAllowed, getSubstageLabel, SUBSTAGES, type SystemModule } from '../../governance';
 
 interface ProcessHubPanelProps {
     initialData: BiddingProcess | null;
@@ -114,26 +115,33 @@ export function ProcessHubPanel({
     const deadlinesCount = ai ? parseJsonField(ai.deadlines).length : 0;
     const hasPdf       = (formData.link || '').includes('/uploads/');
 
-    // ── Quick actions ──────────────────────────────────────────
-    const quickActions = [
-        { icon: <ScanSearch size={14} />, label: 'Análise IA',    color: 'var(--color-ai)',            action: () => { onClose(); onNavigateToModule?.('intelligence',          initialData?.id); } },
-        { icon: <DollarSign size={14} />, label: 'Proposta',      color: 'var(--color-primary)',       action: () => { onClose(); onNavigateToModule?.('production-proposal',   initialData?.id); } },
-        { icon: <FolderArchive size={14}/>,label: 'Dossiê',       color: 'var(--color-urgency)',       action: () => { onClose(); onNavigateToModule?.('production-dossier',    initialData?.id); } },
-        { icon: <FileText size={14} />,   label: 'Declarações',   color: 'var(--color-success)',       action: () => { onClose(); onNavigateToModule?.('production-declaration',initialData?.id); } },
-        { icon: <Gavel size={14} />,      label: 'Petição',       color: 'var(--color-warning)',       action: () => { onClose(); onNavigateToModule?.('production-petition',   initialData?.id); } },
-        { icon: <Monitor size={14} />,    label: 'Monitor Chat',  color: 'var(--color-text-secondary)',action: () => { onClose(); onNavigateToModule?.('monitoring',             initialData?.id); } },
+    // ── Governança ──────────────────────────────────────────────
+    const stage = resolveStage(formData.status || initialData?.status || 'Captado');
+    const substage = formData.substage ?? initialData?.substage ?? null;
+    const gov = getGovernance(stage, substage);
+    const substageLabel = getSubstageLabel(stage, substage);
+    const availableSubstages = SUBSTAGES[stage] || [];
+
+    // ── Quick actions (filtradas pela governança) ──────────────
+    const allActions: { module: SystemModule; icon: React.ReactNode; label: string; color: string }[] = [
+        { module: 'intelligence',           icon: <ScanSearch size={14} />,     label: 'Análise IA',    color: 'var(--color-ai)' },
+        { module: 'production-proposal',    icon: <DollarSign size={14} />,     label: 'Proposta',      color: 'var(--color-primary)' },
+        { module: 'production-dossier',     icon: <FolderArchive size={14} />,  label: 'Dossiê',        color: 'var(--color-urgency)' },
+        { module: 'production-declaration', icon: <FileText size={14} />,       label: 'Declarações',   color: 'var(--color-success)' },
+        { module: 'production-petition',    icon: <Gavel size={14} />,          label: 'Petição',       color: 'var(--color-warning)' },
+        { module: 'monitoring',             icon: <Monitor size={14} />,        label: 'Monitor Chat',  color: 'var(--color-text-secondary)' },
     ];
 
-    // ── Próximo passo ──────────────────────────────────────────
-    const nextStep = !hasPdf
-        ? 'Anexe o edital PDF para habilitar a análise da LicitIA.'
-        : !ai
-        ? 'Execute a análise do edital para identificar riscos e exigências.'
-        : expiredDocs.length > 0
-        ? `Regularize ${expiredDocs.length} documento(s) vencido(s) antes de prosseguir.`
-        : !hasQual || !hasTechQual
-        ? 'Complete o cadastro da empresa (habilitação e qualificação técnica).'
-        : 'Empresa apta. Avance para Proposta ou Montagem de Dossiê.';
+    const quickActions = allActions
+        .filter(a => isModuleAllowed(stage, substage, a.module))
+        .map(a => ({ ...a, action: () => { onClose(); onNavigateToModule?.(a.module, initialData?.id); } }));
+
+    // ── Próximo passo (governança + contexto documental) ───────
+    const nextStep = gov.primaryAction + (
+        !hasPdf ? ' — Anexe o edital PDF para análise da LicitIA.' 
+        : expiredDocs.length > 0 ? ` — ${expiredDocs.length} documento(s) vencido(s) impedem a participação.`
+        : ''
+    );
 
     return (
         <div style={{ padding: 'var(--space-5) var(--space-8)', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -363,6 +371,24 @@ export function ProcessHubPanel({
                             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
                                 {nextStep}
                             </div>
+                            {substageLabel && (
+                                <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span style={{
+                                        padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                                        fontSize: '0.65rem', fontWeight: 600,
+                                        background: `color-mix(in srgb, ${gov.themeColor} 10%, transparent)`,
+                                        color: gov.themeColor,
+                                        border: `1px solid color-mix(in srgb, ${gov.themeColor} 25%, transparent)`,
+                                    }}>
+                                        {substageLabel}
+                                    </span>
+                                    {availableSubstages.length > 1 && (
+                                        <span style={{ fontSize: '0.6rem', color: 'var(--color-text-tertiary)' }}>
+                                            ({availableSubstages.length} subfases disponíveis)
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

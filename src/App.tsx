@@ -47,7 +47,7 @@ function App() {
   const [alertCount, setAlertCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string } | null>(null);
-  const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string } | null>(null);
+  const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string; hubOriginId?: string } | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -409,7 +409,7 @@ function App() {
           {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { setNavFilter(filter || null); setActiveTab(tab as AppTab); }} />}
           {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)}
-            onNavigateToModule={(module, processId) => {
+             onNavigateToModule={(module, processId) => {
               const subTabMap: Record<string, { tab: AppTab; subTab?: string }> = {
                 'intelligence':             { tab: 'intelligence' },
                 'production-proposal':      { tab: 'production', subTab: 'proposal' },
@@ -421,15 +421,15 @@ function App() {
               };
               const mapping = subTabMap[module];
               if (mapping) {
-                setModuleContext({ subTab: mapping.subTab, processId });
+                setModuleContext({ subTab: mapping.subTab, processId, hubOriginId: processId });
                 setActiveTab(mapping.tab);
               }
             }}
           />}
-          {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} initialProcessId={moduleContext?.processId} onContextConsumed={() => setModuleContext(null)} />}
+          {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} initialProcessId={moduleContext?.processId} hubOriginId={moduleContext?.hubOriginId} onContextConsumed={() => setModuleContext(null)} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
           {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
-          {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} initialContext={moduleContext} onContextConsumed={() => setModuleContext(null)} />}
-          {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} />}
+          {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} initialContext={moduleContext} onContextConsumed={() => setModuleContext(null)} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
+          {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} biddings={items} hubOriginId={moduleContext?.hubOriginId} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
           {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}
           {activeTab === 'settings' && <SettingsPage />}
           </Suspense>

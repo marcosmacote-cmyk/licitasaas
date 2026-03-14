@@ -3,18 +3,23 @@ import { ScanSearch } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { TechnicalOracle } from './reports/TechnicalOracle';
 import { TabNav } from './ui';
+import { BackToHubBanner } from './ui/BackToHubBanner';
+import { GovernanceBlockedBanner } from './ui/GovernanceBlockedBanner';
+import { resolveStage, isModuleAllowed } from '../governance';
 
 interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onRefresh?: () => void;
     initialProcessId?: string;
+    hubOriginId?: string;
     onContextConsumed?: () => void;
+    onReturnToHub?: (processId: string) => void;
 }
 
 type InteligenciaTab = 'oracle';
 
-export function InteligenciaPage({ biddings, companies, onRefresh, initialProcessId, onContextConsumed }: Props) {
+export function InteligenciaPage({ biddings, companies, onRefresh, initialProcessId, hubOriginId, onContextConsumed, onReturnToHub }: Props) {
     const [activeTab, setActiveTab] = useState<InteligenciaTab>('oracle');
 
     useEffect(() => {
@@ -27,8 +32,18 @@ export function InteligenciaPage({ biddings, companies, onRefresh, initialProces
         { key: 'oracle', label: 'Oráculo Técnico', icon: <ScanSearch size={16} />, description: 'Compare exigências técnicas com acervos da empresa' },
     ];
 
+    const hubProcess = hubOriginId ? biddings.find(b => b.id === hubOriginId) : undefined;
+
     return (
         <div className="page-container">
+            {/* Back to Hub */}
+            {hubOriginId && onReturnToHub && (
+                <BackToHubBanner
+                    processTitle={hubProcess?.title}
+                    onReturn={() => onReturnToHub(hubOriginId)}
+                />
+            )}
+
             {/* Breadcrumb */}
             <div className="breadcrumb">
                 <span>Inteligência</span>
@@ -63,10 +78,31 @@ export function InteligenciaPage({ biddings, companies, onRefresh, initialProces
                 color="var(--color-ai)"
             />
 
-            {/* Content */}
-            <div>
-                {activeTab === 'oracle' && <TechnicalOracle biddings={biddings} companies={companies} onRefresh={onRefresh} initialBiddingId={initialProcessId} />}
-            </div>
+            {/* Content — governance check */}
+            {(() => {
+                if (hubProcess) {
+                    const stage = resolveStage(hubProcess.status);
+                    const module = activeTab === 'oracle' ? 'oracle' as const : 'intelligence' as const;
+                    if (!isModuleAllowed(stage, hubProcess.substage, module)) {
+                        return (
+                            <div style={{ marginTop: 'var(--space-4)' }}>
+                                <GovernanceBlockedBanner
+                                    processStatus={hubProcess.status}
+                                    substage={hubProcess.substage}
+                                    module={module}
+                                    processTitle={hubProcess.title}
+                                    onGoToHub={onReturnToHub ? () => onReturnToHub(hubOriginId!) : undefined}
+                                />
+                            </div>
+                        );
+                    }
+                }
+                return (
+                    <div>
+                        {activeTab === 'oracle' && <TechnicalOracle biddings={biddings} companies={companies} onRefresh={onRefresh} initialBiddingId={initialProcessId} />}
+                    </div>
+                );
+            })()}
         </div>
     );
 }

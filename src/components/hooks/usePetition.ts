@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { useToast } from '../ui';
+import { resolveStage, isModuleAllowed } from '../../governance';
 
 export const PETITION_TYPES = [
     { id: 'impugnacao', label: 'Impugnação ao Edital', law: 'Lei 14.133/2021, Art. 164' },
@@ -50,7 +51,10 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
     // ── Computed ──
     const selectedCompany = useMemo(() => companies.find(c => c.id === selectedCompanyId), [companies, selectedCompanyId]);
     const selectedBidding = useMemo(() => biddings.find(b => b.id === selectedBiddingId), [biddings, selectedBiddingId]);
-    const biddingsInRecurso = useMemo(() => biddings.filter(b => b.status === 'Recurso'), [biddings]);
+    const eligibleBiddings = useMemo(() => biddings.filter(b => {
+        const stage = resolveStage(b.status);
+        return isModuleAllowed(stage, b.substage, 'production-petition');
+    }), [biddings]);
 
     // ── Effects ──
     // Load company defaults when company changes
@@ -318,7 +322,7 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
         isSavingTemplate, showStyles, setShowStyles, selectedImg,
         editorRef, lastAiResult, editorKey,
         // Computed
-        selectedCompany, selectedBidding, biddingsInRecurso,
+        selectedCompany, selectedBidding, eligibleBiddings,
         // Handlers
         handleImageUpload, handleSaveCompanyTemplate, handleClear, handleNew,
         handleAttachmentUpload, handleCopy, handleGenerate, handleInsertImage,

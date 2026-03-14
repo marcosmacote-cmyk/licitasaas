@@ -74,6 +74,7 @@ model BiddingProcess {
   portal           String
   modality         String
   status           String           @default("Captado")
+  substage         String?          // Subfase operacional interna
   risk             String?
   estimatedValue   Float            @default(0.0)
   sessionDate      DateTime

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DollarSign, FolderArchive, Cpu, Gavel, FileOutput } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../types';
 import { ProposalGeneratorPage } from './proposals/ProposalGeneratorPage';
@@ -6,24 +6,30 @@ import { DossierExporter } from './reports/DossierExporter';
 import { AiDeclarationGenerator } from './reports/AiDeclarationGenerator';
 import { PetitionGenerator } from './reports/PetitionGenerator';
 import { TabNav } from './ui';
+import { BackToHubBanner } from './ui/BackToHubBanner';
+import { GovernanceBlockedBanner } from './ui/GovernanceBlockedBanner';
+import { resolveStage, isModuleAllowed, type SystemModule } from '../governance';
 
 interface Props {
     biddings: BiddingProcess[];
     companies: CompanyProfile[];
     onRefresh?: () => void;
-    initialContext?: { subTab?: string; processId?: string } | null;
+    initialContext?: { subTab?: string; processId?: string; hubOriginId?: string } | null;
     onContextConsumed?: () => void;
+    onReturnToHub?: (processId: string) => void;
 }
 
 type ProducaoTab = 'proposal' | 'declarations' | 'petitions' | 'dossier';
 
-export function ProducaoPage({ biddings, companies, onRefresh, initialContext, onContextConsumed }: Props) {
+export function ProducaoPage({ biddings, companies, onRefresh, initialContext, onContextConsumed, onReturnToHub }: Props) {
     const [activeTab, setActiveTab] = useState<ProducaoTab>(
         initialContext?.subTab && ['proposal', 'declarations', 'petitions', 'dossier'].includes(initialContext.subTab)
             ? initialContext.subTab as ProducaoTab
             : 'proposal'
     );
     const [initialProcessId] = useState<string | undefined>(initialContext?.processId);
+    const [hubOriginId] = useState<string | undefined>(initialContext?.hubOriginId);
+    const hubProcess = hubOriginId ? biddings.find(b => b.id === hubOriginId) : undefined;
 
     // Consume context on mount
     useEffect(() => {
@@ -47,8 +53,31 @@ export function ProducaoPage({ biddings, companies, onRefresh, initialContext, o
     };
     const meta = tabMeta[activeTab];
 
+    // ── Governance blocking ──
+    const TAB_MODULE_MAP: Record<ProducaoTab, SystemModule> = {
+        proposal: 'production-proposal',
+        declarations: 'production-declaration',
+        petitions: 'production-petition',
+        dossier: 'production-dossier',
+    };
+
+    const isBlocked = useMemo(() => {
+        if (!hubProcess) return false;
+        const stage = resolveStage(hubProcess.status);
+        const module = TAB_MODULE_MAP[activeTab];
+        return !isModuleAllowed(stage, hubProcess.substage, module);
+    }, [hubProcess, activeTab]);
+
     return (
         <div className="page-container">
+            {/* Back to Hub */}
+            {hubOriginId && onReturnToHub && (
+                <BackToHubBanner
+                    processTitle={hubProcess?.title}
+                    onReturn={() => onReturnToHub(hubOriginId)}
+                />
+            )}
+
             {/* Breadcrumb */}
             <div className="breadcrumb">
                 <span>Produção</span>
@@ -82,13 +111,25 @@ export function ProducaoPage({ biddings, companies, onRefresh, initialContext, o
                 onChange={(key) => setActiveTab(key as ProducaoTab)}
             />
 
-            {/* Content */}
-            <div>
-                {activeTab === 'proposal' && <ProposalGeneratorPage biddings={biddings} companies={companies} initialBiddingId={initialProcessId} />}
-                {activeTab === 'declarations' && <AiDeclarationGenerator biddings={biddings} companies={companies} onSave={onRefresh} initialBiddingId={initialProcessId} />}
-                {activeTab === 'petitions' && <PetitionGenerator biddings={biddings} companies={companies} onSave={onRefresh} initialBiddingId={initialProcessId} />}
-                {activeTab === 'dossier' && <DossierExporter biddings={biddings} companies={companies} initialBiddingId={initialProcessId} />}
-            </div>
+            {/* Content — blocked by governance? */}
+            {isBlocked && hubProcess ? (
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                    <GovernanceBlockedBanner
+                        processStatus={hubProcess.status}
+                        substage={hubProcess.substage}
+                        module={TAB_MODULE_MAP[activeTab]}
+                        processTitle={hubProcess.title}
+                        onGoToHub={onReturnToHub ? () => onReturnToHub(hubOriginId!) : undefined}
+                    />
+                </div>
+            ) : (
+                <div>
+                    {activeTab === 'proposal' && <ProposalGeneratorPage biddings={biddings} companies={companies} initialBiddingId={initialProcessId} />}
+                    {activeTab === 'declarations' && <AiDeclarationGenerator biddings={biddings} companies={companies} onSave={onRefresh} initialBiddingId={initialProcessId} />}
+                    {activeTab === 'petitions' && <PetitionGenerator biddings={biddings} companies={companies} onSave={onRefresh} initialBiddingId={initialProcessId} />}
+                    {activeTab === 'dossier' && <DossierExporter biddings={biddings} companies={companies} initialBiddingId={initialProcessId} />}
+                </div>
+            )}
         </div>
     );
 }

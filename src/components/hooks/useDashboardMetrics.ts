@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess } from '../../types';
+import { resolveStage } from '../../governance';
 
 // ════════════════════════════════════════
 //  useDashboardMetrics — extracted hook
@@ -57,17 +58,18 @@ export function useDashboardMetrics(items: BiddingProcess[], selectedCompanyId: 
   }, [items, selectedCompanyId]);
 
   const totalValue = filteredItems.reduce((acc, curr) => acc + curr.estimatedValue, 0);
-  const wonItems = filteredItems.filter(i => i.status === 'Vencido');
+  const wonItems = filteredItems.filter(i => resolveStage(i.status) === 'Ganho');
   const wonValue = wonItems.reduce((acc, curr) => acc + curr.estimatedValue, 0);
-  const lostItems = filteredItems.filter(i => i.status === 'Perdido');
-  const activeItems = filteredItems.filter(i => !['Vencido', 'Perdido', 'Sem Sucesso'].includes(i.status));
+  const lostItems = filteredItems.filter(i => resolveStage(i.status) === 'Perdido');
+  const terminalStages = ['Ganho', 'Perdido', 'Não Participar', 'Arquivado'];
+  const activeItems = filteredItems.filter(i => !terminalStages.includes(resolveStage(i.status)));
   const totalFinished = wonItems.length + lostItems.length;
   const winRate = totalFinished > 0 ? Math.round((wonItems.length / totalFinished) * 100) : 0;
 
-  const captadoItems = filteredItems.filter(i => i.status === 'Captado');
-  const emAnaliseItems = filteredItems.filter(i => i.status === 'Em Análise de Edital');
-  const preparandoItems = filteredItems.filter(i => i.status === 'Preparando Documentação');
-  const participandoItems = filteredItems.filter(i => i.status === 'Participando');
+  const captadoItems = filteredItems.filter(i => resolveStage(i.status) === 'Captado');
+  const emAnaliseItems = filteredItems.filter(i => resolveStage(i.status) === 'Em Análise');
+  const preparandoItems = filteredItems.filter(i => ['Preparando Documentação', 'Preparando Proposta'].includes(resolveStage(i.status)));
+  const participandoItems = filteredItems.filter(i => resolveStage(i.status) === 'Em Sessão');
 
   // Fetch expiring documents
   useEffect(() => {

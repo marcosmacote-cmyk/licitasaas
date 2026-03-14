@@ -7,6 +7,7 @@ import { aiService } from '../../services/ai';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../../types';
 import { COLUMNS } from '../../types';
+import { resolveStage, getDefaultSubstage, type KanbanStage } from '../../governance';
 import { useToast } from '../ui';
 
 // ===== FILTER TYPES =====
@@ -394,12 +395,13 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     };
 
     const handleStatusChange = (id: string, status: BiddingStatus) => {
+        const substage = getDefaultSubstage(status as KanbanStage);
         fetch(`${API_BASE_URL}/api/biddings/${id}`, {
             method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-            body: JSON.stringify({ status })
+            body: JSON.stringify({ status, substage })
         }).then(async (res) => {
             if (!res.ok) { const errorObj = await res.json(); throw new Error(errorObj.error || 'Server error'); }
-            setItems(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+            setItems(prev => prev.map(p => p.id === id ? { ...p, status, substage } : p));
         }).catch(e => { console.error("Status update error:", e); toast.error("Erro ao salvar a movimentação no servidor."); refreshData(); });
     };
 
@@ -452,12 +454,12 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
 
     // ===== PIPELINE COUNTERS =====
     const statusCounters = useMemo(() => ({
-        captado: items.filter(i => i.status === 'Captado').length,
-        analise: items.filter(i => i.status === 'Em Análise de Edital').length,
-        preparando: items.filter(i => i.status === 'Preparando Documentação').length,
-        participando: items.filter(i => i.status === 'Participando').length,
-        vencido: items.filter(i => i.status === 'Vencido').length,
-        perdido: items.filter(i => i.status === 'Perdido' || i.status === 'Sem Sucesso').length,
+        captado: items.filter(i => resolveStage(i.status) === 'Captado').length,
+        analise: items.filter(i => resolveStage(i.status) === 'Em Análise').length,
+        preparando: items.filter(i => ['Preparando Documentação', 'Preparando Proposta'].includes(resolveStage(i.status))).length,
+        participando: items.filter(i => resolveStage(i.status) === 'Em Sessão').length,
+        vencido: items.filter(i => resolveStage(i.status) === 'Ganho').length,
+        perdido: items.filter(i => ['Perdido', 'Não Participar'].includes(resolveStage(i.status))).length,
     }), [items]);
 
     return {

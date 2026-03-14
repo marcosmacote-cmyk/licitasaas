@@ -1,6 +1,10 @@
 import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff } from 'lucide-react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
+import { BackToHubBanner } from './ui/BackToHubBanner';
+import { GovernanceBlockedBanner } from './ui/GovernanceBlockedBanner';
+import { resolveStage, isModuleAllowed } from '../governance';
+import type { BiddingProcess } from '../types';
 
 // ── Keyword highlight helper ──
 function highlightKeywords(text: string, keyword: string | null) {
@@ -46,10 +50,40 @@ function portalBadge(portal: string) {
 
 interface Props {
   companies: { id: string; name?: string; cnpj?: string; }[];
+  biddings?: BiddingProcess[];
+  hubOriginId?: string;
+  onReturnToHub?: (processId: string) => void;
 }
 
-export function ChatMonitorPage({ companies }: Props) {
+export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHub }: Props) {
   const c = useChatMonitor({ companies });
+
+  // ── Governance check ──
+  const hubProcess = hubOriginId && biddings ? biddings.find(b => b.id === hubOriginId) : undefined;
+  if (hubProcess) {
+    const stage = resolveStage(hubProcess.status);
+    if (!isModuleAllowed(stage, hubProcess.substage, 'monitoring')) {
+      return (
+        <div className="page-container" style={{ padding: 'var(--space-6)' }}>
+          {onReturnToHub && (
+            <BackToHubBanner
+              processTitle={hubProcess.title}
+              onReturn={() => onReturnToHub(hubOriginId!)}
+            />
+          )}
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <GovernanceBlockedBanner
+              processStatus={hubProcess.status}
+              substage={hubProcess.substage}
+              module="monitoring"
+              processTitle={hubProcess.title}
+              onGoToHub={onReturnToHub ? () => onReturnToHub(hubOriginId!) : undefined}
+            />
+          </div>
+        </div>
+      );
+    }
+  }
 
   if (c.loadingProcesses) {
     return (
@@ -61,6 +95,14 @@ export function ChatMonitorPage({ companies }: Props) {
 
   return (
     <div className="page-container" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+      {/* Back to Hub */}
+      {hubOriginId && onReturnToHub && (
+        <div style={{ padding: 'var(--space-3) var(--space-4)', flexShrink: 0 }}>
+          <BackToHubBanner
+            onReturn={() => onReturnToHub(hubOriginId)}
+          />
+        </div>
+      )}
       {/* ── Top Bar ── */}
       <div className="chat-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>

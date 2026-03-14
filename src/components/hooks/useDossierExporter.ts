@@ -6,6 +6,7 @@ import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, CompanyDocument } from '../../types';
 import { useToast } from '../ui';
+import { resolveStage, isModuleAllowed } from '../../governance';
 
 // ──────────────────────────────────────────────────────────────────────
 // Constants & Utilities
@@ -160,7 +161,10 @@ export function useDossierExporter({ biddings, companies, initialBiddingId }: Us
     const [aiApplied, setAiApplied] = useState(false);
     const [isAiLoading, setIsAiLoading] = useState(false);
 
-    const biddingsWithAnalysis = useMemo(() => biddings.filter(b => b.aiAnalysis), [biddings]);
+    const biddingsWithAnalysis = useMemo(() => biddings.filter(b => {
+        const stage = resolveStage(b.status);
+        return isModuleAllowed(stage, b.substage, 'production-dossier') && b.aiAnalysis;
+    }), [biddings]);
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
     const selectedCompany = companies.find(c => c.id === selectedCompanyId);
 

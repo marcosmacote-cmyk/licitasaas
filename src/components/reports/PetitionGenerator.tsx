@@ -48,7 +48,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
                         <label className="form-label form-label--sm">Processo</label>
                         <select className="form-control" value={p.selectedBiddingId} onChange={(e) => p.setSelectedBiddingId(e.target.value)} style={{ borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)' }}>
                             <option value="">-- Selecione um processo --</option>
-                            {biddings.map(b => (<option key={b.id} value={b.id}>{b.title} ({b.portal})</option>))}
+                            {p.eligibleBiddings.map(b => (<option key={b.id} value={b.id}>{b.title} ({b.portal})</option>))}
                         </select>
                     </div>
 

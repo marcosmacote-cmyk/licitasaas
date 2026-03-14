@@ -66,11 +66,15 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
     const statusCounts = items.reduce((acc, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {} as Record<string, number>);
     const funnelData = [
         { name: 'Captado', count: statusCounts['Captado'] || 0, fill: 'var(--color-neutral)' },
-        { name: 'Em Análise', count: statusCounts['Em Análise de Edital'] || 0, fill: 'var(--color-primary)' },
-        { name: 'Preparando', count: statusCounts['Preparando Documentação'] || 0, fill: 'var(--color-urgency)' },
-        { name: 'Participando', count: statusCounts['Participando'] || 0, fill: 'var(--color-warning)' },
-        { name: 'Vencido', count: statusCounts['Vencido'] || 0, fill: 'var(--color-success)' },
-        { name: 'Perdido', count: statusCounts['Perdido'] || 0, fill: 'var(--color-danger)' },
+        { name: 'Em Análise', count: statusCounts['Em Análise'] || 0, fill: 'var(--color-primary)' },
+        { name: 'Aprovado', count: statusCounts['Aprovado para Participação'] || 0, fill: 'var(--color-ai)' },
+        { name: 'Doc.',      count: statusCounts['Preparando Documentação'] || 0, fill: 'var(--color-urgency)' },
+        { name: 'Proposta',  count: statusCounts['Preparando Proposta'] || 0, fill: 'var(--color-primary)' },
+        { name: 'Em Sessão', count: statusCounts['Em Sessão'] || 0, fill: 'var(--color-danger)' },
+        { name: 'Pós-Sessão',count: statusCounts['Pós-Sessão'] || 0, fill: 'var(--color-warning)' },
+        { name: 'Recurso',   count: statusCounts['Recurso'] || 0, fill: 'var(--color-danger)' },
+        { name: 'Ganho',     count: statusCounts['Ganho'] || 0, fill: 'var(--color-success)' },
+        { name: 'Perdido',   count: statusCounts['Perdido'] || 0, fill: 'var(--color-danger)' },
     ];
 
     // ── Calendar ──
@@ -104,9 +108,9 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
     const pipelineSteps = [
         { label: 'Captados', count: m.captadoItems.length, icon: <RadioTower size={14} />, color: 'var(--color-neutral)', action: 'Triar', statuses: ['Captado'] },
-        { label: 'Em Análise', count: m.emAnaliseItems.length, icon: <Eye size={14} />, color: 'var(--color-primary)', action: 'Analisar', statuses: ['Em Análise de Edital'] },
-        { label: 'Preparando', count: m.preparandoItems.length, icon: <FileText size={14} />, color: 'var(--color-urgency)', action: 'Documentar', statuses: ['Preparando Documentação'] },
-        { label: 'Participando', count: m.participandoItems.length, icon: <TrendingUp size={14} />, color: 'var(--color-warning)', action: 'Acompanhar', statuses: ['Participando'] },
+        { label: 'Em Análise', count: m.emAnaliseItems.length, icon: <Eye size={14} />, color: 'var(--color-primary)', action: 'Analisar', statuses: ['Em Análise'] },
+        { label: 'Preparando', count: m.preparandoItems.length, icon: <FileText size={14} />, color: 'var(--color-urgency)', action: 'Documentar', statuses: ['Preparando Documentação', 'Preparando Proposta'] },
+        { label: 'Em Sessão', count: m.participandoItems.length, icon: <TrendingUp size={14} />, color: 'var(--color-danger)', action: 'Acompanhar', statuses: ['Em Sessão'] },
     ];
 
     const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
@@ -157,9 +161,9 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
             {/* ═══ KPIs ═══ */}
             <div className="stagger-children grid-4" style={{ marginBottom: 'var(--space-5)' }}>
-                <MetricCard title="Volume no Funil" value={fmt(m.totalValue)} icon={<DollarSign size={18} />} color="var(--color-primary)" bg="var(--color-primary-light)" subtitle={`${m.activeItems.length} processos ativos`} onClick={() => onNavigate?.('bidding', { statuses: ['Captado', 'Em Análise de Edital', 'Preparando Documentação', 'Participando'] })} />
-                <MetricCard title="Volume Ganho (YTD)" value={fmt(m.wonValue)} icon={<BadgeCheck size={18} />} color="var(--color-success)" bg="var(--color-success-bg)" subtitle={`${m.wonItems.length} licitações vencidas`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido'] })} />
-                <MetricCard title="Taxa de Sucesso" value={`${m.winRate}%`} icon={<Crosshair size={18} />} color={m.winRate >= 50 ? 'var(--color-success)' : m.winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} bg={m.winRate >= 50 ? 'var(--color-success-bg)' : m.winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'} subtitle={`${m.wonItems.length} de ${m.totalFinished} finalizados`} onClick={() => onNavigate?.('bidding', { statuses: ['Vencido', 'Perdido', 'Sem Sucesso'] })} />
+                <MetricCard title="Volume no Funil" value={fmt(m.totalValue)} icon={<DollarSign size={18} />} color="var(--color-primary)" bg="var(--color-primary-light)" subtitle={`${m.activeItems.length} processos ativos`} onClick={() => onNavigate?.('bidding', { statuses: ['Captado', 'Em Análise', 'Aprovado para Participação', 'Preparando Documentação', 'Preparando Proposta', 'Em Sessão'] })} />
+                <MetricCard title="Volume Ganho (YTD)" value={fmt(m.wonValue)} icon={<BadgeCheck size={18} />} color="var(--color-success)" bg="var(--color-success-bg)" subtitle={`${m.wonItems.length} licitações vencidas`} onClick={() => onNavigate?.('bidding', { statuses: ['Ganho'] })} />
+                <MetricCard title="Taxa de Sucesso" value={`${m.winRate}%`} icon={<Crosshair size={18} />} color={m.winRate >= 50 ? 'var(--color-success)' : m.winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} bg={m.winRate >= 50 ? 'var(--color-success-bg)' : m.winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'} subtitle={`${m.wonItems.length} de ${m.totalFinished} finalizados`} onClick={() => onNavigate?.('bidding', { statuses: ['Ganho', 'Perdido', 'Não Participar'] })} />
                 <MetricCard title="Próximas Sessões" value={(m.todaySessions.length + m.upcomingSessions.length).toString()} icon={<CalendarIcon size={18} />} color={m.todaySessions.length > 0 ? 'var(--color-danger)' : 'var(--color-primary)'} bg={m.todaySessions.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)'} subtitle={m.todaySessions.length > 0 ? `${m.todaySessions.length} SESSÃO(ES) HOJE` : 'nos próximos 7 dias'} onClick={() => onNavigate?.('bidding')} />
             </div>
 

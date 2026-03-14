@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
 import { useToast } from '../ui';
+import { resolveStage, isModuleAllowed } from '../../governance';
 import { calculateItem, calculateTotals } from '../proposals/engine';
 import type { RoundingMode } from '../proposals/engine';
 import { exportExcelProposal, generateProposalPdf } from '../proposals/exportServices';
@@ -51,9 +52,12 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    // Filter biddings with AI analysis
+    // Filter biddings eligible for proposal module per governance
     const availableBiddings = useMemo(() =>
-        biddings.filter(b => b.status === "Preparando Documentação")
+        biddings.filter(b => {
+            const stage = resolveStage(b.status);
+            return isModuleAllowed(stage, b.substage, 'production-proposal');
+        })
         , [biddings]);
 
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);

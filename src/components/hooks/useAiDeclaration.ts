@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { useToast } from '../ui';
+import { resolveStage, isModuleAllowed } from '../../governance';
 
 // ── Types ──
 
@@ -184,7 +185,10 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
     // ── Computed ──
     const biddingsWithAnalysis = useMemo(() =>
-        biddings.filter(b => b.status === 'Preparando Documentação' && (b.aiAnalysis || b.summary))
+        biddings.filter(b => {
+            const stage = resolveStage(b.status);
+            return isModuleAllowed(stage, b.substage, 'production-declaration') && (b.aiAnalysis || b.summary);
+        })
     , [biddings]);
 
     const declarationTypesFromEdital = useMemo(() => {
