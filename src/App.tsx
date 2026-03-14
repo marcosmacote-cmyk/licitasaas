@@ -264,15 +264,26 @@ function App() {
           {/* Logo */}
           <div className="sidebar-header">
             <div style={{
-              padding: '6px',
+              width: 32,
+              height: 32,
               borderRadius: 'var(--radius-md)',
-              background: 'var(--color-primary-light)',
-              color: 'var(--color-primary)',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+              color: 'white',
               display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(99,102,241,0.45)',
+              flexShrink: 0,
             }}>
-              <Gavel size={20} />
+              <Gavel size={18} />
             </div>
-            <span style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>LicitaSaaS</span>
+            <span style={{
+              fontSize: 'var(--text-lg)',
+              fontWeight: 'var(--font-extrabold)',
+              color: '#ffffff',
+              letterSpacing: '-0.03em',
+              lineHeight: 1,
+            }}>LicitaSaaS</span>
           </div>
 
           <nav className="sidebar-nav">

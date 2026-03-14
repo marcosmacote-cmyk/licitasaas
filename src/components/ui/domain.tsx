@@ -54,7 +54,11 @@ interface MetricCardProps {
 
 export function MetricCard({ title, value, icon, color = 'var(--color-primary)', bg = 'var(--color-primary-light)', subtitle, onClick }: MetricCardProps) {
   return (
-    <div className="card card-interactive dom-metric" onClick={onClick}>
+    <div
+      className="card card-interactive dom-metric"
+      onClick={onClick}
+      style={{ borderTop: `3px solid ${color}` }}
+    >
       <div className="dom-metric__body">
         <div>
           <div className="dom-metric__title">{title}</div>
