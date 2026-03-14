@@ -96,7 +96,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     background: form.hubTab === 'form' ? 'var(--color-bg-surface)' : 'transparent',
                                     color: form.hubTab === 'form' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
                                     boxShadow: form.hubTab === 'form' ? 'var(--shadow-sm)' : 'none',
-                                }}>📝 Dados do Processo</button>
+                                }}>Dados do Processo</button>
                             </div>
                         )}
                     </div>
@@ -346,7 +346,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                             <button type="button" onClick={() => form.setViewingPdf(isViewing ? null : file)}
                                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: isViewing ? 'var(--color-primary)' : 'var(--color-text-tertiary)', fontWeight: 600, fontSize: '0.7rem' }}
                                                                 title="Visualizar PDF">
-                                                                {isViewing ? '✕ Fechar' : '👁 Visualizar'}
+                                                                {isViewing ? '✕ Fechar' : 'Visualizar'}
                                                             </button>
                                                             <a href={`${API_BASE_URL}${file}`} target="_blank" rel="noopener noreferrer"
                                                                 style={{ color: 'var(--color-text-tertiary)', fontSize: '0.7rem', textDecoration: 'none' }} title="Abrir em nova aba">
