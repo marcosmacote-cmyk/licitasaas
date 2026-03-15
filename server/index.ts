@@ -1470,68 +1470,390 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             });
         }
 
-        // 3. Setup Gemini AI
+        // ═══════════════════════════════════════════════════════════════════════
+        // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
+        // ═══════════════════════════════════════════════════════════════════════
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
         }
         const ai = new GoogleGenAI({ apiKey });
+        const analysisStartTime = Date.now();
 
-        // 4. Use enhanced analysis prompt with strict precision for financial data, deadlines, OCR, and Qualificação Técnica
-        const systemInstruction = ANALYZE_EDITAL_SYSTEM_PROMPT;
+        // Initialize V2 result schema
+        const v2Result = createEmptyAnalysisSchema();
+        v2Result.analysis_meta.analysis_id = `pncp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        v2Result.analysis_meta.generated_at = new Date().toISOString();
+        v2Result.analysis_meta.source_files = downloadedFiles;
+        v2Result.analysis_meta.source_type = 'pncp_download';
 
-        console.log(`[PNCP-AI] Calling Gemini with ${pdfParts.length} PDF parts (files: ${downloadedFiles.join(', ')})...`);
-        let response: any;
-        const startTime = Date.now();
+        let modelsUsed: string[] = [];
+        const stageTimes: Record<string, number> = {};
+
+        console.log(`[PNCP-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${downloadedFiles.join(', ')})`);
+
+        // ── Stage 1: Factual Extraction (with PDFs) ──
+        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual...`);
+        let extractionJson: any;
+        const t1Start = Date.now();
 
         try {
-            response = await callGeminiWithRetry(ai.models, {
+            const extractionResponse = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: [{
                     role: 'user',
                     parts: [
                         ...pdfParts,
-                        { text: USER_ANALYSIS_INSTRUCTION }
+                        { text: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') }
                     ]
                 }],
                 config: {
-                    systemInstruction,
-                    temperature: 0.1,
+                    systemInstruction: V2_EXTRACTION_PROMPT,
+                    temperature: 0.05,
                     maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
             });
-        } catch (geminiError: any) {
-            console.warn(`[PNCP-AI] Gemini falhou miseravelmente: ${geminiError.message}. Tentando OpenAI gpt-4o-mini Fallback...`);
+            const extractionText = extractionResponse.text;
+            if (!extractionText) throw new Error('Etapa 1 retornou vazio');
+            extractionJson = robustJsonParse(extractionText, 'PNCP-V2-Extraction');
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
+            modelsUsed.push('gemini-2.5-flash');
+            stageTimes.extraction = (Date.now() - t1Start) / 1000;
+            console.log(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
+        } catch (err: any) {
+            console.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou: ${err.message}. Tentando OpenAI...`);
             try {
-                response = await fallbackToOpenAi(pdfParts, systemInstruction, USER_ANALYSIS_INSTRUCTION);
-            } catch (openAiError: any) {
-                console.error(`[PNCP-AI] O Fallback via OpenAI também falhou: ${openAiError.message}`);
-                throw new Error(`Ambas IAs falharam. Gemini: ${geminiError.message} | OpenAI: ${openAiError.message}`);
+                const openAiResult = await fallbackToOpenAiV2({
+                    systemPrompt: V2_EXTRACTION_PROMPT,
+                    userPrompt: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
+                    pdfParts,
+                    temperature: 0.05,
+                    stageName: 'PNCP Etapa 1 (Extração)'
+                });
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                extractionJson = robustJsonParse(openAiResult.text, 'PNCP-V2-Extraction-OpenAI');
+                v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
+                modelsUsed.push(openAiResult.model);
+                stageTimes.extraction = (Date.now() - t1Start) / 1000;
+                console.log(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
+            } catch (openAiErr: any) {
+                console.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
+                throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
             }
         }
 
-        const duration = (Date.now() - startTime) / 1000;
-        console.log(`[PNCP-AI] Gemini responded in ${duration.toFixed(1)}s`);
+        // Merge extraction into V2 result
+        if (extractionJson.process_identification) v2Result.process_identification = extractionJson.process_identification;
+        if (extractionJson.timeline) v2Result.timeline = extractionJson.timeline;
+        if (extractionJson.participation_conditions) v2Result.participation_conditions = extractionJson.participation_conditions;
+        if (extractionJson.requirements) v2Result.requirements = extractionJson.requirements;
+        if (extractionJson.technical_analysis) v2Result.technical_analysis = extractionJson.technical_analysis;
+        if (extractionJson.economic_financial_analysis) v2Result.economic_financial_analysis = extractionJson.economic_financial_analysis;
+        if (extractionJson.proposal_analysis) v2Result.proposal_analysis = extractionJson.proposal_analysis;
+        if (extractionJson.contractual_analysis) v2Result.contractual_analysis = extractionJson.contractual_analysis;
+        if (extractionJson.evidence_registry) v2Result.evidence_registry = extractionJson.evidence_registry;
 
-        const rawText = response.text;
-        if (!rawText) throw new Error('A IA não retornou nenhum texto.');
+        // Domain Routing
+        const detectedObjectType = v2Result.process_identification?.tipo_objeto || 'outro';
+        const domainReinforcement = getDomainRoutingInstruction(detectedObjectType);
+        if (domainReinforcement) {
+            console.log(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
+        }
 
-        // 5. Parse JSON with robust multi-strategy parser
-        const finalPayload = robustJsonParse(rawText, 'PNCP-AI');
+        // ── Stage 2: Normalization (text-only, no PDFs) ──
+        console.log(`[PNCP-V2] ── Etapa 2/3: Normalização Licitatória...`);
+        let normalizationJson: any = {};
+        const t2Start = Date.now();
 
-        // Add source info
-        finalPayload.pncpSource = {
-            link_sistema,
-            downloadedFiles,
-            analyzedAt: new Date().toISOString()
+        try {
+            const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
+                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+
+            const normResponse = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: normUserInstruction }] }],
+                config: {
+                    systemInstruction: V2_NORMALIZATION_PROMPT,
+                    temperature: 0.1,
+                    maxOutputTokens: 16384,
+                    responseMimeType: 'application/json'
+                }
+            });
+            const normText = normResponse.text;
+            if (!normText) throw new Error('Etapa 2 retornou vazio');
+            normalizationJson = robustJsonParse(normText, 'PNCP-V2-Normalization');
+            v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
+            modelsUsed.push('gemini-2.5-flash');
+            stageTimes.normalization = (Date.now() - t2Start) / 1000;
+            console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${(normalizationJson.operational_outputs?.documents_to_prepare || []).length} docs, ${(normalizationJson.operational_outputs?.internal_checklist || []).length} checklist`);
+        } catch (err: any) {
+            console.warn(`[PNCP-V2] ⚠️ Etapa 2 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+            try {
+                const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
+                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+                const openAiResult = await fallbackToOpenAiV2({
+                    systemPrompt: V2_NORMALIZATION_PROMPT,
+                    userPrompt: normUserInstruction,
+                    temperature: 0.1,
+                    stageName: 'PNCP Etapa 2 (Normalização)'
+                });
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                normalizationJson = robustJsonParse(openAiResult.text, 'PNCP-V2-Normalization-OpenAI');
+                v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
+                modelsUsed.push(openAiResult.model);
+                stageTimes.normalization = (Date.now() - t2Start) / 1000;
+                console.log(`[PNCP-V2] ✅ Etapa 2 via OpenAI em ${stageTimes.normalization.toFixed(1)}s`);
+            } catch (openAiErr: any) {
+                console.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
+                v2Result.analysis_meta.workflow_stage_status.normalization = 'failed';
+                v2Result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${err.message}`);
+                stageTimes.normalization = (Date.now() - t2Start) / 1000;
+            }
+        }
+
+        // Merge normalization
+        if (normalizationJson.requirements_normalized) {
+            v2Result.requirements = normalizationJson.requirements_normalized;
+        }
+        if (normalizationJson.operational_outputs) {
+            v2Result.operational_outputs = { ...v2Result.operational_outputs, ...normalizationJson.operational_outputs };
+        }
+        if (normalizationJson.confidence) {
+            v2Result.confidence = { ...v2Result.confidence, ...normalizationJson.confidence };
+        }
+
+        // ── Stage 3: Risk Review (text-only, no PDFs) ──
+        console.log(`[PNCP-V2] ── Etapa 3/3: Revisão de Risco...`);
+        const t3Start = Date.now();
+
+        try {
+            const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
+                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2))
+                + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+
+            const riskResponse = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: riskUserInstruction }] }],
+                config: {
+                    systemInstruction: V2_RISK_REVIEW_PROMPT,
+                    temperature: 0.2,
+                    maxOutputTokens: 16384,
+                    responseMimeType: 'application/json'
+                }
+            });
+            const riskText = riskResponse.text;
+            if (!riskText) throw new Error('Etapa 3 retornou vazio');
+            const riskJson = robustJsonParse(riskText, 'PNCP-V2-RiskReview');
+            v2Result.analysis_meta.workflow_stage_status.risk_review = 'done';
+            modelsUsed.push('gemini-2.5-flash');
+            stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+            console.log(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(riskJson.legal_risk_review?.critical_points || []).length} pontos críticos`);
+
+            if (riskJson.legal_risk_review) v2Result.legal_risk_review = riskJson.legal_risk_review;
+            if (riskJson.operational_outputs_risk) {
+                if (riskJson.operational_outputs_risk.questions_for_consultor_chat) {
+                    v2Result.operational_outputs.questions_for_consultor_chat = riskJson.operational_outputs_risk.questions_for_consultor_chat;
+                }
+                if (riskJson.operational_outputs_risk.possible_petition_routes) {
+                    v2Result.operational_outputs.possible_petition_routes = riskJson.operational_outputs_risk.possible_petition_routes;
+                }
+            }
+            if (riskJson.confidence_update) {
+                v2Result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
+            }
+        } catch (err: any) {
+            console.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+            try {
+                const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
+                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                    .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2))
+                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+                const openAiResult = await fallbackToOpenAiV2({
+                    systemPrompt: V2_RISK_REVIEW_PROMPT,
+                    userPrompt: riskUserInstruction,
+                    temperature: 0.2,
+                    stageName: 'PNCP Etapa 3 (Risco)'
+                });
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                const riskJson = robustJsonParse(openAiResult.text, 'PNCP-V2-RiskReview-OpenAI');
+                v2Result.analysis_meta.workflow_stage_status.risk_review = 'done';
+                modelsUsed.push(openAiResult.model);
+                stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+                if (riskJson.legal_risk_review) v2Result.legal_risk_review = riskJson.legal_risk_review;
+                if (riskJson.operational_outputs_risk) {
+                    if (riskJson.operational_outputs_risk.questions_for_consultor_chat) v2Result.operational_outputs.questions_for_consultor_chat = riskJson.operational_outputs_risk.questions_for_consultor_chat;
+                    if (riskJson.operational_outputs_risk.possible_petition_routes) v2Result.operational_outputs.possible_petition_routes = riskJson.operational_outputs_risk.possible_petition_routes;
+                }
+                if (riskJson.confidence_update) v2Result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
+            } catch (openAiErr: any) {
+                console.error(`[PNCP-V2] ❌ Etapa 3 falhou — continuando sem revisão de risco`);
+                v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
+                v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${err.message}`);
+                stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+            }
+        }
+
+        // ── Validation (no AI) ──
+        const validation = validateAnalysisCompleteness(v2Result);
+        v2Result.analysis_meta.workflow_stage_status.validation = validation.valid ? 'done' : 'failed';
+        if (validation.issues.length > 0) {
+            v2Result.confidence.warnings.push(...validation.issues);
+        }
+
+        // ── Risk Rules Engine ──
+        let ruleFindings: any[] = [];
+        try {
+            ruleFindings = executeRiskRules(v2Result);
+            if (ruleFindings.length > 0) {
+                (v2Result.analysis_meta as any).rule_findings = ruleFindings;
+            }
+        } catch (ruleErr: any) {
+            console.warn(`[PNCP-V2] Motor de regras falhou: ${ruleErr.message}`);
+        }
+
+        // ── Quality Evaluator ──
+        let qualityReport: any = null;
+        try {
+            qualityReport = evaluateAnalysisQuality(v2Result, ruleFindings, v2Result.analysis_meta.analysis_id);
+            (v2Result.analysis_meta as any).quality_report = {
+                overallScore: qualityReport.overallScore,
+                categoryScores: qualityReport.categoryScores,
+                issueCount: qualityReport.issues.length,
+                summary: qualityReport.summary
+            };
+        } catch (qualErr: any) {
+            console.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
+        }
+
+        // ── Confidence Score ──
+        const stagesDone = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
+        const stageScore = (stagesDone / 4) * 100;
+        const qualityScore = qualityReport?.overallScore || 50;
+        const combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.35) + (qualityScore * 0.35));
+        if (combinedScore >= 80) v2Result.confidence.overall_confidence = 'alta';
+        else if (combinedScore >= 50) v2Result.confidence.overall_confidence = 'media';
+        else v2Result.confidence.overall_confidence = 'baixa';
+        (v2Result.confidence as any).score_percentage = combinedScore;
+
+        const uniqueModels = [...new Set(modelsUsed)];
+        v2Result.analysis_meta.model_used = uniqueModels.join('+');
+        (v2Result.analysis_meta as any).prompt_version = V2_PROMPT_VERSION;
+        (v2Result.analysis_meta as any).models_per_stage = {
+            extraction: modelsUsed[0] || 'failed',
+            normalization: modelsUsed[1] || 'failed',
+            risk_review: modelsUsed[2] || 'failed'
+        };
+        (v2Result.analysis_meta as any).stage_times = stageTimes;
+
+        const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
+        const totalReqs = Object.values(v2Result.requirements).reduce((sum, arr) => sum + arr.length, 0);
+        console.log(`[PNCP-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
+            `Modelos: ${uniqueModels.join('+')} | ` +
+            `${totalReqs} exigências | ${v2Result.legal_risk_review.critical_points.length} riscos | ` +
+            `${v2Result.evidence_registry.length} evidências | Score: ${combinedScore}% (${v2Result.confidence.overall_confidence})`);
+
+        // ── Legacy V1 Compatibility ──
+        // Build process/analysis format expected by frontend
+        const allReqs = Object.entries(v2Result.requirements).reduce((acc: Record<string, any[]>, [cat, items]) => {
+            acc[cat] = items.map((r: any) => ({ item: r.requirement_id, description: `${r.title}: ${r.description}` }));
+            return acc;
+        }, {} as Record<string, any[]>);
+
+        const legacyProcess = {
+            title: v2Result.process_identification.numero_edital
+                ? `${v2Result.process_identification.modalidade} ${v2Result.process_identification.numero_edital} - ${v2Result.process_identification.orgao}`
+                : v2Result.process_identification.objeto_resumido || '',
+            summary: `${v2Result.process_identification.objeto_completo || v2Result.process_identification.objeto_resumido || ''}\n\n` +
+                `Modalidade: ${v2Result.process_identification.modalidade || ''}\n` +
+                `Critério: ${v2Result.process_identification.criterio_julgamento || ''}\n` +
+                `Regime: ${v2Result.process_identification.regime_execucao || ''}\n` +
+                `Município: ${v2Result.process_identification.municipio_uf || ''}\n` +
+                `Sessão: ${v2Result.timeline.data_sessao || ''}\n` +
+                (v2Result.participation_conditions.exige_visita_tecnica ? `Visita Técnica: ${v2Result.participation_conditions.visita_tecnica_detalhes}\n` : '') +
+                (v2Result.participation_conditions.exige_garantia_proposta ? `Garantia de Proposta: ${v2Result.participation_conditions.garantia_proposta_detalhes}\n` : '') +
+                (v2Result.participation_conditions.exige_garantia_contratual ? `Garantia Contratual: ${v2Result.participation_conditions.garantia_contratual_detalhes}\n` : '') +
+                `\n--- RISCOS CRÍTICOS (${v2Result.legal_risk_review.critical_points.length}) ---\n` +
+                v2Result.legal_risk_review.critical_points.map(cp =>
+                    `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`
+                ).join('\n'),
+            modality: v2Result.process_identification.modalidade || '',
+            portal: v2Result.process_identification.fonte_oficial || 'PNCP',
+            estimatedValue: 0,
+            risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
+                : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
+                : v2Result.legal_risk_review.critical_points.length > 0 ? 'Médio' : 'Baixo',
+            sessionDate: v2Result.timeline.data_sessao || ''
         };
 
-        console.log(`[PNCP-AI] SUCCESS — process keys: ${Object.keys(finalPayload.process || {}).join(', ')}`);
+        const legacyAnalysis = {
+            requiredDocuments: allReqs,
+            pricingConsiderations: v2Result.economic_financial_analysis.indices_exigidos
+                .map(i => `${i.indice}: ${i.formula_ou_descricao} (mín: ${i.valor_minimo})`).join('\n')
+                + (v2Result.contractual_analysis.medicao_pagamento ? `\nPagamento: ${v2Result.contractual_analysis.medicao_pagamento}` : '')
+                + (v2Result.contractual_analysis.reajuste ? `\nReajuste: ${v2Result.contractual_analysis.reajuste}` : ''),
+            irregularitiesFlags: v2Result.legal_risk_review.critical_points.map(cp => `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description}`),
+            fullSummary: `ANÁLISE V2 PIPELINE — ${v2Result.process_identification.objeto_resumido || ''}\n\n` +
+                `Objeto: ${v2Result.process_identification.objeto_completo || ''}\n` +
+                `Órgão: ${v2Result.process_identification.orgao || ''}\n` +
+                `Sessão: ${v2Result.timeline.data_sessao || ''}\n\n` +
+                `--- CONDIÇÕES ---\n` +
+                `Consórcio: ${v2Result.participation_conditions.permite_consorcio ?? 'Não informado'}\n` +
+                `Subcontratação: ${v2Result.participation_conditions.permite_subcontratacao ?? 'Não informado'}\n` +
+                `Visita Técnica: ${v2Result.participation_conditions.exige_visita_tecnica ?? 'Não informado'}\n\n` +
+                `--- PENALIDADES ---\n` +
+                (v2Result.contractual_analysis.penalidades || []).join('\n') +
+                `\n\n--- RISCOS (${v2Result.legal_risk_review.critical_points.length}) ---\n` +
+                v2Result.legal_risk_review.critical_points.map(cp =>
+                    `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`
+                ).join('\n'),
+            deadlines: [
+                v2Result.timeline.data_sessao ? `${v2Result.timeline.data_sessao} - Sessão Pública` : '',
+                v2Result.timeline.prazo_impugnacao ? `${v2Result.timeline.prazo_impugnacao} - Impugnação` : '',
+                v2Result.timeline.prazo_esclarecimento ? `${v2Result.timeline.prazo_esclarecimento} - Esclarecimento` : '',
+                v2Result.timeline.prazo_envio_proposta ? `${v2Result.timeline.prazo_envio_proposta} - Envio de Proposta` : '',
+                v2Result.contractual_analysis.prazo_execucao ? `Prazo de Execução: ${v2Result.contractual_analysis.prazo_execucao}` : '',
+                v2Result.contractual_analysis.prazo_vigencia ? `Vigência: ${v2Result.contractual_analysis.prazo_vigencia}` : '',
+                ...(v2Result.timeline.outros_prazos || []).map(p => `${p.data || ''} - ${p.descricao || ''}`)
+            ].filter(Boolean),
+            penalties: (v2Result.contractual_analysis.penalidades || []).join('\n'),
+            qualificationRequirements: Object.values(v2Result.requirements)
+                .flat()
+                .map(r => `[${r.requirement_id}] ${r.title}: ${r.description}`)
+                .join('\n'),
+            biddingItems: (v2Result.proposal_analysis.observacoes_proposta || []).join('\n')
+        };
+
+        // Build final response with both V1 compat and V2 schema
+        const finalPayload = {
+            process: legacyProcess,
+            analysis: legacyAnalysis,
+            schemaV2: v2Result,
+            pncpSource: {
+                link_sistema,
+                downloadedFiles,
+                analyzedAt: new Date().toISOString()
+            },
+            _version: '2.0',
+            _pipeline_duration_s: parseFloat(totalDuration),
+            _prompt_version: V2_PROMPT_VERSION,
+            _model_used: uniqueModels.join('+'),
+            _overall_confidence: v2Result.confidence.overall_confidence,
+            _stage_times: stageTimes,
+            _quality_score: qualityReport?.overallScore || null,
+            _evidence_count: v2Result.evidence_registry.length,
+            _risk_count: v2Result.legal_risk_review.critical_points.length,
+            _requirement_count: totalReqs
+        };
+
+        console.log(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
         res.json(finalPayload);
 
     } catch (error: any) {
-        console.error('[PNCP-AI] Error:', error?.message || error);
+        console.error('[PNCP-V2] Error:', error?.message || error);
         res.status(500).json({ error: `Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}` });
     }
 });

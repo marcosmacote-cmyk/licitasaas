@@ -94,7 +94,13 @@ class SupabaseStorageService {
                 .from(this.bucketName)
                 .download(filePath);
             if (error) {
-                console.error(`[Supabase Storage] Error downloading ${filePath}:`, error);
+                // If it's a 400 or 404, it might just mean the file isn't there (old PNCP bug).
+                if (error.statusCode === 400 || error.statusCode === 404 || error.message?.includes('400')) {
+                    console.warn(`[Supabase Storage] Not found or invalid path: ${filePath}`);
+                }
+                else {
+                    console.error(`[Supabase Storage] Error downloading ${filePath}:`, error.message || error);
+                }
                 throw error;
             }
             if (!data)
@@ -103,7 +109,8 @@ class SupabaseStorageService {
             return Buffer.from(arrayBuffer);
         }
         catch (err) {
-            console.error(`[Supabase Storage] Exception downloading ${filePath}:`, err);
+            // Simplify exception log
+            console.warn(`[Supabase Storage] Exception downloading ${filePath}: ${err.message || 'Unknown error'}`);
             throw err;
         }
     }

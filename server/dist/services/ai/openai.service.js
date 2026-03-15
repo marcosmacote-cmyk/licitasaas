@@ -4,17 +4,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fallbackToOpenAi = fallbackToOpenAi;
+exports.fallbackToOpenAiV2 = fallbackToOpenAiV2;
 const openai_1 = __importDefault(require("openai"));
 const pdfParse = require("pdf-parse");
-async function fallbackToOpenAi(pdfParts, systemInstruction, userInstruction) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-        throw new Error("OPENAI_API_KEY não está configurada para realizar o fallback.");
-    }
-    const openai = new openai_1.default({ apiKey });
+/**
+ * Extrai texto dos PDFs (compartilhado entre V1 e V2 fallbacks).
+ */
+async function extractTextFromPdfParts(pdfParts) {
     let fullExtractedText = "";
-    console.log(`[OpenAI Fallback] Iniciando extração de texto de ${pdfParts.length} partes do PDF usando pdf-parse...`);
-    // Converte os buffers de PDF base64 (usados pelo Gemini) para texto legível pela OpenAI
     for (let i = 0; i < pdfParts.length; i++) {
         const part = pdfParts[i];
         if (part.inlineData && part.inlineData.mimeType === 'application/pdf') {
@@ -22,24 +19,34 @@ async function fallbackToOpenAi(pdfParts, systemInstruction, userInstruction) {
                 const buffer = Buffer.from(part.inlineData.data, 'base64');
                 const data = await pdfParse(buffer);
                 fullExtractedText += `\n--- Documento ${i + 1} ---\n` + data.text;
-                console.log(`[OpenAI Fallback] Documento ${i + 1} extraído com sucesso (${data.text.length} caracteres).`);
             }
             catch (err) {
-                console.warn(`[OpenAI Fallback] Falha ao extrair texto do PDF ${i + 1}: ${err.message}`);
+                console.warn(`[OpenAI] Falha ao extrair texto do PDF ${i + 1}: ${err.message}`);
             }
         }
     }
+    // Truncar se muito longo (gpt-4o-mini: 128k context)
+    const MAX_CHARS = 400000;
+    if (fullExtractedText.length > MAX_CHARS) {
+        console.warn(`[OpenAI] Texto truncado: ${fullExtractedText.length} → ${MAX_CHARS} chars`);
+        fullExtractedText = fullExtractedText.substring(0, MAX_CHARS);
+    }
+    return fullExtractedText;
+}
+/**
+ * Fallback V1 — Usado pelo endpoint legado /api/analyze-edital
+ */
+async function fallbackToOpenAi(pdfParts, systemInstruction, userInstruction) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error("OPENAI_API_KEY não está configurada para realizar o fallback.");
+    }
+    const openai = new openai_1.default({ apiKey });
+    const fullExtractedText = await extractTextFromPdfParts(pdfParts);
     if (!fullExtractedText.trim()) {
         throw new Error("Não foi possível extrair texto legível dos PDFs para processar com a OpenAI.");
     }
-    // Limitamos o texto extraído caso seja insanamente longo para gpt-4o-mini
-    // 1 token ~= 4 chars. 128k context = ~500k chars.
-    const MAX_CHARS = 400000;
-    if (fullExtractedText.length > MAX_CHARS) {
-        console.warn(`[OpenAI Fallback] Texto muito longo (${fullExtractedText.length} chars). Truncando para ${MAX_CHARS}...`);
-        fullExtractedText = fullExtractedText.substring(0, MAX_CHARS);
-    }
-    console.log(`[OpenAI Fallback] Chamando modelo gpt-4o-mini...`);
+    console.log(`[OpenAI Fallback V1] Chamando gpt-4o-mini...`);
     const startTime = Date.now();
     const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -48,11 +55,44 @@ async function fallbackToOpenAi(pdfParts, systemInstruction, userInstruction) {
             { role: "user", content: `${userInstruction}\n\nTEXTO DO(S) EDITAIS EXTRAÍDO:\n${fullExtractedText}` }
         ],
         temperature: 0.1,
-        // Informamos que queremos JSON puro se o prompt demandar JSON.
-        // response_format: { type: "json_object" } (Iremos confiar no parser nativo robustJsonParse que vai ler)
     });
     const duration = (Date.now() - startTime) / 1000;
-    console.log(`[OpenAI Fallback] gpt-4o-mini respondeu em ${duration.toFixed(1)}s`);
+    console.log(`[OpenAI Fallback V1] gpt-4o-mini respondeu em ${duration.toFixed(1)}s`);
     const textOutput = response.choices[0]?.message?.content || "";
     return { text: textOutput };
+}
+/**
+ * Fallback V2 — Usado por etapas individuais do pipeline V2
+ * Aceita input como texto (para etapas 2/3 que não precisam de PDF) ou PDF parts (etapa 1).
+ */
+async function fallbackToOpenAiV2(opts) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error("OPENAI_API_KEY não configurada");
+    }
+    const openai = new openai_1.default({ apiKey });
+    let userContent = opts.userPrompt;
+    // Se tem PDFs (etapa 1), extrai texto e anexa ao prompt
+    if (opts.pdfParts && opts.pdfParts.length > 0) {
+        const extractedText = await extractTextFromPdfParts(opts.pdfParts);
+        if (extractedText.trim()) {
+            userContent += `\n\nTEXTO COMPLETO DO(S) DOCUMENTO(S):\n${extractedText}`;
+        }
+    }
+    const model = 'gpt-4o-mini';
+    console.log(`[OpenAI V2 Fallback] ${opts.stageName} → chamando ${model}...`);
+    const startTime = Date.now();
+    const response = await openai.chat.completions.create({
+        model,
+        messages: [
+            { role: "system", content: opts.systemPrompt },
+            { role: "user", content: userContent }
+        ],
+        temperature: opts.temperature ?? 0.1,
+        response_format: { type: "json_object" },
+    });
+    const duration = (Date.now() - startTime) / 1000;
+    const textOutput = response.choices[0]?.message?.content || "";
+    console.log(`[OpenAI V2 Fallback] ${opts.stageName} respondeu em ${duration.toFixed(1)}s (${textOutput.length} chars)`);
+    return { text: textOutput, model };
 }
