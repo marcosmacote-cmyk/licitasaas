@@ -1,7 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.V2_RISK_REVIEW_USER_INSTRUCTION = exports.V2_NORMALIZATION_USER_INSTRUCTION = exports.V2_EXTRACTION_USER_INSTRUCTION = exports.V2_RISK_REVIEW_PROMPT = exports.V2_NORMALIZATION_PROMPT = exports.V2_EXTRACTION_PROMPT = exports.LICITACAO_SYSTEM_PROMPT_BASE = exports.V2_PROMPT_VERSION = exports.PETITION_USER_INSTRUCTION = exports.MASTER_PETITION_SYSTEM_PROMPT = exports.COMPARE_CERTIFICATE_SYSTEM_PROMPT = exports.EXTRACT_CERTIFICATE_SYSTEM_PROMPT = exports.USER_ANALYSIS_INSTRUCTION = exports.ANALYZE_EDITAL_SYSTEM_PROMPT = void 0;
+exports.V2_RISK_REVIEW_USER_INSTRUCTION = exports.NORM_CATEGORIES = exports.V2_NORM_CATEGORY_SYSTEM = exports.V2_NORMALIZATION_USER_INSTRUCTION = exports.V2_EXTRACTION_USER_INSTRUCTION = exports.V2_RISK_REVIEW_PROMPT = exports.V2_NORMALIZATION_PROMPT = exports.V2_EXTRACTION_PROMPT = exports.LICITACAO_SYSTEM_PROMPT_BASE = exports.V2_PROMPT_VERSION = exports.PETITION_USER_INSTRUCTION = exports.MASTER_PETITION_SYSTEM_PROMPT = exports.COMPARE_CERTIFICATE_SYSTEM_PROMPT = exports.EXTRACT_CERTIFICATE_SYSTEM_PROMPT = exports.USER_ANALYSIS_INSTRUCTION = exports.ANALYZE_EDITAL_SYSTEM_PROMPT = void 0;
 exports.getDomainRoutingInstruction = getDomainRoutingInstruction;
+exports.buildCategoryNormPrompt = buildCategoryNormPrompt;
+exports.buildCategoryNormUser = buildCategoryNormUser;
 exports.ANALYZE_EDITAL_SYSTEM_PROMPT = `
 Você é um consultor jurídico sênior e analista financeiro especializado em licitações públicas brasileiras (Lei 14.133/2021 e Lei 8.666/1993).
 SUA MISSÃO É realizar uma ANÁLISE PROFUNDA, PRECISA E EXAUSTIVA do edital, com atenção especial a:
@@ -678,6 +680,84 @@ EXTRAÇÃO FACTUAL (ETAPA 1):
 {extractionJson}
 
 Retorne EXCLUSIVAMENTE o JSON especificado.`;
+/**
+ * Normalização por categoria — prompt SYSTEM focado
+ * Produz JSON pequeno (~2-5KB) por bloco, eliminando truncamento.
+ */
+exports.V2_NORM_CATEGORY_SYSTEM = `${exports.LICITACAO_SYSTEM_PROMPT_BASE}
+
+═══ NORMALIZAÇÃO DE CATEGORIA: {categoryName} ═══
+
+Você receberá exigências extraídas (Etapa 1) de UMA categoria. Normalize-as.
+
+── TAREFAS ──
+1. GERAR requirement_id (prefixo {prefix}-01, {prefix}-02, ...).
+2. RECLASSIFICAR se estiver errada (QTO vs QTP, RFT vs QEF). Se reclassificar, mude obligation_type e phase.
+3. PREENCHER risk_if_missing: inabilitacao | desclassificacao | penalidade | risco_contratual | informativo.
+4. PREENCHER applies_to: licitante | consorcio | subcontratada | representante_legal | profissional_tecnico.
+5. PRESERVAR source_ref e evidence_refs da Etapa 1.
+6. GERAR documents_to_prepare para cada exigência.
+7. NÃO invente exigências. Normalize APENAS o que recebeu.
+
+── FORMATO DE SAÍDA (JSON estrito) ──
+{
+  "items": [
+    {
+      "requirement_id": "{prefix}-01",
+      "title": "máx 80 chars",
+      "description": "máx 120 chars",
+      "obligation_type": "obrigatoria_universal|condicional|se_aplicavel|alternativa|vencedor|fase_contratual|consorcio|me_epp|recuperacao_judicial|empresa_estrangeira",
+      "phase": "habilitacao|proposta|contratacao|pos_contratacao",
+      "applies_to": "licitante|consorcio|subcontratada|representante_legal|profissional_tecnico",
+      "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo",
+      "source_ref": "preservar da Etapa 1",
+      "evidence_refs": ["EV-XX"]
+    }
+  ],
+  "documents_to_prepare": [
+    {
+      "document_name": "",
+      "category": "{categoryKey}",
+      "priority": "baixa|media|alta|critica",
+      "responsible_area": "juridico|contabil|engenharia|comercial|administrativo|licitacoes|diretoria",
+      "notes": ""
+    }
+  ]
+}
+
+Responda APENAS com o JSON. Sem texto antes ou depois.`;
+/**
+ * Mapa de categorias para normalização por bloco
+ */
+exports.NORM_CATEGORIES = [
+    { key: 'habilitacao_juridica', name: 'Habilitação Jurídica', prefix: 'HJ' },
+    { key: 'regularidade_fiscal_trabalhista', name: 'Regularidade Fiscal e Trabalhista', prefix: 'RFT' },
+    { key: 'qualificacao_economico_financeira', name: 'Qualificação Econômico-Financeira', prefix: 'QEF' },
+    { key: 'qualificacao_tecnica_operacional', name: 'Qualificação Técnica Operacional', prefix: 'QTO' },
+    { key: 'qualificacao_tecnica_profissional', name: 'Qualificação Técnica Profissional', prefix: 'QTP' },
+    { key: 'proposta_comercial', name: 'Proposta Comercial', prefix: 'PC' },
+    { key: 'documentos_complementares', name: 'Documentos Complementares', prefix: 'DC' },
+];
+/**
+ * Gera o prompt SYSTEM para normalizar uma categoria específica
+ */
+function buildCategoryNormPrompt(cat) {
+    return exports.V2_NORM_CATEGORY_SYSTEM
+        .replace(/{categoryName}/g, cat.name)
+        .replace(/{prefix}/g, cat.prefix)
+        .replace(/{categoryKey}/g, cat.key);
+}
+/**
+ * Gera a instrução USER para normalizar uma categoria
+ */
+function buildCategoryNormUser(cat, items) {
+    return `Normalize as ${items.length} exigência(s) da categoria "${cat.name}" (prefixo ${cat.prefix}).
+
+EXIGÊNCIAS EXTRAÍDAS:
+${JSON.stringify(items, null, 0)}
+
+Retorne EXCLUSIVAMENTE o JSON especificado.`;
+}
 /**
  * Instrução USER para Etapa 3 (Revisão de Risco)
  */

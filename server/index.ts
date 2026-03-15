@@ -1,6 +1,6 @@
 import { robustJsonParse, robustJsonParseDetailed } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction } from "./services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser } from "./services/ai/prompt.service";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "./services/ai/analysis-schema-v1";
 import { fallbackToOpenAi, fallbackToOpenAiV2 } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
@@ -1657,45 +1657,125 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         // Run both stages concurrently
         const [normSettled, riskSettled] = await Promise.allSettled([
-            // ── Stage 2: Normalization ──
+            // ── Stage 2: Per-Category Normalization (7 parallel micro-calls) ──
             (async () => {
                 const t2Start = Date.now();
-                const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
-                    .replace('{extractionJson}', extractionJsonCompact)
-                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
-                try {
-                    const normResponse = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
-                        contents: [{ role: 'user', parts: [{ text: normUserInstruction }] }],
-                        config: {
-                            systemInstruction: V2_NORMALIZATION_PROMPT,
-                            temperature: 0.1,
-                            maxOutputTokens: 16384,
-                            responseMimeType: 'application/json'
+                const mergedRequirements: Record<string, any[]> = {};
+                const mergedDocs: any[] = [];
+                let totalNormalized = 0;
+                let categoriesFailed = 0;
+                let categoriesSkipped = 0;
+                let usedFallback = false;
+                let hadRepair = false;
+
+                // Build parallel tasks for categories that have items
+                const categoryTasks = NORM_CATEGORIES.map(cat => {
+                    const items = Array.isArray((extractionJson.requirements as any)?.[cat.key])
+                        ? (extractionJson.requirements as any)[cat.key]
+                        : [];
+
+                    if (items.length === 0) {
+                        mergedRequirements[cat.key] = [];
+                        categoriesSkipped++;
+                        return null; // Skip empty categories
+                    }
+
+                    return (async () => {
+                        const systemPrompt = buildCategoryNormPrompt(cat);
+                        const userPrompt = buildCategoryNormUser(cat, items);
+
+                        try {
+                            const resp = await callGeminiWithRetry(ai.models, {
+                                model: 'gemini-2.5-flash',
+                                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                                config: {
+                                    systemInstruction: systemPrompt,
+                                    temperature: 0.1,
+                                    maxOutputTokens: 8192,
+                                    responseMimeType: 'application/json'
+                                }
+                            }, 1);
+
+                            const text = resp.text;
+                            if (!text) throw new Error(`${cat.prefix} retornou vazio`);
+                            const parsed = robustJsonParseDetailed(text, `Norm-${cat.prefix}`);
+                            if (parsed.repaired) hadRepair = true;
+                            const data = parsed.data;
+
+                            // Validate block schema
+                            if (Array.isArray(data.items) && data.items.length > 0) {
+                                mergedRequirements[cat.key] = data.items;
+                                totalNormalized += data.items.length;
+                            } else {
+                                // Response valid but no items — keep originals
+                                mergedRequirements[cat.key] = items;
+                                totalNormalized += items.length;
+                            }
+                            if (Array.isArray(data.documents_to_prepare)) {
+                                mergedDocs.push(...data.documents_to_prepare);
+                            }
+                            console.log(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens`);
+                            return { cat: cat.key, success: true };
+                        } catch (geminiErr: any) {
+                            // Per-block fallback to OpenAI
+                            console.warn(`[PNCP-V2] ⚠️ Norm ${cat.prefix} Gemini falhou: ${geminiErr.message}. Fallback OpenAI...`);
+                            usedFallback = true;
+                            try {
+                                const oaiResult = await fallbackToOpenAiV2({
+                                    systemPrompt,
+                                    userPrompt,
+                                    temperature: 0.1,
+                                    stageName: `Norm-${cat.prefix}`
+                                });
+                                if (!oaiResult.text) throw new Error('OpenAI vazio');
+                                const parsed = robustJsonParseDetailed(oaiResult.text, `Norm-${cat.prefix}-OAI`);
+                                if (parsed.repaired) hadRepair = true;
+                                const data = parsed.data;
+                                if (Array.isArray(data.items) && data.items.length > 0) {
+                                    mergedRequirements[cat.key] = data.items;
+                                    totalNormalized += data.items.length;
+                                } else {
+                                    mergedRequirements[cat.key] = items;
+                                    totalNormalized += items.length;
+                                }
+                                if (Array.isArray(data.documents_to_prepare)) {
+                                    mergedDocs.push(...data.documents_to_prepare);
+                                }
+                                console.log(`[PNCP-V2] ✅ Norm ${cat.prefix} via OpenAI: ${(data.items || []).length} itens`);
+                                return { cat: cat.key, success: true, fallback: true };
+                            } catch (oaiErr: any) {
+                                // Both failed — keep original extraction data
+                                console.error(`[PNCP-V2] ❌ Norm ${cat.prefix} falhou (ambos): ${oaiErr.message}`);
+                                mergedRequirements[cat.key] = items;
+                                totalNormalized += items.length;
+                                categoriesFailed++;
+                                return { cat: cat.key, success: false };
+                            }
                         }
-                    }, 2);
-                    const normText = normResponse.text;
-                    if (!normText) throw new Error('Etapa 2 retornou vazio');
-                    const parseN = robustJsonParseDetailed(normText, 'PNCP-V2-Normalization');
-                    const json = parseN.data;
-                    stageTimes.normalization = (Date.now() - t2Start) / 1000;
-                    console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s`);
-                    return { json, model: 'gemini-2.5-flash', repaired: parseN.repaired, fallback: false };
-                } catch (err: any) {
-                    console.warn(`[PNCP-V2] ⚠️ Etapa 2 Gemini falhou: ${err.message}. Tentando OpenAI...`);
-                    const openAiResult = await fallbackToOpenAiV2({
-                        systemPrompt: V2_NORMALIZATION_PROMPT,
-                        userPrompt: normUserInstruction,
-                        temperature: 0.1,
-                        stageName: 'PNCP Etapa 2 (Normalização)'
-                    });
-                    if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
-                    const parseNOai = robustJsonParseDetailed(openAiResult.text, 'PNCP-V2-Normalization-OpenAI');
-                    const json = parseNOai.data;
-                    stageTimes.normalization = (Date.now() - t2Start) / 1000;
-                    console.log(`[PNCP-V2] ✅ Etapa 2 via OpenAI em ${stageTimes.normalization.toFixed(1)}s`);
-                    return { json, model: openAiResult.model, repaired: parseNOai.repaired, fallback: true };
-                }
+                    })();
+                }).filter(Boolean);
+
+                // Execute all categories in parallel
+                const results = await Promise.allSettled(categoryTasks as Promise<any>[]);
+
+                stageTimes.normalization = (Date.now() - t2Start) / 1000;
+                const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+                console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${NORM_CATEGORIES.length - categoriesSkipped} categorias OK, ${categoriesFailed} falhas`);
+
+                // Build merged normalization result
+                const json = {
+                    requirements_normalized: mergedRequirements,
+                    operational_outputs: {
+                        documents_to_prepare: mergedDocs,
+                    },
+                    confidence: {
+                        overall_confidence: categoriesFailed > 2 ? 'baixa' : categoriesFailed > 0 ? 'media' : 'alta',
+                        section_confidence: {} as any,
+                        warnings: categoriesFailed > 0 ? [`${categoriesFailed} categoria(s) não normalizada(s) — dados originais preservados`] : [],
+                    }
+                };
+
+                return { json, model: 'gemini-2.5-flash', repaired: hadRepair, fallback: usedFallback };
             })(),
 
             // ── Stage 3: Risk Review ──
@@ -3439,68 +3519,97 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             console.log(`[AI-V2] 🎯 Roteamento por tipo: ${detectedObjectType} — reforço aplicado nas Etapas 2 e 3`);
         }
 
-        // ── 3. Etapa 2: Normalização Licitatória ──
-        console.log(`[AI-V2] ── Etapa 2/3: Normalização Licitatória...`);
-        let normalizationJson: any;
+        // ── 3. Etapa 2: Normalização por Categoria (paralela) ──
+        console.log(`[AI-V2] ── Etapa 2/3: Normalização por Categoria...`);
+        let normalizationJson: any = {};
         const t2Start = Date.now();
 
         try {
-            const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
-                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
-                + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+            const mergedRequirements: Record<string, any[]> = {};
+            const mergedDocs: any[] = [];
+            let totalNormalized = 0;
+            let categoriesFailed = 0;
 
-            const normResponse = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
-                contents: [{
-                    role: 'user',
-                    parts: [{ text: normUserInstruction }]
-                }],
-                config: {
-                    systemInstruction: V2_NORMALIZATION_PROMPT,
-                    temperature: 0.1,
-                    maxOutputTokens: 16384,
-                    responseMimeType: 'application/json'
+            const categoryTasks = NORM_CATEGORIES.map(cat => {
+                const items = Array.isArray((extractionJson.requirements as any)?.[cat.key])
+                    ? (extractionJson.requirements as any)[cat.key]
+                    : [];
+
+                if (items.length === 0) {
+                    mergedRequirements[cat.key] = [];
+                    return null;
                 }
-            });
 
-            const normText = normResponse.text;
-            if (!normText) throw new Error('Etapa 2 retornou vazio');
+                return (async () => {
+                    const systemPrompt = buildCategoryNormPrompt(cat);
+                    const userPrompt = buildCategoryNormUser(cat, items);
 
-            normalizationJson = robustJsonParse(normText, 'V2-Normalization');
+                    try {
+                        const resp = await callGeminiWithRetry(ai.models, {
+                            model: 'gemini-2.5-flash',
+                            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                            config: {
+                                systemInstruction: systemPrompt,
+                                temperature: 0.1,
+                                maxOutputTokens: 8192,
+                                responseMimeType: 'application/json'
+                            }
+                        }, 1);
+                        const text = resp.text;
+                        if (!text) throw new Error(`${cat.prefix} vazio`);
+                        const data = robustJsonParse(text, `Norm-${cat.prefix}`);
+                        if (Array.isArray(data.items) && data.items.length > 0) {
+                            mergedRequirements[cat.key] = data.items;
+                            totalNormalized += data.items.length;
+                        } else {
+                            mergedRequirements[cat.key] = items;
+                            totalNormalized += items.length;
+                        }
+                        if (Array.isArray(data.documents_to_prepare)) mergedDocs.push(...data.documents_to_prepare);
+                        return { success: true };
+                    } catch (gErr: any) {
+                        console.warn(`[AI-V2] ⚠️ Norm ${cat.prefix} Gemini falhou. Fallback OpenAI...`);
+                        try {
+                            const oai = await fallbackToOpenAiV2({ systemPrompt, userPrompt, temperature: 0.1, stageName: `Norm-${cat.prefix}` });
+                            if (!oai.text) throw new Error('OpenAI vazio');
+                            const data = robustJsonParse(oai.text, `Norm-${cat.prefix}-OAI`);
+                            if (Array.isArray(data.items) && data.items.length > 0) {
+                                mergedRequirements[cat.key] = data.items;
+                                totalNormalized += data.items.length;
+                            } else {
+                                mergedRequirements[cat.key] = items;
+                                totalNormalized += items.length;
+                            }
+                            if (Array.isArray(data.documents_to_prepare)) mergedDocs.push(...data.documents_to_prepare);
+                            modelsUsed.push('gpt-4o-mini');
+                            return { success: true };
+                        } catch {
+                            mergedRequirements[cat.key] = items;
+                            totalNormalized += items.length;
+                            categoriesFailed++;
+                            return { success: false };
+                        }
+                    }
+                })();
+            }).filter(Boolean);
+
+            await Promise.allSettled(categoryTasks as Promise<any>[]);
+
+            normalizationJson = {
+                requirements_normalized: mergedRequirements,
+                operational_outputs: { documents_to_prepare: mergedDocs },
+            };
             result.analysis_meta.workflow_stage_status.normalization = 'done';
             modelsUsed.push('gemini-2.5-flash');
-            console.log(`[AI-V2] ✅ Etapa 2 concluída em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ` +
-                `${(normalizationJson.operational_outputs?.documents_to_prepare || []).length} docs a preparar, ` +
-                `${(normalizationJson.operational_outputs?.internal_checklist || []).length} itens no checklist`);
+            console.log(`[AI-V2] ✅ Etapa 2 em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ${totalNormalized} itens, ${categoriesFailed} falhas`);
 
-        } catch (err: any) {
-            console.warn(`[AI-V2] ⚠️ Etapa 2 Gemini falhou: ${err.message}. Tentando OpenAI...`);
-
-            try {
-                const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
-                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
-                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
-
-                const openAiResult = await fallbackToOpenAiV2({
-                    systemPrompt: V2_NORMALIZATION_PROMPT,
-                    userPrompt: normUserInstruction,
-                    temperature: 0.1,
-                    stageName: 'Etapa 2 (Normalização)'
-                });
-
-                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
-
-                normalizationJson = robustJsonParse(openAiResult.text, 'V2-Normalization-OpenAI');
-                result.analysis_meta.workflow_stage_status.normalization = 'done';
-                modelsUsed.push(openAiResult.model);
-                console.log(`[AI-V2] ✅ Etapa 2 concluída via OpenAI em ${((Date.now() - t2Start) / 1000).toFixed(1)}s`);
-
-            } catch (openAiErr: any) {
-                console.error(`[AI-V2] ❌ Etapa 2 falhou (Gemini + OpenAI): ${openAiErr.message}`);
-                result.analysis_meta.workflow_stage_status.normalization = 'failed';
-                result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
-                normalizationJson = {};
+            if (categoriesFailed > 0) {
+                result.confidence.warnings.push(`${categoriesFailed} categoria(s) não normalizada(s)`);
             }
+        } catch (err: any) {
+            console.error(`[AI-V2] ❌ Etapa 2 falhou: ${err.message}`);
+            result.analysis_meta.workflow_stage_status.normalization = 'failed';
+            result.confidence.warnings.push(`Etapa 2 falhou: ${err.message}`);
         }
 
         // Merge normalization — requirements normalizados sobrescrevem os da extração
