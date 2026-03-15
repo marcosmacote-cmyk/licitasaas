@@ -339,8 +339,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     // ─── Multi-list Saved Searches ───
     const searchListNames = useMemo(() => {
         const names = new Set(savedSearches.map(s => s.listName || 'Pesquisas Gerais'));
-        names.add('Pesquisas Gerais'); // Always include default
-        return [...names].sort();
+        names.add('Pesquisas Gerais');
+        const rest = [...names].filter(n => n !== 'Pesquisas Gerais').sort();
+        return ['Pesquisas Gerais', ...rest];
     }, [savedSearches]);
 
     const filteredSavedSearches = useMemo(() => {
