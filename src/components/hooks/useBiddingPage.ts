@@ -231,7 +231,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
             if (filters.companies.length > 0 && (!item.companyProfileId || !filters.companies.includes(item.companyProfileId))) return false;
             if (filters.modalities.length > 0 && !filters.modalities.includes(item.modality)) return false;
             if (filters.portals.length > 0 && !filters.portals.includes(item.portal)) return false;
-            if (filters.statuses.length > 0 && !filters.statuses.includes(item.status)) return false;
+            if (filters.statuses.length > 0 && !filters.statuses.includes(resolveStage(item.status))) return false;
             if (filters.risks.length > 0 && !filters.risks.includes(item.risk || '')) return false;
             return true;
         });

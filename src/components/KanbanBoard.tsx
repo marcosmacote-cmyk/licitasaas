@@ -19,6 +19,7 @@ import { KanbanColumn } from './KanbanColumn';
 import { KanbanItem } from './KanbanCard';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../types';
 import { COLUMNS } from '../types';
+import { resolveStage } from '../governance';
 
 interface CardFieldConfig {
     key: string;
@@ -112,7 +113,7 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
         >
             <div className="kanban-board">
                 {(visibleColumns && visibleColumns.length > 0 ? COLUMNS.filter(col => visibleColumns.includes(col)) : COLUMNS).map((col) => {
-                    let colItems = items.filter(item => item.status === col);
+                    let colItems = items.filter(item => resolveStage(item.status) === col);
                     // Apply sorting
                     if (sortBy && sortBy !== 'default') {
                         const riskOrder: Record<string, number> = { 'Crítico': 0, 'Alto': 1, 'Médio': 2, 'Baixo': 3, 'Bairro': 4 };
