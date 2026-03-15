@@ -1326,11 +1326,14 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         // 3. Download and process files (PDF, ZIP, or RAR containing PDFs)
         const MAX_PDF_PARTS = 5; // Increased from 3 to handle complex editals
+        const MAX_TOTAL_PDF_SIZE_KB = 30000; // 30MB budget for total PDF input
+        let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
 
         for (const arq of arquivos) {
             if (pdfParts.length >= MAX_PDF_PARTS) break;
+
 
             const fileUrl = arq.url || arq.uri || '';
             const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
@@ -1354,6 +1357,13 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                 const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
 
                 if (isPdf) {
+                    // Budget check: skip if adding this PDF would exceed total size limit
+                    const bufferSizeKB = buffer.length / 1024;
+                    if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                        console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
+                        continue;
+                    }
+                    totalPdfSizeAccum += bufferSizeKB;
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
                     fs.writeFileSync(path.join(uploadDir, safeFileName), buffer);
 
@@ -1522,7 +1532,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                 config: {
                     systemInstruction: V2_EXTRACTION_PROMPT,
                     temperature: 0.05,
-                    maxOutputTokens: 32768,
+                    maxOutputTokens: 65536,
                     responseMimeType: 'application/json'
                 }
             });

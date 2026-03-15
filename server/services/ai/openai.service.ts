@@ -20,8 +20,8 @@ async function extractTextFromPdfParts(pdfParts: any[]): Promise<string> {
         }
     }
 
-    // Truncar se muito longo (gpt-4o-mini: 128k context)
-    const MAX_CHARS = 400000;
+    // Truncar se muito longo (gpt-4o-mini: 128k context ≈ ~250k chars, keeping margin for prompts)
+    const MAX_CHARS = 200000;
     if (fullExtractedText.length > MAX_CHARS) {
         console.warn(`[OpenAI] Texto truncado: ${fullExtractedText.length} → ${MAX_CHARS} chars`);
         fullExtractedText = fullExtractedText.substring(0, MAX_CHARS);
