@@ -217,14 +217,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         }));
     };
 
-    // Open list picker to add item to a list
+    // ALWAYS open list picker — user must choose which list to save to
     const startFavoritar = (item: PncpBiddingItem) => {
-        // If only one list exists, add directly
-        if (favLists.length === 1) {
-            addToFavList(item, favLists[0].id);
-            toast.success(`Adicionado a "${favLists[0].name}"`);
-            return;
-        }
         setListPickerItem(item);
         setListPickerOpen(true);
     };
@@ -321,8 +315,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
 
     // ─── Multi-list Saved Searches ───
     const searchListNames = useMemo(() => {
-        const names = [...new Set(savedSearches.map(s => s.listName || 'Pesquisas Gerais'))];
-        return names.sort();
+        const names = new Set(savedSearches.map(s => s.listName || 'Pesquisas Gerais'));
+        names.add('Pesquisas Gerais'); // Always include default
+        return [...names].sort();
     }, [savedSearches]);
 
     const filteredSavedSearches = useMemo(() => {
@@ -331,11 +326,11 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     }, [savedSearches, activeSearchListName]);
 
     const handleSaveSearch = async (listName?: string) => {
+        // If no listName was provided (should not happen anymore), fallback
+        const effectiveListName = listName || 'Pesquisas Gerais';
+
         const name = prompt("Defina um nome para esta pesquisa (ex: Equipamentos TI em SP):");
         if (!name) return;
-
-        // If no listName provided, and multiple lists exist, open picker
-        const effectiveListName = listName || 'Pesquisas Gerais';
 
         setSaving(true);
         try {
@@ -357,13 +352,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         finally { setSaving(false); }
     };
 
-    // Start save search flow (with list picker)
+    // ALWAYS open list picker — user must choose which list to save to
     const startSaveSearch = () => {
-        if (searchListNames.length > 1) {
-            setSearchListPickerOpen(true);
-        } else {
-            handleSaveSearch();
-        }
+        setSearchListPickerOpen(true);
     };
 
     const loadSavedSearch = (search: PncpSavedSearch) => {

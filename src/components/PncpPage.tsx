@@ -708,8 +708,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     p.handleSaveSearch(listName);
                 }}
                 onCreateNew={(name) => {
-                    // For searches, the "list" is just a string name — create inline
-                    p.handleSaveSearch(name);
+                    // Just return the name — onSelect will be called next with this name
                     return name;
                 }}
             />
