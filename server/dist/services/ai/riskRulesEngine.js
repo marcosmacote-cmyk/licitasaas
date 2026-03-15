@@ -272,6 +272,164 @@ const rules = [
             }
             return [];
         }
+    },
+    // R16 — Firma reconhecida / assinatura comprovada do RT
+    {
+        name: 'R16-firma-reconhecida-rt',
+        fn: (s) => {
+            const allReqs = Object.values(s.requirements).flat();
+            const firmaReqs = allReqs.filter(r => {
+                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                return text.includes('firma reconhec') || text.includes('reconhecimento de firma') || text.includes('assinatura autenticada') || text.includes('autenticação de assinatura');
+            });
+            if (firmaReqs.length > 0) {
+                return [{
+                        code: 'R16', severity: 'high', category: 'qualificacao_tecnica',
+                        message: `Exigência de firma reconhecida/assinatura autenticada identificada (${firmaReqs.map(r => r.requirement_id).join(', ')}). Requer providência presencial em cartório com antecedência.`,
+                        affectedFields: firmaReqs.map(r => `requirements.${r.requirement_id}`),
+                        recommendation: 'Providenciar reconhecimento de firma em cartório com antecedência. Se houver dúvida sobre base legal, avaliar esclarecimento ao órgão antes de impugnar.'
+                    }];
+            }
+            return [];
+        }
+    },
+    // R17 — Vínculo do RT não comprovado / não especificado
+    {
+        name: 'R17-vinculo-rt',
+        fn: (s) => {
+            const qtpReqs = s.requirements.qualificacao_tecnica_profissional || [];
+            const vinculoReq = qtpReqs.find(r => {
+                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                return text.includes('vínculo') || text.includes('quadro permanente') || text.includes('quadro técnico') || text.includes('ctps') || text.includes('contrato de trabalho');
+            });
+            if (vinculoReq) {
+                return [{
+                        code: 'R17', severity: 'high', category: 'qualificacao_tecnica',
+                        message: `Exigência de comprovação de vínculo do responsável técnico (${vinculoReq.requirement_id}). Formas aceitas: CTPS, contrato social, contrato de prestação de serviços. Verificar se o edital restringe as formas admissíveis.`,
+                        affectedFields: [`requirements.qualificacao_tecnica_profissional.${vinculoReq.requirement_id}`],
+                        recommendation: 'Verificar antecipadamente que a forma de vínculo do RT atende aos termos do edital. Se restrito a CTPS, preparar documentação comprobatória junto ao RH.'
+                    }];
+            }
+            return [];
+        }
+    },
+    // R18 — Garantia de proposta como requisito de habilitação
+    {
+        name: 'R18-garantia-proposta-habilitacao',
+        fn: (s) => {
+            if (s.participation_conditions.exige_garantia_proposta) {
+                const detalhes = s.participation_conditions.garantia_proposta_detalhes || '';
+                const qefReqs = s.requirements.qualificacao_economico_financeira || [];
+                const garantiaReq = qefReqs.find(r => {
+                    const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                    return text.includes('garantia de proposta') || text.includes('garantia da proposta');
+                });
+                return [{
+                        code: 'R18', severity: 'high', category: 'economico_financeira',
+                        message: `Garantia de proposta exigida${detalhes ? ` (${detalhes})` : ''}${garantiaReq ? ` — ${garantiaReq.requirement_id}` : ''}. Requisito de habilitação: ausência = inabilitação imediata. Exige modalidade correta (seguro-garantia, fiança bancária ou caução) e upload no prazo.`,
+                        affectedFields: ['participation_conditions.exige_garantia_proposta', ...(garantiaReq ? [`requirements.qualificacao_economico_financeira.${garantiaReq.requirement_id}`] : [])],
+                        recommendation: 'Confirmar modalidade aceita, valor exato, e prazo de validade. Providenciar documento junto à seguradora/banco com antecedência.'
+                    }];
+            }
+            return [];
+        }
+    },
+    // R19 — Quantitativos técnicos com potencial de barreira
+    {
+        name: 'R19-quantitativos-tecnicos',
+        fn: (s) => {
+            const findings = [];
+            for (const p of s.technical_analysis.parcelas_relevantes) {
+                const percentual = parseFloat((p.percentual_minimo || '').replace(/[^0-9.,]/g, '').replace(',', '.'));
+                if (percentual && percentual >= 50) {
+                    findings.push({
+                        code: 'R19', severity: 'high', category: 'qualificacao_tecnica',
+                        message: `Parcela "${p.item}: ${p.descricao}" exige comprovação de ${p.percentual_minimo} (${percentual}%) sobre o quantitativo. Percentuais elevados (≥50%) podem extrapolar o razoável.`,
+                        affectedFields: ['technical_analysis.parcelas_relevantes'],
+                        recommendation: `Avaliar se o quantitativo de ${p.quantitativo_minimo || 'N/I'} ${p.unidade || ''} corresponde ao percentual normativamente aceito. Se houver extrapolação, fundamentar impugnação.`
+                    });
+                }
+            }
+            if (s.technical_analysis.parcelas_relevantes.length > 0 && findings.length === 0) {
+                findings.push({
+                    code: 'R19', severity: 'medium', category: 'qualificacao_tecnica',
+                    message: `${s.technical_analysis.parcelas_relevantes.length} parcela(s) de maior relevância identificadas. Verificar se os quantitativos mínimos correspondem ao percentual legalmente aceito (normalmente ≤50% do item relevante).`,
+                    affectedFields: ['technical_analysis.parcelas_relevantes'],
+                    recommendation: 'Comparar quantitativos com o orçamento e verificar se estão restritos às parcelas de maior relevância.'
+                });
+            }
+            return findings;
+        }
+    },
+    // R20 — Visita técnica com prazo possivelmente curto
+    {
+        name: 'R20-visita-tecnica-prazo',
+        fn: (s) => {
+            if (s.participation_conditions.exige_visita_tecnica) {
+                const detalhes = s.participation_conditions.visita_tecnica_detalhes || '';
+                return [{
+                        code: 'R20', severity: 'medium', category: 'participacao',
+                        message: `Visita técnica exigida${detalhes ? ` — ${detalhes}` : ''}. Verificar se há data-limite e se há declaração substitutiva disponível.`,
+                        affectedFields: ['participation_conditions.exige_visita_tecnica'],
+                        recommendation: 'Agendar visita imediatamente ou verificar possibilidade de declaração substitutiva (Súmula TCU 289). Atenção ao prazo e documentação necessária para comprovação.'
+                    }];
+            }
+            return [];
+        }
+    },
+    // R21 — Proposta com anexos obrigatórios e assinados
+    {
+        name: 'R21-proposta-anexos-obrigatorios',
+        fn: (s) => {
+            const findings = [];
+            const pcReqs = s.requirements.proposta_comercial || [];
+            // Check if there are proposta requirements with "assinatura" or "rubrica" requirements
+            const assinaturaReqs = pcReqs.filter(r => {
+                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                return text.includes('assinad') || text.includes('rubricad') || text.includes('assinatura') || text.includes('rubrica');
+            });
+            if (assinaturaReqs.length > 0) {
+                findings.push({
+                    code: 'R21', severity: 'medium', category: 'proposta',
+                    message: `Proposta exige documentos assinados/rubricados (${assinaturaReqs.map(r => r.requirement_id).join(', ')}). Ausência de assinatura é causa frequente de desclassificação.`,
+                    affectedFields: assinaturaReqs.map(r => `requirements.proposta_comercial.${r.requirement_id}`),
+                    recommendation: 'Listar todos os documentos da proposta que exigem assinatura. Preparar checklist de conferência antes do envio.'
+                });
+            }
+            // Check for planilha/BDI/cronograma
+            const annexCount = pcReqs.filter(r => {
+                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                return text.includes('planilha') || text.includes('bdi') || text.includes('cronograma') || text.includes('composição');
+            }).length;
+            if (annexCount >= 2) {
+                findings.push({
+                    code: 'R21b', severity: 'medium', category: 'proposta',
+                    message: `Proposta exige ${annexCount} documentos técnicos/financeiros (planilha, BDI, cronograma). Conferir completude antes do envio.`,
+                    affectedFields: ['requirements.proposta_comercial'],
+                    recommendation: 'Preparar todos os anexos com antecedência e conferir formatação conforme modelo do edital.'
+                });
+            }
+            return findings;
+        }
+    },
+    // R22 — Excessão declaração ME/EPP sem rubrica
+    {
+        name: 'R22-inexequibilidade-potencial',
+        fn: (s) => {
+            const tipo = s.process_identification.tipo_objeto;
+            if (tipo === 'obra_engenharia' || tipo === 'servico_comum_engenharia') {
+                const criterio = (s.process_identification.criterio_julgamento || '').toLowerCase();
+                if (criterio.includes('menor preço') || criterio.includes('maior desconto')) {
+                    return [{
+                            code: 'R22', severity: 'medium', category: 'proposta',
+                            message: `Licitação de ${tipo === 'obra_engenharia' ? 'obra' : 'serviço de engenharia'} com critério "${s.process_identification.criterio_julgamento}". Há risco de análise de inexequibilidade sobre propostas com desconto elevado.`,
+                            affectedFields: ['process_identification.criterio_julgamento'],
+                            recommendation: 'Para obras/serviços de engenharia, proposta abaixo de 75% do orçamento referencial gera presunção de inexequibilidade (art. 59, §3º da Lei 14.133/21). Fundamentar BDI e composições unitárias.'
+                        }];
+                }
+            }
+            return [];
+        }
     }
 ];
 // ── Executor ──

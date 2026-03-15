@@ -403,10 +403,25 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 20. PROIBIDO classificar como "obrigatoria_universal" exigências que contenham "caso", "quando", "se o licitante", "no caso de", "somente para", "exclusivamente para". Essas são "condicional", "se_aplicavel" ou outro tipo específico.
 21. CLASSIFIQUE phase: "habilitacao" = documentos de habilitação, "proposta" = envelope de preços/proposta comercial, "contratacao" = pós-adjudicação/assinatura, "pos_contratacao" = execução contratual.
 22. INTEGRIDADE: exigência SEM source_ref é INVÁLIDA e será descartada pelo sistema.
-23. VISITA TÉCNICA vs DECLARAÇÃO: quando o edital oferece visita técnica OU declaração de conhecimento como ALTERNATIVAS, crie 2 entradas SEPARADAS com obligation_type="alternativa" e na description de cada uma, indique a alternativa (ex: "Alternativa à declaração QTO-02"). Se a declaração substitui integralmente a visita, indique "substitui" na description. Se é excepcional, indique "apenas se impossibilitada a visita".
+23. VISITA TÉCNICA: NÃO classifique como "alternativa". Trate como UMA exigência com DUAS formas de atendimento:
+    - Crie 1 exigência principal (obligation_type="obrigatoria_universal" se obrigatória, "condicional" se facultativa)
+    - Crie 2 subitens: (a) atestado de visita técnica, (b) declaração substitutiva de conhecimento
+    - Na description da principal, escreva: "Comprovação de conhecimento do local — atendível por visita técnica ou declaração substitutiva (Súmula TCU 289)"
+    - Se o edital NÃO oferece declaração substitutiva, crie apenas 1 exigência sem subitens
+    - NUNCA use obligation_type="alternativa" para visita técnica
 24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
 25. OPERADORES FINANCEIROS: para índices contábeis, use EXATAMENTE o operador do edital. LG >= 1,0 significa "maior ou igual a 1,0". EG <= 0,5 significa "menor ou igual a 0,5". NUNCA inverta o operador. Se o edital diz EG <= 0,5, NÃO escreva "mínimo 0,5" — escreva "máximo 0,5 (EG ≤ 0,5)". Se o edital diz LG >= 1,0, escreva "mínimo 1,0 (LG ≥ 1,0)".
 26. TAXONOMIA DE GARANTIAS: garantia de proposta, garantia de execução/contratual, seguro-garantia e caução SEMPRE vão em qualificacao_economico_financeira (QEF), NUNCA em documentos_complementares (DC). DC é apenas para declarações formais, procurações e documentos auxiliares sem natureza financeira.
+27. SEPARAÇÃO RIGOROSA QTP: em qualificacao_tecnica_profissional, crie itens DISTINTOS para cada pilar:
+    (a) Vínculo do RT: comprovação de vínculo empregatício ou contratual do responsável técnico (CTPS, contrato, quadro societário)
+    (b) Acervo técnico / CAT: certidão de acervo técnico do profissional, emitida pelo CREA/CAU/CFT
+    (c) Declaração de concordância: declaração formal do profissional indicado concordando com sua indicação
+    NÃO agrupe esses três em um único item. São obrigações distintas com documentos distintos.
+28. PADRONIZAÇÃO PC: em proposta_comercial, use exatamente estas categorias semânticas:
+    - proposta inicial: exigências para composição e envio da proposta de preços
+    - proposta ajustada (vencedor): adequação da proposta pelo vencedor provisório
+    - documentos anexos: planilha orçamentária, composição de BDI, cronograma etc.
+    - formalidades da proposta: assinatura, rubrica, validade, formato
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {

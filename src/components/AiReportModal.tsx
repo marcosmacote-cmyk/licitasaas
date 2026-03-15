@@ -231,6 +231,11 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                             border: `1px solid ${c.type === 'danger' ? 'var(--color-danger-border)' : c.type === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border)'}`
                                         }}>
                                             {c.label}: {c.value}
+                                            {c.sourceRef && c.sourceRef !== 'referência não localizada' && (
+                                                <span style={{ fontSize: '0.6rem', fontWeight: 400, opacity: 0.75, marginLeft: '4px' }}>
+                                                    📄 {c.sourceRef}
+                                                </span>
+                                            )}
                                         </span>
                                     ))}
                                 </div>

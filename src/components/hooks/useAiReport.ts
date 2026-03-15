@@ -225,14 +225,26 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
     const conditions = useMemo(() => {
         if (!v2?.participation_conditions) return [];
         const pc = v2.participation_conditions;
-        const items: { label: string; value: string; type: 'info' | 'warning' | 'danger' }[] = [];
-        if (pc.permite_consorcio !== null) items.push({ label: 'Consórcio', value: pc.permite_consorcio ? 'Permitido' : 'Não permitido', type: pc.permite_consorcio ? 'info' : 'warning' });
-        if (pc.permite_subcontratacao !== null) items.push({ label: 'Subcontratação', value: pc.permite_subcontratacao ? 'Permitida' : 'Não permitida', type: 'info' });
-        if (pc.exige_visita_tecnica) items.push({ label: 'Visita Técnica', value: pc.visita_tecnica_detalhes || 'Obrigatória', type: 'warning' });
-        if (pc.exige_garantia_proposta) items.push({ label: 'Garantia de Proposta', value: pc.garantia_proposta_detalhes || 'Exigida', type: 'warning' });
-        if (pc.exige_garantia_contratual) items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning' });
-        if (pc.exige_amostra) items.push({ label: 'Amostra', value: pc.amostra_detalhes || 'Exigida', type: 'warning' });
-        if (pc.tratamento_me_epp) items.push({ label: 'ME/EPP', value: pc.tratamento_me_epp, type: 'info' });
+        const items: { label: string; value: string; type: 'info' | 'warning' | 'danger'; sourceRef?: string }[] = [];
+
+        // Helper: find source_ref from requirements that match a keyword
+        const findSourceRef = (keyword: string): string => {
+            if (!v2?.requirements) return '';
+            const allReqs = Object.values(v2.requirements).flat() as any[];
+            const match = allReqs.find((r: any) => {
+                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                return text.includes(keyword);
+            });
+            return match?.source_ref || '';
+        };
+
+        if (pc.permite_consorcio !== null) items.push({ label: 'Consórcio', value: pc.permite_consorcio ? 'Permitido' : 'Não permitido', type: pc.permite_consorcio ? 'info' : 'warning', sourceRef: findSourceRef('consórcio') || findSourceRef('consorcio') });
+        if (pc.permite_subcontratacao !== null) items.push({ label: 'Subcontratação', value: pc.permite_subcontratacao ? 'Permitida' : 'Não permitida', type: 'info', sourceRef: findSourceRef('subcontrat') });
+        if (pc.exige_visita_tecnica) items.push({ label: 'Visita Técnica', value: pc.visita_tecnica_detalhes || 'Obrigatória', type: 'warning', sourceRef: findSourceRef('visita técnica') || findSourceRef('visita tecnica') });
+        if (pc.exige_garantia_proposta) items.push({ label: 'Garantia de Proposta', value: pc.garantia_proposta_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia de proposta') || findSourceRef('garantia da proposta') });
+        if (pc.exige_garantia_contratual) items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia contratual') || findSourceRef('garantia de execução') });
+        if (pc.exige_amostra) items.push({ label: 'Amostra', value: pc.amostra_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('amostra') });
+        if (pc.tratamento_me_epp) items.push({ label: 'ME/EPP', value: pc.tratamento_me_epp, type: 'info', sourceRef: findSourceRef('me/epp') || findSourceRef('microempresa') });
         return items;
     }, [v2]);
 
