@@ -149,7 +149,11 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             if (efa.indices_exigidos?.length > 0) {
                 parts.push('Índices exigidos:');
                 efa.indices_exigidos.forEach((idx: any) => {
-                    parts.push(`• ${idx.indice}: ${idx.formula_ou_descricao || ''} (mín: ${idx.valor_minimo || 'N/I'})`);
+                    const operador = idx.operador || (idx.indice?.toUpperCase() === 'EG' ? '<=' : '>=');
+                    const valor = idx.valor_referencia || idx.valor_minimo || 'N/I';
+                    const label = operador === '<=' ? 'máx' : 'mín';
+                    const symbol = operador === '<=' ? '≤' : '≥';
+                    parts.push(`• ${idx.indice}: ${idx.formula_ou_descricao || ''} (${label}: ${valor} — ${idx.indice} ${symbol} ${valor})`);
                 });
             }
             if (efa.patrimonio_liquido_minimo) parts.push(`Patrimônio Líquido Mínimo: ${efa.patrimonio_liquido_minimo}`);
@@ -398,6 +402,18 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
     }, [v2, analysis?.requiredDocuments, companyDocs]);
 
     const allDocsList = useMemo(() => Object.values(categorizedDocs).flat(), [categorizedDocs]);
+    // Count only main requirements (exigencia_principal or entries without entry_type for backwards compat)
+    const mainRequirementCount = useMemo(() => {
+        return allDocsList.filter((d: any) => !d.entryType || d.entryType === 'exigencia_principal').length;
+    }, [allDocsList]);
+    // Per-category main count
+    const mainCountPerCategory = useMemo(() => {
+        const result: Record<string, number> = {};
+        for (const [cat, docs] of Object.entries(categorizedDocs)) {
+            result[cat] = (docs as any[]).filter((d: any) => !d.entryType || d.entryType === 'exigencia_principal').length;
+        }
+        return result;
+    }, [categorizedDocs]);
     const readinessScore = allDocsList.length > 0
         ? Math.round((allDocsList.filter(d => d.hasMatch).length / allDocsList.length) * 100)
         : 0;
@@ -423,5 +439,6 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         // Company docs
         companyDocs, isLoadingDocs,
         categorizedDocs, allDocsList, readinessScore,
+        mainRequirementCount, mainCountPerCategory,
     };
 }

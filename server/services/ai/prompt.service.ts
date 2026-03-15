@@ -405,6 +405,7 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 22. INTEGRIDADE: exigência SEM source_ref é INVÁLIDA e será descartada pelo sistema.
 23. VISITA TÉCNICA vs DECLARAÇÃO: quando o edital oferece visita técnica OU declaração de conhecimento como ALTERNATIVAS, crie 2 entradas SEPARADAS com obligation_type="alternativa" e na description de cada uma, indique a alternativa (ex: "Alternativa à declaração QTO-02"). Se a declaração substitui integralmente a visita, indique "substitui" na description. Se é excepcional, indique "apenas se impossibilitada a visita".
 24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
+25. OPERADORES FINANCEIROS: para índices contábeis, use EXATAMENTE o operador do edital. LG >= 1,0 significa "maior ou igual a 1,0". EG <= 0,5 significa "menor ou igual a 0,5". NUNCA inverta o operador. Se o edital diz EG <= 0,5, NÃO escreva "mínimo 0,5" — escreva "máximo 0,5 (EG ≤ 0,5)". Se o edital diz LG >= 1,0, escreva "mínimo 1,0 (LG ≥ 1,0)".
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -453,7 +454,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
   },
   "economic_financial_analysis": {
     "exige_balanco": null, "exige_indices": null,
-    "indices_exigidos": [{"indice": "LG", "formula_ou_descricao": "", "valor_minimo": "", "evidence_refs": []}],
+    "indices_exigidos": [{"indice": "LG|LC|SG|EG", "formula_ou_descricao": "", "operador": ">= ou <=  (usar >= para LG, LC, SG; <= para EG)", "valor_referencia": "ex: 1.0", "evidence_refs": []}],
     "exige_patrimonio_liquido_minimo": null, "patrimonio_liquido_minimo": "",
     "exige_capital_social_minimo": null, "capital_social_minimo": "",
     "exige_garantias_adicionais": null, "outras_exigencias_ef": []

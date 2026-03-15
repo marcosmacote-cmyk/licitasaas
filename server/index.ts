@@ -1942,9 +1942,10 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         // Traceability assessment: count requirements with valid source_ref
         const evidenceCount = v2Result.evidence_registry?.length || 0;
         const allReqArrays = Object.values(v2Result.requirements || {}).flat() as any[];
-        const requirementCount = allReqArrays.length;
+        // Count only principal requirements for the total (subitems/observations don't inflate the count)
+        const requirementCount = allReqArrays.filter((r: any) => !r.entry_type || r.entry_type === 'exigencia_principal').length;
         const tracedCount = allReqArrays.filter((r: any) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
-        const traceabilityRatio = requirementCount > 0 ? tracedCount / requirementCount : 0;
+        const traceabilityRatio = requirementCount > 0 ? Math.min(1, tracedCount / requirementCount) : 0;
 
         // Traceability penalty: if many requirements lack source_ref, penalize
         if (traceabilityRatio < 0.5 && requirementCount > 5) {
@@ -3309,7 +3310,8 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
     );
 
     // ── 3. Exigências de Habilitação ──
-    const totalReqs = Object.values(schema.requirements || {}).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+    const allReqItems = Object.values(schema.requirements || {}).reduce((acc: any[], arr) => acc.concat(Array.isArray(arr) ? arr : []), [] as any[]);
+    const totalReqs = allReqItems.filter((r: any) => !r.entry_type || r.entry_type === 'exigencia_principal').length;
     check(totalReqs > 0, 'Nenhuma exigência de habilitação identificada');
     check(totalReqs >= 3, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
 

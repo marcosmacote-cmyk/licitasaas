@@ -211,9 +211,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                             <BadgeCheck size={13} /> Exigências
                                         </div>
                                         <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-warning-hover)' }}>
-                                            {report.allDocsList.length}
+                                            {report.mainRequirementCount}
                                             <span style={{ fontSize: '0.65rem', fontWeight: 500, color: 'var(--color-warning)', marginLeft: '6px' }}>
-                                                ({Object.keys(report.categorizedDocs).length} cat.)
+                                                ({Object.keys(report.categorizedDocs).length} cat.{report.allDocsList.length > report.mainRequirementCount ? ` + ${report.allDocsList.length - report.mainRequirementCount} subitens` : ''})
                                             </span>
                                         </div>
                                     </div>
@@ -346,7 +346,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                     {Object.entries(report.categorizedDocs).map(([category, docs]) => (
                                                         <div key={category}>
                                                             <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                                                {category} <span style={{ fontSize: '0.65rem', color: 'var(--color-text-quaternary)' }}>({docs.length})</span>
+                                                                {category} <span style={{ fontSize: '0.65rem', color: 'var(--color-text-quaternary)' }}>({report.mainCountPerCategory[category] ?? docs.length})</span>
                                                                 <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--color-border)' }} />
                                                             </div>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
