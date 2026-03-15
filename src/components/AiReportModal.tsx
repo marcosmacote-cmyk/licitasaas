@@ -212,6 +212,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         </div>
                                         <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-warning-hover)' }}>
                                             {report.allDocsList.length}
+                                            <span style={{ fontSize: '0.65rem', fontWeight: 500, color: 'var(--color-warning)', marginLeft: '6px' }}>
+                                                ({Object.keys(report.categorizedDocs).length} cat.)
+                                            </span>
                                         </div>
                                     </div>
                                 )}
@@ -276,9 +279,10 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                     → {flag.action}
                                                                 </p>
                                                             )}
-                                                            {flag.evidenceRefs?.length > 0 && (
-                                                                <p style={{ fontSize: '0.65rem', color: sc.text, opacity: 0.7, margin: '3px 0 0', fontStyle: 'italic' }}>
-                                                                    📄 Fonte: {flag.evidenceRefs.join(', ')}
+                                                            {/* Normative reference (visible) */}
+                                                            {flag.sourceRef && (
+                                                                <p style={{ fontSize: '0.65rem', color: sc.text, opacity: 0.8, margin: '3px 0 0', fontWeight: 500 }}>
+                                                                    📄 {flag.sourceRef}
                                                                 </p>
                                                             )}
                                                         </div>

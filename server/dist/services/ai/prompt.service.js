@@ -585,11 +585,9 @@ Você DEVE avaliar CADA um dos seguintes pontos e reportar quando identificar al
 2. CONTRADIÇÃO: Há CONTRADIÇÃO entre edital e TR/anexos?
    → Prazo diferente no edital e no TR?
    → Quantitativo divergente entre planilha e TR?
-   → Critério de julgamento diferente entre corpo do edital e preâmbulo?
 
 3. AMBIGUIDADE: Há AMBIGUIDADE relevante que pode prejudicar o licitante?
    → Termos vagos como "a critério da Administração"?
-   → Exigência que pode ser interpretada de formas opostas?
 
 4. IMPUGNABILIDADE: Há ponto que justifica IMPUGNAÇÃO ou PEDIDO DE ESCLARECIMENTO?
    → Violação da Lei 14.133/2021?
@@ -604,22 +602,23 @@ Você DEVE avaliar CADA um dos seguintes pontos e reportar quando identificar al
 6. RISCO NA PROPOSTA: Há ponto de ATENÇÃO CRÍTICO para a proposta comercial?
    → Critério de exequibilidade apertado?
    → BDI imposto vs. BDI livre?
-   → Planilha com muitos itens de detalhamento?
 
 7. OMISSÃO: Há OMISSÃO relevante no edital?
    → Falta de informação sobre forma de pagamento?
    → Falta de cronograma em obra?
-   → Falta de matriz de riscos?
+   → Matriz de riscos: SOMENTE aponte como omissão quando: (a) o objeto for obra/serviço de engenharia de valor estimado > R$10 milhões, OU (b) o regime for contratação integrada/semi-integrada, OU (c) houver alocação de risco contratual explícita no edital que deveria estar na MR. NÃO aponte falta de MR para serviços comuns de pequeno porte.
 
 ── REGRAS DE QUALIDADE ──
 
-- Cada ponto crítico DEVE ter evidence_refs vinculando ao evidence_registry.
-- NÃO gere pontos genéricos do tipo "é necessário atenção". Seja ESPECÍFICO: cite o item, a cláusula, o quantitativo.
+- Cada ponto crítico DEVE ter source_ref com referência normativa visível (ex: "Edital, item 8.3" ou "TR, seção 5.2.1"). NUNCA deixe vazio.
+- Cada ponto DEVE ter evidence_refs vinculando ao evidence_registry.
+- NÃO gere pontos genéricos. Seja ESPECÍFICO: cite o item, a cláusula, o quantitativo.
 - Severidade: baixa (informativo), media (atenção), alta (exige ação), critica (pode inabilitar/desclassificar).
-- Recomende ação CONCRETA e VIÁVEL — não apenas "verificar".
-- Gere perguntas que o Consultor Chat deve estar preparado para responder sobre os riscos identificados.
-- Identifique rotas possíveis de petição (impugnação, esclarecimento, recurso) com tese jurídica resumida.
-- Se NÃO encontrar riscos relevantes, DIGA EXPLICITAMENTE: "Nenhum risco significativo identificado." Não invente riscos genéricos.
+- AÇÃO CONCRETA e VIÁVEL — NÃO use "verificar" como ação. Use: "providenciar", "solicitar esclarecimento", "avaliar impugnação", "preparar", etc.
+- PRAZOS RECURSAIS: se o prazo depende de evento futuro (ex: "3 dias úteis após intimação do resultado"), classifique como CONDICIONAL e na description indique "a contar de [evento]". NÃO apresente como data fixa.
+- FIRMA RECONHECIDA DO RT: quando o edital exige reconhecimento de firma de responsável técnico, a ação recomendada DEVE ser primeiro "cumprir a exigência providenciando o reconhecimento de firma" e apenas secundariamente "caso inviável, solicitar esclarecimento sobre aceitação de assinatura digital". NÃO recomende impugnação como ação primária para exigências de autenticação documental.
+- Se NÃO encontrar riscos relevantes, DIGA: "Nenhum risco significativo identificado." Não invente riscos genéricos.
+- Gere perguntas que o Consultor Chat deve estar preparado para responder.
 
 FORMATO DE SAÍDA — JSON:
 {
@@ -631,7 +630,8 @@ FORMATO DE SAÍDA — JSON:
         "severity": "baixa|media|alta|critica",
         "description": "descrição objetiva máx 150 chars com referência ao item/cláusula",
         "reason": "motivador jurídico máx 120 chars",
-        "recommended_action": "ação concreta máx 100 chars",
+        "recommended_action": "ação concreta máx 100 chars — NUNCA 'verificar'",
+        "source_ref": "Edital, item X.Y | TR, seção Z",
         "evidence_refs": ["EV-XX"]
       }
     ],

@@ -174,8 +174,20 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             if (tl.prazo_esclarecimento) items.push(`❓ ${tl.prazo_esclarecimento} — Esclarecimento`);
             if (tl.prazo_envio_proposta) items.push(`📄 ${tl.prazo_envio_proposta} — Envio de Proposta`);
             if (tl.prazo_envio_habilitacao) items.push(`📋 ${tl.prazo_envio_habilitacao} — Envio Habilitação`);
-            if (tl.prazo_recurso) items.push(`📝 ${tl.prazo_recurso} — Prazo Recursal`);
-            if (tl.prazo_contrarrazoes) items.push(`📝 ${tl.prazo_contrarrazoes} — Contrarrazões`);
+            // Conditional deadlines: depend on future events, not fixed dates
+            const isDatePattern = /^\d{2}\/\d{2}\/\d{4}/;
+            if (tl.prazo_recurso) {
+                const isFixed = isDatePattern.test(tl.prazo_recurso);
+                items.push(isFixed
+                    ? `📝 ${tl.prazo_recurso} — Prazo Recursal`
+                    : `📝 Prazo Recursal: ${tl.prazo_recurso} (condicionado à intimação do resultado)`);
+            }
+            if (tl.prazo_contrarrazoes) {
+                const isFixed = isDatePattern.test(tl.prazo_contrarrazoes);
+                items.push(isFixed
+                    ? `📝 ${tl.prazo_contrarrazoes} — Contrarrazões`
+                    : `📝 Contrarrazões: ${tl.prazo_contrarrazoes} (condicionado a recurso)`);
+            }
             if (v2.contractual_analysis?.prazo_execucao) items.push(`🔧 Prazo de Execução: ${v2.contractual_analysis.prazo_execucao}`);
             if (v2.contractual_analysis?.prazo_vigencia) items.push(`📆 Vigência: ${v2.contractual_analysis.prazo_vigencia}`);
             if (tl.outros_prazos?.length > 0) {
@@ -197,11 +209,12 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                 severity: cp.severity || 'media',
                 action: cp.recommended_action || '',
                 reason: cp.reason || '',
+                sourceRef: cp.source_ref || '',
                 evidenceRefs: cp.evidence_refs || [],
             }));
         }
         const legacy = parseArray(analysis?.irregularitiesFlags);
-        return legacy.map(f => ({ title: '', text: f, severity: 'media', action: '', reason: '', evidenceRefs: [] as string[] }));
+        return legacy.map(f => ({ title: '', text: f, severity: 'media', action: '', reason: '', sourceRef: '', evidenceRefs: [] as string[] }));
     }, [v2, analysis?.irregularitiesFlags]);
 
     // Conditions (V2 only)
