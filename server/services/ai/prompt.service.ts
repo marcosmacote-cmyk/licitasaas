@@ -406,6 +406,7 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 23. VISITA TÉCNICA vs DECLARAÇÃO: quando o edital oferece visita técnica OU declaração de conhecimento como ALTERNATIVAS, crie 2 entradas SEPARADAS com obligation_type="alternativa" e na description de cada uma, indique a alternativa (ex: "Alternativa à declaração QTO-02"). Se a declaração substitui integralmente a visita, indique "substitui" na description. Se é excepcional, indique "apenas se impossibilitada a visita".
 24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
 25. OPERADORES FINANCEIROS: para índices contábeis, use EXATAMENTE o operador do edital. LG >= 1,0 significa "maior ou igual a 1,0". EG <= 0,5 significa "menor ou igual a 0,5". NUNCA inverta o operador. Se o edital diz EG <= 0,5, NÃO escreva "mínimo 0,5" — escreva "máximo 0,5 (EG ≤ 0,5)". Se o edital diz LG >= 1,0, escreva "mínimo 1,0 (LG ≥ 1,0)".
+26. TAXONOMIA DE GARANTIAS: garantia de proposta, garantia de execução/contratual, seguro-garantia e caução SEMPRE vão em qualificacao_economico_financeira (QEF), NUNCA em documentos_complementares (DC). DC é apenas para declarações formais, procurações e documentos auxiliares sem natureza financeira.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -711,7 +712,8 @@ Você receberá exigências extraídas (Etapa 1) de UMA categoria. Normalize-as.
 
 ── TAREFAS ──
 1. GERAR requirement_id (prefixo {prefix}-01, {prefix}-02, ...).
-2. RECLASSIFICAR se estiver errada (QTO vs QTP, RFT vs QEF). Se reclassificar, mude obligation_type e phase.
+2. RECLASSIFICAR se estiver errada: QTO vs QTP, RFT vs QEF, garantias em DC → mover para QEF.
+   GARANTIAS (proposta, execução, contratual, seguro-garantia, caução): SEMPRE QEF, NUNCA DC.
 3. PREENCHER risk_if_missing: inabilitacao | desclassificacao | penalidade | risco_contratual | informativo.
 4. PREENCHER applies_to: licitante | consorcio | subcontratada | representante_legal | profissional_tecnico.
 5. CLASSIFICAR entry_type conforme hierarquia (ver regras abaixo).
@@ -736,6 +738,8 @@ Cada item DEVE receber um entry_type:
 11. Se o edital lista "alíneas" (a, b, c...) de um mesmo item, CONSOLIDE como 1 exigência principal + subitens por alínea.
 12. Declarações padrão (ME/EPP, impedimento, inexistência de fatos impeditivos) que aparecem em múltiplos pontos do edital: 1 card único.
 13. Máximo 1 card por document/exigência real. Na dúvida, consolide.
+14. Se reclassificar um item para outra categoria (ex: garantia de DC→QEF), EXCLUA o item desta categoria e retorne os demais. O item será processado na categoria correta.
+15. TODO subitem e observação DEVE preservar source_ref do pai ou ter source_ref próprio. NUNCA null/vazio em nenhum nível hierárquico.
 
 ── RASTREABILIDADE OBRIGATÓRIA (source_ref) ──
 

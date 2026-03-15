@@ -315,7 +315,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                 'qualificacao_tecnica_operacional': 'Qualificação Técnica — Operacional',
                 'qualificacao_tecnica_profissional': 'Qualificação Técnica — Profissional',
                 'proposta_comercial': 'Proposta Comercial',
-                'documentos_complementares': 'Declarações e Outros',
+                'documentos_complementares': 'Declarações e Documentos Complementares',
             };
 
             const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; obligationType?: string; phase?: string; riskIfMissing?: string; sourceRef?: string; entryType?: string; parentId?: string | null }[]> = {};

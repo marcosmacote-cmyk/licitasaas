@@ -1646,7 +1646,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                                 config: {
                                     systemInstruction: systemPrompt,
                                     temperature: 0.1,
-                                    maxOutputTokens: 8192,
+                                    maxOutputTokens: 16384,
                                     responseMimeType: 'application/json'
                                 }
                             }, 1);
@@ -1910,10 +1910,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         // Traceability assessment: count requirements with valid source_ref
         const evidenceCount = v2Result.evidence_registry?.length || 0;
         const allReqArrays = Object.values(v2Result.requirements || {}).flat();
-        // Count only principal requirements for the total (subitems/observations don't inflate the count)
-        const requirementCount = allReqArrays.filter((r) => !r.entry_type || r.entry_type === 'exigencia_principal').length;
-        const tracedCount = allReqArrays.filter((r) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
-        const traceabilityRatio = requirementCount > 0 ? Math.min(1, tracedCount / requirementCount) : 0;
+        // Use same base (principals only) for both numerator and denominator
+        const principalReqs = allReqArrays.filter((r) => !r.entry_type || r.entry_type === 'exigencia_principal');
+        const requirementCount = principalReqs.length;
+        const tracedCount = principalReqs.filter((r) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
+        const traceabilityRatio = requirementCount > 0 ? tracedCount / requirementCount : 0;
         // Traceability penalty: if many requirements lack source_ref, penalize
         if (traceabilityRatio < 0.5 && requirementCount > 5) {
             combinedScore -= 15;
@@ -3338,7 +3339,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
                             config: {
                                 systemInstruction: systemPrompt,
                                 temperature: 0.1,
-                                maxOutputTokens: 8192,
+                                maxOutputTokens: 16384,
                                 responseMimeType: 'application/json'
                             }
                         }, 1);
@@ -3546,10 +3547,11 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
         const stageScore = (stagesDone / stagesTotal) * 100;
         const qualityScore = qualityReport?.overallScore || 50;
         let combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.35) + (qualityScore * 0.35));
-        // Traceability assessment
+        // Traceability assessment — same base (principals) for numerator and denominator
         const allReqArrays = Object.values(result.requirements || {}).flat();
-        const reqCount = allReqArrays.length;
-        const tracedCount = allReqArrays.filter((r) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
+        const principalReqs = allReqArrays.filter((r) => !r.entry_type || r.entry_type === 'exigencia_principal');
+        const reqCount = principalReqs.length;
+        const tracedCount = principalReqs.filter((r) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
         const traceabilityRatio = reqCount > 0 ? tracedCount / reqCount : 0;
         if (traceabilityRatio < 0.5 && reqCount > 5) {
             combinedScore -= 10;
