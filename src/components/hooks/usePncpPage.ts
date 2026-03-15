@@ -190,13 +190,34 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         return newList;
     };
 
-    const deleteFavList = (listId: string) => {
+    const renameFavList = (listId: string, newName: string) => {
+        const trimmed = newName.trim();
+        if (!trimmed) return;
         setFavStore(prev => ({
             ...prev,
-            lists: prev.lists.filter(l => l.id !== listId),
-            items: prev.items.filter(i => i._listId !== listId),
+            lists: prev.lists.map(l => l.id === listId ? { ...l, name: trimmed } : l),
         }));
-        if (activeFavListId === listId) setActiveFavListId(null);
+        toast.success(`Lista renomeada para "${trimmed}"`);
+    };
+
+    const deleteFavList = (listId: string) => {
+        if (listId === 'default') { toast.warning('A lista padrão não pode ser excluída.'); return; }
+        const listName = favLists.find(l => l.id === listId)?.name || 'lista';
+        const itemCount = favStore.items.filter(i => i._listId === listId).length;
+        setConfirmAction({
+            type: 'deleteFavList',
+            message: `Excluir a lista "${listName}"?${itemCount > 0 ? `\n\nOs ${itemCount} item(ns) serão movidos para "Favoritos Gerais".` : ''}`,
+            onConfirm: () => {
+                setFavStore(prev => ({
+                    ...prev,
+                    lists: prev.lists.filter(l => l.id !== listId),
+                    items: prev.items.map(i => i._listId === listId ? { ...i, _listId: 'default' } : i),
+                }));
+                if (activeFavListId === listId) setActiveFavListId(null);
+                setConfirmAction(null);
+                toast.success(`Lista "${listName}" excluída. Itens movidos para "Favoritos Gerais".`);
+            }
+        });
     };
 
     const addToFavList = (item: PncpBiddingItem, listId: string) => {
@@ -352,6 +373,48 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             } else { throw new Error("Failed to save"); }
         } catch (e) { console.error(e); toast.error('Erro ao salvar pesquisa.'); }
         finally { setSaving(false); }
+    };
+
+    const renameSearchList = async (oldName: string, newName: string) => {
+        const trimmed = newName.trim();
+        if (!trimmed || trimmed === oldName) return;
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/searches/list/rename`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ oldName, newName: trimmed })
+            });
+            if (res.ok) {
+                fetchSavedSearches();
+                if (activeSearchListName === oldName) setActiveSearchListName(trimmed);
+                toast.success(`Lista renomeada para "${trimmed}"`);
+            } else { throw new Error('Failed'); }
+        } catch (e) { console.error(e); toast.error('Erro ao renomear lista.'); }
+    };
+
+    const deleteSearchList = (listName: string) => {
+        if (listName === 'Pesquisas Gerais') { toast.warning('A lista padrão não pode ser excluída.'); return; }
+        const count = savedSearches.filter(s => (s.listName || 'Pesquisas Gerais') === listName).length;
+        setConfirmAction({
+            type: 'deleteSearchList',
+            message: `Excluir a lista "${listName}"?${count > 0 ? `\n\nAs ${count} pesquisa(s) serão movidas para "Pesquisas Gerais".` : ''}`,
+            onConfirm: async () => {
+                setConfirmAction(null);
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${API_BASE_URL}/api/pncp/searches/list/${encodeURIComponent(listName)}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        fetchSavedSearches();
+                        if (activeSearchListName === listName) setActiveSearchListName(null);
+                        toast.success(`Lista "${listName}" excluída. Pesquisas movidas para "Pesquisas Gerais".`);
+                    } else { throw new Error('Failed'); }
+                } catch (e) { console.error(e); toast.error('Erro ao excluir lista.'); }
+            }
+        });
     };
 
     // ALWAYS open list picker — user must choose which list to save to
@@ -571,10 +634,11 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         favoritos, favLists, favStore, activeFavListId, setActiveFavListId,
         showFavoritosTab, setShowFavoritosTab, confirmAction, setConfirmAction,
         listPickerOpen, setListPickerOpen, listPickerItem, setListPickerItem,
-        createFavList, deleteFavList, addToFavList, removeFromFavList, favListItemCount,
+        createFavList, renameFavList, deleteFavList, addToFavList, removeFromFavList, favListItemCount,
         // Multi-list Saved Searches
         searchListNames, filteredSavedSearches, activeSearchListName, setActiveSearchListName,
         searchListPickerOpen, setSearchListPickerOpen,
+        renameSearchList, deleteSearchList,
         // Computed
         displayItems, activeFilterCount,
         // Handlers

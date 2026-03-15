@@ -976,6 +976,41 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
     }
 });
 
+// ── Rename a saved search list (bulk update listName) ──
+app.put('/api/pncp/searches/list/rename', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { oldName, newName } = req.body;
+        if (!oldName || !newName) return res.status(400).json({ error: 'oldName and newName required' });
+        await prisma.pncpSavedSearch.updateMany({
+            where: { tenantId, listName: oldName },
+            data: { listName: newName.trim() }
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Rename search list error:", error);
+        res.status(500).json({ error: 'Failed to rename list' });
+    }
+});
+
+// ── Delete a saved search list (migrate items to default) ──
+app.delete('/api/pncp/searches/list/:name', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const listName = decodeURIComponent(req.params.name);
+        if (listName === 'Pesquisas Gerais') return res.status(400).json({ error: 'Cannot delete default list' });
+        // Move all searches from this list to the default list
+        await prisma.pncpSavedSearch.updateMany({
+            where: { tenantId, listName },
+            data: { listName: 'Pesquisas Gerais' }
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Delete search list error:", error);
+        res.status(500).json({ error: 'Failed to delete list' });
+    }
+});
+
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;

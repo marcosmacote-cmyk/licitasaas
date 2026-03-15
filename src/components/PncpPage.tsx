@@ -1,4 +1,5 @@
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
@@ -13,6 +14,8 @@ interface Props {
 
 export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     const p = usePncpPage({ companies, onRefresh, items });
+    const [favListMenu, setFavListMenu] = useState<string | null>(null);
+    const [searchListMenu, setSearchListMenu] = useState<string | null>(null);
 
     return (
         <>
@@ -59,18 +62,77 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 }}
                             >Todas</button>
                             {p.searchListNames.map(name => (
-                                <button
-                                    key={name}
-                                    onClick={() => p.setActiveSearchListName(name)}
-                                    style={{
-                                        padding: '3px 10px', borderRadius: 'var(--radius-lg)',
-                                        border: p.activeSearchListName === name ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                        background: p.activeSearchListName === name ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
-                                        color: p.activeSearchListName === name ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                                        fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
-                                        transition: 'var(--transition-fast)',
-                                    }}
-                                >{name}</button>
+                                <div key={name} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                                    <button
+                                        onClick={() => p.setActiveSearchListName(name)}
+                                        style={{
+                                            padding: '3px 10px', borderRadius: 'var(--radius-lg)',
+                                            border: p.activeSearchListName === name ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                            background: p.activeSearchListName === name ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                                            color: p.activeSearchListName === name ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                            fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
+                                            transition: 'var(--transition-fast)',
+                                            paddingRight: name !== 'Pesquisas Gerais' ? '24px' : '10px',
+                                        }}
+                                    >{name}</button>
+                                    {name !== 'Pesquisas Gerais' && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setSearchListMenu(searchListMenu === name ? null : name); }}
+                                            style={{
+                                                position: 'absolute', right: '2px', top: '50%', transform: 'translateY(-50%)',
+                                                background: 'none', border: 'none', cursor: 'pointer',
+                                                color: 'var(--color-text-tertiary)', padding: '2px',
+                                                opacity: 0.5, transition: 'var(--transition-fast)',
+                                            }}
+                                            onMouseEnter={(e: any) => e.currentTarget.style.opacity = '1'}
+                                            onMouseLeave={(e: any) => e.currentTarget.style.opacity = '0.5'}
+                                        >
+                                            <MoreVertical size={12} />
+                                        </button>
+                                    )}
+                                    {searchListMenu === name && (
+                                        <div
+                                            style={{
+                                                position: 'absolute', top: '100%', right: 0, zIndex: 100,
+                                                background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                                borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
+                                                minWidth: '150px', overflow: 'hidden', marginTop: '4px',
+                                            }}
+                                            onMouseLeave={() => setSearchListMenu(null)}
+                                        >
+                                            <button
+                                                onClick={() => {
+                                                    setSearchListMenu(null);
+                                                    const newName = prompt(`Renomear lista "${name}":`, name);
+                                                    if (newName) p.renameSearchList(name, newName);
+                                                }}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                                    width: '100%', padding: '8px 12px', background: 'none', border: 'none',
+                                                    cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)',
+                                                    textAlign: 'left', transition: 'var(--transition-fast)',
+                                                }}
+                                                onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                                onMouseLeave={(e: any) => e.currentTarget.style.background = 'none'}
+                                            >
+                                                <Pencil size={13} /> Renomear
+                                            </button>
+                                            <button
+                                                onClick={() => { setSearchListMenu(null); p.deleteSearchList(name); }}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                                    width: '100%', padding: '8px 12px', background: 'none', border: 'none',
+                                                    cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-danger)',
+                                                    textAlign: 'left', transition: 'var(--transition-fast)',
+                                                }}
+                                                onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                                onMouseLeave={(e: any) => e.currentTarget.style.background = 'none'}
+                                            >
+                                                <Trash2 size={13} /> Excluir
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             ))}
                         </div>
                     )}
@@ -345,7 +407,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         }}
                     >Todas ({p.favoritos.length})</button>
                     {p.favLists.map(list => (
-                        <div key={list.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                        <div key={list.id} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                             <button
                                 onClick={() => p.setActiveFavListId(list.id)}
                                 style={{
@@ -355,22 +417,65 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                     color: p.activeFavListId === list.id ? 'var(--color-warning)' : 'var(--color-text-secondary)',
                                     fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
                                     transition: 'var(--transition-fast)',
+                                    paddingRight: list.id !== 'default' ? '24px' : '12px',
                                 }}
                             >{list.name} ({p.favListItemCount(list.id)})</button>
                             {list.id !== 'default' && (
                                 <button
-                                    onClick={() => p.deleteFavList(list.id)}
+                                    onClick={(e) => { e.stopPropagation(); setFavListMenu(favListMenu === list.id ? null : list.id); }}
                                     style={{
+                                        position: 'absolute', right: '2px', top: '50%', transform: 'translateY(-50%)',
                                         background: 'none', border: 'none', cursor: 'pointer',
                                         color: 'var(--color-text-tertiary)', padding: '2px',
                                         opacity: 0.5, transition: 'var(--transition-fast)',
                                     }}
-                                    title="Excluir lista"
                                     onMouseEnter={(e: any) => e.currentTarget.style.opacity = '1'}
                                     onMouseLeave={(e: any) => e.currentTarget.style.opacity = '0.5'}
                                 >
-                                    <Trash2 size={12} />
+                                    <MoreVertical size={12} />
                                 </button>
+                            )}
+                            {favListMenu === list.id && (
+                                <div
+                                    style={{
+                                        position: 'absolute', top: '100%', right: 0, zIndex: 100,
+                                        background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                        borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
+                                        minWidth: '150px', overflow: 'hidden', marginTop: '4px',
+                                    }}
+                                    onMouseLeave={() => setFavListMenu(null)}
+                                >
+                                    <button
+                                        onClick={() => {
+                                            setFavListMenu(null);
+                                            const newName = prompt(`Renomear lista "${list.name}":`, list.name);
+                                            if (newName) p.renameFavList(list.id, newName);
+                                        }}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                            width: '100%', padding: '8px 12px', background: 'none', border: 'none',
+                                            cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)',
+                                            textAlign: 'left', transition: 'var(--transition-fast)',
+                                        }}
+                                        onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.background = 'none'}
+                                    >
+                                        <Pencil size={13} /> Renomear
+                                    </button>
+                                    <button
+                                        onClick={() => { setFavListMenu(null); p.deleteFavList(list.id); }}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                            width: '100%', padding: '8px 12px', background: 'none', border: 'none',
+                                            cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-danger)',
+                                            textAlign: 'left', transition: 'var(--transition-fast)',
+                                        }}
+                                        onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.background = 'none'}
+                                    >
+                                        <Trash2 size={13} /> Excluir
+                                    </button>
+                                </div>
                             )}
                         </div>
                     ))}
@@ -733,10 +838,20 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
             <ConfirmDialog
                 open={!!p.confirmAction}
-                title={p.confirmAction?.type === 'deleteSearch' ? 'Excluir Pesquisa' : 'Aviso de Duplicidade'}
-                message={p.confirmAction?.type === 'deleteSearch' ? 'Excluir esta pesquisa salva?' : (p.confirmAction?.message || '')}
-                variant={p.confirmAction?.type === 'deleteSearch' ? 'danger' : 'warning'}
-                confirmLabel={p.confirmAction?.type === 'deleteSearch' ? 'Excluir' : 'Importar Mesmo Assim'}
+                title={
+                    p.confirmAction?.type === 'deleteSearch' ? 'Excluir Pesquisa'
+                    : p.confirmAction?.type === 'deleteFavList' ? 'Excluir Lista de Favoritos'
+                    : p.confirmAction?.type === 'deleteSearchList' ? 'Excluir Lista de Pesquisas'
+                    : 'Aviso de Duplicidade'
+                }
+                message={p.confirmAction?.message || ''}
+                variant={['deleteSearch', 'deleteFavList', 'deleteSearchList'].includes(p.confirmAction?.type || '') ? 'danger' : 'warning'}
+                confirmLabel={
+                    ['deleteFavList', 'deleteSearchList'].includes(p.confirmAction?.type || '')
+                        ? 'Excluir e Migrar'
+                        : p.confirmAction?.type === 'deleteSearch' ? 'Excluir'
+                        : 'Importar Mesmo Assim'
+                }
                 onConfirm={() => p.confirmAction?.onConfirm()}
                 onCancel={() => p.setConfirmAction(null)}
             />
