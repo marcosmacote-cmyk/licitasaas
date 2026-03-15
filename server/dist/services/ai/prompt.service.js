@@ -393,6 +393,8 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 20. PROIBIDO classificar como "obrigatoria_universal" exigências que contenham "caso", "quando", "se o licitante", "no caso de", "somente para", "exclusivamente para". Essas são "condicional", "se_aplicavel" ou outro tipo específico.
 21. CLASSIFIQUE phase: "habilitacao" = documentos de habilitação, "proposta" = envelope de preços/proposta comercial, "contratacao" = pós-adjudicação/assinatura, "pos_contratacao" = execução contratual.
 22. INTEGRIDADE: exigência SEM source_ref é INVÁLIDA e será descartada pelo sistema.
+23. VISITA TÉCNICA vs DECLARAÇÃO: quando o edital oferece visita técnica OU declaração de conhecimento como ALTERNATIVAS, crie 2 entradas SEPARADAS com obligation_type="alternativa" e na description de cada uma, indique a alternativa (ex: "Alternativa à declaração QTO-02"). Se a declaração substitui integralmente a visita, indique "substitui" na description. Se é excepcional, indique "apenas se impossibilitada a visita".
+24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {

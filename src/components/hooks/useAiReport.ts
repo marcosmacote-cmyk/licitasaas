@@ -174,6 +174,8 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             if (tl.prazo_esclarecimento) items.push(`❓ ${tl.prazo_esclarecimento} — Esclarecimento`);
             if (tl.prazo_envio_proposta) items.push(`📄 ${tl.prazo_envio_proposta} — Envio de Proposta`);
             if (tl.prazo_envio_habilitacao) items.push(`📋 ${tl.prazo_envio_habilitacao} — Envio Habilitação`);
+            if (tl.prazo_recurso) items.push(`📝 ${tl.prazo_recurso} — Prazo Recursal`);
+            if (tl.prazo_contrarrazoes) items.push(`📝 ${tl.prazo_contrarrazoes} — Contrarrazões`);
             if (v2.contractual_analysis?.prazo_execucao) items.push(`🔧 Prazo de Execução: ${v2.contractual_analysis.prazo_execucao}`);
             if (v2.contractual_analysis?.prazo_vigencia) items.push(`📆 Vigência: ${v2.contractual_analysis.prazo_vigencia}`);
             if (tl.outros_prazos?.length > 0) {
@@ -195,10 +197,11 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                 severity: cp.severity || 'media',
                 action: cp.recommended_action || '',
                 reason: cp.reason || '',
+                evidenceRefs: cp.evidence_refs || [],
             }));
         }
         const legacy = parseArray(analysis?.irregularitiesFlags);
-        return legacy.map(f => ({ title: '', text: f, severity: 'media', action: '', reason: '' }));
+        return legacy.map(f => ({ title: '', text: f, severity: 'media', action: '', reason: '', evidenceRefs: [] as string[] }));
     }, [v2, analysis?.irregularitiesFlags]);
 
     // Conditions (V2 only)
@@ -221,6 +224,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         if (!v2?.analysis_meta) return null;
         const am = v2.analysis_meta;
         const health = (v2.confidence as any)?.pipeline_health || null;
+        const traceability = (v2.confidence as any)?.traceability || null;
         return {
             confidence: v2.confidence?.overall_confidence || analysis?.overallConfidence || '',
             scorePercentage: (v2.confidence as any)?.score_percentage || null,
@@ -228,7 +232,10 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             promptVersion: (am as any)?.prompt_version || analysis?.promptVersion || '',
             stageTimes: (am as any)?.stage_times || null,
             qualityScore: (am as any)?.quality_report?.overallScore || null,
-            evidenceCount: v2.evidence_registry?.length || 0,
+            evidenceCount: traceability?.evidence_registry_count ?? (v2.evidence_registry?.length || 0),
+            tracedRequirements: traceability?.traced_requirements ?? 0,
+            totalRequirements: traceability?.total_requirements ?? 0,
+            traceabilityPercentage: traceability?.traceability_percentage ?? null,
             pipelineHealth: health,
         };
     }, [v2, analysis]);

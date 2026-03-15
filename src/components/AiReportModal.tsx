@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, Target, BarChart3 } from 'lucide-react';
+import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, BarChart3 } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
@@ -89,7 +89,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
     const hasFinancial = report.hasContent(report.financialText);
     const hasPenalties = report.hasContent(report.penaltiesText);
     const hasItems = report.hasContent(report.biddingItemsText);
-    const hasQualification = report.hasContent(report.qualificationText);
+
     const hasConditions = report.conditions.length > 0;
     const hasTechnicalOpinion = report.hasContent(report.technicalOpinion);
 
@@ -276,6 +276,11 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                     → {flag.action}
                                                                 </p>
                                                             )}
+                                                            {flag.evidenceRefs?.length > 0 && (
+                                                                <p style={{ fontSize: '0.65rem', color: sc.text, opacity: 0.7, margin: '3px 0 0', fontStyle: 'italic' }}>
+                                                                    📄 Fonte: {flag.evidenceRefs.join(', ')}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
@@ -306,16 +311,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     )}
 
                                     {/* Technical Qualification */}
-                                    {hasQualification && (
-                                        <div className="report-card">
-                                            <h3 className="ai-section-header"><Target size={18} /> Qualificação Técnica Exigida</h3>
-                                            <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-warning-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-warning-border)' }}>
-                                                <p style={{ color: 'var(--color-warning-hover)', fontSize: 'var(--text-sm)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                                    {report.qualificationText}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
+                                    {/* Qualificação Técnica — removed: duplicates QTO/QTP cards in Habilitação Requerida */}
 
                                     {/* Document Readiness / Habilitação */}
                                     {hasRequirements && (
@@ -352,7 +348,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                                                 {docs.map((doc: any, idx: number) => {
                                                                     const DESC_LIMIT = 120;
-                                                                    const isLong = doc.description && doc.description.length > DESC_LIMIT;
+                                                                    // Don't truncate PC items (proposta comercial) or items with short descriptions
+                                                                    const isProposta = doc.item?.startsWith('PC-');
+                                                                    const isLong = !isProposta && doc.description && doc.description.length > DESC_LIMIT;
                                                                     // Obligation type display
                                                                     const oblMap: Record<string, { label: string; color: string; bg: string }> = {
                                                                         'obrigatoria_universal': { label: 'Obrigatório', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
@@ -500,9 +498,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                     </div>
                                                 )}
                                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span>Evidências</span>
-                                                    <span style={{ fontWeight: 700, color: report.pipelineMeta.evidenceCount === 0 ? 'var(--color-danger)' : 'inherit' }}>
-                                                        {report.pipelineMeta.evidenceCount}
+                                                    <span>Rastreabilidade</span>
+                                                    <span style={{ fontWeight: 700, color: report.pipelineMeta.traceabilityPercentage !== null && report.pipelineMeta.traceabilityPercentage < 80 ? 'var(--color-warning)' : 'inherit' }}>
+                                                        {report.pipelineMeta.traceabilityPercentage !== null ? `${report.pipelineMeta.tracedRequirements}/${report.pipelineMeta.totalRequirements} (${report.pipelineMeta.traceabilityPercentage}%)` : `${report.pipelineMeta.evidenceCount} evidências`}
                                                     </span>
                                                 </div>
                                                 {report.pipelineMeta.qualityScore !== null && (

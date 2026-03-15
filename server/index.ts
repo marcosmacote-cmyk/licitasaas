@@ -1802,21 +1802,32 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             console.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
         }
 
-        // ── Confidence Score (honest — penalizes repairs, fallbacks, missing data) ──
+        // ── Confidence Score (honest — penalizes repairs, fallbacks, missing traceability) ──
         const stagesDone = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
         const stageScore = (stagesDone / 4) * 100;
         const qualityScore = qualityReport?.overallScore || 50;
         let combinedScore = Math.round((stageScore * 0.25) + (validation.confidence_score * 0.30) + (qualityScore * 0.30));
 
-        // Evidence penalty: if 0 evidences but >5 requirements, penalize hard
-        const evidenceCount = v2Result.evidence_registry.length;
-        const requirementCount = Object.values(v2Result.requirements).reduce((sum, arr) => sum + arr.length, 0);
-        if (evidenceCount === 0 && requirementCount > 5) {
-            combinedScore -= 20;
-            v2Result.confidence.warnings.push(`0 evidências com ${requirementCount} exigências — rastreabilidade comprometida`);
-        } else if (evidenceCount < 3 && requirementCount > 10) {
+        // Traceability assessment: count requirements with valid source_ref
+        const evidenceCount = v2Result.evidence_registry?.length || 0;
+        const allReqArrays = Object.values(v2Result.requirements || {}).flat() as any[];
+        const requirementCount = allReqArrays.length;
+        const tracedCount = allReqArrays.filter((r: any) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
+        const traceabilityRatio = requirementCount > 0 ? tracedCount / requirementCount : 0;
+
+        // Traceability penalty: if many requirements lack source_ref, penalize
+        if (traceabilityRatio < 0.5 && requirementCount > 5) {
+            combinedScore -= 15;
+            v2Result.confidence.warnings.push(`Apenas ${Math.round(traceabilityRatio * 100)}% das exigências têm referência documental — rastreabilidade comprometida`);
+        } else if (traceabilityRatio < 0.8 && requirementCount > 5) {
+            combinedScore -= 5;
+            v2Result.confidence.warnings.push(`${Math.round(traceabilityRatio * 100)}% das exigências têm referência documental`);
+        }
+
+        // Evidence registry penalty (secondary — source_ref is primary traceability)
+        if (evidenceCount === 0 && requirementCount > 5 && traceabilityRatio < 0.8) {
             combinedScore -= 10;
-            v2Result.confidence.warnings.push(`Poucas evidências (${evidenceCount}) para ${requirementCount} exigências`);
+            v2Result.confidence.warnings.push(`0 evidências no registro com ${requirementCount} exigências`);
         }
 
         // Parse repair penalty: each repair indicates fragile response
@@ -1841,7 +1852,8 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         combinedScore = Math.max(5, Math.min(100, combinedScore));
 
-        if (combinedScore >= 75 && pipelineHealth.fallbacksUsed === 0 && pipelineHealth.parseRepairs === 0 && evidenceCount >= 5) {
+        // Confidence level: 'alta' requires both good score AND good traceability
+        if (combinedScore >= 75 && pipelineHealth.fallbacksUsed === 0 && pipelineHealth.parseRepairs === 0 && traceabilityRatio >= 0.8) {
             v2Result.confidence.overall_confidence = 'alta';
         } else if (combinedScore >= 50) {
             v2Result.confidence.overall_confidence = 'media';
@@ -1850,6 +1862,12 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         }
         (v2Result.confidence as any).score_percentage = combinedScore;
         (v2Result.confidence as any).pipeline_health = pipelineHealth;
+        (v2Result.confidence as any).traceability = {
+            total_requirements: requirementCount,
+            traced_requirements: tracedCount,
+            traceability_percentage: Math.round(traceabilityRatio * 100),
+            evidence_registry_count: evidenceCount,
+        };
 
         const uniqueModels = [...new Set(modelsUsed)];
         v2Result.analysis_meta.model_used = uniqueModels.join('+');
@@ -3583,9 +3601,20 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         const stagesTotal = 4;
         const stageScore = (stagesDone / stagesTotal) * 100;
         const qualityScore = qualityReport?.overallScore || 50;
-        const combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.35) + (qualityScore * 0.35));
+        let combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.35) + (qualityScore * 0.35));
 
-        if (combinedScore >= 80) {
+        // Traceability assessment
+        const allReqArrays = Object.values(result.requirements || {}).flat() as any[];
+        const reqCount = allReqArrays.length;
+        const tracedCount = allReqArrays.filter((r: any) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
+        const traceabilityRatio = reqCount > 0 ? tracedCount / reqCount : 0;
+
+        if (traceabilityRatio < 0.5 && reqCount > 5) {
+            combinedScore -= 10;
+        }
+        combinedScore = Math.max(5, Math.min(100, combinedScore));
+
+        if (combinedScore >= 80 && traceabilityRatio >= 0.8) {
             result.confidence.overall_confidence = 'alta';
         } else if (combinedScore >= 50) {
             result.confidence.overall_confidence = 'media';
@@ -3593,6 +3622,12 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
             result.confidence.overall_confidence = 'baixa';
         }
         (result.confidence as any).score_percentage = combinedScore;
+        (result.confidence as any).traceability = {
+            total_requirements: reqCount,
+            traced_requirements: tracedCount,
+            traceability_percentage: Math.round(traceabilityRatio * 100),
+            evidence_registry_count: result.evidence_registry?.length || 0,
+        };
 
         // Track all models used (deduped)
         const uniqueModels = [...new Set(modelsUsed)];
