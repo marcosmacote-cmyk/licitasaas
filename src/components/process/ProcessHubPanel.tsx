@@ -379,7 +379,7 @@ export function ProcessHubPanel({
                                 }}>
                                     {stage}
                                 </span>
-                                <PhaseExplainer stage={stage} substage={substage} position="right" />
+                                <PhaseExplainer stage={stage} substage={substage} />
                             </div>
                             <SectionLabel>Próximo passo</SectionLabel>
                             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
