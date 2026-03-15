@@ -113,6 +113,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const [esfera, setEsfera] = useState('todas');
     const [orgao, setOrgao] = useState('');
     const [orgaosLista, setOrgaosLista] = useState('');
+    const [excludeKeywords, setExcludeKeywords] = useState('');
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
     const [page, setPage] = useState(1);
@@ -285,7 +286,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         } catch (e) { console.error("Failed to fetch saved searches", e); }
     };
 
-    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string }) => {
+    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string; excludeKeywords?: string }) => {
         if (e) { e.preventDefault(); setPage(1); }
         setLoading(true);
         try {
@@ -301,6 +302,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                     dataFim: (overrides?.dataFim ?? dataFim) || undefined,
                     esfera: overrides?.esfera ?? esfera, orgao: overrides?.orgao ?? orgao,
                     orgaosLista: overrides?.orgaosLista ?? orgaosLista,
+                    excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
                 })
             });
             if (res.ok) {
@@ -341,7 +343,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 body: JSON.stringify({
                     name, keywords, status, companyProfileId: selectedSearchCompanyId || undefined,
                     listName: effectiveListName,
-                    states: JSON.stringify({ uf: selectedUf, modalidade, esfera, orgao, orgaosLista, dataInicio, dataFim })
+                    states: JSON.stringify({ uf: selectedUf, modalidade, esfera, orgao, orgaosLista, excludeKeywords, dataInicio, dataFim })
                 })
             });
             if (res.ok) {
@@ -360,7 +362,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const loadSavedSearch = (search: PncpSavedSearch) => {
         const searchKeywords = search.keywords || '';
         const searchStatus = search.status || 'recebendo_proposta';
-        let customState = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', dataInicio: '', dataFim: '' };
+        let customState = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '' };
         try {
             const parsedStates = JSON.parse(search.states || '{}');
             if (Array.isArray(parsedStates)) { customState.uf = parsedStates[0] || ''; }
@@ -371,7 +373,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         setSelectedSearchCompanyId(search.companyProfileId || '');
         setSelectedUf(customState.uf); setModalidade(customState.modalidade);
         setEsfera(customState.esfera); setOrgao(customState.orgao);
-        setOrgaosLista(customState.orgaosLista);
+        setOrgaosLista(customState.orgaosLista); setExcludeKeywords(customState.excludeKeywords);
         setDataInicio(customState.dataInicio); setDataFim(customState.dataFim);
         setPage(1);
 
@@ -379,6 +381,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             keywords: searchKeywords, status: searchStatus, uf: customState.uf,
             modalidade: customState.modalidade, esfera: customState.esfera,
             orgao: customState.orgao, orgaosLista: customState.orgaosLista,
+            excludeKeywords: customState.excludeKeywords,
             dataInicio: customState.dataInicio, dataFim: customState.dataFim
         });
     };
@@ -400,7 +403,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const clearSearch = () => {
         setKeywords(''); setStatus('recebendo_proposta'); setSelectedUf('');
         setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');
-        setOrgao(''); setOrgaosLista(''); setDataInicio(''); setDataFim('');
+        setOrgao(''); setOrgaosLista(''); setExcludeKeywords(''); setDataInicio(''); setDataFim('');
         setResults([]); setTotalResults(0); setPage(1);
     };
 
@@ -544,7 +547,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
 
     const activeFilterCount = [
         modalidade !== 'todas', esfera !== 'todas', orgao !== '',
-        orgaosLista.trim() !== '', dataInicio !== '', dataFim !== '', selectedSearchCompanyId !== ''
+        orgaosLista.trim() !== '', excludeKeywords.trim() !== '',
+        dataInicio !== '', dataFim !== '', selectedSearchCompanyId !== ''
     ].filter(Boolean).length;
 
     return {
@@ -553,7 +557,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         keywords, setKeywords, status, setStatus, selectedUf, setSelectedUf,
         selectedSearchCompanyId, setSelectedSearchCompanyId,
         modalidade, setModalidade, esfera, setEsfera, orgao, setOrgao,
-        orgaosLista, setOrgaosLista, dataInicio, setDataInicio, dataFim, setDataFim,
+        orgaosLista, setOrgaosLista, excludeKeywords, setExcludeKeywords,
+        dataInicio, setDataInicio, dataFim, setDataFim,
         page, setPage, totalResults,
         // Modal state
         editingProcess, setEditingProcess,

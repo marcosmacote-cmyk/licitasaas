@@ -978,7 +978,7 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
 
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista } = req.body;
+        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
         const pageSize = 10;
 
         let kwList: string[] = [];
@@ -1151,6 +1151,20 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                 filteredItems = filteredItems.filter((it: any) => {
                     const nome = (it.modalidade_nome || '').toLowerCase();
                     return nome.includes(modalidadeLabel.split(' - ')[0]) || nome.includes(modalidadeLabel);
+                });
+            }
+        }
+
+        // ── Post-filter by exclude keywords (remove results with unwanted terms in objeto) ──
+        if (excludeKeywords && typeof excludeKeywords === 'string' && excludeKeywords.trim()) {
+            const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const excludeTerms = excludeKeywords.split(',')
+                .map((t: string) => normalize(t.trim()))
+                .filter((t: string) => t.length > 0);
+            if (excludeTerms.length > 0) {
+                filteredItems = filteredItems.filter((it: any) => {
+                    const objNorm = normalize((it.objeto || '') + ' ' + (it.titulo || ''));
+                    return !excludeTerms.some((term: string) => objNorm.includes(term));
                 });
             }
         }

@@ -262,6 +262,24 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 </div>
                             </div>
 
+                            <div className="col-span-full">
+                                <label className="form-label" style={{ color: 'var(--color-danger)' }}>🚫 Excluir palavras-chave do objeto</label>
+                                <input
+                                    type="text"
+                                    placeholder="Ex.: aquisição, materiais, fornecimento, luminária (separe por vírgula)"
+                                    value={p.excludeKeywords}
+                                    onChange={(e) => p.setExcludeKeywords(e.target.value)}
+                                    className="form-select"
+                                    style={{
+                                        borderColor: p.excludeKeywords.trim() ? 'var(--color-danger)' : undefined,
+                                        fontSize: '0.8125rem',
+                                    }}
+                                />
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                                    Resultados cujo objeto contenha qualquer destes termos serão removidos da listagem.
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="form-label">Publicado a partir de</label>
                                 <input type="date" value={p.dataInicio} onChange={(e) => p.setDataInicio(e.target.value)} className="form-select" />
