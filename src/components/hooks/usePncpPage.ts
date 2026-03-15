@@ -600,7 +600,12 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             setViewingAnalysisProcess(fakeProcess);
         } catch (error: any) {
             console.error('PNCP AI Analysis error:', error);
-            toast.error(`Erro na análise IA: ${error.message}`);
+            // Check for extraction insufficient error for a more helpful message
+            if (error.message?.includes('insuficiente')) {
+                toast.error(`Análise IA indisponível: A IA não conseguiu extrair dados suficientes dos documentos deste edital. Os PDFs podem estar escaneados, protegidos ou em formato não-textual.`);
+            } else {
+                toast.error(`Erro na análise IA: ${error.message}`);
+            }
         } finally { setAnalyzingItemId(null); }
     };
 

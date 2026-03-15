@@ -379,7 +379,7 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 16. BUSQUE informações em TODOS os documentos (edital, TR, projeto básico, anexos, planilhas). NÃO se limite ao corpo do edital.
 17. Em caso de informação mencionada em mais de um documento, use a versão mais DETALHADA.
 
-FORMATO DE SAÍDA — JSON com estas seções:
+FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
   "process_identification": {
     "orgao": "", "unidade_compradora": "", "numero_processo": "", "numero_edital": "",
@@ -395,15 +395,6 @@ FORMATO DE SAÍDA — JSON com estas seções:
     "prazo_contrarrazoes": "",
     "outros_prazos": [{"descricao": "", "data": ""}]
   },
-  "participation_conditions": {
-    "permite_consorcio": null, "permite_subcontratacao": null,
-    "exige_visita_tecnica": null, "visita_tecnica_detalhes": "",
-    "exige_garantia_proposta": null, "garantia_proposta_detalhes": "",
-    "exige_garantia_contratual": null, "garantia_contratual_detalhes": "",
-    "exige_amostra": null, "amostra_detalhes": "",
-    "tratamento_me_epp": "", "participacao_restrita": "",
-    "outras_condicoes": []
-  },
   "requirements": {
     "habilitacao_juridica": [{"requirement_id": "HJ-01", "title": "", "description": "texto LITERAL do edital", "mandatory": true, "applies_to": "licitante", "risk_if_missing": "inabilitação", "evidence_refs": ["EV-01"]}],
     "regularidade_fiscal_trabalhista": [],
@@ -412,6 +403,18 @@ FORMATO DE SAÍDA — JSON com estas seções:
     "qualificacao_tecnica_profissional": [],
     "proposta_comercial": [],
     "documentos_complementares": []
+  },
+  "evidence_registry": [
+    {"evidence_id": "EV-01", "document_type": "edital|tr|pb|minuta|anexo|planilha|outro", "document_name": "", "page": "", "section": "", "excerpt": "trecho literal do documento (mínimo 30 caracteres)", "normalized_topic": ""}
+  ],
+  "participation_conditions": {
+    "permite_consorcio": null, "permite_subcontratacao": null,
+    "exige_visita_tecnica": null, "visita_tecnica_detalhes": "",
+    "exige_garantia_proposta": null, "garantia_proposta_detalhes": "",
+    "exige_garantia_contratual": null, "garantia_contratual_detalhes": "",
+    "exige_amostra": null, "amostra_detalhes": "",
+    "tratamento_me_epp": "", "participacao_restrita": "",
+    "outras_condicoes": []
   },
   "technical_analysis": {
     "exige_atestado_capacidade_tecnica": null, "exige_comprovacao_parcelas_relevantes": null,
@@ -441,11 +444,10 @@ FORMATO DE SAÍDA — JSON com estas seções:
     "medicao_pagamento": "", "penalidades": [],
     "obrigacoes_contratada": [], "obrigacoes_contratante": [],
     "matriz_risco_contratual": []
-  },
-  "evidence_registry": [
-    {"evidence_id": "EV-01", "document_type": "edital|tr|pb|minuta|anexo|planilha|outro", "document_name": "", "page": "", "section": "", "excerpt": "trecho literal do documento (mínimo 30 caracteres)", "normalized_topic": ""}
-  ]
+  }
 }
+
+IMPORTANTE: As seções "requirements" e "evidence_registry" são as MAIS CRÍTICAS da extração. NUNCA as deixe vazias — se há documentos fornecidos, haverá exigências e evidências a extrair.
 
 Responda APENAS com o JSON. Sem texto antes ou depois.`;
 /**

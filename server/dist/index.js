@@ -1446,7 +1446,13 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         };
         console.log(`[PNCP-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${downloadedFiles.join(', ')})`);
         // ── Stage 1: Factual Extraction (with PDFs) ──
-        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual...`);
+        // Log diagnostic info about PDFs being sent
+        const pdfSizes = pdfParts.map((p, i) => {
+            const sizeKB = Math.round(Buffer.from(p.inlineData.data, 'base64').length / 1024);
+            return `Doc${i + 1}: ${sizeKB}KB`;
+        });
+        const totalPdfSizeKB = pdfParts.reduce((sum, p) => sum + Buffer.from(p.inlineData.data, 'base64').length, 0) / 1024;
+        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} PDFs, ${Math.round(totalPdfSizeKB)}KB total — ${pdfSizes.join(', ')})...`);
         let extractionJson;
         const t1Start = Date.now();
         try {
@@ -1462,7 +1468,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                 config: {
                     systemInstruction: prompt_service_1.V2_EXTRACTION_PROMPT,
                     temperature: 0.05,
-                    maxOutputTokens: 16384,
+                    maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
             });
@@ -1521,6 +1527,51 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             v2Result.contractual_analysis = extractionJson.contractual_analysis;
         if (extractionJson.evidence_registry)
             v2Result.evidence_registry = extractionJson.evidence_registry;
+        // ── HARD FAILURE GATE: Check extraction quality ──
+        const extractedReqs = Object.values(extractionJson.requirements || {}).flat().length;
+        const extractedEvidence = (extractionJson.evidence_registry || []).length;
+        const hasProcessId = !!(extractionJson.process_identification?.objeto_resumido || extractionJson.process_identification?.objeto_completo);
+        // Log detailed per-category extraction
+        if (extractionJson.requirements) {
+            const catCounts = Object.entries(extractionJson.requirements)
+                .map(([cat, items]) => `${cat}: ${Array.isArray(items) ? items.length : 0}`)
+                .join(' | ');
+            console.log(`[PNCP-V2] 📋 Exigências por categoria: ${catCounts}`);
+        }
+        console.log(`[PNCP-V2] 📊 Extração: ${extractedReqs} exigências, ${extractedEvidence} evidências, processo=${hasProcessId}`);
+        // Hard failure: Extraction returned materially empty content
+        const MIN_REQUIREMENTS = 3;
+        const MIN_EVIDENCE = 1;
+        if (extractedReqs < MIN_REQUIREMENTS && extractedEvidence < MIN_EVIDENCE && !hasProcessId) {
+            console.error(`[PNCP-V2] ❌ FALHA FACTUAL DURA: ${extractedReqs} exigências (mín: ${MIN_REQUIREMENTS}), ${extractedEvidence} evidências (mín: ${MIN_EVIDENCE}), sem identificação do processo`);
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
+            const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
+            return res.status(422).json({
+                error: 'Extração factual insuficiente',
+                details: `A IA não conseguiu extrair dados suficientes dos ${pdfParts.length} documento(s). ` +
+                    `Foram encontradas apenas ${extractedReqs} exigência(s) e ${extractedEvidence} evidência(s). ` +
+                    `Isso pode indicar que os documentos estão escaneados com baixa qualidade, protegidos, ou em formato não-textual.`,
+                diagnostics: {
+                    pdfs_sent: pdfParts.length,
+                    pdf_sizes: pdfSizes,
+                    requirements_found: extractedReqs,
+                    evidence_found: extractedEvidence,
+                    has_process_id: hasProcessId,
+                    parse_repaired: pipelineHealth.parseRepairs > 0,
+                    time_seconds: parseFloat(totalDuration),
+                    downloaded_files: downloadedFiles
+                },
+                _extraction_insufficient: true
+            });
+        }
+        // Soft warning: Low quality extraction (still continues)
+        if (extractedReqs < MIN_REQUIREMENTS || extractedEvidence < MIN_EVIDENCE) {
+            console.warn(`[PNCP-V2] ⚠️ Extração abaixo do ideal: ${extractedReqs} exigências, ${extractedEvidence} evidências — pipeline continua com degradação`);
+            v2Result.confidence.warnings.push(`Extração com qualidade reduzida: ${extractedReqs} exigências, ${extractedEvidence} evidências`);
+            if (extractedReqs < MIN_REQUIREMENTS) {
+                v2Result.confidence.warnings.push(`Extração retornou apenas ${extractedReqs} exigência(s) — possível truncamento ou PDF protegido`);
+            }
+        }
         // Domain Routing
         const detectedObjectType = v2Result.process_identification?.tipo_objeto || 'outro';
         const domainReinforcement = (0, prompt_service_1.getDomainRoutingInstruction)(detectedObjectType);
