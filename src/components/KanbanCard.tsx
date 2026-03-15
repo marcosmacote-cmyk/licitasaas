@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { Calendar, DollarSign, ScanSearch, Building2, Trash2, MessageSquare, Bell, SignalHigh } from 'lucide-react';
 import { format } from 'date-fns';
@@ -16,6 +17,7 @@ interface Props {
     hasAnalysis?: boolean;
     companies?: CompanyProfile[];
     onViewAnalysis?: () => void;
+    onClick?: () => void;
     onDoubleClick?: () => void;
     onDelete?: (id: string) => void;
     onToggleMonitor?: (id: string) => void;
@@ -25,11 +27,30 @@ interface Props {
     highlightExpiring?: boolean;
 }
 
-export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onDoubleClick, onDelete, onToggleMonitor, cardFields, compactMode, highlightExpiring }: Props) {
+export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onClick, onDoubleClick, onDelete, onToggleMonitor, cardFields, compactMode, highlightExpiring }: Props) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: item.id,
         data: item,
     });
+
+    // Single-click → Hub, distinguishing from double-click and drag
+    const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleClick = (e: React.MouseEvent) => {
+        // Ignore if drag was initiated
+        if (isDragging) return;
+        // Don't interfere with buttons (they use stopPropagation)
+        if ((e.target as HTMLElement).closest('button')) return;
+        if (clickTimer.current) {
+            clearTimeout(clickTimer.current);
+            clickTimer.current = null;
+            // This is a double-click — let onDoubleClick handle it
+            return;
+        }
+        clickTimer.current = setTimeout(() => {
+            clickTimer.current = null;
+            onClick?.();
+        }, 220);
+    };
 
     // Helper: check if a field should be visible
     const isVisible = (key: string) => {
@@ -60,7 +81,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
 
     const style = {
         opacity: isDragging ? 0.5 : 1,
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: isDragging ? 'grabbing' : 'pointer',
         boxShadow: isOverlay ? 'var(--shadow-lg)' : undefined,
         zIndex: isOverlay ? 999 : undefined,
         padding: compactMode ? '10px' : undefined,
@@ -78,6 +99,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
             {...listeners}
             className="kanban-card"
             style={style}
+            onClick={handleClick}
             onDoubleClick={onDoubleClick}
         >
             <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>

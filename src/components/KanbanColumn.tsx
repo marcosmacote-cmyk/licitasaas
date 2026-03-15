@@ -53,6 +53,7 @@ export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteP
                             key={item.id}
                             item={item}
                             companies={companies}
+                            onClick={() => onEditProcess(item)}
                             onDoubleClick={() => onEditProcess(item)}
                             hasAnalysis={!!analysis}
                             onViewAnalysis={analysis ? () => onViewAnalysis(analysis, item) : undefined}
