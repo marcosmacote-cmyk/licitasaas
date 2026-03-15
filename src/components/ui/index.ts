@@ -23,6 +23,7 @@ export { Table, Thead, Tbody, Tr, Th, Td } from './Table';
 
 // Patterns
 export { SectionHeader, EmptyState, TabNav, Skeleton, StatusDot } from './Components';
+export { ListPickerPopover } from './ListPickerPopover';
 
 // Domain Components — LicitaSaaS-specific
 export {

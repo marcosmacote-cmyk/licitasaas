@@ -167,6 +167,7 @@ model PncpSavedSearch {
   status           String?  @default("aberta")
   states           String? // Stored as JSON string
   regions          String? // Stored as JSON string
+  listName         String   @default("Pesquisas Gerais") // Group into named lists
   createdAt        DateTime @default(now())
 
   tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)

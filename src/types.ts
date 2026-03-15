@@ -142,6 +142,7 @@ export interface PncpSavedSearch {
     states?: string; // JSON array string
     regions?: string; // JSON array string
     companyProfileId?: string;
+    listName?: string; // Group name for organizing searches
     company?: CompanyProfile;
 }
 

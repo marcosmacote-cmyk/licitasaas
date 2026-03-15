@@ -1,8 +1,8 @@
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2 } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
-import { ConfirmDialog } from './ui';
+import { ConfirmDialog, ListPickerPopover } from './ui';
 import { usePncpPage, UFS, ESFERAS, MODALIDADES, STATUS_OPTIONS } from './hooks/usePncpPage';
 
 interface Props {
@@ -40,44 +40,84 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 </div>
             </div>
 
-            {/* Saved Searches as Chips */}
+            {/* ═══ Saved Searches — Multi-list ═══ */}
             {p.savedSearches.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-5)', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>
-                        <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                        Pesquisas Salvas:
-                    </span>
-                    {p.savedSearches.map(s => (
-                        <div
-                            key={s.id}
-                            onClick={() => p.loadSavedSearch(s)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 'var(--space-2)',
-                                padding: 'var(--space-2) var(--space-4)',
-                                background: 'var(--color-bg-surface)',
-                                border: '1px solid var(--color-border)',
-                                borderRadius: 'var(--radius-xl)',
-                                fontSize: 'var(--text-md)',
-                                color: 'var(--color-text-primary)',
-                                cursor: 'pointer',
-                                transition: 'var(--transition-fast)',
-                                fontWeight: 'var(--font-medium)',
-                            }}
-                            onMouseEnter={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.background = 'rgba(37, 99, 235, 0.06)'; }}
-                            onMouseLeave={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
-                        >
-                            {s.name}
-                            {s.companyProfileId && <Building2 size={12} color="var(--color-primary)" />}
+                <div style={{ marginBottom: 'var(--space-5)' }}>
+                    {/* List filter tabs */}
+                    {p.searchListNames.length > 1 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)', flexWrap: 'wrap' }}>
+                            <List size={14} style={{ color: 'var(--color-text-tertiary)' }} />
                             <button
-                                onClick={(e) => p.deleteSavedSearch(s.id, e)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 0, display: 'flex' }}
-                            >
-                                <X size={13} />
-                            </button>
+                                onClick={() => p.setActiveSearchListName(null)}
+                                style={{
+                                    padding: '3px 10px', borderRadius: 'var(--radius-lg)',
+                                    border: p.activeSearchListName === null ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    background: p.activeSearchListName === null ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                                    color: p.activeSearchListName === null ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                    fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer',
+                                    transition: 'var(--transition-fast)',
+                                }}
+                            >Todas</button>
+                            {p.searchListNames.map(name => (
+                                <button
+                                    key={name}
+                                    onClick={() => p.setActiveSearchListName(name)}
+                                    style={{
+                                        padding: '3px 10px', borderRadius: 'var(--radius-lg)',
+                                        border: p.activeSearchListName === name ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                        background: p.activeSearchListName === name ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                                        color: p.activeSearchListName === name ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                        fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
+                                        transition: 'var(--transition-fast)',
+                                    }}
+                                >{name}</button>
+                            ))}
                         </div>
-                    ))}
+                    )}
+
+                    {/* Search chips */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)' as any, whiteSpace: 'nowrap' }}>
+                            <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                            Pesquisas Salvas:
+                        </span>
+                        {p.filteredSavedSearches.map(s => (
+                            <div
+                                key={s.id}
+                                onClick={() => p.loadSavedSearch(s)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 'var(--space-2)',
+                                    padding: 'var(--space-2) var(--space-4)',
+                                    background: 'var(--color-bg-surface)',
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: 'var(--radius-xl)',
+                                    fontSize: 'var(--text-md)',
+                                    color: 'var(--color-text-primary)',
+                                    cursor: 'pointer',
+                                    transition: 'var(--transition-fast)',
+                                    fontWeight: 'var(--font-medium)' as any,
+                                }}
+                                onMouseEnter={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.background = 'rgba(37, 99, 235, 0.06)'; }}
+                                onMouseLeave={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
+                            >
+                                {s.name}
+                                {s.listName && s.listName !== 'Pesquisas Gerais' && (
+                                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', opacity: 0.7 }}>
+                                        ({s.listName})
+                                    </span>
+                                )}
+                                {s.companyProfileId && <Building2 size={12} color="var(--color-primary)" />}
+                                <button
+                                    onClick={(e) => p.deleteSavedSearch(s.id, e)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 0, display: 'flex' }}
+                                >
+                                    <X size={13} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -129,7 +169,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         </div>
 
                         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'end' }}>
-                            <button type="submit" className="btn btn-primary" disabled={p.loading} style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', height: '44px' }}>
+                            <button type="submit" className="btn btn-primary" disabled={p.loading} style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' as any, height: '44px' }}>
                                 {p.loading ? <Loader2 size={18} className="spinner" /> : <Search size={18} />}
                                 Buscar
                             </button>
@@ -144,7 +184,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 onClick={() => p.setShowAdvancedFilters(!p.showAdvancedFilters)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                                    fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
+                                    fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)' as any,
                                     color: p.showAdvancedFilters ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                                     background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
                                 }}
@@ -154,7 +194,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 {p.activeFilterCount > 0 && (
                                     <span style={{
                                         background: 'var(--color-primary)', color: 'white', borderRadius: 'var(--radius-lg)',
-                                        padding: '1px var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)',
+                                        padding: '1px var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)' as any,
                                     }}>{p.activeFilterCount}</span>
                                 )}
                                 {p.showAdvancedFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -165,7 +205,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             <button type="button" className="btn btn-ghost" onClick={p.clearSearch} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
                                 <X size={14} /> Limpar
                             </button>
-                            <button type="button" className="btn btn-outline" onClick={p.handleSaveSearch} disabled={p.saving} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
+                            <button type="button" className="btn btn-outline" onClick={p.startSaveSearch} disabled={p.saving} style={{ padding: '6px 12px', fontSize: '0.8125rem', gap: '4px' }}>
                                 {p.saving ? <Loader2 size={14} className="spinner" /> : <Save size={14} />} Salvar Pesquisa
                             </button>
                         </div>
@@ -222,7 +262,6 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 </div>
                             </div>
 
-
                             <div>
                                 <label className="form-label">Publicado a partir de</label>
                                 <input type="date" value={p.dataInicio} onChange={(e) => p.setDataInicio(e.target.value)} className="form-select" />
@@ -268,10 +307,66 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 </div>
             </div>
 
+            {/* ═══ Favorites List Filter (only when on Favoritos tab) ═══ */}
+            {p.showFavoritosTab && p.favLists.length > 0 && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                    marginBottom: 'var(--space-4)', marginTop: 'var(--space-3)',
+                    flexWrap: 'wrap',
+                }}>
+                    <FolderOpen size={14} style={{ color: 'var(--color-text-tertiary)' }} />
+                    <button
+                        onClick={() => p.setActiveFavListId(null)}
+                        style={{
+                            padding: '4px 12px', borderRadius: 'var(--radius-lg)',
+                            border: p.activeFavListId === null ? '1px solid var(--color-warning)' : '1px solid var(--color-border)',
+                            background: p.activeFavListId === null ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
+                            color: p.activeFavListId === null ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+                            fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer',
+                            transition: 'var(--transition-fast)',
+                        }}
+                    >Todas ({p.favoritos.length})</button>
+                    {p.favLists.map(list => (
+                        <div key={list.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                            <button
+                                onClick={() => p.setActiveFavListId(list.id)}
+                                style={{
+                                    padding: '4px 12px', borderRadius: 'var(--radius-lg)',
+                                    border: p.activeFavListId === list.id ? '1px solid var(--color-warning)' : '1px solid var(--color-border)',
+                                    background: p.activeFavListId === list.id ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
+                                    color: p.activeFavListId === list.id ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+                                    fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
+                                    transition: 'var(--transition-fast)',
+                                }}
+                            >{list.name} ({p.favListItemCount(list.id)})</button>
+                            {list.id !== 'default' && (
+                                <button
+                                    onClick={() => p.deleteFavList(list.id)}
+                                    style={{
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        color: 'var(--color-text-tertiary)', padding: '2px',
+                                        opacity: 0.5, transition: 'var(--transition-fast)',
+                                    }}
+                                    title="Excluir lista"
+                                    onMouseEnter={(e: any) => e.currentTarget.style.opacity = '1'}
+                                    onMouseLeave={(e: any) => e.currentTarget.style.opacity = '0.5'}
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Results Table Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 'var(--space-4)', marginTop: 'var(--space-8)' }}>
-                <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', margin: 0 }}>
-                    {p.showFavoritosTab ? 'Licitações Favoritadas' : 'Resultados da Pesquisa'}
+                <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' as any, color: 'var(--color-text-primary)', margin: 0 }}>
+                    {p.showFavoritosTab
+                        ? (p.activeFavListId
+                            ? p.favLists.find(l => l.id === p.activeFavListId)?.name || 'Favoritos'
+                            : 'Todas as Listas de Favoritos')
+                        : 'Resultados da Pesquisa'}
                 </h3>
                 {p.showFavoritosTab && p.favoritos.length > 0 && (
                     <button className="btn btn-primary" onClick={p.exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)' }}>
@@ -305,7 +400,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
                                     {p.showFavoritosTab ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} /> : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
-                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>{p.showFavoritosTab ? 'Nenhum edital nos p.favoritos' : 'Nenhum edital encontrado'}</div>
+                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>{p.showFavoritosTab ? 'Nenhum edital nos favoritos' : 'Nenhum edital encontrado'}</div>
                                     <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>{p.showFavoritosTab ? 'Clique na estrela para favoritar resultados.' : 'Tente ajustar as palavras-chave ou filtros.'}</div>
                                 </td>
                             </tr>
@@ -339,7 +434,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                         color: 'var(--color-success)',
                                                         borderRadius: 'var(--radius-lg)',
                                                         fontSize: 'var(--text-sm)',
-                                                        fontWeight: 'var(--font-bold)',
+                                                        fontWeight: 'var(--font-bold)' as any,
                                                         verticalAlign: 'middle'
                                                     }} title="Esta licitação já foi captada para o Kanban.">
                                                         <CheckCircle2 size={12} />
@@ -360,7 +455,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                     background: 'var(--color-primary-light)',
                                                     color: 'var(--color-primary)',
                                                     fontSize: 'var(--text-sm)',
-                                                    fontWeight: 'var(--font-semibold)',
+                                                    fontWeight: 'var(--font-semibold)' as any,
                                                 }}>{item.modalidade_nome}</span>
                                             ) : (
                                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
@@ -486,7 +581,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                         background: i === p.page ? 'var(--color-primary)' : 'transparent',
                                         color: i === p.page ? 'white' : 'var(--color-text)',
                                         fontSize: 'var(--text-md)',
-                                        fontWeight: i === p.page ? 'var(--font-semibold)' : 'var(--font-normal)',
+                                        fontWeight: i === p.page ? 'var(--font-semibold)' as any : 'var(--font-normal)' as any,
                                         cursor: 'pointer',
                                         transition: 'var(--transition-fast)'
                                     }}
@@ -585,6 +680,40 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 />
             )}
         </div>
+
+            {/* ═══ List Picker Popovers ═══ */}
+            <ListPickerPopover
+                open={p.listPickerOpen}
+                onClose={() => { p.setListPickerOpen(false); p.setListPickerItem(null); }}
+                title="Adicionar aos Favoritos"
+                lists={p.favLists.map(l => ({ id: l.id, name: l.name, count: p.favListItemCount(l.id) }))}
+                onSelect={(listId) => {
+                    if (p.listPickerItem) {
+                        p.addToFavList(p.listPickerItem, listId);
+                    }
+                    p.setListPickerItem(null);
+                }}
+                onCreateNew={(name) => {
+                    const newList = p.createFavList(name);
+                    return newList.id;
+                }}
+            />
+
+            <ListPickerPopover
+                open={p.searchListPickerOpen}
+                onClose={() => p.setSearchListPickerOpen(false)}
+                title="Salvar Pesquisa em..."
+                lists={p.searchListNames.map(name => ({ id: name, name, count: p.savedSearches.filter(s => (s.listName || 'Pesquisas Gerais') === name).length }))}
+                onSelect={(listName) => {
+                    p.handleSaveSearch(listName);
+                }}
+                onCreateNew={(name) => {
+                    // For searches, the "list" is just a string name — create inline
+                    p.handleSaveSearch(name);
+                    return name;
+                }}
+            />
+
             <ConfirmDialog
                 open={!!p.confirmAction}
                 title={p.confirmAction?.type === 'deleteSearch' ? 'Excluir Pesquisa' : 'Aviso de Duplicidade'}

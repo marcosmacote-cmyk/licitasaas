@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from '../../config';
@@ -29,8 +29,6 @@ export const MODALIDADES = [
     { value: '5', label: 'Diálogo Competitivo' },
     { value: '6', label: 'Dispensa de Licitação' },
     { value: '7', label: 'Inexigibilidade' },
-    { value: '8', label: 'Tomada de Preços' },
-    { value: '9', label: 'Convite' },
 ];
 
 export const STATUS_OPTIONS = [
@@ -40,6 +38,57 @@ export const STATUS_OPTIONS = [
     { value: 'anulada', label: '⚫ Anuladas' },
     { value: 'todas', label: 'Todas' },
 ];
+
+// ─── Multi-list Favorites Data ───
+const DEFAULT_FAV_LIST = 'Favoritos Gerais';
+
+interface FavList {
+    id: string;
+    name: string;
+    createdAt: string;
+}
+
+interface FavItemWithList extends PncpBiddingItem {
+    _listId: string; // Which list this item belongs to
+}
+
+interface FavStore {
+    version: 2;
+    lists: FavList[];
+    items: FavItemWithList[];
+}
+
+function loadFavStore(): FavStore {
+    // Try V2 first
+    try {
+        const raw = localStorage.getItem('pncp_favoritos_v2');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.version === 2) return parsed;
+        }
+    } catch { }
+
+    // Migrate V1 (flat array) → V2
+    const defaultList: FavList = { id: 'default', name: DEFAULT_FAV_LIST, createdAt: new Date().toISOString() };
+    try {
+        const oldRaw = localStorage.getItem('pncp_favoritos');
+        if (oldRaw) {
+            const oldItems: PncpBiddingItem[] = JSON.parse(oldRaw);
+            if (Array.isArray(oldItems) && oldItems.length > 0) {
+                const migratedItems = oldItems.map(item => ({ ...item, _listId: 'default' }));
+                return { version: 2, lists: [defaultList], items: migratedItems };
+            }
+        }
+    } catch { }
+
+    return { version: 2, lists: [defaultList], items: [] };
+}
+
+function saveFavStore(store: FavStore) {
+    localStorage.setItem('pncp_favoritos_v2', JSON.stringify(store));
+    // Keep V1 in sync for backward compatibility
+    localStorage.setItem('pncp_favoritos', JSON.stringify(store.items));
+}
 
 interface UsePncpPageParams {
     companies: CompanyProfile[];
@@ -79,42 +128,50 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const [analyzedPncpItem, setAnalyzedPncpItem] = useState<PncpBiddingItem | null>(null);
     const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
 
-    // Favoritos State
-    const [favoritos, setFavoritos] = useState<PncpBiddingItem[]>(() => {
-        const saved = localStorage.getItem('pncp_favoritos');
-        return saved ? JSON.parse(saved) : [];
-    });
+    // ─── Multi-list Favorites State ───
+    const [favStore, setFavStore] = useState<FavStore>(loadFavStore);
+    const [activeFavListId, setActiveFavListId] = useState<string | null>(null); // null = show all
     const [showFavoritosTab, setShowFavoritosTab] = useState(false);
     const [confirmAction, setConfirmAction] = useState<{ type: string; message?: string; onConfirm: () => void } | null>(null);
 
-    useEffect(() => {
-        localStorage.setItem('pncp_favoritos', JSON.stringify(favoritos));
-    }, [favoritos]);
+    // List Picker state (shared between fav and search)
+    const [listPickerOpen, setListPickerOpen] = useState(false);
+    const [listPickerItem, setListPickerItem] = useState<PncpBiddingItem | null>(null);
+    const [searchListPickerOpen, setSearchListPickerOpen] = useState(false);
 
-    const toggleFavorito = (item: PncpBiddingItem) => {
-        setFavoritos(prev => {
-            const isFav = prev.some(f => f.id === item.id);
-            if (isFav) return prev.filter(f => f.id !== item.id);
-            return [...prev, item];
+    // Active search list filter
+    const [activeSearchListName, setActiveSearchListName] = useState<string | null>(null);
+
+    useEffect(() => { saveFavStore(favStore); }, [favStore]);
+
+    // Computed: all favoritos (flat) for backward compat
+    const favoritos = favStore.items as PncpBiddingItem[];
+
+    // Computed: filtered favorites by active list
+    const filteredFavoritos = useMemo(() => {
+        const items = activeFavListId
+            ? favStore.items.filter(f => f._listId === activeFavListId)
+            : favStore.items;
+        return [...items].sort((a, b) => {
+            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
+            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
+            return dateA.getTime() - dateB.getTime();
         });
-    };
+    }, [favStore, activeFavListId]);
 
-    const displayItems = showFavoritosTab ? [...favoritos].sort((a, b) => {
-        const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
-        const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
-        return dateA.getTime() - dateB.getTime();
-    }) : results;
+    const displayItems = showFavoritosTab ? filteredFavoritos : results;
 
+    // Expired cleanup
     useEffect(() => {
         const checkExpired = () => {
             const now = new Date();
-            setFavoritos(prev => {
-                const filtered = prev.filter(f => {
+            setFavStore(prev => {
+                const filtered = prev.items.filter(f => {
                     if (!f.data_encerramento_proposta && !f.data_abertura) return true;
                     const sessao = new Date(f.data_encerramento_proposta || f.data_abertura || Date.now());
                     return sessao.getTime() >= now.getTime();
                 });
-                if (filtered.length !== prev.length) return filtered;
+                if (filtered.length !== prev.items.length) return { ...prev, items: filtered };
                 return prev;
             });
         };
@@ -123,20 +180,79 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         return () => clearInterval(interval);
     }, []);
 
+    // ─── Multi-list Favorites API ───
+    const favLists = favStore.lists;
+
+    const createFavList = (name: string): FavList => {
+        const newList: FavList = { id: uuidv4(), name: name.trim(), createdAt: new Date().toISOString() };
+        setFavStore(prev => ({ ...prev, lists: [...prev.lists, newList] }));
+        return newList;
+    };
+
+    const deleteFavList = (listId: string) => {
+        setFavStore(prev => ({
+            ...prev,
+            lists: prev.lists.filter(l => l.id !== listId),
+            items: prev.items.filter(i => i._listId !== listId),
+        }));
+        if (activeFavListId === listId) setActiveFavListId(null);
+    };
+
+    const addToFavList = (item: PncpBiddingItem, listId: string) => {
+        setFavStore(prev => {
+            // Don't add if already in this list
+            if (prev.items.some(f => f.id === item.id && f._listId === listId)) {
+                return prev;
+            }
+            return { ...prev, items: [...prev.items, { ...item, _listId: listId }] };
+        });
+    };
+
+    const removeFromFavList = (itemId: string, listId?: string) => {
+        setFavStore(prev => ({
+            ...prev,
+            items: listId
+                ? prev.items.filter(f => !(f.id === itemId && f._listId === listId))
+                : prev.items.filter(f => f.id !== itemId),
+        }));
+    };
+
+    // Open list picker to add item to a list
+    const startFavoritar = (item: PncpBiddingItem) => {
+        // If only one list exists, add directly
+        if (favLists.length === 1) {
+            addToFavList(item, favLists[0].id);
+            toast.success(`Adicionado a "${favLists[0].name}"`);
+            return;
+        }
+        setListPickerItem(item);
+        setListPickerOpen(true);
+    };
+
+    // Toggle: if item exists in any list, remove from all; otherwise open picker
+    const toggleFavorito = (item: PncpBiddingItem) => {
+        const isInAnyList = favStore.items.some(f => f.id === item.id);
+        if (isInAnyList) {
+            removeFromFavList(item.id);
+        } else {
+            startFavoritar(item);
+        }
+    };
+
+    const favListItemCount = (listId: string) => favStore.items.filter(f => f._listId === listId).length;
+
     const exportFavoritesToPdf = () => {
-        if (favoritos.length === 0) { toast.warning('Não há licitações favoritadas.'); return; }
+        const itemsToExport = filteredFavoritos;
+        if (itemsToExport.length === 0) { toast.warning('Não há licitações favoritadas.'); return; }
+        const listName = activeFavListId
+            ? favLists.find(l => l.id === activeFavListId)?.name || 'Favoritos'
+            : 'Favoritos (Todas as Listas)';
         const doc = new jsPDF('l', 'mm', 'a4');
-        doc.setFontSize(16); doc.text("Relatório de Licitações Favoritas (PNCP)", 14, 20);
+        doc.setFontSize(16); doc.text(`Relatório: ${listName}`, 14, 20);
         doc.setFontSize(10); doc.text(`Data da Exportação: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
 
         const tableColumn = ["Órgão", "Mod. / N°", "Objeto", "Prazo Limite", "Val. Est. (R$)", "Município", "Link PNCP"];
-        const sortedFavoritos = [...favoritos].sort((a, b) => {
-            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
-            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
-            return dateA.getTime() - dateB.getTime();
-        });
-
-        const tableRows = sortedFavoritos.map(item => [
+        const tableRows = itemsToExport.map(item => [
             item.orgao_nome,
             `${item.modalidade_nome}\n${item.ano}/${item.numero_sequencial}`,
             item.objeto.length > 90 ? item.objeto.substring(0, 87) + '...' : item.objeto,
@@ -154,7 +270,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             columnStyles: { 2: { cellWidth: 70 }, 6: { cellWidth: 35 } },
             didDrawCell: (data) => {
                 if (data.section === 'body' && data.column.index === 6) {
-                    const item = sortedFavoritos[data.row.index];
+                    const item = itemsToExport[data.row.index];
                     if (item?.link_sistema) {
                         doc.setTextColor(37, 99, 235);
                         doc.textWithLink("Acessar no PNCP", data.cell.x + 2, data.cell.y + 5, { url: item.link_sistema });
@@ -162,7 +278,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 }
             }
         });
-        doc.save(`licitacoes-favoritas-${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`licitacoes-${listName.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     useEffect(() => { fetchSavedSearches(); }, []);
@@ -203,9 +319,24 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         finally { setLoading(false); }
     };
 
-    const handleSaveSearch = async () => {
+    // ─── Multi-list Saved Searches ───
+    const searchListNames = useMemo(() => {
+        const names = [...new Set(savedSearches.map(s => s.listName || 'Pesquisas Gerais'))];
+        return names.sort();
+    }, [savedSearches]);
+
+    const filteredSavedSearches = useMemo(() => {
+        if (!activeSearchListName) return savedSearches;
+        return savedSearches.filter(s => (s.listName || 'Pesquisas Gerais') === activeSearchListName);
+    }, [savedSearches, activeSearchListName]);
+
+    const handleSaveSearch = async (listName?: string) => {
         const name = prompt("Defina um nome para esta pesquisa (ex: Equipamentos TI em SP):");
         if (!name) return;
+
+        // If no listName provided, and multiple lists exist, open picker
+        const effectiveListName = listName || 'Pesquisas Gerais';
+
         setSaving(true);
         try {
             const token = localStorage.getItem('token');
@@ -214,12 +345,25 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name, keywords, status, companyProfileId: selectedSearchCompanyId || undefined,
+                    listName: effectiveListName,
                     states: JSON.stringify({ uf: selectedUf, modalidade, esfera, orgao, orgaosLista, dataInicio, dataFim })
                 })
             });
-            if (res.ok) { fetchSavedSearches(); } else { throw new Error("Failed to save"); }
+            if (res.ok) {
+                fetchSavedSearches();
+                toast.success(`Pesquisa salva em "${effectiveListName}"`);
+            } else { throw new Error("Failed to save"); }
         } catch (e) { console.error(e); toast.error('Erro ao salvar pesquisa.'); }
         finally { setSaving(false); }
+    };
+
+    // Start save search flow (with list picker)
+    const startSaveSearch = () => {
+        if (searchListNames.length > 1) {
+            setSearchListPickerOpen(true);
+        } else {
+            handleSaveSearch();
+        }
     };
 
     const loadSavedSearch = (search: PncpSavedSearch) => {
@@ -427,13 +571,19 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         viewingAnalysisProcess, setViewingAnalysisProcess,
         analyzedPncpItem, setAnalyzedPncpItem,
         pendingAiAnalysis, setPendingAiAnalysis,
-        // Favoritos
-        favoritos, showFavoritosTab, setShowFavoritosTab, confirmAction, setConfirmAction,
+        // Multi-list Favoritos
+        favoritos, favLists, favStore, activeFavListId, setActiveFavListId,
+        showFavoritosTab, setShowFavoritosTab, confirmAction, setConfirmAction,
+        listPickerOpen, setListPickerOpen, listPickerItem, setListPickerItem,
+        createFavList, deleteFavList, addToFavList, removeFromFavList, favListItemCount,
+        // Multi-list Saved Searches
+        searchListNames, filteredSavedSearches, activeSearchListName, setActiveSearchListName,
+        searchListPickerOpen, setSearchListPickerOpen,
         // Computed
         displayItems, activeFilterCount,
         // Handlers
         toggleFavorito, exportFavoritesToPdf,
-        handleSearch, handleSaveSearch, loadSavedSearch,
+        handleSearch, handleSaveSearch, startSaveSearch, loadSavedSearch,
         deleteSavedSearch, clearSearch,
         handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess,
     };
