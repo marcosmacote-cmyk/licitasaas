@@ -190,13 +190,15 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
     const flagList = useMemo(() => {
         if (v2?.legal_risk_review?.critical_points?.length > 0) {
             return v2.legal_risk_review.critical_points.map((cp: any) => ({
-                text: `${cp.title}: ${cp.description}`,
+                title: cp.title || '',
+                text: cp.description || '',
                 severity: cp.severity || 'media',
                 action: cp.recommended_action || '',
+                reason: cp.reason || '',
             }));
         }
         const legacy = parseArray(analysis?.irregularitiesFlags);
-        return legacy.map(f => ({ text: f, severity: 'media', action: '' }));
+        return legacy.map(f => ({ title: '', text: f, severity: 'media', action: '', reason: '' }));
     }, [v2, analysis?.irregularitiesFlags]);
 
     // Conditions (V2 only)
@@ -292,7 +294,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                 'documentos_complementares': 'Declarações e Outros',
             };
 
-            const result: Record<string, { item: string; description: string; hasMatch: boolean; mandatory?: boolean; riskIfMissing?: string }[]> = {};
+            const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; mandatory?: boolean; riskIfMissing?: string }[]> = {};
 
             for (const [key, label] of Object.entries(v2Categories)) {
                 const reqs = v2.requirements[key];
@@ -313,7 +315,8 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                     });
                     return {
                         item: r.requirement_id || '-',
-                        description: r.title ? `${r.title}: ${r.description || ''}` : (r.description || ''),
+                        title: r.title || '',
+                        description: r.description || '',
                         hasMatch,
                         mandatory: r.mandatory,
                         riskIfMissing: r.risk_if_missing,

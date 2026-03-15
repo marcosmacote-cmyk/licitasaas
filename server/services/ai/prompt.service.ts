@@ -373,8 +373,8 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 3. NÃO avalie riscos — isso será feito na Etapa 3.
 4. Se um campo não tiver informação no documento, preencha com null ou string vazia. NUNCA invente.
 5. Para campos booleanos, use true/false apenas quando o documento for EXPLÍCITO. Use null quando não mencionar.
-6. REGISTRE EVIDÊNCIAS: para cada dado extraído, crie uma entrada no evidence_registry com seção, página e trecho literal.
-7. Transcreva exigências de qualificação técnica de forma LITERAL — nunca resuma, nunca agrupe, nunca parafraseie.
+6. REGISTRE EVIDÊNCIAS: para cada dado extraído, crie uma entrada no evidence_registry com seção, página e trecho literal (30-80 caracteres).
+7. Extraia exigências de qualificação técnica de forma OBJETIVA — título curto (máx 80 chars) + descrição resumida (máx 120 chars). Preserve termos técnicos e legais exatos.
 8. Em PDFs escaneados, faça OCR visual cuidadoso. Ignore marcas d'água e carimbos.
 
 ── REGRAS DE QUALIDADE PARA EXTRAÇÃO ──
@@ -395,7 +395,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "orgao": "", "unidade_compradora": "", "numero_processo": "", "numero_edital": "",
     "modalidade": "", "forma_disputa": "", "criterio_julgamento": "", "regime_execucao": "",
     "tipo_objeto": "servico_comum|servico_comum_engenharia|obra_engenharia|fornecimento|locacao|outro",
-    "objeto_resumido": "até 200 caracteres", "objeto_completo": "transcrição integral",
+    "objeto_resumido": "até 150 caracteres", "objeto_completo": "transcrição integral",
     "fonte_oficial": "", "municipio_uf": ""
   },
   "timeline": {
@@ -406,7 +406,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "outros_prazos": [{"descricao": "", "data": ""}]
   },
   "requirements": {
-    "habilitacao_juridica": [{"requirement_id": "HJ-01", "title": "", "description": "texto LITERAL do edital", "mandatory": true, "applies_to": "licitante", "risk_if_missing": "inabilitação", "evidence_refs": ["EV-01"]}],
+    "habilitacao_juridica": [{"requirement_id": "HJ-01", "title": "título curto máx 80 chars", "description": "resumo objetivo máx 120 chars", "mandatory": true, "applies_to": "licitante", "risk_if_missing": "inabilitação", "evidence_refs": ["EV-01"]}],
     "regularidade_fiscal_trabalhista": [],
     "qualificacao_economico_financeira": [],
     "qualificacao_tecnica_operacional": [],
@@ -415,7 +415,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "documentos_complementares": []
   },
   "evidence_registry": [
-    {"evidence_id": "EV-01", "document_type": "edital|tr|pb|minuta|anexo|planilha|outro", "document_name": "", "page": "", "section": "", "excerpt": "trecho literal do documento (mínimo 30 caracteres)", "normalized_topic": ""}
+    {"evidence_id": "EV-01", "document_type": "edital|tr|pb|minuta|anexo|planilha|outro", "document_name": "", "page": "", "section": "", "excerpt": "trecho literal 30-80 chars", "normalized_topic": ""}
   ],
   "participation_conditions": {
     "permite_consorcio": null, "permite_subcontratacao": null,
@@ -524,7 +524,7 @@ ENTRADA: JSON da Etapa 1 (será fornecido abaixo)
 FORMATO DE SAÍDA — JSON complementar com estas seções:
 {
   "requirements_normalized": {
-    "habilitacao_juridica": [{"requirement_id": "", "title": "", "description": "", "mandatory": true, "applies_to": "", "risk_if_missing": "", "evidence_refs": []}],
+    "habilitacao_juridica": [{"requirement_id": "", "title": "máx 80 chars", "description": "máx 120 chars", "mandatory": true, "applies_to": "", "risk_if_missing": "", "evidence_refs": []}],
     "regularidade_fiscal_trabalhista": [],
     "qualificacao_economico_financeira": [],
     "qualificacao_tecnica_operacional": [],
@@ -623,12 +623,12 @@ FORMATO DE SAÍDA — JSON:
   "legal_risk_review": {
     "critical_points": [
       {
-        "title": "título conciso do ponto",
+        "title": "título conciso máx 60 chars",
         "category": "habilitacao|proposta|tecnica|economico_financeira|prazo|contratual|outro",
         "severity": "baixa|media|alta|critica",
-        "description": "descrição detalhada do ponto com referência ao item/cláusula",
-        "reason": "por que isso é um risco — cite base legal ou jurisprudência",
-        "recommended_action": "ação concreta e viável (impugnar, esclarecer, preparar documento X, etc.)",
+        "description": "descrição objetiva máx 150 chars com referência ao item/cláusula",
+        "reason": "motivador jurídico máx 120 chars",
+        "recommended_action": "ação concreta máx 100 chars",
         "evidence_refs": ["EV-XX"]
       }
     ],

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, ChevronRight, FileSearch2, Plus, Target, BarChart3 } from 'lucide-react';
+import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, Target, BarChart3 } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
@@ -255,17 +255,24 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                 {report.flagList.map((flag: any, i: number) => {
                                                     const sc = severityColor(flag.severity);
                                                     return (
-                                                        <div key={i} style={{ padding: 'var(--space-4)', background: sc.bg, border: `1px solid ${sc.border}`, borderRadius: 'var(--radius-lg)', borderLeft: `4px solid ${sc.badge}` }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: sc.badge, background: `${sc.badge}15`, padding: '2px 8px', borderRadius: 'var(--radius-md)' }}>
+                                                        <div key={i} style={{ padding: 'var(--space-3) var(--space-4)', background: sc.bg, border: `1px solid ${sc.border}`, borderRadius: 'var(--radius-lg)', borderLeft: `3px solid ${sc.badge}` }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: flag.title ? '3px' : 0 }}>
+                                                                <span style={{ fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', color: sc.badge, background: `${sc.badge}15`, padding: '1px 6px', borderRadius: 'var(--radius-sm)', letterSpacing: '0.03em' }}>
                                                                     {flag.severity || 'média'}
                                                                 </span>
+                                                                {flag.title && (
+                                                                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: sc.text }}>
+                                                                        {flag.title}
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <p style={{ fontSize: 'var(--text-sm)', color: sc.text, lineHeight: 1.6, margin: 0, fontWeight: 500 }}>
-                                                                {flag.text}
-                                                            </p>
+                                                            {flag.text && (
+                                                                <p style={{ fontSize: '0.8rem', color: sc.text, lineHeight: 1.5, margin: 0, fontWeight: 400 }}>
+                                                                    {flag.text}
+                                                                </p>
+                                                            )}
                                                             {flag.action && (
-                                                                <p style={{ fontSize: '0.8rem', color: sc.text, lineHeight: 1.5, margin: '6px 0 0', opacity: 0.85, fontStyle: 'italic' }}>
+                                                                <p style={{ fontSize: '0.75rem', color: sc.badge, lineHeight: 1.4, margin: '4px 0 0', fontWeight: 600 }}>
                                                                     → {flag.action}
                                                                 </p>
                                                             )}
@@ -343,34 +350,49 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                 <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--color-border)' }} />
                                                             </div>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                                {docs.map((doc: any, idx: number) => (
+                                                                {docs.map((doc: any, idx: number) => {
+                                                                    const DESC_LIMIT = 120;
+                                                                    const isLong = doc.description && doc.description.length > DESC_LIMIT;
+                                                                    return (
                                                                     <div key={idx} style={{
                                                                         padding: 'var(--space-3) var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)',
-                                                                        border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: 'var(--text-sm)'
+                                                                        border: '1px solid var(--color-border)', display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', fontSize: 'var(--text-sm)'
                                                                     }}>
-                                                                        <div style={{ padding: '2px', borderRadius: 'var(--radius-md)', background: doc.hasMatch ? 'var(--color-success-bg)' : 'var(--color-danger-bg)', flexShrink: 0 }}>
+                                                                        <div style={{ padding: '2px', borderRadius: 'var(--radius-md)', background: doc.hasMatch ? 'var(--color-success-bg)' : 'var(--color-danger-bg)', flexShrink: 0, marginTop: '2px' }}>
                                                                             {doc.hasMatch ? <CheckCircle2 size={14} color="var(--color-success)" /> : <FileX size={14} color="var(--color-danger)" />}
                                                                         </div>
                                                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: '2px' }}>
                                                                                 {doc.item && doc.item !== '-' && (
-                                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '2px 6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-border)', flexShrink: 0 }}>
+                                                                                    <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '1px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary-border)', flexShrink: 0, letterSpacing: '0.02em' }}>
                                                                                         {doc.item}
                                                                                     </span>
                                                                                 )}
                                                                                 {doc.mandatory === false && (
-                                                                                    <span style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--color-text-tertiary)', background: 'var(--color-bg-secondary)', padding: '1px 5px', borderRadius: 'var(--radius-sm)' }}>
+                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 600, color: 'var(--color-text-tertiary)', background: 'var(--color-bg-secondary)', padding: '1px 4px', borderRadius: 'var(--radius-sm)' }}>
                                                                                         opcional
                                                                                     </span>
                                                                                 )}
+                                                                                {doc.riskIfMissing && doc.riskIfMissing !== 'informativo' && (
+                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 700, color: doc.riskIfMissing === 'inabilitação' || doc.riskIfMissing === 'inabilitacao' ? 'var(--color-danger)' : 'var(--color-warning)', background: doc.riskIfMissing === 'inabilitação' || doc.riskIfMissing === 'inabilitacao' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)', padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
+                                                                                        {doc.riskIfMissing}
+                                                                                    </span>
+                                                                                )}
                                                                             </div>
-                                                                            <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: 'var(--color-text-primary)', fontWeight: 500, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                                {doc.description}
-                                                                            </p>
+                                                                            {doc.title && (
+                                                                                <p style={{ margin: '0 0 1px', fontSize: '0.82rem', color: 'var(--color-text-primary)', fontWeight: 600, lineHeight: 1.3 }}>
+                                                                                    {doc.title}
+                                                                                </p>
+                                                                            )}
+                                                                            {doc.description && (
+                                                                                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-secondary)', fontWeight: 400, lineHeight: 1.4 }}>
+                                                                                    {isLong ? doc.description.slice(0, DESC_LIMIT) + '…' : doc.description}
+                                                                                </p>
+                                                                            )}
                                                                         </div>
-                                                                        <ChevronRight size={14} color="var(--color-border)" style={{ flexShrink: 0 }} />
                                                                     </div>
-                                                                ))}
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     ))}
