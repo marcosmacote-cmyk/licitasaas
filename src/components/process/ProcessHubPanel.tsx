@@ -1,6 +1,7 @@
 import { ScanSearch, Cpu, Loader2, Eye, ChevronRight, CheckCircle2, AlertTriangle, XCircle, FileText, DollarSign, FolderArchive, Gavel, Monitor, MessageSquare, PlusCircle, Edit3, Shield, FileWarning } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, CompanyCredential, ObservationLog } from '../../types';
 import { getGovernance, resolveStage, isModuleAllowed, getSubstageLabel, SUBSTAGES, type SystemModule } from '../../governance';
+import { PhaseExplainer } from '../ui/PhaseExplainer';
 
 interface ProcessHubPanelProps {
     initialData: BiddingProcess | null;
@@ -367,6 +368,19 @@ export function ProcessHubPanel({
                     {/* Próximo passo — sempre visível se empresa selecionada */}
                     {company && (
                         <div style={{ marginTop: 'auto', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--color-border)' }}>
+                            {/* Fase atual + Entenda esta fase */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                <span style={{
+                                    padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                                    fontSize: '0.65rem', fontWeight: 700,
+                                    background: `color-mix(in srgb, ${gov.themeColor} 10%, transparent)`,
+                                    color: gov.themeColor,
+                                    border: `1px solid color-mix(in srgb, ${gov.themeColor} 25%, transparent)`,
+                                }}>
+                                    {stage}
+                                </span>
+                                <PhaseExplainer stage={stage} substage={substage} position="right" />
+                            </div>
                             <SectionLabel>Próximo passo</SectionLabel>
                             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
                                 {nextStep}

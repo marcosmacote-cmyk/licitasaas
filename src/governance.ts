@@ -447,3 +447,114 @@ export const MODULE_LABELS: Record<SystemModule, { label: string; icon: string }
     'companies':              { label: 'Empresas',           icon: 'Building2' },
     'results':                { label: 'Resultados',         icon: 'BarChart3' },
 };
+
+// ── "Entenda esta fase" — Conteúdo contextual por fase ───────
+
+export interface PhaseExplainerContent {
+    meaning: string;
+    cardInterpretation: string;
+    availableModules: string[];
+    blockedModules: string[];
+    recommendedAction: string;
+    criticalNote: string;
+}
+
+export const PHASE_EXPLAINER: Record<KanbanStage, PhaseExplainerContent> = {
+    'Captado': {
+        meaning: 'O processo entrou no sistema, mas ainda não passou por triagem operacional.',
+        cardInterpretation: 'Os cards aqui representam oportunidades recém-captadas, ainda sem decisão interna de participação.',
+        availableModules: ['Busca PNCP', 'Visualização básica', 'Observações internas'],
+        blockedModules: ['Proposta', 'Declarações', 'Petições/Recursos', 'Dossiê', 'Monitor Chat'],
+        recommendedAction: 'Iniciar triagem',
+        criticalNote: 'Esta fase é de entrada. Ainda não há liberação para execução operacional.',
+    },
+    'Em Análise': {
+        meaning: 'O processo está em avaliação técnica, jurídica e estratégica.',
+        cardInterpretation: 'Os cards aqui ainda não foram aprovados para participação. A equipe está analisando riscos, exigências e viabilidade.',
+        availableModules: ['LicitIA', 'Oráculo Técnico', 'Documentos'],
+        blockedModules: ['Proposta', 'Monitor Chat'],
+        recommendedAction: 'Concluir análise e decidir participação',
+        criticalNote: 'Se a subfase for análise para esclarecimento ou impugnação, o módulo Petições/Recursos poderá ser habilitado.',
+    },
+    'Aprovado para Participação': {
+        meaning: 'A decisão interna foi participar do processo.',
+        cardInterpretation: 'Os cards aqui já passaram pela análise e seguirão para a execução preparatória.',
+        availableModules: ['Documentos', 'Dossiê', 'Oráculo Técnico', 'LicitIA'],
+        blockedModules: ['Recurso', 'Monitor Chat'],
+        recommendedAction: 'Preparar documentação',
+        criticalNote: 'Esta fase marca a transição entre análise e preparação.',
+    },
+    'Preparando Documentação': {
+        meaning: 'A equipe está reunindo e regularizando a documentação de habilitação, declarações, acervos e dossiê.',
+        cardInterpretation: 'Os cards aqui exigem foco em prontidão documental e resolução de pendências.',
+        availableModules: ['Documentos', 'Declarações', 'Dossiê', 'Oráculo Técnico', 'LicitIA'],
+        blockedModules: ['Proposta', 'Monitor Chat', 'Recurso'],
+        recommendedAction: 'Regularizar pendências documentais',
+        criticalNote: 'Pendências críticas nesta fase podem impedir a participação.',
+    },
+    'Preparando Proposta': {
+        meaning: 'A proposta comercial/técnica está sendo montada, revisada ou finalizada.',
+        cardInterpretation: 'Os cards aqui representam processos já aptos documentalmente ou próximos disso, com foco na composição da proposta.',
+        availableModules: ['Proposta', 'Declarações', 'Dossiê', 'Documentos'],
+        blockedModules: ['Recurso', 'Monitor Chat'],
+        recommendedAction: 'Concluir proposta',
+        criticalNote: 'Esta fase antecede a sessão. O foco principal é a proposta.',
+    },
+    'Em Sessão': {
+        meaning: 'O processo está em disputa, negociação ou acompanhamento operacional em tempo real.',
+        cardInterpretation: 'Os cards aqui exigem atenção imediata, leitura de eventos da sessão e resposta rápida.',
+        availableModules: ['Monitor Chat', 'Proposta', 'Documentos'],
+        blockedModules: ['Petições/Recursos'],
+        recommendedAction: 'Acompanhar sessão',
+        criticalNote: 'Quando houver disputa ou negociação, o módulo prioritário é o Monitor Chat.',
+    },
+    'Pós-Sessão': {
+        meaning: 'A sessão ocorreu e o processo está em diligência, habilitação ou aguardando resultado final.',
+        cardInterpretation: 'Os cards aqui ainda exigem acompanhamento ativo, mas já fora da disputa ao vivo.',
+        availableModules: ['Dossiê', 'Documentos', 'Declarações'],
+        blockedModules: ['Monitor Chat', 'Proposta'],
+        recommendedAction: 'Responder diligência ou acompanhar habilitação',
+        criticalNote: 'Esta fase é crítica para documentações complementares e exigências pós-disputa.',
+    },
+    'Recurso': {
+        meaning: 'O processo entrou em fase recursal.',
+        cardInterpretation: 'Os cards aqui exigem atuação jurídica/administrativa específica, como recurso ou contrarrazão.',
+        availableModules: ['Petições/Recursos', 'Documentos'],
+        blockedModules: ['Proposta', 'Monitor Chat'],
+        recommendedAction: 'Elaborar recurso ou contrarrazão',
+        criticalNote: 'Nesta fase, os módulos de proposta e sessão não fazem sentido operacional.',
+    },
+    'Ganho': {
+        meaning: 'O resultado final foi favorável à empresa.',
+        cardInterpretation: 'Os cards aqui representam processos ganhos, homologados ou em consolidação final.',
+        availableModules: ['Resultados', 'Exportações', 'Documentos finais'],
+        blockedModules: ['Monitor Chat', 'Proposta', 'Petições/Recursos'],
+        recommendedAction: 'Consolidar ganho',
+        criticalNote: 'É uma fase de fechamento positivo e transição para histórico ou contratação.',
+    },
+    'Não Participar': {
+        meaning: 'Foi tomada decisão interna de não seguir no processo.',
+        cardInterpretation: 'Os cards aqui representam processos descartados por estratégia, inviabilidade ou impeditivos.',
+        availableModules: ['Histórico', 'Observações', 'Resultados'],
+        blockedModules: ['Proposta', 'Dossiê', 'Monitor Chat', 'Recurso'],
+        recommendedAction: 'Registrar justificativa',
+        criticalNote: 'Esta fase deve deixar clara a razão da não participação.',
+    },
+    'Perdido': {
+        meaning: 'A empresa participou, mas não obteve êxito no resultado.',
+        cardInterpretation: 'Os cards aqui representam processos encerrados sem vitória, ainda podendo exigir análise final ou eventual recurso.',
+        availableModules: ['Resultados', 'Histórico', 'Petições/Recursos (se cabível)'],
+        blockedModules: ['Proposta', 'Monitor Chat'],
+        recommendedAction: 'Registrar perda',
+        criticalNote: 'Dependendo da subfase, pode haver possibilidade de recurso.',
+    },
+    'Arquivado': {
+        meaning: 'O processo está encerrado e sem ação operacional ativa.',
+        cardInterpretation: 'Os cards aqui existem apenas para consulta histórica e análise posterior.',
+        availableModules: ['Histórico', 'Resultados'],
+        blockedModules: ['Todos os módulos operacionais'],
+        recommendedAction: 'Consultar histórico',
+        criticalNote: 'Esta é uma fase terminal do fluxo.',
+    },
+};
+

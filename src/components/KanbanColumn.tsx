@@ -1,6 +1,8 @@
 import { useDroppable } from '@dnd-kit/core';
 import { KanbanItem } from './KanbanCard';
 import type { BiddingProcess, AiAnalysis, CompanyProfile } from '../types';
+import { PhaseExplainer } from './ui/PhaseExplainer';
+import type { KanbanStage } from '../governance';
 
 interface CardFieldConfig {
     key: string;
@@ -37,7 +39,10 @@ export function KanbanColumn({ title, items, companies, onEditProcess, onDeleteP
             }}
         >
             <div className="kanban-column-header">
-                <span>{title}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+                    <PhaseExplainer stage={title as KanbanStage} compact />
+                </div>
                 <span className="column-badge">{items.length}</span>
             </div>
             <div className="kanban-column-content">
