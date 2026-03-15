@@ -1276,18 +1276,39 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             console.warn(`[PNCP-AI] Failed to fetch attachments: ${e.message}`);
         }
         // 2. Sort to prioritize: Edital (tipoDocumentoId=2) > Termo de Referência (4) > Others
+        // Sort by legal/technical priority: Edital > TR > Projeto Básico > Planilhas > Proposta > Minuta > outros
         arquivos.sort((a, b) => {
-            const priority = { 2: 0, 4: 1 }; // Edital, TR
-            const pa = priority[a.tipoDocumentoId] ?? 99;
-            const pb = priority[b.tipoDocumentoId] ?? 99;
+            const nameScore = (name) => {
+                const n = (name || '').toLowerCase();
+                if (n.includes('edital') && !n.includes('anexo'))
+                    return 0;
+                if (n.includes('termo_referencia') || n.includes('termo de referencia') || n.includes('tr_') || (a.tipoDocumentoId === 4))
+                    return 1;
+                if (n.includes('projeto_basico') || n.includes('projeto basico'))
+                    return 2;
+                if (n.includes('planilha') || n.includes('orcamento'))
+                    return 3;
+                if (n.includes('proposta') || n.includes('modelo_proposta'))
+                    return 4;
+                if (n.includes('etp') || n.includes('estudo_tecnico'))
+                    return 5;
+                if (n.includes('minuta') || n.includes('contrato'))
+                    return 8;
+                if (n.includes('anexo'))
+                    return 6;
+                return 7;
+            };
+            const pa = (a.tipoDocumentoId === 2) ? -1 : nameScore(a.titulo || a.nomeArquivo || '');
+            const pb = (b.tipoDocumentoId === 2) ? -1 : nameScore(b.titulo || b.nomeArquivo || '');
             return pa - pb;
         });
         // 3. Download and process files (PDF, ZIP, or RAR containing PDFs)
-        const MAX_PDF_PARTS = 5; // Increased from 3 to handle complex editals
-        const MAX_TOTAL_PDF_SIZE_KB = 30000; // 30MB budget for total PDF input
+        const MAX_PDF_PARTS = 5;
+        const MAX_TOTAL_PDF_SIZE_KB = 30000; // 30MB budget
         let totalPdfSizeAccum = 0;
         const pdfParts = [];
         const downloadedFiles = [];
+        const discardedFiles = [];
         for (const arq of arquivos) {
             if (pdfParts.length >= MAX_PDF_PARTS)
                 break;
@@ -1314,7 +1335,8 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                     // Budget check: skip if adding this PDF would exceed total size limit
                     const bufferSizeKB = buffer.length / 1024;
                     if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                        console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
+                        console.warn(`[PNCP-AI] \u26a0\ufe0f Or\u00e7amento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
+                        discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
                         continue;
                     }
                     totalPdfSizeAccum += bufferSizeKB;
@@ -1737,6 +1759,42 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
             v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${riskSettled.reason?.message || 'erro desconhecido'}`);
             stageTimes.risk_review = stageTimes.risk_review || 0;
+        }
+        // ── Schema Sanitization: Safe defaults for all arrays/collections ──
+        // Prevents "Cannot read properties of undefined (reading 'length')" crashes
+        const reqCategories = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira',
+            'qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'proposta_comercial', 'documentos_complementares'];
+        if (!v2Result.requirements)
+            v2Result.requirements = {};
+        for (const cat of reqCategories) {
+            if (!Array.isArray(v2Result.requirements[cat])) {
+                v2Result.requirements[cat] = [];
+            }
+        }
+        if (!Array.isArray(v2Result.evidence_registry))
+            v2Result.evidence_registry = [];
+        if (!v2Result.legal_risk_review)
+            v2Result.legal_risk_review = { critical_points: [], ambiguities: [], inconsistencies: [], omissions: [], possible_restrictive_clauses: [], points_for_impugnation_or_clarification: [] };
+        if (!Array.isArray(v2Result.legal_risk_review.critical_points))
+            v2Result.legal_risk_review.critical_points = [];
+        if (!v2Result.operational_outputs)
+            v2Result.operational_outputs = { documents_to_prepare: [], internal_checklist: [], questions_for_consultor_chat: [], possible_petition_routes: [] };
+        if (!v2Result.confidence)
+            v2Result.confidence = { overall_confidence: 'baixa', section_confidence: {}, warnings: [] };
+        if (!Array.isArray(v2Result.confidence.warnings))
+            v2Result.confidence.warnings = [];
+        if (!v2Result.economic_financial_analysis)
+            v2Result.economic_financial_analysis = { indices_exigidos: [] };
+        if (!Array.isArray(v2Result.economic_financial_analysis.indices_exigidos))
+            v2Result.economic_financial_analysis.indices_exigidos = [];
+        if (!v2Result.technical_analysis)
+            v2Result.technical_analysis = { parcelas_relevantes: [] };
+        if (!Array.isArray(v2Result.technical_analysis.parcelas_relevantes))
+            v2Result.technical_analysis.parcelas_relevantes = [];
+        // Record discarded files in analysis metadata
+        if (discardedFiles.length > 0) {
+            v2Result.analysis_meta.discarded_files = discardedFiles;
+            v2Result.confidence.warnings.push(`${discardedFiles.length} anexo(s) ignorado(s) por limite de tamanho: ${discardedFiles.join(', ')}`);
         }
         // ── Validation (no AI) ──
         const validation = validateAnalysisCompleteness(v2Result);
@@ -2999,39 +3057,40 @@ function validateAnalysisCompleteness(schema) {
         }
     };
     // ── 1. Identificação do Processo (peso alto) ──
-    check(!!(schema.process_identification.objeto_resumido || schema.process_identification.objeto_completo), 'Objeto da licitação não identificado');
-    check(!!schema.process_identification.modalidade, 'Modalidade não identificada');
-    check(!!schema.process_identification.orgao, 'Órgão licitante não identificado');
-    check(!!schema.process_identification.numero_edital, 'Número do edital não identificado');
+    check(!!(schema.process_identification?.objeto_resumido || schema.process_identification?.objeto_completo), 'Objeto da licitação não identificado');
+    check(!!schema.process_identification?.modalidade, 'Modalidade não identificada');
+    check(!!schema.process_identification?.orgao, 'Órgão licitante não identificado');
+    check(!!schema.process_identification?.numero_edital, 'Número do edital não identificado');
     // ── 2. Timeline ──
-    check(!!schema.timeline.data_sessao, 'Data da sessão não identificada');
-    check(!!(schema.timeline.data_publicacao || schema.timeline.prazo_impugnacao || schema.timeline.prazo_esclarecimento), 'Nenhum prazo relevante identificado (publicação, impugnação ou esclarecimento)');
+    check(!!schema.timeline?.data_sessao, 'Data da sessão não identificada');
+    check(!!(schema.timeline?.data_publicacao || schema.timeline?.prazo_impugnacao || schema.timeline?.prazo_esclarecimento), 'Nenhum prazo relevante identificado (publicação, impugnação ou esclarecimento)');
     // ── 3. Exigências de Habilitação ──
-    const totalReqs = Object.values(schema.requirements).reduce((sum, arr) => sum + arr.length, 0);
+    const totalReqs = Object.values(schema.requirements || {}).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
     check(totalReqs > 0, 'Nenhuma exigência de habilitação identificada');
     check(totalReqs >= 3, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
     // ── 4. Condições de Participação ──
-    check(schema.participation_conditions.permite_consorcio !== null ||
-        schema.participation_conditions.permite_subcontratacao !== null ||
-        !!schema.participation_conditions.tratamento_me_epp, 'Nenhuma condição de participação identificada');
+    check(schema.participation_conditions?.permite_consorcio !== null ||
+        schema.participation_conditions?.permite_subcontratacao !== null ||
+        !!schema.participation_conditions?.tratamento_me_epp, 'Nenhuma condição de participação identificada');
     // ── 5. Análise Técnica ──
-    check(schema.requirements.qualificacao_tecnica_operacional.length > 0 ||
-        schema.requirements.qualificacao_tecnica_profissional.length > 0 ||
-        schema.technical_analysis.exige_atestado_capacidade_tecnica === true, 'Nenhuma exigência técnica ou atestado identificado');
+    check((schema.requirements?.qualificacao_tecnica_operacional?.length || 0) > 0 ||
+        (schema.requirements?.qualificacao_tecnica_profissional?.length || 0) > 0 ||
+        schema.technical_analysis?.exige_atestado_capacidade_tecnica === true, 'Nenhuma exigência técnica ou atestado identificado');
     // ── 6. Análise Econômico-Financeira ──
-    check(schema.economic_financial_analysis.indices_exigidos.length > 0 ||
-        !!schema.economic_financial_analysis.capital_social_minimo ||
-        !!schema.economic_financial_analysis.patrimonio_liquido_minimo, 'Nenhuma exigência econômico-financeira identificada');
+    check((schema.economic_financial_analysis?.indices_exigidos?.length || 0) > 0 ||
+        !!schema.economic_financial_analysis?.capital_social_minimo ||
+        !!schema.economic_financial_analysis?.patrimonio_liquido_minimo, 'Nenhuma exigência econômico-financeira identificada');
     // ── 7. Proposta/Preço ──
-    check(!!schema.process_identification.criterio_julgamento, 'Critério de julgamento não identificado');
+    check(!!schema.process_identification?.criterio_julgamento, 'Critério de julgamento não identificado');
     // ── 8. Evidências ──
-    check(schema.evidence_registry.length > 0, 'Nenhuma evidência textual registrada');
-    check(schema.evidence_registry.length >= 5, `Poucas evidências registradas (apenas ${schema.evidence_registry.length}), rastreabilidade comprometida`);
+    const evCount = schema.evidence_registry?.length || 0;
+    check(evCount > 0, 'Nenhuma evidência textual registrada');
+    check(evCount >= 5, `Poucas evidências registradas (apenas ${evCount}), rastreabilidade comprometida`);
     // ── 9. Outputs Operacionais ──
-    check((schema.operational_outputs.documents_to_prepare?.length || 0) > 0, 'Lista de documentos a preparar não gerada');
+    check((schema.operational_outputs?.documents_to_prepare?.length || 0) > 0, 'Lista de documentos a preparar não gerada');
     // ── 10. Revisão de Risco ──
-    check(schema.legal_risk_review.critical_points.length > 0 ||
-        schema.legal_risk_review.ambiguities.length > 0, 'Nenhum ponto crítico ou ambiguidade identificada (análise de risco pode estar incompleta)');
+    check((schema.legal_risk_review?.critical_points?.length || 0) > 0 ||
+        (schema.legal_risk_review?.ambiguities?.length || 0) > 0, 'Nenhum ponto crítico ou ambiguidade identificada (análise de risco pode estar incompleta)');
     const confidence_score = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
     return {
         valid: confidence_score >= 60, // 60%+ das checagens passaram
