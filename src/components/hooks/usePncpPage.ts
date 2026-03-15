@@ -32,10 +32,10 @@ export const MODALIDADES = [
 ];
 
 export const STATUS_OPTIONS = [
-    { value: 'recebendo_proposta', label: '🟢 Abertas (Recebendo Propostas)' },
+    { value: 'recebendo_proposta', label: 'Abertas (Recebendo Propostas)' },
     { value: 'encerrada', label: 'Encerradas' },
-    { value: 'suspensa', label: '🟡 Suspensas' },
-    { value: 'anulada', label: '⚫ Anuladas' },
+    { value: 'suspensa', label: 'Suspensas' },
+    { value: 'anulada', label: 'Anuladas' },
     { value: 'todas', label: 'Todas' },
 ];
 
