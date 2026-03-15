@@ -444,6 +444,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         setOrgaosLista(customState.orgaosLista); setExcludeKeywords(customState.excludeKeywords);
         setDataInicio(customState.dataInicio); setDataFim(customState.dataFim);
         setPage(1);
+        setShowFavoritosTab(false);
 
         handleSearch(undefined, {
             keywords: searchKeywords, status: searchStatus, uf: customState.uf,
@@ -473,6 +474,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');
         setOrgao(''); setOrgaosLista(''); setExcludeKeywords(''); setDataInicio(''); setDataFim('');
         setResults([]); setTotalResults(0); setPage(1);
+        setShowFavoritosTab(false);
     };
 
     const handleImportToFunnel = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
