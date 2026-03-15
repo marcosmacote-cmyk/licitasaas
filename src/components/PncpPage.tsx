@@ -27,7 +27,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 <div style={{ display: 'flex', gap: 'var(--space-3)', overflowX: 'auto', paddingBottom: '4px' }}>
                     <div className="indicator-card">
                         <div className="indicator-label"><BarChart2 size={12} /> Descobertos</div>
-                        <div className="indicator-value">{p.totalResults.toLocaleString('pt-BR')}</div>
+                        <div className="indicator-value">{(p.totalResults || 0).toLocaleString('pt-BR')}</div>
                     </div>
                     <div className="indicator-card">
                         <div className="indicator-label"><Bookmark size={12} /> No Funil</div>

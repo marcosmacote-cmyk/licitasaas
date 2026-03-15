@@ -993,16 +993,35 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             }
         }
 
-        const buildBaseUrl = (qItems: string[], overrideCnpj?: string) => {
+        // Merge single orgao into orgaosLista if it contains commas
+        let effectiveOrgao = orgao || '';
+        let effectiveOrgaosLista = orgaosLista || '';
+        if (effectiveOrgao.includes(',')) {
+            effectiveOrgaosLista = effectiveOrgaosLista
+                ? `${effectiveOrgaosLista},${effectiveOrgao}`
+                : effectiveOrgao;
+            effectiveOrgao = '';
+        }
+
+        // Expand region UF groups into individual UFs for separate fetches
+        let ufsToIterate: string[] = [];
+        if (uf && uf.includes(',')) {
+            ufsToIterate = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
+        } else if (uf) {
+            ufsToIterate = [uf];
+        }
+
+        const buildBaseUrl = (qItems: string[], overrideCnpj?: string, singleUf?: string) => {
             let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 100 : 500}&pagina=1`;
             if (overrideCnpj) {
                 url += `&cnpj=${overrideCnpj}`;
             }
             if (qItems.length > 0) {
-                url += `&q=${encodeURIComponent(qItems.join(' AND '))}`;
+                url += `&q=${encodeURIComponent(qItems.join(' '))}`;
             }
             if (status && status !== 'todas') url += `&status=${status}`;
-            if (uf) url += `&ufs=${uf}`; // Allow comma-separated UFs
+            // Use single UF per request (region groups are split upstream)
+            if (singleUf) url += `&ufs=${singleUf}`;
             if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
             if (dataInicio) url += `&data_inicio=${dataInicio}`;
             if (dataFim) url += `&data_fim=${dataFim}`;
@@ -1011,33 +1030,36 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         };
 
         let extractedNames: string[] = [];
-        if (orgaosLista) {
-            extractedNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
+        if (effectiveOrgaosLista) {
+            extractedNames = effectiveOrgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
             extractedNames = [...new Set(extractedNames)]; // Remove duplicates
         }
 
         let urlsToFetch: string[] = [];
         const keywordsToIterate = kwList.length > 0 ? kwList : [null];
-        const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
+        const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (effectiveOrgao ? [effectiveOrgao] : [null]);
+        const ufsForIteration = ufsToIterate.length > 0 ? ufsToIterate : [null];
 
         for (const kw of keywordsToIterate) {
             for (const org of orgaosToIterate) {
-                let localParams: string[] = [];
-                let overrideCnpj: string | undefined = undefined;
+                for (const singleUf of ufsForIteration) {
+                    let localParams: string[] = [];
+                    let overrideCnpj: string | undefined = undefined;
 
-                if (kw) localParams.push(kw);
+                    if (kw) localParams.push(kw);
 
-                if (org) {
-                    const onlyNumbers = org.replace(/\D/g, '');
-                    if (onlyNumbers.length === 14) {
-                        overrideCnpj = onlyNumbers;
-                    } else {
-                        const exactOrgName = org.includes(' ') && !org.startsWith('"') ? `"${org}"` : org;
-                        localParams.push(exactOrgName);
+                    if (org) {
+                        const onlyNumbers = org.replace(/\D/g, '');
+                        if (onlyNumbers.length === 14) {
+                            overrideCnpj = onlyNumbers;
+                        } else {
+                            const exactOrgName = org.includes(' ') && !org.startsWith('"') ? `"${org}"` : org;
+                            localParams.push(exactOrgName);
+                        }
                     }
-                }
 
-                urlsToFetch.push(buildBaseUrl(localParams, overrideCnpj));
+                    urlsToFetch.push(buildBaseUrl(localParams, overrideCnpj, singleUf || undefined));
+                }
             }
         }
 
@@ -1080,10 +1102,10 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             const ano = item.ano || item.anoCompra || '';
             const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
 
-            // Extract value from all possible fields aggressively
+            // Extract value from all possible fields aggressively (null-safe)
             const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
-                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao ?? 0;
-            const valorEstimado = Number(rawVal) || 0;
+                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao ?? null;
+            const valorEstimado = rawVal != null ? (Number(rawVal) || 0) : 0;
 
             // Extract modalidade from API response
             const modalidadeNome = item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidadeNome
@@ -1115,9 +1137,31 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
             seenIds.add(item.id);
             return true;
         });
+
+        // ── Post-filter by modalidade (API may not filter precisely) ──
+        const modalidadeMap: Record<string, string> = {
+            '1': 'Pregão - Eletrônico', '2': 'Concorrência', '3': 'Concurso',
+            '4': 'Leilão', '5': 'Diálogo Competitivo', '6': 'Dispensa de Licitação',
+            '7': 'Inexigibilidade', '8': 'Tomada de Preços', '9': 'Convite',
+        };
+        let filteredItems = items;
+        if (modalidade && modalidade !== 'todas') {
+            const modalidadeLabel = (modalidadeMap[modalidade] || '').toLowerCase();
+            if (modalidadeLabel) {
+                filteredItems = filteredItems.filter((it: any) => {
+                    const nome = (it.modalidade_nome || '').toLowerCase();
+                    return nome.includes(modalidadeLabel.split(' - ')[0]) || nome.includes(modalidadeLabel);
+                });
+            }
+        }
+
+        // ── Post-filter by esfera (additional accuracy) ──
+        // The PNCP API esfera param works on the search API but results may leak
+        // We don't post-filter esfera since the API handles it and we don't have esfera in results
+
         // GLOBAL sort ALL items by closest deadline using search API dates
         const now = Date.now();
-        items.sort((a: any, b: any) => {
+        filteredItems.sort((a: any, b: any) => {
             const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || '9999').getTime();
             const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || '9999').getTime();
             const absA = isNaN(dateA) ? Infinity : Math.abs(dateA - now);
@@ -1126,9 +1170,9 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         });
 
         // Paginate first, then hydrate ONLY the page items (fast!)
-        const totalResults = items.length;
+        const totalResults = filteredItems.length;
         const startIdx = (Number(pagina) - 1) * pageSize;
-        const pageItems = items.slice(startIdx, startIdx + pageSize);
+        const pageItems = filteredItems.slice(startIdx, startIdx + pageSize);
 
         // Hydrate only the 10 items on this page from detail API
         const hydratedPageItems = await Promise.all(pageItems.map(async (item: any) => {

@@ -194,7 +194,10 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 })
             });
             if (res.ok) {
-                const data = await res.json(); setResults(data.items || data); setTotalResults(data.total || data.length);
+                const data = await res.json();
+                const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
+                setResults(items);
+                setTotalResults(typeof data.total === 'number' ? data.total : items.length);
             } else { throw new Error("Erro na busca"); }
         } catch (e) { console.error(e); toast.error('Falha ao buscar editais. Tente novamente.'); }
         finally { setLoading(false); }
