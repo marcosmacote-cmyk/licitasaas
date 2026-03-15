@@ -130,10 +130,15 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
     // Penalties: from V2 contractual or legacy
     const penaltiesText = useMemo(() => {
         if (v2?.contractual_analysis?.penalidades?.length > 0) {
-            return v2.contractual_analysis.penalidades.map((p: string) => `• ${p}`).join('\n');
+            return v2.contractual_analysis.penalidades.map((p: any) => {
+                if (typeof p === 'string') return `• ${p}`;
+                // Handle object: {tipo, descricao, percentual, etc.}
+                return `• ${safeText(p)}`;
+            }).join('\n');
         }
-        const legacy = safeText(analysis?.penalties);
-        return legacy || '';
+        const legacy = analysis?.penalties;
+        if (legacy === null || legacy === undefined) return '';
+        return safeText(legacy);
     }, [v2, analysis?.penalties]);
 
     // Pricing: from V2 economic + contractual or legacy
@@ -213,6 +218,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
     const pipelineMeta = useMemo(() => {
         if (!v2?.analysis_meta) return null;
         const am = v2.analysis_meta;
+        const health = (v2.confidence as any)?.pipeline_health || null;
         return {
             confidence: v2.confidence?.overall_confidence || analysis?.overallConfidence || '',
             scorePercentage: (v2.confidence as any)?.score_percentage || null,
@@ -221,15 +227,21 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             stageTimes: (am as any)?.stage_times || null,
             qualityScore: (am as any)?.quality_report?.overallScore || null,
             evidenceCount: v2.evidence_registry?.length || 0,
+            pipelineHealth: health,
         };
     }, [v2, analysis]);
 
     // Items: from V2 proposal or legacy
     const biddingItemsText = useMemo(() => {
         if (v2?.proposal_analysis?.observacoes_proposta?.length > 0) {
-            return v2.proposal_analysis.observacoes_proposta.map((o: string) => `• ${o}`).join('\n');
+            return v2.proposal_analysis.observacoes_proposta.map((o: any) => {
+                if (typeof o === 'string') return `• ${o}`;
+                return `• ${safeText(o)}`;
+            }).join('\n');
         }
-        return safeText(analysis?.biddingItems) || '';
+        const legacy = analysis?.biddingItems;
+        if (legacy === null || legacy === undefined) return '';
+        return safeText(legacy);
     }, [v2, analysis?.biddingItems]);
 
     // Qualification: from V2 requirements or legacy

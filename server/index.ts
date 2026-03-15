@@ -1,4 +1,4 @@
-import { robustJsonParse } from "./services/ai/parser.service";
+import { robustJsonParse, robustJsonParseDetailed } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction } from "./services/ai/prompt.service";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "./services/ai/analysis-schema-v1";
@@ -1489,6 +1489,12 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         let modelsUsed: string[] = [];
         const stageTimes: Record<string, number> = {};
+        // Pipeline health tracking for honest confidence scoring
+        const pipelineHealth = {
+            parseRepairs: 0,
+            fallbacksUsed: 0,
+            stagesFailed: 0,
+        };
 
         console.log(`[PNCP-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${downloadedFiles.join(', ')})`);
 
@@ -1510,19 +1516,22 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                 config: {
                     systemInstruction: V2_EXTRACTION_PROMPT,
                     temperature: 0.05,
-                    maxOutputTokens: 32768,
+                    maxOutputTokens: 16384,
                     responseMimeType: 'application/json'
                 }
             });
             const extractionText = extractionResponse.text;
             if (!extractionText) throw new Error('Etapa 1 retornou vazio');
-            extractionJson = robustJsonParse(extractionText, 'PNCP-V2-Extraction');
+            const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');
+            extractionJson = parseResult1.data;
+            if (parseResult1.repaired) pipelineHealth.parseRepairs++;
             v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
             modelsUsed.push('gemini-2.5-flash');
             stageTimes.extraction = (Date.now() - t1Start) / 1000;
             console.log(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         } catch (err: any) {
             console.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+            pipelineHealth.fallbacksUsed++;
             try {
                 const openAiResult = await fallbackToOpenAiV2({
                     systemPrompt: V2_EXTRACTION_PROMPT,
@@ -1588,10 +1597,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                     }, 2);
                     const normText = normResponse.text;
                     if (!normText) throw new Error('Etapa 2 retornou vazio');
-                    const json = robustJsonParse(normText, 'PNCP-V2-Normalization');
+                    const parseN = robustJsonParseDetailed(normText, 'PNCP-V2-Normalization');
+                    const json = parseN.data;
                     stageTimes.normalization = (Date.now() - t2Start) / 1000;
                     console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s`);
-                    return { json, model: 'gemini-2.5-flash' };
+                    return { json, model: 'gemini-2.5-flash', repaired: parseN.repaired, fallback: false };
                 } catch (err: any) {
                     console.warn(`[PNCP-V2] ⚠️ Etapa 2 Gemini falhou: ${err.message}. Tentando OpenAI...`);
                     const openAiResult = await fallbackToOpenAiV2({
@@ -1601,10 +1611,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                         stageName: 'PNCP Etapa 2 (Normalização)'
                     });
                     if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
-                    const json = robustJsonParse(openAiResult.text, 'PNCP-V2-Normalization-OpenAI');
+                    const parseNOai = robustJsonParseDetailed(openAiResult.text, 'PNCP-V2-Normalization-OpenAI');
+                    const json = parseNOai.data;
                     stageTimes.normalization = (Date.now() - t2Start) / 1000;
                     console.log(`[PNCP-V2] ✅ Etapa 2 via OpenAI em ${stageTimes.normalization.toFixed(1)}s`);
-                    return { json, model: openAiResult.model };
+                    return { json, model: openAiResult.model, repaired: parseNOai.repaired, fallback: true };
                 }
             })(),
 
@@ -1628,10 +1639,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                     }, 2);
                     const riskText = riskResponse.text;
                     if (!riskText) throw new Error('Etapa 3 retornou vazio');
-                    const json = robustJsonParse(riskText, 'PNCP-V2-RiskReview');
+                    const parseR = robustJsonParseDetailed(riskText, 'PNCP-V2-RiskReview');
+                    const json = parseR.data;
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
                     console.log(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
-                    return { json, model: 'gemini-2.5-flash' };
+                    return { json, model: 'gemini-2.5-flash', repaired: parseR.repaired, fallback: false };
                 } catch (err: any) {
                     console.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
                     const openAiResult = await fallbackToOpenAiV2({
@@ -1641,10 +1653,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                         stageName: 'PNCP Etapa 3 (Risco)'
                     });
                     if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
-                    const json = robustJsonParse(openAiResult.text, 'PNCP-V2-RiskReview-OpenAI');
+                    const parseROai = robustJsonParseDetailed(openAiResult.text, 'PNCP-V2-RiskReview-OpenAI');
+                    const json = parseROai.data;
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
                     console.log(`[PNCP-V2] ✅ Etapa 3 via OpenAI em ${stageTimes.risk_review.toFixed(1)}s`);
-                    return { json, model: openAiResult.model };
+                    return { json, model: openAiResult.model, repaired: parseROai.repaired, fallback: true };
                 }
             })()
         ]);
@@ -1656,6 +1669,8 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             normalizationJson = normSettled.value.json;
             v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
             modelsUsed.push(normSettled.value.model);
+            if (normSettled.value.repaired) pipelineHealth.parseRepairs++;
+            if (normSettled.value.fallback) pipelineHealth.fallbacksUsed++;
         } else {
             console.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
             v2Result.analysis_meta.workflow_stage_status.normalization = 'failed';
@@ -1679,6 +1694,8 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             const riskJson = riskSettled.value.json;
             v2Result.analysis_meta.workflow_stage_status.risk_review = 'done';
             modelsUsed.push(riskSettled.value.model);
+            if (riskSettled.value.repaired) pipelineHealth.parseRepairs++;
+            if (riskSettled.value.fallback) pipelineHealth.fallbacksUsed++;
             if (riskJson.legal_risk_review) v2Result.legal_risk_review = riskJson.legal_risk_review;
             if (riskJson.operational_outputs_risk) {
                 if (riskJson.operational_outputs_risk.questions_for_consultor_chat) {
@@ -1730,15 +1747,54 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             console.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
         }
 
-        // ── Confidence Score ──
+        // ── Confidence Score (honest — penalizes repairs, fallbacks, missing data) ──
         const stagesDone = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
         const stageScore = (stagesDone / 4) * 100;
         const qualityScore = qualityReport?.overallScore || 50;
-        const combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.35) + (qualityScore * 0.35));
-        if (combinedScore >= 80) v2Result.confidence.overall_confidence = 'alta';
-        else if (combinedScore >= 50) v2Result.confidence.overall_confidence = 'media';
-        else v2Result.confidence.overall_confidence = 'baixa';
+        let combinedScore = Math.round((stageScore * 0.25) + (validation.confidence_score * 0.30) + (qualityScore * 0.30));
+
+        // Evidence penalty: if 0 evidences but >5 requirements, penalize hard
+        const evidenceCount = v2Result.evidence_registry.length;
+        const requirementCount = Object.values(v2Result.requirements).reduce((sum, arr) => sum + arr.length, 0);
+        if (evidenceCount === 0 && requirementCount > 5) {
+            combinedScore -= 20;
+            v2Result.confidence.warnings.push(`0 evidências com ${requirementCount} exigências — rastreabilidade comprometida`);
+        } else if (evidenceCount < 3 && requirementCount > 10) {
+            combinedScore -= 10;
+            v2Result.confidence.warnings.push(`Poucas evidências (${evidenceCount}) para ${requirementCount} exigências`);
+        }
+
+        // Parse repair penalty: each repair indicates fragile response
+        if (pipelineHealth.parseRepairs > 0) {
+            const repairPenalty = Math.min(pipelineHealth.parseRepairs * 5, 15);
+            combinedScore -= repairPenalty;
+            v2Result.confidence.warnings.push(`${pipelineHealth.parseRepairs} reparos de JSON foram necessários`);
+        }
+
+        // Fallback penalty: each fallback indicates primary model failure
+        if (pipelineHealth.fallbacksUsed > 0) {
+            const fallbackPenalty = Math.min(pipelineHealth.fallbacksUsed * 8, 20);
+            combinedScore -= fallbackPenalty;
+            v2Result.confidence.warnings.push(`${pipelineHealth.fallbacksUsed} fallback(s) para OpenAI acionado(s)`);
+        }
+
+        // Stage failure penalty
+        const stagesFailed = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'failed').length;
+        if (stagesFailed > 0) {
+            combinedScore -= stagesFailed * 12;
+        }
+
+        combinedScore = Math.max(5, Math.min(100, combinedScore));
+
+        if (combinedScore >= 75 && pipelineHealth.fallbacksUsed === 0 && pipelineHealth.parseRepairs === 0 && evidenceCount >= 5) {
+            v2Result.confidence.overall_confidence = 'alta';
+        } else if (combinedScore >= 50) {
+            v2Result.confidence.overall_confidence = 'media';
+        } else {
+            v2Result.confidence.overall_confidence = 'baixa';
+        }
         (v2Result.confidence as any).score_percentage = combinedScore;
+        (v2Result.confidence as any).pipeline_health = pipelineHealth;
 
         const uniqueModels = [...new Set(modelsUsed)];
         v2Result.analysis_meta.model_used = uniqueModels.join('+');

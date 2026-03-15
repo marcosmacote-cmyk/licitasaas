@@ -435,12 +435,12 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                         <span style={{ fontWeight: 700 }}>{analysis.pipelineDurationS.toFixed(1)}s</span>
                                                     </div>
                                                 )}
-                                                {report.pipelineMeta.evidenceCount > 0 && (
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                        <span>Evidências</span>
-                                                        <span style={{ fontWeight: 700 }}>{report.pipelineMeta.evidenceCount}</span>
-                                                    </div>
-                                                )}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Evidências</span>
+                                                    <span style={{ fontWeight: 700, color: report.pipelineMeta.evidenceCount === 0 ? 'var(--color-danger)' : 'inherit' }}>
+                                                        {report.pipelineMeta.evidenceCount}
+                                                    </span>
+                                                </div>
                                                 {report.pipelineMeta.qualityScore !== null && (
                                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                         <span>Qualidade</span>
@@ -451,6 +451,23 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                     <span>Modelo</span>
                                                     <span style={{ fontWeight: 600, fontSize: '0.7rem' }}>{report.pipelineMeta.model}</span>
                                                 </div>
+                                                {/* Pipeline health warnings */}
+                                                {report.pipelineMeta.pipelineHealth && (
+                                                    <>
+                                                        {report.pipelineMeta.pipelineHealth.parseRepairs > 0 && (
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-warning)' }}>
+                                                                <span>⚠️ Reparos JSON</span>
+                                                                <span style={{ fontWeight: 700 }}>{report.pipelineMeta.pipelineHealth.parseRepairs}</span>
+                                                            </div>
+                                                        )}
+                                                        {report.pipelineMeta.pipelineHealth.fallbacksUsed > 0 && (
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-warning)' }}>
+                                                                <span>⚠️ Fallbacks</span>
+                                                                <span style={{ fontWeight: 700 }}>{report.pipelineMeta.pipelineHealth.fallbacksUsed}</span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     )}
