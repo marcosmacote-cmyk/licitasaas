@@ -50,21 +50,10 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     {p.searchListNames.length > 1 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)', flexWrap: 'wrap' }}>
                             <List size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                            <button
-                                onClick={() => p.setActiveSearchListName(null)}
-                                style={{
-                                    padding: '3px 10px', borderRadius: 'var(--radius-lg)',
-                                    border: p.activeSearchListName === null ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                    background: p.activeSearchListName === null ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
-                                    color: p.activeSearchListName === null ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                                    fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer',
-                                    transition: 'var(--transition-fast)',
-                                }}
-                            >Todas</button>
                             {p.searchListNames.map(name => (
                                 <div key={name} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                                     <button
-                                        onClick={() => p.setActiveSearchListName(name)}
+                                        onClick={() => p.setActiveSearchListName(p.activeSearchListName === name ? null : name)}
                                         style={{
                                             padding: '3px 10px', borderRadius: 'var(--radius-lg)',
                                             border: p.activeSearchListName === name ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
@@ -388,28 +377,17 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             </div>
 
             {/* ═══ Favorites List Filter (only when on Favoritos tab) ═══ */}
-            {p.showFavoritosTab && p.favLists.length > 0 && (
+            {p.showFavoritosTab && p.favLists.length > 1 && (
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                     marginBottom: 'var(--space-4)', marginTop: 'var(--space-3)',
                     flexWrap: 'wrap',
                 }}>
                     <FolderOpen size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                    <button
-                        onClick={() => p.setActiveFavListId(null)}
-                        style={{
-                            padding: '4px 12px', borderRadius: 'var(--radius-lg)',
-                            border: p.activeFavListId === null ? '1px solid var(--color-warning)' : '1px solid var(--color-border)',
-                            background: p.activeFavListId === null ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
-                            color: p.activeFavListId === null ? 'var(--color-warning)' : 'var(--color-text-secondary)',
-                            fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer',
-                            transition: 'var(--transition-fast)',
-                        }}
-                    >Todas ({p.favoritos.length})</button>
                     {p.favLists.map(list => (
                         <div key={list.id} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                             <button
-                                onClick={() => p.setActiveFavListId(list.id)}
+                                onClick={() => p.setActiveFavListId(p.activeFavListId === list.id ? null : list.id)}
                                 style={{
                                     padding: '4px 12px', borderRadius: 'var(--radius-lg)',
                                     border: p.activeFavListId === list.id ? '1px solid var(--color-warning)' : '1px solid var(--color-border)',
