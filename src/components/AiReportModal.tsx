@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, ChevronRight, FileSearch2, Plus } from 'lucide-react';
+import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, ChevronRight, FileSearch2, Plus, Target, BarChart3 } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
@@ -73,6 +73,26 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
         return elements;
     };
 
+    const severityColor = (sev: string) => {
+        switch (sev) {
+            case 'critica': return { bg: '#fef2f2', border: '#fca5a5', text: '#991b1b', badge: '#dc2626' };
+            case 'alta': return { bg: '#fff7ed', border: '#fdba74', text: '#9a3412', badge: '#ea580c' };
+            case 'media': return { bg: '#fffbeb', border: '#fcd34d', text: '#92400e', badge: '#d97706' };
+            case 'baixa': return { bg: '#f0fdf4', border: '#86efac', text: '#166534', badge: '#16a34a' };
+            default: return { bg: '#f8fafc', border: '#cbd5e1', text: '#475569', badge: '#64748b' };
+        }
+    };
+
+    const hasRequirements = Object.keys(report.categorizedDocs).length > 0;
+    const hasRisks = report.flagList.length > 0;
+    const hasDeadlines = report.deadlineList.length > 0;
+    const hasFinancial = report.hasContent(report.financialText);
+    const hasPenalties = report.hasContent(report.penaltiesText);
+    const hasItems = report.hasContent(report.biddingItemsText);
+    const hasQualification = report.hasContent(report.qualificationText);
+    const hasConditions = report.conditions.length > 0;
+    const hasTechnicalOpinion = report.hasContent(report.technicalOpinion);
+
     return (
         <div className="modal-overlay" style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000,
@@ -80,36 +100,57 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
             backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)', animation: 'fadeIn 0.25s ease-out'
         }}>
             <div className="modal-content" style={{
-                maxWidth: '950px', width: '95%', height: '92vh', borderRadius: 'var(--radius-xl)',
+                maxWidth: '1060px', width: '95%', height: '92vh', borderRadius: 'var(--radius-xl)',
                 boxShadow: 'var(--shadow-xl)', overflow: 'hidden', backgroundColor: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border)', animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
                 display: 'flex', flexDirection: 'column'
             }}>
-                {/* Modern AI Header */}
+                {/* Header */}
                 <div style={{
-                    padding: 'var(--space-8) var(--space-10)',
+                    padding: 'var(--space-6) var(--space-10)',
                     background: 'linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-bg-surface-hover) 100%)',
-                    color: 'white', display: 'flex', flexDirection: 'column', gap: 'var(--space-6)'
+                    color: 'white', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)'
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
                             <div style={{ padding: 'var(--space-3)', background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))', borderRadius: 'var(--radius-xl)', boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)' }}>
-                                <ScanSearch size={28} color="white" />
+                                <ScanSearch size={24} color="white" />
                             </div>
                             <div>
-                                <h2 style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, margin: 0, letterSpacing: '-0.025em' }}>
+                                <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, margin: 0, letterSpacing: '-0.025em' }}>
                                     Análise Estratégica <span style={{ color: 'var(--color-primary-border)' }}>IA</span>
                                 </h2>
-                                <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)', marginTop: '4px' }}>
-                                    Processando: <span style={{ color: 'var(--color-border)', fontWeight: 'var(--font-semibold)' }}>{process?.title}</span>
+                                <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)', marginTop: '2px', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {process?.title}
                                 </p>
                             </div>
                         </div>
-                        <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', cursor: 'pointer', padding: '10px', borderRadius: '50%', transition: 'all 0.2s' }}
-                            onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-                            onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}>
-                            <X size={24} />
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                            {report.pipelineMeta && (
+                                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                                    {report.pipelineMeta.confidence && (
+                                        <span style={{
+                                            padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 700,
+                                            background: report.pipelineMeta.confidence === 'alta' ? 'rgba(34,197,94,0.2)' : report.pipelineMeta.confidence === 'media' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)',
+                                            color: report.pipelineMeta.confidence === 'alta' ? '#4ade80' : report.pipelineMeta.confidence === 'media' ? '#fbbf24' : '#f87171',
+                                            border: `1px solid ${report.pipelineMeta.confidence === 'alta' ? 'rgba(34,197,94,0.3)' : report.pipelineMeta.confidence === 'media' ? 'rgba(234,179,8,0.3)' : 'rgba(239,68,68,0.3)'}`
+                                        }}>
+                                            {report.pipelineMeta.confidence === 'alta' ? '●' : report.pipelineMeta.confidence === 'media' ? '●' : '●'} Confiança {report.pipelineMeta.confidence}
+                                        </span>
+                                    )}
+                                    {report.pipelineMeta.scorePercentage !== null && (
+                                        <span style={{ padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.7rem', fontWeight: 700, background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}>
+                                            {report.pipelineMeta.scorePercentage}%
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', cursor: 'pointer', padding: '8px', borderRadius: '50%', transition: 'all 0.2s' }}
+                                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}>
+                                <X size={20} />
+                            </button>
+                        </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: 'var(--space-8)' }}>
@@ -127,159 +168,292 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                 {/* Content Area */}
                 <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
                     {activeTab === 'report' ? (
-                        <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr)', gap: 'var(--space-10)', background: 'var(--color-bg-base)' }}>
-                            {/* Left Column */}
-                            <div className="flex-col gap-8" style={{ /* left col */ }}>
-                                {/* Key Metrics */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-                                    <div style={{ padding: 'var(--space-5)', background: 'var(--color-success-bg)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-success-border)' }}>
-                                        <div className="section-label" style={{ color: 'var(--color-success)' }}>Valor Estimado</div>
-                                        <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, color: 'var(--color-success-hover)' }}>
-                                            {process?.estimatedValue ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(process?.estimatedValue) : 'Não informado'}
-                                        </div>
+                        <div style={{ flex: 1, padding: 'var(--space-8)', overflowY: 'auto', background: 'var(--color-bg-base)' }}>
+
+                            {/* ─── ROW 1: Key Indicators ─── */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+                                {/* Valor Estimado */}
+                                <div style={{ padding: 'var(--space-4)', background: 'var(--color-success-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-success-border)' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-success)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <DollarSign size={13} /> Valor Estimado
                                     </div>
-                                    <div style={{ padding: 'var(--space-5)', background: 'var(--color-primary-light)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-primary-border)' }}>
-                                        <div className="section-label" style={{ color: 'var(--color-primary)' }}>Sessão / Prazo</div>
-                                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-primary-hover)' }}>
-                                            {process?.sessionDate ? new Date(process?.sessionDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Não informado'}
-                                        </div>
+                                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-success-hover)' }}>
+                                        {process?.estimatedValue ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(process?.estimatedValue) : 'Não informado'}
                                     </div>
                                 </div>
 
-                                {/* Executive Summary */}
-                                <div className="report-card">
-                                    <h3 className="ai-section-header"><FileSearch2 size={18} /> Resumo Executivo</h3>
-                                    <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                        {report.renderTextValue(process?.summary) || report.renderTextValue(analysis?.fullSummary) || 'Resumo executivo não disponível para este edital.'}
-                                    </p>
+                                {/* Sessão */}
+                                <div style={{ padding: 'var(--space-4)', background: 'var(--color-primary-light)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-primary-border)' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <Calendar size={13} /> Sessão
+                                    </div>
+                                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-primary-hover)' }}>
+                                        {process?.sessionDate ? new Date(process?.sessionDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Não informado'}
+                                    </div>
                                 </div>
 
-                                {/* Technical-Legal Opinion */}
-                                {analysis?.fullSummary && process?.summary && analysis?.fullSummary !== process?.summary && (
-                                    <div className="report-card">
-                                        <h3 className="ai-section-header"><ScanSearch size={18} /> Parecer Técnico-Jurídico</h3>
-                                        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                            {report.renderTextValue(analysis?.fullSummary)}
-                                        </p>
+                                {/* Riscos */}
+                                {hasRisks && (
+                                    <div style={{ padding: 'var(--space-4)', background: 'var(--color-danger-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-danger-border)' }}>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-danger)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <AlertTriangle size={13} /> Riscos
+                                        </div>
+                                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-danger-hover)' }}>
+                                            {report.flagList.length} {report.flagList.length === 1 ? 'ponto' : 'pontos'}
+                                        </div>
                                     </div>
                                 )}
 
-                                {/* Bidding Items */}
-                                {analysis?.biddingItems && (
-                                    <div className="report-card">
-                                        <h3 className="ai-section-header"><FileCheck size={18} /> Itens Licitados</h3>
-                                        <div style={{ padding: 'var(--space-5)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
-                                            <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap', fontFamily: typeof analysis?.biddingItems !== 'string' ? 'monospace' : 'inherit' }}>
-                                                {report.renderTextValue(analysis?.biddingItems)}
+                                {/* Exigências */}
+                                {hasRequirements && (
+                                    <div style={{ padding: 'var(--space-4)', background: 'var(--color-warning-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-warning-border)' }}>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-warning)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <BadgeCheck size={13} /> Exigências
+                                        </div>
+                                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-warning-hover)' }}>
+                                            {report.allDocsList.length}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ─── ROW 2: Conditions Tags (V2 only) ─── */}
+                            {hasConditions && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
+                                    {report.conditions.map((c, i) => (
+                                        <span key={i} style={{
+                                            padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600,
+                                            background: c.type === 'danger' ? 'var(--color-danger-bg)' : c.type === 'warning' ? 'var(--color-warning-bg)' : 'var(--color-bg-secondary)',
+                                            color: c.type === 'danger' ? 'var(--color-danger-hover)' : c.type === 'warning' ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
+                                            border: `1px solid ${c.type === 'danger' ? 'var(--color-danger-border)' : c.type === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border)'}`
+                                        }}>
+                                            {c.label}: {c.value}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* ─── Main 2-Column Layout ─── */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.7fr) minmax(0, 1fr)', gap: 'var(--space-8)' }}>
+                                {/* LEFT COLUMN */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+                                    {/* Executive Summary */}
+                                    {report.hasContent(report.executiveSummary) && (
+                                        <div className="report-card">
+                                            <h3 className="ai-section-header"><FileSearch2 size={18} /> Resumo Executivo</h3>
+                                            <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                                {report.executiveSummary}
                                             </p>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {/* Technical Qualification */}
-                                {analysis?.qualificationRequirements && (
-                                    <div className="report-card">
-                                        <h3 className="ai-section-header"><BadgeCheck size={18} /> Qualificação Técnica Exigida</h3>
-                                        <div style={{ padding: 'var(--space-5)', backgroundColor: 'var(--color-warning-bg)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-warning-border)' }}>
-                                            <p style={{ color: 'var(--color-warning-hover)', fontSize: 'var(--text-base)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                                {report.renderTextValue(analysis?.qualificationRequirements)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Document Readiness */}
-                                <div className="report-card">
-                                    <div className="flex-between mb-6">
-                                        <h3 className="ai-section-header mb-0"><BadgeCheck size={18} /> Habilitação Requerida</h3>
-                                        {process?.companyProfileId && !report.isLoadingDocs && (
-                                            <div className="flex-center gap-3" style={{ padding: 'var(--space-2) var(--space-4)',
-                                                backgroundColor: report.readinessScore > 70 ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-                                                borderRadius: 'var(--radius-full)', border: `1px solid ${report.readinessScore > 70 ? 'var(--color-success-border)' : 'var(--color-warning-border)'}` }}>
-                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: report.readinessScore > 70 ? 'var(--color-success)' : 'var(--color-warning)' }} />
-                                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-bold)', color: report.readinessScore > 70 ? 'var(--color-success-hover)' : 'var(--color-warning-hover)' }}>
-                                                    Readiness: {report.readinessScore}%
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {report.isLoadingDocs ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-5)', color: 'var(--color-text-secondary)' }}>
-                                            <Loader2 size={20} className="spinner" /> Sincronizando com documentos cadastrados...
-                                        </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                                            {Object.entries(report.categorizedDocs).map(([category, docs]) => docs.length > 0 && (
-                                                <div key={category}>
-                                                    <div style={{ fontSize: '0.8125rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                                        {category} <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--color-border)' }} />
-                                                    </div>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                                                        {docs.map((doc, idx) => (
-                                                            <div key={idx} style={{ padding: 'var(--space-4) var(--space-5)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', boxShadow: 'var(--shadow-xs)' }}>
-                                                                <div style={{ padding: 'var(--space-2)', borderRadius: 'var(--radius-lg)', background: doc.hasMatch ? 'var(--color-success-bg)' : 'var(--color-danger-bg)' }}>
-                                                                    {doc.hasMatch ? <CheckCircle2 size={18} color="var(--color-success)" /> : <FileX size={18} color="var(--color-danger)" />}
-                                                                </div>
-                                                                <div style={{ flex: 1 }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-                                                                        {doc.item && doc.item !== '-' && (
-                                                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '4px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-border)' }}>ITEM {doc.item}</span>
-                                                                        )}
-                                                                        {!doc.hasMatch ? (
-                                                                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-danger)', background: 'var(--color-danger-bg)', padding: '4px 10px', borderRadius: 'var(--radius-md)' }}>PENDENTE</span>
-                                                                        ) : (
-                                                                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '4px 10px', borderRadius: 'var(--radius-md)' }}>MAPPED</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--color-text-primary)', fontWeight: 500, lineHeight: 1.5 }}>{doc.description}</p>
-                                                                </div>
-                                                                <ChevronRight size={16} color="var(--color-border)" />
+                                    {/* Risks — structured cards, not text dump */}
+                                    {hasRisks && (
+                                        <div className="report-card">
+                                            <h3 className="ai-section-header"><AlertTriangle size={18} /> Riscos e Pontos Críticos</h3>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                                {report.flagList.map((flag: any, i: number) => {
+                                                    const sc = severityColor(flag.severity);
+                                                    return (
+                                                        <div key={i} style={{ padding: 'var(--space-4)', background: sc.bg, border: `1px solid ${sc.border}`, borderRadius: 'var(--radius-lg)', borderLeft: `4px solid ${sc.badge}` }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: sc.badge, background: `${sc.badge}15`, padding: '2px 8px', borderRadius: 'var(--radius-md)' }}>
+                                                                    {flag.severity || 'média'}
+                                                                </span>
                                                             </div>
-                                                        ))}
+                                                            <p style={{ fontSize: 'var(--text-sm)', color: sc.text, lineHeight: 1.6, margin: 0, fontWeight: 500 }}>
+                                                                {flag.text}
+                                                            </p>
+                                                            {flag.action && (
+                                                                <p style={{ fontSize: '0.8rem', color: sc.text, lineHeight: 1.5, margin: '6px 0 0', opacity: 0.85, fontStyle: 'italic' }}>
+                                                                    → {flag.action}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Technical-Legal Opinion */}
+                                    {hasTechnicalOpinion && !hasRisks && (
+                                        <div className="report-card">
+                                            <h3 className="ai-section-header"><ScanSearch size={18} /> Parecer Técnico-Jurídico</h3>
+                                            <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                                                {renderMarkdown(report.technicalOpinion)}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Bidding Items */}
+                                    {hasItems && (
+                                        <div className="report-card">
+                                            <h3 className="ai-section-header"><FileCheck size={18} /> Observações da Proposta</h3>
+                                            <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                                                <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                                    {report.biddingItemsText}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Technical Qualification */}
+                                    {hasQualification && (
+                                        <div className="report-card">
+                                            <h3 className="ai-section-header"><Target size={18} /> Qualificação Técnica Exigida</h3>
+                                            <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-warning-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-warning-border)' }}>
+                                                <p style={{ color: 'var(--color-warning-hover)', fontSize: 'var(--text-sm)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                                    {report.qualificationText}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Document Readiness / Habilitação */}
+                                    {hasRequirements && (
+                                        <div className="report-card">
+                                            <div className="flex-between mb-6">
+                                                <h3 className="ai-section-header mb-0"><BadgeCheck size={18} /> Habilitação Requerida</h3>
+                                                {process?.companyProfileId && !report.isLoadingDocs && (
+                                                    <div className="flex-center gap-3" style={{
+                                                        padding: 'var(--space-2) var(--space-4)',
+                                                        backgroundColor: report.readinessScore > 70 ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                                                        borderRadius: 'var(--radius-full)',
+                                                        border: `1px solid ${report.readinessScore > 70 ? 'var(--color-success-border)' : 'var(--color-warning-border)'}`
+                                                    }}>
+                                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: report.readinessScore > 70 ? 'var(--color-success)' : 'var(--color-warning)' }} />
+                                                        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-bold)', color: report.readinessScore > 70 ? 'var(--color-success-hover)' : 'var(--color-warning-hover)' }}>
+                                                            Readiness: {report.readinessScore}%
+                                                        </span>
                                                     </div>
+                                                )}
+                                            </div>
+
+                                            {report.isLoadingDocs ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-5)', color: 'var(--color-text-secondary)' }}>
+                                                    <Loader2 size={20} className="spinner" /> Sincronizando com documentos cadastrados...
                                                 </div>
-                                            ))}
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                                                    {Object.entries(report.categorizedDocs).map(([category, docs]) => (
+                                                        <div key={category}>
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                                {category} <span style={{ fontSize: '0.65rem', color: 'var(--color-text-quaternary)' }}>({docs.length})</span>
+                                                                <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--color-border)' }} />
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                                {docs.map((doc: any, idx: number) => (
+                                                                    <div key={idx} style={{
+                                                                        padding: 'var(--space-3) var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)',
+                                                                        border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: 'var(--text-sm)'
+                                                                    }}>
+                                                                        <div style={{ padding: '2px', borderRadius: 'var(--radius-md)', background: doc.hasMatch ? 'var(--color-success-bg)' : 'var(--color-danger-bg)', flexShrink: 0 }}>
+                                                                            {doc.hasMatch ? <CheckCircle2 size={14} color="var(--color-success)" /> : <FileX size={14} color="var(--color-danger)" />}
+                                                                        </div>
+                                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                                                {doc.item && doc.item !== '-' && (
+                                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '2px 6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-border)', flexShrink: 0 }}>
+                                                                                        {doc.item}
+                                                                                    </span>
+                                                                                )}
+                                                                                {doc.mandatory === false && (
+                                                                                    <span style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--color-text-tertiary)', background: 'var(--color-bg-secondary)', padding: '1px 5px', borderRadius: 'var(--radius-sm)' }}>
+                                                                                        opcional
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: 'var(--color-text-primary)', fontWeight: 500, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                {doc.description}
+                                                                            </p>
+                                                                        </div>
+                                                                        <ChevronRight size={14} color="var(--color-border)" style={{ flexShrink: 0 }} />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
-                            </div>
 
-                            {/* Right Column */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                                <div className="report-metrics-card" style={{ background: 'var(--color-success-bg)', border: '1px solid var(--color-success-border)' }}>
-                                    <div style={{ color: 'var(--color-success-hover)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}><DollarSign size={20} /> <span style={{ fontWeight: 'var(--font-bold)' }}>Financeiro</span></div>
-                                    <p style={{ margin: 0, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                        {report.renderTextValue(analysis?.pricingConsiderations) || 'Análise financeira não disponível para este edital.'}
-                                    </p>
-                                </div>
-
-                                <div className="report-metrics-card" style={{ background: 'var(--color-primary-light)', border: '1px solid var(--color-primary-border)' }}>
-                                    <div style={{ color: 'var(--color-primary-hover)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}><Calendar size={20} /> <span style={{ fontWeight: 'var(--font-bold)' }}>Cronograma Crítico</span></div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                                        {report.deadlineList.length > 0 ? report.deadlineList.map((dl, i) => (
-                                            <div key={i} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-primary)', marginTop: '7px', flexShrink: 0 }} />
-                                                <span style={{ fontSize: '0.875rem', color: 'var(--color-primary-hover)', lineHeight: 1.5 }}>{dl}</span>
+                                {/* RIGHT COLUMN */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                                    {/* Financial */}
+                                    {hasFinancial && (
+                                        <div className="report-metrics-card" style={{ background: 'var(--color-success-bg)', border: '1px solid var(--color-success-border)' }}>
+                                            <div style={{ color: 'var(--color-success-hover)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                                                <DollarSign size={18} /> <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)' }}>Financeiro</span>
                                             </div>
-                                        )) : <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Prazos não identificados no edital.</p>}
-                                    </div>
-                                </div>
+                                            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                                                {report.financialText}
+                                            </p>
+                                        </div>
+                                    )}
 
-                                <div className="report-metrics-card" style={{ background: 'var(--color-urgency-bg)', border: '1px solid var(--color-urgency-border)' }}>
-                                    <div style={{ color: 'var(--color-urgency)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}><ShieldAlert size={20} /> <span style={{ fontWeight: 'var(--font-bold)' }}>Penalidades</span></div>
-                                    <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-urgency)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                        {report.renderTextValue(analysis?.penalties) || 'Penalidades não identificadas no edital.'}
-                                    </p>
-                                </div>
+                                    {/* Deadlines */}
+                                    {hasDeadlines && (
+                                        <div className="report-metrics-card" style={{ background: 'var(--color-primary-light)', border: '1px solid var(--color-primary-border)' }}>
+                                            <div style={{ color: 'var(--color-primary-hover)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                                                <Calendar size={18} /> <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)' }}>Cronograma</span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                {report.deadlineList.map((dl: string, i: number) => (
+                                                    <div key={i} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
+                                                        <span style={{ fontSize: '0.8rem', color: 'var(--color-primary-hover)', lineHeight: 1.5 }}>{dl}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
-                                <div className="report-metrics-card" style={{ background: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)' }}>
-                                    <div style={{ color: 'var(--color-danger-hover)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}><AlertTriangle size={20} /> <span style={{ fontWeight: 'var(--font-bold)' }}>Riscos e Pontos de Atenção</span></div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                                        {report.flagList.length > 0 ? report.flagList.map((flag, i) => (
-                                            <div key={i} style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-danger-border)', borderRadius: 'var(--radius-lg)', fontSize: '0.8125rem', color: 'var(--color-danger-hover)', fontWeight: 500 }}>{flag}</div>
-                                        )) : <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Nenhum risco identificado.</p>}
-                                    </div>
+                                    {/* Penalties */}
+                                    {hasPenalties && (
+                                        <div className="report-metrics-card" style={{ background: 'var(--color-urgency-bg)', border: '1px solid var(--color-urgency-border)' }}>
+                                            <div style={{ color: 'var(--color-urgency)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                                                <ShieldAlert size={18} /> <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)' }}>Penalidades</span>
+                                            </div>
+                                            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-urgency)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                                                {report.penaltiesText}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Pipeline Meta */}
+                                    {report.pipelineMeta && (
+                                        <div style={{ padding: 'var(--space-4)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <BarChart3 size={13} /> Métricas do Pipeline
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                                                {analysis?.pipelineDurationS && (
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                        <span>Tempo total</span>
+                                                        <span style={{ fontWeight: 700 }}>{analysis.pipelineDurationS.toFixed(1)}s</span>
+                                                    </div>
+                                                )}
+                                                {report.pipelineMeta.evidenceCount > 0 && (
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                        <span>Evidências</span>
+                                                        <span style={{ fontWeight: 700 }}>{report.pipelineMeta.evidenceCount}</span>
+                                                    </div>
+                                                )}
+                                                {report.pipelineMeta.qualityScore !== null && (
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                        <span>Qualidade</span>
+                                                        <span style={{ fontWeight: 700 }}>{report.pipelineMeta.qualityScore}%</span>
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Modelo</span>
+                                                    <span style={{ fontWeight: 600, fontSize: '0.7rem' }}>{report.pipelineMeta.model}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -337,8 +511,10 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         value={inputText} onChange={(e) => setInputText(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isSending} />
                                     <button onClick={() => handleSendMessage()} disabled={!inputText.trim() || isSending}
-                                        style={{ background: 'var(--color-text-primary)', color: 'white', border: 'none', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
-                                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', opacity: (!inputText.trim() || isSending) ? 0.5 : 1, transition: 'var(--transition-fast)' }}>
+                                        style={{
+                                            background: 'var(--color-text-primary)', color: 'white', border: 'none', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', opacity: (!inputText.trim() || isSending) ? 0.5 : 1, transition: 'var(--transition-fast)'
+                                        }}>
                                         <Send size={18} /> Pergunta
                                     </button>
                                 </div>
@@ -351,11 +527,12 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: 'var(--space-5) var(--space-10)', background: 'var(--color-bg-surface)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-                        <span style={{ fontWeight: 'var(--font-semibold)' }}>ID ANÁLISE: {analysis?.id.slice(0, 8)}</span>
+                <div style={{ padding: 'var(--space-4) var(--space-10)', background: 'var(--color-bg-surface)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                        <span style={{ fontWeight: 'var(--font-semibold)' }}>ID: {analysis?.id.slice(0, 8)}</span>
                         <span>•</span>
                         <span>{new Date(analysis?.analyzedAt).toLocaleString('pt-BR')}</span>
+                        {analysis?.modelUsed && (<><span>•</span><span>{analysis.modelUsed}</span></>)}
                     </div>
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                         {onImport && (

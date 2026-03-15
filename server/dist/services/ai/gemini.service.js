@@ -1,35 +1,36 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.callGeminiWithRetry = callGeminiWithRetry;
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
-async function callGeminiWithRetry(model, options, maxRetries = 4) {
+/**
+ * Call Gemini with configurable retry count. Defaults to 2 retries on the requested model only.
+ * Only falls back to other models if explicitly allowed.
+ * Lower retry count = faster failure → faster fallback to OpenAI.
+ */
+async function callGeminiWithRetry(model, options, maxRetries = 2) {
     let lastError;
-    // Iterate over fallback models
-    for (const modelName of GEMINI_MODELS) {
-        const attemptOptions = { ...options, model: modelName };
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                console.log(`[Gemini] Trying model '${modelName}' (attempt ${i + 1}/${maxRetries})`);
-                return await model.generateContent(attemptOptions);
-            }
-            catch (error) {
-                lastError = error;
-                const isRetryable = error?.message?.includes('503') || error?.message?.includes('429') ||
-                    error?.status === 503 || error?.code === 503 ||
-                    error?.status === 429 || error?.code === 429;
-                if (isRetryable) {
-                    const delay = Math.min((i + 1) * 3000, 15000); // exponential backoff, max 15s
-                    console.warn(`[Gemini] ${error?.status || '503/429'} error on '${modelName}', retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    continue;
-                }
-                // Non-retryable error: break inner loop, try next model
-                const errorMsg = error?.message || String(error);
-                console.error(`[Gemini] Non-retryable error on '${modelName}': ${errorMsg}`);
-                break;
-            }
+    const requestedModel = options.model || 'gemini-2.5-flash';
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            if (i > 0)
+                console.log(`[Gemini] Retrying '${requestedModel}' (attempt ${i + 1}/${maxRetries})`);
+            return await model.generateContent({ ...options, model: requestedModel });
         }
-        console.warn(`[Gemini] All retries exhausted for model '${modelName}', trying next model...`);
+        catch (error) {
+            lastError = error;
+            const isRetryable = error?.message?.includes('503') || error?.message?.includes('429') ||
+                error?.status === 503 || error?.code === 503 ||
+                error?.status === 429 || error?.code === 429;
+            if (isRetryable && i < maxRetries - 1) {
+                const delay = Math.min((i + 1) * 2000, 8000); // faster backoff, max 8s
+                console.warn(`[Gemini] ${error?.status || '503/429'} on '${requestedModel}', retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            // Non-retryable or last attempt
+            const errorMsg = error?.message || String(error);
+            console.error(`[Gemini] Error on '${requestedModel}': ${errorMsg}`);
+            break;
+        }
     }
     const finalErrorMsg = lastError?.message || String(lastError);
     if (finalErrorMsg.includes('leaked') || lastError?.status === 403) {

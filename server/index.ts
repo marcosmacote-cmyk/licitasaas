@@ -1561,57 +1561,106 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             console.log(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
         }
 
-        // ── Stage 2: Normalization (text-only, no PDFs) ──
-        console.log(`[PNCP-V2] ── Etapa 2/3: Normalização Licitatória...`);
+        // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
+        console.log(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
         let normalizationJson: any = {};
-        const t2Start = Date.now();
+        const extractionJsonCompact = JSON.stringify(extractionJson);  // Compact — saves ~20-30% tokens
+        const t2t3Start = Date.now();
 
-        try {
-            const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
-                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
-                + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
-
-            const normResponse = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [{ text: normUserInstruction }] }],
-                config: {
-                    systemInstruction: V2_NORMALIZATION_PROMPT,
-                    temperature: 0.1,
-                    maxOutputTokens: 16384,
-                    responseMimeType: 'application/json'
-                }
-            });
-            const normText = normResponse.text;
-            if (!normText) throw new Error('Etapa 2 retornou vazio');
-            normalizationJson = robustJsonParse(normText, 'PNCP-V2-Normalization');
-            v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
-            modelsUsed.push('gemini-2.5-flash');
-            stageTimes.normalization = (Date.now() - t2Start) / 1000;
-            console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${(normalizationJson.operational_outputs?.documents_to_prepare || []).length} docs, ${(normalizationJson.operational_outputs?.internal_checklist || []).length} checklist`);
-        } catch (err: any) {
-            console.warn(`[PNCP-V2] ⚠️ Etapa 2 Gemini falhou: ${err.message}. Tentando OpenAI...`);
-            try {
+        // Run both stages concurrently
+        const [normSettled, riskSettled] = await Promise.allSettled([
+            // ── Stage 2: Normalization ──
+            (async () => {
+                const t2Start = Date.now();
                 const normUserInstruction = V2_NORMALIZATION_USER_INSTRUCTION
-                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
+                    .replace('{extractionJson}', extractionJsonCompact)
                     + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
-                const openAiResult = await fallbackToOpenAiV2({
-                    systemPrompt: V2_NORMALIZATION_PROMPT,
-                    userPrompt: normUserInstruction,
-                    temperature: 0.1,
-                    stageName: 'PNCP Etapa 2 (Normalização)'
-                });
-                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
-                normalizationJson = robustJsonParse(openAiResult.text, 'PNCP-V2-Normalization-OpenAI');
-                v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
-                modelsUsed.push(openAiResult.model);
-                stageTimes.normalization = (Date.now() - t2Start) / 1000;
-                console.log(`[PNCP-V2] ✅ Etapa 2 via OpenAI em ${stageTimes.normalization.toFixed(1)}s`);
-            } catch (openAiErr: any) {
-                console.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
-                v2Result.analysis_meta.workflow_stage_status.normalization = 'failed';
-                v2Result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${err.message}`);
-                stageTimes.normalization = (Date.now() - t2Start) / 1000;
-            }
+                try {
+                    const normResponse = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: [{ role: 'user', parts: [{ text: normUserInstruction }] }],
+                        config: {
+                            systemInstruction: V2_NORMALIZATION_PROMPT,
+                            temperature: 0.1,
+                            maxOutputTokens: 16384,
+                            responseMimeType: 'application/json'
+                        }
+                    }, 2);
+                    const normText = normResponse.text;
+                    if (!normText) throw new Error('Etapa 2 retornou vazio');
+                    const json = robustJsonParse(normText, 'PNCP-V2-Normalization');
+                    stageTimes.normalization = (Date.now() - t2Start) / 1000;
+                    console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s`);
+                    return { json, model: 'gemini-2.5-flash' };
+                } catch (err: any) {
+                    console.warn(`[PNCP-V2] ⚠️ Etapa 2 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+                    const openAiResult = await fallbackToOpenAiV2({
+                        systemPrompt: V2_NORMALIZATION_PROMPT,
+                        userPrompt: normUserInstruction,
+                        temperature: 0.1,
+                        stageName: 'PNCP Etapa 2 (Normalização)'
+                    });
+                    if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                    const json = robustJsonParse(openAiResult.text, 'PNCP-V2-Normalization-OpenAI');
+                    stageTimes.normalization = (Date.now() - t2Start) / 1000;
+                    console.log(`[PNCP-V2] ✅ Etapa 2 via OpenAI em ${stageTimes.normalization.toFixed(1)}s`);
+                    return { json, model: openAiResult.model };
+                }
+            })(),
+
+            // ── Stage 3: Risk Review ──
+            (async () => {
+                const t3Start = Date.now();
+                const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
+                    .replace('{extractionJson}', extractionJsonCompact)
+                    .replace('{normalizationJson}', '{}')  // Norm not yet available in parallel, use empty
+                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+                try {
+                    const riskResponse = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: [{ role: 'user', parts: [{ text: riskUserInstruction }] }],
+                        config: {
+                            systemInstruction: V2_RISK_REVIEW_PROMPT,
+                            temperature: 0.2,
+                            maxOutputTokens: 16384,
+                            responseMimeType: 'application/json'
+                        }
+                    }, 2);
+                    const riskText = riskResponse.text;
+                    if (!riskText) throw new Error('Etapa 3 retornou vazio');
+                    const json = robustJsonParse(riskText, 'PNCP-V2-RiskReview');
+                    stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+                    console.log(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
+                    return { json, model: 'gemini-2.5-flash' };
+                } catch (err: any) {
+                    console.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+                    const openAiResult = await fallbackToOpenAiV2({
+                        systemPrompt: V2_RISK_REVIEW_PROMPT,
+                        userPrompt: riskUserInstruction,
+                        temperature: 0.2,
+                        stageName: 'PNCP Etapa 3 (Risco)'
+                    });
+                    if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                    const json = robustJsonParse(openAiResult.text, 'PNCP-V2-RiskReview-OpenAI');
+                    stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+                    console.log(`[PNCP-V2] ✅ Etapa 3 via OpenAI em ${stageTimes.risk_review.toFixed(1)}s`);
+                    return { json, model: openAiResult.model };
+                }
+            })()
+        ]);
+
+        console.log(`[PNCP-V2] Etapas 2+3 paralelas concluídas em ${((Date.now() - t2t3Start) / 1000).toFixed(1)}s`);
+
+        // Process normalization result
+        if (normSettled.status === 'fulfilled') {
+            normalizationJson = normSettled.value.json;
+            v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
+            modelsUsed.push(normSettled.value.model);
+        } else {
+            console.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
+            v2Result.analysis_meta.workflow_stage_status.normalization = 'failed';
+            v2Result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${normSettled.reason?.message || 'erro desconhecido'}`);
+            stageTimes.normalization = stageTimes.normalization || 0;
         }
 
         // Merge normalization
@@ -1625,34 +1674,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             v2Result.confidence = { ...v2Result.confidence, ...normalizationJson.confidence };
         }
 
-        // ── Stage 3: Risk Review (text-only, no PDFs) ──
-        console.log(`[PNCP-V2] ── Etapa 3/3: Revisão de Risco...`);
-        const t3Start = Date.now();
-
-        try {
-            const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
-                .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
-                .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2))
-                + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
-
-            const riskResponse = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
-                contents: [{ role: 'user', parts: [{ text: riskUserInstruction }] }],
-                config: {
-                    systemInstruction: V2_RISK_REVIEW_PROMPT,
-                    temperature: 0.2,
-                    maxOutputTokens: 16384,
-                    responseMimeType: 'application/json'
-                }
-            });
-            const riskText = riskResponse.text;
-            if (!riskText) throw new Error('Etapa 3 retornou vazio');
-            const riskJson = robustJsonParse(riskText, 'PNCP-V2-RiskReview');
+        // Process risk review result
+        if (riskSettled.status === 'fulfilled') {
+            const riskJson = riskSettled.value.json;
             v2Result.analysis_meta.workflow_stage_status.risk_review = 'done';
-            modelsUsed.push('gemini-2.5-flash');
-            stageTimes.risk_review = (Date.now() - t3Start) / 1000;
-            console.log(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(riskJson.legal_risk_review?.critical_points || []).length} pontos críticos`);
-
+            modelsUsed.push(riskSettled.value.model);
             if (riskJson.legal_risk_review) v2Result.legal_risk_review = riskJson.legal_risk_review;
             if (riskJson.operational_outputs_risk) {
                 if (riskJson.operational_outputs_risk.questions_for_consultor_chat) {
@@ -1665,36 +1691,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             if (riskJson.confidence_update) {
                 v2Result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
             }
-        } catch (err: any) {
-            console.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
-            try {
-                const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
-                    .replace('{extractionJson}', JSON.stringify(extractionJson, null, 2))
-                    .replace('{normalizationJson}', JSON.stringify(normalizationJson, null, 2))
-                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
-                const openAiResult = await fallbackToOpenAiV2({
-                    systemPrompt: V2_RISK_REVIEW_PROMPT,
-                    userPrompt: riskUserInstruction,
-                    temperature: 0.2,
-                    stageName: 'PNCP Etapa 3 (Risco)'
-                });
-                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
-                const riskJson = robustJsonParse(openAiResult.text, 'PNCP-V2-RiskReview-OpenAI');
-                v2Result.analysis_meta.workflow_stage_status.risk_review = 'done';
-                modelsUsed.push(openAiResult.model);
-                stageTimes.risk_review = (Date.now() - t3Start) / 1000;
-                if (riskJson.legal_risk_review) v2Result.legal_risk_review = riskJson.legal_risk_review;
-                if (riskJson.operational_outputs_risk) {
-                    if (riskJson.operational_outputs_risk.questions_for_consultor_chat) v2Result.operational_outputs.questions_for_consultor_chat = riskJson.operational_outputs_risk.questions_for_consultor_chat;
-                    if (riskJson.operational_outputs_risk.possible_petition_routes) v2Result.operational_outputs.possible_petition_routes = riskJson.operational_outputs_risk.possible_petition_routes;
-                }
-                if (riskJson.confidence_update) v2Result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
-            } catch (openAiErr: any) {
-                console.error(`[PNCP-V2] ❌ Etapa 3 falhou — continuando sem revisão de risco`);
-                v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
-                v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${err.message}`);
-                stageTimes.risk_review = (Date.now() - t3Start) / 1000;
-            }
+        } else {
+            console.error(`[PNCP-V2] ❌ Etapa 3 falhou — continuando sem revisão de risco`);
+            v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
+            v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${riskSettled.reason?.message || 'erro desconhecido'}`);
+            stageTimes.risk_review = stageTimes.risk_review || 0;
         }
 
         // ── Validation (no AI) ──
