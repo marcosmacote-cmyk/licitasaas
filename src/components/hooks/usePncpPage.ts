@@ -182,7 +182,11 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     }, []);
 
     // ─── Multi-list Favorites API ───
-    const favLists = favStore.lists;
+    const favLists = useMemo(() => {
+        const def = favStore.lists.filter(l => l.id === 'default');
+        const rest = favStore.lists.filter(l => l.id !== 'default').sort((a, b) => a.name.localeCompare(b.name));
+        return [...def, ...rest];
+    }, [favStore.lists]);
 
     const createFavList = (name: string): FavList => {
         const newList: FavList = { id: uuidv4(), name: name.trim(), createdAt: new Date().toISOString() };
