@@ -353,14 +353,31 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                 {docs.map((doc: any, idx: number) => {
                                                                     const DESC_LIMIT = 120;
                                                                     const isLong = doc.description && doc.description.length > DESC_LIMIT;
-                                                                    // Map riskIfMissing to user-friendly consequence label
+                                                                    // Obligation type display
+                                                                    const oblMap: Record<string, { label: string; color: string; bg: string }> = {
+                                                                        'obrigatoria_universal': { label: 'Obrigatório', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
+                                                                        'condicional': { label: 'Condicional', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                        'se_aplicavel': { label: 'Se aplicável', color: 'var(--color-text-tertiary)', bg: 'var(--color-bg-secondary)' },
+                                                                        'alternativa': { label: 'Alternativa', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                        'vencedor': { label: 'Só vencedor', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                                                                        'fase_contratual': { label: 'Contratual', color: 'var(--color-text-tertiary)', bg: 'var(--color-bg-secondary)' },
+                                                                        'consorcio': { label: 'Consórcio', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                        'me_epp': { label: 'ME/EPP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                        'recuperacao_judicial': { label: 'Rec. Judicial', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                                                                        'empresa_estrangeira': { label: 'Estrangeira', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                                                                    };
+                                                                    const obl = oblMap[doc.obligationType] || oblMap['obrigatoria_universal'];
+                                                                    // Phase display
+                                                                    const phaseMap: Record<string, string> = {
+                                                                        'habilitacao': 'Habilitação', 'proposta': 'Proposta',
+                                                                        'contratacao': 'Contratação', 'pos_contratacao': 'Pós-contrato',
+                                                                    };
+                                                                    const phaseLabel = phaseMap[doc.phase] || '';
+                                                                    // Consequence
                                                                     const consequenceMap: Record<string, string> = {
-                                                                        'inabilitacao': 'Risco: inabilitação',
-                                                                        'inabilitação': 'Risco: inabilitação',
-                                                                        'desclassificacao': 'Risco: desclassificação',
-                                                                        'desclassificação': 'Risco: desclassificação',
-                                                                        'penalidade': 'Risco: penalidade',
-                                                                        'risco_contratual': 'Risco contratual',
+                                                                        'inabilitacao': 'Risco: inabilitação', 'inabilitação': 'Risco: inabilitação',
+                                                                        'desclassificacao': 'Risco: desclassificação', 'desclassificação': 'Risco: desclassificação',
+                                                                        'penalidade': 'Risco: penalidade', 'risco_contratual': 'Risco contratual',
                                                                     };
                                                                     const consequenceLabel = doc.riskIfMissing ? consequenceMap[doc.riskIfMissing] || '' : '';
                                                                     const hasSourceRef = doc.sourceRef && doc.sourceRef !== 'referência não localizada';
@@ -373,34 +390,35 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                             {doc.hasMatch ? <CheckCircle2 size={14} color="var(--color-success)" /> : <FileX size={14} color="var(--color-danger)" />}
                                                                         </div>
                                                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: '2px' }}>
+                                                                            {/* Row 1: Code + Obligation Type + Phase */}
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '2px' }}>
                                                                                 {doc.item && doc.item !== '-' && (
-                                                                                    <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '1px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary-border)', flexShrink: 0, letterSpacing: '0.02em' }}>
+                                                                                    <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '1px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary-border)', flexShrink: 0 }}>
                                                                                         {doc.item}
                                                                                     </span>
                                                                                 )}
-                                                                                {/* Nature label: Obrigatório or Opcional */}
-                                                                                {doc.mandatory !== false ? (
-                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 700, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
-                                                                                        obrigatório
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 600, color: 'var(--color-text-tertiary)', background: 'var(--color-bg-secondary)', padding: '1px 4px', borderRadius: 'var(--radius-sm)' }}>
-                                                                                        opcional
+                                                                                <span style={{ fontSize: '0.55rem', fontWeight: 700, color: obl.color, background: obl.bg, padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
+                                                                                    {obl.label}
+                                                                                </span>
+                                                                                {phaseLabel && (
+                                                                                    <span style={{ fontSize: '0.5rem', fontWeight: 600, color: 'var(--color-text-quaternary)', background: 'var(--color-bg-tertiary)', padding: '1px 3px', borderRadius: 'var(--radius-sm)' }}>
+                                                                                        {phaseLabel}
                                                                                     </span>
                                                                                 )}
                                                                             </div>
+                                                                            {/* Row 2: Title */}
                                                                             {doc.title && (
                                                                                 <p style={{ margin: '0 0 1px', fontSize: '0.82rem', color: 'var(--color-text-primary)', fontWeight: 600, lineHeight: 1.3 }}>
                                                                                     {doc.title}
                                                                                 </p>
                                                                             )}
+                                                                            {/* Row 3: Description (truncated) */}
                                                                             {doc.description && (
                                                                                 <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-secondary)', fontWeight: 400, lineHeight: 1.4 }}>
                                                                                     {isLong ? doc.description.slice(0, DESC_LIMIT) + '…' : doc.description}
                                                                                 </p>
                                                                             )}
-                                                                            {/* Consequence (separated from nature) + Source reference */}
+                                                                            {/* Row 4: Consequence + Source reference */}
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginTop: '3px', flexWrap: 'wrap' }}>
                                                                                 {consequenceLabel && (
                                                                                     <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 500, fontStyle: 'italic' }}>

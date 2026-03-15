@@ -3030,7 +3030,9 @@ Tratamento ME/EPP: ${pc.tratamento_me_epp || 'N/A'}`);
             if (Array.isArray(items) && items.length > 0) {
                 reqText += `\n▸ ${cat}:\n`;
                 for (const r of items) {
-                    reqText += `  [${r.requirement_id}] ${r.title}: ${r.description}${r.mandatory ? ' (OBRIGATÓRIO)' : ''}\n`;
+                    const oblLabel = r.obligation_type || (r.mandatory ? 'obrigatória' : 'opcional');
+                    const srcLabel = r.source_ref ? ` — 📄 ${r.source_ref}` : '';
+                    reqText += `  [${r.requirement_id}] ${r.title}: ${r.description} (${oblLabel})${srcLabel}\n`;
                 }
             }
         }

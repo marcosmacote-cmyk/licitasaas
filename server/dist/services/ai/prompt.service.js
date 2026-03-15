@@ -371,15 +371,28 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 
 9. CRIE UMA ENTRADA SEPARADA para cada exigência. Se um item lista 5 documentos, retorne 5 objetos separados.
 10. CLASSIFIQUE cada exigência usando a taxonomia fornecida. Use os PREFIXOS corretos: HJ, RFT, QEF, QTO, QTP, PC, DC.
-11. DISTINGUA COM RIGOR: atestado da empresa (QTO) vs. acervo/CAT do profissional (QTP). Leia a regra de distinção na taxonomia.
+11. DISTINGUA COM RIGOR: atestado da empresa (QTO) vs. acervo/CAT do profissional (QTP).
 12. DISTINGUA COM RIGOR: certidão negativa de débitos (RFT) vs. balanço/índices (QEF).
-13. Para CADA exigência, marque mandatory: true se o edital indica como obrigatória na habilitação, false se eventual/"mediante convocação".
+13. CLASSIFIQUE obligation_type com precisão semântica:
+    - "obrigatoria_universal": exigida de TODOS os licitantes, sem exceção
+    - "condicional": exigida apenas SE uma condição for atendida (ex: "caso seja consórcio", "quando o valor superar X")
+    - "se_aplicavel": exigida apenas se a situação existir (ex: "se houver filiais")
+    - "alternativa": uma entre várias opções aceitas (ex: "certidão A OU certidão B")
+    - "vencedor": exigida somente do licitante vencedor, após adjudicação
+    - "fase_contratual": exigida na assinatura ou durante execução do contrato
+    - "consorcio": exigida exclusivamente de participantes em consórcio
+    - "me_epp": regime diferenciado para microempresa/empresa de pequeno porte
+    - "recuperacao_judicial": exigida exclusivamente de empresas em recuperação judicial
+    - "empresa_estrangeira": exigida exclusivamente de empresas estrangeiras
 14. Para tipo_objeto, use exatamente um de: servico_comum | servico_comum_engenharia | obra_engenharia | fornecimento | locacao | outro
-15. Em parcelas_relevantes, sempre inclua o quantitativo_minimo e unidade quando presentes (mesmo que percentuais).
-16. BUSQUE informações em TODOS os documentos (edital, TR, projeto básico, anexos, planilhas). NÃO se limite ao corpo do edital.
+15. Em parcelas_relevantes, sempre inclua o quantitativo_minimo e unidade quando presentes.
+16. BUSQUE informações em TODOS os documentos (edital, TR, projeto básico, ETP, anexos, planilhas, memoriais). NÃO se limite ao corpo do edital.
 17. Em caso de informação mencionada em mais de um documento, use a versão mais DETALHADA.
-18. RASTREABILIDADE OBRIGATÓRIA: toda exigência DEVE ter source_ref preenchido com a peça + item/seção de origem (ex: "Edital, item 8.3" ou "TR, seção 5.2.1"). Se não conseguir localizar com precisão, preencha: "referência não localizada".
-19. NÃO use risk_if_missing como rótulo do item. risk_if_missing é a CONSEQUÊNCIA de não apresentar o documento, não a natureza do item.
+18. RASTREABILIDADE OBRIGATÓRIA: toda exigência DEVE ter source_ref com peça + item/seção (ex: "Edital, item 8.3" ou "TR, seção 5.2.1"). NUNCA deixe vazio. Se não localizar com precisão, preencha: "referência não localizada".
+19. NÃO use risk_if_missing como rótulo do item. risk_if_missing é a CONSEQUÊNCIA de não atender, não a natureza do item.
+20. PROIBIDO classificar como "obrigatoria_universal" exigências que contenham "caso", "quando", "se o licitante", "no caso de", "somente para", "exclusivamente para". Essas são "condicional", "se_aplicavel" ou outro tipo específico.
+21. CLASSIFIQUE phase: "habilitacao" = documentos de habilitação, "proposta" = envelope de preços/proposta comercial, "contratacao" = pós-adjudicação/assinatura, "pos_contratacao" = execução contratual.
+22. INTEGRIDADE: exigência SEM source_ref é INVÁLIDA e será descartada pelo sistema.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -398,7 +411,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "outros_prazos": [{"descricao": "", "data": ""}]
   },
   "requirements": {
-    "habilitacao_juridica": [{"requirement_id": "HJ-01", "title": "título curto máx 80 chars", "description": "resumo objetivo máx 120 chars", "mandatory": true, "applies_to": "licitante", "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo", "source_ref": "Edital, item X.Y | TR, seção X | Anexo X | referência não localizada", "evidence_refs": ["EV-01"]}],
+    "habilitacao_juridica": [{"requirement_id": "HJ-01", "title": "máx 80 chars", "description": "máx 120 chars", "obligation_type": "obrigatoria_universal|condicional|se_aplicavel|alternativa|vencedor|fase_contratual|consorcio|me_epp|recuperacao_judicial|empresa_estrangeira", "phase": "habilitacao|proposta|contratacao|pos_contratacao", "applies_to": "licitante", "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo", "source_ref": "Edital, item X.Y", "evidence_refs": ["EV-01"]}],
     "regularidade_fiscal_trabalhista": [],
     "qualificacao_economico_financeira": [],
     "qualificacao_tecnica_operacional": [],
@@ -407,7 +420,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "documentos_complementares": []
   },
   "evidence_registry": [
-    {"evidence_id": "EV-01", "document_type": "edital|tr|pb|minuta|anexo|planilha|outro", "document_name": "", "page": "", "section": "", "excerpt": "trecho literal 30-80 chars", "normalized_topic": ""}
+    {"evidence_id": "EV-01", "document_type": "edital|tr|pb|etp|minuta|anexo|memorial|planilha|outro", "document_name": "", "page": "", "section": "", "excerpt": "trecho literal 30-80 chars", "normalized_topic": ""}
   ],
   "participation_conditions": {
     "permite_consorcio": null, "permite_subcontratacao": null,
@@ -514,7 +527,7 @@ ENTRADA: JSON da Etapa 1 (será fornecido abaixo)
 FORMATO DE SAÍDA — JSON complementar com estas seções:
 {
   "requirements_normalized": {
-    "habilitacao_juridica": [{"requirement_id": "", "title": "máx 80 chars", "description": "máx 120 chars", "mandatory": true, "applies_to": "", "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo", "source_ref": "preservar da Etapa 1", "evidence_refs": []}],
+    "habilitacao_juridica": [{"requirement_id": "", "title": "máx 80 chars", "description": "máx 120 chars", "obligation_type": "preservar da Etapa 1", "phase": "preservar da Etapa 1", "applies_to": "", "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo", "source_ref": "preservar da Etapa 1", "evidence_refs": []}],
     "regularidade_fiscal_trabalhista": [],
     "qualificacao_economico_financeira": [],
     "qualificacao_tecnica_operacional": [],

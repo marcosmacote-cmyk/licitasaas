@@ -294,7 +294,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                 'documentos_complementares': 'Declarações e Outros',
             };
 
-            const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; mandatory?: boolean; riskIfMissing?: string; sourceRef?: string }[]> = {};
+            const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; obligationType?: string; phase?: string; riskIfMissing?: string; sourceRef?: string }[]> = {};
 
             for (const [key, label] of Object.entries(v2Categories)) {
                 const reqs = v2.requirements[key];
@@ -313,12 +313,15 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                         if (textToMatch.includes('contrato social') && docType.includes('contrato social')) return true;
                         return false;
                     });
+                    // Backward compat: if obligation_type missing, infer from mandatory boolean
+                    const obligationType = r.obligation_type || (r.mandatory === false ? 'se_aplicavel' : 'obrigatoria_universal');
                     return {
                         item: r.requirement_id || '-',
                         title: r.title || '',
                         description: r.description || '',
                         hasMatch,
-                        mandatory: r.mandatory,
+                        obligationType,
+                        phase: r.phase || 'habilitacao',
                         riskIfMissing: r.risk_if_missing,
                         sourceRef: r.source_ref || '',
                     };
