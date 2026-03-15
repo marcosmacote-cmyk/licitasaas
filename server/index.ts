@@ -976,6 +976,30 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
     }
 });
 
+// ── Update a single saved search ──
+app.put('/api/pncp/searches/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const id = req.params.id;
+        const tenantId = req.user.tenantId;
+        const { name, keywords, status, states, listName, companyProfileId } = req.body;
+        const data: any = {};
+        if (name !== undefined) data.name = name;
+        if (keywords !== undefined) data.keywords = keywords;
+        if (status !== undefined) data.status = status;
+        if (states !== undefined) data.states = states;
+        if (listName !== undefined) data.listName = listName;
+        if (companyProfileId !== undefined) data.companyProfileId = companyProfileId || null;
+        await prisma.pncpSavedSearch.updateMany({
+            where: { id, tenantId },
+            data
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Update saved search error:", error);
+        res.status(500).json({ error: 'Failed to update saved search' });
+    }
+});
+
 // ── Rename a saved search list (bulk update listName) ──
 app.put('/api/pncp/searches/list/rename', authenticateToken, async (req: any, res) => {
     try {

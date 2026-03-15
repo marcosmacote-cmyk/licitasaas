@@ -16,6 +16,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     const p = usePncpPage({ companies, onRefresh, items });
     const [favListMenu, setFavListMenu] = useState<string | null>(null);
     const [searchListMenu, setSearchListMenu] = useState<string | null>(null);
+    const [searchChipMenu, setSearchChipMenu] = useState<string | null>(null);
 
     return (
         <>
@@ -135,37 +136,104 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         {p.filteredSavedSearches.map(s => (
                             <div
                                 key={s.id}
-                                onClick={() => p.loadSavedSearch(s)}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-2)',
-                                    padding: 'var(--space-2) var(--space-4)',
-                                    background: 'var(--color-bg-surface)',
-                                    border: '1px solid var(--color-border)',
-                                    borderRadius: 'var(--radius-xl)',
-                                    fontSize: 'var(--text-md)',
-                                    color: 'var(--color-text-primary)',
-                                    cursor: 'pointer',
-                                    transition: 'var(--transition-fast)',
-                                    fontWeight: 'var(--font-medium)' as any,
-                                }}
-                                onMouseEnter={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.background = 'rgba(37, 99, 235, 0.06)'; }}
-                                onMouseLeave={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
+                                style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
                             >
-                                {s.name}
-                                {s.listName && s.listName !== 'Pesquisas Gerais' && (
-                                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', opacity: 0.7 }}>
-                                        ({s.listName})
-                                    </span>
-                                )}
-                                {s.companyProfileId && <Building2 size={12} color="var(--color-primary)" />}
-                                <button
-                                    onClick={(e) => p.deleteSavedSearch(s.id, e)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: 0, display: 'flex' }}
+                                <div
+                                    onClick={() => p.loadSavedSearch(s)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 'var(--space-2)',
+                                        padding: 'var(--space-2) var(--space-4)',
+                                        paddingRight: '28px',
+                                        background: 'var(--color-bg-surface)',
+                                        border: '1px solid var(--color-border)',
+                                        borderRadius: 'var(--radius-xl)',
+                                        fontSize: 'var(--text-md)',
+                                        color: 'var(--color-text-primary)',
+                                        cursor: 'pointer',
+                                        transition: 'var(--transition-fast)',
+                                        fontWeight: 'var(--font-medium)' as any,
+                                    }}
+                                    onMouseEnter={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.background = 'rgba(37, 99, 235, 0.06)'; }}
+                                    onMouseLeave={(e: any) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
                                 >
-                                    <X size={13} />
+                                    {s.name}
+                                    {s.listName && s.listName !== 'Pesquisas Gerais' && (
+                                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', opacity: 0.7 }}>
+                                            ({s.listName})
+                                        </span>
+                                    )}
+                                    {s.companyProfileId && <Building2 size={12} color="var(--color-primary)" />}
+                                </div>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setSearchChipMenu(searchChipMenu === s.id ? null : s.id); }}
+                                    style={{
+                                        position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        color: 'var(--color-text-tertiary)', padding: '2px',
+                                        opacity: 0.5, transition: 'var(--transition-fast)',
+                                    }}
+                                    onMouseEnter={(e: any) => e.currentTarget.style.opacity = '1'}
+                                    onMouseLeave={(e: any) => e.currentTarget.style.opacity = '0.5'}
+                                >
+                                    <MoreVertical size={13} />
                                 </button>
+                                {searchChipMenu === s.id && (
+                                    <div
+                                        style={{
+                                            position: 'absolute', top: '100%', right: 0, zIndex: 100,
+                                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                            borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
+                                            minWidth: '170px', overflow: 'hidden', marginTop: '4px',
+                                        }}
+                                        onMouseLeave={() => setSearchChipMenu(null)}
+                                    >
+                                        <button
+                                            onClick={() => {
+                                                setSearchChipMenu(null);
+                                                const newName = prompt(`Renomear pesquisa "${s.name}":`, s.name);
+                                                if (newName && newName.trim()) p.updateSavedSearch(s.id, { name: newName.trim() });
+                                            }}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                                width: '100%', padding: '8px 12px', background: 'none', border: 'none',
+                                                cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)',
+                                                textAlign: 'left', transition: 'var(--transition-fast)',
+                                            }}
+                                            onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                            onMouseLeave={(e: any) => e.currentTarget.style.background = 'none'}
+                                        >
+                                            <Pencil size={13} /> Renomear
+                                        </button>
+                                        <button
+                                            onClick={() => { setSearchChipMenu(null); p.setEditingSearch(s); }}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                                width: '100%', padding: '8px 12px', background: 'none', border: 'none',
+                                                cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)',
+                                                textAlign: 'left', transition: 'var(--transition-fast)',
+                                            }}
+                                            onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                            onMouseLeave={(e: any) => e.currentTarget.style.background = 'none'}
+                                        >
+                                            <Filter size={13} /> Editar Filtros
+                                        </button>
+                                        <button
+                                            onClick={() => { setSearchChipMenu(null); p.deleteSavedSearch(s.id); }}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                                width: '100%', padding: '8px 12px', background: 'none', border: 'none',
+                                                cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-danger)',
+                                                textAlign: 'left', transition: 'var(--transition-fast)',
+                                            }}
+                                            onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                            onMouseLeave={(e: any) => e.currentTarget.style.background = 'none'}
+                                        >
+                                            <Trash2 size={13} /> Excluir
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -833,6 +901,111 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 onConfirm={() => p.confirmAction?.onConfirm()}
                 onCancel={() => p.setConfirmAction(null)}
             />
+            {/* ═══ Edit Saved Search Modal ═══ */}
+            {p.editingSearch && (() => {
+                const es = p.editingSearch;
+                let parsedStates = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '' };
+                try { parsedStates = { ...parsedStates, ...JSON.parse(es.states || '{}') }; } catch {}
+                return (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+                        onClick={() => p.setEditingSearch(null)}>
+                        <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', maxWidth: '600px', width: '90%', maxHeight: '85vh', overflow: 'auto', boxShadow: 'var(--shadow-xl)' }}
+                            onClick={(e) => e.stopPropagation()}>
+                            <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--color-text-primary)' }}>Editar Pesquisa Salva</h3>
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                const fd = new FormData(e.currentTarget);
+                                const states = JSON.stringify({
+                                    uf: fd.get('uf') || '', modalidade: fd.get('modalidade') || 'todas',
+                                    esfera: fd.get('esfera') || 'todas', orgao: fd.get('orgao') || '',
+                                    orgaosLista: fd.get('orgaosLista') || '', excludeKeywords: fd.get('excludeKeywords') || '',
+                                    dataInicio: fd.get('dataInicio') || '', dataFim: fd.get('dataFim') || '',
+                                });
+                                const ok = await p.updateSavedSearch(es.id, {
+                                    name: fd.get('name') as string,
+                                    keywords: fd.get('keywords') as string,
+                                    status: fd.get('status') as string,
+                                    states,
+                                    companyProfileId: fd.get('companyProfileId') as string || '',
+                                });
+                                if (ok) p.setEditingSearch(null);
+                            }} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                                <div>
+                                    <label className="form-label">Nome da pesquisa</label>
+                                    <input name="name" defaultValue={es.name} className="form-select" required />
+                                </div>
+                                <div>
+                                    <label className="form-label">Palavras-chave (Objeto)</label>
+                                    <input name="keywords" defaultValue={es.keywords || ''} className="form-select" />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                    <div>
+                                        <label className="form-label">Status</label>
+                                        <select name="status" defaultValue={es.status || 'recebendo_proposta'} className="form-select">
+                                            {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="form-label">Estado (UF)</label>
+                                        <select name="uf" defaultValue={parsedStates.uf} className="form-select">
+                                            <option value="">Todos</option>
+                                            {UFS.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                    <div>
+                                        <label className="form-label">Modalidade</label>
+                                        <select name="modalidade" defaultValue={parsedStates.modalidade} className="form-select">
+                                            {MODALIDADES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="form-label">Esfera de Governo</label>
+                                        <select name="esfera" defaultValue={parsedStates.esfera} className="form-select">
+                                            {ESFERAS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="form-label">Órgão específico</label>
+                                    <input name="orgao" defaultValue={parsedStates.orgao} className="form-select" placeholder="Nome do órgão" />
+                                </div>
+                                <div>
+                                    <label className="form-label">Lista de órgãos (separados por vírgula)</label>
+                                    <input name="orgaosLista" defaultValue={parsedStates.orgaosLista} className="form-select" placeholder="Ex.: Prefeitura X, Secretaria Y" />
+                                </div>
+                                <div>
+                                    <label className="form-label" style={{ color: 'var(--color-danger)' }}>🚫 Excluir palavras-chave do objeto</label>
+                                    <input name="excludeKeywords" defaultValue={parsedStates.excludeKeywords} className="form-select" placeholder="Ex.: aquisição, materiais, fornecimento" style={{ borderColor: parsedStates.excludeKeywords ? 'var(--color-danger)' : undefined }} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                    <div>
+                                        <label className="form-label">Publicado a partir de</label>
+                                        <input type="date" name="dataInicio" defaultValue={parsedStates.dataInicio} className="form-select" />
+                                    </div>
+                                    <div>
+                                        <label className="form-label">Publicado até</label>
+                                        <input type="date" name="dataFim" defaultValue={parsedStates.dataFim} className="form-select" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="form-label">Empresa vinculada</label>
+                                    <select name="companyProfileId" defaultValue={es.companyProfileId || ''} className="form-select">
+                                        <option value="">Nenhuma</option>
+                                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', paddingTop: 'var(--space-2)' }}>
+                                    <button type="button" className="btn btn-secondary" onClick={() => p.setEditingSearch(null)}>Cancelar</button>
+                                    <button type="submit" className="btn btn-primary"><Save size={14} /> Salvar Alterações</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            })()}
+
         </>
     );
 }

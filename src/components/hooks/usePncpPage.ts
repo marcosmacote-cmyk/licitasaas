@@ -457,16 +457,31 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
 
     useEffect(() => { if (!loading) { handleSearch(); } }, [page]);
 
-    const deleteSavedSearch = async (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        setConfirmAction({ type: 'deleteSearch', onConfirm: async () => {
+    const deleteSavedSearch = async (id: string, e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setConfirmAction({ type: 'deleteSearch', message: 'Excluir esta pesquisa salva?', onConfirm: async () => {
             setConfirmAction(null);
             try {
                 const token = localStorage.getItem('token');
                 const res = await fetch(`${API_BASE_URL}/api/pncp/searches/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-                if (res.ok) fetchSavedSearches();
+                if (res.ok) { fetchSavedSearches(); toast.success('Pesquisa excluída.'); }
             } catch (e) { console.error(e); }
         }});
+    };
+
+    const [editingSearch, setEditingSearch] = useState<PncpSavedSearch | null>(null);
+
+    const updateSavedSearch = async (id: string, updates: Partial<{name: string; keywords: string; status: string; states: string; listName: string; companyProfileId: string}>) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/searches/${id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) { fetchSavedSearches(); toast.success('Pesquisa atualizada.'); return true; }
+            throw new Error('Failed');
+        } catch (e) { console.error(e); toast.error('Erro ao atualizar pesquisa.'); return false; }
     };
 
     const clearSearch = () => {
@@ -651,7 +666,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // Handlers
         toggleFavorito, exportFavoritesToPdf,
         handleSearch, handleSaveSearch, startSaveSearch, loadSavedSearch,
-        deleteSavedSearch, clearSearch,
+        deleteSavedSearch, clearSearch, editingSearch, setEditingSearch, updateSavedSearch,
         handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess,
     };
 }
