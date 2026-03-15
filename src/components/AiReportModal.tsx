@@ -383,26 +383,46 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                     };
                                                                     const consequenceLabel = doc.riskIfMissing ? consequenceMap[doc.riskIfMissing] || '' : '';
                                                                     const hasSourceRef = doc.sourceRef && doc.sourceRef !== 'referência não localizada';
+                                                                    const isSubitem = doc.entryType === 'subitem';
+                                                                    const isObservacao = doc.entryType === 'observacao';
+                                                                    const isDocCompl = doc.entryType === 'documento_complementar';
+                                                                    const isSecondary = isSubitem || isObservacao || isDocCompl;
+                                                                    const entryIcon = isSubitem ? '↳' : isObservacao ? '📝' : isDocCompl ? '📎' : '';
                                                                     return (
                                                                     <div key={idx} style={{
-                                                                        padding: 'var(--space-3) var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)',
-                                                                        border: '1px solid var(--color-border)', display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', fontSize: 'var(--text-sm)'
+                                                                        padding: isSecondary ? 'var(--space-2) var(--space-3) var(--space-2) var(--space-5)' : 'var(--space-3) var(--space-4)',
+                                                                        background: isSecondary ? 'var(--color-bg-tertiary)' : 'var(--color-bg-surface)',
+                                                                        borderRadius: 'var(--radius-lg)',
+                                                                        border: isSecondary ? '1px solid var(--color-border-light, var(--color-border))' : '1px solid var(--color-border)',
+                                                                        borderLeft: isSecondary ? '3px solid var(--color-primary-border, var(--color-primary))' : undefined,
+                                                                        display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', fontSize: 'var(--text-sm)',
+                                                                        opacity: isObservacao ? 0.85 : 1,
                                                                     }}>
-                                                                        <div style={{ padding: '2px', borderRadius: 'var(--radius-md)', background: doc.hasMatch ? 'var(--color-success-bg)' : 'var(--color-danger-bg)', flexShrink: 0, marginTop: '2px' }}>
-                                                                            {doc.hasMatch ? <CheckCircle2 size={14} color="var(--color-success)" /> : <FileX size={14} color="var(--color-danger)" />}
+                                                                        <div style={{ padding: '2px', borderRadius: 'var(--radius-md)', background: doc.hasMatch ? 'var(--color-success-bg)' : isSecondary ? 'transparent' : 'var(--color-danger-bg)', flexShrink: 0, marginTop: '2px' }}>
+                                                                            {isSecondary
+                                                                                ? <span style={{ fontSize: '0.7rem' }}>{entryIcon}</span>
+                                                                                : doc.hasMatch ? <CheckCircle2 size={14} color="var(--color-success)" /> : <FileX size={14} color="var(--color-danger)" />
+                                                                            }
                                                                         </div>
                                                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                                                            {/* Row 1: Code + Obligation Type + Phase */}
+                                                                            {/* Row 1: Code + Obligation Type + Phase + Entry Type */}
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '2px' }}>
                                                                                 {doc.item && doc.item !== '-' && (
                                                                                     <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '1px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary-border)', flexShrink: 0 }}>
                                                                                         {doc.item}
                                                                                     </span>
                                                                                 )}
-                                                                                <span style={{ fontSize: '0.55rem', fontWeight: 700, color: obl.color, background: obl.bg, padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
-                                                                                    {obl.label}
-                                                                                </span>
-                                                                                {phaseLabel && (
+                                                                                {!isSecondary && (
+                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 700, color: obl.color, background: obl.bg, padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
+                                                                                        {obl.label}
+                                                                                    </span>
+                                                                                )}
+                                                                                {isSecondary && (
+                                                                                    <span style={{ fontSize: '0.5rem', fontWeight: 600, color: 'var(--color-text-quaternary)', background: 'var(--color-bg-secondary)', padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
+                                                                                        {isSubitem ? 'subitem' : isObservacao ? 'observação' : 'doc. complementar'}
+                                                                                    </span>
+                                                                                )}
+                                                                                {phaseLabel && !isSecondary && (
                                                                                     <span style={{ fontSize: '0.5rem', fontWeight: 600, color: 'var(--color-text-quaternary)', background: 'var(--color-bg-tertiary)', padding: '1px 3px', borderRadius: 'var(--radius-sm)' }}>
                                                                                         {phaseLabel}
                                                                                     </span>
@@ -410,7 +430,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                             </div>
                                                                             {/* Row 2: Title */}
                                                                             {doc.title && (
-                                                                                <p style={{ margin: '0 0 1px', fontSize: '0.82rem', color: 'var(--color-text-primary)', fontWeight: 600, lineHeight: 1.3 }}>
+                                                                                <p style={{ margin: '0 0 1px', fontSize: isSecondary ? '0.78rem' : '0.82rem', color: 'var(--color-text-primary)', fontWeight: isSecondary ? 500 : 600, lineHeight: 1.3 }}>
                                                                                     {doc.title}
                                                                                 </p>
                                                                             )}
@@ -422,13 +442,13 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                             )}
                                                                             {/* Row 4: Consequence + Source reference */}
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginTop: '3px', flexWrap: 'wrap' }}>
-                                                                                {consequenceLabel && (
+                                                                                {consequenceLabel && !isSecondary && (
                                                                                     <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 500, fontStyle: 'italic' }}>
                                                                                         ⚠ {consequenceLabel}
                                                                                     </span>
                                                                                 )}
                                                                                 {doc.sourceRef && (
-                                                                                    <span style={{ fontSize: '0.65rem', color: hasSourceRef ? 'var(--color-text-tertiary)' : 'var(--color-warning)', fontWeight: 400 }}>
+                                                                                    <span style={{ fontSize: '0.65rem', color: hasSourceRef ? 'var(--color-text-tertiary)' : 'var(--color-warning)', fontWeight: hasSourceRef ? 500 : 400 }}>
                                                                                         📄 {doc.sourceRef}
                                                                                     </span>
                                                                                 )}

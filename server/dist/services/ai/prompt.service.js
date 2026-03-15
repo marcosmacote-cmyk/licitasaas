@@ -695,22 +695,61 @@ Você receberá exigências extraídas (Etapa 1) de UMA categoria. Normalize-as.
 2. RECLASSIFICAR se estiver errada (QTO vs QTP, RFT vs QEF). Se reclassificar, mude obligation_type e phase.
 3. PREENCHER risk_if_missing: inabilitacao | desclassificacao | penalidade | risco_contratual | informativo.
 4. PREENCHER applies_to: licitante | consorcio | subcontratada | representante_legal | profissional_tecnico.
-5. PRESERVAR source_ref e evidence_refs da Etapa 1.
-6. GERAR documents_to_prepare para cada exigência.
+5. CLASSIFICAR entry_type conforme hierarquia (ver regras abaixo).
+6. GERAR documents_to_prepare para cada exigência principal.
 7. NÃO invente exigências. Normalize APENAS o que recebeu.
+
+── HIERARQUIA DE ITENS (entry_type) ──
+
+Cada item DEVE receber um entry_type:
+- "exigencia_principal" → exigência autônoma que gera obrigação direta (ex: apresentar CND Federal).
+- "subitem" → desdobramento de uma exigência principal. DEVE ter parent_id apontando para o {prefix}-XX pai.
+- "observacao" → condição, ressalva, prazo de validade ou nota interpretativa vinculada a um item. DEVE ter parent_id.
+- "documento_complementar" → documento auxiliar que não gera inabilitação/desclassificação por si só (ex: declaração de ciência).
+
+── REGRAS ANTI-DUPLICAÇÃO ──
+
+8. Se a Etapa 1 fragmentou UM item do edital em MÚLTIPLAS entradas (mesmo source_ref), CONSOLIDE em UMA exigência principal com subitens.
+   Exemplo ERRADO: 3 cards separados para "item 8.1.a", "item 8.1.b", "item 8.1.c" todos sobre certidões.
+   Exemplo CORRETO: 1 card "Certidões de regularidade fiscal" (exigencia_principal) com 3 subitens.
+9. Se duas entradas têm títulos semanticamente idênticos (ex: "CND Federal" e "Certidão Negativa de Débitos Federais"), UNIFIQUE na que tiver melhor descrição.
+10. Observações sobre prazo de validade, forma de apresentação ou exceções NÃO devem gerar cards separados — devem ser subitens ou observações do card principal.
+11. Se o edital lista "alíneas" (a, b, c...) de um mesmo item, CONSOLIDE como 1 exigência principal + subitens por alínea.
+12. Declarações padrão (ME/EPP, impedimento, inexistência de fatos impeditivos) que aparecem em múltiplos pontos do edital: 1 card único.
+13. Máximo 1 card por document/exigência real. Na dúvida, consolide.
+
+── RASTREABILIDADE OBRIGATÓRIA (source_ref) ──
+
+14. TODA exigência DEVE ter source_ref preenchido no formato:
+    "[Documento], [localizador]"
+    Exemplos válidos:
+    - "Edital, item 8.3"
+    - "Edital, item 8.1, alínea 'd'"
+    - "TR, seção 5.2.1"
+    - "Projeto Básico, item 4.3"
+    - "Anexo I, item 2.1"
+    - "Minuta do contrato, cláusula 7ª"
+    - "Planilha orçamentária, item 3"
+    Documentos válidos: Edital | TR | Projeto Básico | ETP | Anexo [N] | Minuta | Planilha | Memorial
+    Localizadores válidos: item X.Y | seção X.Y | alínea 'X' | cláusula Xª | página X | art. X
+15. Se a Etapa 1 já tiver source_ref válido, PRESERVE como está.
+16. Se source_ref estiver vazio ou "referência não localizada", tente inferir da descrição ou evidence_refs. Se impossível, preencha "referência não localizada".
+17. NUNCA deixe source_ref vazio ou null.
 
 ── FORMATO DE SAÍDA (JSON estrito) ──
 {
   "items": [
     {
       "requirement_id": "{prefix}-01",
+      "entry_type": "exigencia_principal|subitem|observacao|documento_complementar",
+      "parent_id": null,
       "title": "máx 80 chars",
-      "description": "máx 120 chars",
+      "description": "máx 150 chars — inclua detalhes essenciais, exclua repetição literal do edital",
       "obligation_type": "obrigatoria_universal|condicional|se_aplicavel|alternativa|vencedor|fase_contratual|consorcio|me_epp|recuperacao_judicial|empresa_estrangeira",
       "phase": "habilitacao|proposta|contratacao|pos_contratacao",
       "applies_to": "licitante|consorcio|subcontratada|representante_legal|profissional_tecnico",
       "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo",
-      "source_ref": "preservar da Etapa 1",
+      "source_ref": "Edital, item X.Y",
       "evidence_refs": ["EV-XX"]
     }
   ],
@@ -752,6 +791,12 @@ function buildCategoryNormPrompt(cat) {
  */
 function buildCategoryNormUser(cat, items) {
     return `Normalize as ${items.length} exigência(s) da categoria "${cat.name}" (prefixo ${cat.prefix}).
+
+LEMBRETE:
+- CONSOLIDE fragmentos de um mesmo item do edital em 1 exigência principal + subitens.
+- Todo item DEVE ter entry_type preenchido (exigencia_principal, subitem, observacao ou documento_complementar).
+- Todo item DEVE ter source_ref no formato "Documento, item X.Y" (ex: "Edital, item 8.3", "TR, seção 5.2.1").
+- Subitens e observações DEVEM ter parent_id apontando para o id da exigência principal.
 
 EXIGÊNCIAS EXTRAÍDAS:
 ${JSON.stringify(items, null, 0)}

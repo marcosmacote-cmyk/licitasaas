@@ -314,7 +314,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                 'documentos_complementares': 'Declarações e Outros',
             };
 
-            const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; obligationType?: string; phase?: string; riskIfMissing?: string; sourceRef?: string }[]> = {};
+            const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; obligationType?: string; phase?: string; riskIfMissing?: string; sourceRef?: string; entryType?: string; parentId?: string | null }[]> = {};
 
             for (const [key, label] of Object.entries(v2Categories)) {
                 const reqs = v2.requirements[key];
@@ -344,6 +344,8 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                         phase: r.phase || 'habilitacao',
                         riskIfMissing: r.risk_if_missing,
                         sourceRef: r.source_ref || '',
+                        entryType: r.entry_type || 'exigencia_principal',
+                        parentId: r.parent_id || null,
                     };
                 });
             }
