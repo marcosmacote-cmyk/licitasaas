@@ -294,7 +294,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                 'documentos_complementares': 'Declarações e Outros',
             };
 
-            const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; mandatory?: boolean; riskIfMissing?: string }[]> = {};
+            const result: Record<string, { item: string; title: string; description: string; hasMatch: boolean; mandatory?: boolean; riskIfMissing?: string; sourceRef?: string }[]> = {};
 
             for (const [key, label] of Object.entries(v2Categories)) {
                 const reqs = v2.requirements[key];
@@ -320,6 +320,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                         hasMatch,
                         mandatory: r.mandatory,
                         riskIfMissing: r.risk_if_missing,
+                        sourceRef: r.source_ref || '',
                     };
                 });
             }

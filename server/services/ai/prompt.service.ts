@@ -388,6 +388,8 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 15. Em parcelas_relevantes, sempre inclua o quantitativo_minimo e unidade quando presentes (mesmo que percentuais).
 16. BUSQUE informações em TODOS os documentos (edital, TR, projeto básico, anexos, planilhas). NÃO se limite ao corpo do edital.
 17. Em caso de informação mencionada em mais de um documento, use a versão mais DETALHADA.
+18. RASTREABILIDADE OBRIGATÓRIA: toda exigência DEVE ter source_ref preenchido com a peça + item/seção de origem (ex: "Edital, item 8.3" ou "TR, seção 5.2.1"). Se não conseguir localizar com precisão, preencha: "referência não localizada".
+19. NÃO use risk_if_missing como rótulo do item. risk_if_missing é a CONSEQUÊNCIA de não apresentar o documento, não a natureza do item.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -406,7 +408,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "outros_prazos": [{"descricao": "", "data": ""}]
   },
   "requirements": {
-    "habilitacao_juridica": [{"requirement_id": "HJ-01", "title": "título curto máx 80 chars", "description": "resumo objetivo máx 120 chars", "mandatory": true, "applies_to": "licitante", "risk_if_missing": "inabilitação", "evidence_refs": ["EV-01"]}],
+    "habilitacao_juridica": [{"requirement_id": "HJ-01", "title": "título curto máx 80 chars", "description": "resumo objetivo máx 120 chars", "mandatory": true, "applies_to": "licitante", "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo", "source_ref": "Edital, item X.Y | TR, seção X | Anexo X | referência não localizada", "evidence_refs": ["EV-01"]}],
     "regularidade_fiscal_trabalhista": [],
     "qualificacao_economico_financeira": [],
     "qualificacao_tecnica_operacional": [],
@@ -524,7 +526,7 @@ ENTRADA: JSON da Etapa 1 (será fornecido abaixo)
 FORMATO DE SAÍDA — JSON complementar com estas seções:
 {
   "requirements_normalized": {
-    "habilitacao_juridica": [{"requirement_id": "", "title": "máx 80 chars", "description": "máx 120 chars", "mandatory": true, "applies_to": "", "risk_if_missing": "", "evidence_refs": []}],
+    "habilitacao_juridica": [{"requirement_id": "", "title": "máx 80 chars", "description": "máx 120 chars", "mandatory": true, "applies_to": "", "risk_if_missing": "inabilitacao|desclassificacao|penalidade|risco_contratual|informativo", "source_ref": "preservar da Etapa 1", "evidence_refs": []}],
     "regularidade_fiscal_trabalhista": [],
     "qualificacao_economico_financeira": [],
     "qualificacao_tecnica_operacional": [],

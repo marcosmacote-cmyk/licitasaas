@@ -353,6 +353,17 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                 {docs.map((doc: any, idx: number) => {
                                                                     const DESC_LIMIT = 120;
                                                                     const isLong = doc.description && doc.description.length > DESC_LIMIT;
+                                                                    // Map riskIfMissing to user-friendly consequence label
+                                                                    const consequenceMap: Record<string, string> = {
+                                                                        'inabilitacao': 'Risco: inabilitação',
+                                                                        'inabilitação': 'Risco: inabilitação',
+                                                                        'desclassificacao': 'Risco: desclassificação',
+                                                                        'desclassificação': 'Risco: desclassificação',
+                                                                        'penalidade': 'Risco: penalidade',
+                                                                        'risco_contratual': 'Risco contratual',
+                                                                    };
+                                                                    const consequenceLabel = doc.riskIfMissing ? consequenceMap[doc.riskIfMissing] || '' : '';
+                                                                    const hasSourceRef = doc.sourceRef && doc.sourceRef !== 'referência não localizada';
                                                                     return (
                                                                     <div key={idx} style={{
                                                                         padding: 'var(--space-3) var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)',
@@ -368,14 +379,14 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                                         {doc.item}
                                                                                     </span>
                                                                                 )}
-                                                                                {doc.mandatory === false && (
+                                                                                {/* Nature label: Obrigatório or Opcional */}
+                                                                                {doc.mandatory !== false ? (
+                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 700, color: 'var(--color-success)', background: 'var(--color-success-bg)', padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
+                                                                                        obrigatório
+                                                                                    </span>
+                                                                                ) : (
                                                                                     <span style={{ fontSize: '0.55rem', fontWeight: 600, color: 'var(--color-text-tertiary)', background: 'var(--color-bg-secondary)', padding: '1px 4px', borderRadius: 'var(--radius-sm)' }}>
                                                                                         opcional
-                                                                                    </span>
-                                                                                )}
-                                                                                {doc.riskIfMissing && doc.riskIfMissing !== 'informativo' && (
-                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 700, color: doc.riskIfMissing === 'inabilitação' || doc.riskIfMissing === 'inabilitacao' ? 'var(--color-danger)' : 'var(--color-warning)', background: doc.riskIfMissing === 'inabilitação' || doc.riskIfMissing === 'inabilitacao' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)', padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
-                                                                                        {doc.riskIfMissing}
                                                                                     </span>
                                                                                 )}
                                                                             </div>
@@ -389,6 +400,19 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                                     {isLong ? doc.description.slice(0, DESC_LIMIT) + '…' : doc.description}
                                                                                 </p>
                                                                             )}
+                                                                            {/* Consequence (separated from nature) + Source reference */}
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginTop: '3px', flexWrap: 'wrap' }}>
+                                                                                {consequenceLabel && (
+                                                                                    <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 500, fontStyle: 'italic' }}>
+                                                                                        ⚠ {consequenceLabel}
+                                                                                    </span>
+                                                                                )}
+                                                                                {doc.sourceRef && (
+                                                                                    <span style={{ fontSize: '0.65rem', color: hasSourceRef ? 'var(--color-text-tertiary)' : 'var(--color-warning)', fontWeight: 400 }}>
+                                                                                        📄 {doc.sourceRef}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                     );
