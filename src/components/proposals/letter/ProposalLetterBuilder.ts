@@ -1,0 +1,446 @@
+/**
+ * ══════════════════════════════════════════════════════════════
+ * ProposalLetterBuilder
+ * Motor de composição da carta proposta orientado a blocos.
+ * Cada bloco tem regras fixas de montagem — a IA NÃO decide estrutura.
+ * ══════════════════════════════════════════════════════════════
+ */
+
+import { numberToWords, currencyToWords } from './utils/numberToWords';
+import type {
+    ProposalLetterData, LetterBlock, ProposalLetterResult,
+} from './types';
+import { LetterBlockType } from './types';
+
+const BUILDER_VERSION = '2.0.0';
+
+export class ProposalLetterBuilder {
+    private data: ProposalLetterData;
+    private overrides: Map<string, string> = new Map();
+    private aiBlocks: Map<string, string> = new Map();
+
+    constructor(data: ProposalLetterData) {
+        this.data = data;
+    }
+
+    /**
+     * Sobrescreve o conteúdo de um bloco (edição manual do usuário).
+     * Tem precedência sobre conteúdo gerado automaticamente e IA.
+     */
+    setOverride(blockId: string, content: string): this {
+        this.overrides.set(blockId, content);
+        return this;
+    }
+
+    /**
+     * Define conteúdo gerado por IA para blocos específicos.
+     * Usado pelo endpoint /ai-letter-blocks.
+     */
+    setAiContent(blockId: string, content: string): this {
+        this.aiBlocks.set(blockId, content);
+        return this;
+    }
+
+    /**
+     * Monta todos os blocos e retorna o resultado completo.
+     */
+    build(): ProposalLetterResult {
+        const allBlocks: LetterBlock[] = [
+            this.buildRecipientBlock(),
+            this.buildReferenceBlock(),
+            this.buildQualificationBlock(),
+            this.buildObjectBlock(),
+            this.buildCommercialDeclarationBlock(),
+            this.buildPricingSummaryBlock(),
+            this.buildValidityBlock(),
+            this.buildExecutionBlock(),
+            this.buildBankingBlock(),
+            this.buildClosingBlock(),
+            this.buildSignatureBlock(),
+        ];
+
+        // Assign order and filter visible
+        allBlocks.forEach((b, i) => { b.order = i; });
+        const visibleBlocks = allBlocks.filter(b => b.visible);
+
+        const plainText = visibleBlocks
+            .map(b => b.content)
+            .join('\n\n');
+
+        return {
+            blocks: allBlocks,
+            plainText,
+            htmlContent: '', // Renderizado pelo LetterRenderer (Fase 3)
+            validation: { isValid: true, errors: [], warnings: [] },
+            meta: {
+                generatedAt: new Date().toISOString(),
+                builderVersion: BUILDER_VERSION,
+                aiBlockIds: allBlocks.filter(b => b.aiGenerated).map(b => b.id),
+                dataHash: this.computeHash(),
+            },
+        };
+    }
+
+    // ════════════════════════════════════════
+    // BLOCOS INDIVIDUAIS
+    // ════════════════════════════════════════
+
+    private buildRecipientBlock(): LetterBlock {
+        const r = this.data.recipient;
+        const lines: string[] = [];
+
+        lines.push(`Ao Ilmo(a). Sr(a). ${r.title || 'Agente de Contratação / Pregoeiro(a)'}`);
+        if (r.orgao) lines.push(r.orgao);
+
+        return this.createBlock(LetterBlockType.RECIPIENT, 'Destinatário',
+            this.resolve(LetterBlockType.RECIPIENT, lines.join('\n')),
+            { required: true, editable: true });
+    }
+
+    private buildReferenceBlock(): LetterBlock {
+        const ref = this.data.reference;
+        const parts: string[] = [];
+
+        if (ref.modalidade) parts.push(ref.modalidade);
+        if (ref.numero) parts.push(`nº ${ref.numero}`);
+        if (ref.ano) parts.push(`/${ref.ano}`);
+
+        let content = 'Ref: ';
+        content += parts.join(' ');
+
+        if (ref.processo) {
+            content += ` — Processo Administrativo nº ${ref.processo}`;
+        }
+
+        return this.createBlock(LetterBlockType.REFERENCE, 'Referência do Processo',
+            content, { required: true, editable: false });
+    }
+
+    private buildQualificationBlock(): LetterBlock {
+        const c = this.data.company;
+
+        // Prioridade: override > qualification cadastrada > composição automática
+        const autoComposition = this.composeQualification(c);
+        const content = this.resolve(LetterBlockType.QUALIFICATION,
+            c.qualification?.trim() || autoComposition);
+
+        return this.createBlock(LetterBlockType.QUALIFICATION, 'Qualificação da Empresa',
+            content, { required: true, editable: true });
+    }
+
+    private buildObjectBlock(): LetterBlock {
+        // Prioridade: override > AI > dados do edital > placeholder
+        const aiContent = this.aiBlocks.get(LetterBlockType.OBJECT);
+        const editalContent = this.data.object.fullDescription?.trim();
+
+        let content: string;
+        let isAi = false;
+
+        if (this.overrides.has(LetterBlockType.OBJECT)) {
+            content = this.overrides.get(LetterBlockType.OBJECT)!;
+        } else if (aiContent) {
+            content = `vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${aiContent}`;
+            isAi = true;
+        } else if (editalContent) {
+            content = `vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${editalContent}`;
+        } else {
+            content = 'vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o objeto descrito no Edital em referência.';
+        }
+
+        return this.createBlock(LetterBlockType.OBJECT, 'Objeto',
+            content, { required: true, editable: true, aiGenerated: isAi });
+    }
+
+    private buildCommercialDeclarationBlock(): LetterBlock {
+        const declarations: string[] = [];
+
+        // Declaração obrigatória — Lei 14.133/2021
+        declarations.push(
+            'Declaramos que nos preços propostos estão inclusos todos os custos diretos e indiretos, ' +
+            'tributos, taxas, fretes, encargos sociais, trabalhistas e previdenciários, seguros, lucro ' +
+            'e quaisquer outras despesas que incidam ou venham a incidir sobre o objeto desta licitação.'
+        );
+
+        declarations.push(
+            'Declaramos que tomamos conhecimento de todas as condições do Edital e seus anexos, ' +
+            'concordando integralmente com os termos estabelecidos.'
+        );
+
+        declarations.push(
+            'Declaramos que não empregamos menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, ' +
+            'nem menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de ' +
+            '14 (quatorze) anos, conforme art. 68, inciso VI, da Lei nº 14.133/2021.'
+        );
+
+        // Condições específicas do edital (via IA ou dados extraídos)
+        const aiExtras = this.aiBlocks.get('commercialExtras');
+        if (aiExtras?.trim()) {
+            declarations.push(aiExtras.trim());
+        }
+
+        // Condições de pagamento (se disponível nos dados)
+        if (this.data.commercial.paymentConditions?.trim()) {
+            declarations.push(this.data.commercial.paymentConditions.trim());
+        }
+
+        // Garantia contratual (se exigida)
+        if (this.data.commercial.warrantyPercentage && this.data.commercial.warrantyPercentage > 0) {
+            declarations.push(
+                `Declaramos ciência da exigência de garantia contratual de ${this.data.commercial.warrantyPercentage}% ` +
+                `do valor do contrato, conforme disposto no Edital.`
+            );
+        }
+
+        const content = this.resolve(LetterBlockType.COMMERCIAL, declarations.join('\n\n'));
+        const hasAi = !!aiExtras?.trim();
+
+        return this.createBlock(LetterBlockType.COMMERCIAL, 'Declarações Comerciais',
+            content, { required: true, editable: true, aiGenerated: hasAi });
+    }
+
+    private buildPricingSummaryBlock(): LetterBlock {
+        const p = this.data.pricing;
+        const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const lines: string[] = [];
+
+        // Valor Global por extenso
+        const extenso = p.totalValueExtended || currencyToWords(p.totalValue);
+        lines.push(`Valor Global da Proposta: ${fmt(p.totalValue)} (${extenso}).`);
+
+        // BDI
+        if (p.bdiPercentage > 0) {
+            lines.push(`BDI aplicado: ${p.bdiPercentage.toFixed(2)}%.`);
+        }
+
+        // Desconto
+        if (p.discountPercentage > 0) {
+            lines.push(`Desconto linear aplicado: ${p.discountPercentage.toFixed(2)}%.`);
+        }
+
+        // Referência à planilha
+        lines.push(`Conforme Planilha de Formação de Preços em anexo, contendo ${p.itemCount} item(ns).`);
+
+        // NÃO permite override — valores devem vir do cálculo
+        return this.createBlock(LetterBlockType.PRICING_SUMMARY, 'Resumo de Preços',
+            lines.join('\n'), { required: true, editable: false });
+    }
+
+    private buildValidityBlock(): LetterBlock {
+        const days = this.data.commercial.validityDays || 60;
+        const extensoDias = numberToWords(days);
+
+        const content = this.resolve(LetterBlockType.VALIDITY,
+            `A presente proposta tem prazo de validade de ${days} (${extensoDias}) dias corridos, ` +
+            `contados da data de sua apresentação.`
+        );
+
+        return this.createBlock(LetterBlockType.VALIDITY, 'Validade da Proposta',
+            content, { required: true, editable: true });
+    }
+
+    private buildExecutionBlock(): LetterBlock {
+        const e = this.data.execution;
+        const hasData = e.executionLocation || e.executionDeadline || e.contractDuration;
+        const aiContent = this.aiBlocks.get(LetterBlockType.EXECUTION);
+
+        if (!hasData && !aiContent && !this.overrides.has(LetterBlockType.EXECUTION)) {
+            return this.createBlock(LetterBlockType.EXECUTION, 'Condições de Execução',
+                '', { required: false, visible: false });
+        }
+
+        let content: string;
+        let isAi = false;
+
+        if (this.overrides.has(LetterBlockType.EXECUTION)) {
+            content = this.overrides.get(LetterBlockType.EXECUTION)!;
+        } else if (aiContent?.trim()) {
+            content = aiContent.trim();
+            isAi = true;
+        } else {
+            const lines: string[] = [];
+            if (e.executionLocation) lines.push(`Local de execução/entrega: ${e.executionLocation}.`);
+            if (e.executionDeadline) lines.push(`Prazo de execução/entrega: ${e.executionDeadline}.`);
+            if (e.contractDuration) lines.push(`Vigência do contrato: ${e.contractDuration}.`);
+            content = lines.join('\n');
+        }
+
+        return this.createBlock(LetterBlockType.EXECUTION, 'Condições de Execução',
+            content, { required: false, editable: true, aiGenerated: isAi });
+    }
+
+    private buildBankingBlock(): LetterBlock {
+        const b = this.data.banking;
+        const hasData = b.bank || b.agency || b.account || b.pix;
+
+        const lines = ['Dados bancários para pagamento:'];
+
+        if (hasData) {
+            lines.push(`Banco: ${b.bank || '_______________'}`);
+            lines.push(`Agência: ${b.agency || '_______________'}`);
+            lines.push(`${b.accountType || 'Conta Corrente'}: ${b.account || '_______________'}`);
+            if (b.pix) lines.push(`PIX: ${b.pix}`);
+        } else {
+            lines.push('Banco: _______________');
+            lines.push('Agência: _______________');
+            lines.push('Conta Corrente: _______________');
+        }
+
+        const content = this.resolve(LetterBlockType.BANKING, lines.join('\n'));
+
+        return this.createBlock(LetterBlockType.BANKING, 'Dados Bancários',
+            content, { required: false, editable: true });
+    }
+
+    private buildClosingBlock(): LetterBlock {
+        const localDate = this.data.signature.localDate || this.deriveLocalDate();
+        const content = `${localDate}\n\nAtenciosamente,`;
+
+        return this.createBlock(LetterBlockType.CLOSING, 'Encerramento',
+            content, { required: true, editable: false });
+    }
+
+    private buildSignatureBlock(): LetterBlock {
+        const sig = this.data.signature;
+        const company = this.data.company;
+        const sections: string[] = [];
+
+        if (sig.mode === 'LEGAL' || sig.mode === 'BOTH') {
+            const legalLines = [
+                '___________________________________',
+                sig.legalRepresentative.name || company.contactName || 'Representante Legal',
+            ];
+            if (sig.legalRepresentative.cpf || company.contactCpf) {
+                legalLines.push(`CPF: ${sig.legalRepresentative.cpf || company.contactCpf}`);
+            }
+            legalLines.push(sig.legalRepresentative.role || 'Representante Legal');
+            legalLines.push(company.razaoSocial);
+            legalLines.push(`CNPJ: ${company.cnpj}`);
+            sections.push(legalLines.join('\n'));
+        }
+
+        if (sig.mode === 'TECH' || sig.mode === 'BOTH') {
+            const techLines = [
+                '___________________________________',
+                sig.technicalRepresentative?.name || company.technicalResponsible || 'Responsável Técnico',
+            ];
+            if (sig.technicalRepresentative?.registration || company.technicalRegistration) {
+                techLines.push(sig.technicalRepresentative?.registration || company.technicalRegistration!);
+            }
+            techLines.push(sig.technicalRepresentative?.role || 'Responsável Técnico');
+            techLines.push(company.razaoSocial);
+            techLines.push(`CNPJ: ${company.cnpj}`);
+            sections.push(techLines.join('\n'));
+        }
+
+        return this.createBlock(LetterBlockType.SIGNATURE, 'Assinatura',
+            sections.join('\n\n'), { required: true, editable: false });
+    }
+
+    // ════════════════════════════════════════
+    // HELPERS
+    // ════════════════════════════════════════
+
+    /**
+     * Resolve conteúdo: override > input
+     */
+    private resolve(blockType: LetterBlockType, defaultContent: string): string {
+        return this.overrides.get(blockType) || defaultContent;
+    }
+
+    /**
+     * Compõe qualificação automaticamente a partir dos campos da empresa.
+     */
+    private composeQualification(c: ProposalLetterData['company']): string {
+        const parts: string[] = [];
+        parts.push(c.razaoSocial || '[Razão Social]');
+        parts.push(`inscrita no CNPJ sob o nº ${c.cnpj || '[CNPJ]'}`);
+
+        if (c.address) {
+            parts.push(`com sede em ${c.address}`);
+        } else if (c.city && c.state) {
+            parts.push(`com sede em ${c.city}/${c.state}`);
+        }
+
+        if (c.contactName) {
+            parts.push(`neste ato representada por ${c.contactName}`);
+            if (c.contactCpf) {
+                parts.push(`portador(a) do CPF nº ${c.contactCpf}`);
+            }
+        }
+
+        return parts.join(', ') + ',';
+    }
+
+    /**
+     * Derive local/date from company data.
+     */
+    private deriveLocalDate(): string {
+        const c = this.data.company;
+        const now = new Date();
+        const dateStr = new Intl.DateTimeFormat('pt-BR', {
+            day: '2-digit', month: 'long', year: 'numeric'
+        }).format(now);
+
+        const locParts = [c.city, c.state].filter(Boolean);
+        if (locParts.length > 0) {
+            return `${locParts.join('/')}, ${dateStr}`;
+        }
+        return dateStr;
+    }
+
+    /**
+     * Creates a LetterBlock with standard defaults.
+     */
+    private createBlock(
+        type: LetterBlockType,
+        label: string,
+        content: string,
+        opts: {
+            required?: boolean;
+            editable?: boolean;
+            aiGenerated?: boolean;
+            visible?: boolean;
+        } = {}
+    ): LetterBlock {
+        const isRequired = opts.required ?? true;
+        const isEmpty = !content.trim();
+
+        return {
+            id: type,
+            type,
+            label,
+            required: isRequired,
+            editable: opts.editable ?? false,
+            aiGenerated: opts.aiGenerated ?? false,
+            content,
+            order: 0,
+            visible: opts.visible ?? true,
+            validationStatus: isEmpty
+                ? (isRequired ? 'error' : 'pending')
+                : 'valid',
+            validationMessage: isEmpty && isRequired
+                ? `O bloco "${label}" é obrigatório mas está vazio.`
+                : undefined,
+        };
+    }
+
+    /**
+     * Compute a simple hash of key data for change detection.
+     */
+    private computeHash(): string {
+        const str = JSON.stringify({
+            c: this.data.company.cnpj,
+            r: this.data.reference.numero,
+            t: this.data.pricing.totalValue,
+            n: this.data.pricing.itemCount,
+            v: this.data.commercial.validityDays,
+        });
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
+        }
+        return Math.abs(hash).toString(36);
+    }
+}
