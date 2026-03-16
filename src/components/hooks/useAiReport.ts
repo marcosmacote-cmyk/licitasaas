@@ -227,24 +227,49 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         const pc = v2.participation_conditions;
         const items: { label: string; value: string; type: 'info' | 'warning' | 'danger'; sourceRef?: string }[] = [];
 
-        // Helper: find source_ref from requirements that match a keyword
-        const findSourceRef = (keyword: string): string => {
-            if (!v2?.requirements) return '';
-            const allReqs = Object.values(v2.requirements).flat() as any[];
-            const match = allReqs.find((r: any) => {
-                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
-                return text.includes(keyword);
-            });
-            return match?.source_ref || '';
+        // Helper: find source_ref using 3 fallback strategies
+        const findSourceRef = (...keywords: string[]): string => {
+            // Strategy 1: search requirements by keyword in title/description
+            if (v2?.requirements) {
+                const allReqs = Object.values(v2.requirements).flat() as any[];
+                for (const kw of keywords) {
+                    const match = allReqs.find((r: any) => {
+                        const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                        return text.includes(kw.toLowerCase());
+                    });
+                    if (match?.source_ref && match.source_ref !== 'referência não localizada') return match.source_ref;
+                }
+            }
+            // Strategy 2: search evidence_registry by normalized_topic
+            if (v2?.evidence_registry) {
+                for (const kw of keywords) {
+                    const ev = (v2.evidence_registry as any[]).find(e =>
+                        (e.normalized_topic || '').toLowerCase().includes(kw.toLowerCase())
+                    );
+                    if (ev) {
+                        const doc = ev.document_type === 'edital' ? 'Edital' : ev.document_type === 'tr' ? 'TR' : ev.document_type || 'Edital';
+                        const loc = ev.section ? `seção ${ev.section}` : ev.page ? `p. ${ev.page}` : '';
+                        if (loc) return `${doc}, ${loc}`;
+                    }
+                }
+            }
+            // Strategy 3: extract ref from any detalhes string that contains a localizador
+            if (keywords.length > 0) {
+                const detalhesField = Object.entries(pc).find(([k]) => k.includes('detalhes'))?.[1] as string || '';
+                const refMatch = detalhesField.match(/(item|seção|art\.|cláusula)\s+[\d.]+/i);
+                if (refMatch) return `Edital, ${refMatch[0]}`;
+            }
+            return '';
         };
 
-        if (pc.permite_consorcio !== null) items.push({ label: 'Consórcio', value: pc.permite_consorcio ? 'Permitido' : 'Não permitido', type: pc.permite_consorcio ? 'info' : 'warning', sourceRef: findSourceRef('consórcio') || findSourceRef('consorcio') });
+        if (pc.permite_consorcio !== null) items.push({ label: 'Consórcio', value: pc.permite_consorcio ? 'Permitido' : 'Não permitido', type: pc.permite_consorcio ? 'info' : 'warning', sourceRef: findSourceRef('consórcio', 'consorcio') });
         if (pc.permite_subcontratacao !== null) items.push({ label: 'Subcontratação', value: pc.permite_subcontratacao ? 'Permitida' : 'Não permitida', type: 'info', sourceRef: findSourceRef('subcontrat') });
-        if (pc.exige_visita_tecnica) items.push({ label: 'Visita Técnica', value: pc.visita_tecnica_detalhes || 'Obrigatória', type: 'warning', sourceRef: findSourceRef('visita técnica') || findSourceRef('visita tecnica') });
-        if (pc.exige_garantia_proposta) items.push({ label: 'Garantia de Proposta', value: pc.garantia_proposta_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia de proposta') || findSourceRef('garantia da proposta') });
-        if (pc.exige_garantia_contratual) items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia contratual') || findSourceRef('garantia de execução') });
+        if (pc.exige_visita_tecnica) items.push({ label: 'Visita Técnica', value: pc.visita_tecnica_detalhes || 'Obrigatória', type: 'warning', sourceRef: findSourceRef('visita técnica', 'visita tecnica') });
+        if (pc.exige_garantia_proposta) items.push({ label: 'Garantia de Proposta', value: pc.garantia_proposta_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia de proposta', 'garantia da proposta') });
+        if (pc.exige_garantia_contratual) items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia contratual', 'garantia de execução', 'garantia de contrato') });
         if (pc.exige_amostra) items.push({ label: 'Amostra', value: pc.amostra_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('amostra') });
-        if (pc.tratamento_me_epp) items.push({ label: 'ME/EPP', value: pc.tratamento_me_epp, type: 'info', sourceRef: findSourceRef('me/epp') || findSourceRef('microempresa') });
+        if (pc.tratamento_me_epp) items.push({ label: 'ME/EPP', value: pc.tratamento_me_epp, type: 'info', sourceRef: findSourceRef('me/epp', 'microempresa', 'pequeno porte', 'benefício') });
+        if (pc.participacao_restrita) items.push({ label: 'Participação', value: pc.participacao_restrita, type: 'warning', sourceRef: findSourceRef('participação restrita', 'exclusivo', 'restrita') });
         return items;
     }, [v2]);
 

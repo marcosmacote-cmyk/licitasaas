@@ -375,17 +375,19 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 10. CLASSIFIQUE cada exigência usando a taxonomia fornecida. Use os PREFIXOS corretos: HJ, RFT, QEF, QTO, QTP, PC, DC.
 11. DISTINGUA COM RIGOR: atestado da empresa (QTO) vs. acervo/CAT do profissional (QTP).
 12. DISTINGUA COM RIGOR: certidão negativa de débitos (RFT) vs. balanço/índices (QEF).
-13. CLASSIFIQUE obligation_type com precisão semântica:
+    VISITA TÉCNICA pertence a QTO (atividade operacional), NUNCA a QTP (qualificação profissional individual).
+13. CLASSIFIQUE obligation_type com precisão semântica — use SOMENTE o que estiver EXPLÍCITO no edital:
     - "obrigatoria_universal": exigida de TODOS os licitantes, sem exceção
-    - "condicional": exigida apenas SE uma condição for atendida (ex: "caso seja consórcio", "quando o valor superar X")
-    - "se_aplicavel": exigida apenas se a situação existir (ex: "se houver filiais")
-    - "alternativa": uma entre várias opções aceitas (ex: "certidão A OU certidão B")
+    - "condicional": use APENAS se o edital contiver literalmente condição suspensiva ("caso seja consórcio", "quando o valor superar X"). NÃO infira condicionalidade de contexto geral.
+    - "se_aplicavel": exigida apenas se a situação existir (ex: "se houver filiais", "se aplicável")
+    - "alternativa": uma entre várias opções aceitas, EXPRESSAS no edital como alternativas (ex: "certidão A OU certidão B")
     - "vencedor": exigida somente do licitante vencedor, após adjudicação
     - "fase_contratual": exigida na assinatura ou durante execução do contrato
     - "consorcio": exigida exclusivamente de participantes em consórcio
     - "me_epp": regime diferenciado para microempresa/empresa de pequeno porte
     - "recuperacao_judicial": exigida exclusivamente de empresas em recuperação judicial
     - "empresa_estrangeira": exigida exclusivamente de empresas estrangeiras
+    NA DÚVIDA entre "condicional" e "obrigatoria_universal", use "obrigatoria_universal". Nunca invente condição.
 14. Para tipo_objeto, use exatamente um de: servico_comum | servico_comum_engenharia | obra_engenharia | fornecimento | locacao | outro
 15. Em parcelas_relevantes, sempre inclua o quantitativo_minimo e unidade quando presentes.
 16. BUSQUE informações em TODOS os documentos (edital, TR, projeto básico, ETP, anexos, planilhas, memoriais). NÃO se limite ao corpo do edital.
@@ -395,12 +397,13 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 20. PROIBIDO classificar como "obrigatoria_universal" exigências que contenham "caso", "quando", "se o licitante", "no caso de", "somente para", "exclusivamente para". Essas são "condicional", "se_aplicavel" ou outro tipo específico.
 21. CLASSIFIQUE phase: "habilitacao" = documentos de habilitação, "proposta" = envelope de preços/proposta comercial, "contratacao" = pós-adjudicação/assinatura, "pos_contratacao" = execução contratual.
 22. INTEGRIDADE: exigência SEM source_ref é INVÁLIDA e será descartada pelo sistema.
-23. VISITA TÉCNICA: NÃO classifique como "alternativa". Trate como UMA exigência com DUAS formas de atendimento:
-    - Crie 1 exigência principal (obligation_type="obrigatoria_universal" se obrigatória, "condicional" se facultativa)
-    - Crie 2 subitens: (a) atestado de visita técnica, (b) declaração substitutiva de conhecimento
-    - Na description da principal, escreva: "Comprovação de conhecimento do local — atendível por visita técnica ou declaração substitutiva (Súmula TCU 289)"
-    - Se o edital NÃO oferece declaração substitutiva, crie apenas 1 exigência sem subitens
+23. VISITA TÉCNICA: Pertence a qualificacao_tecnica_operacional (QTO), NÃO a QTP. NÃO classifique como "alternativa". Trate como UMA exigência com DUAS formas de atendimento:
+    - Crie 1 exigência principal com obligation_type="obrigatoria_universal" (se obrigatória por edital)
+    - Crie 2 subitens: (a) atestado de visita técnica, (b) declaração substitutiva de conhecimento do local
+    - Na description da principal: "Comprovação de conhecimento do local — atendível por visita técnica (atestado) ou declaração substitutiva (Súmula TCU 289)"
+    - Se o edital não oferece declaração substitutiva, crie apenas 1 exigência sem subitens
     - NUNCA use obligation_type="alternativa" para visita técnica
+    - NUNCA coloque visita técnica em qualificacao_tecnica_profissional
 24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
 25. OPERADORES FINANCEIROS: para índices contábeis, use EXATAMENTE o operador do edital. LG >= 1,0 significa "maior ou igual a 1,0". EG <= 0,5 significa "menor ou igual a 0,5". NUNCA inverta o operador. Se o edital diz EG <= 0,5, NÃO escreva "mínimo 0,5" — escreva "máximo 0,5 (EG ≤ 0,5)". Se o edital diz LG >= 1,0, escreva "mínimo 1,0 (LG ≥ 1,0)".
 26. TAXONOMIA DE GARANTIAS: garantia de proposta, garantia de execução/contratual, seguro-garantia e caução SEMPRE vão em qualificacao_economico_financeira (QEF), NUNCA em documentos_complementares (DC). DC é apenas para declarações formais, procurações e documentos auxiliares sem natureza financeira.
@@ -414,6 +417,16 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
     - proposta ajustada (vencedor): adequação da proposta pelo vencedor provisório
     - documentos anexos: planilha orçamentária, composição de BDI, cronograma etc.
     - formalidades da proposta: assinatura, rubrica, validade, formato
+29. DOCUMENTOS FISCAIS AUTÔNOMOS: cada certidão tributária/fiscal relevante é uma exigência SEPARADA. NÃO consolide em um único card "Certidões Fiscais":
+    - CND Federal (Receita Federal / PGFN): 1 card próprio
+    - CND Estadual: 1 card próprio
+    - CND Municipal (do domicílio do licitante): 1 card próprio
+    - CRF do FGTS: 1 card próprio
+    - CNDT (Certidão Negativa de Débitos Trabalhistas): 1 card próprio
+    - Certidão de Falência/Recuperação: 1 card próprio (QEF, não RFT)
+    EXCEÇÃO: alíneas do MESMO item do edital que listam certidões → subitem por alínea (pai = item do edital).
+    NUNCA una certidões de esferas distintas (Federal ≠ Estadual ≠ Municipal) sob um único card.
+30. FUNDAMENTOS DISTINTOS — UMA FONTE POR FUNDAMENTO: se uma exigência cita dois fundamentos jurídicos de itens diferentes do edital (ex: "item 8.1" e "item 10.3"), mantenha CADA exigência em seu item original. NÃO unifique em uma única source_ref. Se a mesma obrigação aparece em dois pontos, use a referência mais detalhada e anote a secundária na description.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -730,13 +743,16 @@ Cada item DEVE receber um entry_type:
 8. Se a Etapa 1 fragmentou UM item do edital em MÚLTIPLAS entradas (mesmo source_ref), CONSOLIDE em UMA exigência principal com subitens.
    Exemplo ERRADO: 3 cards separados para "item 8.1.a", "item 8.1.b", "item 8.1.c" todos sobre certidões.
    Exemplo CORRETO: 1 card "Certidões de regularidade fiscal" (exigencia_principal) com 3 subitens.
+   EXCEÇÃO FISCAL: certidões de esferas/órgãos DISTINTOS (Federal, Estadual, Municipal, FGTS, CNDT) jamais devem ser consolidadas.
+   Cada uma é uma exigência autônoma com consequência legal independente. Mantenha separadas mesmo que o edital as liste no mesmo item.
 9. Se duas entradas têm títulos semanticamente idênticos (ex: "CND Federal" e "Certidão Negativa de Débitos Federais"), UNIFIQUE na que tiver melhor descrição.
 10. Observações sobre prazo de validade, forma de apresentação ou exceções NÃO devem gerar cards separados — devem ser subitens ou observações do card principal.
-11. Se o edital lista "alíneas" (a, b, c...) de um mesmo item, CONSOLIDE como 1 exigência principal + subitens por alínea.
+11. Se o edital lista "alíneas" (a, b, c...) de um mesmo item fiscal, crie 1 principal + subitens; mas se as alíneas são certidões de esferas distintas, mantenha como exigências principais separadas.
 12. Declarações padrão (ME/EPP, impedimento, inexistência de fatos impeditivos) que aparecem em múltiplos pontos do edital: 1 card único.
-13. Máximo 1 card por document/exigência real. Na dúvida, consolide.
+13. Máximo 1 card por document/exigência real. Na dúvida, consolide — EXCETO para certidões fiscais de esferas distintas.
 14. Se reclassificar um item para outra categoria (ex: garantia de DC→QEF), EXCLUA o item desta categoria e retorne os demais. O item será processado na categoria correta.
 15. TODO subitem e observação DEVE preservar source_ref do pai ou ter source_ref próprio. NUNCA null/vazio em nenhum nível hierárquico.
+16. obligation_type="condicional" SOMENTE quando o edital contém explicitamente condição suspensiva. NÃO infira condicionalidade. Na dúvida: "obrigatoria_universal".
 
 ── RASTREABILIDADE OBRIGATÓRIA (source_ref) ──
 
