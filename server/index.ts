@@ -1649,6 +1649,104 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             console.log(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
         }
 
+        // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION ──
+        // Detect if critical categories are missing (likely due to output truncation)
+        const expectedCategories: Record<string, string[]> = {
+            'obra_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
+            'servico_comum_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
+            'servico_comum': ['qualificacao_tecnica_operacional', 'qualificacao_economico_financeira', 'proposta_comercial'],
+            'fornecimento': ['qualificacao_economico_financeira', 'proposta_comercial'],
+            'outro': ['proposta_comercial'],
+        };
+        const objType = detectedObjectType || 'outro';
+        const expected = expectedCategories[objType] || expectedCategories['outro'];
+        const missingCategories = expected.filter(cat => {
+            const items = Array.isArray((extractionJson.requirements as any)?.[cat]) ? (extractionJson.requirements as any)[cat] : [];
+            return items.length === 0;
+        });
+
+        if (missingCategories.length > 0) {
+            console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')}`);
+            console.log(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
+
+            const missingCatLabels: Record<string, string> = {
+                'qualificacao_tecnica_operacional': 'Qualificação Técnica Operacional (atestados da empresa, parcelas relevantes, visita técnica)',
+                'qualificacao_tecnica_profissional': 'Qualificação Técnica Profissional (RT, CAT, acervo técnico do profissional)',
+                'qualificacao_economico_financeira': 'Qualificação Econômico-Financeira (balanço, índices, garantia, certidão falência)',
+                'proposta_comercial': 'Proposta Comercial (envelope de preços, planilha, BDI, validade, formato)',
+                'documentos_complementares': 'Documentos Complementares e Declarações (declarações, procurações, docs auxiliares)',
+            };
+            const catDescriptions = missingCategories.map(c => `- ${missingCatLabels[c] || c}`).join('\n');
+
+            const reExtractionPrompt = `ATENÇÃO: a extração anterior capturou apenas ${extractedReqs} exigências e OMITIU categorias inteiras.
+As seguintes categorias estão VAZIAS e precisam ser extraídas:
+${catDescriptions}
+
+Extraia APENAS as exigências dessas categorias faltantes. NÃO re-extraia habilitação jurídica ou regularidade fiscal (já capturadas).
+Use o mesmo formato JSON de saída mas incluindo apenas as categorias listadas acima em "requirements".
+Para QTO/QTP, transcreva LITERALMENTE cada parcela de maior relevância com quantitativos exatos.
+Inclua evidence_registry com ao menos 1 evidência por exigência principal.
+
+Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "evidence_registry": [...] }`;
+
+            try {
+                // Use only the first PDF (edital) for re-extraction — reduces context size
+                const editalPdf = pdfParts[0];
+                const reExtractionResponse = await callGeminiWithRetry(ai.models, {
+                    model: 'gemini-2.5-flash',
+                    contents: [{
+                        role: 'user',
+                        parts: [
+                            editalPdf,
+                            { text: reExtractionPrompt }
+                        ]
+                    }],
+                    config: {
+                        systemInstruction: V2_EXTRACTION_PROMPT,
+                        temperature: 0.05,
+                        maxOutputTokens: 65536,
+                        responseMimeType: 'application/json'
+                    }
+                });
+                const reText = reExtractionResponse.text;
+                if (reText) {
+                    const reParseResult = robustJsonParseDetailed(reText, 'PNCP-V2-ReExtraction');
+                    const reData = reParseResult.data;
+                    if (reParseResult.repaired) pipelineHealth.parseRepairs++;
+
+                    // Merge re-extracted categories into the main extraction
+                    let reExtractedCount = 0;
+                    if (reData.requirements) {
+                        for (const [cat, items] of Object.entries(reData.requirements)) {
+                            if (Array.isArray(items) && items.length > 0) {
+                                const existing = Array.isArray((extractionJson.requirements as any)?.[cat]) ? (extractionJson.requirements as any)[cat] : [];
+                                if (existing.length === 0) {
+                                    (extractionJson.requirements as any)[cat] = items;
+                                    (v2Result.requirements as any)[cat] = items;
+                                    reExtractedCount += items.length;
+                                    console.log(`[PNCP-V2] ✅ Re-extração ${cat}: +${items.length} itens`);
+                                }
+                            }
+                        }
+                    }
+                    // Merge evidence_registry
+                    if (reData.evidence_registry && Array.isArray(reData.evidence_registry)) {
+                        extractionJson.evidence_registry = [
+                            ...(extractionJson.evidence_registry || []),
+                            ...reData.evidence_registry
+                        ];
+                        v2Result.evidence_registry = extractionJson.evidence_registry;
+                    }
+
+                    console.log(`[PNCP-V2] ✅ Re-extração concluída: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
+                }
+            } catch (reErr: any) {
+                console.warn(`[PNCP-V2] ⚠️ Re-extração falhou: ${reErr.message}. Continuando com dados parciais.`);
+                v2Result.confidence.warnings.push(`Re-extração de categorias faltantes falhou: ${reErr.message}`);
+            }
+        }
+
+
         // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
         console.log(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
         let normalizationJson: any = {};
