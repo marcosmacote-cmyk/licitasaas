@@ -1,0 +1,673 @@
+/**
+ * ══════════════════════════════════════════════════════════════
+ * ProposalLetterWizard — Nova UI orientada a blocos
+ * Wizard em 5 etapas: Config → Validação → Geração → Revisão → Exportação
+ * ══════════════════════════════════════════════════════════════
+ */
+
+import { useState, useCallback, useMemo } from 'react';
+import {
+    Settings, CheckCircle2, Cpu, Edit3, Printer,
+    AlertTriangle, XCircle, Info, ChevronRight, ChevronLeft,
+    Loader2, Save, RefreshCw, Lock, Unlock, Sparkles,
+    FileText, Table2, FileStack, ListOrdered, BarChart3,
+} from 'lucide-react';
+import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../../types';
+import type { ProposalLetterResult, LetterBlock, ValidationResult, LetterExportMode } from './types';
+import { LetterBlockType } from './types';
+import { LetterDataNormalizer } from './LetterDataNormalizer';
+import { ProposalLetterBuilder } from './ProposalLetterBuilder';
+import { ProposalLetterValidator } from './ProposalLetterValidator';
+import type { AiLetterBlocksResponse } from './types';
+import { API_BASE_URL } from '../../../config';
+
+// ── Types ──
+type WizardStep = 'config' | 'validation' | 'generation' | 'review' | 'export';
+
+interface ProposalLetterWizardProps {
+    // Data
+    bidding: BiddingProcess;
+    company: CompanyProfile;
+    proposal: PriceProposal;
+    items: ProposalItem[];
+    totalValue: number;
+    // Config state
+    validityDays: number;
+    signatureMode: 'LEGAL' | 'TECH' | 'BOTH';
+    bdi: number;
+    discount: number;
+    headerImage: string;
+    footerImage: string;
+    headerImageHeight: number;
+    footerImageHeight: number;
+    // Callbacks
+    setValidityDays: (v: number) => void;
+    setSignatureMode: (v: 'LEGAL' | 'TECH' | 'BOTH') => void;
+    setHeaderImage: (v: string) => void;
+    setFooterImage: (v: string) => void;
+    setHeaderImageHeight: (v: number) => void;
+    setFooterImageHeight: (v: number) => void;
+    handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => void;
+    handleSaveConfig: () => void;
+    handleSaveCompanyTemplate: () => void;
+    isSavingTemplate: boolean;
+    // Letter I/O
+    setLetterContent: (v: string) => void;
+    handleSaveLetter: () => void;
+    handlePrintProposal: (type: 'FULL' | 'LETTER' | 'SPREADSHEET') => void;
+    isSaving: boolean;
+}
+
+const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
+    { id: 'config',     label: 'Configuração',  icon: <Settings size={16} /> },
+    { id: 'validation', label: 'Validação',      icon: <CheckCircle2 size={16} /> },
+    { id: 'generation', label: 'Geração',        icon: <Cpu size={16} /> },
+    { id: 'review',     label: 'Revisão',        icon: <Edit3 size={16} /> },
+    { id: 'export',     label: 'Exportação',     icon: <Printer size={16} /> },
+];
+
+const BLOCK_LABELS: Record<string, { icon: string; color: string }> = {
+    [LetterBlockType.RECIPIENT]:       { icon: '📬', color: '#3B82F6' },
+    [LetterBlockType.REFERENCE]:       { icon: '📋', color: '#6366F1' },
+    [LetterBlockType.QUALIFICATION]:   { icon: '🏢', color: '#8B5CF6' },
+    [LetterBlockType.OBJECT]:          { icon: '📝', color: '#EC4899' },
+    [LetterBlockType.COMMERCIAL]:      { icon: '⚖️', color: '#F59E0B' },
+    [LetterBlockType.PRICING_SUMMARY]: { icon: '💰', color: '#10B981' },
+    [LetterBlockType.VALIDITY]:        { icon: '📅', color: '#06B6D4' },
+    [LetterBlockType.EXECUTION]:       { icon: '🔧', color: '#F97316' },
+    [LetterBlockType.BANKING]:         { icon: '🏦', color: '#14B8A6' },
+    [LetterBlockType.CLOSING]:         { icon: '✉️', color: '#64748B' },
+    [LetterBlockType.SIGNATURE]:       { icon: '✍️', color: '#334155' },
+};
+
+export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
+    const [step, setStep] = useState<WizardStep>('config');
+    const [validation, setValidation] = useState<ValidationResult | null>(null);
+    const [letterResult, setLetterResult] = useState<ProposalLetterResult | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationProgress, setGenerationProgress] = useState<string[]>([]);
+    const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+    const [editBuffer, setEditBuffer] = useState('');
+    const [selectedExportMode, setSelectedExportMode] = useState<LetterExportMode>('FULL');
+
+    const stepIndex = STEPS.findIndex(s => s.id === step);
+
+    // ── Normalizer ──
+    const normalizedData = useMemo(() => {
+        const normalizer = new LetterDataNormalizer();
+        return normalizer.normalize({
+            bidding: props.bidding,
+            company: props.company,
+            proposal: props.proposal,
+            items: props.items,
+            totalValue: props.totalValue,
+            signatureMode: props.signatureMode,
+            validityDays: props.validityDays,
+            bdiPercentage: props.bdi,
+            discountPercentage: props.discount,
+        });
+    }, [props.bidding, props.company, props.proposal, props.items, props.totalValue,
+        props.signatureMode, props.validityDays, props.bdi, props.discount]);
+
+    // ── Validate ──
+    const handleValidate = useCallback(() => {
+        const validator = new ProposalLetterValidator();
+        const result = validator.validate(normalizedData);
+        setValidation(result);
+        setStep('validation');
+    }, [normalizedData]);
+
+    // ── Generate ──
+    const handleGenerate = useCallback(async () => {
+        setIsGenerating(true);
+        setGenerationProgress(['Iniciando composição...']);
+        setStep('generation');
+
+        try {
+            // Step 1: Fetch AI blocks
+            setGenerationProgress(prev => [...prev, '🤖 Solicitando redação IA para blocos variáveis...']);
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+            let aiBlocks: Record<string, string> = {};
+            try {
+                const aiRes = await fetch(`${API_BASE_URL}/api/proposals/ai-letter-blocks`, {
+                    method: 'POST', headers,
+                    body: JSON.stringify({
+                        biddingProcessId: props.bidding.id,
+                        requestedBlocks: ['objectBlock', 'executionBlock', 'commercialExtras'],
+                    }),
+                });
+                if (aiRes.ok) {
+                    const aiData: AiLetterBlocksResponse & { timings?: Record<string, number>; totalMs?: number } = await aiRes.json();
+                    aiBlocks = aiData.blocks || {};
+                    const timings = aiData.timings || {};
+                    Object.entries(timings).forEach(([k, ms]) => {
+                        setGenerationProgress(prev => [...prev, `✅ ${k} redigido (${(ms / 1000).toFixed(1)}s)`]);
+                    });
+                } else {
+                    setGenerationProgress(prev => [...prev, '⚠️ IA indisponível — usando dados estruturais']);
+                }
+            } catch {
+                setGenerationProgress(prev => [...prev, '⚠️ Erro na IA — carta gerada sem trechos variáveis']);
+            }
+
+            // Step 2: Build letter
+            setGenerationProgress(prev => [...prev, '🔧 Compondo blocos estruturais...']);
+            const builder = new ProposalLetterBuilder(normalizedData);
+            if (aiBlocks.objectBlock) builder.setAiContent(LetterBlockType.OBJECT, aiBlocks.objectBlock);
+            if (aiBlocks.executionBlock) builder.setAiContent(LetterBlockType.EXECUTION, aiBlocks.executionBlock);
+            if (aiBlocks.commercialExtras) builder.setAiContent('commercialExtras', aiBlocks.commercialExtras);
+
+            const result = builder.build();
+            setLetterResult(result);
+
+            // Sync with textarea (backward compat)
+            props.setLetterContent(result.plainText);
+
+            const visibleCount = result.blocks.filter(b => b.visible).length;
+            const aiCount = result.meta.aiBlockIds.length;
+            setGenerationProgress(prev => [
+                ...prev,
+                `✅ Carta composta: ${visibleCount} blocos (${aiCount} com IA)`,
+                '🎉 Pronto para revisão!'
+            ]);
+
+            // Auto-advance after 1.5s
+            setTimeout(() => setStep('review'), 1500);
+        } catch (e: any) {
+            setGenerationProgress(prev => [...prev, `❌ Erro: ${e.message || 'Desconhecido'}`]);
+        } finally {
+            setIsGenerating(false);
+        }
+    }, [normalizedData, props]);
+
+    // ── Block editing ──
+    const handleStartEdit = (block: LetterBlock) => {
+        setEditingBlockId(block.id);
+        setEditBuffer(block.content);
+    };
+
+    const handleSaveEdit = () => {
+        if (!letterResult || !editingBlockId) return;
+        const updatedBlocks = letterResult.blocks.map(b =>
+            b.id === editingBlockId ? { ...b, content: editBuffer, aiGenerated: false } : b
+        );
+        const plainText = updatedBlocks.filter(b => b.visible).map(b => b.content).join('\n\n');
+        setLetterResult({ ...letterResult, blocks: updatedBlocks, plainText });
+        props.setLetterContent(plainText);
+        setEditingBlockId(null);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingBlockId(null);
+        setEditBuffer('');
+    };
+
+    // ── Save ──
+    const handleSave = () => {
+        if (letterResult) {
+            props.setLetterContent(letterResult.plainText);
+        }
+        props.handleSaveLetter();
+    };
+
+    // ── Export ──
+    const handleExport = () => {
+        if (selectedExportMode === 'LETTER' || selectedExportMode === 'LETTER_WITH_SUMMARY' || selectedExportMode === 'LETTER_ANALYTICAL') {
+            props.handlePrintProposal('LETTER');
+        } else if (selectedExportMode === 'SPREADSHEET') {
+            props.handlePrintProposal('SPREADSHEET');
+        } else {
+            props.handlePrintProposal('FULL');
+        }
+    };
+
+    // ════════════════════════════════════
+    // RENDER
+    // ════════════════════════════════════
+
+    return (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {/* ── Step Bar ── */}
+            <div style={{
+                display: 'flex', background: 'var(--color-bg-elevated)', borderBottom: '1px solid var(--color-border)',
+                padding: '0 var(--space-2)',
+            }}>
+                {STEPS.map((s, i) => {
+                    const isActive = s.id === step;
+                    const isPast = i < stepIndex;
+                    const isAccessible = i <= stepIndex || (letterResult && i <= 4);
+                    return (
+                        <button key={s.id}
+                            onClick={() => isAccessible && setStep(s.id)}
+                            style={{
+                                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                padding: 'var(--space-3) var(--space-2)',
+                                background: 'none', border: 'none', cursor: isAccessible ? 'pointer' : 'default',
+                                borderBottom: isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
+                                color: isActive ? 'var(--color-primary)'
+                                    : isPast ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                                fontWeight: isActive ? 700 : 500,
+                                fontSize: 'var(--text-sm)',
+                                opacity: isAccessible ? 1 : 0.4,
+                                transition: 'all 0.2s',
+                            }}>
+                            {isPast ? <CheckCircle2 size={15} color="var(--color-success)" /> : s.icon}
+                            <span style={{ display: 'inline' }}>{s.label}</span>
+                            {i < STEPS.length - 1 && (
+                                <ChevronRight size={12} style={{ marginLeft: 2, opacity: 0.3 }} />
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* ── Step Content ── */}
+            <div style={{ padding: 'var(--space-6)' }}>
+
+                {/* ═══ STEP 1: CONFIG ═══ */}
+                {step === 'config' && (
+                    <div>
+                        <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Settings size={18} color="var(--color-primary)" /> Configuração Documental
+                        </h3>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)', marginBottom: 'var(--space-5)' }}>
+                            <div>
+                                <label className="form-label">Validade da Proposta (dias)</label>
+                                <input type="number" value={props.validityDays}
+                                    onChange={e => props.setValidityDays(parseInt(e.target.value) || 60)}
+                                    onBlur={props.handleSaveConfig} className="prop-input" />
+                            </div>
+                            <div>
+                                <label className="form-label">Modelo de Assinatura</label>
+                                <select value={props.signatureMode}
+                                    onChange={e => { props.setSignatureMode(e.target.value as any); setTimeout(props.handleSaveConfig, 100); }}
+                                    className="prop-input" style={{ padding: '6px 8px' }}>
+                                    <option value="LEGAL">Representante Legal</option>
+                                    <option value="TECH">Responsável Técnico</option>
+                                    <option value="BOTH">Ambos</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Header/Footer uploads */}
+                        <div style={{
+                            background: 'var(--color-primary-light)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                            border: '1px solid rgba(37, 99, 235, 0.1)', marginBottom: 'var(--space-4)',
+                        }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
+                                <div>
+                                    <span className="form-label">Cabeçalho (Timbrado Topo)</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                        <input type="file" accept="image/*" onChange={e => props.handleImageUpload(e, props.setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ fontSize: '0.7rem' }}>Alt:</span>
+                                            <input type="number" value={props.headerImageHeight} onChange={e => props.setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                        </div>
+                                        {props.headerImage && <button type="button" onClick={() => props.setHeaderImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                    </div>
+                                    {props.headerImage && (
+                                        <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '80px', overflow: 'hidden', background: 'white' }}>
+                                            <img src={props.headerImage} alt="Header" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <span className="form-label">Rodapé (Timbrado Base)</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                        <input type="file" accept="image/*" onChange={e => props.handleImageUpload(e, props.setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ fontSize: '0.7rem' }}>Alt:</span>
+                                            <input type="number" value={props.footerImageHeight} onChange={e => props.setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
+                                        </div>
+                                        {props.footerImage && <button type="button" onClick={() => props.setFooterImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
+                                    </div>
+                                    {props.footerImage && (
+                                        <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '80px', overflow: 'hidden', background: 'white' }}>
+                                            <img src={props.footerImage} alt="Footer" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div style={{ borderTop: '1px solid rgba(37, 99, 235, 0.1)', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                                <button onClick={props.handleSaveCompanyTemplate} disabled={props.isSavingTemplate} style={{
+                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 600,
+                                    background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
+                                    color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                                }}>
+                                    {props.isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+                                    Salvar como Padrão da Empresa
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Data summary */}
+                        <div style={{
+                            background: 'var(--color-bg-elevated)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                            border: '1px solid var(--color-border)',
+                        }}>
+                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Info size={14} /> Resumo dos dados que serão usados na carta
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+                                <div><strong>Empresa:</strong> {props.company.razaoSocial}</div>
+                                <div><strong>CNPJ:</strong> {props.company.cnpj}</div>
+                                <div><strong>Processo:</strong> {props.bidding.modality} — {props.bidding.title?.substring(0, 60)}</div>
+                                <div><strong>Valor:</strong> {props.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                                <div><strong>Itens:</strong> {props.items.length}</div>
+                                <div><strong>BDI:</strong> {props.bdi}% | <strong>Desconto:</strong> {props.discount}%</div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-5)' }}>
+                            <button onClick={handleValidate} style={{
+                                padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                background: 'var(--color-primary)', color: 'white', border: 'none',
+                                fontWeight: 700, fontSize: 'var(--text-md)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 8,
+                            }}>
+                                Validar dados <ChevronRight size={16} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ═══ STEP 2: VALIDATION ═══ */}
+                {step === 'validation' && validation && (
+                    <div>
+                        <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {validation.isValid
+                                ? <><CheckCircle2 size={18} color="var(--color-success)" /> Dados Validados</>
+                                : <><XCircle size={18} color="var(--color-danger)" /> Validação com Erros</>
+                            }
+                        </h3>
+
+                        {/* Errors */}
+                        {validation.errors.length > 0 && (
+                            <div style={{
+                                background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)',
+                                borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)',
+                            }}>
+                                <div style={{ fontWeight: 700, color: 'var(--color-danger)', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <XCircle size={15} /> {validation.errors.length} erro(s) impeditivo(s)
+                                </div>
+                                {validation.errors.map((e, i) => (
+                                    <div key={i} style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) 0', borderTop: i > 0 ? '1px solid rgba(239,68,68,0.1)' : 'none' }}>
+                                        <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>❌ {e.message}</span>
+                                        {e.suggestion && <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', marginTop: 2 }}>💡 {e.suggestion}</div>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Warnings */}
+                        {validation.warnings.length > 0 && (
+                            <div style={{
+                                background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)',
+                                borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)',
+                            }}>
+                                <div style={{ fontWeight: 700, color: 'var(--color-warning)', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <AlertTriangle size={15} /> {validation.warnings.length} alerta(s)
+                                </div>
+                                {validation.warnings.map((w, i) => (
+                                    <div key={i} style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) 0', borderTop: i > 0 ? '1px solid rgba(245,158,11,0.1)' : 'none' }}>
+                                        <span style={{ color: 'var(--color-warning)' }}>⚠️ {w.message}</span>
+                                        {w.suggestion && <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', marginTop: 2 }}>💡 {w.suggestion}</div>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Success */}
+                        {validation.isValid && validation.errors.length === 0 && (
+                            <div style={{
+                                background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)',
+                                borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)',
+                                color: 'var(--color-success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8,
+                            }}>
+                                <CheckCircle2 size={18} /> Todos os campos obrigatórios estão preenchidos. Pronto para gerar!
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-5)' }}>
+                            <button onClick={() => setStep('config')} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <ChevronLeft size={16} /> Voltar
+                            </button>
+                            <button onClick={handleGenerate} disabled={!validation.isValid || isGenerating} style={{
+                                padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                background: validation.isValid ? 'linear-gradient(135deg, var(--color-ai), var(--color-primary))' : 'var(--color-bg-elevated)',
+                                color: validation.isValid ? 'white' : 'var(--color-text-tertiary)',
+                                border: 'none', fontWeight: 700, fontSize: 'var(--text-md)', cursor: validation.isValid ? 'pointer' : 'default',
+                                display: 'flex', alignItems: 'center', gap: 8, opacity: validation.isValid ? 1 : 0.5,
+                            }}>
+                                <Sparkles size={16} /> Gerar Carta <ChevronRight size={16} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ═══ STEP 3: GENERATION ═══ */}
+                {step === 'generation' && (
+                    <div>
+                        <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Cpu size={18} color="var(--color-primary)" /> Geração da Carta
+                            {isGenerating && <Loader2 size={16} className="spin" style={{ color: 'var(--color-primary)' }} />}
+                        </h3>
+
+                        <div style={{
+                            background: 'var(--color-bg-elevated)', borderRadius: 'var(--radius-lg)',
+                            border: '1px solid var(--color-border)', padding: 'var(--space-4)',
+                        }}>
+                            {generationProgress.map((msg, i) => (
+                                <div key={i} style={{
+                                    padding: 'var(--space-2) 0', fontSize: 'var(--text-sm)',
+                                    borderTop: i > 0 ? '1px solid var(--color-border)' : 'none',
+                                    color: msg.startsWith('❌') ? 'var(--color-danger)'
+                                        : msg.startsWith('⚠️') ? 'var(--color-warning)'
+                                        : msg.startsWith('✅') || msg.startsWith('🎉') ? 'var(--color-success)'
+                                        : 'var(--color-text-secondary)',
+                                    fontWeight: i === generationProgress.length - 1 ? 600 : 400,
+                                    animation: i === generationProgress.length - 1 ? 'fadeIn 0.3s ease-in' : 'none',
+                                }}>
+                                    {msg}
+                                </div>
+                            ))}
+                        </div>
+
+                        {!isGenerating && letterResult && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
+                                <button onClick={() => setStep('review')} style={{
+                                    padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                    background: 'var(--color-primary)', color: 'white', border: 'none',
+                                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                                }}>
+                                    Revisar Carta <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ═══ STEP 4: REVIEW ═══ */}
+                {step === 'review' && letterResult && (
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Edit3 size={18} color="var(--color-primary)" /> Revisão por Blocos
+                                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 400, color: 'var(--color-text-tertiary)' }}>
+                                    ({letterResult.blocks.filter(b => b.visible).length} blocos)
+                                </span>
+                            </h3>
+                            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                                <button onClick={() => { handleGenerate(); }} className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 12px' }}>
+                                    <RefreshCw size={13} /> Regenerar
+                                </button>
+                                <button onClick={handleSave} disabled={props.isSaving} className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 12px' }}>
+                                    {props.isSaving ? <Loader2 size={13} className="spin" /> : <Save size={13} />} Salvar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                            {letterResult.blocks.filter(b => b.visible).map(block => {
+                                const meta = BLOCK_LABELS[block.id] || { icon: '📄', color: '#64748B' };
+                                const isEditing = editingBlockId === block.id;
+
+                                return (
+                                    <div key={block.id} style={{
+                                        borderRadius: 'var(--radius-lg)',
+                                        border: isEditing ? `2px solid ${meta.color}` : '1px solid var(--color-border)',
+                                        overflow: 'hidden', transition: 'border-color 0.2s',
+                                    }}>
+                                        {/* Block header */}
+                                        <div style={{
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            padding: 'var(--space-2) var(--space-3)',
+                                            background: `${meta.color}08`, borderBottom: '1px solid var(--color-border)',
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                                                <span>{meta.icon}</span>
+                                                <span style={{ color: meta.color }}>{block.label}</span>
+                                                {block.aiGenerated && (
+                                                    <span style={{
+                                                        fontSize: '0.65rem', padding: '1px 6px', borderRadius: '99px',
+                                                        background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(59,130,246,0.15))',
+                                                        color: 'var(--color-ai)', fontWeight: 700,
+                                                    }}>🤖 IA</span>
+                                                )}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                {block.editable ? (
+                                                    isEditing ? (
+                                                        <>
+                                                            <button onClick={handleSaveEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-success)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Salvar</button>
+                                                            <button onClick={handleCancelEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Cancelar</button>
+                                                        </>
+                                                    ) : (
+                                                        <button onClick={() => handleStartEdit(block)} style={{
+                                                            fontSize: '0.7rem', padding: '2px 8px', background: 'none',
+                                                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                                                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                                                            color: 'var(--color-text-secondary)',
+                                                        }}>
+                                                            <Unlock size={10} /> Editar
+                                                        </button>
+                                                    )
+                                                ) : (
+                                                    <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                        <Lock size={10} /> Fixo
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Block content */}
+                                        <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
+                                            {isEditing ? (
+                                                <textarea value={editBuffer} onChange={e => setEditBuffer(e.target.value)}
+                                                    style={{
+                                                        width: '100%', minHeight: '120px', padding: 'var(--space-3)',
+                                                        borderRadius: 'var(--radius-md)', border: `1px solid ${meta.color}40`,
+                                                        fontSize: 'var(--text-sm)', lineHeight: 1.6, resize: 'vertical',
+                                                        background: 'var(--color-bg-base)',
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div style={{
+                                                    fontSize: 'var(--text-sm)', lineHeight: 1.65,
+                                                    color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap',
+                                                    maxHeight: '200px', overflow: 'auto',
+                                                }}>
+                                                    {block.content || <em style={{ color: 'var(--color-text-tertiary)' }}>Bloco vazio</em>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-5)' }}>
+                            <button onClick={() => setStep('config')} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <ChevronLeft size={16} /> Configuração
+                            </button>
+                            <button onClick={() => setStep('export')} style={{
+                                padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                background: 'var(--color-primary)', color: 'white', border: 'none',
+                                fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                            }}>
+                                Exportar <ChevronRight size={16} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ═══ STEP 5: EXPORT ═══ */}
+                {step === 'export' && (
+                    <div>
+                        <h3 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-lg)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Printer size={18} color="var(--color-primary)" /> Exportação
+                        </h3>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
+                            {([
+                                { mode: 'LETTER' as const, icon: <FileText size={24} />, label: 'Carta Apenas', desc: 'Carta proposta sem planilha' },
+                                { mode: 'SPREADSHEET' as const, icon: <Table2 size={24} />, label: 'Planilha Apenas', desc: 'Tabela de preços isolada' },
+                                { mode: 'FULL' as const, icon: <FileStack size={24} />, label: 'Completa', desc: 'Carta + Planilha de Preços' },
+                            ]).map(opt => (
+                                <button key={opt.mode} onClick={() => setSelectedExportMode(opt.mode)} style={{
+                                    padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                                    border: selectedExportMode === opt.mode ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    background: selectedExportMode === opt.mode ? 'var(--color-primary-light)' : 'var(--color-bg-base)',
+                                    cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                }}>
+                                    <div style={{ color: selectedExportMode === opt.mode ? 'var(--color-primary)' : 'var(--color-text-tertiary)', marginBottom: 8 }}>{opt.icon}</div>
+                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)' }}>{opt.label}</div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 4 }}>{opt.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
+                            {([
+                                { mode: 'LETTER_WITH_SUMMARY' as const, icon: <ListOrdered size={20} />, label: 'Carta c/ Resumo', desc: 'Carta com quadro resumido dos itens' },
+                                { mode: 'LETTER_ANALYTICAL' as const, icon: <BarChart3 size={20} />, label: 'Carta Analítica', desc: 'Carta com detalhamento completo' },
+                            ]).map(opt => (
+                                <button key={opt.mode} onClick={() => setSelectedExportMode(opt.mode)} style={{
+                                    padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                    border: selectedExportMode === opt.mode ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    background: selectedExportMode === opt.mode ? 'var(--color-primary-light)' : 'var(--color-bg-base)',
+                                    cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+                                    display: 'flex', alignItems: 'center', gap: 12,
+                                }}>
+                                    <div style={{ color: selectedExportMode === opt.mode ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }}>{opt.icon}</div>
+                                    <div>
+                                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)' }}>{opt.label}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{opt.desc}</div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-5)' }}>
+                            <button onClick={() => setStep('review')} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <ChevronLeft size={16} /> Voltar
+                            </button>
+                            <button onClick={handleExport} style={{
+                                padding: 'var(--space-3) var(--space-8)', borderRadius: 'var(--radius-lg)',
+                                background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
+                                color: 'white', border: 'none', fontWeight: 700, fontSize: 'var(--text-md)',
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                            }}>
+                                <Printer size={18} /> Exportar PDF
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

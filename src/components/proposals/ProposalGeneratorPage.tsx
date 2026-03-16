@@ -7,6 +7,7 @@ import {
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
 import { useProposal } from '../hooks/useProposal';
+import { ProposalLetterWizard } from './letter/ProposalLetterWizard';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -463,115 +464,42 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                 </div>
             )}
 
-            {/* ── Letter Tab ── */}
-            {p.activeTab === 'letter' && (
-                <div className="card p-6">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                <FileText size={18} color="var(--color-primary)" /> Texto Principal da Carta
-                            </h3>
-                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>Recomendamos pedir para a IA escrever o texto formal baseado no edital e nos itens.</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                            <button className="btn btn-outline" onClick={p.handleSaveLetter} disabled={p.isSaving}
-                                style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)' }}>
-                                {p.isSaving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Salvar Rascunho
-                            </button>
-                            <button className="btn" onClick={p.handleGenerateLetter} disabled={p.isLetterLoading} style={{
-                                padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--text-md)',
-                                background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))', color: 'white', border: 'none',
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-                            }}>
-                                {p.isLetterLoading ? <Loader2 size={16} className="spin" /> : <Cpu size={16} />}
-                                Gerar com IA
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Proposal Configs */}
-                    <div style={{
-                        background: 'var(--color-primary-light)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
-                        border: '1px solid rgba(37, 99, 235, 0.1)', marginBottom: 'var(--space-4)',
-                        display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-5)'
-                    }}>
-                        <div>
-                            <label className="form-label">Validade da Proposta (dias)</label>
-                            <input type="number" value={p.validityDays} onChange={e => p.setValidityDays(parseInt(e.target.value) || 60)} onBlur={p.handleSaveConfig} className="prop-input" />
-                        </div>
-                        <div>
-                            <label className="form-label">Modelo de Assinatura</label>
-                            <select value={p.signatureMode} onChange={e => { p.setSignatureMode(e.target.value as 'LEGAL' | 'TECH' | 'BOTH'); setTimeout(p.handleSaveConfig, 100); }}
-                                className="prop-input" style={{ padding: '6px 8px' }}>
-                                <option value="LEGAL">Representante Legal</option>
-                                <option value="TECH">Responsável Técnico</option>
-                                <option value="BOTH">Ambos</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Image Uploads UI */}
-                    <div style={{
-                        background: 'var(--color-primary-light)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
-                        border: '1px solid rgba(37, 99, 235, 0.1)', marginBottom: 'var(--space-4)',
-                        display: 'flex', flexDirection: 'column', gap: 'var(--space-4)'
-                    }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
-                            <div>
-                                <span className="form-label">Cabeçalho (Timbrado Topo)</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                    <input type="file" accept="image/*" onChange={e => p.handleImageUpload(e, p.setHeaderImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <span style={{ fontSize: '0.7rem' }}>Alt:</span>
-                                        <input type="number" value={p.headerImageHeight} onChange={e => p.setHeaderImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
-                                    </div>
-                                    {p.headerImage && <button type="button" onClick={() => p.setHeaderImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
-                                </div>
-                                {p.headerImage && (
-                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '100px', overflow: 'hidden', background: 'white' }}>
-                                        <img src={p.headerImage} alt="Header Preview" style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'contain' }} />
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <span className="form-label">Rodapé (Timbrado Base)</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                    <input type="file" accept="image/*" onChange={e => p.handleImageUpload(e, p.setFooterImage)} style={{ fontSize: '0.75rem', flex: 1 }} />
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <span style={{ fontSize: '0.7rem' }}>Alt:</span>
-                                        <input type="number" value={p.footerImageHeight} onChange={e => p.setFooterImageHeight(Number(e.target.value))} style={{ width: '50px', padding: '2px', fontSize: '0.75rem' }} />
-                                    </div>
-                                    {p.footerImage && <button type="button" onClick={() => p.setFooterImage('')} style={{ fontSize: 'var(--text-sm)', color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer' }}>Remover</button>}
-                                </div>
-                                {p.footerImage && (
-                                    <div style={{ marginTop: 'var(--space-3)', border: '1px dashed var(--color-border)', padding: '4px', borderRadius: 'var(--radius-sm)', maxHeight: '80px', overflow: 'hidden', background: 'white' }}>
-                                        <img src={p.footerImage} alt="Footer Preview" style={{ width: '100%', height: 'auto', maxHeight: '70px', objectFit: 'contain' }} />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div style={{ borderTop: '1px solid rgba(37, 99, 235, 0.1)', paddingTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                            <button onClick={p.handleSaveCompanyTemplate} disabled={p.isSavingTemplate || !p.selectedCompanyId} style={{
-                                padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)',
-                                background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
-                                color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer'
-                            }}>
-                                {p.isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
-                                Salvar como Padrão da Empresa
-                            </button>
-                        </div>
-                    </div>
-
-                    <textarea value={p.letterContent} onChange={e => p.setLetterContent(e.target.value)}
-                        placeholder="Nenhuma carta gerada ainda. Clique em 'Gerar com IA' ou digite seu texto."
-                        style={{
-                            width: '100%', minHeight: '400px', padding: 'var(--space-4)',
-                            borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)',
-                            fontSize: 'var(--text-base)', lineHeight: 1.6, background: 'var(--color-bg-base)',
-                            color: 'var(--color-text-primary)'
-                        }}
-                    />
+            {/* ── Letter Tab (Wizard V2) ── */}
+            {p.activeTab === 'letter' && p.proposal && p.selectedBidding && p.selectedCompany && (
+                <ProposalLetterWizard
+                    bidding={p.selectedBidding}
+                    company={p.selectedCompany}
+                    proposal={p.proposal}
+                    items={p.items}
+                    totalValue={p.total}
+                    validityDays={p.validityDays}
+                    signatureMode={p.signatureMode as 'LEGAL' | 'TECH' | 'BOTH'}
+                    bdi={p.bdi}
+                    discount={p.discount}
+                    headerImage={p.headerImage}
+                    footerImage={p.footerImage}
+                    headerImageHeight={p.headerImageHeight}
+                    footerImageHeight={p.footerImageHeight}
+                    setValidityDays={p.setValidityDays}
+                    setSignatureMode={p.setSignatureMode as (v: 'LEGAL' | 'TECH' | 'BOTH') => void}
+                    setHeaderImage={p.setHeaderImage}
+                    setFooterImage={p.setFooterImage}
+                    setHeaderImageHeight={p.setHeaderImageHeight}
+                    setFooterImageHeight={p.setFooterImageHeight}
+                    handleImageUpload={p.handleImageUpload}
+                    handleSaveConfig={p.handleSaveConfig}
+                    handleSaveCompanyTemplate={p.handleSaveCompanyTemplate}
+                    isSavingTemplate={p.isSavingTemplate}
+                    setLetterContent={p.setLetterContent}
+                    handleSaveLetter={p.handleSaveLetter}
+                    handlePrintProposal={p.handlePrintProposal}
+                    isSaving={p.isSaving}
+                />
+            )}
+            {p.activeTab === 'letter' && (!p.proposal || !p.selectedBidding || !p.selectedCompany) && (
+                <div className="card p-6" style={{ textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                    <FileText size={32} style={{ margin: '0 auto var(--space-3)', opacity: 0.3 }} />
+                    <p>Selecione a licitação, empresa e inicie a proposta para acessar a carta.</p>
                 </div>
             )}
 

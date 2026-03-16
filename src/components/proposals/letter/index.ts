@@ -28,5 +28,8 @@ export { ProposalLetterValidator } from './ProposalLetterValidator';
 // Normalizer
 export { LetterDataNormalizer } from './LetterDataNormalizer';
 
+// Wizard (UI)
+export { ProposalLetterWizard } from './ProposalLetterWizard';
+
 // Utils
 export { numberToWords, currencyToWords } from './utils/numberToWords';
