@@ -438,15 +438,66 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     (c) Declaração de concordância: declaração formal do profissional indicado concordando com sua indicação — 1 item principal
     NÃO agrupe esses três em um único item. São obrigações distintas com documentos distintos.
     QTP CONTÉM APENAS: vínculo RT, CAT/acervo do profissional, declaração de concordância, experiência profissional, participação técnica permanente.
-35. VISTO CREA/CAU-UF — NÃO É NÚCLEO DE QTP:
-    Se o edital exige "visto" ou "registro" do CREA/CAU na UF da obra, esse item é uma CONDIÇÃO REGISTRAL ACESSÓRIA, não qualificação técnico-profissional.
-    → Classificar como entry_type: "observacao" vinculada ao QTO principal (com parent_id), OU como item em documentos_complementares
-    → NÃO criar como exigencia_principal em QTP — isso infla falsa importância
-    → Título: "Visto CREA/CAU-[UF] (condição registral)" ou similar
-36. CERTIDÃO DE REGISTRO PJ CREA/CAU — SEPARAR DE ACERVO:
-    Certidão de Registro de Pessoa Jurídica (empresa no CREA/CAU) vai em qualificacao_tecnica_operacional (QTO), NÃO em QTP.
-    QTP é reservado para credenciais do PROFISSIONAL (pessoa física), não da empresa.
-    Se o edital menciona registro PJ separadamente do acervo, crie item principal em QTO.
+
+35. ESTRUTURA INTERNA DE QTO — 3 BLOCOS DISTINTOS:
+    qualificacao_tecnica_operacional deve separar INTERNAMENTE os itens em 3 blocos semânticos:
+    
+    BLOCO A — DOCUMENTAÇÃO TÉCNICA DA PESSOA JURÍDICA:
+      Certidão de Registro de Pessoa Jurídica no CREA/CAU/CFT:
+        → É exigência DOCUMENTAL de habilitação técnica da PJ
+        → NÃO é atestado operacional e NÃO é parcela de maior relevância
+        → entry_type: "exigencia_principal"
+        → Na description, mencionar EXPRESSAMENTE: "exigência documental de habilitação técnica da pessoa jurídica"
+        → Se aplicável, Certidão do CAU segue a mesma lógica
+      Registro/inscrição em Conselho profissional:
+        → Mesmo tratamento: documental da PJ
+    
+    BLOCO B — COMPROVAÇÃO DE CONHECIMENTO DO LOCAL (se exigida):
+      Criar 1 exigência principal com 2 SUBITENS ALTERNATIVOS:
+        → Subitem 1: Atestado de Visita Técnica (declaração emitida pelo órgão após visita ao local)
+        → Subitem 2: Declaração de Pleno Conhecimento e Aceitação (substitutiva da visita, se prevista no edital)
+      AMBOS são formas de atendimento — o licitante escolhe uma.
+      entry_type do pai: "exigencia_principal"
+      entry_type dos filhos: "subitem" com obligation_type: "alternativa"
+    
+    BLOCO C — ATESTADOS OPERACIONAIS DA EMPRESA (parcelas de maior relevância):
+      → CADA parcela de maior relevância = 1 item PRINCIPAL separado
+      → Com quantitativo mínimo literal (ex: "5.325,50 KG", "533,65 m²")
+      → PROIBIDO usar expressões genéricas (ver regra 37)
+      → Referência ao item/alínea do edital obrigatória
+
+36. VISTO CREA/CAU-UF — OBSERVAÇÃO ACESSÓRIA:
+    Se o edital exige "visto" do CREA/CAU na UF da obra:
+      → NÃO É exigência de habilitação técnica da empresa, e sim condição pré-contratual ou registral
+      → Classificar como entry_type: "observacao" vinculada à Certidão de Registro PJ (BLOCO A do QTO)
+      → Ou como item em documentos_complementares com entry_type: "documento_complementar"
+      → NÃO classificar como QTP — visto é da PJ, não do profissional
+      → NÃO criar como exigencia_principal em QTO — é acessório
+      → Título: "Visto CREA/CAU-[UF] (condição registral para contratação)"
+
+37. ANTI-GENERICIDADE — PROIBIÇÃO EXPRESSA:
+    PROIBIDO usar qualquer das expressões abaixo sem especificar cada serviço/parcela com quantitativo:
+      ✗ "serviços similares"
+      ✗ "acervo técnico compatível"
+      ✗ "parcelas de maior relevância"
+      ✗ "experiência em serviços análogos"
+      ✗ "atestado de capacidade técnica compatível"
+    OBRIGATÓRIO: detalhar ITEM POR ITEM com quantitativo mínimo literal.
+    Exemplo PROIBIDO: "Atestado de capacidade técnica em parcelas de maior relevância"
+    Exemplo CORRETO: "Atestado de execução de serviços de terraplanagem — mínimo 5.325,50 KG (50% da parcela estimada), conforme Edital item 8.7.1 alínea 'a'"
+
+38. QTP — EXCLUSIVAMENTE CREDENCIAIS DO PROFISSIONAL (PESSOA FÍSICA):
+    qualificacao_tecnica_profissional NÃO deve conter NENHUM dos itens abaixo:
+      ✗ Certidão de Registro PJ (empresa) → vai no BLOCO A do QTO
+      ✗ Visto CREA/CAU-UF → vai como observação do QTO ou DC
+      ✗ Atestados da empresa → vai no BLOCO C do QTO
+      ✗ Visita técnica → vai no BLOCO B do QTO
+    QTP contém apenas:
+      ✓ Vínculo do RT (CTPS, contrato, quadro societário)
+      ✓ CAT/acervo do profissional (por parcela relevante, com quantitativo)
+      ✓ Declaração de concordância do profissional
+      ✓ Experiência profissional comprovada
+      ✓ Participação técnica permanente
 28. PADRONIZAÇÃO PC: em proposta_comercial, use exatamente estas categorias semânticas:
     - proposta inicial: exigências para composição e envio da proposta de preços
     - proposta ajustada (vencedor): adequação da proposta pelo vencedor provisório
@@ -508,6 +559,10 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     → Se CNPJ não está em RFT como item: ADICIONE antes de responder (title: "Prova de inscrição no CNPJ", source_ref: do item de habilitação do edital)
     → Se QTP tem apenas 1 item "Acervo técnico" genérico mas o edital lista múltiplas parcelas: EXPLODA em itens separados
     → Se inscrição estadual/municipal é exigida mas ausente: ADICIONE
+    → Se Certidão PJ CREA/CAU está em QTP: MOVA para QTO (BLOCO A)
+    → Se Visto CREA/CAU está como exigencia_principal em QTP: REBAIXE para observação no QTO
+    → Se QTO ou QTP contém "serviços similares", "acervo compatível" ou "parcelas relevantes" sem quantitativo: SUBSTITUA pela transcrição literal do edital
+    → Se visita técnica está em QTP: MOVA para QTO (BLOCO B)
     Se alguma categoria estiver VAZIA mas o edital a exigir, RE-EXTRAI antes de responder.
     Se genuinamente não exigida, deixe vazia e anote em evidence_registry: 'categoria {X} não identificada no edital'.
 
@@ -800,8 +855,12 @@ AUTOCONFERÊNCIA ANTES DE RESPONDER:
 → RFT tem inscrição estadual + inscrição municipal? (se exigidos)
 → RFT tem os 5-8 documentos fiscais individuais (CNPJ, CND Federal, Estadual, Municipal, FGTS, CNDT)?
 → HJ tem ato constitutivo e demais docs societários?
+→ QTO tem Certidão PJ CREA/CAU como documental (BLOCO A)? Não como atestado operacional.
+→ QTO: cada parcela relevante da empresa é item principal com quantitativo mínimo literal (BLOCO C)?
+→ QTO: se visita técnica, está em BLOCO B com alternativas visita/declaração?
+→ QTP: contém APENAS credenciais do profissional? Sem Certidão PJ, sem Visto, sem Visita.
 → QTP: cada parcela relevante do profissional é item PRINCIPAL separado (não subitem genérico)?
-→ QTO: cada parcela relevante da empresa é item principal com quantitativo literal?
+→ QTO/QTP: contém expressões genéricas proibidas (se sim, substituir pela transcrição literal)?
 → Há ao menos 1 EV por exigência principal?
 → Quantitativos técnicos estão com valor exato e fonte?
 
