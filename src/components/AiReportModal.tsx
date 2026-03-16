@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, BarChart3 } from 'lucide-react';
+import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, BarChart3, Building2 } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
@@ -216,6 +216,50 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                 ({Object.keys(report.categorizedDocs).length} cat.{report.allDocsList.length > report.mainRequirementCount ? ` + ${report.allDocsList.length - report.mainRequirementCount} subitens` : ''})
                                             </span>
                                         </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ─── BLOCO FIXO: Metadados do Processo ─── */}
+                            <div style={{
+                                background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
+                                border: '1px solid var(--color-border)', padding: 'var(--space-4) var(--space-5)',
+                                marginBottom: 'var(--space-4)'
+                            }}>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Building2 size={11} /> Metadados do Processo
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-2) var(--space-6)' }}>
+                                    {([ 
+                                        { label: 'Objeto', value: report.processMetadata.objeto, span: true },
+                                        { label: 'Órgão / Entidade', value: report.processMetadata.orgao },
+                                        { label: 'Nº do Processo', value: report.processMetadata.numeroProcesso },
+                                        { label: 'Modalidade', value: report.processMetadata.modalidade },
+                                        { label: 'Critério de Julgamento', value: report.processMetadata.criterioJulgamento },
+                                        { label: 'Regime de Execução', value: report.processMetadata.regimeExecucao },
+                                        { label: 'Local', value: report.processMetadata.local },
+                                        { label: 'Sessão', value: report.processMetadata.dataSessao },
+                                        { label: 'Valor Estimado', value: report.processMetadata.valorEstimado },
+                                    ] as { label: string; value: string | null; span?: boolean }[]).map((item, i) => (
+                                        <div key={i} style={item.span ? { gridColumn: '1 / -1' } : {}}>
+                                            <span style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-tertiary)', display: 'block' }}>
+                                                {item.label}
+                                            </span>
+                                            <span style={{
+                                                fontSize: item.span ? 'var(--text-sm)' : '0.8rem',
+                                                fontWeight: item.value ? 600 : 400,
+                                                color: item.value ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                                fontStyle: item.value ? 'normal' : 'italic',
+                                                lineHeight: 1.4, display: 'block'
+                                            }}>
+                                                {item.value || 'Não informado'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                                {report.processMetadata.fonteOficial && (
+                                    <div style={{ marginTop: 'var(--space-2)', fontSize: '0.6rem', color: 'var(--color-text-tertiary)' }}>
+                                        📄 {report.processMetadata.fonteOficial}
                                     </div>
                                 )}
                             </div>

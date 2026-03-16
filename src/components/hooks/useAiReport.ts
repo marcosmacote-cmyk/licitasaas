@@ -101,6 +101,32 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         return safeText(process?.summary) || safeText(analysis?.fullSummary) || '';
     }, [v2, process?.summary, analysis?.fullSummary]);
 
+    // Metadados fixos do processo — sempre exibidos no painel, com fonte quando disponível
+    const processMetadata = useMemo(() => {
+        const pi = v2?.process_identification || {};
+        const tl = v2?.timeline || {};
+        const sessionDateStr = tl.data_sessao || (process?.sessionDate
+            ? new Date(process.sessionDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : null);
+        const valueStr = process?.estimatedValue
+            ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(process.estimatedValue)
+            : null;
+        return {
+            objeto: pi.objeto_completo || pi.objeto_resumido || safeText(process?.title) || null,
+            orgao: pi.orgao || pi.unidade_compradora || null,
+            numeroProcesso: pi.numero_processo || pi.numero_edital || null,
+            modalidade: pi.modalidade || null,
+            criterioJulgamento: pi.criterio_julgamento || null,
+            regimeExecucao: pi.regime_execucao || null,
+            local: pi.municipio_uf || null,
+            dataSessao: sessionDateStr || null,
+            valorEstimado: valueStr || null,
+            fonteOficial: pi.fonte_oficial || null,
+        };
+    }, [v2, process]);
+
+
+
     // Parecer: from V2 risk review or legacy fullSummary
     const technicalOpinion = useMemo(() => {
         if (v2?.legal_risk_review?.critical_points?.length > 0) {
@@ -458,6 +484,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
     return {
         // V2-aware data
         executiveSummary,
+        processMetadata,
         technicalOpinion,
         penaltiesText,
         financialText,
