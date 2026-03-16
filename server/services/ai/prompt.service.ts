@@ -437,6 +437,16 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
         → Cada parcela do profissional deve ter o MESMO destaque literal que as parcelas da empresa em QTO
     (c) Declaração de concordância: declaração formal do profissional indicado concordando com sua indicação — 1 item principal
     NÃO agrupe esses três em um único item. São obrigações distintas com documentos distintos.
+    QTP CONTÉM APENAS: vínculo RT, CAT/acervo do profissional, declaração de concordância, experiência profissional, participação técnica permanente.
+35. VISTO CREA/CAU-UF — NÃO É NÚCLEO DE QTP:
+    Se o edital exige "visto" ou "registro" do CREA/CAU na UF da obra, esse item é uma CONDIÇÃO REGISTRAL ACESSÓRIA, não qualificação técnico-profissional.
+    → Classificar como entry_type: "observacao" vinculada ao QTO principal (com parent_id), OU como item em documentos_complementares
+    → NÃO criar como exigencia_principal em QTP — isso infla falsa importância
+    → Título: "Visto CREA/CAU-[UF] (condição registral)" ou similar
+36. CERTIDÃO DE REGISTRO PJ CREA/CAU — SEPARAR DE ACERVO:
+    Certidão de Registro de Pessoa Jurídica (empresa no CREA/CAU) vai em qualificacao_tecnica_operacional (QTO), NÃO em QTP.
+    QTP é reservado para credenciais do PROFISSIONAL (pessoa física), não da empresa.
+    Se o edital menciona registro PJ separadamente do acervo, crie item principal em QTO.
 28. PADRONIZAÇÃO PC: em proposta_comercial, use exatamente estas categorias semânticas:
     - proposta inicial: exigências para composição e envio da proposta de preços
     - proposta ajustada (vencedor): adequação da proposta pelo vencedor provisório

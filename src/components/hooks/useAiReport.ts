@@ -223,47 +223,62 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         return safeText(analysis?.pricingConsiderations) || '';
     }, [v2, analysis?.pricingConsiderations]);
 
-    // Deadlines: from V2 timeline or legacy — WITH DEDUP
-    const deadlineList = useMemo(() => {
+    // Deadlines: split into critical (always visible) + secondary (expandable)
+    const { criticalDeadlines, secondaryDeadlines, deadlineList } = useMemo(() => {
+        const critical: string[] = [];
+        const secondary: string[] = [];
+
         if (v2?.timeline) {
             const tl = v2.timeline;
-            const items: string[] = [];
-            if (tl.data_sessao) items.push(`📅 ${tl.data_sessao} — Sessão Pública`);
-            if (tl.prazo_impugnacao) items.push(`⚖️ ${tl.prazo_impugnacao} — Impugnação`);
-            if (tl.prazo_esclarecimento) items.push(`❓ ${tl.prazo_esclarecimento} — Esclarecimento`);
-            if (tl.prazo_envio_proposta) items.push(`📄 ${tl.prazo_envio_proposta} — Envio de Proposta`);
-            if (tl.prazo_envio_habilitacao) items.push(`📋 ${tl.prazo_envio_habilitacao} — Envio Habilitação`);
+            // Critical: marcos obrigatórios
+            if (tl.data_sessao) critical.push(`📅 ${tl.data_sessao} — Sessão Pública`);
+            if (tl.prazo_impugnacao) critical.push(`⚖️ ${tl.prazo_impugnacao} — Impugnação`);
+            if (tl.prazo_esclarecimento) critical.push(`❓ ${tl.prazo_esclarecimento} — Esclarecimento`);
+            if (tl.prazo_envio_proposta) critical.push(`📄 ${tl.prazo_envio_proposta} — Envio de Proposta`);
+            if (tl.prazo_envio_habilitacao) critical.push(`📋 ${tl.prazo_envio_habilitacao} — Envio Habilitação`);
+
+            // Secondary: prazos condicionados ou contratuais
             const isDatePattern = /^\d{2}\/\d{2}\/\d{4}/;
             if (tl.prazo_recurso) {
                 const isFixed = isDatePattern.test(tl.prazo_recurso);
-                items.push(isFixed
+                secondary.push(isFixed
                     ? `📝 ${tl.prazo_recurso} — Prazo Recursal`
-                    : `📝 Prazo Recursal: ${tl.prazo_recurso} (condicionado à intimação do resultado)`);
+                    : `📝 Prazo Recursal: ${tl.prazo_recurso} (condicionado à intimação)`);
             }
             if (tl.prazo_contrarrazoes) {
                 const isFixed = isDatePattern.test(tl.prazo_contrarrazoes);
-                items.push(isFixed
+                secondary.push(isFixed
                     ? `📝 ${tl.prazo_contrarrazoes} — Contrarrazões`
                     : `📝 Contrarrazões: ${tl.prazo_contrarrazoes} (condicionado a recurso)`);
             }
-            if (v2.contractual_analysis?.prazo_execucao) items.push(`🔧 Prazo de Execução: ${v2.contractual_analysis.prazo_execucao}`);
-            if (v2.contractual_analysis?.prazo_vigencia) items.push(`📆 Vigência: ${v2.contractual_analysis.prazo_vigencia}`);
+            if (v2.contractual_analysis?.prazo_execucao) secondary.push(`🔧 Prazo de Execução: ${v2.contractual_analysis.prazo_execucao}`);
+            if (v2.contractual_analysis?.prazo_vigencia) secondary.push(`📆 Vigência: ${v2.contractual_analysis.prazo_vigencia}`);
             if (tl.outros_prazos?.length > 0) {
                 tl.outros_prazos.forEach((p: any) => {
-                    if (p.descricao) items.push(`• ${p.data || ''} — ${p.descricao}`);
+                    if (p.descricao) secondary.push(`• ${p.data || ''} — ${p.descricao}`);
                 });
             }
-            // Deduplicate: normalize by removing emojis and extra whitespace, keep first occurrence
-            const seen = new Set<string>();
-            const deduped = items.filter(item => {
-                const normalized = item.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
-                if (seen.has(normalized)) return false;
-                seen.add(normalized);
-                return true;
-            });
-            if (deduped.length > 0) return deduped;
+
+            // Dedup helper
+            const dedup = (list: string[]) => {
+                const seen = new Set<string>();
+                return list.filter(item => {
+                    const normalized = item.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                    if (seen.has(normalized)) return false;
+                    seen.add(normalized);
+                    return true;
+                });
+            };
+
+            return {
+                criticalDeadlines: dedup(critical),
+                secondaryDeadlines: dedup(secondary),
+                deadlineList: dedup([...critical, ...secondary])
+            };
         }
-        return parseArray(analysis?.deadlines);
+
+        const legacy = parseArray(analysis?.deadlines);
+        return { criticalDeadlines: legacy, secondaryDeadlines: [], deadlineList: legacy };
     }, [v2, analysis?.deadlines]);
 
     // Risk flags: from V2 critical points or legacy
@@ -561,6 +576,8 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         penaltiesStructured,
         financialText,
         deadlineList,
+        criticalDeadlines,
+        secondaryDeadlines,
         flagList,
         conditions,
         pipelineMeta,

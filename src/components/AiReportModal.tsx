@@ -85,10 +85,11 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
     const [expandedChildren, setExpandedChildren] = useState<Record<string, boolean>>({});
     const toggleChildren = (key: string) => setExpandedChildren(prev => ({ ...prev, [key]: !prev[key] }));
+    const [showSecondaryDeadlines, setShowSecondaryDeadlines] = useState(false);
 
     const hasRequirements = Object.keys(report.categorizedDocs).length > 0;
     const hasRisks = report.flagList.length > 0;
-    const hasDeadlines = report.deadlineList.length > 0;
+    const hasDeadlines = report.criticalDeadlines.length > 0 || report.secondaryDeadlines.length > 0;
     const hasFinancial = report.hasContent(report.financialText);
     const hasPenalties = report.hasContent(report.penaltiesText);
     const hasItems = report.hasContent(report.biddingItemsText);
@@ -267,26 +268,65 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 )}
                             </div>
 
-                            {/* ─── ROW 2: Conditions Tags (V2 only) ─── */}
-                            {hasConditions && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
-                                    {report.conditions.map((c, i) => (
-                                        <span key={i} style={{
-                                            padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600,
-                                            background: c.type === 'danger' ? 'var(--color-danger-bg)' : c.type === 'warning' ? 'var(--color-warning-bg)' : 'var(--color-bg-secondary)',
-                                            color: c.type === 'danger' ? 'var(--color-danger-hover)' : c.type === 'warning' ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
-                                            border: `1px solid ${c.type === 'danger' ? 'var(--color-danger-border)' : c.type === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border)'}`
-                                        }}>
-                                            {c.label}: {c.value}
-                                            {c.sourceRef && c.sourceRef !== 'referência não localizada' && (
-                                                <span style={{ fontSize: '0.6rem', fontWeight: 400, opacity: 0.75, marginLeft: '4px' }}>
-                                                    📄 {c.sourceRef}
-                                                </span>
-                                            )}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
+                            {/* ─── ROW 2: Conditions Tags (V2 only) — grouped by theme ─── */}
+                            {hasConditions && (() => {
+                                const vedacoes = report.conditions.filter((c: any) => c.label.startsWith('Vedação'));
+                                const processConditions = report.conditions.filter((c: any) => !c.label.startsWith('Vedação'));
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
+                                        {/* Process conditions as tags */}
+                                        {processConditions.length > 0 && (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                                                {processConditions.map((c: any, i: number) => (
+                                                    <span key={i} style={{
+                                                        padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600,
+                                                        background: c.type === 'danger' ? 'var(--color-danger-bg)' : c.type === 'warning' ? 'var(--color-warning-bg)' : 'var(--color-bg-secondary)',
+                                                        color: c.type === 'danger' ? 'var(--color-danger-hover)' : c.type === 'warning' ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
+                                                        border: `1px solid ${c.type === 'danger' ? 'var(--color-danger-border)' : c.type === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border)'}`
+                                                    }}>
+                                                        {c.label}: {c.value}
+                                                        {c.sourceRef && c.sourceRef !== 'referência não localizada' && (
+                                                            <span style={{ fontSize: '0.6rem', fontWeight: 400, opacity: 0.75, marginLeft: '4px' }}>
+                                                                📄 {c.sourceRef}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {/* Vedações grouped in a compact block */}
+                                        {vedacoes.length > 0 && (
+                                            <div style={{
+                                                padding: '8px 12px', borderRadius: 'var(--radius-lg)',
+                                                background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)'
+                                            }}>
+                                                <div style={{
+                                                    fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-warning-hover)',
+                                                    marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px'
+                                                }}>
+                                                    🚫 Vedações de Participação
+                                                    <span style={{
+                                                        background: 'var(--color-warning-hover)', color: 'white',
+                                                        fontSize: '0.6rem', padding: '1px 6px', borderRadius: 'var(--radius-full)', fontWeight: 800
+                                                    }}>{vedacoes.length}</span>
+                                                    {vedacoes[0]?.sourceRef && (
+                                                        <span style={{ fontSize: '0.6rem', fontWeight: 400, opacity: 0.7, marginLeft: '4px' }}>
+                                                            📄 {vedacoes[0].sourceRef}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                    {vedacoes.map((v: any, i: number) => (
+                                                        <span key={i} style={{ fontSize: '0.73rem', color: 'var(--color-warning-hover)', lineHeight: 1.4 }}>
+                                                            • {v.value}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
 
                             {/* ─── Main 2-Column Layout ─── */}
                             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.7fr) minmax(0, 1fr)', gap: 'var(--space-8)' }}>
@@ -608,19 +648,44 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         </div>
                                     )}
 
-                                    {/* Deadlines */}
+                                    {/* Deadlines — critical always visible, secondary expandable */}
                                     {hasDeadlines && (
                                         <div className="report-metrics-card" style={{ background: 'var(--color-primary-light)', border: '1px solid var(--color-primary-border)' }}>
                                             <div style={{ color: 'var(--color-primary-hover)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
                                                 <Calendar size={18} /> <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)' }}>Cronograma</span>
                                             </div>
+                                            {/* Critical deadlines — always visible */}
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                {report.deadlineList.map((dl: string, i: number) => (
+                                                {report.criticalDeadlines.map((dl: string, i: number) => (
                                                     <div key={i} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
                                                         <span style={{ fontSize: '0.8rem', color: 'var(--color-primary-hover)', lineHeight: 1.5 }}>{dl}</span>
                                                     </div>
                                                 ))}
                                             </div>
+                                            {/* Secondary deadlines — expandable */}
+                                            {report.secondaryDeadlines.length > 0 && (
+                                                <>
+                                                    <button
+                                                        onClick={() => setShowSecondaryDeadlines(!showSecondaryDeadlines)}
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+                                                            fontSize: '0.72rem', color: 'var(--color-primary)', fontWeight: 600,
+                                                            display: 'flex', alignItems: 'center', gap: '4px', marginTop: 'var(--space-2)'
+                                                        }}
+                                                    >
+                                                        {showSecondaryDeadlines ? '▾' : '▸'} {report.secondaryDeadlines.length} prazo(s) complementar(es)
+                                                    </button>
+                                                    {showSecondaryDeadlines && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', marginTop: '4px', paddingLeft: '8px', borderLeft: '2px solid var(--color-primary-border)' }}>
+                                                            {report.secondaryDeadlines.map((dl: string, i: number) => (
+                                                                <div key={i} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
+                                                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>{dl}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     )}
 
