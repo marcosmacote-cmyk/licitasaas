@@ -264,10 +264,13 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                     if (p.descricao) items.push(`• ${p.data || ''} — ${p.descricao}`);
                 });
             }
-            // Dedup
+            // M7: Enhanced dedup — also catches near-duplicates like same deadline/duration
             const seen = new Set<string>();
             const deduped = items.filter(item => {
-                const normalized = item.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                // Strip emojis, whitespace, lowercase
+                let normalized = item.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                // Also strip accent marks for comparison
+                normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 if (seen.has(normalized)) return false;
                 seen.add(normalized);
                 return true;

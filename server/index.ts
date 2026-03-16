@@ -1336,15 +1336,39 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             return pa - pb;
         });
 
-        // 3. Download and process files (PDF, ZIP, or RAR containing PDFs)
-        const MAX_PDF_PARTS = 5;
-        const MAX_TOTAL_PDF_SIZE_KB = 30000; // 30MB budget
+        // 3. Download and process files — SMART PDF FILTER
+        // Only download PDFs that contribute to habilitação extraction
+        const MAX_PDF_PARTS = 3; // Reduced from 5 — edital + TR + 1 extra is enough
+        const MAX_TOTAL_PDF_SIZE_KB = 15000; // Reduced from 30MB — 15MB budget
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
         const discardedFiles: string[] = [];
 
-        for (const arq of arquivos) {
+        // Pre-filter: exclude templates and irrelevant attachments BEFORE download
+        const EXCLUDE_PATTERNS = [
+            'modelo_proposta', 'modelo_de_proposta', 'modelo proposta',
+            'modelo_recibo', 'modelo recibo', 'modelo_declarac', 'modelo declarac',
+            'modelo_ata', 'modelo ata', 'modelo_contrato',
+            'aviso_publicac', 'aviso publicac', 'aviso_licitac',
+            'retificac', 'errata', 'ata_sessao', 'ata_da_sessao',
+            'comprovante', 'recibo_garantia', 'modelo_recibo_garantia',
+        ];
+
+        const filteredArquivos = arquivos.filter((arq: any) => {
+            const name = (arq.titulo || arq.nomeArquivo || arq.nome || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const isExcluded = EXCLUDE_PATTERNS.some(pat => name.includes(pat));
+            if (isExcluded) {
+                console.log(`[PNCP-AI] 🚫 Excluído (template/irrelevante): "${arq.titulo}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId})`);
+                discardedFiles.push(`${arq.titulo} (excluído por filtro)`);
+            }
+            return !isExcluded;
+        });
+
+        console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
+
+        for (const arq of filteredArquivos) {
             if (pdfParts.length >= MAX_PDF_PARTS) break;
 
 
@@ -1637,6 +1661,25 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             (extractionJson.requirements as any).regularidade_fiscal_trabalhista = rftItems;
             (v2Result.requirements as any).regularidade_fiscal_trabalhista = rftItems;
             console.log(`[PNCP-V2] 🔧 RFT completude: +${injectedCount} doc(s) injetado(s) (CNPJ/inscrições omitidos pela IA)`);
+        }
+
+        // ── M3: DEDUP — remove generic "estadual ou municipal" if IE/IM are separate ──
+        const hasIE = rftItems.some((r: any) => r.requirement_id === 'RFT-IE' || /inscri[çc][ãa]o\s+estadual/i.test(r.title || ''));
+        const hasIM = rftItems.some((r: any) => r.requirement_id === 'RFT-IM' || /inscri[çc][ãa]o\s+municipal/i.test(r.title || ''));
+        if (hasIE && hasIM) {
+            // Remove generic combined IE+IM items ("estadual ou municipal" / "estadual e municipal")
+            const beforeLen = rftItems.length;
+            const dedupedRft = rftItems.filter((r: any) => {
+                const title = (r.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const isGenericCombined = (title.includes('estadual') && title.includes('municipal'))
+                    && r.requirement_id !== 'RFT-IE' && r.requirement_id !== 'RFT-IM';
+                return !isGenericCombined;
+            });
+            if (dedupedRft.length < beforeLen) {
+                (extractionJson.requirements as any).regularidade_fiscal_trabalhista = dedupedRft;
+                (v2Result.requirements as any).regularidade_fiscal_trabalhista = dedupedRft;
+                console.log(`[PNCP-V2] 🧹 Dedup IE/IM: removido(s) ${beforeLen - dedupedRft.length} item(ns) genérico(s) (IE+IM separados existem)`);
+            }
         }
 
 

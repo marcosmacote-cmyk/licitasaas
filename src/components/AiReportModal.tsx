@@ -85,6 +85,8 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
     const [expandedChildren, setExpandedChildren] = useState<Record<string, boolean>>({});
     const toggleChildren = (key: string) => setExpandedChildren(prev => ({ ...prev, [key]: !prev[key] }));
+    const [expandedConditions, setExpandedConditions] = useState<Record<number, boolean>>({});
+    const toggleCondition = (idx: number) => setExpandedConditions(prev => ({ ...prev, [idx]: !prev[idx] }));
 
     const hasRequirements = Object.keys(report.categorizedDocs).length > 0;
     const hasRisks = report.flagList.length > 0;
@@ -275,22 +277,60 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
                                         {/* Process conditions as tags */}
                                         {processConditions.length > 0 && (
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                                                {processConditions.map((c: any, i: number) => (
-                                                    <span key={i} style={{
-                                                        padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600,
-                                                        background: c.type === 'danger' ? 'var(--color-danger-bg)' : c.type === 'warning' ? 'var(--color-warning-bg)' : 'var(--color-bg-secondary)',
-                                                        color: c.type === 'danger' ? 'var(--color-danger-hover)' : c.type === 'warning' ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
-                                                        border: `1px solid ${c.type === 'danger' ? 'var(--color-danger-border)' : c.type === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border)'}`
-                                                    }}>
-                                                        {c.label}: {c.value}
-                                                        {c.sourceRef && c.sourceRef !== 'referência não localizada' && (
-                                                            <span style={{ fontSize: '0.6rem', fontWeight: 400, opacity: 0.75, marginLeft: '4px' }}>
-                                                                📄 {c.sourceRef}
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                ))}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                {/* Short conditions as inline pills */}
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                                                    {processConditions.filter((c: any) => (c.value || '').length <= 100).map((c: any, i: number) => (
+                                                        <span key={`short-${i}`} style={{
+                                                            padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600,
+                                                            background: c.type === 'danger' ? 'var(--color-danger-bg)' : c.type === 'warning' ? 'var(--color-warning-bg)' : 'var(--color-bg-secondary)',
+                                                            color: c.type === 'danger' ? 'var(--color-danger-hover)' : c.type === 'warning' ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
+                                                            border: `1px solid ${c.type === 'danger' ? 'var(--color-danger-border)' : c.type === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border)'}`
+                                                        }}>
+                                                            {c.label}: {c.value}
+                                                            {c.sourceRef && c.sourceRef !== 'referência não localizada' && (
+                                                                <span style={{ fontSize: '0.6rem', fontWeight: 400, opacity: 0.75, marginLeft: '4px' }}>
+                                                                    📄 {c.sourceRef}
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                {/* Long conditions as expandable cards */}
+                                                {processConditions.filter((c: any) => (c.value || '').length > 100).map((c: any, i: number) => {
+                                                    const isExpanded = expandedConditions[i] || false;
+                                                    const TRUNCATE_AT = 150;
+                                                    const fullText = c.value || '';
+                                                    const truncated = fullText.length > TRUNCATE_AT ? fullText.slice(0, TRUNCATE_AT) + '...' : fullText;
+                                                    return (
+                                                        <div key={`long-${i}`} style={{
+                                                            padding: '8px 12px', borderRadius: 'var(--radius-lg)', fontSize: '0.75rem',
+                                                            background: c.type === 'warning' ? 'var(--color-warning-bg)' : 'var(--color-bg-secondary)',
+                                                            border: `1px solid ${c.type === 'warning' ? 'var(--color-warning-border)' : 'var(--color-border)'}`,
+                                                            color: c.type === 'warning' ? 'var(--color-warning-hover)' : 'var(--color-text-secondary)',
+                                                        }}>
+                                                            <div style={{ fontWeight: 700, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                {c.label}
+                                                                {c.sourceRef && c.sourceRef !== 'referência não localizada' && (
+                                                                    <span style={{ fontSize: '0.6rem', fontWeight: 400, opacity: 0.75 }}>📄 {c.sourceRef}</span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ lineHeight: 1.5, fontWeight: 400 }}>
+                                                                {isExpanded ? fullText : truncated}
+                                                            </div>
+                                                            {fullText.length > TRUNCATE_AT && (
+                                                                <button onClick={() => toggleCondition(i)} style={{
+                                                                    background: 'none', border: 'none', padding: '2px 0', marginTop: '4px',
+                                                                    fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer',
+                                                                    color: c.type === 'warning' ? 'var(--color-warning-hover)' : 'var(--color-primary)',
+                                                                    textDecoration: 'underline'
+                                                                }}>
+                                                                    {isExpanded ? '▲ ver menos' : '▼ ver mais'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                         {/* Vedações grouped in a compact block */}

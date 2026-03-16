@@ -429,14 +429,21 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
 25. OPERADORES FINANCEIROS: para índices contábeis, use EXATAMENTE o operador do edital. LG >= 1,0 significa "maior ou igual a 1,0". EG <= 0,5 significa "menor ou igual a 0,5". NUNCA inverta o operador. Se o edital diz EG <= 0,5, NÃO escreva "mínimo 0,5" — escreva "máximo 0,5 (EG ≤ 0,5)". Se o edital diz LG >= 1,0, escreva "mínimo 1,0 (LG ≥ 1,0)".
 26. TAXONOMIA DE GARANTIAS: garantia de proposta, garantia de execução/contratual, seguro-garantia e caução SEMPRE vão em qualificacao_economico_financeira (QEF), NUNCA em documentos_complementares (DC). DC é apenas para declarações formais, procurações e documentos auxiliares sem natureza financeira.
-27. SEPARAÇÃO RIGOROSA QTP: em qualificacao_tecnica_profissional, crie itens DISTINTOS e com DESTAQUE LITERAL idêntico ao de QTO:
-    (a) Vínculo do RT: comprovação de vínculo empregatício ou contratual do responsável técnico (CTPS, contrato, quadro societário) — 1 item principal
-    (b) Acervo técnico / CAT: certidão de acervo técnico do profissional, emitida pelo CREA/CAU/CFT — 1 item principal POR parcela relevante
-        → Se o edital exige CAT em 3 parcelas distintas (ex: pavimentação, drenagem, sinalização), crie 3 ITENS PRINCIPAIS separados (QTP-02, QTP-03, QTP-04), cada um com quantitativo mínimo literal
+27. SEPARAÇÃO RIGOROSA QTP — CADA ITEM É EXIGÊNCIA PRINCIPAL INDEPENDENTE:
+    Em qualificacao_tecnica_profissional, CADA obrigação abaixo é um item entry_type="exigencia_principal" COM parent_id=null:
+    (a) Vínculo do RT: comprovação de vínculo empregatício ou contratual do responsável técnico (CTPS, contrato, quadro societário) — 1 EXIGÊNCIA PRINCIPAL (QTP-01)
+    (b) Acervo técnico / CAT: certidão de acervo técnico do profissional, emitida pelo CREA/CAU/CFT — 1 EXIGÊNCIA PRINCIPAL POR parcela relevante
+        → Se o edital exige CAT em 3 parcelas distintas, crie 3 EXIGÊNCIAS PRINCIPAIS separadas (QTP-02, QTP-03, QTP-04), cada uma com quantitativo mínimo literal
         → PROIBIDO: agrupar múltiplas parcelas do profissional sob um único 'Acervo técnico' genérico
         → Cada parcela do profissional deve ter o MESMO destaque literal que as parcelas da empresa em QTO
-    (c) Declaração de concordância: declaração formal do profissional indicado concordando com sua indicação — 1 item principal
-    NÃO agrupe esses três em um único item. São obrigações distintas com documentos distintos.
+    (c) Declaração de concordância: declaração formal do profissional indicado — 1 EXIGÊNCIA PRINCIPAL (QTP-05)
+    
+    ⛔ PROIBIDO CRIAR ITEM GUARDA-CHUVA:
+    NÃO crie um item genérico como "Profissional de nível superior no quadro permanente" (entry_type=exigencia_principal)
+    e depois agrupe Vínculo RT, CATs e Declaração como subitens dele.
+    CADA UM dos itens acima é uma EXIGÊNCIA PRINCIPAL AUTÔNOMA, com parent_id=null, entry_type=exigencia_principal.
+    O edital pode mencioná-los sob um mesmo item (ex: "12.6.1"), mas na análise eles são obrigações documentais DISTINTAS.
+    
     QTP CONTÉM APENAS: vínculo RT, CAT/acervo do profissional, declaração de concordância, experiência profissional, participação técnica permanente.
 
 35. ESTRUTURA INTERNA DE QTO — 3 BLOCOS DISTINTOS:
@@ -451,6 +458,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
         → Se aplicável, Certidão do CAU segue a mesma lógica
       Registro/inscrição em Conselho profissional:
         → Mesmo tratamento: documental da PJ
+        → NÃO mencionar "responsável técnico" na description do registro PJ — vínculo do RT pertence ao QTP
     
     BLOCO B — COMPROVAÇÃO DE CONHECIMENTO DO LOCAL (se exigida):
       Criar 1 exigência principal com 2 SUBITENS ALTERNATIVOS:
