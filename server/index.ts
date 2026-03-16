@@ -1402,6 +1402,48 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             return true;
         });
 
+        // ── BUILD FULL ATTACHMENT CATALOG (for Proposal module) ──
+        // Classifies ALL files by purpose so they can be downloaded on demand later
+        const classifyAttachment = (arq: any): string => {
+            const n = (arq.titulo || arq.nomeArquivo || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const tipoId = arq.tipoDocumentoId;
+            if (tipoId === 2 || (n.includes('edital') && !n.includes('anexo'))) return 'edital';
+            if (tipoId === 4 || n.includes('termo_referencia') || n.includes('tr_')) return 'termo_referencia';
+            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orçamento')) return 'planilha_orcamentaria';
+            if (n.includes('cronograma')) return 'cronograma';
+            if (n.includes('bdi') || n.includes('encargos')) return 'bdi_encargos';
+            if (n.includes('modelo_proposta') || n.includes('modelo de proposta') || n.includes('modelo_carta')) return 'modelo_proposta';
+            if (n.includes('modelo_recibo') || n.includes('modelo_garantia')) return 'modelo_documento';
+            if (n.includes('minuta') || n.includes('contrato')) return 'minuta_contrato';
+            if (n.includes('projeto') || n.includes('planta') || n.includes('memorial')) return 'projeto_engenharia';
+            if (n.includes('aviso')) return 'aviso_publicacao';
+            if (n.includes('composic') || n.includes('custo')) return 'composicao_custos';
+            return 'anexo_geral';
+        };
+
+        const pncpAttachments = arquivos.map((arq: any) => {
+            const name = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
+            const purpose = classifyAttachment(arq);
+            const isDownloaded = filteredArquivos.includes(arq);
+            return {
+                titulo: name,
+                url: arq.url || arq.uri || '',
+                tipoDocumentoId: arq.tipoDocumentoId,
+                tipoDocumentoDescricao: arq.tipoDocumentoDescricao || '',
+                purpose,
+                downloaded: isDownloaded,
+                sequencial: arq.sequencialDocumento || arq.sequencial || null,
+                ativo: arq.statusAtivo ?? true,
+            };
+        });
+
+        const purposeCounts = pncpAttachments.reduce((acc: Record<string, number>, a: any) => {
+            acc[a.purpose] = (acc[a.purpose] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+        console.log(`[PNCP-AI] 📋 Catálogo completo: ${pncpAttachments.length} arquivos — ${JSON.stringify(purposeCounts)}`);
+
         console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
 
         for (const arq of filteredArquivos) {
@@ -2376,6 +2418,8 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
             pncpSource: {
                 link_sistema,
                 downloadedFiles,
+                discardedFiles,
+                attachments: pncpAttachments,  // Full catalog with URLs for proposal module
                 analyzedAt: new Date().toISOString()
             },
             _version: '2.0',
