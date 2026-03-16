@@ -1561,12 +1561,13 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         // ── MODEL CONFIGURATION ──
         // Each pipeline stage uses the optimal model for its task
         const PIPELINE_MODELS = {
-            extraction: 'gemini-2.5-flash',       // Etapa 1: PDF parsing (multimodal, keeps proven model)
-            reExtraction: 'gemini-2.5-flash',     // Re-extraction fallback  
-            normalization: 'gemini-2.5-flash-lite', // Etapa 2: text-only JSON→JSON (fast, cheap)
-            riskReview: 'gemini-2.5-flash-lite',    // Etapa 3: text-only risk analysis (fast, cheap)
+            extraction: 'gemini-2.5-flash',         // Etapa 1: PDF parsing (multimodal, proven)
+            reExtraction: 'gemini-2.5-flash',       // Re-extraction fallback  
+            normalization: 'gemini-2.5-flash-lite',  // Etapa 2: text-only JSON→JSON (fast, cheap)
+            normQtp: 'gemini-2.5-flash',             // Etapa 2 QTP: needs full Flash for Rule 18 (CAT explosion)
+            riskReview: 'gemini-2.5-flash-lite',     // Etapa 3: text-only risk analysis (fast, cheap)
         };
-        console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} | E3=${PIPELINE_MODELS.riskReview}`);
+        console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
 
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
@@ -1951,13 +1952,17 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     }
 
                     // ── AI NORMALIZATION: QTO, QTP, PC, DC (interpretation needed) ──
+                    // QTP uses full Flash model for Rule 18 (CAT explosion) reliability
+                    const normModel = cat.key === 'qualificacao_tecnica_profissional'
+                        ? PIPELINE_MODELS.normQtp
+                        : PIPELINE_MODELS.normalization;
                     return (async () => {
                         const systemPrompt = buildCategoryNormPrompt(cat);
                         const userPrompt = buildCategoryNormUser(cat, items);
 
                         try {
                             const resp = await callGeminiWithRetry(ai.models, {
-                                model: PIPELINE_MODELS.normalization,
+                                model: normModel,
                                 contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
                                 config: {
                                     systemInstruction: systemPrompt,
@@ -1985,7 +1990,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             if (Array.isArray(data.documents_to_prepare)) {
                                 mergedDocs.push(...data.documents_to_prepare);
                             }
-                            console.log(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens`);
+                            console.log(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens (${normModel})`);
                             return { cat: cat.key, success: true };
                         } catch (geminiErr: any) {
                             // Per-block fallback to OpenAI
