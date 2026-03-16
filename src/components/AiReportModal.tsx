@@ -438,7 +438,8 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
                                                                         // Children for this principal
                                                                         const myChildren = childrenByParent[doc.item] || [];
-                                                                        const childrenOpen = expandedChildren[doc.item] || false;
+                                                                        // QTO/QTP: auto-expand children to show parcelas/quantitativos
+                                                                        const childrenOpen = isQTOorQTP ? (expandedChildren[doc.item] !== false) : (expandedChildren[doc.item] || false);
 
                                                                         return (
                                                                             <div key={idx}>

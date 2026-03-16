@@ -429,10 +429,13 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
 25. OPERADORES FINANCEIROS: para índices contábeis, use EXATAMENTE o operador do edital. LG >= 1,0 significa "maior ou igual a 1,0". EG <= 0,5 significa "menor ou igual a 0,5". NUNCA inverta o operador. Se o edital diz EG <= 0,5, NÃO escreva "mínimo 0,5" — escreva "máximo 0,5 (EG ≤ 0,5)". Se o edital diz LG >= 1,0, escreva "mínimo 1,0 (LG ≥ 1,0)".
 26. TAXONOMIA DE GARANTIAS: garantia de proposta, garantia de execução/contratual, seguro-garantia e caução SEMPRE vão em qualificacao_economico_financeira (QEF), NUNCA em documentos_complementares (DC). DC é apenas para declarações formais, procurações e documentos auxiliares sem natureza financeira.
-27. SEPARAÇÃO RIGOROSA QTP: em qualificacao_tecnica_profissional, crie itens DISTINTOS para cada pilar:
-    (a) Vínculo do RT: comprovação de vínculo empregatício ou contratual do responsável técnico (CTPS, contrato, quadro societário)
-    (b) Acervo técnico / CAT: certidão de acervo técnico do profissional, emitida pelo CREA/CAU/CFT
-    (c) Declaração de concordância: declaração formal do profissional indicado concordando com sua indicação
+27. SEPARAÇÃO RIGOROSA QTP: em qualificacao_tecnica_profissional, crie itens DISTINTOS e com DESTAQUE LITERAL idêntico ao de QTO:
+    (a) Vínculo do RT: comprovação de vínculo empregatício ou contratual do responsável técnico (CTPS, contrato, quadro societário) — 1 item principal
+    (b) Acervo técnico / CAT: certidão de acervo técnico do profissional, emitida pelo CREA/CAU/CFT — 1 item principal POR parcela relevante
+        → Se o edital exige CAT em 3 parcelas distintas (ex: pavimentação, drenagem, sinalização), crie 3 ITENS PRINCIPAIS separados (QTP-02, QTP-03, QTP-04), cada um com quantitativo mínimo literal
+        → PROIBIDO: agrupar múltiplas parcelas do profissional sob um único 'Acervo técnico' genérico
+        → Cada parcela do profissional deve ter o MESMO destaque literal que as parcelas da empresa em QTO
+    (c) Declaração de concordância: declaração formal do profissional indicado concordando com sua indicação — 1 item principal
     NÃO agrupe esses três em um único item. São obrigações distintas com documentos distintos.
 28. PADRONIZAÇÃO PC: em proposta_comercial, use exatamente estas categorias semânticas:
     - proposta inicial: exigências para composição e envio da proposta de preços
@@ -461,15 +464,17 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     Exemplo CORRETO: "Atestado de capacidade técnica comprovando execução de serviços de manutenção predial preventiva e corretiva, com quantitativo mínimo de 5.000m² de área construída (50% da parcela de maior relevância), conforme Edital, item 8.7.1, alínea 'c'"
 
 31. CHECKLIST OBRIGATÓRIO RFT — verifique um por um antes de fechar a resposta:
-    Para cada item abaixo, SE o edital exigir (explicitamente OU por remissão legal), crie um item separado em regularidade_fiscal_trabalhista:
-    [ ] Comprovação de inscrição no CNPJ (em geral, em habilitacao_juridica)
-    [ ] Inscrição estadual no cadastro de contribuintes (se exigida e houver IE)
-    [ ] Inscrição municipal no cadastro de contribuintes (se exigida)
-    [ ] Certidão Negativa de Débitos Federais (Receita Federal + PGFN — certidão conjunta)
-    [ ] Certidão Negativa de Débitos Estaduais (do estado do domicílio fiscal)
-    [ ] Certidão Negativa de Débitos Municipais (do município do domicílio fiscal)
-    [ ] Certificado de Regularidade do FGTS (CRF — emitido pela CEF)
-    [ ] Certidão Negativa de Débitos Trabalhistas (CNDT — emitida pela Justiça do Trabalho)
+    Para cada item abaixo, SE o edital exigir (explicitamente OU por remissão legal), crie um item SEPARADO em regularidade_fiscal_trabalhista.
+    ATENÇÃO: CNPJ e inscrições vão em RFT (não em HJ). Cada um é um card próprio:
+    [ ] RFT-xx: Prova de inscrição no CNPJ — OBRIGATÓRIO em toda licitação (Art. 68 Lei 14.133/2021)
+    [ ] RFT-xx: Inscrição estadual no cadastro de contribuintes (se exigida e houver IE) — item AUTÔNOMO
+    [ ] RFT-xx: Inscrição municipal no cadastro de contribuintes (se exigida) — item AUTÔNOMO
+    [ ] RFT-xx: Certidão Negativa de Débitos Federais (Receita Federal + PGFN — certidão conjunta)
+    [ ] RFT-xx: Certidão Negativa de Débitos Estaduais (do estado do domicílio fiscal)
+    [ ] RFT-xx: Certidão Negativa de Débitos Municipais (do município do domicílio fiscal)
+    [ ] RFT-xx: Certificado de Regularidade do FGTS (CRF — emitido pela CEF)
+    [ ] RFT-xx: Certidão Negativa de Débitos Trabalhistas (CNDT — emitida pela Justiça do Trabalho)
+    REGRA DURA: se CNPJ não aparecer como item em RFT, a extração está INCOMPLETA.
     Se o edital não mencionar algum item, NÃO crie — mas documente no evidence_registry como 'não exigido explicitamente'.
 
 32. CHECKLIST OBRIGATÓRIO HJ — verifique um por um antes de fechar a resposta:
@@ -482,13 +487,17 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 
 33. AUTOCONFERÊNCIA FINAL (OBRIGATÓRIA): antes de retornar o JSON, verifique:
     (a) requirements.habilitacao_juridica: possui ao menos os docs de constituíção empresarial?
-    (b) requirements.regularidade_fiscal_trabalhista: tem os 5-7 documentos fiscais individuais?
+    (b) requirements.regularidade_fiscal_trabalhista: tem os 5-8 documentos fiscais individuais? CNPJ está presente como item separado?
     (c) requirements.qualificacao_economico_financeira: balanço, índices ou garantia?
-    (d) requirements.qualificacao_tecnica_operacional: atestado, parcelas relevantes ou visita?
-    (e) requirements.qualificacao_tecnica_profissional: pilares distintos (vínculo, acervo, declaração)?
+    (d) requirements.qualificacao_tecnica_operacional: atestado COM quantitativo literal por parcela?
+    (e) requirements.qualificacao_tecnica_profissional: cada parcela relevante é item PRINCIPAL separado (não subitem)? Vínculo RT + CATs individuais + declaração?
     (f) requirements.proposta_comercial: envelope de preços, planilha, declarações de proposta?
     (g) requirements.documentos_complementares: declarações padrão (ME/EPP, inexistencia fatos imp., etc)?
     (h) evidence_registry: ao menos 1 EV por exigência principal?
+    VERIFICAÇÕES DURAS:
+    → Se CNPJ não está em RFT como item: ADICIONE antes de responder (title: "Prova de inscrição no CNPJ", source_ref: do item de habilitação do edital)
+    → Se QTP tem apenas 1 item "Acervo técnico" genérico mas o edital lista múltiplas parcelas: EXPLODA em itens separados
+    → Se inscrição estadual/municipal é exigida mas ausente: ADICIONE
     Se alguma categoria estiver VAZIA mas o edital a exigir, RE-EXTRAI antes de responder.
     Se genuinamente não exigida, deixe vazia e anote em evidence_registry: 'categoria {X} não identificada no edital'.
 
@@ -521,7 +530,8 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     {"evidence_id": "EV-01", "document_type": "edital|tr|pb|etp|minuta|anexo|memorial|planilha|outro", "document_name": "", "page": "", "section": "", "excerpt": "trecho literal 30-80 chars", "normalized_topic": ""}
   ],
   "participation_conditions": {
-    "permite_consorcio": null, "permite_subcontratacao": null,
+    "permite_consorcio": null, "consorcio_detalhes": "",
+    "permite_subcontratacao": null, "subcontratacao_detalhes": "limite ou condições + fonte do edital (ex: item 5.2)",
     "exige_visita_tecnica": null, "visita_tecnica_detalhes": "",
     "exige_garantia_proposta": null, "garantia_proposta_detalhes": "",
     "exige_garantia_contratual": null, "garantia_contratual_detalhes": "",

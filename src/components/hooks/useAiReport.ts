@@ -289,7 +289,22 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         };
 
         if (pc.permite_consorcio !== null) items.push({ label: 'Consórcio', value: pc.permite_consorcio ? 'Permitido' : 'Não permitido', type: pc.permite_consorcio ? 'info' : 'warning', sourceRef: findSourceRef('consórcio', 'consorcio') });
-        if (pc.permite_subcontratacao !== null) items.push({ label: 'Subcontratação', value: pc.permite_subcontratacao ? 'Permitida' : 'Não permitida', type: 'info', sourceRef: findSourceRef('subcontrat') });
+        if (pc.permite_subcontratacao !== null) {
+            let subSourceRef = findSourceRef('subcontrat', 'subcontratação');
+            // Extra strategy: parse subcontratacao_detalhes for source ref
+            if (!subSourceRef && pc.subcontratacao_detalhes) {
+                const refMatch = (pc.subcontratacao_detalhes as string).match(/(item|seção|art\.|cláusula|edital)\s*,?\s*[\d.]+/i);
+                if (refMatch) subSourceRef = `Edital, ${refMatch[0]}`;
+            }
+            // Extra strategy: search outras_condicoes
+            if (!subSourceRef && pc.outras_condicoes && Array.isArray(pc.outras_condicoes)) {
+                const subCond = (pc.outras_condicoes as any[]).find((c: any) =>
+                    (c.descricao || c.condicao || '').toLowerCase().includes('subcontrat')
+                );
+                if (subCond?.fonte || subCond?.source_ref) subSourceRef = subCond.fonte || subCond.source_ref;
+            }
+            items.push({ label: 'Subcontratação', value: pc.permite_subcontratacao ? 'Permitida' : 'Não permitida', type: 'info', sourceRef: subSourceRef });
+        }
         if (pc.exige_visita_tecnica) items.push({ label: 'Visita Técnica', value: pc.visita_tecnica_detalhes || 'Obrigatória', type: 'warning', sourceRef: findSourceRef('visita técnica', 'visita tecnica') });
         if (pc.exige_garantia_proposta) items.push({ label: 'Garantia de Proposta', value: pc.garantia_proposta_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia de proposta', 'garantia da proposta') });
         if (pc.exige_garantia_contratual) items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia contratual', 'garantia de execução', 'garantia de contrato') });
