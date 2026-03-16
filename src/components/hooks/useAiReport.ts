@@ -170,17 +170,26 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             const text = typeof p === 'string' ? p : (p.descricao || p.description || safeText(p));
             const lower = text.toLowerCase();
             const normalized = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            // Also check tipo/categoria fields from AI extraction
+            const tipo = ((p.tipo || p.categoria || p.type || '') as string).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
             // Order matters: most specific first
-            if (normalized.includes('advertencia')) {
+            if (normalized.includes('advertencia') || tipo.includes('advertencia')) {
                 result.advertencia.push(text);
-            } else if (lower.includes('multa') || lower.includes('percentual') || normalized.includes('%')) {
+            } else if (lower.includes('multa') || lower.includes('percentual') || /\d+[.,]?\d*\s*%/.test(normalized) || tipo.includes('multa')) {
                 result.multas.push(text);
-            } else if (normalized.includes('impedimento') || normalized.includes('suspensao') || lower.includes('suspensão') || normalized.includes('proibicao') || lower.includes('proibição')) {
+            } else if (normalized.includes('impedimento') || normalized.includes('suspensao') || lower.includes('suspensão')
+                || normalized.includes('proibicao') || lower.includes('proibição')
+                || (normalized.includes('licitar') && normalized.includes('contratar'))
+                || tipo.includes('impedimento') || tipo.includes('suspensao')) {
                 result.impedimento.push(text);
-            } else if (normalized.includes('inidoneidade')) {
+            } else if (normalized.includes('inidoneidade') || normalized.includes('inidone')
+                || tipo.includes('inidoneidade') || tipo.includes('declaracao de inidoneidade')) {
                 result.inidoneidade.push(text);
-            } else if (normalized.includes('rescis') || normalized.includes('resolucao') || lower.includes('resolução') || normalized.includes('extincao') || lower.includes('extinção') || lower.includes('efeito')) {
+            } else if (normalized.includes('rescis') || normalized.includes('resolucao') || lower.includes('resolução')
+                || normalized.includes('extincao') || lower.includes('extinção') || lower.includes('efeito')
+                || normalized.includes('inexecucao') || lower.includes('inexecução')
+                || tipo.includes('rescis') || tipo.includes('extincao')) {
                 result.rescisao.push(text);
             } else {
                 result.outros.push(text);

@@ -1345,25 +1345,57 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         const downloadedFiles: string[] = [];
         const discardedFiles: string[] = [];
 
-        // Pre-filter: exclude templates and irrelevant attachments BEFORE download
+        // Pre-filter: exclude templates, project drawings, and irrelevant attachments BEFORE download
         const EXCLUDE_PATTERNS = [
+            // Templates / Modelos
             'modelo_proposta', 'modelo_de_proposta', 'modelo proposta',
             'modelo_recibo', 'modelo recibo', 'modelo_declarac', 'modelo declarac',
-            'modelo_ata', 'modelo ata', 'modelo_contrato',
+            'modelo_ata', 'modelo ata', 'modelo_contrato', 'modelo_carta',
+            'carta_fian', 'carta fian',
+            // Publicações / Atas
             'aviso_publicac', 'aviso publicac', 'aviso_licitac',
             'retificac', 'errata', 'ata_sessao', 'ata_da_sessao',
             'comprovante', 'recibo_garantia', 'modelo_recibo_garantia',
+            // Projetos de engenharia / plantas / memoriais (não contribuem para habilitação)
+            'projeto_arq', 'projeto arq', 'planta_', 'planta ',
+            'memorial_descritivo', 'memorial descritivo',
+            'croqui', 'layout_', 'layout ',
+            'detalhamento_', 'det_arq', 'det arq',
+        ];
+
+        // Keywords that indicate edital/TR content (should NOT be excluded even if "Outros Documentos")
+        const ESSENTIAL_KEYWORDS = [
+            'edital', 'termo_referencia', 'termo de referencia', 'tr_',
+            'projeto_basico', 'projeto basico', 'planilha', 'orcamento',
+            'cronograma', 'bdi', 'etp', 'estudo_tecnico',
         ];
 
         const filteredArquivos = arquivos.filter((arq: any) => {
             const name = (arq.titulo || arq.nomeArquivo || arq.nome || '').toLowerCase()
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const isExcluded = EXCLUDE_PATTERNS.some(pat => name.includes(pat));
-            if (isExcluded) {
-                console.log(`[PNCP-AI] 🚫 Excluído (template/irrelevante): "${arq.titulo}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId})`);
-                discardedFiles.push(`${arq.titulo} (excluído por filtro)`);
+            const tipoDesc = (arq.tipoDocumentoDescricao || '').toLowerCase();
+            const tipoId = arq.tipoDocumentoId;
+
+            // Rule 1: Exclude by explicit pattern match
+            const isExcludedByPattern = EXCLUDE_PATTERNS.some(pat => name.includes(pat));
+            if (isExcludedByPattern) {
+                console.log(`[PNCP-AI] 🚫 Excluído (template/padrão): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                discardedFiles.push(`${arq.titulo} (excluído: template/padrão)`);
+                return false;
             }
-            return !isExcluded;
+
+            // Rule 2: "Outros Documentos" with generic "ANEXO" names and no essential keywords → likely project files
+            const isOutros = tipoDesc.includes('outros') || (tipoId !== 2 && tipoId !== 4); // Not Edital (2) nor TR (4)
+            const hasEssentialKeyword = ESSENTIAL_KEYWORDS.some(kw => name.includes(kw));
+            const isGenericAnexo = /^anexo[_\s]+(i|ii|iii|iv|v|vi|vii|viii|ix|x|[0-9])/.test(name);
+
+            if (isOutros && isGenericAnexo && !hasEssentialKeyword) {
+                console.log(`[PNCP-AI] 🚫 Excluído (anexo genérico/projeto): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                discardedFiles.push(`${arq.titulo} (excluído: anexo genérico)`);
+                return false;
+            }
+
+            return true;
         });
 
         console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
