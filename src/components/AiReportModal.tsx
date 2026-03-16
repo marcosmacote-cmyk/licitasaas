@@ -83,6 +83,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
         }
     };
 
+    const [expandedChildren, setExpandedChildren] = useState<Record<string, boolean>>({});
+    const toggleChildren = (key: string) => setExpandedChildren(prev => ({ ...prev, [key]: !prev[key] }));
+
     const hasRequirements = Object.keys(report.categorizedDocs).length > 0;
     const hasRisks = report.flagList.length > 0;
     const hasDeadlines = report.deadlineList.length > 0;
@@ -399,113 +402,188 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                                 <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--color-border)' }} />
                                                             </div>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                                {docs.map((doc: any, idx: number) => {
-                                                                    const DESC_LIMIT = 120;
-                                                                    // Don't truncate PC items (proposta comercial) or items with short descriptions
-                                                                    const isProposta = doc.item?.startsWith('PC-');
-                                                                    const isLong = !isProposta && doc.description && doc.description.length > DESC_LIMIT;
-                                                                    // Obligation type display
-                                                                    const oblMap: Record<string, { label: string; color: string; bg: string }> = {
-                                                                        'obrigatoria_universal': { label: 'Obrigatório', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
-                                                                        'condicional': { label: 'Condicional', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
-                                                                        'se_aplicavel': { label: 'Se aplicável', color: 'var(--color-text-tertiary)', bg: 'var(--color-bg-secondary)' },
-                                                                        'alternativa': { label: 'Alternativa', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
-                                                                        'vencedor': { label: 'Só vencedor', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
-                                                                        'fase_contratual': { label: 'Contratual', color: 'var(--color-text-tertiary)', bg: 'var(--color-bg-secondary)' },
-                                                                        'consorcio': { label: 'Consórcio', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
-                                                                        'me_epp': { label: 'ME/EPP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
-                                                                        'recuperacao_judicial': { label: 'Rec. Judicial', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
-                                                                        'empresa_estrangeira': { label: 'Estrangeira', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
-                                                                    };
-                                                                    const obl = oblMap[doc.obligationType] || oblMap['obrigatoria_universal'];
-                                                                    // Phase display
-                                                                    const phaseMap: Record<string, string> = {
-                                                                        'habilitacao': 'Habilitação', 'proposta': 'Proposta',
-                                                                        'contratacao': 'Contratação', 'pos_contratacao': 'Pós-contrato',
-                                                                    };
-                                                                    const phaseLabel = phaseMap[doc.phase] || '';
-                                                                    // Consequence
-                                                                    const consequenceMap: Record<string, string> = {
-                                                                        'inabilitacao': 'Risco: inabilitação', 'inabilitação': 'Risco: inabilitação',
-                                                                        'desclassificacao': 'Risco: desclassificação', 'desclassificação': 'Risco: desclassificação',
-                                                                        'penalidade': 'Risco: penalidade', 'risco_contratual': 'Risco contratual',
-                                                                    };
-                                                                    const consequenceLabel = doc.riskIfMissing ? consequenceMap[doc.riskIfMissing] || '' : '';
-                                                                    const hasSourceRef = doc.sourceRef && doc.sourceRef !== 'referência não localizada';
-                                                                    const isSubitem = doc.entryType === 'subitem';
-                                                                    const isObservacao = doc.entryType === 'observacao';
-                                                                    const isDocCompl = doc.entryType === 'documento_complementar';
-                                                                    const isSecondary = isSubitem || isObservacao || isDocCompl;
-                                                                    const entryIcon = isSubitem ? '↳' : isObservacao ? '📝' : isDocCompl ? '📎' : '';
-                                                                    return (
-                                                                    <div key={idx} style={{
-                                                                        padding: isSecondary ? 'var(--space-2) var(--space-3) var(--space-2) var(--space-5)' : 'var(--space-3) var(--space-4)',
-                                                                        background: isSecondary ? 'var(--color-bg-tertiary)' : 'var(--color-bg-surface)',
-                                                                        borderRadius: 'var(--radius-lg)',
-                                                                        border: isSecondary ? '1px solid var(--color-border-light, var(--color-border))' : '1px solid var(--color-border)',
-                                                                        borderLeft: isSecondary ? '3px solid var(--color-primary-border, var(--color-primary))' : undefined,
-                                                                        display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', fontSize: 'var(--text-sm)',
-                                                                        opacity: isObservacao ? 0.85 : 1,
-                                                                    }}>
-                                                                        <div style={{ padding: '2px', borderRadius: 'var(--radius-md)', background: doc.hasMatch ? 'var(--color-success-bg)' : isSecondary ? 'transparent' : 'var(--color-danger-bg)', flexShrink: 0, marginTop: '2px' }}>
-                                                                            {isSecondary
-                                                                                ? <span style={{ fontSize: '0.7rem' }}>{entryIcon}</span>
-                                                                                : doc.hasMatch ? <CheckCircle2 size={14} color="var(--color-success)" /> : <FileX size={14} color="var(--color-danger)" />
-                                                                            }
-                                                                        </div>
-                                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                                            {/* Row 1: Code + Obligation Type + Phase + Entry Type */}
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '2px' }}>
-                                                                                {doc.item && doc.item !== '-' && (
-                                                                                    <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '1px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary-border)', flexShrink: 0 }}>
-                                                                                        {doc.item}
-                                                                                    </span>
-                                                                                )}
-                                                                                {!isSecondary && (
-                                                                                    <span style={{ fontSize: '0.55rem', fontWeight: 700, color: obl.color, background: obl.bg, padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
-                                                                                        {obl.label}
-                                                                                    </span>
-                                                                                )}
-                                                                                {isSecondary && (
-                                                                                    <span style={{ fontSize: '0.5rem', fontWeight: 600, color: 'var(--color-text-quaternary)', background: 'var(--color-bg-secondary)', padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
-                                                                                        {isSubitem ? 'subitem' : isObservacao ? 'observação' : 'doc. complementar'}
-                                                                                    </span>
-                                                                                )}
-                                                                                {phaseLabel && !isSecondary && (
-                                                                                    <span style={{ fontSize: '0.5rem', fontWeight: 600, color: 'var(--color-text-quaternary)', background: 'var(--color-bg-tertiary)', padding: '1px 3px', borderRadius: 'var(--radius-sm)' }}>
-                                                                                        {phaseLabel}
-                                                                                    </span>
+                                                                {(() => {
+                                                                    // Separate principal items and their children
+                                                                    const principals = docs.filter((d: any) => !d.entryType || d.entryType === 'exigencia_principal');
+                                                                    const children = docs.filter((d: any) => d.entryType && d.entryType !== 'exigencia_principal');
+                                                                    const isQTOorQTP = category.includes('Operacional') || category.includes('Profissional');
+
+                                                                    // Group children by parentId
+                                                                    const childrenByParent: Record<string, any[]> = {};
+                                                                    children.forEach((child: any) => {
+                                                                        const pid = child.parentId || '__orphan__';
+                                                                        if (!childrenByParent[pid]) childrenByParent[pid] = [];
+                                                                        childrenByParent[pid].push(child);
+                                                                    });
+
+                                                                    return principals.map((doc: any, idx: number) => {
+                                                                        const DESC_LIMIT = isQTOorQTP ? 999 : 120;
+                                                                        const isLong = doc.description && doc.description.length > DESC_LIMIT;
+                                                                        const obl = ({
+                                                                            'obrigatoria_universal': { label: 'Obrigatório', color: 'var(--color-success)', bg: 'var(--color-success-bg)' },
+                                                                            'condicional': { label: 'Condicional', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                            'se_aplicavel': { label: 'Se aplicável', color: 'var(--color-text-tertiary)', bg: 'var(--color-bg-secondary)' },
+                                                                            'alternativa': { label: 'Alternativa', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                            'vencedor': { label: 'Só vencedor', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                                                                            'fase_contratual': { label: 'Contratual', color: 'var(--color-text-tertiary)', bg: 'var(--color-bg-secondary)' },
+                                                                            'consorcio': { label: 'Consórcio', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                            'me_epp': { label: 'ME/EPP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' },
+                                                                            'recuperacao_judicial': { label: 'Rec. Judicial', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                                                                            'empresa_estrangeira': { label: 'Estrangeira', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' },
+                                                                        } as Record<string, { label: string; color: string; bg: string }>)[doc.obligationType] || { label: 'Obrigatório', color: 'var(--color-success)', bg: 'var(--color-success-bg)' };
+                                                                        const phaseLabel = ({ 'habilitacao': 'Habilitação', 'proposta': 'Proposta', 'contratacao': 'Contratação', 'pos_contratacao': 'Pós-contrato' } as Record<string, string>)[doc.phase] || '';
+                                                                        const consequenceMap: Record<string, string> = { 'inabilitacao': '⚠ Risco: inabilitação', 'inabilitação': '⚠ Risco: inabilitação', 'desclassificacao': '⚠ Risco: desclassificação', 'desclassificação': '⚠ Risco: desclassificação', 'penalidade': '⚠ Risco: penalidade', 'risco_contratual': '⚠ Risco contratual' };
+                                                                        const consequenceLabel = doc.riskIfMissing ? consequenceMap[doc.riskIfMissing] || '' : '';
+                                                                        const hasSourceRef = doc.sourceRef && doc.sourceRef !== 'referência não localizada';
+
+                                                                        // Children for this principal
+                                                                        const myChildren = childrenByParent[doc.item] || [];
+                                                                        const childrenOpen = expandedChildren[doc.item] || false;
+
+                                                                        return (
+                                                                            <div key={idx}>
+                                                                                {/* Principal requirement card */}
+                                                                                <div style={{
+                                                                                    padding: 'var(--space-3) var(--space-4)',
+                                                                                    background: 'var(--color-bg-surface)',
+                                                                                    borderRadius: 'var(--radius-lg)',
+                                                                                    border: '1px solid var(--color-border)',
+                                                                                    display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', fontSize: 'var(--text-sm)',
+                                                                                }}>
+                                                                                    <div style={{ padding: '2px', borderRadius: 'var(--radius-md)', background: doc.hasMatch ? 'var(--color-success-bg)' : 'var(--color-danger-bg)', flexShrink: 0, marginTop: '2px' }}>
+                                                                                        {doc.hasMatch ? <CheckCircle2 size={14} color="var(--color-success)" /> : <FileX size={14} color="var(--color-danger)" />}
+                                                                                    </div>
+                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                        {/* Row 1: Code + badges */}
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                                                                                            {doc.item && doc.item !== '-' && (
+                                                                                                <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: '1px 5px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary-border)', flexShrink: 0 }}>
+                                                                                                    {doc.item}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            <span style={{ fontSize: '0.55rem', fontWeight: 700, color: obl.color, background: obl.bg, padding: '1px 4px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase' }}>
+                                                                                                {obl.label}
+                                                                                            </span>
+                                                                                            {phaseLabel && (
+                                                                                                <span style={{ fontSize: '0.5rem', fontWeight: 600, color: 'var(--color-text-quaternary)', background: 'var(--color-bg-tertiary)', padding: '1px 3px', borderRadius: 'var(--radius-sm)' }}>
+                                                                                                    {phaseLabel}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        {/* Row 2: Title */}
+                                                                                        {doc.title && (
+                                                                                            <p style={{ margin: '0 0 1px', fontSize: '0.82rem', color: 'var(--color-text-primary)', fontWeight: 600, lineHeight: 1.3 }}>
+                                                                                                {doc.title}
+                                                                                            </p>
+                                                                                        )}
+                                                                                        {/* Row 3: Description */}
+                                                                                        {doc.description && (
+                                                                                            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-secondary)', fontWeight: 400, lineHeight: 1.4 }}>
+                                                                                                {isLong ? doc.description.slice(0, DESC_LIMIT) + '…' : doc.description}
+                                                                                            </p>
+                                                                                        )}
+                                                                                        {/* Row 4: Consequence + Source */}
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginTop: '3px', flexWrap: 'wrap' }}>
+                                                                                            {consequenceLabel && (
+                                                                                                <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 500, fontStyle: 'italic' }}>
+                                                                                                    {consequenceLabel}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {doc.sourceRef && (
+                                                                                                <span style={{ fontSize: '0.65rem', color: hasSourceRef ? 'var(--color-text-tertiary)' : 'var(--color-warning)', fontWeight: hasSourceRef ? 500 : 400 }}>
+                                                                                                    📄 {doc.sourceRef}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Collapsible children toggle */}
+                                                                                {myChildren.length > 0 && (
+                                                                                    <>
+                                                                                        <button onClick={() => toggleChildren(doc.item)} style={{
+                                                                                            background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 600,
+                                                                                            color: 'var(--color-primary)', padding: '2px 0 2px var(--space-8)', display: 'flex', alignItems: 'center', gap: '4px'
+                                                                                        }}>
+                                                                                            {childrenOpen ? '▾' : '▸'} {myChildren.length} {myChildren.length === 1 ? 'subitem/observação' : 'subitens/observações'}
+                                                                                        </button>
+                                                                                        {childrenOpen && (
+                                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginLeft: 'var(--space-5)' }}>
+                                                                                                {myChildren.map((child: any, cidx: number) => {
+                                                                                                    const isObs = child.entryType === 'observacao';
+                                                                                                    const icon = child.entryType === 'subitem' ? '↳' : isObs ? '📝' : '📎';
+                                                                                                    const typeLabel = child.entryType === 'subitem' ? 'subitem' : isObs ? 'observação' : 'doc. complementar';
+                                                                                                    const childDescLimit = isQTOorQTP ? 999 : 200;
+                                                                                                    return (
+                                                                                                        <div key={cidx} style={{
+                                                                                                            padding: 'var(--space-2) var(--space-3)',
+                                                                                                            background: 'var(--color-bg-tertiary)',
+                                                                                                            borderRadius: 'var(--radius-md)',
+                                                                                                            borderLeft: '3px solid var(--color-primary-border, var(--color-primary))',
+                                                                                                            opacity: isObs ? 0.85 : 1,
+                                                                                                            display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)', fontSize: '0.78rem',
+                                                                                                        }}>
+                                                                                                            <span style={{ fontSize: '0.7rem', flexShrink: 0, marginTop: '1px' }}>{icon}</span>
+                                                                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '1px' }}>
+                                                                                                                    {child.item && child.item !== '-' && (
+                                                                                                                        <span style={{ fontSize: '0.55rem', fontWeight: 700, color: 'var(--color-primary)', padding: '0 3px', background: 'var(--color-primary-light)', borderRadius: '2px' }}>
+                                                                                                                            {child.item}
+                                                                                                                        </span>
+                                                                                                                    )}
+                                                                                                                    <span style={{ fontSize: '0.5rem', fontWeight: 600, color: 'var(--color-text-quaternary)', textTransform: 'uppercase' }}>{typeLabel}</span>
+                                                                                                                </div>
+                                                                                                                {child.title && <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{child.title}</p>}
+                                                                                                                {child.description && (
+                                                                                                                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>
+                                                                                                                        {child.description.length > childDescLimit ? child.description.slice(0, childDescLimit) + '…' : child.description}
+                                                                                                                    </p>
+                                                                                                                )}
+                                                                                                                {child.sourceRef && (
+                                                                                                                    <span style={{ fontSize: '0.6rem', color: 'var(--color-text-tertiary)' }}>📄 {child.sourceRef}</span>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </>
                                                                                 )}
                                                                             </div>
-                                                                            {/* Row 2: Title */}
-                                                                            {doc.title && (
-                                                                                <p style={{ margin: '0 0 1px', fontSize: isSecondary ? '0.78rem' : '0.82rem', color: 'var(--color-text-primary)', fontWeight: isSecondary ? 500 : 600, lineHeight: 1.3 }}>
-                                                                                    {doc.title}
-                                                                                </p>
-                                                                            )}
-                                                                            {/* Row 3: Description (truncated) */}
-                                                                            {doc.description && (
-                                                                                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-secondary)', fontWeight: 400, lineHeight: 1.4 }}>
-                                                                                    {isLong ? doc.description.slice(0, DESC_LIMIT) + '…' : doc.description}
-                                                                                </p>
-                                                                            )}
-                                                                            {/* Row 4: Consequence + Source reference */}
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginTop: '3px', flexWrap: 'wrap' }}>
-                                                                                {consequenceLabel && !isSecondary && (
-                                                                                    <span style={{ fontSize: '0.65rem', color: 'var(--color-danger)', fontWeight: 500, fontStyle: 'italic' }}>
-                                                                                        ⚠ {consequenceLabel}
-                                                                                    </span>
-                                                                                )}
-                                                                                {doc.sourceRef && (
-                                                                                    <span style={{ fontSize: '0.65rem', color: hasSourceRef ? 'var(--color-text-tertiary)' : 'var(--color-warning)', fontWeight: hasSourceRef ? 500 : 400 }}>
-                                                                                        📄 {doc.sourceRef}
-                                                                                    </span>
-                                                                                )}
+                                                                        );
+                                                                    });
+                                                                })()}
+                                                                {/* Orphan children (without a matching principal) */}
+                                                                {(() => {
+                                                                    const orphans = docs.filter((d: any) => d.entryType && d.entryType !== 'exigencia_principal' && !docs.some((p: any) => (!p.entryType || p.entryType === 'exigencia_principal') && p.item === d.parentId));
+                                                                    if (orphans.length === 0) return null;
+                                                                    const isQTOorQTP = category.includes('Operacional') || category.includes('Profissional');
+                                                                    return orphans.map((child: any, cidx: number) => {
+                                                                        const icon = child.entryType === 'subitem' ? '↳' : child.entryType === 'observacao' ? '📝' : '📎';
+                                                                        const childDescLimit = isQTOorQTP ? 999 : 200;
+                                                                        return (
+                                                                            <div key={`orphan-${cidx}`} style={{
+                                                                                padding: 'var(--space-2) var(--space-3)',
+                                                                                background: 'var(--color-bg-tertiary)',
+                                                                                borderRadius: 'var(--radius-md)',
+                                                                                borderLeft: '3px solid var(--color-border)',
+                                                                                display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)', fontSize: '0.78rem',
+                                                                            }}>
+                                                                                <span style={{ fontSize: '0.7rem', flexShrink: 0, marginTop: '1px' }}>{icon}</span>
+                                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                    {child.title && <p style={{ margin: 0, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{child.title}</p>}
+                                                                                    {child.description && (
+                                                                                        <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>
+                                                                                            {child.description.length > childDescLimit ? child.description.slice(0, childDescLimit) + '…' : child.description}
+                                                                                        </p>
+                                                                                    )}
+                                                                                    {child.sourceRef && <span style={{ fontSize: '0.6rem', color: 'var(--color-text-tertiary)' }}>📄 {child.sourceRef}</span>}
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    );
-                                                                })}
+                                                                        );
+                                                                    });
+                                                                })()}
                                                             </div>
                                                         </div>
                                                     ))}

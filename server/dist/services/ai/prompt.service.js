@@ -442,6 +442,16 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     NUNCA una certidões de esferas distintas (Federal ≠ Estadual ≠ Municipal) sob um único card.
 30. FUNDAMENTOS DISTINTOS — UMA FONTE POR FUNDAMENTO: se uma exigência cita dois fundamentos jurídicos de itens diferentes do edital (ex: "item 8.1" e "item 10.3"), mantenha CADA exigência em seu item original. NÃO unifique em uma única source_ref. Se a mesma obrigação aparece em dois pontos, use a referência mais detalhada e anote a secundária na description.
 
+34. EXCEÇÃO QTO/QTP — LITERALIDADE INTEGRAL: em qualificacao_tecnica_operacional e qualificacao_tecnica_profissional, NUNCA resuma, condense ou parafraseie:
+    → Parcelas de maior relevância: transcreva CADA parcela individual com seu item/alínea do edital
+    → Quantitativos mínimos: preserve EXATAMENTE o valor numérico + unidade (ex: "5.000m²", "50% do item 2.3.4", "2 atestados", "3 anos")
+    → Itens/alíneas: mantenha a referência exata a cada alínea do edital (ex: "conforme item 8.7.1, alínea 'c'")
+    → description para QTO/QTP pode ter até 300 caracteres (vs. 150 para demais categorias) — use TODO o espaço necessário
+    → Se a parcela relevante tiver quantitativo E percentual, preserve AMBOS: "mínimo 5.000m² (50% do total estimado)"
+    → PROIBIDO: "atestado de capacidade técnica em serviços similares" sem especificar QUAIS serviços e QUAL o quantitativo
+    Exemplo ERRADO: "Atestado de experiência em serviços de manutenção predial"
+    Exemplo CORRETO: "Atestado de capacidade técnica comprovando execução de serviços de manutenção predial preventiva e corretiva, com quantitativo mínimo de 5.000m² de área construída (50% da parcela de maior relevância), conforme Edital, item 8.7.1, alínea 'c'"
+
 31. CHECKLIST OBRIGATÓRIO RFT — verifique um por um antes de fechar a resposta:
     Para cada item abaixo, SE o edital exigir (explicitamente OU por remissão legal), crie um item separado em regularidade_fiscal_trabalhista:
     [ ] Comprovação de inscrição no CNPJ (em geral, em habilitacao_juridica)
