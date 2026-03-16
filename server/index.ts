@@ -3495,9 +3495,187 @@ INSTRUÇÕES TÉCNICAS:
         res.status(500).json({ error: 'Letter generation failed: ' + (error.message || 'Unknown') });
     }
 });
-
 // ═══════════════════════════════════════════════════════════════════════
-// Dossier AI Matching — Gemini-powered document-to-requirement matching
+// AI Letter Blocks — Controlled AI generation for specific letter parts
+// Generates ONLY variable text blocks within a predefined structure.
+// The AI does NOT decide layout, structure, or mandatory sections.
+// ═══════════════════════════════════════════════════════════════════════
+app.post('/api/proposals/ai-letter-blocks', authenticateToken, async (req: any, res) => {
+    try {
+        const { biddingProcessId, requestedBlocks } = req.body;
+
+        if (!biddingProcessId) {
+            return res.status(400).json({ error: 'biddingProcessId is required' });
+        }
+        if (!requestedBlocks || !Array.isArray(requestedBlocks) || requestedBlocks.length === 0) {
+            return res.status(400).json({ error: 'requestedBlocks array is required (objectBlock, executionBlock, commercialExtras)' });
+        }
+
+        const validBlocks = ['objectBlock', 'executionBlock', 'commercialExtras'];
+        const invalid = requestedBlocks.filter((b: string) => !validBlocks.includes(b));
+        if (invalid.length > 0) {
+            return res.status(400).json({ error: `Invalid blocks: ${invalid.join(', ')}. Valid: ${validBlocks.join(', ')}` });
+        }
+
+        const bidding = await prisma.biddingProcess.findFirst({
+            where: { id: biddingProcessId, tenantId: req.user.tenantId },
+            include: { aiAnalysis: true }
+        });
+
+        if (!bidding) return res.status(404).json({ error: 'Bidding process not found' });
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+
+        const ai = new GoogleGenAI({ apiKey });
+        const schemaV2 = bidding.aiAnalysis?.schemaV2 as any;
+        const fullSummary = bidding.aiAnalysis?.fullSummary || '';
+        const pricingInfo = bidding.aiAnalysis?.pricingConsiderations || '';
+        const processId = schemaV2?.process_identification || {};
+        const contractCond = schemaV2?.contract_conditions || {};
+
+        const t0 = Date.now();
+        console.log(`[AI Letter Blocks] Generating ${requestedBlocks.length} block(s) for bidding ${biddingProcessId}`);
+
+        // ── Build prompts for each requested block ──
+        const blockPromises: Promise<{ blockId: string; content: string; durationMs: number }>[] = [];
+
+        for (const blockId of requestedBlocks) {
+            if (blockId === 'objectBlock') {
+                const objContext = processId?.objeto_completo || processId?.objeto || bidding.summary || '';
+                blockPromises.push((async () => {
+                    const tStart = Date.now();
+                    const prompt = `Você é um redator especialista em licitações públicas brasileiras.
+
+TAREFA: Extraia e transcreva NA ÍNTEGRA o OBJETO da licitação abaixo.
+NÃO resuma. Transcreva EXATAMENTE como consta no edital.
+Se houver itens, lotes ou grupos, mencione-os.
+Se o objeto for extenso, inclua-o completo.
+
+DADOS DO EDITAL:
+Título: ${bidding.title}
+${objContext ? `Objeto identificado: ${objContext.substring(0, 2000)}` : ''}
+Resumo do Edital:
+${fullSummary.substring(0, 4000)}
+
+REGRAS:
+- Retorne APENAS o texto do objeto, sem aspas, sem markdown, sem títulos.
+- NÃO adicione interpretações, apenas transcreva.
+- Se não encontrar o objeto claramente, retorne o trecho mais relevante que descreva o escopo da contratação.`;
+
+                    const result = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.1, maxOutputTokens: 2048 },
+                    });
+                    return { blockId: 'objectBlock', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
+                })());
+            }
+
+            if (blockId === 'executionBlock') {
+                const execContext = contractCond?.local_execucao || contractCond?.prazo_execucao || '';
+                blockPromises.push((async () => {
+                    const tStart = Date.now();
+                    const prompt = `Você é um analista especialista em editais de licitação pública brasileira.
+
+TAREFA: Extraia do edital abaixo APENAS os seguintes dados (se existirem):
+1. LOCAL de execução/entrega dos serviços ou bens
+2. PRAZO de execução, entrega ou conclusão
+3. VIGÊNCIA do contrato (se mencionado)
+
+DADOS DO EDITAL:
+Título: ${bidding.title}
+${execContext ? `Dados já identificados: ${execContext}` : ''}
+Resumo do Edital:
+${fullSummary.substring(0, 3000)}
+
+REGRAS:
+- Responda em frases curtas e objetivas, sem markdown.
+- Inclua APENAS os dados que existirem no edital.
+- Se nenhum dado for encontrado, retorne exatamente: ""
+- NÃO invente informações.
+- Formato: "Local de execução: X. Prazo de execução: Y. Vigência contratual: Z."`;
+
+                    const result = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.1, maxOutputTokens: 512 },
+                    });
+                    return { blockId: 'executionBlock', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
+                })());
+            }
+
+            if (blockId === 'commercialExtras') {
+                blockPromises.push((async () => {
+                    const tStart = Date.now();
+                    const prompt = `Você é um analista especialista em licitações públicas brasileiras (Lei 14.133/2021).
+
+TAREFA: Analise as condições financeiras e comerciais ESPECÍFICAS deste edital e extraia APENAS:
+- Condições de pagamento específicas (prazo, forma, documentos exigidos)
+- Exigência de garantia contratual (tipo e percentual)
+- Critério de reajuste de preços
+- Condições sobre composição de BDI
+- Exigências específicas sobre a proposta (formato, prazo, documentos adicionais)
+
+DADOS FINANCEIROS DO EDITAL:
+${pricingInfo ? `Considerações sobre preços: ${pricingInfo.substring(0, 2000)}` : 'Não disponível'}
+
+Resumo do Edital:
+${fullSummary.substring(0, 2000)}
+
+REGRAS:
+- NÃO inclua declarações genéricas sobre tributos, custos ou encargos (já estão na carta padrão).
+- Retorne APENAS condições ESPECÍFICAS deste edital, em frases declarativas formais.
+- Se não houver condições específicas além das padrão, retorne exatamente: ""
+- NÃO invente informações.
+- Sem markdown, sem títulos, sem numeração.`;
+
+                    const result = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.1, maxOutputTokens: 1024 },
+                    });
+                    return { blockId: 'commercialExtras', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
+                })());
+            }
+        }
+
+        // ── Execute all blocks in parallel ──
+        const results = await Promise.allSettled(blockPromises);
+        const blocks: Record<string, string> = {};
+        const timings: Record<string, number> = {};
+        const errors: string[] = [];
+
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                blocks[result.value.blockId] = result.value.content;
+                timings[result.value.blockId] = result.value.durationMs;
+            } else {
+                errors.push(result.reason?.message || 'Unknown AI error');
+            }
+        }
+
+        const totalMs = Date.now() - t0;
+        console.log(`[AI Letter Blocks] Completed in ${totalMs}ms — blocks: ${Object.keys(blocks).join(', ')} | timings: ${JSON.stringify(timings)}`);
+
+        if (errors.length > 0) {
+            console.warn(`[AI Letter Blocks] ${errors.length} block(s) failed:`, errors);
+        }
+
+        res.json({
+            blocks,
+            timings,
+            errors: errors.length > 0 ? errors : undefined,
+            totalMs,
+        });
+
+    } catch (error: any) {
+        console.error('[AI Letter Blocks] Error:', error.message);
+        res.status(500).json({ error: 'AI block generation failed: ' + (error.message || 'Unknown') });
+    }
+});
+
+
 // ═══════════════════════════════════════════════════════════════════════
 app.post('/api/dossier/ai-match', authenticateToken, async (req: any, res) => {
     try {

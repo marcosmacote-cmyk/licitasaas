@@ -6,6 +6,8 @@ import { resolveStage, isModuleAllowed } from '../../governance';
 import { calculateItem, calculateTotals } from '../proposals/engine';
 import type { RoundingMode } from '../proposals/engine';
 import { exportExcelProposal, generateProposalPdf } from '../proposals/exportServices';
+import { LetterDataNormalizer, ProposalLetterBuilder, ProposalLetterValidator } from '../proposals/letter';
+import type { ProposalLetterResult, AiLetterBlocksResponse } from '../proposals/letter';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -398,6 +400,92 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
     };
 
+    /**
+     * [Fase 2] Gera carta usando o novo motor orientado a blocos.
+     * A IA gera APENAS trechos variáveis; a estrutura é fixa.
+     */
+    const handleGenerateLetterBlocks = async (): Promise<ProposalLetterResult | null> => {
+        if (!proposal || !selectedBiddingId || !selectedCompanyId || !selectedBidding || !selectedCompany) {
+            toast.warning('Selecione processo e empresa primeiro.');
+            return null;
+        }
+
+        // 1. Normalizar dados
+        const normalizer = new LetterDataNormalizer();
+        const letterData = normalizer.normalize({
+            bidding: selectedBidding,
+            company: selectedCompany,
+            proposal,
+            items,
+            totalValue: total,
+            signatureMode: signatureMode as 'LEGAL' | 'TECH' | 'BOTH',
+            validityDays,
+            bdiPercentage: bdi,
+            discountPercentage: discount,
+        });
+
+        // 2. Validar
+        const validator = new ProposalLetterValidator();
+        const validation = validator.validate(letterData);
+
+        if (!validation.isValid) {
+            const errorMsgs = validation.errors.map(e => `❌ ${e.message}`).join('\n');
+            toast.error(`Não é possível gerar a carta:\n${errorMsgs}`);
+            return null;
+        }
+
+        if (validation.warnings.length > 0) {
+            validation.warnings.forEach(w => toast.warning(`⚠️ ${w.message}`));
+        }
+
+        // 3. Chamar IA controlada para blocos variáveis
+        setIsLetterLoading(true);
+        try {
+            const aiRes = await fetch(`${API_BASE_URL}/api/proposals/ai-letter-blocks`, {
+                method: 'POST', headers,
+                body: JSON.stringify({
+                    biddingProcessId: selectedBiddingId,
+                    requestedBlocks: ['objectBlock', 'executionBlock', 'commercialExtras'],
+                }),
+            });
+
+            // 4. Montar carta com o Builder
+            const builder = new ProposalLetterBuilder(letterData);
+
+            if (aiRes.ok) {
+                const aiData: AiLetterBlocksResponse & { timings?: Record<string, number>; totalMs?: number } = await aiRes.json();
+                console.log('[Letter Blocks] AI timings:', aiData.timings, `total: ${aiData.totalMs}ms`);
+
+                if (aiData.blocks?.objectBlock) {
+                    builder.setAiContent('objectBlock', aiData.blocks.objectBlock);
+                }
+                if (aiData.blocks?.executionBlock) {
+                    builder.setAiContent('executionBlock', aiData.blocks.executionBlock);
+                }
+                if (aiData.blocks?.commercialExtras) {
+                    builder.setAiContent('commercialExtras', aiData.blocks.commercialExtras);
+                }
+            } else {
+                console.warn('[Letter Blocks] AI blocks failed, building with available data only');
+                toast.warning('IA indisponível — carta gerada com dados estruturais.');
+            }
+
+            const result = builder.build();
+
+            // 5. Atualizar letterContent (compatibilidade com UI atual)
+            setLetterContent(result.plainText);
+            showSaveMsg(`Carta composta com ${result.blocks.filter(b => b.visible).length} blocos!`);
+
+            return result;
+        } catch (e: any) {
+            console.error('[Letter Blocks] Error:', e);
+            toast.error('Erro ao gerar carta: ' + (e.message || 'Desconhecido'));
+            return null;
+        } finally {
+            setIsLetterLoading(false);
+        }
+    };
+
     const handleSaveLetter = async () => {
         if (!proposal) return;
         setIsSaving(true);
@@ -467,7 +555,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         handleSaveAllItems, handleSaveCompanyTemplate,
         handleDeleteItem, executeDeleteItem,
         handleSaveConfig, handleImageUpload,
-        handleExportExcel, handleGenerateLetter,
+        handleExportExcel, handleGenerateLetter, handleGenerateLetterBlocks,
         handleSaveLetter, handlePrintProposal,
     };
 }
