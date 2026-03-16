@@ -302,7 +302,7 @@ const licitationTaxonomy_1 = require("./licitationTaxonomy");
  *   MINOR = melhoria de prompt que altera qualidade
  *   PATCH = ajuste de formatação ou exemplos
  */
-exports.V2_PROMPT_VERSION = 'v3.0.0';
+exports.V2_PROMPT_VERSION = 'v3.1.0';
 // Pre-generate taxonomy block for all prompts
 const TAXONOMY_BLOCK = (0, licitationTaxonomy_1.generateTaxonomyPromptBlock)();
 /**
@@ -358,6 +358,18 @@ exports.V2_EXTRACTION_PROMPT = `${exports.LICITACAO_SYSTEM_PROMPT_BASE}
 
 Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados factuais presentes nos documentos fornecidos.
 
+── PRIORIDADE MÁXIMA: COMPLETUDE + RASTREABILIDADE + NÃO OMISSÃO ──
+
+NENHUMA exigência expressa pode ser omitida.
+TODA exigência documental, técnica, fiscal, econômica, proposta, declaração, participação, garantia,
+visita, prazo ou condição de habilitação/desclassificação deve virar item estruturado — MESMO QUE:
+  • Seja básica ou aparentemente óbvia (ex: CNPJ, contrato social)
+  • Pareça redundante com outra exigência
+  • Seja curta ou formulada de modo simples
+  • Conste em múltiplos pontos do edital
+  • Já exista em qualquer licitação
+NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é implícito".
+
 ── DISCIPLINA DE EXTRAÇÃO ──
 
 1. Extraia SOMENTE o que está expressamente escrito nos documentos.
@@ -366,17 +378,19 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
 4. Se um campo não tiver informação no documento, preencha com null ou string vazia. NUNCA invente.
 5. Para campos booleanos, use true/false apenas quando o documento for EXPLÍCITO. Use null quando não mencionar.
 6. REGISTRE EVIDÊNCIAS: para cada dado extraído, crie uma entrada no evidence_registry com seção, página e trecho literal (30-80 caracteres).
-7. Extraia exigências de qualificação técnica de forma OBJETIVA — título curto (máx 80 chars) + descrição resumida (máx 120 chars). Preserve termos técnicos e legais exatos.
+7. Extraia exigências de qualificação técnica de forma OBJETIVA — título curto (máx 80 chars) + descrição resumida (máx 150 chars). Preserve QUANTITATIVOS EXATOS (ex: '50% do item X', '5.000m²', '2 anos') e a fonte exata.
 8. Em PDFs escaneados, faça OCR visual cuidadoso. Ignore marcas d'água e carimbos.
+9. AMBIGUIDADE: se houver lacuna textual, redação dúbia ou dado incerto, NÃO omita — crie o item com description="[ambiguidade de extração: descreva a dúvida]" e source_ref apontando para o trecho problemático.
 
 ── REGRAS DE QUALIDADE PARA EXTRAÇÃO ──
 
-9. CRIE UMA ENTRADA SEPARADA para cada exigência. Se um item lista 5 documentos, retorne 5 objetos separados.
-10. CLASSIFIQUE cada exigência usando a taxonomia fornecida. Use os PREFIXOS corretos: HJ, RFT, QEF, QTO, QTP, PC, DC.
-11. DISTINGUA COM RIGOR: atestado da empresa (QTO) vs. acervo/CAT do profissional (QTP).
-12. DISTINGUA COM RIGOR: certidão negativa de débitos (RFT) vs. balanço/índices (QEF).
+10. CRIE UMA ENTRADA SEPARADA para cada exigência. Se um item lista 5 documentos, retorne 5 objetos separados.
+    NÃO funda exigências distintas em um item genérico — exceto se o edital expressamente as tratar como conjunto.
+11. CLASSIFIQUE cada exigência usando a taxonomia fornecida. Use os PREFIXOS corretos: HJ, RFT, QEF, QTO, QTP, PC, DC.
+12. DISTINGUA COM RIGOR: atestado da empresa (QTO) vs. acervo/CAT do profissional (QTP).
     VISITA TÉCNICA pertence a QTO (atividade operacional), NUNCA a QTP (qualificação profissional individual).
-13. CLASSIFIQUE obligation_type com precisão semântica — use SOMENTE o que estiver EXPLÍCITO no edital:
+13. DISTINGUA COM RIGOR: certidão negativa de débitos (RFT) vs. balanço/índices (QEF).
+14. CLASSIFIQUE obligation_type com precisão semântica — use SOMENTE o que estiver EXPLÍCITO no edital:
     - "obrigatoria_universal": exigida de TODOS os licitantes, sem exceção
     - "condicional": use APENAS se o edital contiver literalmente condição suspensiva ("caso seja consórcio", "quando o valor superar X"). NÃO infira condicionalidade de contexto geral.
     - "se_aplicavel": exigida apenas se a situação existir (ex: "se houver filiais", "se aplicável")
@@ -427,6 +441,38 @@ Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados
     EXCEÇÃO: alíneas do MESMO item do edital que listam certidões → subitem por alínea (pai = item do edital).
     NUNCA una certidões de esferas distintas (Federal ≠ Estadual ≠ Municipal) sob um único card.
 30. FUNDAMENTOS DISTINTOS — UMA FONTE POR FUNDAMENTO: se uma exigência cita dois fundamentos jurídicos de itens diferentes do edital (ex: "item 8.1" e "item 10.3"), mantenha CADA exigência em seu item original. NÃO unifique em uma única source_ref. Se a mesma obrigação aparece em dois pontos, use a referência mais detalhada e anote a secundária na description.
+
+31. CHECKLIST OBRIGATÓRIO RFT — verifique um por um antes de fechar a resposta:
+    Para cada item abaixo, SE o edital exigir (explicitamente OU por remissão legal), crie um item separado em regularidade_fiscal_trabalhista:
+    [ ] Comprovação de inscrição no CNPJ (em geral, em habilitacao_juridica)
+    [ ] Inscrição estadual no cadastro de contribuintes (se exigida e houver IE)
+    [ ] Inscrição municipal no cadastro de contribuintes (se exigida)
+    [ ] Certidão Negativa de Débitos Federais (Receita Federal + PGFN — certidão conjunta)
+    [ ] Certidão Negativa de Débitos Estaduais (do estado do domicílio fiscal)
+    [ ] Certidão Negativa de Débitos Municipais (do município do domicílio fiscal)
+    [ ] Certificado de Regularidade do FGTS (CRF — emitido pela CEF)
+    [ ] Certidão Negativa de Débitos Trabalhistas (CNDT — emitida pela Justiça do Trabalho)
+    Se o edital não mencionar algum item, NÃO crie — mas documente no evidence_registry como 'não exigido explicitamente'.
+
+32. CHECKLIST OBRIGATÓRIO HJ — verifique um por um antes de fechar a resposta:
+    [ ] Ato constitutivo (contrato social, estatuto) com alterações, ou certidão simplificada (Junta Comercial)
+    [ ] Documentos de eleição e posse dos administradores (se S/A)
+    [ ] Registro na Junta Comercial ou órgão competente
+    [ ] CNPJ (comprovação de inscrição e situação cadastral) — item em HJ se o edital pedir
+    [ ] Declaração de enquadramento ME/EPP (se exigida para benefício)
+    [ ] Autorização especial de funcionamento (se for empresa estrangeira ou setor regulado)
+
+33. AUTOCONFERÊNCIA FINAL (OBRIGATÓRIA): antes de retornar o JSON, verifique:
+    (a) requirements.habilitacao_juridica: possui ao menos os docs de constituíção empresarial?
+    (b) requirements.regularidade_fiscal_trabalhista: tem os 5-7 documentos fiscais individuais?
+    (c) requirements.qualificacao_economico_financeira: balanço, índices ou garantia?
+    (d) requirements.qualificacao_tecnica_operacional: atestado, parcelas relevantes ou visita?
+    (e) requirements.qualificacao_tecnica_profissional: pilares distintos (vínculo, acervo, declaração)?
+    (f) requirements.proposta_comercial: envelope de preços, planilha, declarações de proposta?
+    (g) requirements.documentos_complementares: declarações padrão (ME/EPP, inexistencia fatos imp., etc)?
+    (h) evidence_registry: ao menos 1 EV por exigência principal?
+    Se alguma categoria estiver VAZIA mas o edital a exigir, RE-EXTRAI antes de responder.
+    Se genuinamente não exigida, deixe vazia e anote em evidence_registry: 'categoria {X} não identificada no edital'.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -688,15 +734,28 @@ Responda APENAS com o JSON. Sem texto antes ou depois.`;
  */
 exports.V2_EXTRACTION_USER_INSTRUCTION = `Analise os documentos de licitação fornecidos e execute a EXTRAÇÃO FACTUAL conforme as regras do sistema.
 
+═══ PRIORIDADE MÁXIMA: COMPLETUDE + NÃO OMISSÃO ═══
+Toda exigência expressa deve virar item estruturado — inclusive as "óbvias" (CNPJ, contrato social, CND Federal, CNDT, FGTS).
+Se houver ambiguidade ou dado incerto, marque description="[ambiguidade de extração: ...]" e inclua source_ref.
+NÃO omita por achar redundante, óbvio ou implícito.
+
 ATENÇÃO REFORÇADA:
 1. Leia TODOS os documentos (edital, TR, projeto básico, anexos, planilhas) antes de responder.
 2. Em PDFs escaneados, realize OCR visual cuidadoso.
-3. Transcreva LITERALMENTE as exigências de qualificação técnica — NUNCA resuma.
+3. Transcreva LITERALMENTE as exigências de qualificação técnica — NUNCA resuma. Preserve quantitativos exatos.
 4. Registre de que seção/página cada dado foi extraído (evidence_registry com excerpt mínimo de 30 chars).
 5. Use null para campos não encontrados — NUNCA invente.
 6. CRIE ENTRADA SEPARADA para cada exigência individual — NUNCA agrupe múltiplos documentos em uma entrada.
+   EXCEÇÃO: se o edital expressamente trata como conjunto (ex: "CNPJ e IE do mesmo item 4.1").
 7. CLASSIFIQUE tipo_objeto como um de: servico_comum | servico_comum_engenharia | obra_engenharia | fornecimento | locacao | outro.
 8. Para atestados técnicos, DISTINGA: atestado da empresa (QTO) vs. CAT/acervo do profissional (QTP).
+9. DOCUMENTE AUSENÇAS: se uma categoria de habilitação não tiver exigências, anote no evidence_registry: 'categoria X não identificada no edital'.
+
+AUTOCONFERÊNCIA ANTES DE RESPONDER:
+→ RFT tem os 5-7 documentos fiscais individuais (CND Federal, Estadual, Municipal, FGTS, CNDT)?
+→ HJ tem ato constitutivo, CNPJ e demais docs societários?
+→ Há ao menos 1 EV por exigência principal?
+→ Quantitativos técnicos estão com valor exato e fonte?
 
 {domainReinforcement}
 
