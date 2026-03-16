@@ -1825,6 +1825,42 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         return null; // Skip empty categories
                     }
 
+                    // ── FAST-PATH: HJ, RFT, QEF — server-side normalization (no AI call) ──
+                    const FAST_NORM_CATEGORIES = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira'];
+                    if (FAST_NORM_CATEGORIES.includes(cat.key)) {
+                        // Deterministic normalization — assign IDs, entry_type, risk_if_missing
+                        const riskDefault = cat.key === 'habilitacao_juridica' ? 'inabilitacao'
+                            : cat.key === 'regularidade_fiscal_trabalhista' ? 'inabilitacao'
+                            : 'inabilitacao';
+                        const normalized = items.map((item: any, idx: number) => ({
+                            ...item,
+                            requirement_id: item.requirement_id || `${cat.prefix}-${String(idx + 1).padStart(2, '0')}`,
+                            entry_type: item.entry_type || 'exigencia_principal',
+                            risk_if_missing: item.risk_if_missing || riskDefault,
+                            applies_to: item.applies_to || 'licitante',
+                            obligation_type: item.obligation_type || 'obrigatoria_universal',
+                            phase: item.phase || 'habilitacao',
+                            source_ref: item.source_ref || 'referência não localizada',
+                        }));
+                        mergedRequirements[cat.key] = normalized;
+                        totalNormalized += normalized.length;
+                        // Generate documents_to_prepare
+                        normalized.filter((n: any) => n.entry_type === 'exigencia_principal').forEach((n: any) => {
+                            mergedDocs.push({
+                                document_name: n.title || n.requirement_id,
+                                category: cat.key,
+                                priority: n.risk_if_missing === 'inabilitacao' ? 'critica' : 'alta',
+                                responsible_area: cat.key === 'regularidade_fiscal_trabalhista' ? 'contabil'
+                                    : cat.key === 'qualificacao_economico_financeira' ? 'contabil'
+                                    : 'juridico',
+                                notes: ''
+                            });
+                        });
+                        console.log(`[PNCP-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side, 0 API calls)`);
+                        return { cat: cat.key, success: true, fastPath: true };
+                    }
+
+                    // ── AI NORMALIZATION: QTO, QTP, PC, DC (interpretation needed) ──
                     return (async () => {
                         const systemPrompt = buildCategoryNormPrompt(cat);
                         const userPrompt = buildCategoryNormUser(cat, items);
@@ -1905,7 +1941,9 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
 
                 stageTimes.normalization = (Date.now() - t2Start) / 1000;
                 const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
-                console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${NORM_CATEGORIES.length - categoriesSkipped} categorias OK, ${categoriesFailed} falhas`);
+                const fastPathCount = results.filter(r => r.status === 'fulfilled' && r.value?.fastPath).length;
+                const aiNormCount = successCount - fastPathCount;
+                console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${NORM_CATEGORIES.length - categoriesSkipped} OK (⚡${fastPathCount} fast + 🤖${aiNormCount} AI), ${categoriesFailed} falhas`);
 
                 // Build merged normalization result
                 const json = {
@@ -3688,6 +3726,35 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
                     return null;
                 }
 
+                // ── FAST-PATH: HJ, RFT, QEF — server-side normalization ──
+                const FAST_NORM_CATS = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira'];
+                if (FAST_NORM_CATS.includes(cat.key)) {
+                    const normalized = items.map((item: any, idx: number) => ({
+                        ...item,
+                        requirement_id: item.requirement_id || `${cat.prefix}-${String(idx + 1).padStart(2, '0')}`,
+                        entry_type: item.entry_type || 'exigencia_principal',
+                        risk_if_missing: item.risk_if_missing || 'inabilitacao',
+                        applies_to: item.applies_to || 'licitante',
+                        obligation_type: item.obligation_type || 'obrigatoria_universal',
+                        phase: item.phase || 'habilitacao',
+                        source_ref: item.source_ref || 'referência não localizada',
+                    }));
+                    mergedRequirements[cat.key] = normalized;
+                    totalNormalized += normalized.length;
+                    normalized.filter((n: any) => n.entry_type === 'exigencia_principal').forEach((n: any) => {
+                        mergedDocs.push({
+                            document_name: n.title || n.requirement_id,
+                            category: cat.key,
+                            priority: 'critica',
+                            responsible_area: cat.key === 'habilitacao_juridica' ? 'juridico' : 'contabil',
+                            notes: ''
+                        });
+                    });
+                    console.log(`[AI-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side)`);
+                    return { success: true, fastPath: true };
+                }
+
+                // ── AI normalization for QTO, QTP, PC, DC ──
                 return (async () => {
                     const systemPrompt = buildCategoryNormPrompt(cat);
                     const userPrompt = buildCategoryNormUser(cat, items);
