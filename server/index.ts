@@ -1938,7 +1938,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
         const t2t3Start = Date.now();
 
         // Run both stages concurrently
-        const [normSettled, riskSettled] = await Promise.allSettled([
+        const [normSettled, riskSettled, itemsSettled] = await Promise.allSettled([
             // ── Stage 2: Per-Category Normalization (7 parallel micro-calls) ──
             (async () => {
                 const t2Start = Date.now();
@@ -2142,6 +2142,107 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     console.log(`[PNCP-V2] ✅ Etapa 3 via OpenAI em ${stageTimes.risk_review.toFixed(1)}s`);
                     return { json, model: openAiResult.model, repaired: parseROai.repaired, fallback: true };
                 }
+            })(),
+
+            // ── Stage 1.5: Parallel Item Extraction (runs concurrently with 2+3) ──
+            // When itens_licitados is empty AND we have planilha-like PDFs in the catalog,
+            // download and extract items NOW instead of waiting for ai-populate
+            (async () => {
+                const currentItens = v2Result.proposal_analysis?.itens_licitados || [];
+                if (Array.isArray(currentItens) && currentItens.length > 0) {
+                    console.log(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — itens_licitados já tem ${currentItens.length} itens`);
+                    return { items: currentItens, skipped: true };
+                }
+
+                // Find planilha/budget PDFs from catalog (including excluded-due-to-size ones)
+                const planilhaAttachments = pncpAttachments.filter((a: any) =>
+                    a.ativo && a.url && (
+                        a.purpose === 'planilha_orcamentaria' ||
+                        a.purpose === 'composicao_custos' ||
+                        a.purpose === 'anexo_geral' ||
+                        a.purpose === 'termo_referencia'
+                    )
+                );
+
+                if (planilhaAttachments.length === 0) {
+                    console.log(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — sem planilhas no catálogo`);
+                    return { items: [], skipped: true };
+                }
+
+                console.log(`[PNCP-V2] 📋 Etapa 1.5: Extraindo itens de ${planilhaAttachments.length} PDF(s) em paralelo...`);
+                const t15Start = Date.now();
+
+                try {
+                    // Download the first planilha PDF (prioritize: planilha > composicao > anexo > TR)
+                    const priorityOrder = ['planilha_orcamentaria', 'composicao_custos', 'anexo_geral', 'termo_referencia'];
+                    const sorted = planilhaAttachments.sort((a: any, b: any) => 
+                        priorityOrder.indexOf(a.purpose) - priorityOrder.indexOf(b.purpose)
+                    );
+                    const target = sorted[0];
+                    
+                    const agent15 = new (require('https').Agent)({ rejectUnauthorized: false });
+                    const pdfResp = await axios.get(target.url, { 
+                        responseType: 'arraybuffer', 
+                        httpsAgent: agent15, 
+                        timeout: 30000,
+                        maxContentLength: 50 * 1024 * 1024 // 50MB max
+                    } as any);
+                    const pdfBuffer = Buffer.from(pdfResp.data as ArrayBuffer);
+                    console.log(`[PNCP-V2] 📋 Etapa 1.5: PDF "${target.titulo}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+
+                    const itemExtractionPrompt = `Você é um extrator de itens de planilhas orçamentárias de licitações brasileiras.
+
+Analise o PDF e extraia TODOS os itens/lotes com preço.
+
+Para CADA item extraia:
+- itemNumber: número do item/lote
+- description: descrição técnica COMPLETA (NÃO resuma)
+- unit: unidade de medida (UN, KG, M², M³, ML, MÊS, HORA, DIA, DIÁRIA, KM, LITRO, CJ, VB, SV)
+- quantity: quantidade numérica
+- referencePrice: valor unitário de referência/estimado (número, sem R$)
+- multiplier: se há período (ex: 12 meses), retorne o multiplicador
+- multiplierLabel: rótulo do multiplicador (ex: "Meses")
+
+REGRAS:
+- Extraia APENAS itens PRINCIPAIS (totalizadores), NÃO sub-itens de composição
+- referencePrice é NUMÉRICO (ex: 15000.00, não "R$ 15.000,00")
+- Se não encontrar itens com preço, retorne array vazio []
+- NUNCA invente itens
+
+Responda APENAS com JSON array:
+[{"itemNumber":"1","description":"...","unit":"UN","quantity":1,"referencePrice":0,"multiplier":1,"multiplierLabel":""}]`;
+
+                    const itemResult = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: [{
+                            role: 'user',
+                            parts: [
+                                { inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } },
+                                { text: itemExtractionPrompt }
+                            ]
+                        }],
+                        config: { temperature: 0.05, maxOutputTokens: 16384 }
+                    });
+
+                    const responseText = itemResult.text?.trim() || '';
+                    let jsonStr = responseText;
+                    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                    if (jsonMatch) jsonStr = jsonMatch[0];
+                    
+                    let items: any[] = [];
+                    try { items = JSON.parse(jsonStr); } catch { items = []; }
+                    
+                    // Filter valid items
+                    items = items.filter((it: any) => it.description && it.description.trim().length > 5);
+                    
+                    const elapsed = ((Date.now() - t15Start) / 1000).toFixed(1);
+                    console.log(`[PNCP-V2] ✅ Etapa 1.5 em ${elapsed}s — ${items.length} itens extraídos de "${target.titulo}"`);
+                    
+                    return { items, skipped: false, source: target.titulo, elapsed };
+                } catch (err: any) {
+                    console.warn(`[PNCP-V2] ⚠️ Etapa 1.5 falhou: ${err.message}`);
+                    return { items: [], skipped: false, error: err.message };
+                }
             })()
         ]);
 
@@ -2196,6 +2297,19 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
             v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
             v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${riskSettled.reason?.message || 'erro desconhecido'}`);
             stageTimes.risk_review = stageTimes.risk_review || 0;
+        }
+
+        // Process item extraction result (Etapa 1.5)
+        if (itemsSettled.status === 'fulfilled' && !itemsSettled.value.skipped) {
+            const extractedItems = itemsSettled.value.items || [];
+            if (extractedItems.length > 0) {
+                if (!v2Result.proposal_analysis) v2Result.proposal_analysis = {} as any;
+                v2Result.proposal_analysis.itens_licitados = extractedItems;
+                stageTimes.item_extraction = parseFloat(itemsSettled.value.elapsed || '0');
+                console.log(`[PNCP-V2] ✅ Etapa 1.5 merge: ${extractedItems.length} itens → proposal_analysis.itens_licitados`);
+            }
+        } else if (itemsSettled.status === 'rejected') {
+            console.warn(`[PNCP-V2] ⚠️ Etapa 1.5 rejected: ${itemsSettled.reason?.message || 'erro'}`);
         }
 
         // ── Schema Sanitization: Safe defaults for all arrays/collections ──
