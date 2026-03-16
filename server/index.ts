@@ -3091,11 +3091,66 @@ Responda APENAS com um JSON array, sem markdown:
             )
         );
 
+        // ── Strategy 3: No catalog? Fetch attachments from PNCP API on the fly ──
+        if (planilhaFiles.length === 0 && attachments.length === 0 && bidding.pncpLink) {
+            console.log(`[AI Populate] No catalog found. Fetching attachments from PNCP using pncpLink: ${bidding.pncpLink}`);
+            
+            // Parse pncpLink to extract CNPJ/ano/sequencial
+            // Format: https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ
+            const pncpMatch = bidding.pncpLink.match(/editais\/([^/]+)\/(\d{4})\/(\d+)/);
+            if (pncpMatch) {
+                const [, cnpj, ano, seq] = pncpMatch;
+                const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
+                
+                try {
+                    const agent2 = new (require('https').Agent)({ rejectUnauthorized: false });
+                    const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent2, timeout: 10000 } as any);
+                    const allArquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
+                    console.log(`[AI Populate] PNCP returned ${allArquivos.length} attachments`);
+
+                    // Classify and filter for planilha-type files
+                    const classifyForProposal = (arq: any): string => {
+                        const n = (arq.titulo || arq.nomeArquivo || '').toLowerCase()
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        if (n.includes('planilha') || n.includes('orcamento') || n.includes('orçamento')) return 'planilha_orcamentaria';
+                        if (n.includes('composic') || n.includes('custo')) return 'composicao_custos';
+                        if (n.includes('bdi') || n.includes('encargos')) return 'bdi_encargos';
+                        if (n.includes('cronograma')) return 'cronograma';
+                        if (n.includes('edital') && !n.includes('anexo')) return 'edital';
+                        if (n.includes('aviso') || n.includes('publicacao')) return 'aviso';
+                        if (n.includes('modelo') || n.includes('minuta')) return 'modelo';
+                        if (/^anexo[_\s]+(i|ii|iii|iv|v|vi|[0-9])/.test(n)) return 'anexo_geral';
+                        return 'outro';
+                    };
+
+                    for (const arq of allArquivos) {
+                        const purpose = classifyForProposal(arq);
+                        const url = arq.url || arq.uri || '';
+                        if (!url || !arq.statusAtivo) continue;
+                        if (purpose === 'planilha_orcamentaria' || purpose === 'composicao_custos' || 
+                            purpose === 'bdi_encargos' || purpose === 'anexo_geral') {
+                            planilhaFiles.push({
+                                titulo: arq.titulo || arq.nomeArquivo || 'arquivo',
+                                url,
+                                purpose,
+                                ativo: true,
+                                downloaded: false
+                            });
+                        }
+                    }
+                    console.log(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} planilha candidates found`);
+                } catch (fetchErr: any) {
+                    console.warn(`[AI Populate] Failed to fetch PNCP attachments: ${fetchErr.message}`);
+                }
+            }
+        }
+
         if (planilhaFiles.length === 0) {
             return res.status(400).json({ 
                 error: 'Nenhuma planilha orçamentária encontrada. Este processo não possui itens de orçamento no edital nem planilhas anexas no PNCP.',
-                hint: 'Para obras de engenharia, as planilhas geralmente estão nos Anexos do edital.',
+                hint: 'Para obras de engenharia, as planilhas geralmente estão nos Anexos do edital. Para pregões de serviço, tente re-analisar o processo.',
                 attachments_found: attachments.length,
+                has_pncpLink: !!bidding.pncpLink,
                 attachments_purposes: [...new Set(attachments.map((a: any) => a.purpose))]
             });
         }
