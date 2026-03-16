@@ -3034,7 +3034,10 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req: any, res) 
         const schemaV2 = bidding.aiAnalysis.schemaV2 as any;
 
         // ── Strategy 1: Legacy biddingItems (text-based, from older analyses) ──
-        if (biddingItems && biddingItems.trim().length >= 10) {
+        // Minimum 200 chars — real bid items have descriptions, quantities, units
+        // Below 200 chars is likely observacoes_proposta garbage, skip to Strategy 2/3
+        const hasRealBiddingItems = biddingItems && biddingItems.trim().length >= 200;
+        if (hasRealBiddingItems) {
             console.log(`[AI Populate] Using legacy biddingItems (${biddingItems.length} chars)`);
 
             const prompt = `Você é um especialista em licitações brasileiras. Analise os ITENS LICITADOS abaixo e extraia uma lista estruturada para uma proposta de preços.
