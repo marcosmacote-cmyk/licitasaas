@@ -161,12 +161,21 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
 
         penalidades.forEach((p: any) => {
             const text = typeof p === 'string' ? p : (p.descricao || p.description || safeText(p));
+            // Normalize accents for robust keyword matching
             const lower = text.toLowerCase();
-            if (lower.includes('multa') || lower.includes('percentual') || lower.includes('%')) {
+            const normalized = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            if (lower.includes('multa') || lower.includes('percentual') || normalized.includes('%')) {
                 result.multas.push(text);
-            } else if (lower.includes('suspensão') || lower.includes('impedimento') || lower.includes('declaração de inidoneidade') || lower.includes('sanç') || lower.includes('advertência')) {
+            } else if (
+                normalized.includes('advertencia') ||
+                normalized.includes('suspensao') || lower.includes('suspensão') ||
+                normalized.includes('impedimento de licitar') || lower.includes('impedimento') ||
+                normalized.includes('inidoneidade') ||
+                normalized.includes('proibicao') || lower.includes('proibição') ||
+                normalized.includes('sancao') || normalized.includes('sancoes') || lower.includes('sanç')
+            ) {
                 result.sancoes.push(text);
-            } else if (lower.includes('rescis') || lower.includes('resolução') || lower.includes('extinção') || lower.includes('efeito')) {
+            } else if (normalized.includes('rescis') || normalized.includes('resolucao') || lower.includes('resolução') || normalized.includes('extincao') || lower.includes('extinção') || lower.includes('efeito')) {
                 result.rescisao.push(text);
             } else {
                 result.outros.push(text);
@@ -334,13 +343,21 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         }
         if (pc.exige_visita_tecnica) items.push({ label: 'Visita Técnica', value: pc.visita_tecnica_detalhes || 'Obrigatória', type: 'warning', sourceRef: findSourceRef('visita técnica', 'visita tecnica') });
         if (pc.exige_garantia_proposta) items.push({ label: 'Garantia de Proposta', value: pc.garantia_proposta_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia de proposta', 'garantia da proposta') });
-        if (pc.exige_garantia_contratual) items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia contratual', 'garantia de execução', 'garantia de contrato') });
+        if (pc.exige_garantia_contratual) {
+            let garantiaRef = findSourceRef('garantia contratual', 'garantia de execução', 'garantia de contrato', 'seguro-garantia', 'caução');
+            // Extra: parse garantia_contratual_detalhes for inline source ref
+            if (!garantiaRef && pc.garantia_contratual_detalhes) {
+                const refMatch = (pc.garantia_contratual_detalhes as string).match(/(item|seção|art\.|cláusula|edital)\s*,?\s*[\d.]+/i);
+                if (refMatch) garantiaRef = `Edital, ${refMatch[0]}`;
+            }
+            items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning', sourceRef: garantiaRef });
+        }
         if (pc.exige_amostra) items.push({ label: 'Amostra', value: pc.amostra_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('amostra') });
         if (pc.tratamento_me_epp) items.push({ label: 'ME/EPP', value: pc.tratamento_me_epp, type: 'info', sourceRef: findSourceRef('me/epp', 'microempresa', 'pequeno porte', 'benefício') });
         if (pc.participacao_restrita) {
             // Split participação restrita into individual vedações
             const participacaoText = pc.participacao_restrita as string;
-            const vedacoes = participacaoText.split(/[;\n]/).map((v: string) => v.trim()).filter((v: string) => v.length > 5);
+            const vedacoes = participacaoText.split(/[;\n•\-]/).map((v: string) => v.replace(/^\d+[\.\)]\s*/, '').trim()).filter((v: string) => v.length > 5);
             const participacaoRef = findSourceRef('participação restrita', 'exclusivo', 'restrita', 'vedação', 'impedido', 'não poderão');
             if (vedacoes.length > 1) {
                 vedacoes.forEach((vedacao: string, idx: number) => {

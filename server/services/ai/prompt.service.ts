@@ -533,10 +533,10 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "permite_consorcio": null, "consorcio_detalhes": "",
     "permite_subcontratacao": null, "subcontratacao_detalhes": "limite ou condições + fonte do edital (ex: item 5.2)",
     "exige_visita_tecnica": null, "visita_tecnica_detalhes": "",
-    "exige_garantia_proposta": null, "garantia_proposta_detalhes": "",
-    "exige_garantia_contratual": null, "garantia_contratual_detalhes": "",
+    "exige_garantia_proposta": null, "garantia_proposta_detalhes": "valor/percentual + fonte do edital (ex: 1% do valor estimado, conforme item 10.3)",
+    "exige_garantia_contratual": null, "garantia_contratual_detalhes": "percentual + modalidades + fonte do edital (ex: 5% do valor do contrato, conforme item 15.1)",
     "exige_amostra": null, "amostra_detalhes": "",
-    "tratamento_me_epp": "", "participacao_restrita": "",
+    "tratamento_me_epp": "", "participacao_restrita": "listar vedações separadas por ponto-e-vírgula (ex: Empresas suspensas; Em recuperação judicial sem plano aprovado; Consórcios)",
     "outras_condicoes": []
   },
   "technical_analysis": {
