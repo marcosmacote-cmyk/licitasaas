@@ -31,5 +31,10 @@ export { LetterDataNormalizer } from './LetterDataNormalizer';
 // Wizard (UI)
 export { ProposalLetterWizard } from './ProposalLetterWizard';
 
+// Renderer & Exporter
+export { LetterRenderer } from './LetterRenderer';
+export { LetterPdfExporter } from './LetterPdfExporter';
+export type { PdfExportOptions } from './LetterPdfExporter';
+
 // Utils
 export { numberToWords, currencyToWords } from './utils/numberToWords';

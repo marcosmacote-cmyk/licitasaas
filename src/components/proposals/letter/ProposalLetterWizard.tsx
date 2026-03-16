@@ -18,6 +18,7 @@ import { LetterBlockType } from './types';
 import { LetterDataNormalizer } from './LetterDataNormalizer';
 import { ProposalLetterBuilder } from './ProposalLetterBuilder';
 import { ProposalLetterValidator } from './ProposalLetterValidator';
+import { LetterPdfExporter } from './LetterPdfExporter';
 import type { AiLetterBlocksResponse } from './types';
 import { API_BASE_URL } from '../../../config';
 
@@ -56,6 +57,7 @@ interface ProposalLetterWizardProps {
     handleSaveLetter: () => void;
     handlePrintProposal: (type: 'FULL' | 'LETTER' | 'SPREADSHEET') => void;
     isSaving: boolean;
+    printLandscape?: boolean;
 }
 
 const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
@@ -214,6 +216,24 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
     // ── Export ──
     const handleExport = () => {
+        // If we have structured letterResult, use the new exporter
+        if (letterResult) {
+            const exporter = new LetterPdfExporter();
+            exporter.export({
+                result: letterResult,
+                data: normalizedData,
+                items: props.items,
+                mode: selectedExportMode,
+                headerImage: props.headerImage,
+                footerImage: props.footerImage,
+                headerImageHeight: props.headerImageHeight,
+                footerImageHeight: props.footerImageHeight,
+                printLandscape: props.printLandscape,
+            });
+            return;
+        }
+
+        // Fallback to legacy exporter
         if (selectedExportMode === 'LETTER' || selectedExportMode === 'LETTER_WITH_SUMMARY' || selectedExportMode === 'LETTER_ANALYTICAL') {
             props.handlePrintProposal('LETTER');
         } else if (selectedExportMode === 'SPREADSHEET') {
