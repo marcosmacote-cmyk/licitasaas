@@ -786,8 +786,12 @@ ATENÇÃO REFORÇADA:
 9. DOCUMENTE AUSENÇAS: se uma categoria de habilitação não tiver exigências, anote no evidence_registry: 'categoria X não identificada no edital'.
 
 AUTOCONFERÊNCIA ANTES DE RESPONDER:
-→ RFT tem os 5-7 documentos fiscais individuais (CND Federal, Estadual, Municipal, FGTS, CNDT)?
-→ HJ tem ato constitutivo, CNPJ e demais docs societários?
+→ RFT tem CNPJ como item separado? (OBRIGATÓRIO — nunca omitir)
+→ RFT tem inscrição estadual + inscrição municipal? (se exigidos)
+→ RFT tem os 5-8 documentos fiscais individuais (CNPJ, CND Federal, Estadual, Municipal, FGTS, CNDT)?
+→ HJ tem ato constitutivo e demais docs societários?
+→ QTP: cada parcela relevante do profissional é item PRINCIPAL separado (não subitem genérico)?
+→ QTO: cada parcela relevante da empresa é item principal com quantitativo literal?
 → Há ao menos 1 EV por exigência principal?
 → Quantitativos técnicos estão com valor exato e fonte?
 
@@ -842,6 +846,12 @@ Cada item DEVE receber um entry_type:
    Exemplo CORRETO: 1 card "Certidões de regularidade fiscal" (exigencia_principal) com 3 subitens.
    EXCEÇÃO FISCAL: certidões de esferas/órgãos DISTINTOS (Federal, Estadual, Municipal, FGTS, CNDT) jamais devem ser consolidadas.
    Cada uma é uma exigência autônoma com consequência legal independente. Mantenha separadas mesmo que o edital as liste no mesmo item.
+   ITENS QUE NUNCA DEVEM SER REMOVIDOS OU CONSOLIDADOS na normalização:
+     • CNPJ (prova de inscrição)
+     • Inscrição estadual no cadastro de contribuintes
+     • Inscrição municipal no cadastro de contribuintes
+     • CND Federal, CND Estadual, CND Municipal, FGTS, CNDT
+   Se algum desses itens chegou da extração, PRESERVE como exigencia_principal.
 9. Se duas entradas têm títulos semanticamente idênticos (ex: "CND Federal" e "Certidão Negativa de Débitos Federais"), UNIFIQUE na que tiver melhor descrição.
 10. Observações sobre prazo de validade, forma de apresentação ou exceções NÃO devem gerar cards separados — devem ser subitens ou observações do card principal.
 11. Se o edital lista "alíneas" (a, b, c...) de um mesmo item fiscal, crie 1 principal + subitens; mas se as alíneas são certidões de esferas distintas, mantenha como exigências principais separadas.
@@ -850,6 +860,10 @@ Cada item DEVE receber um entry_type:
 14. Se reclassificar um item para outra categoria (ex: garantia de DC→QEF), EXCLUA o item desta categoria e retorne os demais. O item será processado na categoria correta.
 15. TODO subitem e observação DEVE preservar source_ref do pai ou ter source_ref próprio. NUNCA null/vazio em nenhum nível hierárquico.
 16. obligation_type="condicional" SOMENTE quando o edital contém explicitamente condição suspensiva. NÃO infira condicionalidade. Na dúvida: "obrigatoria_universal".
+17. QTO/QTP ANTI-CONSOLIDAÇÃO: se a extração trouxe parcelas relevantes como itens separados, MANTENHA separados na normalização.
+    → Cada parcela com quantitativo mínimo é exigencia_principal, não subitem.
+    → NUNCA consolide "Atestado parcela A (5.000m²)" + "Atestado parcela B (500m²)" em 1 card genérico "Atestados".
+    → Preserve descriptions longas e literais para QTO/QTP — não truncar na normalização.
 
 ── RASTREABILIDADE OBRIGATÓRIA (source_ref) ──
 

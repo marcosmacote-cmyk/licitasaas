@@ -1558,6 +1558,47 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             v2Result.contractual_analysis = extractionJson.contractual_analysis;
         if (extractionJson.evidence_registry)
             v2Result.evidence_registry = extractionJson.evidence_registry;
+        // ── MANDATORY RFT COMPLETENESS INJECTION ──
+        // The AI model consistently omits "obvious" fiscal documents (CNPJ, inscrições).
+        // This server-side safety net ensures they're always present.
+        const rftItems = Array.isArray(extractionJson.requirements?.regularidade_fiscal_trabalhista)
+            ? extractionJson.requirements.regularidade_fiscal_trabalhista
+            : [];
+        const rftTexts = rftItems.map((r) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join(' ');
+        // Find an existing source_ref from RFT items to reuse
+        const existingRftSourceRef = rftItems.find((r) => r.source_ref && r.source_ref !== 'referência não localizada')?.source_ref || 'Edital, seção de habilitação';
+        const mandatoryRftDocs = [
+            {
+                keywords: ['cnpj', 'cadastro nacional'],
+                item: { requirement_id: 'RFT-CNPJ', title: 'Prova de inscrição no CNPJ', description: 'Comprovação de inscrição e situação cadastral no Cadastro Nacional da Pessoa Jurídica (CNPJ)', obligation_type: 'obrigatoria_universal', phase: 'habilitacao', applies_to: 'licitante', risk_if_missing: 'inabilitacao', source_ref: existingRftSourceRef, entry_type: 'exigencia_principal' }
+            },
+            {
+                keywords: ['inscrição estadual', 'inscricao estadual', 'cadastro estadual'],
+                item: { requirement_id: 'RFT-IE', title: 'Inscrição estadual no cadastro de contribuintes', description: 'Prova de inscrição no cadastro de contribuintes estadual, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade', obligation_type: 'se_aplicavel', phase: 'habilitacao', applies_to: 'licitante', risk_if_missing: 'inabilitacao', source_ref: existingRftSourceRef, entry_type: 'exigencia_principal' }
+            },
+            {
+                keywords: ['inscrição municipal', 'inscricao municipal', 'cadastro municipal'],
+                item: { requirement_id: 'RFT-IM', title: 'Inscrição municipal no cadastro de contribuintes', description: 'Prova de inscrição no cadastro de contribuintes municipal, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade', obligation_type: 'se_aplicavel', phase: 'habilitacao', applies_to: 'licitante', risk_if_missing: 'inabilitacao', source_ref: existingRftSourceRef, entry_type: 'exigencia_principal' }
+            },
+        ];
+        let injectedCount = 0;
+        for (const doc of mandatoryRftDocs) {
+            const alreadyExists = doc.keywords.some(kw => rftTexts.includes(kw));
+            if (!alreadyExists) {
+                // CNPJ is always mandatory; inscrições only if edital has habilitação section
+                const isCnpj = doc.item.requirement_id === 'RFT-CNPJ';
+                const hasHabilitacao = rftItems.length > 0; // If there are ANY RFT items, habilitação exists
+                if (isCnpj || hasHabilitacao) {
+                    rftItems.push(doc.item);
+                    injectedCount++;
+                }
+            }
+        }
+        if (injectedCount > 0) {
+            extractionJson.requirements.regularidade_fiscal_trabalhista = rftItems;
+            v2Result.requirements.regularidade_fiscal_trabalhista = rftItems;
+            console.log(`[PNCP-V2] 🔧 RFT completude: +${injectedCount} doc(s) injetado(s) (CNPJ/inscrições omitidos pela IA)`);
+        }
         // ── HARD FAILURE GATE: Check extraction quality ──
         const extractedReqs = Object.values(extractionJson.requirements || {}).flat().length;
         const extractedEvidence = (extractionJson.evidence_registry || []).length;
