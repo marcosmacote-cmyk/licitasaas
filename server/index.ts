@@ -1352,10 +1352,14 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             'modelo_recibo', 'modelo recibo', 'modelo_declarac', 'modelo declarac',
             'modelo_ata', 'modelo ata', 'modelo_contrato', 'modelo_carta',
             'carta_fian', 'carta fian',
-            // Publicações / Atas
+            // Publicações / Atas / Avisos
             'aviso_publicac', 'aviso publicac', 'aviso_licitac',
+            'aviso_de_licit', 'aviso de licit', 'aviso_licit',
+            'quadro_de_aviso', 'quadro de aviso',
+            'd.o.u', 'diario_oficial', 'diario oficial',
             'retificac', 'errata', 'ata_sessao', 'ata_da_sessao',
             'comprovante', 'recibo_garantia', 'modelo_recibo_garantia',
+            'minuta_contrato', 'minuta contrato', 'minuta_de_contrato',
             // Projetos de engenharia / plantas / memoriais (não contribuem para habilitação)
             'projeto_arq', 'projeto arq', 'planta_', 'planta ',
             'memorial_descritivo', 'memorial descritivo',
