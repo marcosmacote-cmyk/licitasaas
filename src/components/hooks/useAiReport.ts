@@ -153,19 +153,39 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         return safeText(analysis?.fullSummary) || '';
     }, [v2, analysis?.fullSummary]);
 
-    // Penalties: from V2 contractual or legacy
+    // Penalties: structured into multas, sancoes, rescisao
+    const penaltiesStructured = useMemo(() => {
+        const result = { multas: [] as string[], sancoes: [] as string[], rescisao: [] as string[], outros: [] as string[] };
+        const penalidades = v2?.contractual_analysis?.penalidades || [];
+        if (penalidades.length === 0) return result;
+
+        penalidades.forEach((p: any) => {
+            const text = typeof p === 'string' ? p : (p.descricao || p.description || safeText(p));
+            const lower = text.toLowerCase();
+            if (lower.includes('multa') || lower.includes('percentual') || lower.includes('%')) {
+                result.multas.push(text);
+            } else if (lower.includes('suspensão') || lower.includes('impedimento') || lower.includes('declaração de inidoneidade') || lower.includes('sanç') || lower.includes('advertência')) {
+                result.sancoes.push(text);
+            } else if (lower.includes('rescis') || lower.includes('resolução') || lower.includes('extinção') || lower.includes('efeito')) {
+                result.rescisao.push(text);
+            } else {
+                result.outros.push(text);
+            }
+        });
+        return result;
+    }, [v2]);
+
     const penaltiesText = useMemo(() => {
-        if (v2?.contractual_analysis?.penalidades?.length > 0) {
-            return v2.contractual_analysis.penalidades.map((p: any) => {
-                if (typeof p === 'string') return `• ${p}`;
-                // Handle object: {tipo, descricao, percentual, etc.}
-                return `• ${safeText(p)}`;
-            }).join('\n');
-        }
+        const parts: string[] = [];
+        if (penaltiesStructured.multas.length > 0) parts.push(...penaltiesStructured.multas.map(m => `• ${m}`));
+        if (penaltiesStructured.sancoes.length > 0) parts.push(...penaltiesStructured.sancoes.map(s => `• ${s}`));
+        if (penaltiesStructured.rescisao.length > 0) parts.push(...penaltiesStructured.rescisao.map(r => `• ${r}`));
+        if (penaltiesStructured.outros.length > 0) parts.push(...penaltiesStructured.outros.map(o => `• ${o}`));
+        if (parts.length > 0) return parts.join('\n');
         const legacy = analysis?.penalties;
         if (legacy === null || legacy === undefined) return '';
         return safeText(legacy);
-    }, [v2, analysis?.penalties]);
+    }, [penaltiesStructured, analysis?.penalties]);
 
     // Pricing: from V2 economic + contractual or legacy
     const financialText = useMemo(() => {
@@ -194,7 +214,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         return safeText(analysis?.pricingConsiderations) || '';
     }, [v2, analysis?.pricingConsiderations]);
 
-    // Deadlines: from V2 timeline or legacy
+    // Deadlines: from V2 timeline or legacy — WITH DEDUP
     const deadlineList = useMemo(() => {
         if (v2?.timeline) {
             const tl = v2.timeline;
@@ -204,7 +224,6 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             if (tl.prazo_esclarecimento) items.push(`❓ ${tl.prazo_esclarecimento} — Esclarecimento`);
             if (tl.prazo_envio_proposta) items.push(`📄 ${tl.prazo_envio_proposta} — Envio de Proposta`);
             if (tl.prazo_envio_habilitacao) items.push(`📋 ${tl.prazo_envio_habilitacao} — Envio Habilitação`);
-            // Conditional deadlines: depend on future events, not fixed dates
             const isDatePattern = /^\d{2}\/\d{2}\/\d{4}/;
             if (tl.prazo_recurso) {
                 const isFixed = isDatePattern.test(tl.prazo_recurso);
@@ -225,7 +244,15 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
                     if (p.descricao) items.push(`• ${p.data || ''} — ${p.descricao}`);
                 });
             }
-            if (items.length > 0) return items;
+            // Deduplicate: normalize by removing emojis and extra whitespace, keep first occurrence
+            const seen = new Set<string>();
+            const deduped = items.filter(item => {
+                const normalized = item.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                if (seen.has(normalized)) return false;
+                seen.add(normalized);
+                return true;
+            });
+            if (deduped.length > 0) return deduped;
         }
         return parseArray(analysis?.deadlines);
     }, [v2, analysis?.deadlines]);
@@ -310,7 +337,19 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         if (pc.exige_garantia_contratual) items.push({ label: 'Garantia Contratual', value: pc.garantia_contratual_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('garantia contratual', 'garantia de execução', 'garantia de contrato') });
         if (pc.exige_amostra) items.push({ label: 'Amostra', value: pc.amostra_detalhes || 'Exigida', type: 'warning', sourceRef: findSourceRef('amostra') });
         if (pc.tratamento_me_epp) items.push({ label: 'ME/EPP', value: pc.tratamento_me_epp, type: 'info', sourceRef: findSourceRef('me/epp', 'microempresa', 'pequeno porte', 'benefício') });
-        if (pc.participacao_restrita) items.push({ label: 'Participação', value: pc.participacao_restrita, type: 'warning', sourceRef: findSourceRef('participação restrita', 'exclusivo', 'restrita') });
+        if (pc.participacao_restrita) {
+            // Split participação restrita into individual vedações
+            const participacaoText = pc.participacao_restrita as string;
+            const vedacoes = participacaoText.split(/[;\n]/).map((v: string) => v.trim()).filter((v: string) => v.length > 5);
+            const participacaoRef = findSourceRef('participação restrita', 'exclusivo', 'restrita', 'vedação', 'impedido', 'não poderão');
+            if (vedacoes.length > 1) {
+                vedacoes.forEach((vedacao: string, idx: number) => {
+                    items.push({ label: `Vedação ${idx + 1}`, value: vedacao, type: 'warning', sourceRef: idx === 0 ? participacaoRef : '' });
+                });
+            } else {
+                items.push({ label: 'Participação', value: participacaoText, type: 'warning', sourceRef: participacaoRef });
+            }
+        }
         return items;
     }, [v2]);
 
@@ -502,6 +541,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         processMetadata,
         technicalOpinion,
         penaltiesText,
+        penaltiesStructured,
         financialText,
         deadlineList,
         flagList,

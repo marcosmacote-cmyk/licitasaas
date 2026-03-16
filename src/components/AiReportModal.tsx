@@ -624,15 +624,67 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         </div>
                                     )}
 
-                                    {/* Penalties */}
+                                    {/* Penalties — structured blocks */}
                                     {hasPenalties && (
                                         <div className="report-metrics-card" style={{ background: 'var(--color-urgency-bg)', border: '1px solid var(--color-urgency-border)' }}>
                                             <div style={{ color: 'var(--color-urgency)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
                                                 <ShieldAlert size={18} /> <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)' }}>Penalidades</span>
                                             </div>
-                                            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-urgency)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                                {report.penaltiesText}
-                                            </p>
+                                            {(() => {
+                                                const ps = report.penaltiesStructured;
+                                                const hasStructured = ps && (ps.multas.length > 0 || ps.sancoes.length > 0 || ps.rescisao.length > 0);
+                                                if (!hasStructured) {
+                                                    return (
+                                                        <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-urgency)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                                                            {report.penaltiesText}
+                                                        </p>
+                                                    );
+                                                }
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                                        {ps.multas.length > 0 && (
+                                                            <div>
+                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>💰 Multas</div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    {ps.multas.map((m: string, i: number) => (
+                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {m}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {ps.sancoes.length > 0 && (
+                                                            <div>
+                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>⛔ Sanções Administrativas</div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    {ps.sancoes.map((s: string, i: number) => (
+                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {s}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {ps.rescisao.length > 0 && (
+                                                            <div>
+                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>📋 Rescisão / Efeitos</div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    {ps.rescisao.map((r: string, i: number) => (
+                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {r}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {ps.outros.length > 0 && (
+                                                            <div>
+                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>📎 Outras</div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    {ps.outros.map((o: string, i: number) => (
+                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {o}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     )}
 
