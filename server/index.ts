@@ -1557,6 +1557,17 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
         // ═══════════════════════════════════════════════════════════════════════
+        
+        // ── MODEL CONFIGURATION ──
+        // Each pipeline stage uses the optimal model for its task
+        const PIPELINE_MODELS = {
+            extraction: 'gemini-2.5-flash',       // Etapa 1: PDF parsing (multimodal, keeps proven model)
+            reExtraction: 'gemini-2.5-flash',     // Re-extraction fallback  
+            normalization: 'gemini-2.5-flash-lite', // Etapa 2: text-only JSON→JSON (fast, cheap)
+            riskReview: 'gemini-2.5-flash-lite',    // Etapa 3: text-only risk analysis (fast, cheap)
+        };
+        console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} | E3=${PIPELINE_MODELS.riskReview}`);
+
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
@@ -1595,7 +1606,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         try {
             const extractionResponse = await callGeminiWithRetry(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: PIPELINE_MODELS.extraction,
                 contents: [{
                     role: 'user',
                     parts: [
@@ -1616,7 +1627,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             extractionJson = parseResult1.data;
             if (parseResult1.repaired) pipelineHealth.parseRepairs++;
             v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
-            modelsUsed.push('gemini-2.5-flash');
+            modelsUsed.push(PIPELINE_MODELS.extraction);
             stageTimes.extraction = (Date.now() - t1Start) / 1000;
             console.log(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         } catch (err: any) {
@@ -1819,7 +1830,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 // Use only the first PDF (edital) for re-extraction — reduces context size
                 const editalPdf = pdfParts[0];
                 const reExtractionResponse = await callGeminiWithRetry(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: PIPELINE_MODELS.reExtraction,
                     contents: [{
                         role: 'user',
                         parts: [
@@ -1946,7 +1957,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
 
                         try {
                             const resp = await callGeminiWithRetry(ai.models, {
-                                model: 'gemini-2.5-flash',
+                                model: PIPELINE_MODELS.normalization,
                                 contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
                                 config: {
                                     systemInstruction: systemPrompt,
@@ -2037,7 +2048,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     }
                 };
 
-                return { json, model: 'gemini-2.5-flash', repaired: hadRepair, fallback: usedFallback };
+                return { json, model: PIPELINE_MODELS.normalization, repaired: hadRepair, fallback: usedFallback };
             })(),
 
             // ── Stage 3: Risk Review ──
@@ -2049,7 +2060,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
                 try {
                     const riskResponse = await callGeminiWithRetry(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: PIPELINE_MODELS.riskReview,
                         contents: [{ role: 'user', parts: [{ text: riskUserInstruction }] }],
                         config: {
                             systemInstruction: V2_RISK_REVIEW_PROMPT,
@@ -2064,7 +2075,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     const json = parseR.data;
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
                     console.log(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
-                    return { json, model: 'gemini-2.5-flash', repaired: parseR.repaired, fallback: false };
+                    return { json, model: PIPELINE_MODELS.riskReview, repaired: parseR.repaired, fallback: false };
                 } catch (err: any) {
                     console.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
                     const openAiResult = await fallbackToOpenAiV2({
