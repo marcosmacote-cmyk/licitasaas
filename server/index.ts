@@ -1707,6 +1707,10 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         if (extractionJson.contractual_analysis) v2Result.contractual_analysis = extractionJson.contractual_analysis;
         if (extractionJson.evidence_registry) v2Result.evidence_registry = extractionJson.evidence_registry;
 
+        // Diagnostic: check itens_licitados extraction
+        const extractedItens = v2Result.proposal_analysis?.itens_licitados || [];
+        console.log(`[PNCP-V2] 📋 itens_licitados: ${Array.isArray(extractedItens) ? extractedItens.length : 0} itens extraídos pela Etapa 1`);
+
         // ── MANDATORY RFT COMPLETENESS INJECTION ──
         // The AI model consistently omits "obvious" fiscal documents (CNPJ, inscrições).
         // This server-side safety net ensures they're always present.
