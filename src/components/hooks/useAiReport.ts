@@ -153,28 +153,33 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         return safeText(analysis?.fullSummary) || '';
     }, [v2, analysis?.fullSummary]);
 
-    // Penalties: structured into multas, sancoes, rescisao
+    // Penalties: 5 ordered legal categories
     const penaltiesStructured = useMemo(() => {
-        const result = { multas: [] as string[], sancoes: [] as string[], rescisao: [] as string[], outros: [] as string[] };
+        const result = {
+            advertencia: [] as string[],
+            multas: [] as string[],
+            impedimento: [] as string[],
+            inidoneidade: [] as string[],
+            rescisao: [] as string[],
+            outros: [] as string[]
+        };
         const penalidades = v2?.contractual_analysis?.penalidades || [];
         if (penalidades.length === 0) return result;
 
         penalidades.forEach((p: any) => {
             const text = typeof p === 'string' ? p : (p.descricao || p.description || safeText(p));
-            // Normalize accents for robust keyword matching
             const lower = text.toLowerCase();
             const normalized = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            if (lower.includes('multa') || lower.includes('percentual') || normalized.includes('%')) {
+
+            // Order matters: most specific first
+            if (normalized.includes('advertencia')) {
+                result.advertencia.push(text);
+            } else if (lower.includes('multa') || lower.includes('percentual') || normalized.includes('%')) {
                 result.multas.push(text);
-            } else if (
-                normalized.includes('advertencia') ||
-                normalized.includes('suspensao') || lower.includes('suspensão') ||
-                normalized.includes('impedimento de licitar') || lower.includes('impedimento') ||
-                normalized.includes('inidoneidade') ||
-                normalized.includes('proibicao') || lower.includes('proibição') ||
-                normalized.includes('sancao') || normalized.includes('sancoes') || lower.includes('sanç')
-            ) {
-                result.sancoes.push(text);
+            } else if (normalized.includes('impedimento') || normalized.includes('suspensao') || lower.includes('suspensão') || normalized.includes('proibicao') || lower.includes('proibição')) {
+                result.impedimento.push(text);
+            } else if (normalized.includes('inidoneidade')) {
+                result.inidoneidade.push(text);
             } else if (normalized.includes('rescis') || normalized.includes('resolucao') || lower.includes('resolução') || normalized.includes('extincao') || lower.includes('extinção') || lower.includes('efeito')) {
                 result.rescisao.push(text);
             } else {
@@ -186,8 +191,10 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
 
     const penaltiesText = useMemo(() => {
         const parts: string[] = [];
+        if (penaltiesStructured.advertencia.length > 0) parts.push(...penaltiesStructured.advertencia.map(a => `• ${a}`));
         if (penaltiesStructured.multas.length > 0) parts.push(...penaltiesStructured.multas.map(m => `• ${m}`));
-        if (penaltiesStructured.sancoes.length > 0) parts.push(...penaltiesStructured.sancoes.map(s => `• ${s}`));
+        if (penaltiesStructured.impedimento.length > 0) parts.push(...penaltiesStructured.impedimento.map(i => `• ${i}`));
+        if (penaltiesStructured.inidoneidade.length > 0) parts.push(...penaltiesStructured.inidoneidade.map(i => `• ${i}`));
         if (penaltiesStructured.rescisao.length > 0) parts.push(...penaltiesStructured.rescisao.map(r => `• ${r}`));
         if (penaltiesStructured.outros.length > 0) parts.push(...penaltiesStructured.outros.map(o => `• ${o}`));
         if (parts.length > 0) return parts.join('\n');
@@ -223,62 +230,51 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         return safeText(analysis?.pricingConsiderations) || '';
     }, [v2, analysis?.pricingConsiderations]);
 
-    // Deadlines: split into critical (always visible) + secondary (expandable)
-    const { criticalDeadlines, secondaryDeadlines, deadlineList } = useMemo(() => {
-        const critical: string[] = [];
-        const secondary: string[] = [];
-
+    // Deadlines: single flat list, ALL visible, with dedup
+    const deadlineList = useMemo(() => {
         if (v2?.timeline) {
             const tl = v2.timeline;
-            // Critical: marcos obrigatórios
-            if (tl.data_sessao) critical.push(`📅 ${tl.data_sessao} — Sessão Pública`);
-            if (tl.prazo_impugnacao) critical.push(`⚖️ ${tl.prazo_impugnacao} — Impugnação`);
-            if (tl.prazo_esclarecimento) critical.push(`❓ ${tl.prazo_esclarecimento} — Esclarecimento`);
-            if (tl.prazo_envio_proposta) critical.push(`📄 ${tl.prazo_envio_proposta} — Envio de Proposta`);
-            if (tl.prazo_envio_habilitacao) critical.push(`📋 ${tl.prazo_envio_habilitacao} — Envio Habilitação`);
-
-            // Secondary: prazos condicionados ou contratuais
+            const items: string[] = [];
+            // Marcos críticos licitatórios
+            if (tl.data_sessao) items.push(`📅 ${tl.data_sessao} — Sessão Pública`);
+            if (tl.prazo_impugnacao) items.push(`⚖️ ${tl.prazo_impugnacao} — Impugnação`);
+            if (tl.prazo_esclarecimento) items.push(`❓ ${tl.prazo_esclarecimento} — Esclarecimento`);
+            if (tl.prazo_envio_proposta) items.push(`📄 ${tl.prazo_envio_proposta} — Envio de Proposta`);
+            if (tl.prazo_envio_habilitacao) items.push(`📋 ${tl.prazo_envio_habilitacao} — Envio Habilitação`);
+            // Prazos processuais
             const isDatePattern = /^\d{2}\/\d{2}\/\d{4}/;
             if (tl.prazo_recurso) {
                 const isFixed = isDatePattern.test(tl.prazo_recurso);
-                secondary.push(isFixed
+                items.push(isFixed
                     ? `📝 ${tl.prazo_recurso} — Prazo Recursal`
-                    : `📝 Prazo Recursal: ${tl.prazo_recurso} (condicionado à intimação)`);
+                    : `📝 Prazo Recursal: ${tl.prazo_recurso}`);
             }
             if (tl.prazo_contrarrazoes) {
                 const isFixed = isDatePattern.test(tl.prazo_contrarrazoes);
-                secondary.push(isFixed
+                items.push(isFixed
                     ? `📝 ${tl.prazo_contrarrazoes} — Contrarrazões`
-                    : `📝 Contrarrazões: ${tl.prazo_contrarrazoes} (condicionado a recurso)`);
+                    : `📝 Contrarrazões: ${tl.prazo_contrarrazoes}`);
             }
-            if (v2.contractual_analysis?.prazo_execucao) secondary.push(`🔧 Prazo de Execução: ${v2.contractual_analysis.prazo_execucao}`);
-            if (v2.contractual_analysis?.prazo_vigencia) secondary.push(`📆 Vigência: ${v2.contractual_analysis.prazo_vigencia}`);
+            // Prazos contratuais
+            if (v2.contractual_analysis?.prazo_execucao) items.push(`🔧 Execução: ${v2.contractual_analysis.prazo_execucao}`);
+            if (v2.contractual_analysis?.prazo_vigencia) items.push(`📆 Vigência: ${v2.contractual_analysis.prazo_vigencia}`);
+            // Outros prazos
             if (tl.outros_prazos?.length > 0) {
                 tl.outros_prazos.forEach((p: any) => {
-                    if (p.descricao) secondary.push(`• ${p.data || ''} — ${p.descricao}`);
+                    if (p.descricao) items.push(`• ${p.data || ''} — ${p.descricao}`);
                 });
             }
-
-            // Dedup helper
-            const dedup = (list: string[]) => {
-                const seen = new Set<string>();
-                return list.filter(item => {
-                    const normalized = item.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
-                    if (seen.has(normalized)) return false;
-                    seen.add(normalized);
-                    return true;
-                });
-            };
-
-            return {
-                criticalDeadlines: dedup(critical),
-                secondaryDeadlines: dedup(secondary),
-                deadlineList: dedup([...critical, ...secondary])
-            };
+            // Dedup
+            const seen = new Set<string>();
+            const deduped = items.filter(item => {
+                const normalized = item.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                if (seen.has(normalized)) return false;
+                seen.add(normalized);
+                return true;
+            });
+            if (deduped.length > 0) return deduped;
         }
-
-        const legacy = parseArray(analysis?.deadlines);
-        return { criticalDeadlines: legacy, secondaryDeadlines: [], deadlineList: legacy };
+        return parseArray(analysis?.deadlines);
     }, [v2, analysis?.deadlines]);
 
     // Risk flags: from V2 critical points or legacy
@@ -576,8 +572,6 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         penaltiesStructured,
         financialText,
         deadlineList,
-        criticalDeadlines,
-        secondaryDeadlines,
         flagList,
         conditions,
         pipelineMeta,

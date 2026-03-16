@@ -85,11 +85,10 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
     const [expandedChildren, setExpandedChildren] = useState<Record<string, boolean>>({});
     const toggleChildren = (key: string) => setExpandedChildren(prev => ({ ...prev, [key]: !prev[key] }));
-    const [showSecondaryDeadlines, setShowSecondaryDeadlines] = useState(false);
 
     const hasRequirements = Object.keys(report.categorizedDocs).length > 0;
     const hasRisks = report.flagList.length > 0;
-    const hasDeadlines = report.criticalDeadlines.length > 0 || report.secondaryDeadlines.length > 0;
+    const hasDeadlines = report.deadlineList.length > 0;
     const hasFinancial = report.hasContent(report.financialText);
     const hasPenalties = report.hasContent(report.penaltiesText);
     const hasItems = report.hasContent(report.biddingItemsText);
@@ -648,48 +647,23 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         </div>
                                     )}
 
-                                    {/* Deadlines — critical always visible, secondary expandable */}
+                                    {/* Deadlines — all marcos visible */}
                                     {hasDeadlines && (
                                         <div className="report-metrics-card" style={{ background: 'var(--color-primary-light)', border: '1px solid var(--color-primary-border)' }}>
                                             <div style={{ color: 'var(--color-primary-hover)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
                                                 <Calendar size={18} /> <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)' }}>Cronograma</span>
                                             </div>
-                                            {/* Critical deadlines — always visible */}
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                {report.criticalDeadlines.map((dl: string, i: number) => (
+                                                {report.deadlineList.map((dl: string, i: number) => (
                                                     <div key={i} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
                                                         <span style={{ fontSize: '0.8rem', color: 'var(--color-primary-hover)', lineHeight: 1.5 }}>{dl}</span>
                                                     </div>
                                                 ))}
                                             </div>
-                                            {/* Secondary deadlines — expandable */}
-                                            {report.secondaryDeadlines.length > 0 && (
-                                                <>
-                                                    <button
-                                                        onClick={() => setShowSecondaryDeadlines(!showSecondaryDeadlines)}
-                                                        style={{
-                                                            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
-                                                            fontSize: '0.72rem', color: 'var(--color-primary)', fontWeight: 600,
-                                                            display: 'flex', alignItems: 'center', gap: '4px', marginTop: 'var(--space-2)'
-                                                        }}
-                                                    >
-                                                        {showSecondaryDeadlines ? '▾' : '▸'} {report.secondaryDeadlines.length} prazo(s) complementar(es)
-                                                    </button>
-                                                    {showSecondaryDeadlines && (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', marginTop: '4px', paddingLeft: '8px', borderLeft: '2px solid var(--color-primary-border)' }}>
-                                                            {report.secondaryDeadlines.map((dl: string, i: number) => (
-                                                                <div key={i} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
-                                                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>{dl}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
                                         </div>
                                     )}
 
-                                    {/* Penalties — structured blocks */}
+                                    {/* Penalties — 5 legal categories */}
                                     {hasPenalties && (
                                         <div className="report-metrics-card" style={{ background: 'var(--color-urgency-bg)', border: '1px solid var(--color-urgency-border)' }}>
                                             <div style={{ color: 'var(--color-urgency)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
@@ -697,7 +671,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                             </div>
                                             {(() => {
                                                 const ps = report.penaltiesStructured;
-                                                const hasStructured = ps && (ps.multas.length > 0 || ps.sancoes.length > 0 || ps.rescisao.length > 0);
+                                                const hasStructured = ps && (ps.advertencia.length > 0 || ps.multas.length > 0 || ps.impedimento.length > 0 || ps.inidoneidade.length > 0 || ps.rescisao.length > 0);
                                                 if (!hasStructured) {
                                                     return (
                                                         <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-urgency)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
@@ -705,44 +679,66 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                                         </p>
                                                     );
                                                 }
+                                                const blockStyle = { fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase' as const, color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' };
+                                                const itemStyle = { margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 };
                                                 return (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                                                        {ps.multas.length > 0 && (
+                                                        {ps.advertencia.length > 0 && (
                                                             <div>
-                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>💰 Multas</div>
+                                                                <div style={blockStyle}>⚠️ Advertência</div>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                    {ps.multas.map((m: string, i: number) => (
-                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {m}</p>
+                                                                    {ps.advertencia.map((a: string, i: number) => (
+                                                                        <p key={i} style={itemStyle}>• {a}</p>
                                                                     ))}
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        {ps.sancoes.length > 0 && (
+                                                        {ps.multas.length > 0 && (
                                                             <div>
-                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>⛔ Sanções Administrativas</div>
+                                                                <div style={blockStyle}>💰 Multas</div>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                    {ps.sancoes.map((s: string, i: number) => (
-                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {s}</p>
+                                                                    {ps.multas.map((m: string, i: number) => (
+                                                                        <p key={i} style={itemStyle}>• {m}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {ps.impedimento.length > 0 && (
+                                                            <div>
+                                                                <div style={blockStyle}>⛔ Impedimento de Licitar e Contratar</div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    {ps.impedimento.map((imp: string, i: number) => (
+                                                                        <p key={i} style={itemStyle}>• {imp}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {ps.inidoneidade.length > 0 && (
+                                                            <div>
+                                                                <div style={blockStyle}>🛑 Declaração de Inidoneidade</div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                    {ps.inidoneidade.map((ind: string, i: number) => (
+                                                                        <p key={i} style={itemStyle}>• {ind}</p>
                                                                     ))}
                                                                 </div>
                                                             </div>
                                                         )}
                                                         {ps.rescisao.length > 0 && (
                                                             <div>
-                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>📋 Rescisão / Efeitos</div>
+                                                                <div style={blockStyle}>📋 Rescisão Contratual</div>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                                     {ps.rescisao.map((r: string, i: number) => (
-                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {r}</p>
+                                                                        <p key={i} style={itemStyle}>• {r}</p>
                                                                     ))}
                                                                 </div>
                                                             </div>
                                                         )}
                                                         {ps.outros.length > 0 && (
                                                             <div>
-                                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-urgency)', opacity: 0.8, marginBottom: '4px' }}>📎 Outras</div>
+                                                                <div style={blockStyle}>📎 Outras</div>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                                     {ps.outros.map((o: string, i: number) => (
-                                                                        <p key={i} style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-urgency)', lineHeight: 1.4 }}>• {o}</p>
+                                                                        <p key={i} style={itemStyle}>• {o}</p>
                                                                     ))}
                                                                 </div>
                                                             </div>
