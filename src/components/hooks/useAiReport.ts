@@ -419,8 +419,15 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         };
     }, [v2, analysis]);
 
-    // Items: from V2 proposal or legacy
     const biddingItemsText = useMemo(() => {
+        // V2: structured items from itens_licitados
+        const itens = v2?.proposal_analysis?.itens_licitados;
+        if (Array.isArray(itens) && itens.length > 0) {
+            return itens.map((it: any) =>
+                `Item ${it.itemNumber || '?'}: ${it.description || ''} | ${it.unit || 'UN'} × ${it.quantity || 1}${it.multiplier && it.multiplier > 1 ? ` × ${it.multiplier} ${it.multiplierLabel || ''}` : ''} | Ref: R$ ${(it.referencePrice || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            ).join('\n');
+        }
+        // V2: observacoes_proposta (observations only)
         if (v2?.proposal_analysis?.observacoes_proposta?.length > 0) {
             return v2.proposal_analysis.observacoes_proposta.map((o: any) => {
                 if (typeof o === 'string') return `• ${o}`;
@@ -431,6 +438,13 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         if (legacy === null || legacy === undefined) return '';
         return safeText(legacy);
     }, [v2, analysis?.biddingItems]);
+
+    // Structured items for collapsible table in report
+    const itensLicitados = useMemo(() => {
+        const itens = v2?.proposal_analysis?.itens_licitados;
+        if (Array.isArray(itens) && itens.length > 0) return itens;
+        return [];
+    }, [v2]);
 
     // Qualification: from V2 requirements or legacy
     const qualificationText = useMemo(() => {
@@ -593,6 +607,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
         conditions,
         pipelineMeta,
         biddingItemsText,
+        itensLicitados,
         qualificationText,
         // Helpers
         safeText,

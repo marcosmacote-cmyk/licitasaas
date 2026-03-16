@@ -174,6 +174,7 @@ export interface ProposalAnalysis {
   criterios_exequibilidade: string[];
   criterios_desempate: string[];
   observacoes_proposta: string[];
+  itens_licitados: Array<{ itemNumber: string; description: string; unit: string; quantity: number; referencePrice: number; multiplier?: number; multiplierLabel?: string }>;
 }
 
 export interface ContractualAnalysis {
@@ -329,6 +330,7 @@ export function createEmptyAnalysisSchema(): AnalysisSchemaV1 {
       exige_marca_modelo_fabricante: null, exige_catalogo_ficha_tecnica_manual: null,
       exige_declaracao_fabricante: null, criterios_desclassificacao_proposta: [],
       criterios_exequibilidade: [], criterios_desempate: [], observacoes_proposta: [],
+      itens_licitados: [],
     },
     contractual_analysis: {
       prazo_execucao: '', prazo_vigencia: '', reajuste: '', repactuacao: '',

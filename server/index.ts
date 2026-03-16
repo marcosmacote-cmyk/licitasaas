@@ -2407,7 +2407,17 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 .flat()
                 .map(r => `[${r.requirement_id}] ${r.title}: ${r.description}`)
                 .join('\n'),
-            biddingItems: (v2Result.proposal_analysis.observacoes_proposta || []).join('\n')
+            biddingItems: (() => {
+                // Primary: structured items from itens_licitados (V2 pipeline extraction)
+                const itens = v2Result.proposal_analysis?.itens_licitados || [];
+                if (Array.isArray(itens) && itens.length > 0) {
+                    return itens.map((it: any) => 
+                        `Item ${it.itemNumber || '?'}: ${it.description || ''} | Unid: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1}${it.multiplier && it.multiplier > 1 ? ` × ${it.multiplier} ${it.multiplierLabel || ''}` : ''} | Ref: R$ ${it.referencePrice || 0}`
+                    ).join('\n');
+                }
+                // Fallback: observacoes_proposta (legacy, but usually short/useless)
+                return (v2Result.proposal_analysis.observacoes_proposta || []).join('\n');
+            })()
         };
 
         // Embed pncpSource inside schemaV2 so it's persisted in the DB
@@ -3037,6 +3047,23 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req: any, res) 
         const biddingItems = bidding.aiAnalysis.biddingItems || '';
         const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
         const schemaV2 = bidding.aiAnalysis.schemaV2 as any;
+
+        // ── Strategy 0: Structured items from V2 analysis (FASTEST — no AI call needed) ──
+        const itensLicitados = schemaV2?.proposal_analysis?.itens_licitados;
+        if (Array.isArray(itensLicitados) && itensLicitados.length > 0) {
+            console.log(`[AI Populate] ✅ Strategy 0: Using ${itensLicitados.length} pre-extracted items from schemaV2`);
+            // Normalize items format
+            const items = itensLicitados.map((it: any, idx: number) => ({
+                itemNumber: it.itemNumber || String(idx + 1),
+                description: it.description || '',
+                unit: it.unit || 'UN',
+                quantity: it.quantity || 1,
+                multiplier: it.multiplier || 1,
+                multiplierLabel: it.multiplierLabel || '',
+                referencePrice: it.referencePrice || 0,
+            }));
+            return res.json({ items, totalItems: items.length, source: 'schemaV2_itens_licitados' });
+        }
 
         // ── Strategy 1: Legacy biddingItems (text-based, from older analyses) ──
         // Minimum 200 chars — real bid items have descriptions, quantities, units
@@ -4403,7 +4430,15 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
                     .flat()
                     .map(r => `[${r.requirement_id}] ${r.title}: ${r.description}`)
                     .join('\n'),
-                biddingItems: result.proposal_analysis.observacoes_proposta.join('\n'),
+                biddingItems: (() => {
+                    const itens = result.proposal_analysis?.itens_licitados || [];
+                    if (Array.isArray(itens) && itens.length > 0) {
+                        return itens.map((it: any) => 
+                            `Item ${it.itemNumber || '?'}: ${it.description || ''} | Unid: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1}${it.multiplier && it.multiplier > 1 ? ` × ${it.multiplier} ${it.multiplierLabel || ''}` : ''} | Ref: R$ ${it.referencePrice || 0}`
+                        ).join('\n');
+                    }
+                    return (result.proposal_analysis.observacoes_proposta || []).join('\n');
+                })(),
                 pricingConsiderations: result.economic_financial_analysis.indices_exigidos
                     .map(i => `${i.indice}: ${i.formula_ou_descricao} (mín: ${i.valor_minimo})`)
                     .join('\n'),

@@ -433,17 +433,90 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                         </div>
                                     )}
 
-                                    {/* Bidding Items */}
-                                    {hasItems && (
-                                        <div className="report-card">
-                                            <h3 className="ai-section-header"><FileCheck size={18} /> Observações da Proposta</h3>
-                                            <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-                                                <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
-                                                    {report.biddingItemsText}
-                                                </p>
+                                    {/* Bidding Items — collapsible table for structured items */}
+                                    {hasItems && (() => {
+                                        const itens = report.itensLicitados;
+                                        const hasStructured = itens && itens.length > 0;
+                                        const showItems = expandedChildren['__itens_licitados__'] || false;
+                                        const totalRef = hasStructured ? itens.reduce((sum: number, it: any) => {
+                                            const qty = (it.quantity || 1) * (it.multiplier || 1);
+                                            return sum + qty * (it.referencePrice || 0);
+                                        }, 0) : 0;
+                                        return (
+                                            <div className="report-card">
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                                                     onClick={() => toggleChildren('__itens_licitados__')}>
+                                                    <h3 className="ai-section-header" style={{ margin: 0 }}>
+                                                        <FileCheck size={18} /> {hasStructured ? `Itens Licitados (${itens.length})` : 'Observações da Proposta'}
+                                                        {hasStructured && totalRef > 0 && (
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-success)', marginLeft: '8px' }}>
+                                                                Ref: {totalRef.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                            </span>
+                                                        )}
+                                                    </h3>
+                                                    <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                                                        {showItems ? '▲ Recolher' : '▼ Expandir'}
+                                                    </span>
+                                                </div>
+                                                {showItems && (
+                                                    hasStructured ? (
+                                                        <div style={{ marginTop: 'var(--space-3)', overflowX: 'auto' }}>
+                                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                                                <thead>
+                                                                    <tr style={{ background: 'var(--color-bg-secondary)', borderBottom: '2px solid var(--color-border)' }}>
+                                                                        <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, width: '50px' }}>Item</th>
+                                                                        <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 700 }}>Descrição</th>
+                                                                        <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, width: '50px' }}>Unid</th>
+                                                                        <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, width: '55px' }}>Qtd</th>
+                                                                        <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, width: '55px' }}>Mult.</th>
+                                                                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, width: '100px' }}>Ref. Unit.</th>
+                                                                        <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, width: '110px' }}>Ref. Total</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {itens.map((it: any, i: number) => {
+                                                                        const qty = (it.quantity || 1) * (it.multiplier || 1);
+                                                                        const total = qty * (it.referencePrice || 0);
+                                                                        return (
+                                                                            <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                                                                <td style={{ padding: '5px 8px', textAlign: 'center', fontWeight: 600, color: 'var(--color-primary)' }}>{it.itemNumber || i + 1}</td>
+                                                                                <td style={{ padding: '5px 8px', color: 'var(--color-text-secondary)', lineHeight: 1.3 }}>{it.description}</td>
+                                                                                <td style={{ padding: '5px 8px', textAlign: 'center' }}>{it.unit || 'UN'}</td>
+                                                                                <td style={{ padding: '5px 8px', textAlign: 'center' }}>{(it.quantity || 1).toLocaleString('pt-BR')}</td>
+                                                                                <td style={{ padding: '5px 8px', textAlign: 'center', color: it.multiplier > 1 ? 'var(--color-primary)' : 'var(--color-text-tertiary)' }}>
+                                                                                    {it.multiplier > 1 ? `${it.multiplier} ${it.multiplierLabel || ''}`.trim() : '1'}
+                                                                                </td>
+                                                                                <td style={{ padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                                                    {it.referencePrice ? (it.referencePrice as number).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                                                                </td>
+                                                                                <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                                                                    {total > 0 ? total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                                <tfoot>
+                                                                    <tr style={{ borderTop: '2px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}>
+                                                                        <td colSpan={6} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>TOTAL ESTIMADO</td>
+                                                                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: 'var(--color-success-hover)' }}>
+                                                                            {totalRef.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                        </td>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', marginTop: 'var(--space-3)' }}>
+                                                            <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
+                                                                {report.biddingItemsText}
+                                                            </p>
+                                                        </div>
+                                                    )
+                                                )}
                                             </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
 
                                     {/* Technical Qualification */}
                                     {/* Qualificação Técnica — removed: duplicates QTO/QTP cards in Habilitação Requerida */}

@@ -589,6 +589,20 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     Se alguma categoria estiver VAZIA mas o edital a exigir, RE-EXTRAI antes de responder.
     Se genuinamente não exigida, deixe vazia e anote em evidence_registry: 'categoria {X} não identificada no edital'.
 
+34. EXTRAÇÃO DE ITENS LICITADOS (itens_licitados) — OBRIGATÓRIO:
+    Extraia TODOS os itens/lotes com preço do edital, TR, planilha orçamentária ou qualquer tabela que contenha itens com quantidades e valores.
+    Para CADA item extraia: número do item (itemNumber), descrição técnica COMPLETA (description), unidade de medida (unit), quantidade (quantity), valor unitário de referência/estimado (referencePrice).
+    Se o edital especifica um período (ex: 12 meses de serviço mensal), use multiplier e multiplierLabel.
+    FONTES PRIORITÁRIAS: Planilha orçamentária (Anexo) > Tabela de itens no TR > Corpo do edital.
+    Se NÃO encontrar itens com preços (ex: edital sem planilha e sem tabela de itens), retorne array vazio.
+    NUNCA invente itens. Extraia APENAS o que está documentado.
+
+35. QUALIDADE DOS ITENS:
+    - description: transcreva INTEGRALMENTE a descrição do item, NÃO resuma
+    - unit: use abreviaturas padrão (UN, KG, M², M³, ML, MÊS, HORA, DIA, etc.)
+    - referencePrice: valor numérico SEM texto (ex: 15000.00, não "R$ 15.000,00")
+    - Se a planilha contém sub-itens (composição de custos), extraia apenas os itens PRINCIPAIS (totalizadores)
+
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
   "process_identification": {
@@ -648,7 +662,8 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "exige_marca_modelo_fabricante": null, "exige_catalogo_ficha_tecnica_manual": null,
     "exige_declaracao_fabricante": null,
     "criterios_desclassificacao_proposta": [], "criterios_exequibilidade": [],
-    "criterios_desempate": [], "observacoes_proposta": []
+    "criterios_desempate": [], "observacoes_proposta": [],
+    "itens_licitados": [{"itemNumber": "1", "description": "Descrição técnica COMPLETA do item conforme edital/TR/planilha", "unit": "UN|KG|M²|M³|ML|MÊS|HORA|DIA|DIÁRIA|KM|LITRO|CJ|VB|SV", "quantity": 1, "referencePrice": 0.00, "multiplier": 1, "multiplierLabel": ""}]
   },
   "contractual_analysis": {
     "prazo_execucao": "", "prazo_vigencia": "", "reajuste": "", "repactuacao": "",
