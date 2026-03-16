@@ -2410,6 +2410,15 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
             biddingItems: (v2Result.proposal_analysis.observacoes_proposta || []).join('\n')
         };
 
+        // Embed pncpSource inside schemaV2 so it's persisted in the DB
+        (v2Result as any).pncp_source = {
+            link_sistema,
+            downloaded_files: downloadedFiles,
+            discarded_files: discardedFiles,
+            attachments: pncpAttachments,
+            analyzed_at: new Date().toISOString()
+        };
+
         // Build final response with both V1 compat and V2 schema
         const finalPayload = {
             process: legacyProcess,
@@ -3016,19 +3025,19 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req: any, res) 
         if (!bidding) return res.status(404).json({ error: 'Bidding process not found' });
         if (!bidding.aiAnalysis) return res.status(400).json({ error: 'No AI analysis found for this bidding. Run the AI analysis first.' });
 
-        const biddingItems = bidding.aiAnalysis.biddingItems || '';
-        const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
-
-        if (!biddingItems || biddingItems.trim().length < 10) {
-            return res.status(400).json({ error: 'AI analysis has no bidding items to extract.' });
-        }
-
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
-
         const ai = new GoogleGenAI({ apiKey });
 
-        const prompt = `Você é um especialista em licitações brasileiras. Analise os ITENS LICITADOS abaixo e extraia uma lista estruturada para uma proposta de preços.
+        const biddingItems = bidding.aiAnalysis.biddingItems || '';
+        const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
+        const schemaV2 = bidding.aiAnalysis.schemaV2 as any;
+
+        // ── Strategy 1: Legacy biddingItems (text-based, from older analyses) ──
+        if (biddingItems && biddingItems.trim().length >= 10) {
+            console.log(`[AI Populate] Using legacy biddingItems (${biddingItems.length} chars)`);
+
+            const prompt = `Você é um especialista em licitações brasileiras. Analise os ITENS LICITADOS abaixo e extraia uma lista estruturada para uma proposta de preços.
 
 ITENS DO EDITAL:
 ${biddingItems}
@@ -3048,30 +3057,152 @@ REGRAS:
 Responda APENAS com um JSON array, sem markdown:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
 
-        console.log(`[AI Populate] Extracting items from bidding ${biddingProcessId}...`);
+            const result = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: { temperature: 0.05, maxOutputTokens: 8192 },
+            });
+
+            const responseText = result.text?.trim() || '';
+            let jsonStr = responseText;
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) jsonStr = jsonMatch[0];
+
+            let items: any[];
+            try { items = JSON.parse(jsonStr); }
+            catch { return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) }); }
+
+            console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
+            return res.json({ items, totalItems: items.length, source: 'legacy_biddingItems' });
+        }
+
+        // ── Strategy 2: Download planilhas from PNCP catalog (new analyses) ──
+        const pncpSource = schemaV2?.pncp_source;
+        const attachments = pncpSource?.attachments || [];
+        
+        // Find planilha/orçamento files in the catalog
+        const planilhaFiles = attachments.filter((a: any) => 
+            a.ativo && a.url && (
+                a.purpose === 'planilha_orcamentaria' || 
+                a.purpose === 'composicao_custos' ||
+                a.purpose === 'bdi_encargos' ||
+                // Also try generic annexes that might contain budget data
+                (a.purpose === 'anexo_geral' && !a.downloaded)
+            )
+        );
+
+        if (planilhaFiles.length === 0) {
+            return res.status(400).json({ 
+                error: 'Nenhuma planilha orçamentária encontrada. Este processo não possui itens de orçamento no edital nem planilhas anexas no PNCP.',
+                hint: 'Para obras de engenharia, as planilhas geralmente estão nos Anexos do edital.',
+                attachments_found: attachments.length,
+                attachments_purposes: [...new Set(attachments.map((a: any) => a.purpose))]
+            });
+        }
+
+        console.log(`[AI Populate] Found ${planilhaFiles.length} planilha candidates in PNCP catalog`);
+
+        // Download planilha PDFs on demand
+        const pdfParts: any[] = [];
+        const downloadedNames: string[] = [];
+        const agent = new (require('https').Agent)({ rejectUnauthorized: false });
+
+        for (const pf of planilhaFiles.slice(0, 5)) { // Max 5 files
+            try {
+                console.log(`[AI Populate] Downloading: "${pf.titulo}" (${pf.purpose}) from ${pf.url}`);
+                const fileRes = await axios.get(pf.url, {
+                    httpsAgent: agent,
+                    timeout: 60000,
+                    responseType: 'arraybuffer',
+                    maxRedirects: 5
+                } as any);
+
+                const buffer = Buffer.from(fileRes.data as ArrayBuffer);
+                if (buffer.length === 0) continue;
+
+                // Check if PDF
+                const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+                if (isPdf) {
+                    pdfParts.push({
+                        inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
+                    });
+                    downloadedNames.push(pf.titulo);
+                    console.log(`[AI Populate] ✅ PDF: ${pf.titulo} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                } else {
+                    console.log(`[AI Populate] ⚠️ Not a PDF: ${pf.titulo} — skipping`);
+                }
+            } catch (err: any) {
+                console.warn(`[AI Populate] ⚠️ Failed to download ${pf.titulo}: ${err.message}`);
+            }
+        }
+
+        if (pdfParts.length === 0) {
+            return res.status(400).json({ 
+                error: 'Não foi possível baixar nenhuma planilha do PNCP. Tente novamente ou adicione a planilha manualmente.',
+                attempted: planilhaFiles.map((p: any) => p.titulo)
+            });
+        }
+
+        // Extract items from planilha PDFs using Gemini multimodal
+        const extractPrompt = `Você é um especialista em licitações brasileiras de obras e serviços de engenharia.
+Analise a(s) planilha(s) orçamentária(s) abaixo e extraia TODOS os itens/serviços com seus dados.
+
+REGRAS:
+1. Extraia CADA serviço/item individualmente — NÃO agrupe
+2. Para cada item identifique: número, descrição técnica COMPLETA, unidade de medida, quantidade, preço unitário de referência
+3. Mantenha a hierarquia: Grupo/Subgrupo (se houver) como prefixo na descrição
+4. NÃO inclua subtotais, totais gerais, BDI ou encargos como itens — apenas serviços
+5. Se a quantidade ou unidade não estiver clara, use quantidade=1 e unidade="UN"
+6. Para valores monetários, use ponto como separador decimal (ex: 1234.56)
+7. Multiplier = 1 para itens de obra (não há recorrência mensal)
+
+${pricingInfo ? `INFORMAÇÕES ADICIONAIS DE PREÇO:\n${pricingInfo}\n` : ''}
+
+Responda APENAS com um JSON array válido:
+[{"itemNumber":"1.1","description":"Descrição completa do serviço incluindo grupo","unit":"M²","quantity":100,"multiplier":1,"multiplierLabel":"","referencePrice":45.67}]`;
+
+        console.log(`[AI Populate] Sending ${pdfParts.length} PDFs to Gemini for item extraction...`);
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: { temperature: 0.05, maxOutputTokens: 8192 },
+            contents: [{
+                role: 'user',
+                parts: [
+                    ...pdfParts,
+                    { text: extractPrompt }
+                ]
+            }],
+            config: { 
+                temperature: 0.05, 
+                maxOutputTokens: 65536,
+                responseMimeType: 'application/json'
+            }
         });
 
         const responseText = result.text?.trim() || '';
-        console.log(`[AI Populate] Response (first 300): ${responseText.substring(0, 300)}`);
-
-        let jsonStr = responseText;
-        const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) jsonStr = jsonMatch[0];
+        console.log(`[AI Populate] Response length: ${responseText.length} chars (first 300): ${responseText.substring(0, 300)}`);
 
         let items: any[];
         try {
-            items = JSON.parse(jsonStr);
+            const parsed = JSON.parse(responseText);
+            items = Array.isArray(parsed) ? parsed : (parsed.items || parsed.data || []);
         } catch {
-            console.error('[AI Populate] Failed to parse JSON');
-            return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) });
+            // Try regex extract
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                try { items = JSON.parse(jsonMatch[0]); }
+                catch { return res.status(500).json({ error: 'AI returned invalid JSON from planilha', raw: responseText.substring(0, 300) }); }
+            } else {
+                return res.status(500).json({ error: 'AI returned no extractable data from planilha' });
+            }
         }
 
-        console.log(`[AI Populate] Extracted ${items.length} items from edital`);
-        res.json({ items, totalItems: items.length });
+        console.log(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
+        res.json({ 
+            items, 
+            totalItems: items.length, 
+            source: 'pncp_planilha',
+            planilhas: downloadedNames
+        });
     } catch (error: any) {
         console.error('[AI Populate] Error:', error.message);
         res.status(500).json({ error: 'AI populate failed: ' + (error.message || 'Unknown') });
