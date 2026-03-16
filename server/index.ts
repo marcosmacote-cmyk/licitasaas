@@ -3094,17 +3094,21 @@ Responda APENAS com um JSON array, sem markdown:
                 a.purpose === 'planilha_orcamentaria' || 
                 a.purpose === 'composicao_custos' ||
                 a.purpose === 'bdi_encargos' ||
-                // Also try generic annexes that might contain budget data
-                (a.purpose === 'anexo_geral' && !a.downloaded)
+                a.purpose === 'anexo_geral'  // Include ALL annexes (downloaded or not)
             )
         );
+        
+        // Debug: log all attachment purposes to diagnose classification issues
+        if (attachments.length > 0) {
+            console.log(`[AI Populate] Catalog has ${attachments.length} attachments. Purposes: ${JSON.stringify(attachments.map((a: any) => ({ t: a.titulo?.substring(0, 40), p: a.purpose, d: a.downloaded })))}`);
+        }
 
         // ── Strategy 3: No catalog? Fetch attachments from PNCP API on the fly ──
         const pncpUrl = bidding.pncpLink || bidding.link || '';
         console.log(`[AI Populate] Strategy check: planilhaFiles=${planilhaFiles.length}, attachments=${attachments.length}, pncpUrl=${pncpUrl}, hasBiddingItems=${!!(biddingItems && biddingItems.trim().length >= 10)}`);
         
-        if (planilhaFiles.length === 0 && attachments.length === 0 && pncpUrl) {
-            console.log(`[AI Populate] No catalog found. Fetching attachments from PNCP using URL: ${pncpUrl}`);
+        if (planilhaFiles.length === 0 && pncpUrl) {
+            console.log(`[AI Populate] No planilha in catalog (${attachments.length} total attachments). Fetching from PNCP: ${pncpUrl}`);
             
             // Parse URL to extract CNPJ/ano/sequencial
             // Formats: .../editais/CNPJ/ANO/SEQ or .../orgaos/CNPJ/compras/ANO/SEQ
