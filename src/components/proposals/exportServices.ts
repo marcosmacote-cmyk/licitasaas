@@ -22,7 +22,7 @@ export function exportExcelProposal(biddingId: string, items: ProposalItem[], bd
             it.quantity,
             it.multiplier,
             it.unitCost,
-            { f: `${roundFormula}(H${rowIdx} * (1 + $M$1/100) * (1 - $O$1/100) * (1 - 0/100), 2)` }, // Note: Logic is handled in unitPrice calculation on backend/engine, but we represent it here. Actually, we should use the item's unitPrice directly or mirror the new logic.
+            { f: `${roundFormula}(H${rowIdx} * (1 + $M$1/100) * (1 - $O$1/100) * (1 - ${it.discountPercentage || 0}/100), 2)` }, // Uses item discount if set, plus linear discount
             { f: `ROUND(F${rowIdx} * G${rowIdx} * I${rowIdx}, 2)` },
             { f: `J${rowIdx} / $J$${items.length + 2}` }
         ];

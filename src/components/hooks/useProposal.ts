@@ -150,45 +150,57 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.items && data.items.length > 0) {
-                    if (proposal) {
-                        const itemsToSave = data.items.map((it: any) => {
-                            const rawItem = { ...it, unitCost: it.referencePrice || 0, multiplier: 1, quantity: it.quantity || 1 };
-                            const calc = calculateItem(rawItem, bdi, discount, roundingMode);
-                            return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
-                        });
-                        const saveRes = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
-                            method: 'POST', headers,
-                            body: JSON.stringify({ items: itemsToSave, replaceAll: true }),
-                        });
-                        if (saveRes.ok) {
-                            await loadProposals();
-                            showSaveMsg(`${data.items.length} itens extraídos pela IA!`);
-                        }
-                    } else {
-                        await handleCreateProposal();
-                        setTimeout(async () => {
-                            const latestRes = await fetch(`${API_BASE_URL}/api/proposals/${selectedBiddingId}`, { headers });
-                            if (latestRes.ok) {
-                                const latestData = await latestRes.json();
-                                if (latestData[0]) {
-                                    const itemsToSave = data.items.map((it: any) => {
-                                        const rawItem = { ...it, unitCost: it.referencePrice || 0, multiplier: 1, quantity: it.quantity || 1 };
-                                        const calc = calculateItem(rawItem, bdi, discount, roundingMode);
-                                        return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
-                                    });
-                                    await fetch(`${API_BASE_URL}/api/proposals/${latestData[0].id}/items`, {
-                                        method: 'POST', headers,
-                                        body: JSON.stringify({ items: itemsToSave, replaceAll: true }),
-                                    });
-                                    await loadProposals();
-                                    showSaveMsg(`${data.items.length} itens extraídos pela IA!`);
-                                }
-                            }
-                        }, 1000);
+
+                // F5: Validate AI items before saving
+                const validItems = (data.items || []).filter((it: any) => {
+                    if (!it.description || it.description.trim().length < 3) return false;
+                    if (typeof it.quantity === 'number' && it.quantity <= 0) return false;
+                    return true;
+                });
+
+                if (validItems.length === 0) {
+                    toast.warning('A IA não encontrou itens válidos neste edital.');
+                    return;
+                }
+
+                // F4: Preserve multiplier from AI; map referencePrice as unitCost (starting point)
+                const prepareItems = (items: any[]) => items.map((it: any) => {
+                    const rawItem = {
+                        ...it,
+                        unitCost: it.referencePrice || it.unitCost || 0,
+                        multiplier: it.multiplier || 1,           // F4: preserve AI multiplier
+                        multiplierLabel: it.multiplierLabel || '', // F4: preserve label
+                        quantity: it.quantity || 1,
+                        referencePrice: it.referencePrice || null,
+                    };
+                    const calc = calculateItem(rawItem, bdi, discount, roundingMode);
+                    return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
+                });
+
+                const saveItems = async (proposalId: string) => {
+                    const itemsToSave = prepareItems(validItems);
+                    const saveRes = await fetch(`${API_BASE_URL}/api/proposals/${proposalId}/items`, {
+                        method: 'POST', headers,
+                        body: JSON.stringify({ items: itemsToSave, replaceAll: true, roundingMode }),
+                    });
+                    if (saveRes.ok) {
+                        await loadProposals();
+                        const src = data.source === 'pncp_planilha' ? ' (via planilha PNCP)' : '';
+                        showSaveMsg(`${validItems.length} itens extraídos pela IA${src}!`);
                     }
+                };
+
+                if (proposal) {
+                    await saveItems(proposal.id);
                 } else {
-                    toast.warning('A IA não encontrou itens neste edital.');
+                    await handleCreateProposal();
+                    setTimeout(async () => {
+                        const latestRes = await fetch(`${API_BASE_URL}/api/proposals/${selectedBiddingId}`, { headers });
+                        if (latestRes.ok) {
+                            const latestData = await latestRes.json();
+                            if (latestData[0]) await saveItems(latestData[0].id);
+                        }
+                    }, 1000);
                 }
             } else {
                 const err = await res.json();

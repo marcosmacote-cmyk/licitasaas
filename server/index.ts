@@ -2867,13 +2867,19 @@ app.delete('/api/proposals/:id', authenticateToken, async (req: any, res) => {
 // POST add/replace items in bulk (used by AI populate and manual add)
 app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) => {
     try {
-        const { items, replaceAll } = req.body;
+        const { items, replaceAll, roundingMode: reqRoundingMode } = req.body;
         const proposalId = req.params.id;
 
         const existing = await prisma.priceProposal.findFirst({
             where: { id: proposalId, tenantId: req.user.tenantId },
         });
         if (!existing) return res.status(404).json({ error: 'Proposal not found' });
+
+        // F6: Respect rounding mode — from request, or from stored flag (socialCharges=1 means TRUNCATE)
+        const useRounding = reqRoundingMode || (existing.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
+        const roundFn = useRounding === 'TRUNCATE'
+            ? (v: number) => Math.floor(v * 100) / 100
+            : (v: number) => Math.round(v * 100) / 100;
 
         // Optionally clear existing items
         if (replaceAll) {
@@ -2889,13 +2895,12 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
             const itemDisc = item.discountPercentage ?? 0;
             const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
 
-            // Unit Price including BDI and then applying either Linear or Item Discount
-            // Formula: Price = Cost * (1 + BDI/100) * (1 - applicableDiscount/100)
-            const unitPrice = item.unitCost * (1 + bdi / 100) * (1 - applicableDiscount / 100);
+            const rawUnitPrice = (item.unitCost || 0) * (1 + bdi / 100) * (1 - applicableDiscount / 100);
+            const unitPrice = roundFn(rawUnitPrice);
 
-            // App-level default is 1 if not provided
             const multiplier = item.multiplier ?? 1;
-            const totalPrice = item.quantity * multiplier * unitPrice;
+            const rawTotalPrice = (item.quantity || 0) * multiplier * unitPrice;
+            const totalPrice = roundFn(rawTotalPrice);
 
             const dbItem = await prisma.proposalItem.create({
                 data: {
@@ -2907,8 +2912,8 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
                     multiplier: multiplier,
                     multiplierLabel: item.multiplierLabel || null,
                     unitCost: item.unitCost || 0,
-                    unitPrice: Math.round(unitPrice * 100) / 100,
-                    totalPrice: Math.round(totalPrice * 100) / 100,
+                    unitPrice,
+                    totalPrice,
                     referencePrice: item.referencePrice || null,
                     discountPercentage: itemDisc,
                     brand: item.brand || null,
@@ -2924,7 +2929,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
         const totalValue = allItems.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0);
         await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
 
-        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, total: R$ ${totalValue.toFixed(2)}`);
+        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}`);
         res.json({ items: created, totalValue });
     } catch (error: any) {
         console.error('[Proposals] POST items error:', error.message);
