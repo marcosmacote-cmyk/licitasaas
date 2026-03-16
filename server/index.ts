@@ -3092,12 +3092,16 @@ Responda APENAS com um JSON array, sem markdown:
         );
 
         // ── Strategy 3: No catalog? Fetch attachments from PNCP API on the fly ──
-        if (planilhaFiles.length === 0 && attachments.length === 0 && bidding.pncpLink) {
-            console.log(`[AI Populate] No catalog found. Fetching attachments from PNCP using pncpLink: ${bidding.pncpLink}`);
+        const pncpUrl = bidding.pncpLink || bidding.link || '';
+        console.log(`[AI Populate] Strategy check: planilhaFiles=${planilhaFiles.length}, attachments=${attachments.length}, pncpUrl=${pncpUrl}, hasBiddingItems=${!!(biddingItems && biddingItems.trim().length >= 10)}`);
+        
+        if (planilhaFiles.length === 0 && attachments.length === 0 && pncpUrl) {
+            console.log(`[AI Populate] No catalog found. Fetching attachments from PNCP using URL: ${pncpUrl}`);
             
-            // Parse pncpLink to extract CNPJ/ano/sequencial
-            // Format: https://pncp.gov.br/app/editais/CNPJ/ANO/SEQ
-            const pncpMatch = bidding.pncpLink.match(/editais\/([^/]+)\/(\d{4})\/(\d+)/);
+            // Parse URL to extract CNPJ/ano/sequencial
+            // Formats: .../editais/CNPJ/ANO/SEQ or .../orgaos/CNPJ/compras/ANO/SEQ
+            const pncpMatch = pncpUrl.match(/editais\/([^/]+)\/(\d{4})\/(\d+)/) || 
+                              pncpUrl.match(/orgaos\/([^/]+)\/compras\/(\d{4})\/(\d+)/);
             if (pncpMatch) {
                 const [, cnpj, ano, seq] = pncpMatch;
                 const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
