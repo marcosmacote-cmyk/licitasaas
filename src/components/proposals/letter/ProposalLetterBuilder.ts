@@ -114,14 +114,20 @@ export class ProposalLetterBuilder {
 
         if (ref.modalidade) parts.push(ref.modalidade);
         if (ref.numero) {
-            const numStr = ref.ano ? `${ref.numero}/${ref.ano}` : ref.numero;
+            // Strip any existing 'nº', 'Nº', 'N°' prefix to avoid duplication
+            const cleanNum = ref.numero.replace(/^n[º°]\s*/i, '').trim();
+            // Detect if number already contains year (e.g. '08.003/2026-CE')
+            const alreadyHasYear = /\/\d{4}/.test(cleanNum);
+            const numStr = (!alreadyHasYear && ref.ano) ? `${cleanNum}/${ref.ano}` : cleanNum;
             parts.push(`nº ${numStr}`);
         }
 
-        let content = 'Ref: ' + parts.join(' ');
+        let content = 'Ref.: ' + parts.join(' ');
 
         if (ref.processo) {
-            content += ` — Processo Administrativo nº ${ref.processo}`;
+            // Strip prefix from processo too
+            const cleanProc = ref.processo.replace(/^n[º°]\s*/i, '').trim();
+            content += ` — Processo Administrativo nº ${cleanProc}`;
         }
 
         return this.createBlock(LetterBlockType.REFERENCE, 'Referência do Processo',
@@ -151,12 +157,12 @@ export class ProposalLetterBuilder {
         if (this.overrides.has(LetterBlockType.OBJECT)) {
             content = this.overrides.get(LetterBlockType.OBJECT)!;
         } else if (aiContent) {
-            content = `vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${aiContent}`;
+            content = `Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${aiContent}`;
             isAi = true;
         } else if (editalContent) {
-            content = `vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${editalContent}`;
+            content = `Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${editalContent}`;
         } else {
-            content = 'vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o objeto descrito no Edital em referência.';
+            content = 'Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o objeto descrito no Edital em referência.';
         }
 
         return this.createBlock(LetterBlockType.OBJECT, 'Objeto',

@@ -38,10 +38,13 @@ export class TextSanitizer {
         // 3. Corrigir pontuação
         result = this.fixPunctuation(result);
 
-        // 4. Limpar labels órfãs (ex: "Local de execução: " sem valor)
+        // 4. Normalizar ALL CAPS em nomes de órgãos/instituições
+        result = this.normalizeAllCaps(result);
+
+        // 5. Limpar labels órfãs (ex: "Local de execução: " sem valor)
         result = this.removeOrphanLabels(result);
 
-        // 5. Normalizar capitalização de início de parágrafo
+        // 6. Normalizar capitalização de início de parágrafo
         result = this.normalizeCapitalization(result);
 
         return result.trim();
@@ -123,5 +126,35 @@ export class TextSanitizer {
     private normalizeCapitalization(text: string): string {
         // Após ponto final + espaço, garantir maiúscula
         return text.replace(/\.\s+([a-zà-ú])/g, (_, c) => '. ' + c.toUpperCase());
+    }
+
+    /**
+     * Converte ALL CAPS em nomes de órgãos/instituições para Title Case.
+     * Ex: "SECRETARIA DE EDUCAÇÃO" → "Secretaria de Educação"
+     * Preserva acronyms conhecidos (CNPJ, CPF, CEP, CREA, CAU, BDI, PIX, etc.)
+     */
+    private normalizeAllCaps(text: string): string {
+        const ACRONYMS = new Set([
+            'CNPJ', 'CPF', 'CEP', 'CREA', 'CAU', 'CRC', 'OAB', 'CRM',
+            'RG', 'IE', 'IM', 'BDI', 'PIX', 'LTDA', 'EIRELI', 'MEI',
+            'ME', 'EPP', 'SA', 'S/A', 'SLU', 'S.A',
+            'PNCP', 'TCU', 'TCE', 'CGU', 'STF', 'STJ',
+        ]);
+        const LOWERCASE_WORDS = new Set([
+            'de', 'da', 'do', 'das', 'dos', 'e', 'em', 'no', 'na',
+            'nos', 'nas', 'para', 'por', 'com', 'sem', 'sob', 'ao', 'à',
+            'pelo', 'pela', 'pelos', 'pelas', 'o', 'a', 'os', 'as', 'um', 'uma',
+        ]);
+
+        // Match sequences of 3+ ALL CAPS words (at least 2 chars each)
+        return text.replace(/\b([A-ZÀ-Ú]{2,}(?:\s+[A-ZÀ-Ú]{2,}){2,})\b/g, (match) => {
+            const words = match.split(/\s+/);
+            return words.map((word, i) => {
+                if (ACRONYMS.has(word)) return word;
+                if (i > 0 && LOWERCASE_WORDS.has(word.toLowerCase())) return word.toLowerCase();
+                // Title Case
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }).join(' ');
+        });
     }
 }
