@@ -3546,12 +3546,7 @@ REGRAS CRÍTICAS:
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 1024 },
                     });
-                    let content = result.text?.trim() || '';
-                    // Post-generation truncation guard
-                    if (content && content.length > 20 && !/[.;:!?)"\u201D]$/.test(content)) {
-                        console.warn(`[AI Letter Blocks] executionBlock appears truncated: "...${content.slice(-30)}"`);
-                        content += ' [verificar — texto possivelmente incompleto]';
-                    }
+                    const content = result.text?.trim() || '';
                     return { blockId: 'executionBlock', content, durationMs: Date.now() - tStart };
                 })());
             }
@@ -3591,12 +3586,7 @@ REGRAS CRÍTICAS:
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 2048 },
                     });
-                    let content = result.text?.trim() || '';
-                    // Post-generation truncation guard
-                    if (content && content.length > 20 && !/[.;:!?)"\u201D]$/.test(content)) {
-                        console.warn(`[AI Letter Blocks] commercialExtras appears truncated: "...${content.slice(-30)}"`);
-                        content += ' [verificar — texto possivelmente incompleto]';
-                    }
+                    const content = result.text?.trim() || '';
                     return { blockId: 'commercialExtras', content, durationMs: Date.now() - tStart };
                 })());
             }

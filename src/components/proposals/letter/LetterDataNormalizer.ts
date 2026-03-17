@@ -157,7 +157,7 @@ export class LetterDataNormalizer {
     ): ProposalLetterData['commercial'] {
         return {
             validityDays: input.validityDays || input.proposal.validityDays || 60,
-            paymentConditions: this.guardTruncation(contractConditions?.condicoes_pagamento) || undefined,
+            paymentConditions: contractConditions?.condicoes_pagamento?.trim() || undefined,
             warrantyPercentage: contractConditions?.garantia_percentual || undefined,
             readjustmentClause: contractConditions?.clausula_reajuste || undefined,
         };
@@ -165,9 +165,9 @@ export class LetterDataNormalizer {
 
     private normalizeExecution(contractConditions: any): ProposalLetterData['execution'] {
         return {
-            executionLocation: this.guardTruncation(contractConditions?.local_execucao) || undefined,
-            executionDeadline: this.guardTruncation(contractConditions?.prazo_execucao || contractConditions?.prazo_entrega) || undefined,
-            contractDuration: this.guardTruncation(contractConditions?.vigencia_contrato) || undefined,
+            executionLocation: contractConditions?.local_execucao?.trim() || undefined,
+            executionDeadline: (contractConditions?.prazo_execucao || contractConditions?.prazo_entrega)?.trim() || undefined,
+            contractDuration: contractConditions?.vigencia_contrato?.trim() || undefined,
         };
     }
 
@@ -203,26 +203,6 @@ export class LetterDataNormalizer {
                 role: 'Responsável Técnico',
             } : undefined,
         };
-    }
-
-    // ════════════════════════════════════════
-    // COMPLETENESS GUARDS
-    // ════════════════════════════════════════
-
-    /**
-     * Detects truncated text from schemaV2 fields.
-     * If text is > 30 chars and doesn't end with punctuation,
-     * appends a visible marker so the reviewer knows it's incomplete.
-     */
-    private guardTruncation(text?: string): string | undefined {
-        if (!text?.trim()) return undefined;
-        const trimmed = text.trim();
-        // Short fields (addresses, dates) often lack punctuation — skip
-        if (trimmed.length < 30) return trimmed;
-        // Check if it ends with expected punctuation
-        if (/[.;:!?)"\u201D]$/.test(trimmed)) return trimmed;
-        // Likely truncated
-        return trimmed + ' [dado incompleto — verificar no edital]';
     }
 
     // ════════════════════════════════════════

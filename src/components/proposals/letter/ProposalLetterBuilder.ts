@@ -115,12 +115,12 @@ export class ProposalLetterBuilder {
         const r = this.data.recipient;
         const title = r.title || 'Agente de Contratação / Pregoeiro(a)';
 
-        // Inclui o órgão na saudação: "Ao Ilmo(a). Sr(a). Pregoeiro(a) da Prefeitura..."
+        // Linha 1: Saudação formal
         let line = `Ao Ilmo(a). Sr(a). ${title}`;
+
+        // Linha 2: Órgão promovente (em linha separada)
         if (r.orgao) {
-            // Preposição adequada: "do", "da", "do(a)"
-            const prep = this.derivePreposition(r.orgao);
-            line += ` ${prep} ${r.orgao}`;
+            line += `\n${r.orgao}`;
         }
 
         return this.createBlock(LetterBlockType.RECIPIENT, 'Destinatário',
@@ -191,24 +191,27 @@ export class ProposalLetterBuilder {
 
     private buildCommercialDeclarationBlock(): LetterBlock {
         // ═══ APENAS declarações essenciais fixas ═══
-        // Condições de pagamento, reajuste, garantia contratual etc.
-        // NÃO pertencem à carta proposta — são cláusulas contratuais.
         const declarations: string[] = [];
 
-        // Declaração obrigatória — Inclusão de custos
+        // Declaração 1 — Inclusão de custos (versão reforçada, padrão licitatorial)
         declarations.push(
-            'Declaramos que nos preços propostos estão inclusos todos os custos diretos e indiretos, ' +
-            'tributos, taxas, fretes, encargos sociais, trabalhistas e previdenciários, seguros, lucro ' +
-            'e quaisquer outras despesas que incidam ou venham a incidir sobre o objeto desta licitação.'
+            'Que na elaboração da presente Proposta de Preços consideramos o seguinte: ' +
+            'nos preços unitários propostos para cada item estão inclusos todos os custos diretos e indiretos, ' +
+            'tais como: materiais, custo horário da utilização de equipamentos, mão de obra, encargos sociais, ' +
+            'trabalhistas, previdenciários e outros, impostos, tributos, emolumentos, taxas, alvarás, licenças ' +
+            'e outras despesas administrativas, transportes, cargas, descargas, seguros em geral, bem como ' +
+            'encargos decorrentes de fenômenos da natureza, da infortunística e de responsabilidade civil ' +
+            'para quaisquer danos e prejuízos causados à Contratante e/ou a terceiros, gerados direta ou ' +
+            'indiretamente pela execução das obras e/ou serviços, ou quaisquer outros custos.'
         );
 
-        // Declaração obrigatória — Ciência e concordância com o edital
+        // Declaração 2 — Ciência e concordância com o edital
         declarations.push(
             'Declaramos que tomamos conhecimento de todas as condições do Edital e seus anexos, ' +
             'concordando integralmente com os termos estabelecidos.'
         );
 
-        // Declaração obrigatória — Trabalho de menores (Lei 14.133/2021)
+        // Declaração 3 — Trabalho de menores (Lei 14.133/2021)
         declarations.push(
             'Declaramos que não empregamos menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, ' +
             'nem menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de ' +
@@ -235,22 +238,33 @@ export class ProposalLetterBuilder {
 
         const lines: string[] = [];
 
-        // Prazo de execução/fornecimento
-        if (isUseful(e.executionDeadline)) {
-            lines.push(`Prazo de execução/fornecimento: ${e.executionDeadline!.replace(/\s*\[.*\]\s*$/, '').trim()}.`);
+        // a) Prazo de vigência da contratação (com referência legal)
+        if (isUseful(e.contractDuration)) {
+            const duration = e.contractDuration!.replace(/\s*\[.*\]\s*$/, '').trim();
+            lines.push(
+                `O prazo de vigência da contratação é de ${duration}, ` +
+                `contados da assinatura do presente instrumento, na forma do art. 105 da Lei nº 14.133, de 2021.`
+            );
         }
 
-        // Local de execução
+        // b) Prazo de execução/fornecimento
+        if (isUseful(e.executionDeadline)) {
+            const deadline = e.executionDeadline!.replace(/\s*\[.*\]\s*$/, '').trim();
+            lines.push(`Prazo de execução/fornecimento: ${deadline}.`);
+        }
+
+        // c) Dinâmica de iníno da execução
+        lines.push(
+            'A execução do objeto será de forma imediata após a emissão da Ordem de Serviço/Fornecimento, ' +
+            'com a devida comunicação formal para esta empresa.'
+        );
+
+        // d) Local de execução
         if (isUseful(e.executionLocation)) {
             lines.push(`Local de execução: ${e.executionLocation!.replace(/\s*\[.*\]\s*$/, '').trim()}.`);
         }
 
-        // Vigência (se disponível)
-        if (isUseful(e.contractDuration)) {
-            lines.push(`Vigência do contrato: ${e.contractDuration!.replace(/\s*\[.*\]\s*$/, '').trim()}.`);
-        }
-
-        // Condições específicas da IA (filtradas pela blacklist)
+        // e) Condições específicas da IA (filtradas pela blacklist)
         const aiExtras = this.aiBlocks.get('commercialExtras');
         if (aiExtras?.trim()) {
             const filtered = this.filterProhibited(aiExtras.trim());
@@ -539,27 +553,5 @@ export class ProposalLetterBuilder {
             hash |= 0;
         }
         return Math.abs(hash).toString(36);
-    }
-
-    /**
-     * Derive preposition for organ name (da, do, de).
-     * Ex: "Prefeitura" → "da", "Município" → "do", "IFCE" → "do"
-     */
-    private derivePreposition(orgao: string): string {
-        const normalized = orgao.trim().toLowerCase();
-        // Femininos comuns
-        const femininos = ['prefeitura', 'secretaria', 'câmara', 'assembleia', 'fundação', 'agência', 'autarquia', 'companhia', 'empresa', 'universidade'];
-        for (const f of femininos) {
-            if (normalized.startsWith(f)) return 'da';
-        }
-        // Masculinos comuns
-        const masculinos = ['município', 'estado', 'governo', 'tribunal', 'ministério', 'instituto', 'conselho', 'departamento', 'serviço', 'centro'];
-        for (const m of masculinos) {
-            if (normalized.startsWith(m)) return 'do';
-        }
-        // Siglas (ex: IFCE, DNIT) → "do"
-        if (/^[A-Z]{2,}/.test(orgao.trim())) return 'do';
-        // Default
-        return 'do(a)';
     }
 }
