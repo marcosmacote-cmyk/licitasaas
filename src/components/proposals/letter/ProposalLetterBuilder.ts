@@ -118,10 +118,9 @@ export class ProposalLetterBuilder {
         // Linha 1: Saudação formal
         let line = `Ao Ilmo(a). Sr(a). ${title}`;
 
-        // Linha 2: Órgão promovente (em linha separada)
-        if (r.orgao) {
-            line += `\n${r.orgao}`;
-        }
+        // Linha 2: Órgão promovente (OBRIGATÓRIO — sempre presente)
+        const orgao = r.orgao?.trim() || '[Órgão Promovente da Licitação]';
+        line += `\n${orgao}`;
 
         return this.createBlock(LetterBlockType.RECIPIENT, 'Destinatário',
             this.resolve(LetterBlockType.RECIPIENT, line),

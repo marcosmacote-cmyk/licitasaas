@@ -79,14 +79,14 @@ export class LetterPdfExporter {
     <meta charset="UTF-8">
     <title>Proposta Comercial - ${data.company.razaoSocial}</title>
     <style>
-        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.5; font-size: 13px; margin: 0; padding: 0; }
+        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.4; font-size: 11.5px; margin: 0; padding: 0; }
         .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer .gen-info { font-size: 8px; color: #999; margin-top: 2px; }
-        .content-wrapper { padding: 15px 20px; }
-        .letter { margin-bottom: 25px; text-align: justify; font-size: 13px; line-height: 1.5; }
+        .content-wrapper { padding: 10px 15px; }
+        .letter { margin-bottom: 15px; text-align: justify; font-size: 11.5px; line-height: 1.4; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
         table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
         table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; }
@@ -96,14 +96,14 @@ export class LetterPdfExporter {
         .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
         .totals-clearfix { clear: both; height: 1px; }
-        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
-        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 12px; }
+        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 20px; }
+        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 11px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
         table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
         table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
         @media print {
-            body { font-size: 12px; }
+            body { font-size: 11px; }
             .content-wrapper { padding: 0; }
             @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: 0.8cm 1cm; }
         }
