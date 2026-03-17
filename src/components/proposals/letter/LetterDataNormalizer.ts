@@ -33,8 +33,10 @@ export class LetterDataNormalizer {
         const schemaV2 = analysis?.schemaV2 as any;
 
         // ── Extract structured data from V2 schema ──
+        // IMPORTANTE: Os nomes dos nós devem corresponder EXATAMENTE
+        // ao AnalysisSchemaV1 definido em analysis-schema-v1.ts
         const processId = schemaV2?.process_identification || {};
-        const contractConditions = schemaV2?.contract_conditions || {};
+        const contractual = schemaV2?.contractual_analysis || {};
         const proposalAnalysis = schemaV2?.proposal_analysis || {};
 
         return {
@@ -43,8 +45,8 @@ export class LetterDataNormalizer {
             company: this.normalizeCompany(company),
             object: this.normalizeObject(bidding, schemaV2),
             pricing: this.normalizePricing(items, totalValue, input),
-            commercial: this.normalizeCommercial(input, contractConditions, proposalAnalysis),
-            execution: this.normalizeExecution(contractConditions),
+            commercial: this.normalizeCommercial(input, contractual, proposalAnalysis),
+            execution: this.normalizeExecution(contractual, processId),
             banking: { /* Empty — user fills manually or from future company field */ },
             signature: this.normalizeSignature(company, input),
             meta: {
@@ -62,12 +64,21 @@ export class LetterDataNormalizer {
     // ════════════════════════════════════════
 
     private normalizeRecipient(bidding: BiddingProcess, schemaV2: any): ProposalLetterData['recipient'] {
-        // Campos corretos do schemaV2: orgao, unidade_compradora
+        // Campos corretos do AnalysisSchemaV1.ProcessIdentification:
+        //   orgao, unidade_compradora
         const pi = schemaV2?.process_identification || {};
-        const orgao = pi.orgao
-            || pi.unidade_compradora
-            || (bidding as any).organ
+        let orgao = (pi.orgao || '').trim()
+            || (pi.unidade_compradora || '').trim()
             || '';
+
+        // Fallback: extrair órgão do título do bidding
+        // Padrão legacyProcess: "Modalidade Nº - NomeDoÓrgão"
+        if (!orgao && bidding.title) {
+            const titleParts = bidding.title.split(' - ');
+            if (titleParts.length >= 2) {
+                orgao = titleParts.slice(1).join(' - ').trim();
+            }
+        }
 
         // Determine if "Pregoeiro" or "Agente de Contratação" based on modality
         const mod = (bidding.modality || '').toLowerCase();
@@ -114,17 +125,19 @@ export class LetterDataNormalizer {
     }
 
     private normalizeObject(bidding: BiddingProcess, schemaV2: any): ProposalLetterData['object'] {
-        // REGRA: Usar APENAS o objeto — sem resumo, sem análise
-        // Prioridade: objeto_resumido (curto) > objeto_completo > title
+        // REGRA: Usar o OBJETO da licitação — sem o resumo geral da análise.
+        // Campos do AnalysisSchemaV1.ProcessIdentification:
+        //   objeto_completo: "transcrição integral" (texto real do edital)
+        //   objeto_resumido: "até 150 caracteres" (título curto)
+        // Prioridade: objeto_completo > objeto_resumido > title do bidding
         const pi = schemaV2?.process_identification || {};
-        const v2Object = pi.objeto_resumido
-            || pi.objeto
-            || '';
+        const objCompleto = (pi.objeto_completo || '').trim();
+        const objResumido = (pi.objeto_resumido || '').trim();
 
         return {
-            fullDescription: v2Object || bidding.title || '',
-            shortDescription: bidding.title || '',
-            scope: schemaV2?.contract_conditions?.escopo_detalhado,
+            fullDescription: objCompleto || objResumido || bidding.title || '',
+            shortDescription: objResumido || bidding.title || '',
+            scope: schemaV2?.contractual_analysis?.prazo_execucao,
         };
     }
 
@@ -156,22 +169,33 @@ export class LetterDataNormalizer {
 
     private normalizeCommercial(
         input: NormalizerInput,
-        contractConditions: any,
+        contractual: any,
         _proposalAnalysis?: any
     ): ProposalLetterData['commercial'] {
+        // Campos corretos do AnalysisSchemaV1.ContractualAnalysis:
+        //   medicao_pagamento, reajuste, repactuacao, penalidades
+        // AnalysisSchemaV1.ParticipationConditions:
+        //   exige_garantia_contratual, garantia_contratual_detalhes
         return {
             validityDays: input.validityDays || input.proposal.validityDays || 60,
-            paymentConditions: contractConditions?.condicoes_pagamento?.trim() || undefined,
-            warrantyPercentage: contractConditions?.garantia_percentual || undefined,
-            readjustmentClause: contractConditions?.clausula_reajuste || undefined,
+            paymentConditions: (contractual?.medicao_pagamento || '').trim() || undefined,
+            warrantyPercentage: undefined, // Não é campo numérico no schema — vem como texto descritivo
+            readjustmentClause: (contractual?.reajuste || '').trim() || undefined,
         };
     }
 
-    private normalizeExecution(contractConditions: any): ProposalLetterData['execution'] {
+    private normalizeExecution(
+        contractual: any,
+        processId: any
+    ): ProposalLetterData['execution'] {
+        // Campos corretos do AnalysisSchemaV1.ContractualAnalysis:
+        //   prazo_execucao, prazo_vigencia
+        // AnalysisSchemaV1.ProcessIdentification:
+        //   municipio_uf (para local de execução)
         return {
-            executionLocation: contractConditions?.local_execucao?.trim() || undefined,
-            executionDeadline: (contractConditions?.prazo_execucao || contractConditions?.prazo_entrega)?.trim() || undefined,
-            contractDuration: contractConditions?.vigencia_contrato?.trim() || undefined,
+            executionLocation: (processId?.municipio_uf || '').trim() || undefined,
+            executionDeadline: (contractual?.prazo_execucao || '').trim() || undefined,
+            contractDuration: (contractual?.prazo_vigencia || '').trim() || undefined,
         };
     }
 
