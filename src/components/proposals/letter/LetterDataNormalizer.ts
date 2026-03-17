@@ -260,12 +260,23 @@ export class LetterDataNormalizer {
             ? `${locParts.join('/')}, ${dateStr}`
             : dateStr;
 
+        // Extrair nome e CPF (proteger contra CPF embutido no contactName)
+        let contactName = company.contactName || '';
+        let contactCpf = company.contactCpf || '';
+        if (contactName && /CPF/i.test(contactName)) {
+            const cpfInName = contactName.match(/CPF[:\s]*([0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2})/i);
+            if (cpfInName) {
+                if (!contactCpf) contactCpf = cpfInName[1];
+                contactName = contactName.replace(/\s*CPF[:\s]*[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}/i, '').trim();
+            }
+        }
+
         return {
             mode: (input.signatureMode || input.proposal.signatureMode || 'LEGAL') as 'LEGAL' | 'TECH' | 'BOTH',
             localDate,
             legalRepresentative: {
-                name: company.contactName || '',
-                cpf: company.contactCpf || '',
+                name: contactName,
+                cpf: contactCpf,
                 role: 'Representante Legal',
             },
             technicalRepresentative: company.technicalQualification ? {

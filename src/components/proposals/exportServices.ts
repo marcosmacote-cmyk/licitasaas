@@ -113,6 +113,15 @@ export function generateProposalPdf(
     let derivedContactName = company?.contactName || '';
     let derivedCpf = company?.contactCpf || '';
 
+    // Se o contactName contém CPF embutido, separar
+    if (derivedContactName && /CPF/i.test(derivedContactName)) {
+        const cpfInName = derivedContactName.match(/CPF[:\s]*([0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2})/i);
+        if (cpfInName) {
+            if (!derivedCpf) derivedCpf = cpfInName[1];
+            derivedContactName = derivedContactName.replace(/\s*CPF[:\s]*[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}/i, '').trim();
+        }
+    }
+
     if (company?.qualification) {
         const qual = company.qualification;
         if (!derivedCity) {
@@ -255,7 +264,7 @@ export function generateProposalPdf(
                         <strong>${derivedContactName || 'Representante Legal'}</strong><br/>
                         ${derivedCpf ? 'CPF: ' + derivedCpf + '<br/>' : ''}
                         Representante Legal<br/>
-                        ${company?.razaoSocial || ''}<br/>
+                        ${(company?.razaoSocial || '').toUpperCase()}<br/>
                         ${company?.cnpj ? 'CNPJ: ' + company.cnpj : ''}
                     </div>
                 ` : ''}
@@ -264,7 +273,7 @@ export function generateProposalPdf(
                         <div style="margin-bottom: 50px;"></div>
                         ___________________________________<br/>
                         <strong>Responsável Técnico</strong><br/>
-                        ${company?.razaoSocial || ''}<br/>
+                        ${(company?.razaoSocial || '').toUpperCase()}<br/>
                         ${company?.cnpj ? 'CNPJ: ' + company.cnpj : ''}
                     </div>
                 ` : ''}
