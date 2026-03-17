@@ -129,23 +129,35 @@ export class LetterDataNormalizer {
         // Campos do AnalysisSchemaV1.ProcessIdentification:
         //   objeto_completo: "transcrição integral" (texto real do edital)
         //   objeto_resumido: "até 150 caracteres" (título curto)
-        // Prioridade: objeto_completo > objeto_resumido > extraído do summary > title
         const pi = schemaV2?.process_identification || {};
         const objCompleto = (pi.objeto_completo || '').trim();
         const objResumido = (pi.objeto_resumido || '').trim();
 
         // Fallback: extrair objeto do bidding.summary
         // O summary legacyProcess começa com "{objeto_completo}\n\nModalidade:"
+        // IMPORTANTE: objeto_resumido pode conter apenas a referência do certame
+        // (ex: "Concorrência nº X - Órgão") e NÃO a descrição real do objeto.
+        // Por isso, SEMPRE tentamos extrair do summary quando objeto_completo está vazio.
         let summaryObject = '';
-        if (!objCompleto && !objResumido && bidding.summary) {
+        if (!objCompleto && bidding.summary) {
             const parts = bidding.summary.split(/\n\n(?=Modalidade:)/);
-            if (parts.length >= 2 && parts[0].trim().length > 20) {
+            if (parts.length >= 2 && parts[0].trim().length > 30) {
                 summaryObject = parts[0].trim();
             }
         }
 
+        // Escolha: objeto_completo > summaryObject (se mais substancial) > objeto_resumido > title
+        // O summaryObject prevalece sobre objResumido porque geralmente contém
+        // a descrição real do objeto, não apenas a referência do certame.
+        const fullDesc = objCompleto
+            || (summaryObject.length > (objResumido.length + 20) ? summaryObject : '')
+            || objResumido
+            || summaryObject
+            || bidding.title
+            || '';
+
         return {
-            fullDescription: objCompleto || objResumido || summaryObject || bidding.title || '',
+            fullDescription: fullDesc,
             shortDescription: objResumido || bidding.title || '',
             scope: schemaV2?.contractual_analysis?.prazo_execucao,
         };
