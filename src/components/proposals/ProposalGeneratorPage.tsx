@@ -125,47 +125,6 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                             </button>
                         </div>
 
-                        {/* Secondary actions — only when proposal exists */}
-                        {p.proposal && (
-                            <div style={{
-                                display: 'flex', gap: 'var(--space-3)', alignItems: 'center',
-                                marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)',
-                                borderTop: '1px solid var(--color-border)',
-                                flexWrap: 'wrap',
-                            }}>
-                                <button className="btn btn-outline" onClick={p.handleSaveConfig} disabled={p.isSaving}
-                                    style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-                                    <Save size={14} /> Salvar em Dossiê
-                                </button>
-
-                                <label style={{
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
-                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                                    backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
-                                    fontSize: 'var(--text-sm)',
-                                }}>
-                                    <input type="checkbox" checked={p.printLandscape} onChange={(e) => p.setPrintLandscape(e.target.checked)}
-                                        style={{ width: '14px', height: '14px', accentColor: 'var(--color-primary)' }} />
-                                    <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Paisagem</span>
-                                </label>
-
-                                <div style={{ marginLeft: 'auto', display: 'flex', gap: '3px', background: 'var(--color-bg-base)', padding: '3px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
-                                    <button className="btn" onClick={() => p.handlePrintProposal('LETTER')} title="Exportar Apenas Carta"
-                                        style={{ padding: '5px 10px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <FileText size={13} /> Carta
-                                    </button>
-                                    <button className="btn" onClick={() => p.handlePrintProposal('SPREADSHEET')} title="Exportar Apenas Planilha"
-                                        style={{ padding: '5px 10px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: 600, border: 'none', background: 'none', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <Package size={13} /> Planilha
-                                    </button>
-                                    <div style={{ width: '1px', background: 'var(--color-border)', margin: '4px 2px' }}></div>
-                                    <button className="btn btn-primary" onClick={() => p.handlePrintProposal('FULL')}
-                                        style={{ padding: '5px var(--space-4)', borderRadius: 'var(--radius-md)', fontWeight: 700, background: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <Printer size={14} /> Exportar Completa
-                                    </button>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -195,8 +154,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     ✓ {p.saveMessage}
                 </div>
             )}
-
-            {/* ── Proposal Info ── */}
+            {/* ── Proposal Info + Actions ── */}
             {p.proposal && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -212,6 +170,23 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 {p.proposals.length} versões
                             </span>
                         )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <label style={{
+                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
+                            padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                            backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
+                            fontSize: 'var(--text-sm)',
+                        }}>
+                            <input type="checkbox" checked={p.printLandscape} onChange={(e) => p.setPrintLandscape(e.target.checked)}
+                                style={{ width: '14px', height: '14px', accentColor: 'var(--color-primary)' }} />
+                            <Printer size={12} style={{ color: 'var(--color-text-tertiary)' }} />
+                            <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Paisagem</span>
+                        </label>
+                        <button className="btn btn-outline" onClick={p.handleSaveConfig} disabled={p.isSaving}
+                            style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontWeight: 600, fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Save size={14} /> Salvar em Dossiê
+                        </button>
                     </div>
                 </div>
             )}
