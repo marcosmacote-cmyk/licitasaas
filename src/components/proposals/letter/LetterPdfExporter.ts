@@ -127,35 +127,7 @@ export class LetterPdfExporter {
     </style>
 </head>
 <body${printLandscape ? ' class="landscape-mode"' : ''}>
-    <script>
-    window.onload = function() {
-        // Auto-scale suave: só reduz quando realmente necessário
-        setTimeout(function() {
-            var wrapper = document.querySelector('.content-wrapper');
-            if (!wrapper) { window.print(); return; }
-            
-            var isLandscape = document.body.classList.contains('landscape-mode');
-            // A4 a 96dpi: retrato=1123px, paisagem=794px (altura)
-            // Menos margens da @page (~53px retrato, ~38px paisagem)
-            var pageH = isLandscape ? 756 : 1070;
-            var headerH = ${topMargin};
-            var footerH = ${bottomMargin};
-            var availableH = pageH - headerH - footerH;
-            
-            var contentH = wrapper.scrollHeight;
-            
-            // Só escala se o conteúdo ultrapassar em >5% (tolerância)
-            if (contentH > availableH * 1.05) {
-                var scale = Math.max(0.78, availableH / contentH);
-                wrapper.style.transform = 'scale(' + scale + ')';
-                wrapper.style.transformOrigin = 'top left';
-                wrapper.style.width = (100 / scale) + '%';
-            }
-            
-            setTimeout(function() { window.print(); }, 300);
-        }, 400);
-    };
-    </script>
+    <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); };</script>
 
     <div class="fixed-header">
         ${headerImage
