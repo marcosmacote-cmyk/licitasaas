@@ -388,29 +388,57 @@ export class ProposalLetterBuilder {
         const company = this.data.company;
         const sections: string[] = [];
 
+        // Helper: limpa CPF embutido no nome (ex: "João CPF: 123.456.789-00" → "João")
+        const cleanName = (raw: string): { name: string; cpf: string } => {
+            const cpfRe = /\s*CPF[:\s]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i;
+            const m = raw.match(cpfRe);
+            if (m) return { name: raw.replace(cpfRe, '').trim(), cpf: m[1] };
+            return { name: raw, cpf: '' };
+        };
+
+        // Helper: limpa CNPJ embutido na razão social
+        const cleanRazao = (raw: string): { razao: string; cnpj: string } => {
+            const cnpjRe = /\s*CNPJ[:\s]*([\d./-]+)/i;
+            const m = raw.match(cnpjRe);
+            if (m) return { razao: raw.replace(cnpjRe, '').trim(), cnpj: m[1] };
+            return { razao: raw, cnpj: '' };
+        };
+
         if (sig.mode === 'LEGAL' || sig.mode === 'BOTH') {
+            const rawName = sig.legalRepresentative.name || company.contactName || 'Representante Legal';
+            const parsed = cleanName(rawName);
+            const cpf = parsed.cpf || sig.legalRepresentative.cpf || company.contactCpf || '';
+            const rawRazao = company.razaoSocial || '';
+            const parsedRazao = cleanRazao(rawRazao);
+            const cnpj = parsedRazao.cnpj || company.cnpj || '';
+
             const legalLines = [
                 '___________________________________',
-                sig.legalRepresentative.name || company.contactName || 'Representante Legal',
-                `CPF: ${sig.legalRepresentative.cpf || company.contactCpf || '—'}`,
+                parsed.name,
+                cpf ? `CPF: ${cpf}` : '',
                 sig.legalRepresentative.role || 'Representante Legal',
-                (company.razaoSocial || '').toUpperCase(),
-                `CNPJ: ${company.cnpj}`,
-            ];
+                parsedRazao.razao.toUpperCase(),
+                cnpj ? `CNPJ: ${cnpj}` : '',
+            ].filter(Boolean);
             sections.push(legalLines.join('\n'));
         }
 
         if (sig.mode === 'TECH' || sig.mode === 'BOTH') {
+            const rawName = sig.technicalRepresentative?.name || company.technicalResponsible || 'Responsável Técnico';
+            const rawRazao = company.razaoSocial || '';
+            const parsedRazao = cleanRazao(rawRazao);
+            const cnpj = parsedRazao.cnpj || company.cnpj || '';
+
             const techLines = [
                 '___________________________________',
-                sig.technicalRepresentative?.name || company.technicalResponsible || 'Responsável Técnico',
+                rawName,
             ];
             if (sig.technicalRepresentative?.registration || company.technicalRegistration) {
                 techLines.push(sig.technicalRepresentative?.registration || company.technicalRegistration!);
             }
             techLines.push(sig.technicalRepresentative?.role || 'Responsável Técnico');
-            techLines.push((company.razaoSocial || '').toUpperCase());
-            techLines.push(`CNPJ: ${company.cnpj}`);
+            techLines.push(parsedRazao.razao.toUpperCase());
+            if (cnpj) techLines.push(`CNPJ: ${cnpj}`);
             sections.push(techLines.join('\n'));
         }
 

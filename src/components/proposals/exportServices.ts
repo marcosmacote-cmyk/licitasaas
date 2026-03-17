@@ -257,26 +257,40 @@ export function generateProposalPdf(
             </div>
 
             <div class="signature-block">
-                ${(signatureMode === 'LEGAL' || signatureMode === 'BOTH') ? `
-                    <div class="sig-item">
-                        <div style="margin-bottom: 50px;"></div>
-                        ___________________________________<br/>
-                        <strong>${derivedContactName || 'Representante Legal'}</strong><br/>
-                        ${derivedCpf ? 'CPF: ' + derivedCpf + '<br/>' : ''}
-                        Representante Legal<br/>
-                        ${(company?.razaoSocial || '').toUpperCase()}<br/>
-                        ${company?.cnpj ? 'CNPJ: ' + company.cnpj : ''}
-                    </div>
-                ` : ''}
-                ${(signatureMode === 'TECH' || signatureMode === 'BOTH') ? `
-                    <div class="sig-item">
-                        <div style="margin-bottom: 50px;"></div>
-                        ___________________________________<br/>
-                        <strong>Responsável Técnico</strong><br/>
-                        ${(company?.razaoSocial || '').toUpperCase()}<br/>
-                        ${company?.cnpj ? 'CNPJ: ' + company.cnpj : ''}
-                    </div>
-                ` : ''}
+                ${(() => {
+                    // Limpar razão social (remover CNPJ embutido se houver)
+                    let razao = (company?.razaoSocial || '').toUpperCase();
+                    const cnpjInRazao = razao.match(/\s*CNPJ[:\s]*([\d./-]+)/i);
+                    let cnpjVal = company?.cnpj || '';
+                    if (cnpjInRazao) {
+                        if (!cnpjVal) cnpjVal = cnpjInRazao[1];
+                        razao = razao.replace(/\s*CNPJ[:\s]*[\d./-]+/i, '').trim();
+                    }
+                    
+                    const legalHtml = (signatureMode === 'LEGAL' || signatureMode === 'BOTH') ? `
+                        <div class="sig-item">
+                            <div style="margin-bottom: 50px;"></div>
+                            ___________________________________<br/>
+                            <strong>${derivedContactName || 'Representante Legal'}</strong><br/>
+                            ${derivedCpf ? 'CPF: ' + derivedCpf + '<br/>' : ''}
+                            Representante Legal<br/>
+                            ${razao}<br/>
+                            ${cnpjVal ? 'CNPJ: ' + cnpjVal : ''}
+                        </div>
+                    ` : '';
+                    
+                    const techHtml = (signatureMode === 'TECH' || signatureMode === 'BOTH') ? `
+                        <div class="sig-item">
+                            <div style="margin-bottom: 50px;"></div>
+                            ___________________________________<br/>
+                            <strong>Responsável Técnico</strong><br/>
+                            ${razao}<br/>
+                            ${cnpjVal ? 'CNPJ: ' + cnpjVal : ''}
+                        </div>
+                    ` : '';
+                    
+                    return legalHtml + techHtml;
+                })()}
             </div>
             
                     </div>
