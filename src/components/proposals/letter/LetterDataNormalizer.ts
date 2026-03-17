@@ -46,7 +46,7 @@ export class LetterDataNormalizer {
             object: this.normalizeObject(bidding, schemaV2),
             pricing: this.normalizePricing(items, totalValue, input),
             commercial: this.normalizeCommercial(input, contractual, proposalAnalysis),
-            execution: this.normalizeExecution(contractual, processId),
+            execution: this.normalizeExecution(contractual, processId, bidding),
             banking: { /* Empty — user fills manually or from future company field */ },
             signature: this.normalizeSignature(company, input),
             meta: {
@@ -129,13 +129,23 @@ export class LetterDataNormalizer {
         // Campos do AnalysisSchemaV1.ProcessIdentification:
         //   objeto_completo: "transcrição integral" (texto real do edital)
         //   objeto_resumido: "até 150 caracteres" (título curto)
-        // Prioridade: objeto_completo > objeto_resumido > title do bidding
+        // Prioridade: objeto_completo > objeto_resumido > extraído do summary > title
         const pi = schemaV2?.process_identification || {};
         const objCompleto = (pi.objeto_completo || '').trim();
         const objResumido = (pi.objeto_resumido || '').trim();
 
+        // Fallback: extrair objeto do bidding.summary
+        // O summary legacyProcess começa com "{objeto_completo}\n\nModalidade:"
+        let summaryObject = '';
+        if (!objCompleto && !objResumido && bidding.summary) {
+            const parts = bidding.summary.split(/\n\n(?=Modalidade:)/);
+            if (parts.length >= 2 && parts[0].trim().length > 20) {
+                summaryObject = parts[0].trim();
+            }
+        }
+
         return {
-            fullDescription: objCompleto || objResumido || bidding.title || '',
+            fullDescription: objCompleto || objResumido || summaryObject || bidding.title || '',
             shortDescription: objResumido || bidding.title || '',
             scope: schemaV2?.contractual_analysis?.prazo_execucao,
         };
@@ -174,28 +184,42 @@ export class LetterDataNormalizer {
     ): ProposalLetterData['commercial'] {
         // Campos corretos do AnalysisSchemaV1.ContractualAnalysis:
         //   medicao_pagamento, reajuste, repactuacao, penalidades
-        // AnalysisSchemaV1.ParticipationConditions:
-        //   exige_garantia_contratual, garantia_contratual_detalhes
         return {
             validityDays: input.validityDays || input.proposal.validityDays || 60,
             paymentConditions: (contractual?.medicao_pagamento || '').trim() || undefined,
-            warrantyPercentage: undefined, // Não é campo numérico no schema — vem como texto descritivo
+            warrantyPercentage: undefined,
             readjustmentClause: (contractual?.reajuste || '').trim() || undefined,
         };
     }
 
     private normalizeExecution(
         contractual: any,
-        processId: any
+        processId: any,
+        bidding: BiddingProcess
     ): ProposalLetterData['execution'] {
         // Campos corretos do AnalysisSchemaV1.ContractualAnalysis:
         //   prazo_execucao, prazo_vigencia
         // AnalysisSchemaV1.ProcessIdentification:
         //   municipio_uf (para local de execução)
+        let executionDeadline = (contractual?.prazo_execucao || '').trim() || undefined;
+        let contractDuration = (contractual?.prazo_vigencia || '').trim() || undefined;
+        let executionLocation = (processId?.municipio_uf || '').trim() || undefined;
+
+        // Fallback: extrair prazos do fullSummary ou summary
+        if (!executionDeadline || !contractDuration) {
+            const fullText = bidding.aiAnalysis?.fullSummary || bidding.summary || '';
+            if (!executionDeadline) {
+                executionDeadline = this.extractFromText(fullText, /prazo\s*(?:de\s*)?execu[cç][aã]o[:\s]+([^\n.;]+)/i);
+            }
+            if (!contractDuration) {
+                contractDuration = this.extractFromText(fullText, /(?:prazo\s*(?:de\s*)?vig[eê]ncia|dura[cç][aã]o\s*(?:do\s*)?contrato)[:\s]+([^\n.;]+)/i);
+            }
+        }
+
         return {
-            executionLocation: (processId?.municipio_uf || '').trim() || undefined,
-            executionDeadline: (contractual?.prazo_execucao || '').trim() || undefined,
-            contractDuration: (contractual?.prazo_vigencia || '').trim() || undefined,
+            executionLocation,
+            executionDeadline,
+            contractDuration,
         };
     }
 
@@ -236,6 +260,16 @@ export class LetterDataNormalizer {
     // ════════════════════════════════════════
     // DERIVATION HELPERS
     // ════════════════════════════════════════
+
+    /**
+     * Extracts a value from text using a regex pattern.
+     * Returns the first capture group or undefined.
+     */
+    private extractFromText(text: string, pattern: RegExp): string | undefined {
+        if (!text) return undefined;
+        const match = text.match(pattern);
+        return match?.[1]?.trim() || undefined;
+    }
 
     /**
      * Tries to derive city/state from qualification text.
