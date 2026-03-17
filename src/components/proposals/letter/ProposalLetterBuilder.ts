@@ -317,7 +317,7 @@ export class ProposalLetterBuilder {
         lines.push(`Conforme Planilha de Formação de Preços em anexo, contendo ${itemLabel}.`);
 
         return this.createBlock(LetterBlockType.PRICING_SUMMARY, 'Resumo de Preços',
-            lines.join('\n'), { required: true, editable: false });
+            lines.join('\n'), { required: true, editable: true });
     }
 
     private buildValidityBlock(): LetterBlock {
@@ -415,13 +415,23 @@ export class ProposalLetterBuilder {
             return { razao: raw, cnpj: '' };
         };
 
+        // Helper: extrai registro profissional (CREA/CAU/CRA/RPN) do nome
+        const cleanTechName = (raw: string): { name: string; registration: string } => {
+            // Padrões: "Nome CREA-XX 12345", "Nome Cra Nº 8021 - RPN Nº 0602019311"
+            const regRe = /\s*((?:CREA|CAU|CRA|CONFEA)[-\s]*[A-Z]{0,2}[\s-]*(?:N[ºo°]?\s*)?[\d./-]+(?:\s*[-–]\s*(?:RPN|D)\s*(?:N[ºo°]?\s*)?[\d./-]+)?)/i;
+            const m = raw.match(regRe);
+            if (m) return { name: raw.replace(m[0], '').trim(), registration: m[1].trim() };
+            return { name: raw, registration: '' };
+        };
+
+        const rawRazao = company.razaoSocial || '';
+        const parsedRazao = cleanRazao(rawRazao);
+        const companyCnpj = parsedRazao.cnpj || company.cnpj || '';
+
         if (sig.mode === 'LEGAL' || sig.mode === 'BOTH') {
             const rawName = sig.legalRepresentative.name || company.contactName || 'Representante Legal';
             const parsed = cleanName(rawName);
             const cpf = parsed.cpf || sig.legalRepresentative.cpf || company.contactCpf || '';
-            const rawRazao = company.razaoSocial || '';
-            const parsedRazao = cleanRazao(rawRazao);
-            const cnpj = parsedRazao.cnpj || company.cnpj || '';
 
             const legalLines = [
                 '___________________________________',
@@ -429,32 +439,37 @@ export class ProposalLetterBuilder {
                 cpf ? `CPF: ${cpf}` : '',
                 sig.legalRepresentative.role || 'Representante Legal',
                 parsedRazao.razao.toUpperCase(),
-                cnpj ? `CNPJ: ${cnpj}` : '',
+                companyCnpj ? `CNPJ: ${companyCnpj}` : '',
             ].filter(Boolean);
             sections.push(legalLines.join('\n'));
         }
 
         if (sig.mode === 'TECH' || sig.mode === 'BOTH') {
-            const rawName = sig.technicalRepresentative?.name || company.technicalResponsible || 'Responsável Técnico';
-            const rawRazao = company.razaoSocial || '';
-            const parsedRazao = cleanRazao(rawRazao);
-            const cnpj = parsedRazao.cnpj || company.cnpj || '';
+            let techName = sig.technicalRepresentative?.name || company.technicalResponsible || 'Responsável Técnico';
+            let techReg = sig.technicalRepresentative?.registration || company.technicalRegistration || '';
+
+            // Se o nome contém registro profissional embutido, separar
+            if (!techReg || techReg.length < 3) {
+                const parsed = cleanTechName(techName);
+                if (parsed.registration) {
+                    techName = parsed.name;
+                    techReg = parsed.registration;
+                }
+            }
 
             const techLines = [
                 '___________________________________',
-                rawName,
+                techName,
             ];
-            if (sig.technicalRepresentative?.registration || company.technicalRegistration) {
-                techLines.push(sig.technicalRepresentative?.registration || company.technicalRegistration!);
-            }
+            if (techReg) techLines.push(techReg);
             techLines.push(sig.technicalRepresentative?.role || 'Responsável Técnico');
             techLines.push(parsedRazao.razao.toUpperCase());
-            if (cnpj) techLines.push(`CNPJ: ${cnpj}`);
+            if (companyCnpj) techLines.push(`CNPJ: ${companyCnpj}`);
             sections.push(techLines.join('\n'));
         }
 
         return this.createBlock(LetterBlockType.SIGNATURE, 'Assinatura',
-            sections.join('\n\n'), { required: true, editable: false });
+            sections.join('\n\n'), { required: true, editable: true });
     }
 
     // ════════════════════════════════════════

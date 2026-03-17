@@ -343,21 +343,25 @@ export class LetterDataNormalizer {
 
     /**
      * Extract technical responsible name from qualification text.
+     * Handles: "Maria Marize Chaves Maciel Cra Nº 8021 - RPN Nº 0602019311"
      */
     private extractTechName(techQual: string): string {
         if (!techQual) return '';
-        // Usually the first line or text before the first comma
-        const firstLine = techQual.split(/[,\n]/)[0].trim();
-        // Remove registration numbers (CREA-XX 123456)
-        return firstLine.replace(/CREA[- ]\w+\s*\d+/i, '').replace(/CAU[- ]\w+\s*\d+/i, '').trim();
+        // Remove registration patterns (CREA/CAU/CRA/CONFEA + optional RPN/D)
+        const regRe = /\s*(?:CREA|CAU|CRA|CONFEA)[-\s]*[A-Z]{0,2}[\s-]*(?:N[ºo°]?\s*)?[\d./-]+(?:\s*[-–]\s*(?:RPN|D)\s*(?:N[ºo°]?\s*)?[\d./-]+)?.*/i;
+        const cleaned = techQual.replace(regRe, '').trim();
+        // Take first line
+        const firstLine = cleaned.split(/[\n]/)[0].trim();
+        return firstLine || techQual.split(/[,\n]/)[0].trim();
     }
 
     /**
-     * Extract CREA/CAU registration from technical qualification.
+     * Extract CREA/CAU/CRA registration from technical qualification.
+     * Handles: "CRA Nº 8021 - RPN Nº 0602019311", "CREA-CE 12345"
      */
     private extractTechRegistration(techQual: string): string {
         if (!techQual) return '';
-        const match = techQual.match(/(CREA[- ]?\w{2}[- ]?\d+|CAU[- ]?\w{2}[- ]?\d+)/i);
-        return match ? match[1] : '';
+        const match = techQual.match(/((?:CREA|CAU|CRA|CONFEA)[-\s]*[A-Z]{0,2}[\s-]*(?:N[ºo°]?\s*)?[\d./-]+(?:\s*[-–]\s*(?:RPN|D)\s*(?:N[ºo°]?\s*)?[\d./-]+)?)/i);
+        return match ? match[1].trim() : '';
     }
 }
