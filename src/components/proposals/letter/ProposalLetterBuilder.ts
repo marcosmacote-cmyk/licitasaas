@@ -166,26 +166,22 @@ export class ProposalLetterBuilder {
     }
 
     private buildObjectBlock(): LetterBlock {
-        // Prioridade: override > AI > dados do edital > placeholder
-        const aiContent = this.aiBlocks.get(LetterBlockType.OBJECT);
-        const editalContent = this.data.object.fullDescription?.trim();
+        // REGRA: O bloco de objeto deve conter APENAS o objeto da licitação.
+        // Sem resumo, sem análise, sem condições contratuais.
+        const editalObject = this.data.object.fullDescription?.trim();
 
         let content: string;
-        let isAi = false;
 
         if (this.overrides.has(LetterBlockType.OBJECT)) {
             content = this.overrides.get(LetterBlockType.OBJECT)!;
-        } else if (aiContent) {
-            content = `Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${aiContent}`;
-            isAi = true;
-        } else if (editalContent) {
-            content = `Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${editalContent}`;
+        } else if (editalObject) {
+            content = `Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${editalObject}, conforme especificações constantes deste Edital e de seus anexos.`;
         } else {
-            content = 'Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o objeto descrito no Edital em referência.';
+            content = 'Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o objeto descrito no Edital em referência, conforme especificações constantes deste Edital e de seus anexos.';
         }
 
         return this.createBlock(LetterBlockType.OBJECT, 'Objeto',
-            content, { required: true, editable: true, aiGenerated: isAi });
+            content, { required: true, editable: true });
     }
 
     private buildCommercialDeclarationBlock(): LetterBlock {

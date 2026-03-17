@@ -62,9 +62,11 @@ export class LetterDataNormalizer {
     // ════════════════════════════════════════
 
     private normalizeRecipient(bidding: BiddingProcess, schemaV2: any): ProposalLetterData['recipient'] {
-        // Try to extract organ name from V2 schema
-        const orgao = schemaV2?.process_identification?.orgao_promotor
-            || schemaV2?.process_identification?.contratante
+        // Campos corretos do schemaV2: orgao, unidade_compradora
+        const pi = schemaV2?.process_identification || {};
+        const orgao = pi.orgao
+            || pi.unidade_compradora
+            || (bidding as any).organ
             || '';
 
         // Determine if "Pregoeiro" or "Agente de Contratação" based on modality
@@ -112,13 +114,15 @@ export class LetterDataNormalizer {
     }
 
     private normalizeObject(bidding: BiddingProcess, schemaV2: any): ProposalLetterData['object'] {
-        // Priority: V2 object > summary > title
-        const v2Object = schemaV2?.process_identification?.objeto_completo
-            || schemaV2?.process_identification?.objeto
+        // REGRA: Usar APENAS o objeto — sem resumo, sem análise
+        // Prioridade: objeto_resumido (curto) > objeto_completo > title
+        const pi = schemaV2?.process_identification || {};
+        const v2Object = pi.objeto_resumido
+            || pi.objeto
             || '';
 
         return {
-            fullDescription: v2Object || bidding.summary || '',
+            fullDescription: v2Object || bidding.title || '',
             shortDescription: bidding.title || '',
             scope: schemaV2?.contract_conditions?.escopo_detalhado,
         };
