@@ -73,6 +73,7 @@ const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
 ];
 
 const BLOCK_LABELS: Record<string, { icon: React.ReactNode; color: string }> = {
+    [LetterBlockType.TITLE]:                { icon: <FileText size={14} />,     color: '#1E40AF' },
     [LetterBlockType.RECIPIENT]:            { icon: <Mail size={14} />,          color: '#3B82F6' },
     [LetterBlockType.REFERENCE]:            { icon: <ClipboardList size={14} />, color: '#6366F1' },
     [LetterBlockType.QUALIFICATION]:        { icon: <Building2 size={14} />,     color: '#8B5CF6' },
@@ -89,6 +90,7 @@ const BLOCK_LABELS: Record<string, { icon: React.ReactNode; color: string }> = {
 
 // Agrupamento visual para revisão
 const BLOCK_GROUPS = [
+    { label: 'Título', ids: [LetterBlockType.TITLE] },
     { label: 'Identificação e Endereçamento', ids: [LetterBlockType.RECIPIENT, LetterBlockType.REFERENCE, LetterBlockType.QUALIFICATION] },
     { label: 'Corpo Principal da Proposta', ids: [LetterBlockType.OBJECT, LetterBlockType.COMMERCIAL, LetterBlockType.PRICING_SUMMARY, LetterBlockType.VALIDITY, LetterBlockType.PROPOSAL_CONDITIONS] },
     { label: 'Informações Complementares', ids: [LetterBlockType.EXECUTION, LetterBlockType.BANKING] },
@@ -114,12 +116,15 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         bank: string; agency: string; account: string; accountType: string; pix: string;
     }>({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
 
+    // ── Tipo de Proposta (Inicial ou Readequada) ──
+    const [proposalType, setProposalType] = useState<'INICIAL' | 'READEQUADA'>('INICIAL');
+
     const stepIndex = STEPS.findIndex(s => s.id === step);
 
     // ── Normalizer ──
     const normalizedData = useMemo(() => {
         const normalizer = new LetterDataNormalizer();
-        return normalizer.normalize({
+        const data = normalizer.normalize({
             bidding: props.bidding,
             company: props.company,
             proposal: props.proposal,
@@ -132,8 +137,11 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
             bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix)
                 ? bankData : undefined,
         });
+        // Inject proposalType into meta for the Builder's TITLE block
+        (data.meta as any).proposalType = proposalType;
+        return data;
     }, [props.bidding, props.company, props.proposal, props.items, props.totalValue,
-        props.signatureMode, props.validityDays, props.bdi, props.discount, bankData]);
+        props.signatureMode, props.validityDays, props.bdi, props.discount, bankData, proposalType]);
 
     // ── Validate ──
     const handleValidate = useCallback(() => {
@@ -383,6 +391,40 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 }}>
                                     {props.isSavingTemplate ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                                     Salvar como Padrão da Empresa
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Tipo de Proposta */}
+                        <div style={{
+                            background: 'rgba(30, 64, 175, 0.04)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                            border: '1px solid rgba(30, 64, 175, 0.15)', marginBottom: 'var(--space-4)',
+                        }}>
+                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#1E40AF', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <FileText size={14} /> Tipo de Proposta
+                            </div>
+                            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                                <button
+                                    onClick={() => setProposalType('INICIAL')}
+                                    style={{
+                                        flex: 1, padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
+                                        fontSize: 'var(--text-sm)', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                                        background: proposalType === 'INICIAL' ? '#1E40AF' : 'var(--color-bg-base)',
+                                        color: proposalType === 'INICIAL' ? '#fff' : 'var(--color-text-secondary)',
+                                        border: `2px solid ${proposalType === 'INICIAL' ? '#1E40AF' : 'var(--color-border)'}`,
+                                    }}>
+                                    📋 PROPOSTA DE PREÇOS INICIAL
+                                </button>
+                                <button
+                                    onClick={() => setProposalType('READEQUADA')}
+                                    style={{
+                                        flex: 1, padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
+                                        fontSize: 'var(--text-sm)', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                                        background: proposalType === 'READEQUADA' ? '#B45309' : 'var(--color-bg-base)',
+                                        color: proposalType === 'READEQUADA' ? '#fff' : 'var(--color-text-secondary)',
+                                        border: `2px solid ${proposalType === 'READEQUADA' ? '#B45309' : 'var(--color-border)'}`,
+                                    }}>
+                                    🔄 PROPOSTA DE PREÇOS READEQUADA
                                 </button>
                             </div>
                         </div>
@@ -726,10 +768,14 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                                                     />
                                                                 ) : (
                                                                     <div style={{
-                                                                        fontSize: 'var(--text-sm)', lineHeight: 1.65,
+                                                                        fontSize: block.type === LetterBlockType.TITLE ? '1.1rem' : 'var(--text-sm)',
+                                                                        lineHeight: 1.65,
                                                                         color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap',
                                                                         maxHeight: isLongContent ? '250px' : 'none',
                                                                         overflow: isLongContent ? 'auto' : 'visible',
+                                                                        fontWeight: block.type === LetterBlockType.TITLE ? 700 : 'normal',
+                                                                        textAlign: block.type === LetterBlockType.TITLE ? 'center' : 'left',
+                                                                        letterSpacing: block.type === LetterBlockType.TITLE ? '0.5px' : 'normal',
                                                                     }}>
                                                                         {block.content || <em style={{ color: 'var(--color-text-tertiary)' }}>Bloco vazio</em>}
                                                                     </div>

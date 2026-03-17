@@ -8,6 +8,7 @@
 // ── Block Types ──
 
 export const LetterBlockType = {
+    TITLE:                'titleBlock',
     RECIPIENT:            'recipientBlock',
     REFERENCE:            'referenceBlock',
     QUALIFICATION:        'qualificationBlock',

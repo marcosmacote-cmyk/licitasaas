@@ -47,6 +47,11 @@ export class LetterRenderer {
         const formatted = this.formatText(escaped);
 
         switch (block.type) {
+            case LetterBlockType.TITLE:
+                return `<div class="block block-title" style="margin-bottom: 12px; text-align: center;">
+                    <p style="font-weight: bold; font-size: 14px; margin: 0; letter-spacing: 0.5px;">${formatted}</p>
+                </div>`;
+
             case LetterBlockType.RECIPIENT:
                 return `<div class="block block-recipient" style="margin-bottom: 10px;">
                     <p style="font-weight: bold; margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>

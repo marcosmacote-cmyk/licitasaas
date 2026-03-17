@@ -66,6 +66,7 @@ export class ProposalLetterBuilder {
      */
     build(): ProposalLetterResult {
         const allBlocks: LetterBlock[] = [
+            this.buildTitleBlock(),
             this.buildRecipientBlock(),
             this.buildReferenceBlock(),
             this.buildQualificationBlock(),
@@ -110,6 +111,16 @@ export class ProposalLetterBuilder {
     // ════════════════════════════════════════
     // BLOCOS INDIVIDUAIS
     // ════════════════════════════════════════
+
+    private buildTitleBlock(): LetterBlock {
+        const proposalType = (this.data.meta as any).proposalType || 'INICIAL';
+        const title = proposalType === 'READEQUADA'
+            ? 'PROPOSTA DE PREÇOS READEQUADA'
+            : 'PROPOSTA DE PREÇOS INICIAL';
+
+        return this.createBlock(LetterBlockType.TITLE, 'Título da Proposta',
+            title, { required: true, editable: false });
+    }
 
     private buildRecipientBlock(): LetterBlock {
         const r = this.data.recipient;
