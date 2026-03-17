@@ -109,6 +109,11 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const [selectedExportMode, setSelectedExportMode] = useState<LetterExportMode>('FULL');
     const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
 
+    // ── Dados Bancários (preenchimento manual) ──
+    const [bankData, setBankData] = useState<{
+        bank: string; agency: string; account: string; accountType: string; pix: string;
+    }>({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
+
     const stepIndex = STEPS.findIndex(s => s.id === step);
 
     // ── Normalizer ──
@@ -124,9 +129,11 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
             validityDays: props.validityDays,
             bdiPercentage: props.bdi,
             discountPercentage: props.discount,
+            bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix)
+                ? bankData : undefined,
         });
     }, [props.bidding, props.company, props.proposal, props.items, props.totalValue,
-        props.signatureMode, props.validityDays, props.bdi, props.discount]);
+        props.signatureMode, props.validityDays, props.bdi, props.discount, bankData]);
 
     // ── Validate ──
     const handleValidate = useCallback(() => {
@@ -383,7 +390,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                         {/* Data summary */}
                         <div style={{
                             background: 'var(--color-bg-elevated)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
-                            border: '1px solid var(--color-border)',
+                            border: '1px solid var(--color-border)', marginBottom: 'var(--space-4)',
                         }}>
                             <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <Info size={14} /> Resumo dos dados que serão usados na carta
@@ -395,6 +402,53 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div><strong>Valor:</strong> {props.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                                 <div><strong>Itens:</strong> {props.items.length}</div>
                                 <div><strong>BDI:</strong> {props.bdi}% | <strong>Desconto:</strong> {props.discount}%</div>
+                            </div>
+                        </div>
+
+                        {/* Dados Bancários */}
+                        <div style={{
+                            background: 'rgba(20, 184, 166, 0.04)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                            border: '1px solid rgba(20, 184, 166, 0.15)',
+                        }}>
+                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#14B8A6', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Landmark size={14} /> Dados Bancários <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>(opcional — aparecerá na carta se preenchido)</span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Banco</label>
+                                    <input type="text" value={bankData.bank} placeholder="Ex: Banco do Brasil"
+                                        onChange={e => setBankData(prev => ({ ...prev, bank: e.target.value }))}
+                                        className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                </div>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Agência</label>
+                                    <input type="text" value={bankData.agency} placeholder="Ex: 1234-5"
+                                        onChange={e => setBankData(prev => ({ ...prev, agency: e.target.value }))}
+                                        className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                </div>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Conta</label>
+                                    <input type="text" value={bankData.account} placeholder="Ex: 12345-6"
+                                        onChange={e => setBankData(prev => ({ ...prev, account: e.target.value }))}
+                                        className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                </div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Tipo de Conta</label>
+                                    <select value={bankData.accountType}
+                                        onChange={e => setBankData(prev => ({ ...prev, accountType: e.target.value }))}
+                                        className="prop-input" style={{ padding: '6px 8px', fontSize: '0.8rem' }}>
+                                        <option value="Conta Corrente">Conta Corrente</option>
+                                        <option value="Conta Poupança">Conta Poupança</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Chave PIX</label>
+                                    <input type="text" value={bankData.pix} placeholder="CNPJ, e-mail, telefone ou chave aleatória"
+                                        onChange={e => setBankData(prev => ({ ...prev, pix: e.target.value }))}
+                                        className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                </div>
                             </div>
                         </div>
 

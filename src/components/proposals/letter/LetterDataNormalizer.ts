@@ -20,6 +20,13 @@ interface NormalizerInput {
     validityDays?: number;
     bdiPercentage?: number;
     discountPercentage?: number;
+    bankingData?: {
+        bank?: string;
+        agency?: string;
+        account?: string;
+        accountType?: string;
+        pix?: string;
+    };
 }
 
 export class LetterDataNormalizer {
@@ -47,7 +54,7 @@ export class LetterDataNormalizer {
             pricing: this.normalizePricing(items, totalValue, input),
             commercial: this.normalizeCommercial(input, contractual, proposalAnalysis),
             execution: this.normalizeExecution(contractual, processId, bidding),
-            banking: { /* Empty — user fills manually or from future company field */ },
+            banking: input.bankingData || {},
             signature: this.normalizeSignature(company, input),
             meta: {
                 proposalId: proposal.id,
