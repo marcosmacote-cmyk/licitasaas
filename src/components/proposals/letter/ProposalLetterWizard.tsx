@@ -12,6 +12,8 @@ import {
     Loader2, Save, RefreshCw, Lock, Unlock, Sparkles,
     FileText, Table2, FileStack, ListOrdered, BarChart3,
     Zap, ChevronDown,
+    Mail, ClipboardList, Building2, FileEdit, Scale,
+    DollarSign, CalendarDays, Wrench, Landmark, MailCheck, PenTool, File,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../../types';
 import type { ProposalLetterResult, LetterBlock, ValidationResult, LetterExportMode } from './types';
@@ -69,18 +71,18 @@ const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
     { id: 'export',     label: 'Exportação',     icon: <Printer size={16} /> },
 ];
 
-const BLOCK_LABELS: Record<string, { icon: string; color: string }> = {
-    [LetterBlockType.RECIPIENT]:       { icon: '📬', color: '#3B82F6' },
-    [LetterBlockType.REFERENCE]:       { icon: '📋', color: '#6366F1' },
-    [LetterBlockType.QUALIFICATION]:   { icon: '🏢', color: '#8B5CF6' },
-    [LetterBlockType.OBJECT]:          { icon: '📝', color: '#EC4899' },
-    [LetterBlockType.COMMERCIAL]:      { icon: '⚖️', color: '#F59E0B' },
-    [LetterBlockType.PRICING_SUMMARY]: { icon: '💰', color: '#10B981' },
-    [LetterBlockType.VALIDITY]:        { icon: '📅', color: '#06B6D4' },
-    [LetterBlockType.EXECUTION]:       { icon: '🔧', color: '#F97316' },
-    [LetterBlockType.BANKING]:         { icon: '🏦', color: '#14B8A6' },
-    [LetterBlockType.CLOSING]:         { icon: '✉️', color: '#64748B' },
-    [LetterBlockType.SIGNATURE]:       { icon: '✍️', color: '#334155' },
+const BLOCK_LABELS: Record<string, { icon: React.ReactNode; color: string }> = {
+    [LetterBlockType.RECIPIENT]:       { icon: <Mail size={14} />,          color: '#3B82F6' },
+    [LetterBlockType.REFERENCE]:       { icon: <ClipboardList size={14} />, color: '#6366F1' },
+    [LetterBlockType.QUALIFICATION]:   { icon: <Building2 size={14} />,     color: '#8B5CF6' },
+    [LetterBlockType.OBJECT]:          { icon: <FileEdit size={14} />,      color: '#EC4899' },
+    [LetterBlockType.COMMERCIAL]:      { icon: <Scale size={14} />,         color: '#F59E0B' },
+    [LetterBlockType.PRICING_SUMMARY]: { icon: <DollarSign size={14} />,    color: '#10B981' },
+    [LetterBlockType.VALIDITY]:        { icon: <CalendarDays size={14} />,  color: '#06B6D4' },
+    [LetterBlockType.EXECUTION]:       { icon: <Wrench size={14} />,        color: '#F97316' },
+    [LetterBlockType.BANKING]:         { icon: <Landmark size={14} />,      color: '#14B8A6' },
+    [LetterBlockType.CLOSING]:         { icon: <MailCheck size={14} />,     color: '#64748B' },
+    [LetterBlockType.SIGNATURE]:       { icon: <PenTool size={14} />,       color: '#334155' },
 };
 
 // Agrupamento visual para revisão
@@ -581,7 +583,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                             {groupBlocks.map(block => {
-                                                const meta = BLOCK_LABELS[block.id] || { icon: '📄', color: '#64748B' };
+                                                const meta = BLOCK_LABELS[block.id] || { icon: <File size={14} />, color: '#64748B' };
                                                 const isEditing = editingBlockId === block.id;
                                                 const isCollapsed = collapsedBlocks.has(block.id);
                                                 const needsAttention = ATTENTION_BLOCKS.has(block.id);
@@ -613,7 +615,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                                         }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', fontWeight: 600 }}>
                                                                 {isCollapsed ? <ChevronRight size={13} style={{ color: 'var(--color-text-tertiary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--color-text-tertiary)' }} />}
-                                                                <span>{meta.icon}</span>
+                                                                <span style={{ color: meta.color }}>{meta.icon}</span>
                                                                 <span style={{ color: meta.color }}>{block.label}</span>
                                                                 {block.aiGenerated && (
                                                                     <span style={{
