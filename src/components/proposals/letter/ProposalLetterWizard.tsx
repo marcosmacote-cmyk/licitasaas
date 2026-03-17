@@ -886,13 +886,24 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             <button onClick={() => setStep('config')} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <ChevronLeft size={16} /> Configuração
                             </button>
-                            <button onClick={() => setStep('export')} style={{
-                                padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
-                                background: 'var(--color-primary)', color: 'white', border: 'none',
-                                fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                            }}>
-                                Exportar <ChevronRight size={16} />
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                <button onClick={handleSave} disabled={props.isSaving} style={{
+                                    padding: 'var(--space-2) var(--space-5)', borderRadius: 'var(--radius-lg)',
+                                    background: 'var(--color-success)', color: 'white', border: 'none',
+                                    fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                                    fontSize: 'var(--text-sm)', opacity: props.isSaving ? 0.6 : 1,
+                                }}>
+                                    {props.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+                                    Salvar Carta
+                                </button>
+                                <button onClick={() => setStep('export')} style={{
+                                    padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                    background: 'var(--color-primary)', color: 'white', border: 'none',
+                                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                                }}>
+                                    Exportar <ChevronRight size={16} />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
