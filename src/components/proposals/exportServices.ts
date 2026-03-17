@@ -157,7 +157,7 @@ export function generateProposalPdf(
                 .fixed-footer .gen-info { font-size: 8px; color: #999; margin-top: 2px; }
                 .content-wrapper { padding: 15px 20px; }
                 .letter { white-space: pre-wrap; margin-bottom: 25px; text-align: justify; font-size: 13px; line-height: 1.5; }
-                table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: fixed; }
+                table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
                 table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
                 table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; font-weight: normal; }
                 .totals { width: 250px; float: right; margin-top: 10px; }
@@ -218,16 +218,16 @@ export function generateProposalPdf(
             <table class="items">
                 <thead>
                     <tr>
-                        <th style="text-align:center; width: 68px;">Item</th>
+                        <th style="text-align:center; width: 35px;">Item</th>
                         <th style="width: auto;">Descrição detalhada</th>
-                        <th style="text-align:center; width: 65px;">Marca</th>
-                        <th style="text-align:center; width: 65px;">Modelo</th>
-                        <th style="text-align:center; width: 38px;">Unid</th>
-                        <th style="text-align:center; width: 55px;">Qtd</th>
-                        <th style="text-align:center; width: 35px;">Mult.</th>
-                        <th style="text-align:right; width: 85px;">Unitário</th>
-                        <th style="text-align:right; width: 95px;">Total</th>
-                        <th style="text-align:right; width: 42px;">%</th>
+                        <th style="text-align:center; width: 55px;">Marca</th>
+                        <th style="text-align:center; width: 55px;">Modelo</th>
+                        <th style="text-align:center; width: 35px;">Unid</th>
+                        <th style="text-align:center; width: 45px;">Qtd</th>
+                        <th style="text-align:center; width: 28px;">Mult.</th>
+                        <th style="text-align:right; width: 75px;">Unitário</th>
+                        <th style="text-align:right; width: 85px;">Total</th>
+                        <th style="text-align:right; width: 35px;">%</th>
                     </tr>
                 </thead>
                 <tbody>${itemsHtml}</tbody>

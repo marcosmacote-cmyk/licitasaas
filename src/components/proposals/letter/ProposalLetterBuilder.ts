@@ -93,13 +93,18 @@ export class ProposalLetterBuilder {
 
     private buildRecipientBlock(): LetterBlock {
         const r = this.data.recipient;
-        const lines: string[] = [];
+        const title = r.title || 'Agente de Contratação / Pregoeiro(a)';
 
-        lines.push(`Ao Ilmo(a). Sr(a). ${r.title || 'Agente de Contratação / Pregoeiro(a)'}`);
-        if (r.orgao) lines.push(r.orgao);
+        // Inclui o órgão na saudação: "Ao Ilmo(a). Sr(a). Pregoeiro(a) da Prefeitura..."
+        let line = `Ao Ilmo(a). Sr(a). ${title}`;
+        if (r.orgao) {
+            // Preposição adequada: "do", "da", "do(a)"
+            const prep = this.derivePreposition(r.orgao);
+            line += ` ${prep} ${r.orgao}`;
+        }
 
         return this.createBlock(LetterBlockType.RECIPIENT, 'Destinatário',
-            this.resolve(LetterBlockType.RECIPIENT, lines.join('\n')),
+            this.resolve(LetterBlockType.RECIPIENT, line),
             { required: true, editable: true });
     }
 
@@ -452,5 +457,27 @@ export class ProposalLetterBuilder {
             hash |= 0;
         }
         return Math.abs(hash).toString(36);
+    }
+
+    /**
+     * Derive preposition for organ name (da, do, de).
+     * Ex: "Prefeitura" → "da", "Município" → "do", "IFCE" → "do"
+     */
+    private derivePreposition(orgao: string): string {
+        const normalized = orgao.trim().toLowerCase();
+        // Femininos comuns
+        const femininos = ['prefeitura', 'secretaria', 'câmara', 'assembleia', 'fundação', 'agência', 'autarquia', 'companhia', 'empresa', 'universidade'];
+        for (const f of femininos) {
+            if (normalized.startsWith(f)) return 'da';
+        }
+        // Masculinos comuns
+        const masculinos = ['município', 'estado', 'governo', 'tribunal', 'ministério', 'instituto', 'conselho', 'departamento', 'serviço', 'centro'];
+        for (const m of masculinos) {
+            if (normalized.startsWith(m)) return 'do';
+        }
+        // Siglas (ex: IFCE, DNIT) → "do"
+        if (/^[A-Z]{2,}/.test(orgao.trim())) return 'do';
+        // Default
+        return 'do(a)';
     }
 }
