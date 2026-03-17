@@ -45,6 +45,10 @@ export function exportExcelProposal(biddingId: string, items: ProposalItem[], bd
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtNum = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/**
+ * @deprecated Use LetterPdfExporter.export() for block-based export.
+ * This function is kept for backward compatibility with the quick-print buttons.
+ */
 export function generateProposalPdf(
     bidding: BiddingProcess,
     company: CompanyProfile | undefined,

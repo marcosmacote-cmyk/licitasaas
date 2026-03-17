@@ -3425,75 +3425,14 @@ Responda APENAS com um JSON array válido:
     }
 });
 
-// POST AI Letter — generate proposal letter
+// POST AI Letter — DEPRECATED, replaced by /api/proposals/ai-letter-blocks (Fase 2)
+// Kept as stub returning 410 Gone for any remaining clients
 app.post('/api/proposals/ai-letter', authenticateToken, async (req: any, res) => {
-    try {
-        const { biddingProcessId, companyProfileId, totalValue, validityDays, itemsSummary } = req.body;
-
-        const bidding = await prisma.biddingProcess.findFirst({
-            where: { id: biddingProcessId, tenantId: req.user.tenantId },
-            include: { aiAnalysis: true }
-        });
-        const company = await prisma.companyProfile.findFirst({
-            where: { id: companyProfileId, tenantId: req.user.tenantId },
-        });
-
-        if (!bidding || !company) return res.status(404).json({ error: 'Bidding or company not found' });
-
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
-
-        const ai = new GoogleGenAI({ apiKey });
-
-        const prompt = `Gere uma CARTA PROPOSTA formal para licitação pública brasileira baseada estritamente na Lei 14.133/2021.
-Você deve adequar sua carta ao OBJETO e às EXIGÊNCIAS detalhadas abaixo.
-
-REGRA DE OURO (IMPORTANTE):
-1. PRIORIZE O MODELO DE CARTA PROPOSTA DO EDITAL (geralmente é um anexo do edital). Se o Resumo do Edital abaixo contiver um modelo ou exigências específicas de redação, siga-as fielmente.
-2. Se não existir um modelo claro, aplique as condições exigidas em itens específicos do edital (Resumo abaixo).
-3. Utilize SEMPRE o termo "Agente de Contratação". NUNCA utilize o termo "Comissão de Licitação" (não é mais usual na Nova Lei).
-
-DADOS DA LICITAÇÃO E EMPRESA:
-- Licitação: ${bidding.title}
-- Modalidade: ${bidding.modality}
-- Órgão: Conforme edital
-- Empresa: ${company.razaoSocial}
-- CNPJ: ${company.cnpj}
-- Contato: ${company.contactName || 'Representante Legal'}
-- Valor Total da Proposta: R$ ${totalValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-- Validade da Proposta: ${validityDays || 60} dias
-- Resumo dos Itens: ${itemsSummary || 'Conforme planilha de preços em anexo'}
-
-RESUMO DO EDITAL (Use para extrair o modelo ou condições específicas):
-${bidding.aiAnalysis?.fullSummary || 'Não disponível'}
-
-INSTRUÇÕES TÉCNICAS:
-1. Use formato formal de carta comercial.
-2. Enderece ao Agente de Contratação / Pregoeiro.
-3. Inclua: referência explícita ao processo, objeto claro, valor total numérico e por extenso EXATOS.
-4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
-5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
-6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
-16. CRÍTICO: NÃO escreva a qualificação da empresa. Em vez disso, insira exatamente a tag [IDENTIFICACAO] na posição onde a qualificação deve entrar (geralmente após a Referência do processo e antes do corpo principal). O sistema substituirá essa tag pela qualificação completa do cadastro.
-17. CRÍTICO: NÃO inclua Local, Data, "Atenciosamente" ou qualquer campo de assinatura ao final da carta. O sistema já adiciona esses elementos automaticamente na exportação do relatório.
-18. CRÍTICO: O OBJETO da licitação deve ser extraído e transcrito NA ÍNTEGRA, conforme consta no documento original. NÃO o resuma, para que a proposta tenha validade jurídica.
-19. CRÍTICO: NÃO utilize placeholders ou colchetes como "[INSERIR NÚMERO DO PROCESSO]". Se o dado (ex: nº do processo administrativo) estiver presente no "Resumo do Edital" abaixo, utilize-o. Se não estiver, omita o termo completamente em vez de deixar instruções entre colchetes.
-20. Exemplo de estrutura: "Ao Agente de Contratação... Ref: Edital nº... [IDENTIFICACAO] vem perante V. Sª apresentar a proposta para o Objeto: [TRANSCRIÇÃO ÍNTEGRA DO OBJETO]... Valor Global: R$ [VALOR] ([EXTENSO])..."
-21. Retorne APENAS o texto do corpo da carta, sem markdown.`;
-
-        const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: { temperature: 0.2, maxOutputTokens: 4096 },
-        });
-
-        const letterContent = result.text?.trim() || '';
-        console.log(`[AI Letter] Generated letter (${letterContent.length} chars) for bidding ${biddingProcessId}`);
-        res.json({ letterContent });
-    } catch (error: any) {
-        console.error('[AI Letter] Error:', error.message);
-        res.status(500).json({ error: 'Letter generation failed: ' + (error.message || 'Unknown') });
-    }
+    console.warn('[AI Letter] DEPRECATED endpoint called. Use /api/proposals/ai-letter-blocks instead.');
+    res.status(410).json({
+        error: 'Este endpoint foi descontinuado. Use /api/proposals/ai-letter-blocks para geração controlada por blocos.',
+        migration: 'POST /api/proposals/ai-letter-blocks',
+    });
 });
 // ═══════════════════════════════════════════════════════════════════════
 // AI Letter Blocks — Controlled AI generation for specific letter parts
