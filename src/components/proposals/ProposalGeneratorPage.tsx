@@ -470,6 +470,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     handlePrintProposal={p.handlePrintProposal}
                     isSaving={p.isSaving}
                     printLandscape={p.printLandscape}
+                    setPrintLandscape={p.setPrintLandscape}
                 />
             )}
             {p.activeTab === 'letter' && (!p.proposal || !p.selectedBidding || !p.selectedCompany) && (

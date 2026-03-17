@@ -62,6 +62,7 @@ interface ProposalLetterWizardProps {
     handlePrintProposal: (type: 'FULL' | 'LETTER' | 'SPREADSHEET') => void;
     isSaving: boolean;
     printLandscape?: boolean;
+    setPrintLandscape?: (v: boolean) => void;
 }
 
 const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
@@ -119,6 +120,22 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     // ── Tipo de Proposta (Inicial ou Readequada) ──
     const [proposalType, setProposalType] = useState<'INICIAL' | 'READEQUADA'>('INICIAL');
 
+    // ── Dados de Assinatura editáveis ──
+    const [sigLegal, setSigLegal] = useState({
+        name: props.company?.contactName || '',
+        cpf: props.company?.contactCpf || '',
+        role: 'Representante Legal',
+    });
+    const [sigTech, setSigTech] = useState({
+        name: '',
+        registration: '',
+        role: 'Responsável Técnico',
+    });
+    const [sigCompany, setSigCompany] = useState({
+        razaoSocial: props.company?.razaoSocial || '',
+        cnpj: props.company?.cnpj || '',
+    });
+
     const stepIndex = STEPS.findIndex(s => s.id === step);
 
     // ── Normalizer ──
@@ -139,9 +156,28 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         });
         // Inject proposalType into meta for the Builder's TITLE block
         (data.meta as any).proposalType = proposalType;
+        // Inject editable signature data
+        data.signature.legalRepresentative = {
+            name: sigLegal.name,
+            cpf: sigLegal.cpf,
+            role: sigLegal.role,
+        };
+        if (sigTech.name) {
+            data.signature.technicalRepresentative = {
+                name: sigTech.name,
+                registration: sigTech.registration,
+                role: sigTech.role,
+            };
+        }
+        // Override company signature data
+        data.company.razaoSocial = sigCompany.razaoSocial;
+        data.company.cnpj = sigCompany.cnpj;
+        data.company.contactName = sigLegal.name;
+        data.company.contactCpf = sigLegal.cpf;
         return data;
     }, [props.bidding, props.company, props.proposal, props.items, props.totalValue,
-        props.signatureMode, props.validityDays, props.bdi, props.discount, bankData, proposalType]);
+        props.signatureMode, props.validityDays, props.bdi, props.discount, bankData,
+        proposalType, sigLegal, sigTech, sigCompany]);
 
     // ── Validate ──
     const handleValidate = useCallback(() => {
@@ -341,6 +377,47 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                     <option value="TECH">Responsável Técnico</option>
                                     <option value="BOTH">Ambos</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        {/* ── Dados de Assinatura Editáveis ── */}
+                        <div style={{
+                            background: 'rgba(51, 65, 133, 0.04)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
+                            border: '1px solid rgba(51, 65, 133, 0.15)', marginBottom: 'var(--space-4)',
+                        }}>
+                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#334155', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <PenTool size={14} /> Dados de Assinatura
+                            </div>
+
+                            {/* Representante Legal */}
+                            {(props.signatureMode === 'LEGAL' || props.signatureMode === 'BOTH') && (
+                                <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Representante Legal</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
+                                        <input value={sigLegal.name} onChange={e => setSigLegal(s => ({ ...s, name: e.target.value }))} placeholder="Nome completo" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                        <input value={sigLegal.cpf} onChange={e => setSigLegal(s => ({ ...s, cpf: e.target.value }))} placeholder="CPF" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Responsável Técnico */}
+                            {(props.signatureMode === 'TECH' || props.signatureMode === 'BOTH') && (
+                                <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#F97316', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Responsável Técnico</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
+                                        <input value={sigTech.name} onChange={e => setSigTech(s => ({ ...s, name: e.target.value }))} placeholder="Nome do responsável técnico" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                        <input value={sigTech.registration} onChange={e => setSigTech(s => ({ ...s, registration: e.target.value }))} placeholder="CREA/CAU/Registro" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Empresa */}
+                            <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#8B5CF6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Empresa</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
+                                    <input value={sigCompany.razaoSocial} onChange={e => setSigCompany(s => ({ ...s, razaoSocial: e.target.value }))} placeholder="Razão Social" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                    <input value={sigCompany.cnpj} onChange={e => setSigCompany(s => ({ ...s, cnpj: e.target.value }))} placeholder="CNPJ" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                </div>
                             </div>
                         </div>
 
@@ -857,15 +934,30 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             <button onClick={() => setStep('review')} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <ChevronLeft size={16} /> Voltar
                             </button>
-                            <button onClick={handleExport} style={{
-                                padding: 'var(--space-3) var(--space-8)', borderRadius: 'var(--radius-lg)',
-                                background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
-                                color: 'white', border: 'none', fontWeight: 700, fontSize: 'var(--text-md)',
-                                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
-                            }}>
-                                <Printer size={18} /> Exportar PDF
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                {/* Toggle Paisagem ao lado do Exportar */}
+                                <label style={{
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
+                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                                    backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
+                                    fontSize: 'var(--text-sm)',
+                                }}>
+                                    <input type="checkbox" checked={props.printLandscape || false}
+                                        onChange={(e) => props.setPrintLandscape?.(e.target.checked)}
+                                        style={{ width: '14px', height: '14px', accentColor: 'var(--color-primary)' }} />
+                                    <Printer size={12} style={{ color: 'var(--color-text-tertiary)' }} />
+                                    <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Paisagem</span>
+                                </label>
+                                <button onClick={handleExport} style={{
+                                    padding: 'var(--space-3) var(--space-8)', borderRadius: 'var(--radius-lg)',
+                                    background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
+                                    color: 'white', border: 'none', fontWeight: 700, fontSize: 'var(--text-md)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                                }}>
+                                    <Printer size={18} /> Exportar PDF
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
