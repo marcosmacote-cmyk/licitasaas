@@ -121,19 +121,33 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const [proposalType, setProposalType] = useState<'INICIAL' | 'READEQUADA'>('INICIAL');
 
     // ── Dados de Assinatura editáveis ──
-    const [sigLegal, setSigLegal] = useState({
-        name: props.company?.contactName || '',
-        cpf: props.company?.contactCpf || '',
-        role: 'Representante Legal',
+    // Parsear dados sujos do banco (nome+CPF grudados, razão+CNPJ grudados)
+    const [sigLegal, setSigLegal] = useState(() => {
+        let rawName = props.company?.contactName || '';
+        let rawCpf = props.company?.contactCpf || '';
+        // Se o nome contém CPF embutido, separar
+        const cpfInName = rawName.match(/\s*CPF[:\s]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i);
+        if (cpfInName) {
+            if (!rawCpf) rawCpf = cpfInName[1];
+            rawName = rawName.replace(cpfInName[0], '').trim();
+        }
+        return { name: rawName, cpf: rawCpf, role: 'Representante Legal' };
     });
     const [sigTech, setSigTech] = useState({
-        name: '',
-        registration: '',
+        name: (props.company as any)?.technicalResponsible || '',
+        registration: (props.company as any)?.technicalRegistration || '',
         role: 'Responsável Técnico',
     });
-    const [sigCompany, setSigCompany] = useState({
-        razaoSocial: props.company?.razaoSocial || '',
-        cnpj: props.company?.cnpj || '',
+    const [sigCompany, setSigCompany] = useState(() => {
+        let rawRazao = props.company?.razaoSocial || '';
+        let rawCnpj = props.company?.cnpj || '';
+        // Se a razão social contém CNPJ embutido, separar
+        const cnpjInRazao = rawRazao.match(/\s*CNPJ[:\s]*([\d.\/-]+)/i);
+        if (cnpjInRazao) {
+            if (!rawCnpj) rawCnpj = cnpjInRazao[1];
+            rawRazao = rawRazao.replace(cnpjInRazao[0], '').trim();
+        }
+        return { razaoSocial: rawRazao, cnpj: rawCnpj };
     });
 
     const stepIndex = STEPS.findIndex(s => s.id === step);
@@ -366,12 +380,12 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <label className="form-label">Validade da Proposta (dias)</label>
                                 <input type="number" value={props.validityDays}
                                     onChange={e => props.setValidityDays(parseInt(e.target.value) || 60)}
-                                    onBlur={props.handleSaveConfig} className="prop-input" />
+                                    className="prop-input" />
                             </div>
                             <div>
                                 <label className="form-label">Modelo de Assinatura</label>
                                 <select value={props.signatureMode}
-                                    onChange={e => { props.setSignatureMode(e.target.value as any); setTimeout(props.handleSaveConfig, 100); }}
+                                    onChange={e => props.setSignatureMode(e.target.value as any)}
                                     className="prop-input" style={{ padding: '6px 8px' }}>
                                     <option value="LEGAL">Representante Legal</option>
                                     <option value="TECH">Responsável Técnico</option>

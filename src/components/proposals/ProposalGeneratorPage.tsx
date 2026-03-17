@@ -1,7 +1,7 @@
 import {
     Plus, Trash2, Save, FileText, Loader2,
     DollarSign, Package, AlertTriangle, Edit3,
-    ChevronDown, ChevronUp, Briefcase, Printer, Cpu, ScanSearch,
+    ChevronDown, ChevronUp, Briefcase, Cpu, ScanSearch,
     Building2, TrendingUp, ClipboardList,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../../types';
@@ -172,17 +172,6 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                         )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <label style={{
-                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
-                            padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                            backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
-                            fontSize: 'var(--text-sm)',
-                        }}>
-                            <input type="checkbox" checked={p.printLandscape} onChange={(e) => p.setPrintLandscape(e.target.checked)}
-                                style={{ width: '14px', height: '14px', accentColor: 'var(--color-primary)' }} />
-                            <Printer size={12} style={{ color: 'var(--color-text-tertiary)' }} />
-                            <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>Paisagem</span>
-                        </label>
                         <button className="btn btn-outline" onClick={p.handleSaveConfig} disabled={p.isSaving}
                             style={{ padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-lg)', fontWeight: 600, fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Save size={14} /> Salvar em Dossiê
