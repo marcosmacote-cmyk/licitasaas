@@ -14,6 +14,7 @@ import {
     Zap, ChevronDown,
     Mail, ClipboardList, Building2, FileEdit, Scale,
     DollarSign, CalendarDays, Wrench, Landmark, MailCheck, PenTool, File,
+    ListChecks,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../../types';
 import type { ProposalLetterResult, LetterBlock, ValidationResult, LetterExportMode } from './types';
@@ -72,23 +73,24 @@ const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
 ];
 
 const BLOCK_LABELS: Record<string, { icon: React.ReactNode; color: string }> = {
-    [LetterBlockType.RECIPIENT]:       { icon: <Mail size={14} />,          color: '#3B82F6' },
-    [LetterBlockType.REFERENCE]:       { icon: <ClipboardList size={14} />, color: '#6366F1' },
-    [LetterBlockType.QUALIFICATION]:   { icon: <Building2 size={14} />,     color: '#8B5CF6' },
-    [LetterBlockType.OBJECT]:          { icon: <FileEdit size={14} />,      color: '#EC4899' },
-    [LetterBlockType.COMMERCIAL]:      { icon: <Scale size={14} />,         color: '#F59E0B' },
-    [LetterBlockType.PRICING_SUMMARY]: { icon: <DollarSign size={14} />,    color: '#10B981' },
-    [LetterBlockType.VALIDITY]:        { icon: <CalendarDays size={14} />,  color: '#06B6D4' },
-    [LetterBlockType.EXECUTION]:       { icon: <Wrench size={14} />,        color: '#F97316' },
-    [LetterBlockType.BANKING]:         { icon: <Landmark size={14} />,      color: '#14B8A6' },
-    [LetterBlockType.CLOSING]:         { icon: <MailCheck size={14} />,     color: '#64748B' },
-    [LetterBlockType.SIGNATURE]:       { icon: <PenTool size={14} />,       color: '#334155' },
+    [LetterBlockType.RECIPIENT]:            { icon: <Mail size={14} />,          color: '#3B82F6' },
+    [LetterBlockType.REFERENCE]:            { icon: <ClipboardList size={14} />, color: '#6366F1' },
+    [LetterBlockType.QUALIFICATION]:        { icon: <Building2 size={14} />,     color: '#8B5CF6' },
+    [LetterBlockType.OBJECT]:               { icon: <FileEdit size={14} />,      color: '#EC4899' },
+    [LetterBlockType.COMMERCIAL]:           { icon: <Scale size={14} />,         color: '#F59E0B' },
+    [LetterBlockType.PRICING_SUMMARY]:      { icon: <DollarSign size={14} />,    color: '#10B981' },
+    [LetterBlockType.VALIDITY]:             { icon: <CalendarDays size={14} />,  color: '#06B6D4' },
+    [LetterBlockType.PROPOSAL_CONDITIONS]:  { icon: <ListChecks size={14} />,    color: '#0EA5E9' },
+    [LetterBlockType.EXECUTION]:            { icon: <Wrench size={14} />,        color: '#F97316' },
+    [LetterBlockType.BANKING]:              { icon: <Landmark size={14} />,      color: '#14B8A6' },
+    [LetterBlockType.CLOSING]:              { icon: <MailCheck size={14} />,     color: '#64748B' },
+    [LetterBlockType.SIGNATURE]:            { icon: <PenTool size={14} />,       color: '#334155' },
 };
 
 // Agrupamento visual para revisão
 const BLOCK_GROUPS = [
     { label: 'Identificação e Endereçamento', ids: [LetterBlockType.RECIPIENT, LetterBlockType.REFERENCE, LetterBlockType.QUALIFICATION] },
-    { label: 'Corpo Principal da Proposta', ids: [LetterBlockType.OBJECT, LetterBlockType.COMMERCIAL, LetterBlockType.PRICING_SUMMARY, LetterBlockType.VALIDITY] },
+    { label: 'Corpo Principal da Proposta', ids: [LetterBlockType.OBJECT, LetterBlockType.COMMERCIAL, LetterBlockType.PRICING_SUMMARY, LetterBlockType.VALIDITY, LetterBlockType.PROPOSAL_CONDITIONS] },
     { label: 'Informações Complementares', ids: [LetterBlockType.EXECUTION, LetterBlockType.BANKING] },
     { label: 'Fechamento e Assinatura', ids: [LetterBlockType.CLOSING, LetterBlockType.SIGNATURE] },
 ];

@@ -13,7 +13,26 @@ import type {
 import { LetterBlockType } from './types';
 import { TextSanitizer } from './TextSanitizer';
 
-const BUILDER_VERSION = '2.1.0';
+const BUILDER_VERSION = '3.0.0';
+
+// ── Lista negra: padrões textuais que NÃO pertencem à carta proposta ──
+// Cláusulas contratuais, habilitatórias e de julgamento que a IA pode
+// erroneamente incluir nos blocos.
+const PROHIBITED_PATTERNS: RegExp[] = [
+    /a\s+fatura\s+dever[áa]\s+ser\s+apresentada/i,
+    /os\s+pagamentos\s+ser[ãa]o\s+efetuados/i,
+    /n[ãa]o\s+ser[áa]\s+reajustado/i,
+    /propostas\s+com\s+valores\s+inferiores\s+a\s+\d{1,3}\s*%/i,
+    /[ée]\s+exigida\s+declara[çc][ãa]o\s+do\s+respons[áa]vel\s+t[ée]cnico/i,
+    /garantia\s+de\s+proposta/i,
+    /garantia\s+contratual/i,
+    /inexequ[ií]bilidade/i,
+    /firma\s+reconhecida/i,
+    /medi[çc][ãa]o|san[çc][õo]es|penalidades|habilita[çc][ãa]o/i,
+    /pagamento\s+ser[áa]\s+(realizado|efetuado|feito)/i,
+    /reajuste\s+de\s+pre[çc]os/i,
+    /garantia\s+de\s+execu[çc][ãa]o/i,
+];
 
 export class ProposalLetterBuilder {
     private data: ProposalLetterData;
@@ -54,6 +73,7 @@ export class ProposalLetterBuilder {
             this.buildCommercialDeclarationBlock(),
             this.buildPricingSummaryBlock(),
             this.buildValidityBlock(),
+            this.buildProposalConditionsBlock(),
             this.buildExecutionBlock(),
             this.buildBankingBlock(),
             this.buildClosingBlock(),
@@ -170,50 +190,86 @@ export class ProposalLetterBuilder {
     }
 
     private buildCommercialDeclarationBlock(): LetterBlock {
+        // ═══ APENAS declarações essenciais fixas ═══
+        // Condições de pagamento, reajuste, garantia contratual etc.
+        // NÃO pertencem à carta proposta — são cláusulas contratuais.
         const declarations: string[] = [];
 
-        // Declaração obrigatória — Lei 14.133/2021
+        // Declaração obrigatória — Inclusão de custos
         declarations.push(
             'Declaramos que nos preços propostos estão inclusos todos os custos diretos e indiretos, ' +
             'tributos, taxas, fretes, encargos sociais, trabalhistas e previdenciários, seguros, lucro ' +
             'e quaisquer outras despesas que incidam ou venham a incidir sobre o objeto desta licitação.'
         );
 
+        // Declaração obrigatória — Ciência e concordância com o edital
         declarations.push(
             'Declaramos que tomamos conhecimento de todas as condições do Edital e seus anexos, ' +
             'concordando integralmente com os termos estabelecidos.'
         );
 
+        // Declaração obrigatória — Trabalho de menores (Lei 14.133/2021)
         declarations.push(
             'Declaramos que não empregamos menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre, ' +
             'nem menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz, a partir de ' +
             '14 (quatorze) anos, conforme art. 68, inciso VI, da Lei nº 14.133/2021.'
         );
 
-        // Condições específicas do edital (via IA ou dados extraídos)
+        const content = this.resolve(LetterBlockType.COMMERCIAL, declarations.join('\n\n'));
+
+        return this.createBlock(LetterBlockType.COMMERCIAL, 'Declarações Essenciais',
+            content, { required: true, editable: true });
+    }
+
+    /**
+     * NOVO — Bloco "Condições da Proposta"
+     * Contém apenas dados pertinentes à proposta:
+     * - Prazo de execução/fornecimento
+     * - Prazo para início
+     * - Local de execução
+     * - Observações objetivas ligadas à proposta
+     */
+    private buildProposalConditionsBlock(): LetterBlock {
+        const e = this.data.execution;
+        const isUseful = (v?: string) => v && !/^(não informado|n\/a|—|-|\.{3})$/i.test(v.trim());
+
+        const lines: string[] = [];
+
+        // Prazo de execução/fornecimento
+        if (isUseful(e.executionDeadline)) {
+            lines.push(`Prazo de execução/fornecimento: ${e.executionDeadline!.replace(/\s*\[.*\]\s*$/, '').trim()}.`);
+        }
+
+        // Local de execução
+        if (isUseful(e.executionLocation)) {
+            lines.push(`Local de execução: ${e.executionLocation!.replace(/\s*\[.*\]\s*$/, '').trim()}.`);
+        }
+
+        // Vigência (se disponível)
+        if (isUseful(e.contractDuration)) {
+            lines.push(`Vigência do contrato: ${e.contractDuration!.replace(/\s*\[.*\]\s*$/, '').trim()}.`);
+        }
+
+        // Condições específicas da IA (filtradas pela blacklist)
         const aiExtras = this.aiBlocks.get('commercialExtras');
         if (aiExtras?.trim()) {
-            declarations.push(aiExtras.trim());
+            const filtered = this.filterProhibited(aiExtras.trim());
+            if (filtered.trim()) {
+                lines.push(filtered);
+            }
         }
 
-        // Condições de pagamento (se disponível nos dados)
-        if (this.data.commercial.paymentConditions?.trim()) {
-            declarations.push(this.data.commercial.paymentConditions.trim());
-        }
+        const hasContent = lines.length > 0;
+        const content = this.resolve(LetterBlockType.PROPOSAL_CONDITIONS,
+            hasContent ? lines.join('\n\n') : '');
 
-        // Garantia contratual (se exigida)
-        if (this.data.commercial.warrantyPercentage && this.data.commercial.warrantyPercentage > 0) {
-            declarations.push(
-                `Declaramos ciência da exigência de garantia contratual de ${this.data.commercial.warrantyPercentage}% ` +
-                `do valor do contrato, conforme disposto no Edital.`
-            );
-        }
-
-        const content = this.resolve(LetterBlockType.COMMERCIAL, declarations.join('\n\n'));
-        const hasAi = !!aiExtras?.trim();
-
-        return this.createBlock(LetterBlockType.COMMERCIAL, 'Declarações Comerciais',
-            content, { required: true, editable: true, aiGenerated: hasAi });
+        return this.createBlock(LetterBlockType.PROPOSAL_CONDITIONS, 'Condições da Proposta',
+            content, {
+                required: false,
+                editable: true,
+                aiGenerated: !!aiExtras?.trim(),
+                visible: hasContent || this.overrides.has(LetterBlockType.PROPOSAL_CONDITIONS),
+            });
     }
 
     private buildPricingSummaryBlock(): LetterBlock {
@@ -259,34 +315,33 @@ export class ProposalLetterBuilder {
 
     private buildExecutionBlock(): LetterBlock {
         const e = this.data.execution;
-        // Filtra campos com valor real (ignora 'Não informado', 'N/A', etc.)
         const isUseful = (v?: string) => v && !/^(não informado|n\/a|—|-|\.{3})$/i.test(v.trim());
-        const hasData = isUseful(e.executionLocation) || isUseful(e.executionDeadline) || isUseful(e.contractDuration);
         const aiContent = this.aiBlocks.get(LetterBlockType.EXECUTION);
 
-        if (!hasData && !aiContent && !this.overrides.has(LetterBlockType.EXECUTION)) {
-            return this.createBlock(LetterBlockType.EXECUTION, 'Condições de Execução',
+        // Se IA gerou conteúdo para o bloco, filtrar pela blacklist
+        let filteredAiContent = '';
+        if (aiContent?.trim()) {
+            filteredAiContent = this.filterProhibited(aiContent.trim());
+        }
+
+        // Se já há ProposalConditions com dados de execução, este bloco fica oculto
+        // para evitar duplicação
+        const proposalConditionsHasData = isUseful(e.executionDeadline) || isUseful(e.executionLocation) || isUseful(e.contractDuration);
+        if (proposalConditionsHasData && !filteredAiContent && !this.overrides.has(LetterBlockType.EXECUTION)) {
+            return this.createBlock(LetterBlockType.EXECUTION, 'Condições de Execução (Complementar)',
                 '', { required: false, visible: false });
         }
 
-        let content: string;
-        let isAi = false;
-
-        if (this.overrides.has(LetterBlockType.EXECUTION)) {
-            content = this.overrides.get(LetterBlockType.EXECUTION)!;
-        } else if (aiContent?.trim()) {
-            content = aiContent.trim();
-            isAi = true;
-        } else {
-            const lines: string[] = [];
-            if (isUseful(e.executionLocation)) lines.push(`Local de execução/entrega: ${e.executionLocation}.`);
-            if (isUseful(e.executionDeadline)) lines.push(`Prazo de execução/entrega: ${e.executionDeadline}.`);
-            if (isUseful(e.contractDuration)) lines.push(`Vigência do contrato: ${e.contractDuration}.`);
-            content = lines.join('\n');
+        // Conteúdo AI filtrado é o único que aparece aqui (dados diretos vão para ProposalConditions)
+        if (!filteredAiContent && !this.overrides.has(LetterBlockType.EXECUTION)) {
+            return this.createBlock(LetterBlockType.EXECUTION, 'Condições de Execução (Complementar)',
+                '', { required: false, visible: false });
         }
 
-        return this.createBlock(LetterBlockType.EXECUTION, 'Condições de Execução',
-            content, { required: false, editable: true, aiGenerated: isAi });
+        const content = this.overrides.get(LetterBlockType.EXECUTION) || filteredAiContent;
+
+        return this.createBlock(LetterBlockType.EXECUTION, 'Condições de Execução (Complementar)',
+            content, { required: false, editable: true, aiGenerated: !!filteredAiContent });
     }
 
     private buildBankingBlock(): LetterBlock {
@@ -365,6 +420,27 @@ export class ProposalLetterBuilder {
      */
     private resolve(blockType: LetterBlockType, defaultContent: string): string {
         return this.overrides.get(blockType) || defaultContent;
+    }
+
+    /**
+     * Filtra texto da IA removendo parágrafos que contêm cláusulas proibidas.
+     * Apenas PROPOSAL_CORE e PROPOSAL_OPTIONAL passam — cláusulas contratuais,
+     * habilitatórias e de julgamento são descartadas.
+     */
+    private filterProhibited(text: string): string {
+        const paragraphs = text.split(/\n\n+/);
+        const allowed = paragraphs.filter(p => {
+            const trimmed = p.trim();
+            if (!trimmed) return false;
+            // Verifica se algum padrão proibido está presente
+            for (const pattern of PROHIBITED_PATTERNS) {
+                if (pattern.test(trimmed)) {
+                    return false; // Descarta este parágrafo
+                }
+            }
+            return true;
+        });
+        return allowed.join('\n\n');
     }
 
     /**

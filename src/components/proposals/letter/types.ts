@@ -8,17 +8,18 @@
 // ── Block Types ──
 
 export const LetterBlockType = {
-    RECIPIENT:       'recipientBlock',
-    REFERENCE:       'referenceBlock',
-    QUALIFICATION:   'qualificationBlock',
-    OBJECT:          'objectBlock',
-    COMMERCIAL:      'commercialDeclarationBlock',
-    PRICING_SUMMARY: 'pricingSummaryBlock',
-    VALIDITY:        'validityBlock',
-    EXECUTION:       'executionBlock',
-    BANKING:         'bankingBlock',
-    CLOSING:         'closingBlock',
-    SIGNATURE:       'signatureBlock',
+    RECIPIENT:            'recipientBlock',
+    REFERENCE:            'referenceBlock',
+    QUALIFICATION:        'qualificationBlock',
+    OBJECT:               'objectBlock',
+    COMMERCIAL:           'commercialDeclarationBlock',
+    PRICING_SUMMARY:      'pricingSummaryBlock',
+    VALIDITY:             'validityBlock',
+    PROPOSAL_CONDITIONS:  'proposalConditionsBlock',
+    EXECUTION:            'executionBlock',
+    BANKING:              'bankingBlock',
+    CLOSING:              'closingBlock',
+    SIGNATURE:            'signatureBlock',
 } as const;
 
 export type LetterBlockType = typeof LetterBlockType[keyof typeof LetterBlockType];
@@ -192,3 +193,17 @@ export type LetterExportMode =
     | 'FULL'                // Carta + Planilha
     | 'LETTER_WITH_SUMMARY' // Carta com resumo dos itens
     | 'LETTER_ANALYTICAL';  // Carta com detalhamento analítico
+
+// ── Content Classification ──
+// Classifica trechos extraídos do edital para filtrar o que pode entrar na carta
+
+export const ContentClassification = {
+    PROPOSAL_CORE:        'PROPOSAL_CORE',        // Deve constar na proposta
+    PROPOSAL_OPTIONAL:    'PROPOSAL_OPTIONAL',    // Pode constar se relevante
+    CONTRACTUAL_ONLY:     'CONTRACTUAL_ONLY',     // Cláusula contratual — NÃO entra na carta
+    HABILITATION_ONLY:    'HABILITATION_ONLY',    // Exigência de habilitação — NÃO entra na carta
+    JUDGMENT_RULE:        'JUDGMENT_RULE',         // Regra de julgamento — NÃO entra na carta
+    TECHNICAL_ATTACHMENT: 'TECHNICAL_ATTACHMENT',  // Anexo técnico — NÃO entra na carta
+} as const;
+
+export type ContentClassification = typeof ContentClassification[keyof typeof ContentClassification];

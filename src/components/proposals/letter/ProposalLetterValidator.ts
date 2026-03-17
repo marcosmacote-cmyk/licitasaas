@@ -2,11 +2,27 @@
  * ══════════════════════════════════════════════════════════════
  * ProposalLetterValidator
  * Valida campos obrigatórios e condições antes da geração da carta.
+ * Também valida blocos gerados ANTES da exportação (pré-export).
  * Retorna erros impeditivos e warnings não impeditivos.
  * ══════════════════════════════════════════════════════════════
  */
 
-import type { ProposalLetterData, ValidationResult, ValidationIssue } from './types';
+import type { ProposalLetterData, ValidationResult, ValidationIssue, LetterBlock } from './types';
+
+// Padrões proibidos — cláusulas que NÃO pertencem à carta proposta
+const EXPORT_PROHIBITED_PATTERNS: RegExp[] = [
+    /a\s+fatura\s+dever[áa]\s+ser\s+apresentada/i,
+    /os\s+pagamentos\s+ser[ãa]o\s+efetuados/i,
+    /n[ãa]o\s+ser[áa]\s+reajustado/i,
+    /propostas\s+com\s+valores\s+inferiores\s+a\s+\d{1,3}\s*%/i,
+    /[ée]\s+exigida\s+declara[çc][ãa]o\s+do\s+respons[áa]vel\s+t[ée]cnico/i,
+    /garantia\s+de\s+proposta/i,
+    /inexequ[ií]bilidade/i,
+    /firma\s+reconhecida/i,
+    /san[çc][õo]es|penalidades/i,
+    /pagamento\s+ser[áa]\s+(realizado|efetuado|feito)/i,
+    /reajuste\s+de\s+pre[çc]os/i,
+];
 
 export class ProposalLetterValidator {
 
@@ -142,6 +158,59 @@ export class ProposalLetterValidator {
             warnings.push(this.warning('signatureBlock', 'company.technicalResponsible',
                 'Modo de assinatura inclui Responsável Técnico, mas não há RT cadastrado.',
                 'Cadastre o Responsável Técnico no perfil da empresa.'));
+        }
+
+        // ── Prazo de execução/fornecimento (campo essencial) ──
+        if (!data.execution?.executionDeadline?.trim()) {
+            warnings.push(this.warning('proposalConditionsBlock', 'execution.executionDeadline',
+                'Prazo de execução/fornecimento não identificado no edital.',
+                'Preencha manualmente no bloco "Condições da Proposta" antes de exportar.'));
+        }
+
+        return {
+            isValid: errors.length === 0,
+            errors,
+            warnings,
+        };
+    }
+
+    /**
+     * ═══ PRÉ-EXPORTAÇÃO ═══
+     * Valida os blocos GERADOS antes da exportação final.
+     * Verifica: truncamento, marcadores de revisão, cláusulas proibidas.
+     * Se retornar isValid === false, a exportação deve ser BLOQUEADA.
+     */
+    validateForExport(blocks: LetterBlock[]): ValidationResult {
+        const errors: ValidationIssue[] = [];
+        const warnings: ValidationIssue[] = [];
+
+        for (const block of blocks) {
+            if (!block.visible || !block.content?.trim()) continue;
+            const content = block.content;
+
+            // ── Detectar marcadores de truncamento / revisão ──
+            if (/\[texto incompleto/.test(content) || /\[dado incompleto/.test(content)) {
+                errors.push(this.error(block.id, 'content',
+                    `O bloco "${block.label}" contém texto incompleto que precisa ser revisado.`,
+                    'Edite o bloco para completar a informação ou remova o trecho truncado.'));
+            }
+
+            // ── Detectar marcadores de verificação ──
+            if (/\[verificar/.test(content)) {
+                warnings.push(this.warning(block.id, 'content',
+                    `O bloco "${block.label}" contém marcador de verificação.`,
+                    'Revise o conteúdo e remova o marcador antes de protocolar.'));
+            }
+
+            // ── Detectar cláusulas proibidas que passaram ──
+            for (const pattern of EXPORT_PROHIBITED_PATTERNS) {
+                if (pattern.test(content)) {
+                    warnings.push(this.warning(block.id, 'content',
+                        `O bloco "${block.label}" pode conter cláusula contratual/habilitatória que não deve constar na carta proposta.`,
+                        'Verifique se este trecho é pertinente à proposta ou se é uma cláusula do contrato.'));
+                    break; // 1 warning per block is enough
+                }
+            }
         }
 
         return {

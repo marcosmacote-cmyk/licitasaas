@@ -78,6 +78,11 @@ export class LetterRenderer {
                     <p style="margin: 0; text-indent: 2em; line-height: 1.6;">${formatted}</p>
                 </div>`;
 
+            case LetterBlockType.PROPOSAL_CONDITIONS:
+                return `<div class="block block-conditions" style="margin-bottom: 15px; text-align: justify; page-break-inside: avoid;">
+                    ${this.renderParagraphs(formatted)}
+                </div>`;
+
             case LetterBlockType.EXECUTION:
                 return `<div class="block block-execution" style="margin-bottom: 15px; text-align: justify; page-break-inside: avoid;">
                     ${this.renderParagraphs(formatted)}
