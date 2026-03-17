@@ -47,6 +47,9 @@ export class TextSanitizer {
         // 6. Normalizar capitalização de início de parágrafo
         result = this.normalizeCapitalization(result);
 
+        // 7. Detectar texto truncado (mid-word ou sem pontuação final)
+        result = this.detectTruncation(result);
+
         return result.trim();
     }
 
@@ -156,5 +159,38 @@ export class TextSanitizer {
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             }).join(' ');
         });
+    }
+
+    /**
+     * Detecta texto truncado no meio de palavra ou frase.
+     * Ex: "com o pagamento efetu" → sinaliza com marcador visual.
+     * Isso impede que cláusulas sensíveis saiam incompletas no PDF.
+     */
+    private detectTruncation(text: string): string {
+        return text.split('\n\n').map(paragraph => {
+            const trimmed = paragraph.trim();
+            if (!trimmed || trimmed.length < 20) return paragraph;
+
+            // Skip if paragraph ends with expected punctuation or closing chars
+            if (/[.;:!?)"\u201D]$/.test(trimmed)) return paragraph;
+
+            // Skip lines that are labels (e.g., "Atenciosamente,")
+            if (/,\s*$/.test(trimmed)) return paragraph;
+
+            // Skip lines that look like structured data (addresses, names, etc.)
+            if (/^(Local|Prazo|Vigência|Banco|Agência|Conta|PIX|CPF|CNPJ)/i.test(trimmed)) return paragraph;
+
+            // Skip short lines (likely intentional fragments like dates, cities)
+            if (trimmed.split(/\s+/).length < 5) return paragraph;
+
+            // If we get here, it's a multi-word paragraph without final punctuation.
+            // Check if last word looks truncated (lowercase, no caps, not a connective)
+            const lastWord = trimmed.split(/\s+/).pop() || '';
+            const looksComplete = /^(etc|sim|não|anos|dias|meses|itens|reais|centavos|edital|anexos|licitação|contrato|processo)$/i.test(lastWord);
+            if (looksComplete) return paragraph;
+
+            // Likely truncated
+            return paragraph + ' [texto incompleto — revisar antes de protocolar]';
+        }).join('\n\n');
     }
 }

@@ -16,7 +16,23 @@ export class LetterRenderer {
      */
     renderToHtml(result: ProposalLetterResult): string {
         const visibleBlocks = result.blocks.filter(b => b.visible);
-        return visibleBlocks.map(b => this.renderBlock(b)).join('\n\n');
+        // Group closing + signature in a single non-breakable wrapper
+        const parts: string[] = [];
+        let closingBuffer = '';
+        for (const b of visibleBlocks) {
+            if (b.type === LetterBlockType.CLOSING) {
+                closingBuffer = this.renderBlock(b);
+            } else if (b.type === LetterBlockType.SIGNATURE && closingBuffer) {
+                // Wrap closing + signature together to prevent page break between them
+                parts.push(`<div style="page-break-inside: avoid;">${closingBuffer}\n${this.renderBlock(b)}</div>`);
+                closingBuffer = '';
+            } else {
+                if (closingBuffer) { parts.push(closingBuffer); closingBuffer = ''; }
+                parts.push(this.renderBlock(b));
+            }
+        }
+        if (closingBuffer) parts.push(closingBuffer);
+        return parts.join('\n\n');
     }
 
     /**

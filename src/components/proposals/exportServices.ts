@@ -160,7 +160,7 @@ export function generateProposalPdf(
                 table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
                 table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
                 table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; font-weight: normal; }
-                .totals { width: 250px; float: right; margin-top: 10px; }
+                .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
                 .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
                 .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
                 .signature-block .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 12px; }

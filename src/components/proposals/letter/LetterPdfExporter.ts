@@ -93,7 +93,7 @@ export class LetterPdfExporter {
         table.summary { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11px; }
         table.summary th { border-bottom: 2px solid #222; padding: 5px; text-align: left; background: #f5f5f5; font-size: 10px; }
         table.summary td { padding: 4px 5px; border-bottom: 1px solid #ddd; }
-        .totals { width: 250px; float: right; margin-top: 10px; }
+        .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
         .totals-clearfix { clear: both; height: 1px; }
         .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
