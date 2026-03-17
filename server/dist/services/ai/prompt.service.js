@@ -421,14 +421,98 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 24. NÃO DUPLIQUE: não crie entradas separadas para o mesmo fato (ex: "visita técnica" em participation_conditions E em requirements). O fato jurídico vai em requirements; o dado booleano vai em participation_conditions.
 25. OPERADORES FINANCEIROS: para índices contábeis, use EXATAMENTE o operador do edital. LG >= 1,0 significa "maior ou igual a 1,0". EG <= 0,5 significa "menor ou igual a 0,5". NUNCA inverta o operador. Se o edital diz EG <= 0,5, NÃO escreva "mínimo 0,5" — escreva "máximo 0,5 (EG ≤ 0,5)". Se o edital diz LG >= 1,0, escreva "mínimo 1,0 (LG ≥ 1,0)".
 26. TAXONOMIA DE GARANTIAS: garantia de proposta, garantia de execução/contratual, seguro-garantia e caução SEMPRE vão em qualificacao_economico_financeira (QEF), NUNCA em documentos_complementares (DC). DC é apenas para declarações formais, procurações e documentos auxiliares sem natureza financeira.
-27. SEPARAÇÃO RIGOROSA QTP: em qualificacao_tecnica_profissional, crie itens DISTINTOS e com DESTAQUE LITERAL idêntico ao de QTO:
-    (a) Vínculo do RT: comprovação de vínculo empregatício ou contratual do responsável técnico (CTPS, contrato, quadro societário) — 1 item principal
-    (b) Acervo técnico / CAT: certidão de acervo técnico do profissional, emitida pelo CREA/CAU/CFT — 1 item principal POR parcela relevante
-        → Se o edital exige CAT em 3 parcelas distintas (ex: pavimentação, drenagem, sinalização), crie 3 ITENS PRINCIPAIS separados (QTP-02, QTP-03, QTP-04), cada um com quantitativo mínimo literal
-        → PROIBIDO: agrupar múltiplas parcelas do profissional sob um único 'Acervo técnico' genérico
-        → Cada parcela do profissional deve ter o MESMO destaque literal que as parcelas da empresa em QTO
-    (c) Declaração de concordância: declaração formal do profissional indicado concordando com sua indicação — 1 item principal
-    NÃO agrupe esses três em um único item. São obrigações distintas com documentos distintos.
+    MODALIDADES DE GARANTIA (caução em dinheiro, títulos da dívida, fiança bancária, seguro-garantia, título de capitalização) são SUBITENS do item principal de garantia, com:
+      → entry_type: "subitem"
+      → obligation_type: "alternativa"
+      → parent_id: ID do item principal de garantia
+    NÃO crie cada modalidade como exigencia_principal separada — são formas alternativas de atender UMA MESMA exigência.
+27. SEPARAÇÃO RIGOROSA QTP — CADA ITEM É EXIGÊNCIA PRINCIPAL INDEPENDENTE:
+    Em qualificacao_tecnica_profissional, CADA obrigação abaixo é um item entry_type="exigencia_principal" COM parent_id=null:
+    (a) Vínculo do RT: comprovação de vínculo empregatício ou contratual do responsável técnico — 1 EXIGÊNCIA PRINCIPAL
+    (b) Acervo técnico / CAT: certidão de acervo técnico do profissional pelo CREA/CAU — 1 EXIGÊNCIA PRINCIPAL POR PARCELA
+        → Se o edital exige CAT em 3 parcelas, crie 3 ITENS DISTINTOS com quantitativo mínimo literal CADA
+        → AS PARCELAS DO PROFISSIONAL SÃO AS MESMAS PARCELAS DA EMPRESA (QTO, bloco C)
+        → Se QTO tem "Estrutura Treliçada 5.325,5 KG", QTP TAMBÉM deve ter "CAT Estrutura Treliçada 5.325,5 KG"
+        → PROIBIDO: criar um item genérico "Atestado de Capacidade Técnica" que englobe todas as parcelas
+    (c) Declaração de concordância: declaração do profissional indicado — 1 EXIGÊNCIA PRINCIPAL
+    (d) Participação permanente do RT — se exigida, 1 EXIGÊNCIA PRINCIPAL
+    
+    ⛔ PROIBIDO CRIAR ITEM GUARDA-CHUVA:
+    NÃO crie "Profissional de nível superior" como item principal e agrupe CATs como subitens.
+    NÃO crie "Atestado ou Certidão de Capacidade Técnica" genérico que englobe múltiplas parcelas.
+    
+    ✅ EXEMPLO OBRIGATÓRIO de saída para edital com 3 parcelas:
+    qualificacao_tecnica_profissional: [
+      { requirement_id: "QTP-01", title: "Comprovação de vínculo do RT", entry_type: "exigencia_principal", parent_id: null },
+      { requirement_id: "QTP-02", title: "CAT: Estrutura Treliçada de Cobertura", description: "...mínimo 5.325,5 KG...", entry_type: "exigencia_principal", parent_id: null },
+      { requirement_id: "QTP-03", title: "CAT: Telha de Alumínio c/ Poliuretano", description: "...mínimo 533,65 M²...", entry_type: "exigencia_principal", parent_id: null },
+      { requirement_id: "QTP-04", title: "CAT: Muro Contorno de Alvenaria", description: "...mínimo 106,71 M²...", entry_type: "exigencia_principal", parent_id: null },
+      { requirement_id: "QTP-05", title: "Declaração de concordância do RT", entry_type: "exigencia_principal", parent_id: null },
+      { requirement_id: "QTP-06", title: "Participação permanente do RT", entry_type: "exigencia_principal", parent_id: null }
+    ]
+    
+    QTP CONTÉM APENAS: vínculo RT, CAT/acervo do profissional (1 por parcela), declaração de concordância, participação técnica permanente.
+
+35. ESTRUTURA INTERNA DE QTO — 3 BLOCOS DISTINTOS:
+    qualificacao_tecnica_operacional deve separar INTERNAMENTE os itens em 3 blocos semânticos:
+    
+    BLOCO A — DOCUMENTAÇÃO TÉCNICA DA PESSOA JURÍDICA:
+      Certidão de Registro de Pessoa Jurídica no CREA/CAU/CFT:
+        → É exigência DOCUMENTAL de habilitação técnica da PJ
+        → NÃO é atestado operacional e NÃO é parcela de maior relevância
+        → entry_type: "exigencia_principal"
+        → Na description, mencionar EXPRESSAMENTE: "exigência documental de habilitação técnica da pessoa jurídica"
+        → Se aplicável, Certidão do CAU segue a mesma lógica
+      Registro/inscrição em Conselho profissional:
+        → Mesmo tratamento: documental da PJ
+        → NÃO mencionar "responsável técnico" na description do registro PJ — vínculo do RT pertence ao QTP
+    
+    BLOCO B — COMPROVAÇÃO DE CONHECIMENTO DO LOCAL (se exigida):
+      Criar 1 exigência principal com 2 SUBITENS ALTERNATIVOS:
+        → Subitem 1: Atestado de Visita Técnica (declaração emitida pelo órgão após visita ao local)
+        → Subitem 2: Declaração de Pleno Conhecimento e Aceitação (substitutiva da visita, se prevista no edital)
+      AMBOS são formas de atendimento — o licitante escolhe uma.
+      entry_type do pai: "exigencia_principal"
+      entry_type dos filhos: "subitem" com obligation_type: "alternativa"
+    
+    BLOCO C — ATESTADOS OPERACIONAIS DA EMPRESA (parcelas de maior relevância):
+      → CADA parcela de maior relevância = 1 item PRINCIPAL separado
+      → Com quantitativo mínimo literal (ex: "5.325,50 KG", "533,65 m²")
+      → PROIBIDO usar expressões genéricas (ver regra 37)
+      → Referência ao item/alínea do edital obrigatória
+
+36. VISTO CREA/CAU-UF — OBSERVAÇÃO ACESSÓRIA:
+    Se o edital exige "visto" do CREA/CAU na UF da obra:
+      → NÃO É exigência de habilitação técnica da empresa, e sim condição pré-contratual ou registral
+      → Classificar como entry_type: "observacao" vinculada à Certidão de Registro PJ (BLOCO A do QTO)
+      → Ou como item em documentos_complementares com entry_type: "documento_complementar"
+      → NÃO classificar como QTP — visto é da PJ, não do profissional
+      → NÃO criar como exigencia_principal em QTO — é acessório
+      → Título: "Visto CREA/CAU-[UF] (condição registral para contratação)"
+
+37. ANTI-GENERICIDADE — PROIBIÇÃO EXPRESSA:
+    PROIBIDO usar qualquer das expressões abaixo sem especificar cada serviço/parcela com quantitativo:
+      ✗ "serviços similares"
+      ✗ "acervo técnico compatível"
+      ✗ "parcelas de maior relevância"
+      ✗ "experiência em serviços análogos"
+      ✗ "atestado de capacidade técnica compatível"
+    OBRIGATÓRIO: detalhar ITEM POR ITEM com quantitativo mínimo literal.
+    Exemplo PROIBIDO: "Atestado de capacidade técnica em parcelas de maior relevância"
+    Exemplo CORRETO: "Atestado de execução de serviços de terraplanagem — mínimo 5.325,50 KG (50% da parcela estimada), conforme Edital item 8.7.1 alínea 'a'"
+
+38. QTP — EXCLUSIVAMENTE CREDENCIAIS DO PROFISSIONAL (PESSOA FÍSICA):
+    qualificacao_tecnica_profissional NÃO deve conter NENHUM dos itens abaixo:
+      ✗ Certidão de Registro PJ (empresa) → vai no BLOCO A do QTO
+      ✗ Visto CREA/CAU-UF → vai como observação do QTO ou DC
+      ✗ Atestados da empresa → vai no BLOCO C do QTO
+      ✗ Visita técnica → vai no BLOCO B do QTO
+    QTP contém apenas:
+      ✓ Vínculo do RT (CTPS, contrato, quadro societário)
+      ✓ CAT/acervo do profissional (por parcela relevante, com quantitativo)
+      ✓ Declaração de concordância do profissional
+      ✓ Experiência profissional comprovada
+      ✓ Participação técnica permanente
 28. PADRONIZAÇÃO PC: em proposta_comercial, use exatamente estas categorias semânticas:
     - proposta inicial: exigências para composição e envio da proposta de preços
     - proposta ajustada (vencedor): adequação da proposta pelo vencedor provisório
@@ -490,8 +574,26 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     → Se CNPJ não está em RFT como item: ADICIONE antes de responder (title: "Prova de inscrição no CNPJ", source_ref: do item de habilitação do edital)
     → Se QTP tem apenas 1 item "Acervo técnico" genérico mas o edital lista múltiplas parcelas: EXPLODA em itens separados
     → Se inscrição estadual/municipal é exigida mas ausente: ADICIONE
+    → Se Certidão PJ CREA/CAU está em QTP: MOVA para QTO (BLOCO A)
+    → Se Visto CREA/CAU está como exigencia_principal em QTP: REBAIXE para observação no QTO
+    → Se QTO ou QTP contém "serviços similares", "acervo compatível" ou "parcelas relevantes" sem quantitativo: SUBSTITUA pela transcrição literal do edital
+    → Se visita técnica está em QTP: MOVA para QTO (BLOCO B)
     Se alguma categoria estiver VAZIA mas o edital a exigir, RE-EXTRAI antes de responder.
     Se genuinamente não exigida, deixe vazia e anote em evidence_registry: 'categoria {X} não identificada no edital'.
+
+34. EXTRAÇÃO DE ITENS LICITADOS (itens_licitados) — OBRIGATÓRIO:
+    Extraia TODOS os itens/lotes com preço do edital, TR, planilha orçamentária ou qualquer tabela que contenha itens com quantidades e valores.
+    Para CADA item extraia: número do item (itemNumber), descrição técnica COMPLETA (description), unidade de medida (unit), quantidade (quantity), valor unitário de referência/estimado (referencePrice).
+    Se o edital especifica um período (ex: 12 meses de serviço mensal), use multiplier e multiplierLabel.
+    FONTES PRIORITÁRIAS: Planilha orçamentária (Anexo) > Tabela de itens no TR > Corpo do edital.
+    Se NÃO encontrar itens com preços (ex: edital sem planilha e sem tabela de itens), retorne array vazio.
+    NUNCA invente itens. Extraia APENAS o que está documentado.
+
+35. QUALIDADE DOS ITENS:
+    - description: transcreva INTEGRALMENTE a descrição do item, NÃO resuma
+    - unit: use abreviaturas padrão (UN, KG, M², M³, ML, MÊS, HORA, DIA, etc.)
+    - referencePrice: valor numérico SEM texto (ex: 15000.00, não "R$ 15.000,00")
+    - Se a planilha contém sub-itens (composição de custos), extraia apenas os itens PRINCIPAIS (totalizadores)
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -525,10 +627,10 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "permite_consorcio": null, "consorcio_detalhes": "",
     "permite_subcontratacao": null, "subcontratacao_detalhes": "limite ou condições + fonte do edital (ex: item 5.2)",
     "exige_visita_tecnica": null, "visita_tecnica_detalhes": "",
-    "exige_garantia_proposta": null, "garantia_proposta_detalhes": "",
-    "exige_garantia_contratual": null, "garantia_contratual_detalhes": "",
+    "exige_garantia_proposta": null, "garantia_proposta_detalhes": "valor/percentual + fonte do edital (ex: 1% do valor estimado, conforme item 10.3)",
+    "exige_garantia_contratual": null, "garantia_contratual_detalhes": "percentual + modalidades + fonte do edital (ex: 5% do valor do contrato, conforme item 15.1)",
     "exige_amostra": null, "amostra_detalhes": "",
-    "tratamento_me_epp": "", "participacao_restrita": "",
+    "tratamento_me_epp": "", "participacao_restrita": "listar vedações separadas por ponto-e-vírgula (ex: Empresas suspensas; Em recuperação judicial sem plano aprovado; Consórcios)",
     "outras_condicoes": []
   },
   "technical_analysis": {
@@ -552,7 +654,8 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "exige_marca_modelo_fabricante": null, "exige_catalogo_ficha_tecnica_manual": null,
     "exige_declaracao_fabricante": null,
     "criterios_desclassificacao_proposta": [], "criterios_exequibilidade": [],
-    "criterios_desempate": [], "observacoes_proposta": []
+    "criterios_desempate": [], "observacoes_proposta": [],
+    "itens_licitados": [{"itemNumber": "1", "description": "Descrição técnica COMPLETA do item conforme edital/TR/planilha", "unit": "UN|KG|M²|M³|ML|MÊS|HORA|DIA|DIÁRIA|KM|LITRO|CJ|VB|SV", "quantity": 1, "referencePrice": 0.00, "multiplier": 1, "multiplierLabel": ""}]
   },
   "contractual_analysis": {
     "prazo_execucao": "", "prazo_vigencia": "", "reajuste": "", "repactuacao": "",
@@ -716,6 +819,21 @@ Você DEVE avaliar CADA um dos seguintes pontos e reportar quando identificar al
 - PRAZOS RECURSAIS: se o prazo depende de evento futuro (ex: "3 dias úteis após intimação do resultado"), classifique como CONDICIONAL e na description indique "a contar de [evento]". NÃO apresente como data fixa.
 - FIRMA RECONHECIDA DO RT: quando o edital exige reconhecimento de firma de responsável técnico, a ação recomendada DEVE ser primeiro "cumprir a exigência providenciando o reconhecimento de firma" e apenas secundariamente "caso inviável, solicitar esclarecimento sobre aceitação de assinatura digital". NÃO recomende impugnação como ação primária para exigências de autenticação documental.
 - Se NÃO encontrar riscos relevantes, DIGA: "Nenhum risco significativo identificado." Não invente riscos genéricos.
+
+⛔ NÃO CLASSIFIQUE COMO RISCO (são requisitos padrão universais):
+  - Prazo de validade padrão de certidões (30, 60, 90, 180 dias) — procedimento rotineiro
+  - Conformidade de itens e quantitativos da proposta com planilha — é obrigação universal
+  - Regras de arredondamento de preços unitários — procedimento padrão
+  - Exigência de que a proposta não contenha alternativas — cláusula universal
+  - Requisitos formais de formatação de proposta (idioma, rasuras, assinatura) — padrão de todo edital
+  - Declarações obrigatórias genéricas (ME/EPP, menores, impedimento) — rotina licitatória
+  ESSES ITENS SÓ são riscos se tiverem peculiaridade ESPECÍFICA deste edital (ex: prazo de 30 dias quando o normal seria 180).
+
+✅ SEMPRE CLASSIFIQUE COMO RISCO (quando presente):
+  - DUPLICIDADE DE ATESTADOS: quando QTO (empresa) e QTP (profissional) exigem as MESMAS parcelas com os MESMOS quantitativos, flagge como risco ALTA: "O licitante precisa de atestados/CATs DISTINTOS para empresa e profissional nas mesmas parcelas — um único atestado NÃO atende ambas as exigências."
+  - Quantitativos desproporcionais ao objeto
+  - Índices financeiros atípicos (EG ≤ 0,3, LG ≥ 2,0)
+  - Garantia de proposta de valor elevado (> 0,5% do valor estimado)
 - Gere perguntas que o Consultor Chat deve estar preparado para responder.
 
 FORMATO DE SAÍDA — JSON:
@@ -776,8 +894,12 @@ AUTOCONFERÊNCIA ANTES DE RESPONDER:
 → RFT tem inscrição estadual + inscrição municipal? (se exigidos)
 → RFT tem os 5-8 documentos fiscais individuais (CNPJ, CND Federal, Estadual, Municipal, FGTS, CNDT)?
 → HJ tem ato constitutivo e demais docs societários?
+→ QTO tem Certidão PJ CREA/CAU como documental (BLOCO A)? Não como atestado operacional.
+→ QTO: cada parcela relevante da empresa é item principal com quantitativo mínimo literal (BLOCO C)?
+→ QTO: se visita técnica, está em BLOCO B com alternativas visita/declaração?
+→ QTP: contém APENAS credenciais do profissional? Sem Certidão PJ, sem Visto, sem Visita.
 → QTP: cada parcela relevante do profissional é item PRINCIPAL separado (não subitem genérico)?
-→ QTO: cada parcela relevante da empresa é item principal com quantitativo literal?
+→ QTO/QTP: contém expressões genéricas proibidas (se sim, substituir pela transcrição literal)?
 → Há ao menos 1 EV por exigência principal?
 → Quantitativos técnicos estão com valor exato e fonte?
 
@@ -846,6 +968,20 @@ Cada item DEVE receber um entry_type:
     → Cada parcela com quantitativo mínimo é exigencia_principal, não subitem.
     → NUNCA consolide "Atestado parcela A (5.000m²)" + "Atestado parcela B (500m²)" em 1 card genérico "Atestados".
     → Preserve descriptions longas e literais para QTO/QTP — não truncar na normalização.
+18. QTP — EXPLOSÃO DE CAT GENÉRICO:
+    Se a extração trouxe um ÚNICO item "Atestado de Capacidade Técnica" ou "CAT/CAU" genérico
+    que na description menciona MÚLTIPLAS parcelas (ex: "obras similares", "parcelas de maior relevância"),
+    EXPLODA em N itens separados — um por parcela, com:
+      → title: "CAT: [Nome da parcela]"
+      → description com quantitativo mínimo literal
+      → entry_type: "exigencia_principal", parent_id: null
+    As parcelas do profissional são AS MESMAS parcelas da empresa (QTO bloco C).
+    Consulte os itens de QTO para identificar quais parcelas existem.
+    
+    DETECÇÃO DE GUARDA-CHUVA:
+    Se um item tem title como "Profissional de nível superior" ou "Profissional no quadro permanente":
+      → Converter para "Comprovação de vínculo do RT" (se não existir outro item de vínculo)
+      → Ou REMOVER se já existir item de vínculo RT separado
 
 ── RASTREABILIDADE OBRIGATÓRIA (source_ref) ──
 

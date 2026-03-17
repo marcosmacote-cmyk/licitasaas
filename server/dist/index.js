@@ -274,19 +274,21 @@ app.put('/api/companies/:id/proposal-template', authenticateToken, async (req, r
     try {
         const { id } = req.params;
         const { headerImage, footerImage, headerHeight, footerHeight, defaultLetterContent } = req.body;
+        const updateData = {
+            defaultProposalHeader: headerImage,
+            defaultProposalFooter: footerImage,
+            defaultProposalHeaderHeight: headerHeight,
+            defaultProposalFooterHeight: footerHeight,
+            defaultLetterContent: defaultLetterContent
+        };
         await prisma.companyProfile.update({
             where: { id, tenantId: req.user.tenantId },
-            data: {
-                defaultProposalHeader: headerImage,
-                defaultProposalFooter: footerImage,
-                defaultProposalHeaderHeight: headerHeight,
-                defaultProposalFooterHeight: footerHeight,
-                defaultLetterContent: defaultLetterContent
-            }
+            data: updateData
         });
         res.json({ message: 'Template padrão salvo com sucesso!' });
     }
     catch (error) {
+        console.error('[API] Save company template error:', error);
         res.status(500).json({ error: 'Erro ao salvar template: ' + error.message });
     }
 });
@@ -1302,14 +1304,116 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             const pb = (b.tipoDocumentoId === 2) ? -1 : nameScore(b.titulo || b.nomeArquivo || '');
             return pa - pb;
         });
-        // 3. Download and process files (PDF, ZIP, or RAR containing PDFs)
-        const MAX_PDF_PARTS = 5;
-        const MAX_TOTAL_PDF_SIZE_KB = 30000; // 30MB budget
+        // 3. Download and process files — SMART PDF FILTER
+        // Only download PDFs that contribute to habilitação extraction
+        const MAX_PDF_PARTS = 3; // Reduced from 5 — edital + TR + 1 extra is enough
+        const MAX_TOTAL_PDF_SIZE_KB = 15000; // Reduced from 30MB — 15MB budget
         let totalPdfSizeAccum = 0;
         const pdfParts = [];
         const downloadedFiles = [];
         const discardedFiles = [];
-        for (const arq of arquivos) {
+        // Pre-filter: exclude templates, project drawings, and irrelevant attachments BEFORE download
+        const EXCLUDE_PATTERNS = [
+            // Templates / Modelos
+            'modelo_proposta', 'modelo_de_proposta', 'modelo proposta',
+            'modelo_recibo', 'modelo recibo', 'modelo_declarac', 'modelo declarac',
+            'modelo_ata', 'modelo ata', 'modelo_contrato', 'modelo_carta',
+            'carta_fian', 'carta fian',
+            // Publicações / Atas / Avisos
+            'aviso_publicac', 'aviso publicac', 'aviso_licitac',
+            'aviso_de_licit', 'aviso de licit', 'aviso_licit',
+            'quadro_de_aviso', 'quadro de aviso',
+            'd.o.u', 'diario_oficial', 'diario oficial',
+            'retificac', 'errata', 'ata_sessao', 'ata_da_sessao',
+            'comprovante', 'recibo_garantia', 'modelo_recibo_garantia',
+            'minuta_contrato', 'minuta contrato', 'minuta_de_contrato',
+            // Projetos de engenharia / plantas / memoriais (não contribuem para habilitação)
+            'projeto_arq', 'projeto arq', 'planta_', 'planta ',
+            'memorial_descritivo', 'memorial descritivo',
+            'croqui', 'layout_', 'layout ',
+            'detalhamento_', 'det_arq', 'det arq',
+        ];
+        // Keywords that indicate edital/TR content (should NOT be excluded even if "Outros Documentos")
+        const ESSENTIAL_KEYWORDS = [
+            'edital', 'termo_referencia', 'termo de referencia', 'tr_',
+            'projeto_basico', 'projeto basico', 'planilha', 'orcamento',
+            'cronograma', 'bdi', 'etp', 'estudo_tecnico',
+        ];
+        const filteredArquivos = arquivos.filter((arq) => {
+            const name = (arq.titulo || arq.nomeArquivo || arq.nome || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const tipoDesc = (arq.tipoDocumentoDescricao || '').toLowerCase();
+            const tipoId = arq.tipoDocumentoId;
+            // Rule 1: Exclude by explicit pattern match
+            const isExcludedByPattern = EXCLUDE_PATTERNS.some(pat => name.includes(pat));
+            if (isExcludedByPattern) {
+                console.log(`[PNCP-AI] 🚫 Excluído (template/padrão): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                discardedFiles.push(`${arq.titulo} (excluído: template/padrão)`);
+                return false;
+            }
+            // Rule 2: "Outros Documentos" with generic "ANEXO" names and no essential keywords → likely project files
+            const isOutros = tipoDesc.includes('outros') || (tipoId !== 2 && tipoId !== 4); // Not Edital (2) nor TR (4)
+            const hasEssentialKeyword = ESSENTIAL_KEYWORDS.some(kw => name.includes(kw));
+            const isGenericAnexo = /^anexo[_\s]+(i|ii|iii|iv|v|vi|vii|viii|ix|x|[0-9])/.test(name);
+            if (isOutros && isGenericAnexo && !hasEssentialKeyword) {
+                console.log(`[PNCP-AI] 🚫 Excluído (anexo genérico/projeto): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                discardedFiles.push(`${arq.titulo} (excluído: anexo genérico)`);
+                return false;
+            }
+            return true;
+        });
+        // ── BUILD FULL ATTACHMENT CATALOG (for Proposal module) ──
+        // Classifies ALL files by purpose so they can be downloaded on demand later
+        const classifyAttachment = (arq) => {
+            const n = (arq.titulo || arq.nomeArquivo || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const tipoId = arq.tipoDocumentoId;
+            if (tipoId === 2 || (n.includes('edital') && !n.includes('anexo')))
+                return 'edital';
+            if (tipoId === 4 || n.includes('termo_referencia') || n.includes('tr_'))
+                return 'termo_referencia';
+            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orçamento'))
+                return 'planilha_orcamentaria';
+            if (n.includes('cronograma'))
+                return 'cronograma';
+            if (n.includes('bdi') || n.includes('encargos'))
+                return 'bdi_encargos';
+            if (n.includes('modelo_proposta') || n.includes('modelo de proposta') || n.includes('modelo_carta'))
+                return 'modelo_proposta';
+            if (n.includes('modelo_recibo') || n.includes('modelo_garantia'))
+                return 'modelo_documento';
+            if (n.includes('minuta') || n.includes('contrato'))
+                return 'minuta_contrato';
+            if (n.includes('projeto') || n.includes('planta') || n.includes('memorial'))
+                return 'projeto_engenharia';
+            if (n.includes('aviso'))
+                return 'aviso_publicacao';
+            if (n.includes('composic') || n.includes('custo'))
+                return 'composicao_custos';
+            return 'anexo_geral';
+        };
+        const pncpAttachments = arquivos.map((arq) => {
+            const name = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
+            const purpose = classifyAttachment(arq);
+            const isDownloaded = filteredArquivos.includes(arq);
+            return {
+                titulo: name,
+                url: arq.url || arq.uri || '',
+                tipoDocumentoId: arq.tipoDocumentoId,
+                tipoDocumentoDescricao: arq.tipoDocumentoDescricao || '',
+                purpose,
+                downloaded: isDownloaded,
+                sequencial: arq.sequencialDocumento || arq.sequencial || null,
+                ativo: arq.statusAtivo ?? true,
+            };
+        });
+        const purposeCounts = pncpAttachments.reduce((acc, a) => {
+            acc[a.purpose] = (acc[a.purpose] || 0) + 1;
+            return acc;
+        }, {});
+        console.log(`[PNCP-AI] 📋 Catálogo completo: ${pncpAttachments.length} arquivos — ${JSON.stringify(purposeCounts)}`);
+        console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
+        for (const arq of filteredArquivos) {
             if (pdfParts.length >= MAX_PDF_PARTS)
                 break;
             const fileUrl = arq.url || arq.uri || '';
@@ -1455,6 +1559,16 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
         // ═══════════════════════════════════════════════════════════════════════
+        // ── MODEL CONFIGURATION ──
+        // Each pipeline stage uses the optimal model for its task
+        const PIPELINE_MODELS = {
+            extraction: 'gemini-2.5-flash', // Etapa 1: PDF parsing (multimodal, proven)
+            reExtraction: 'gemini-2.5-flash', // Re-extraction fallback  
+            normalization: 'gemini-2.5-flash-lite', // Etapa 2: text-only JSON→JSON (fast, cheap)
+            normQtp: 'gemini-2.5-flash', // Etapa 2 QTP: needs full Flash for Rule 18 (CAT explosion)
+            riskReview: 'gemini-2.5-flash-lite', // Etapa 3: text-only risk analysis (fast, cheap)
+        };
+        console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
@@ -1488,7 +1602,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         const t1Start = Date.now();
         try {
             const extractionResponse = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-                model: 'gemini-2.5-flash',
+                model: PIPELINE_MODELS.extraction,
                 contents: [{
                         role: 'user',
                         parts: [
@@ -1511,7 +1625,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             if (parseResult1.repaired)
                 pipelineHealth.parseRepairs++;
             v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
-            modelsUsed.push('gemini-2.5-flash');
+            modelsUsed.push(PIPELINE_MODELS.extraction);
             stageTimes.extraction = (Date.now() - t1Start) / 1000;
             console.log(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         }
@@ -1558,6 +1672,9 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             v2Result.contractual_analysis = extractionJson.contractual_analysis;
         if (extractionJson.evidence_registry)
             v2Result.evidence_registry = extractionJson.evidence_registry;
+        // Diagnostic: check itens_licitados extraction
+        const extractedItens = v2Result.proposal_analysis?.itens_licitados || [];
+        console.log(`[PNCP-V2] 📋 itens_licitados: ${Array.isArray(extractedItens) ? extractedItens.length : 0} itens extraídos pela Etapa 1`);
         // ── MANDATORY RFT COMPLETENESS INJECTION ──
         // The AI model consistently omits "obvious" fiscal documents (CNPJ, inscrições).
         // This server-side safety net ensures they're always present.
@@ -1598,6 +1715,24 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             extractionJson.requirements.regularidade_fiscal_trabalhista = rftItems;
             v2Result.requirements.regularidade_fiscal_trabalhista = rftItems;
             console.log(`[PNCP-V2] 🔧 RFT completude: +${injectedCount} doc(s) injetado(s) (CNPJ/inscrições omitidos pela IA)`);
+        }
+        // ── M3: DEDUP — remove generic "estadual ou municipal" if IE/IM are separate ──
+        const hasIE = rftItems.some((r) => r.requirement_id === 'RFT-IE' || /inscri[çc][ãa]o\s+estadual/i.test(r.title || ''));
+        const hasIM = rftItems.some((r) => r.requirement_id === 'RFT-IM' || /inscri[çc][ãa]o\s+municipal/i.test(r.title || ''));
+        if (hasIE && hasIM) {
+            // Remove generic combined IE+IM items ("estadual ou municipal" / "estadual e municipal")
+            const beforeLen = rftItems.length;
+            const dedupedRft = rftItems.filter((r) => {
+                const title = (r.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const isGenericCombined = (title.includes('estadual') && title.includes('municipal'))
+                    && r.requirement_id !== 'RFT-IE' && r.requirement_id !== 'RFT-IM';
+                return !isGenericCombined;
+            });
+            if (dedupedRft.length < beforeLen) {
+                extractionJson.requirements.regularidade_fiscal_trabalhista = dedupedRft;
+                v2Result.requirements.regularidade_fiscal_trabalhista = dedupedRft;
+                console.log(`[PNCP-V2] 🧹 Dedup IE/IM: removido(s) ${beforeLen - dedupedRft.length} item(ns) genérico(s) (IE+IM separados existem)`);
+            }
         }
         // ── HARD FAILURE GATE: Check extraction quality ──
         const extractedReqs = Object.values(extractionJson.requirements || {}).flat().length;
@@ -1690,7 +1825,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 // Use only the first PDF (edital) for re-extraction — reduces context size
                 const editalPdf = pdfParts[0];
                 const reExtractionResponse = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-                    model: 'gemini-2.5-flash',
+                    model: PIPELINE_MODELS.reExtraction,
                     contents: [{
                             role: 'user',
                             parts: [
@@ -1748,7 +1883,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
         const extractionJsonCompact = JSON.stringify(extractionJson); // Compact — saves ~20-30% tokens
         const t2t3Start = Date.now();
         // Run both stages concurrently
-        const [normSettled, riskSettled] = await Promise.allSettled([
+        const [normSettled, riskSettled, itemsSettled] = await Promise.allSettled([
             // ── Stage 2: Per-Category Normalization (7 parallel micro-calls) ──
             (async () => {
                 const t2Start = Date.now();
@@ -1769,12 +1904,51 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         categoriesSkipped++;
                         return null; // Skip empty categories
                     }
+                    // ── FAST-PATH: HJ, RFT, QEF — server-side normalization (no AI call) ──
+                    const FAST_NORM_CATEGORIES = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira'];
+                    if (FAST_NORM_CATEGORIES.includes(cat.key)) {
+                        // Deterministic normalization — assign IDs, entry_type, risk_if_missing
+                        const riskDefault = cat.key === 'habilitacao_juridica' ? 'inabilitacao'
+                            : cat.key === 'regularidade_fiscal_trabalhista' ? 'inabilitacao'
+                                : 'inabilitacao';
+                        const normalized = items.map((item, idx) => ({
+                            ...item,
+                            requirement_id: item.requirement_id || `${cat.prefix}-${String(idx + 1).padStart(2, '0')}`,
+                            entry_type: item.entry_type || 'exigencia_principal',
+                            risk_if_missing: item.risk_if_missing || riskDefault,
+                            applies_to: item.applies_to || 'licitante',
+                            obligation_type: item.obligation_type || 'obrigatoria_universal',
+                            phase: item.phase || 'habilitacao',
+                            source_ref: item.source_ref || 'referência não localizada',
+                        }));
+                        mergedRequirements[cat.key] = normalized;
+                        totalNormalized += normalized.length;
+                        // Generate documents_to_prepare
+                        normalized.filter((n) => n.entry_type === 'exigencia_principal').forEach((n) => {
+                            mergedDocs.push({
+                                document_name: n.title || n.requirement_id,
+                                category: cat.key,
+                                priority: n.risk_if_missing === 'inabilitacao' ? 'critica' : 'alta',
+                                responsible_area: cat.key === 'regularidade_fiscal_trabalhista' ? 'contabil'
+                                    : cat.key === 'qualificacao_economico_financeira' ? 'contabil'
+                                        : 'juridico',
+                                notes: ''
+                            });
+                        });
+                        console.log(`[PNCP-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side, 0 API calls)`);
+                        return { cat: cat.key, success: true, fastPath: true };
+                    }
+                    // ── AI NORMALIZATION: QTO, QTP, PC, DC (interpretation needed) ──
+                    // QTP uses full Flash model for Rule 18 (CAT explosion) reliability
+                    const normModel = cat.key === 'qualificacao_tecnica_profissional'
+                        ? PIPELINE_MODELS.normQtp
+                        : PIPELINE_MODELS.normalization;
                     return (async () => {
                         const systemPrompt = (0, prompt_service_1.buildCategoryNormPrompt)(cat);
                         const userPrompt = (0, prompt_service_1.buildCategoryNormUser)(cat, items);
                         try {
                             const resp = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-                                model: 'gemini-2.5-flash',
+                                model: normModel,
                                 contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
                                 config: {
                                     systemInstruction: systemPrompt,
@@ -1803,7 +1977,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             if (Array.isArray(data.documents_to_prepare)) {
                                 mergedDocs.push(...data.documents_to_prepare);
                             }
-                            console.log(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens`);
+                            console.log(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens (${normModel})`);
                             return { cat: cat.key, success: true };
                         }
                         catch (geminiErr) {
@@ -1852,7 +2026,9 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 const results = await Promise.allSettled(categoryTasks);
                 stageTimes.normalization = (Date.now() - t2Start) / 1000;
                 const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
-                console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${prompt_service_1.NORM_CATEGORIES.length - categoriesSkipped} categorias OK, ${categoriesFailed} falhas`);
+                const fastPathCount = results.filter(r => r.status === 'fulfilled' && r.value?.fastPath).length;
+                const aiNormCount = successCount - fastPathCount;
+                console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${prompt_service_1.NORM_CATEGORIES.length - categoriesSkipped} OK (⚡${fastPathCount} fast + 🤖${aiNormCount} AI), ${categoriesFailed} falhas`);
                 // Build merged normalization result
                 const json = {
                     requirements_normalized: mergedRequirements,
@@ -1865,7 +2041,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         warnings: categoriesFailed > 0 ? [`${categoriesFailed} categoria(s) não normalizada(s) — dados originais preservados`] : [],
                     }
                 };
-                return { json, model: 'gemini-2.5-flash', repaired: hadRepair, fallback: usedFallback };
+                return { json, model: PIPELINE_MODELS.normalization, repaired: hadRepair, fallback: usedFallback };
             })(),
             // ── Stage 3: Risk Review ──
             (async () => {
@@ -1876,7 +2052,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
                 try {
                     const riskResponse = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-                        model: 'gemini-2.5-flash',
+                        model: PIPELINE_MODELS.riskReview,
                         contents: [{ role: 'user', parts: [{ text: riskUserInstruction }] }],
                         config: {
                             systemInstruction: prompt_service_1.V2_RISK_REVIEW_PROMPT,
@@ -1892,7 +2068,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     const json = parseR.data;
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
                     console.log(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
-                    return { json, model: 'gemini-2.5-flash', repaired: parseR.repaired, fallback: false };
+                    return { json, model: PIPELINE_MODELS.riskReview, repaired: parseR.repaired, fallback: false };
                 }
                 catch (err) {
                     console.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
@@ -1909,6 +2085,95 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
                     console.log(`[PNCP-V2] ✅ Etapa 3 via OpenAI em ${stageTimes.risk_review.toFixed(1)}s`);
                     return { json, model: openAiResult.model, repaired: parseROai.repaired, fallback: true };
+                }
+            })(),
+            // ── Stage 1.5: Parallel Item Extraction (runs concurrently with 2+3) ──
+            // When itens_licitados is empty AND we have planilha-like PDFs in the catalog,
+            // download and extract items NOW instead of waiting for ai-populate
+            (async () => {
+                const currentItens = v2Result.proposal_analysis?.itens_licitados || [];
+                if (Array.isArray(currentItens) && currentItens.length > 0) {
+                    console.log(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — itens_licitados já tem ${currentItens.length} itens`);
+                    return { items: currentItens, skipped: true };
+                }
+                // Find planilha/budget PDFs from catalog (including excluded-due-to-size ones)
+                const planilhaAttachments = pncpAttachments.filter((a) => a.ativo && a.url && (a.purpose === 'planilha_orcamentaria' ||
+                    a.purpose === 'composicao_custos' ||
+                    a.purpose === 'anexo_geral' ||
+                    a.purpose === 'termo_referencia'));
+                if (planilhaAttachments.length === 0) {
+                    console.log(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — sem planilhas no catálogo`);
+                    return { items: [], skipped: true };
+                }
+                console.log(`[PNCP-V2] 📋 Etapa 1.5: Extraindo itens de ${planilhaAttachments.length} PDF(s) em paralelo...`);
+                const t15Start = Date.now();
+                try {
+                    // Download the first planilha PDF (prioritize: planilha > composicao > anexo > TR)
+                    const priorityOrder = ['planilha_orcamentaria', 'composicao_custos', 'anexo_geral', 'termo_referencia'];
+                    const sorted = planilhaAttachments.sort((a, b) => priorityOrder.indexOf(a.purpose) - priorityOrder.indexOf(b.purpose));
+                    const target = sorted[0];
+                    const agent15 = new (require('https').Agent)({ rejectUnauthorized: false });
+                    const pdfResp = await axios_1.default.get(target.url, {
+                        responseType: 'arraybuffer',
+                        httpsAgent: agent15,
+                        timeout: 30000,
+                        maxContentLength: 50 * 1024 * 1024 // 50MB max
+                    });
+                    const pdfBuffer = Buffer.from(pdfResp.data);
+                    console.log(`[PNCP-V2] 📋 Etapa 1.5: PDF "${target.titulo}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                    const itemExtractionPrompt = `Você é um extrator de itens de planilhas orçamentárias de licitações brasileiras.
+
+Analise o PDF e extraia TODOS os itens/lotes com preço.
+
+Para CADA item extraia:
+- itemNumber: número do item/lote
+- description: descrição técnica COMPLETA (NÃO resuma)
+- unit: unidade de medida (UN, KG, M², M³, ML, MÊS, HORA, DIA, DIÁRIA, KM, LITRO, CJ, VB, SV)
+- quantity: quantidade numérica
+- referencePrice: valor unitário de referência/estimado (número, sem R$)
+- multiplier: se há período (ex: 12 meses), retorne o multiplicador
+- multiplierLabel: rótulo do multiplicador (ex: "Meses")
+
+REGRAS:
+- Extraia APENAS itens PRINCIPAIS (totalizadores), NÃO sub-itens de composição
+- referencePrice é NUMÉRICO (ex: 15000.00, não "R$ 15.000,00")
+- Se não encontrar itens com preço, retorne array vazio []
+- NUNCA invente itens
+
+Responda APENAS com JSON array:
+[{"itemNumber":"1","description":"...","unit":"UN","quantity":1,"referencePrice":0,"multiplier":1,"multiplierLabel":""}]`;
+                    const itemResult = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: [{
+                                role: 'user',
+                                parts: [
+                                    { inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } },
+                                    { text: itemExtractionPrompt }
+                                ]
+                            }],
+                        config: { temperature: 0.05, maxOutputTokens: 16384 }
+                    });
+                    const responseText = itemResult.text?.trim() || '';
+                    let jsonStr = responseText;
+                    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                    if (jsonMatch)
+                        jsonStr = jsonMatch[0];
+                    let items = [];
+                    try {
+                        items = JSON.parse(jsonStr);
+                    }
+                    catch {
+                        items = [];
+                    }
+                    // Filter valid items
+                    items = items.filter((it) => it.description && it.description.trim().length > 5);
+                    const elapsed = ((Date.now() - t15Start) / 1000).toFixed(1);
+                    console.log(`[PNCP-V2] ✅ Etapa 1.5 em ${elapsed}s — ${items.length} itens extraídos de "${target.titulo}"`);
+                    return { items, skipped: false, source: target.titulo, elapsed };
+                }
+                catch (err) {
+                    console.warn(`[PNCP-V2] ⚠️ Etapa 1.5 falhou: ${err.message}`);
+                    return { items: [], skipped: false, error: err.message };
                 }
             })()
         ]);
@@ -1967,6 +2232,20 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
             v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
             v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${riskSettled.reason?.message || 'erro desconhecido'}`);
             stageTimes.risk_review = stageTimes.risk_review || 0;
+        }
+        // Process item extraction result (Etapa 1.5)
+        if (itemsSettled.status === 'fulfilled' && !itemsSettled.value.skipped) {
+            const extractedItems = itemsSettled.value.items || [];
+            if (extractedItems.length > 0) {
+                if (!v2Result.proposal_analysis)
+                    v2Result.proposal_analysis = {};
+                v2Result.proposal_analysis.itens_licitados = extractedItems;
+                stageTimes.item_extraction = parseFloat(itemsSettled.value.elapsed || '0');
+                console.log(`[PNCP-V2] ✅ Etapa 1.5 merge: ${extractedItems.length} itens → proposal_analysis.itens_licitados`);
+            }
+        }
+        else if (itemsSettled.status === 'rejected') {
+            console.warn(`[PNCP-V2] ⚠️ Etapa 1.5 rejected: ${itemsSettled.reason?.message || 'erro'}`);
         }
         // ── Schema Sanitization: Safe defaults for all arrays/collections ──
         // Prevents "Cannot read properties of undefined (reading 'length')" crashes
@@ -2175,7 +2454,23 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 .flat()
                 .map(r => `[${r.requirement_id}] ${r.title}: ${r.description}`)
                 .join('\n'),
-            biddingItems: (v2Result.proposal_analysis.observacoes_proposta || []).join('\n')
+            biddingItems: (() => {
+                // Primary: structured items from itens_licitados (V2 pipeline extraction)
+                const itens = v2Result.proposal_analysis?.itens_licitados || [];
+                if (Array.isArray(itens) && itens.length > 0) {
+                    return itens.map((it) => `Item ${it.itemNumber || '?'}: ${it.description || ''} | Unid: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1}${it.multiplier && it.multiplier > 1 ? ` × ${it.multiplier} ${it.multiplierLabel || ''}` : ''} | Ref: R$ ${it.referencePrice || 0}`).join('\n');
+                }
+                // Fallback: observacoes_proposta (legacy, but usually short/useless)
+                return (v2Result.proposal_analysis.observacoes_proposta || []).join('\n');
+            })()
+        };
+        // Embed pncpSource inside schemaV2 so it's persisted in the DB
+        v2Result.pncp_source = {
+            link_sistema,
+            downloaded_files: downloadedFiles,
+            discarded_files: discardedFiles,
+            attachments: pncpAttachments,
+            analyzed_at: new Date().toISOString()
         };
         // Build final response with both V1 compat and V2 schema
         const finalPayload = {
@@ -2185,6 +2480,8 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
             pncpSource: {
                 link_sistema,
                 downloadedFiles,
+                discardedFiles,
+                attachments: pncpAttachments, // Full catalog with URLs for proposal module
                 analyzedAt: new Date().toISOString()
             },
             _version: '2.0',
@@ -2587,13 +2884,18 @@ app.delete('/api/proposals/:id', authenticateToken, async (req, res) => {
 // POST add/replace items in bulk (used by AI populate and manual add)
 app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
     try {
-        const { items, replaceAll } = req.body;
+        const { items, replaceAll, roundingMode: reqRoundingMode } = req.body;
         const proposalId = req.params.id;
         const existing = await prisma.priceProposal.findFirst({
             where: { id: proposalId, tenantId: req.user.tenantId },
         });
         if (!existing)
             return res.status(404).json({ error: 'Proposal not found' });
+        // F6: Respect rounding mode — from request, or from stored flag (socialCharges=1 means TRUNCATE)
+        const useRounding = reqRoundingMode || (existing.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
+        const roundFn = useRounding === 'TRUNCATE'
+            ? (v) => Math.floor(v * 100) / 100
+            : (v) => Math.round(v * 100) / 100;
         // Optionally clear existing items
         if (replaceAll) {
             await prisma.proposalItem.deleteMany({ where: { proposalId } });
@@ -2606,12 +2908,11 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
             const linearDisc = existing.taxPercentage || 0;
             const itemDisc = item.discountPercentage ?? 0;
             const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
-            // Unit Price including BDI and then applying either Linear or Item Discount
-            // Formula: Price = Cost * (1 + BDI/100) * (1 - applicableDiscount/100)
-            const unitPrice = item.unitCost * (1 + bdi / 100) * (1 - applicableDiscount / 100);
-            // App-level default is 1 if not provided
+            const rawUnitPrice = (item.unitCost || 0) * (1 + bdi / 100) * (1 - applicableDiscount / 100);
+            const unitPrice = roundFn(rawUnitPrice);
             const multiplier = item.multiplier ?? 1;
-            const totalPrice = item.quantity * multiplier * unitPrice;
+            const rawTotalPrice = (item.quantity || 0) * multiplier * unitPrice;
+            const totalPrice = roundFn(rawTotalPrice);
             const dbItem = await prisma.proposalItem.create({
                 data: {
                     proposalId,
@@ -2622,8 +2923,8 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
                     multiplier: multiplier,
                     multiplierLabel: item.multiplierLabel || null,
                     unitCost: item.unitCost || 0,
-                    unitPrice: Math.round(unitPrice * 100) / 100,
-                    totalPrice: Math.round(totalPrice * 100) / 100,
+                    unitPrice,
+                    totalPrice,
                     referencePrice: item.referencePrice || null,
                     discountPercentage: itemDisc,
                     brand: item.brand || null,
@@ -2637,7 +2938,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
         const allItems = await prisma.proposalItem.findMany({ where: { proposalId } });
         const totalValue = allItems.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
         await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
-        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, total: R$ ${totalValue.toFixed(2)}`);
+        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}`);
         res.json({ items: created, totalValue });
     }
     catch (error) {
@@ -2728,16 +3029,36 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Bidding process not found' });
         if (!bidding.aiAnalysis)
             return res.status(400).json({ error: 'No AI analysis found for this bidding. Run the AI analysis first.' });
-        const biddingItems = bidding.aiAnalysis.biddingItems || '';
-        const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
-        if (!biddingItems || biddingItems.trim().length < 10) {
-            return res.status(400).json({ error: 'AI analysis has no bidding items to extract.' });
-        }
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey)
             return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
         const ai = new genai_1.GoogleGenAI({ apiKey });
-        const prompt = `Você é um especialista em licitações brasileiras. Analise os ITENS LICITADOS abaixo e extraia uma lista estruturada para uma proposta de preços.
+        const biddingItems = bidding.aiAnalysis.biddingItems || '';
+        const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
+        const schemaV2 = bidding.aiAnalysis.schemaV2;
+        // ── Strategy 0: Structured items from V2 analysis (FASTEST — no AI call needed) ──
+        const itensLicitados = schemaV2?.proposal_analysis?.itens_licitados;
+        if (Array.isArray(itensLicitados) && itensLicitados.length > 0) {
+            console.log(`[AI Populate] ✅ Strategy 0: Using ${itensLicitados.length} pre-extracted items from schemaV2`);
+            // Normalize items format
+            const items = itensLicitados.map((it, idx) => ({
+                itemNumber: it.itemNumber || String(idx + 1),
+                description: it.description || '',
+                unit: it.unit || 'UN',
+                quantity: it.quantity || 1,
+                multiplier: it.multiplier || 1,
+                multiplierLabel: it.multiplierLabel || '',
+                referencePrice: it.referencePrice || 0,
+            }));
+            return res.json({ items, totalItems: items.length, source: 'schemaV2_itens_licitados' });
+        }
+        // ── Strategy 1: Legacy biddingItems (text-based, from older analyses) ──
+        // Minimum 200 chars — real bid items have descriptions, quantities, units
+        // Below 200 chars is likely observacoes_proposta garbage, skip to Strategy 2/3
+        const hasRealBiddingItems = biddingItems && biddingItems.trim().length >= 200;
+        if (hasRealBiddingItems) {
+            console.log(`[AI Populate] Using legacy biddingItems (${biddingItems.length} chars)`);
+            const prompt = `Você é um especialista em licitações brasileiras. Analise os ITENS LICITADOS abaixo e extraia uma lista estruturada para uma proposta de preços.
 
 ITENS DO EDITAL:
 ${biddingItems}
@@ -2756,102 +3077,403 @@ REGRAS:
 
 Responda APENAS com um JSON array, sem markdown:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
-        console.log(`[AI Populate] Extracting items from bidding ${biddingProcessId}...`);
+            const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: { temperature: 0.05, maxOutputTokens: 8192 },
+            });
+            const responseText = result.text?.trim() || '';
+            let jsonStr = responseText;
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (jsonMatch)
+                jsonStr = jsonMatch[0];
+            let items;
+            try {
+                items = JSON.parse(jsonStr);
+            }
+            catch {
+                return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) });
+            }
+            console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
+            return res.json({ items, totalItems: items.length, source: 'legacy_biddingItems' });
+        }
+        // ── Strategy 2: Download planilhas from PNCP catalog (new analyses) ──
+        const pncpSource = schemaV2?.pncp_source;
+        const attachments = pncpSource?.attachments || [];
+        // Find planilha/orçamento files in the catalog
+        const planilhaFiles = attachments.filter((a) => a.ativo && a.url && (a.purpose === 'planilha_orcamentaria' ||
+            a.purpose === 'composicao_custos' ||
+            a.purpose === 'bdi_encargos' ||
+            a.purpose === 'anexo_geral' // Include ALL annexes (downloaded or not)
+        ));
+        // Debug: log all attachment purposes to diagnose classification issues
+        if (attachments.length > 0) {
+            console.log(`[AI Populate] Catalog has ${attachments.length} attachments. Purposes: ${JSON.stringify(attachments.map((a) => ({ t: a.titulo?.substring(0, 40), p: a.purpose, d: a.downloaded })))}`);
+        }
+        // ── Strategy 3: No catalog? Fetch attachments from PNCP API on the fly ──
+        const pncpUrl = bidding.pncpLink || bidding.link || '';
+        console.log(`[AI Populate] Strategy check: planilhaFiles=${planilhaFiles.length}, attachments=${attachments.length}, pncpUrl=${pncpUrl}, hasBiddingItems=${!!(biddingItems && biddingItems.trim().length >= 10)}`);
+        if (planilhaFiles.length === 0 && pncpUrl) {
+            console.log(`[AI Populate] No planilha in catalog (${attachments.length} total attachments). Fetching from PNCP: ${pncpUrl}`);
+            // Parse URL to extract CNPJ/ano/sequencial
+            // Formats: .../editais/CNPJ/ANO/SEQ or .../orgaos/CNPJ/compras/ANO/SEQ
+            const pncpMatch = pncpUrl.match(/editais\/([^/]+)\/(\d{4})\/(\d+)/) ||
+                pncpUrl.match(/orgaos\/([^/]+)\/compras\/(\d{4})\/(\d+)/);
+            if (pncpMatch) {
+                const [, cnpj, ano, seq] = pncpMatch;
+                const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
+                try {
+                    const agent2 = new (require('https').Agent)({ rejectUnauthorized: false });
+                    const arquivosRes = await axios_1.default.get(arquivosUrl, { httpsAgent: agent2, timeout: 10000 });
+                    const allArquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
+                    console.log(`[AI Populate] PNCP returned ${allArquivos.length} attachments`);
+                    // Classify and filter for planilha-type files
+                    const classifyForProposal = (arq) => {
+                        const n = (arq.titulo || arq.nomeArquivo || '').toLowerCase()
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        if (n.includes('planilha') || n.includes('orcamento') || n.includes('orçamento'))
+                            return 'planilha_orcamentaria';
+                        if (n.includes('composic') || n.includes('custo'))
+                            return 'composicao_custos';
+                        if (n.includes('bdi') || n.includes('encargos'))
+                            return 'bdi_encargos';
+                        if (n.includes('cronograma'))
+                            return 'cronograma';
+                        if (n.includes('edital') && !n.includes('anexo'))
+                            return 'edital';
+                        if (n.includes('aviso') || n.includes('publicacao'))
+                            return 'aviso';
+                        if (n.includes('modelo') || n.includes('minuta'))
+                            return 'modelo';
+                        if (/^anexo[_\s]+(i|ii|iii|iv|v|vi|[0-9])/.test(n))
+                            return 'anexo_geral';
+                        return 'outro';
+                    };
+                    for (const arq of allArquivos) {
+                        const purpose = classifyForProposal(arq);
+                        const url = arq.url || arq.uri || '';
+                        if (!url || !arq.statusAtivo)
+                            continue;
+                        if (purpose === 'planilha_orcamentaria' || purpose === 'composicao_custos' ||
+                            purpose === 'bdi_encargos' || purpose === 'anexo_geral') {
+                            planilhaFiles.push({
+                                titulo: arq.titulo || arq.nomeArquivo || 'arquivo',
+                                url,
+                                purpose,
+                                ativo: true,
+                                downloaded: false
+                            });
+                        }
+                    }
+                    console.log(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} planilha candidates found`);
+                }
+                catch (fetchErr) {
+                    console.warn(`[AI Populate] Failed to fetch PNCP attachments: ${fetchErr.message}`);
+                }
+            }
+        }
+        if (planilhaFiles.length === 0) {
+            return res.status(400).json({
+                error: 'Nenhuma planilha orçamentária encontrada. Este processo não possui itens de orçamento no edital nem planilhas anexas no PNCP.',
+                hint: 'Para obras de engenharia, as planilhas geralmente estão nos Anexos do edital. Para pregões de serviço, tente re-analisar o processo.',
+                attachments_found: attachments.length,
+                has_pncpLink: !!bidding.pncpLink,
+                attachments_purposes: [...new Set(attachments.map((a) => a.purpose))]
+            });
+        }
+        console.log(`[AI Populate] Found ${planilhaFiles.length} planilha candidates in PNCP catalog`);
+        // Download planilha PDFs on demand
+        const pdfParts = [];
+        const downloadedNames = [];
+        const agent = new (require('https').Agent)({ rejectUnauthorized: false });
+        for (const pf of planilhaFiles.slice(0, 5)) { // Max 5 files
+            try {
+                console.log(`[AI Populate] Downloading: "${pf.titulo}" (${pf.purpose}) from ${pf.url}`);
+                const fileRes = await axios_1.default.get(pf.url, {
+                    httpsAgent: agent,
+                    timeout: 60000,
+                    responseType: 'arraybuffer',
+                    maxRedirects: 5
+                });
+                const buffer = Buffer.from(fileRes.data);
+                if (buffer.length === 0)
+                    continue;
+                // Check if PDF
+                const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+                if (isPdf) {
+                    pdfParts.push({
+                        inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
+                    });
+                    downloadedNames.push(pf.titulo);
+                    console.log(`[AI Populate] ✅ PDF: ${pf.titulo} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                }
+                else {
+                    console.log(`[AI Populate] ⚠️ Not a PDF: ${pf.titulo} — skipping`);
+                }
+            }
+            catch (err) {
+                console.warn(`[AI Populate] ⚠️ Failed to download ${pf.titulo}: ${err.message}`);
+            }
+        }
+        if (pdfParts.length === 0) {
+            return res.status(400).json({
+                error: 'Não foi possível baixar nenhuma planilha do PNCP. Tente novamente ou adicione a planilha manualmente.',
+                attempted: planilhaFiles.map((p) => p.titulo)
+            });
+        }
+        // Extract items from planilha PDFs using Gemini multimodal
+        const extractPrompt = `Você é um especialista em licitações brasileiras de obras e serviços de engenharia.
+Analise a(s) planilha(s) orçamentária(s) abaixo e extraia TODOS os itens/serviços com seus dados.
+
+REGRAS:
+1. Extraia CADA serviço/item individualmente — NÃO agrupe
+2. Para cada item identifique: número, descrição técnica COMPLETA, unidade de medida, quantidade, preço unitário de referência
+3. Mantenha a hierarquia: Grupo/Subgrupo (se houver) como prefixo na descrição
+4. NÃO inclua subtotais, totais gerais, BDI ou encargos como itens — apenas serviços
+5. Se a quantidade ou unidade não estiver clara, use quantidade=1 e unidade="UN"
+6. Para valores monetários, use ponto como separador decimal (ex: 1234.56)
+7. Multiplier = 1 para itens de obra (não há recorrência mensal)
+
+${pricingInfo ? `INFORMAÇÕES ADICIONAIS DE PREÇO:\n${pricingInfo}\n` : ''}
+
+Responda APENAS com um JSON array válido:
+[{"itemNumber":"1.1","description":"Descrição completa do serviço incluindo grupo","unit":"M²","quantity":100,"multiplier":1,"multiplierLabel":"","referencePrice":45.67}]`;
+        console.log(`[AI Populate] Sending ${pdfParts.length} PDFs to Gemini for item extraction...`);
         const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
             model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: { temperature: 0.05, maxOutputTokens: 8192 },
+            contents: [{
+                    role: 'user',
+                    parts: [
+                        ...pdfParts,
+                        { text: extractPrompt }
+                    ]
+                }],
+            config: {
+                temperature: 0.05,
+                maxOutputTokens: 65536,
+                responseMimeType: 'application/json'
+            }
         });
         const responseText = result.text?.trim() || '';
-        console.log(`[AI Populate] Response (first 300): ${responseText.substring(0, 300)}`);
-        let jsonStr = responseText;
-        const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-        if (jsonMatch)
-            jsonStr = jsonMatch[0];
+        console.log(`[AI Populate] Response length: ${responseText.length} chars (first 300): ${responseText.substring(0, 300)}`);
         let items;
         try {
-            items = JSON.parse(jsonStr);
+            const parsed = JSON.parse(responseText);
+            items = Array.isArray(parsed) ? parsed : (parsed.items || parsed.data || []);
         }
         catch {
-            console.error('[AI Populate] Failed to parse JSON');
-            return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) });
+            // Try regex extract
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                try {
+                    items = JSON.parse(jsonMatch[0]);
+                }
+                catch {
+                    return res.status(500).json({ error: 'AI returned invalid JSON from planilha', raw: responseText.substring(0, 300) });
+                }
+            }
+            else {
+                return res.status(500).json({ error: 'AI returned no extractable data from planilha' });
+            }
         }
-        console.log(`[AI Populate] Extracted ${items.length} items from edital`);
-        res.json({ items, totalItems: items.length });
+        console.log(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
+        res.json({
+            items,
+            totalItems: items.length,
+            source: 'pncp_planilha',
+            planilhas: downloadedNames
+        });
     }
     catch (error) {
         console.error('[AI Populate] Error:', error.message);
         res.status(500).json({ error: 'AI populate failed: ' + (error.message || 'Unknown') });
     }
 });
-// POST AI Letter — generate proposal letter
+// POST AI Letter — DEPRECATED, replaced by /api/proposals/ai-letter-blocks (Fase 2)
+// Kept as stub returning 410 Gone for any remaining clients
 app.post('/api/proposals/ai-letter', authenticateToken, async (req, res) => {
+    console.warn('[AI Letter] DEPRECATED endpoint called. Use /api/proposals/ai-letter-blocks instead.');
+    res.status(410).json({
+        error: 'Este endpoint foi descontinuado. Use /api/proposals/ai-letter-blocks para geração controlada por blocos.',
+        migration: 'POST /api/proposals/ai-letter-blocks',
+    });
+});
+// ═══════════════════════════════════════════════════════════════════════
+// AI Letter Blocks — Controlled AI generation for specific letter parts
+// Generates ONLY variable text blocks within a predefined structure.
+// The AI does NOT decide layout, structure, or mandatory sections.
+// ═══════════════════════════════════════════════════════════════════════
+app.post('/api/proposals/ai-letter-blocks', authenticateToken, async (req, res) => {
     try {
-        const { biddingProcessId, companyProfileId, totalValue, validityDays, itemsSummary } = req.body;
+        const { biddingProcessId, requestedBlocks } = req.body;
+        if (!biddingProcessId) {
+            return res.status(400).json({ error: 'biddingProcessId is required' });
+        }
+        if (!requestedBlocks || !Array.isArray(requestedBlocks) || requestedBlocks.length === 0) {
+            return res.status(400).json({ error: 'requestedBlocks array is required (objectBlock, executionBlock, commercialExtras)' });
+        }
+        const validBlocks = ['objectBlock', 'executionBlock', 'commercialExtras'];
+        const invalid = requestedBlocks.filter((b) => !validBlocks.includes(b));
+        if (invalid.length > 0) {
+            return res.status(400).json({ error: `Invalid blocks: ${invalid.join(', ')}. Valid: ${validBlocks.join(', ')}` });
+        }
         const bidding = await prisma.biddingProcess.findFirst({
             where: { id: biddingProcessId, tenantId: req.user.tenantId },
             include: { aiAnalysis: true }
         });
-        const company = await prisma.companyProfile.findFirst({
-            where: { id: companyProfileId, tenantId: req.user.tenantId },
-        });
-        if (!bidding || !company)
-            return res.status(404).json({ error: 'Bidding or company not found' });
+        if (!bidding)
+            return res.status(404).json({ error: 'Bidding process not found' });
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey)
             return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
         const ai = new genai_1.GoogleGenAI({ apiKey });
-        const prompt = `Gere uma CARTA PROPOSTA formal para licitação pública brasileira baseada estritamente na Lei 14.133/2021.
-Você deve adequar sua carta ao OBJETO e às EXIGÊNCIAS detalhadas abaixo.
+        const schemaV2 = bidding.aiAnalysis?.schemaV2;
+        const fullSummary = bidding.aiAnalysis?.fullSummary || '';
+        const pricingInfo = bidding.aiAnalysis?.pricingConsiderations || '';
+        const processId = schemaV2?.process_identification || {};
+        const contractCond = schemaV2?.contract_conditions || {};
+        const t0 = Date.now();
+        console.log(`[AI Letter Blocks] Generating ${requestedBlocks.length} block(s) for bidding ${biddingProcessId}`);
+        // ── Build prompts for each requested block ──
+        const blockPromises = [];
+        for (const blockId of requestedBlocks) {
+            if (blockId === 'objectBlock') {
+                const objContext = processId?.objeto_completo || processId?.objeto || bidding.summary || '';
+                blockPromises.push((async () => {
+                    const tStart = Date.now();
+                    const prompt = `Você é um redator especialista em licitações públicas brasileiras.
 
-REGRA DE OURO (IMPORTANTE):
-1. PRIORIZE O MODELO DE CARTA PROPOSTA DO EDITAL (geralmente é um anexo do edital). Se o Resumo do Edital abaixo contiver um modelo ou exigências específicas de redação, siga-as fielmente.
-2. Se não existir um modelo claro, aplique as condições exigidas em itens específicos do edital (Resumo abaixo).
-3. Utilize SEMPRE o termo "Agente de Contratação". NUNCA utilize o termo "Comissão de Licitação" (não é mais usual na Nova Lei).
+TAREFA: Extraia e transcreva NA ÍNTEGRA o OBJETO da licitação abaixo.
+NÃO resuma. Transcreva EXATAMENTE como consta no edital.
+Se houver itens, lotes ou grupos, mencione-os.
+Se o objeto for extenso, inclua-o completo.
 
-DADOS DA LICITAÇÃO E EMPRESA:
-- Licitação: ${bidding.title}
-- Modalidade: ${bidding.modality}
-- Órgão: Conforme edital
-- Empresa: ${company.razaoSocial}
-- CNPJ: ${company.cnpj}
-- Contato: ${company.contactName || 'Representante Legal'}
-- Valor Total da Proposta: R$ ${totalValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-- Validade da Proposta: ${validityDays || 60} dias
-- Resumo dos Itens: ${itemsSummary || 'Conforme planilha de preços em anexo'}
+DADOS DO EDITAL:
+Título: ${bidding.title}
+${objContext ? `Objeto identificado: ${objContext.substring(0, 2000)}` : ''}
+Resumo do Edital:
+${fullSummary.substring(0, 4000)}
 
-RESUMO DO EDITAL (Use para extrair o modelo ou condições específicas):
-${bidding.aiAnalysis?.fullSummary || 'Não disponível'}
+REGRAS:
+- Retorne APENAS o texto do objeto, sem aspas, sem markdown, sem títulos.
+- NÃO adicione interpretações, apenas transcreva.
+- Se não encontrar o objeto claramente, retorne o trecho mais relevante que descreva o escopo da contratação.`;
+                    const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.1, maxOutputTokens: 2048 },
+                    });
+                    return { blockId: 'objectBlock', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
+                })());
+            }
+            if (blockId === 'executionBlock') {
+                // Provide FULL contract conditions as context, not just 1 field
+                const execContext = contractCond?.local_execucao || contractCond?.prazo_execucao || '';
+                const contractCondJson = JSON.stringify(contractCond || {}, null, 0).substring(0, 3000);
+                blockPromises.push((async () => {
+                    const tStart = Date.now();
+                    const prompt = `Você é um analista especialista em editais de licitação pública brasileira.
 
-INSTRUÇÕES TÉCNICAS:
-1. Use formato formal de carta comercial.
-2. Enderece ao Agente de Contratação / Pregoeiro.
-3. Inclua: referência explícita ao processo, objeto claro, valor total numérico e por extenso EXATOS.
-4. Declare todas as condições exigidas na Lei 14.133/2021: que nos preços estão inclusos todos os custos diretos e indiretos, tributos, taxas, fretes, encargos, etc.
-5. DECLARE o prazo de validade da proposta (mínimo de ${validityDays || 60} dias).
-6. Inclua espaço para inserir DADOS BANCÁRIOS (ex: Banco, Agência, Conta Corrente) a ser preenchido.
-16. CRÍTICO: NÃO escreva a qualificação da empresa. Em vez disso, insira exatamente a tag [IDENTIFICACAO] na posição onde a qualificação deve entrar (geralmente após a Referência do processo e antes do corpo principal). O sistema substituirá essa tag pela qualificação completa do cadastro.
-17. CRÍTICO: NÃO inclua Local, Data, "Atenciosamente" ou qualquer campo de assinatura ao final da carta. O sistema já adiciona esses elementos automaticamente na exportação do relatório.
-18. CRÍTICO: O OBJETO da licitação deve ser extraído e transcrito NA ÍNTEGRA, conforme consta no documento original. NÃO o resuma, para que a proposta tenha validade jurídica.
-19. CRÍTICO: NÃO utilize placeholders ou colchetes como "[INSERIR NÚMERO DO PROCESSO]". Se o dado (ex: nº do processo administrativo) estiver presente no "Resumo do Edital" abaixo, utilize-o. Se não estiver, omita o termo completamente em vez de deixar instruções entre colchetes.
-20. Exemplo de estrutura: "Ao Agente de Contratação... Ref: Edital nº... [IDENTIFICACAO] vem perante V. Sª apresentar a proposta para o Objeto: [TRANSCRIÇÃO ÍNTEGRA DO OBJETO]... Valor Global: R$ [VALOR] ([EXTENSO])..."
-21. Retorne APENAS o texto do corpo da carta, sem markdown.`;
-        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: { temperature: 0.2, maxOutputTokens: 4096 },
+TAREFA: Extraia do edital abaixo APENAS os seguintes dados (se existirem):
+1. LOCAL COMPLETO de execução/entrega dos serviços ou bens (endereço completo, cidade, UF)
+2. PRAZO de execução, entrega ou conclusão (em dias, meses ou conforme consta)
+3. VIGÊNCIA do contrato (se mencionado)
+
+DADOS DO EDITAL:
+Título: ${bidding.title}
+${execContext ? `Dados já identificados: ${execContext}` : ''}
+Condições contratuais (JSON):
+${contractCondJson}
+Resumo do Edital:
+${fullSummary.substring(0, 4000)}
+
+REGRAS CRÍTICAS:
+- Responda em frases COMPLETAS e objetivas, sem markdown.
+- NUNCA trunque o texto no meio de uma palavra ou frase.
+- Cada informação deve terminar com ponto final.
+- Inclua APENAS os dados que existirem no edital.
+- Se nenhum dado for encontrado, retorne exatamente: ""
+- NÃO invente informações.
+- Formato obrigatório: "Local de execução: [endereço completo]. Prazo de execução: [prazo]. Vigência contratual: [vigência]."`;
+                    const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.1, maxOutputTokens: 1024 },
+                    });
+                    const content = result.text?.trim() || '';
+                    return { blockId: 'executionBlock', content, durationMs: Date.now() - tStart };
+                })());
+            }
+            if (blockId === 'commercialExtras') {
+                const contractCondJson = JSON.stringify(contractCond || {}, null, 0).substring(0, 3000);
+                blockPromises.push((async () => {
+                    const tStart = Date.now();
+                    const prompt = `Você é um analista especialista em licitações públicas brasileiras (Lei 14.133/2021).
+
+TAREFA: Analise as condições financeiras e comerciais ESPECÍFICAS deste edital e extraia APENAS:
+- Condições de pagamento específicas (prazo, forma, documentos exigidos para liquidação)
+- Exigência de garantia contratual (tipo e percentual)
+- Critério de reajuste de preços
+- Condições sobre composição de BDI
+- Exigências específicas sobre a proposta (formato, prazo, documentos adicionais)
+
+DADOS FINANCEIROS DO EDITAL:
+${pricingInfo ? `Considerações sobre preços: ${pricingInfo.substring(0, 3000)}` : 'Não disponível'}
+Condições contratuais (JSON):
+${contractCondJson}
+
+Resumo do Edital:
+${fullSummary.substring(0, 4000)}
+
+REGRAS CRÍTICAS:
+- NÃO inclua declarações genéricas sobre tributos, custos ou encargos (já estão na carta padrão).
+- Retorne APENAS condições ESPECÍFICAS deste edital, em frases declarativas formais.
+- Cada frase/cláusula DEVE terminar com ponto final.
+- NUNCA trunque o texto no meio de uma palavra ou frase — complete a sentença.
+- Se não houver condições específicas além das padrão, retorne exatamente: ""
+- NÃO invente informações.
+- Sem markdown, sem títulos, sem numeração.`;
+                    const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.1, maxOutputTokens: 2048 },
+                    });
+                    const content = result.text?.trim() || '';
+                    return { blockId: 'commercialExtras', content, durationMs: Date.now() - tStart };
+                })());
+            }
+        }
+        // ── Execute all blocks in parallel ──
+        const results = await Promise.allSettled(blockPromises);
+        const blocks = {};
+        const timings = {};
+        const errors = [];
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                blocks[result.value.blockId] = result.value.content;
+                timings[result.value.blockId] = result.value.durationMs;
+            }
+            else {
+                errors.push(result.reason?.message || 'Unknown AI error');
+            }
+        }
+        const totalMs = Date.now() - t0;
+        console.log(`[AI Letter Blocks] Completed in ${totalMs}ms — blocks: ${Object.keys(blocks).join(', ')} | timings: ${JSON.stringify(timings)}`);
+        if (errors.length > 0) {
+            console.warn(`[AI Letter Blocks] ${errors.length} block(s) failed:`, errors);
+        }
+        res.json({
+            blocks,
+            timings,
+            errors: errors.length > 0 ? errors : undefined,
+            totalMs,
         });
-        const letterContent = result.text?.trim() || '';
-        console.log(`[AI Letter] Generated letter (${letterContent.length} chars) for bidding ${biddingProcessId}`);
-        res.json({ letterContent });
     }
     catch (error) {
-        console.error('[AI Letter] Error:', error.message);
-        res.status(500).json({ error: 'Letter generation failed: ' + (error.message || 'Unknown') });
+        console.error('[AI Letter Blocks] Error:', error.message);
+        res.status(500).json({ error: 'AI block generation failed: ' + (error.message || 'Unknown') });
     }
 });
-// ═══════════════════════════════════════════════════════════════════════
-// Dossier AI Matching — Gemini-powered document-to-requirement matching
 // ═══════════════════════════════════════════════════════════════════════
 app.post('/api/dossier/ai-match', authenticateToken, async (req, res) => {
     try {
@@ -3462,6 +4084,34 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
                     mergedRequirements[cat.key] = [];
                     return null;
                 }
+                // ── FAST-PATH: HJ, RFT, QEF — server-side normalization ──
+                const FAST_NORM_CATS = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira'];
+                if (FAST_NORM_CATS.includes(cat.key)) {
+                    const normalized = items.map((item, idx) => ({
+                        ...item,
+                        requirement_id: item.requirement_id || `${cat.prefix}-${String(idx + 1).padStart(2, '0')}`,
+                        entry_type: item.entry_type || 'exigencia_principal',
+                        risk_if_missing: item.risk_if_missing || 'inabilitacao',
+                        applies_to: item.applies_to || 'licitante',
+                        obligation_type: item.obligation_type || 'obrigatoria_universal',
+                        phase: item.phase || 'habilitacao',
+                        source_ref: item.source_ref || 'referência não localizada',
+                    }));
+                    mergedRequirements[cat.key] = normalized;
+                    totalNormalized += normalized.length;
+                    normalized.filter((n) => n.entry_type === 'exigencia_principal').forEach((n) => {
+                        mergedDocs.push({
+                            document_name: n.title || n.requirement_id,
+                            category: cat.key,
+                            priority: 'critica',
+                            responsible_area: cat.key === 'habilitacao_juridica' ? 'juridico' : 'contabil',
+                            notes: ''
+                        });
+                    });
+                    console.log(`[AI-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side)`);
+                    return { success: true, fastPath: true };
+                }
+                // ── AI normalization for QTO, QTP, PC, DC ──
                 return (async () => {
                     const systemPrompt = (0, prompt_service_1.buildCategoryNormPrompt)(cat);
                     const userPrompt = (0, prompt_service_1.buildCategoryNormUser)(cat, items);
@@ -3758,7 +4408,13 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
                     .flat()
                     .map(r => `[${r.requirement_id}] ${r.title}: ${r.description}`)
                     .join('\n'),
-                biddingItems: result.proposal_analysis.observacoes_proposta.join('\n'),
+                biddingItems: (() => {
+                    const itens = result.proposal_analysis?.itens_licitados || [];
+                    if (Array.isArray(itens) && itens.length > 0) {
+                        return itens.map((it) => `Item ${it.itemNumber || '?'}: ${it.description || ''} | Unid: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1}${it.multiplier && it.multiplier > 1 ? ` × ${it.multiplier} ${it.multiplierLabel || ''}` : ''} | Ref: R$ ${it.referencePrice || 0}`).join('\n');
+                    }
+                    return (result.proposal_analysis.observacoes_proposta || []).join('\n');
+                })(),
                 pricingConsiderations: result.economic_financial_analysis.indices_exigidos
                     .map(i => `${i.indice}: ${i.formula_ou_descricao} (mín: ${i.valor_minimo})`)
                     .join('\n'),

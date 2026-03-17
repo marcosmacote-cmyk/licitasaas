@@ -272,7 +272,10 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     };
 
     const handleSaveCompanyTemplate = async () => {
-        if (!selectedCompanyId) return;
+        if (!selectedCompanyId) {
+            toast.warning('Selecione uma empresa primeiro.');
+            return;
+        }
         setIsSavingTemplate(true);
         try {
             const res = await fetch(`${API_BASE_URL}/api/companies/${selectedCompanyId}/proposal-template`, {
@@ -286,7 +289,11 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                 })
             });
             if (res.ok) {
+                toast.success('Template padrão da empresa salvo!');
                 showSaveMsg('Template padrão da empresa salvo!');
+            } else {
+                const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+                toast.error(err.error || 'Erro ao salvar template.');
             }
         } catch (e) {
             toast.error('Erro ao salvar template da empresa.');

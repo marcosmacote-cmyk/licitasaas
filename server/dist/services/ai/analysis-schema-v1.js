@@ -81,6 +81,7 @@ function createEmptyAnalysisSchema() {
             exige_marca_modelo_fabricante: null, exige_catalogo_ficha_tecnica_manual: null,
             exige_declaracao_fabricante: null, criterios_desclassificacao_proposta: [],
             criterios_exequibilidade: [], criterios_desempate: [], observacoes_proposta: [],
+            itens_licitados: [],
         },
         contractual_analysis: {
             prazo_execucao: '', prazo_vigencia: '', reajuste: '', repactuacao: '',

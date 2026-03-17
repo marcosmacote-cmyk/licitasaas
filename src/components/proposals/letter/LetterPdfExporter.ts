@@ -79,14 +79,14 @@ export class LetterPdfExporter {
     <meta charset="UTF-8">
     <title>Proposta Comercial - ${data.company.razaoSocial}</title>
     <style>
-        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.35; font-size: 11px; margin: 0; padding: 0; }
+        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.4; font-size: 11.5px; margin: 0; padding: 0; }
         .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer .gen-info { font-size: 7px; color: #999; margin-top: 2px; }
-        .content-wrapper { padding: 4px 15px; }
-        .letter { margin-bottom: 6px; text-align: justify; font-size: 11px; line-height: 1.35; }
+        .content-wrapper { padding: 6px 15px; }
+        .letter { margin-bottom: 8px; text-align: justify; font-size: 11px; line-height: 1.4; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
         table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
         table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; }
@@ -96,65 +96,42 @@ export class LetterPdfExporter {
         .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
         .totals-clearfix { clear: both; height: 1px; }
-        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 10px; }
-        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px; }
+        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 12px; }
+        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 11px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
         table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
         table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
 
-        /* ── REGRA: Conteúdo da carta cabe em 1 página ── */
-        .letter .block { margin-bottom: 5px; }
-        .letter .block p { margin-bottom: 4px; line-height: 1.35; }
-        .letter .block-closing { margin-top: 8px; margin-bottom: 2px; }
+        /* Espaçamento compacto mas harmonicamente legível */
+        .letter .block { margin-bottom: 6px; }
+        .letter .block p { margin-bottom: 5px; line-height: 1.4; }
+        .letter .block-closing { margin-top: 10px; margin-bottom: 3px; }
 
-        /* ── Modo Paisagem: compactação para altura menor ── */
-        body.landscape-mode { font-size: 9.5px; line-height: 1.2; }
-        body.landscape-mode .letter { font-size: 9.5px; line-height: 1.2; margin-bottom: 3px; }
-        body.landscape-mode .letter .block { margin-bottom: 3px; }
-        body.landscape-mode .letter .block p { margin-bottom: 3px; line-height: 1.2; }
-        body.landscape-mode .block-closing { margin-top: 4px; margin-bottom: 1px; }
-        body.landscape-mode .signature-block { margin-top: 5px; }
-        body.landscape-mode .sig-item { font-size: 9px; }
-        body.landscape-mode .sig-item div:first-child { margin-bottom: 8px; }
-        body.landscape-mode .content-wrapper { padding: 2px 8px; }
-
-        /* ── Auto-shrink: aplicado via JS se conteúdo exceder a página ── */
-        .auto-shrink .content-wrapper {
-            transform-origin: top left;
-        }
+        /* Modo Paisagem */
+        body.landscape-mode { font-size: 10px; line-height: 1.25; }
+        body.landscape-mode .letter { font-size: 10px; line-height: 1.25; margin-bottom: 4px; }
+        body.landscape-mode .letter .block { margin-bottom: 4px; }
+        body.landscape-mode .letter .block p { margin-bottom: 3px; line-height: 1.25; }
+        body.landscape-mode .block-closing { margin-top: 5px; margin-bottom: 2px; }
+        body.landscape-mode .signature-block { margin-top: 6px; }
+        body.landscape-mode .sig-item { font-size: 9.5px; }
+        body.landscape-mode .sig-item div:first-child { margin-bottom: 10px; }
+        body.landscape-mode .content-wrapper { padding: 3px 10px; }
 
         @media print {
-            body { font-size: 10.5px; }
-            body.landscape-mode { font-size: 9px; }
+            body { font-size: 11px; }
+            body.landscape-mode { font-size: 9.5px; }
             .content-wrapper { padding: 0; }
-            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.4cm 0.5cm' : '0.5cm 0.8cm'}; }
+            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.4cm 0.6cm' : '0.6cm 1cm'}; }
         }
     </style>
 </head>
 <body${printLandscape ? ' class="landscape-mode"' : ''}>
     <script>
     window.onload = function() {
-        // Auto-shrink: mede conteúdo vs página e escala se necessário
-        setTimeout(function() {
-            var wrapper = document.querySelector('.content-wrapper');
-            if (!wrapper) { window.print(); return; }
-            var isLandscape = document.body.classList.contains('landscape-mode');
-            // Altura disponível da página (A4: 297mm portrait, 210mm landscape) menos header/footer
-            var headerH = ${topMargin};
-            var footerH = ${bottomMargin};
-            var pageH = isLandscape ? 710 : 1050; // px approx for A4
-            var available = pageH - headerH - footerH;
-            var contentH = wrapper.scrollHeight;
-            if (contentH > available) {
-                var scale = Math.max(available / contentH, 0.65); // mínimo 65%
-                wrapper.style.transform = 'scale(' + scale + ')';
-                wrapper.style.transformOrigin = 'top left';
-                wrapper.style.width = (100 / scale) + '%';
-                document.body.classList.add('auto-shrink');
-            }
-            setTimeout(function() { window.print(); }, 300);
-        }, 400);
+        // Imprimir após carregamento completo (sem auto-shrink agressivo)
+        setTimeout(function() { window.print(); }, 500);
     };
     </script>
 

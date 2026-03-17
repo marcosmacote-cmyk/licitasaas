@@ -270,19 +270,22 @@ app.put('/api/companies/:id/proposal-template', authenticateToken, async (req: a
         const { id } = req.params;
         const { headerImage, footerImage, headerHeight, footerHeight, defaultLetterContent } = req.body;
 
+        const updateData: any = {
+            defaultProposalHeader: headerImage,
+            defaultProposalFooter: footerImage,
+            defaultProposalHeaderHeight: headerHeight,
+            defaultProposalFooterHeight: footerHeight,
+            defaultLetterContent: defaultLetterContent
+        };
+
         await prisma.companyProfile.update({
             where: { id, tenantId: req.user.tenantId },
-            data: {
-                defaultProposalHeader: headerImage,
-                defaultProposalFooter: footerImage,
-                defaultProposalHeaderHeight: headerHeight,
-                defaultProposalFooterHeight: footerHeight,
-                defaultLetterContent: defaultLetterContent
-            }
+            data: updateData
         });
 
         res.json({ message: 'Template padrão salvo com sucesso!' });
     } catch (error: any) {
+        console.error('[API] Save company template error:', error);
         res.status(500).json({ error: 'Erro ao salvar template: ' + error.message });
     }
 });
