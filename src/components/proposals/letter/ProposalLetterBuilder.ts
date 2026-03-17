@@ -392,13 +392,11 @@ export class ProposalLetterBuilder {
             const legalLines = [
                 '___________________________________',
                 sig.legalRepresentative.name || company.contactName || 'Representante Legal',
+                `CPF: ${sig.legalRepresentative.cpf || company.contactCpf || '—'}`,
+                sig.legalRepresentative.role || 'Representante Legal',
+                (company.razaoSocial || '').toUpperCase(),
+                `CNPJ: ${company.cnpj}`,
             ];
-            if (sig.legalRepresentative.cpf || company.contactCpf) {
-                legalLines.push(`CPF: ${sig.legalRepresentative.cpf || company.contactCpf}`);
-            }
-            legalLines.push(sig.legalRepresentative.role || 'Representante Legal');
-            legalLines.push(company.razaoSocial);
-            legalLines.push(`CNPJ: ${company.cnpj}`);
             sections.push(legalLines.join('\n'));
         }
 
@@ -411,7 +409,7 @@ export class ProposalLetterBuilder {
                 techLines.push(sig.technicalRepresentative?.registration || company.technicalRegistration!);
             }
             techLines.push(sig.technicalRepresentative?.role || 'Responsável Técnico');
-            techLines.push(company.razaoSocial);
+            techLines.push((company.razaoSocial || '').toUpperCase());
             techLines.push(`CNPJ: ${company.cnpj}`);
             sections.push(techLines.join('\n'));
         }
