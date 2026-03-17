@@ -102,14 +102,31 @@ export class LetterPdfExporter {
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
         table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
         table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
+
+        /* ── Modo Paisagem: compactação extra para caber em 1 página ── */
+        body.landscape-mode { font-size: 10px; line-height: 1.25; }
+        body.landscape-mode .letter { font-size: 10px; line-height: 1.25; margin-bottom: 8px; }
+        body.landscape-mode .block { margin-bottom: 4px !important; }
+        body.landscape-mode .block-recipient { margin-bottom: 6px !important; }
+        body.landscape-mode .block-reference { margin-bottom: 4px !important; }
+        body.landscape-mode .block-commercial p,
+        body.landscape-mode .block-conditions p,
+        body.landscape-mode .block-pricing p { margin-bottom: 4px !important; }
+        body.landscape-mode .block-closing { margin-top: 8px !important; margin-bottom: 3px !important; }
+        body.landscape-mode .signature-block { margin-top: 10px !important; }
+        body.landscape-mode .sig-item { font-size: 10px; }
+        body.landscape-mode .sig-item div:first-child { margin-bottom: 15px !important; }
+        body.landscape-mode .content-wrapper { padding: 5px 10px; }
+
         @media print {
             body { font-size: 11px; }
+            body.landscape-mode { font-size: 9.5px; }
             .content-wrapper { padding: 0; }
-            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: 0.8cm 1cm; }
+            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.5cm 0.8cm' : '0.8cm 1cm'}; }
         }
     </style>
 </head>
-<body>
+<body${printLandscape ? ' class="landscape-mode"' : ''}>
     <script>window.onload = function() { setTimeout(() => { window.print(); }, 500); };</script>
 
     <div class="fixed-header">
