@@ -79,14 +79,14 @@ export class LetterPdfExporter {
     <meta charset="UTF-8">
     <title>Proposta Comercial - ${data.company.razaoSocial}</title>
     <style>
-        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.4; font-size: 11.5px; margin: 0; padding: 0; }
+        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.35; font-size: 11px; margin: 0; padding: 0; }
         .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-        .fixed-footer .gen-info { font-size: 8px; color: #999; margin-top: 2px; }
-        .content-wrapper { padding: 10px 15px; }
-        .letter { margin-bottom: 15px; text-align: justify; font-size: 11.5px; line-height: 1.4; }
+        .fixed-footer .gen-info { font-size: 7px; color: #999; margin-top: 1px; }
+        .content-wrapper { padding: 5px 10px; }
+        .letter { margin-bottom: 10px; text-align: justify; font-size: 11px; line-height: 1.35; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
         table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
         table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; }
@@ -96,38 +96,67 @@ export class LetterPdfExporter {
         .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
         .totals-clearfix { clear: both; height: 1px; }
-        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 20px; }
-        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 11px; }
+        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 15px; }
+        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
         table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
         table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
 
-        /* ── Modo Paisagem: compactação extra para caber em 1 página ── */
-        body.landscape-mode { font-size: 10px; line-height: 1.25; }
-        body.landscape-mode .letter { font-size: 10px; line-height: 1.25; margin-bottom: 8px; }
-        body.landscape-mode .block { margin-bottom: 4px !important; }
-        body.landscape-mode .block-recipient { margin-bottom: 6px !important; }
-        body.landscape-mode .block-reference { margin-bottom: 4px !important; }
-        body.landscape-mode .block-commercial p,
-        body.landscape-mode .block-conditions p,
-        body.landscape-mode .block-pricing p { margin-bottom: 4px !important; }
-        body.landscape-mode .block-closing { margin-top: 8px !important; margin-bottom: 3px !important; }
-        body.landscape-mode .signature-block { margin-top: 10px !important; }
-        body.landscape-mode .sig-item { font-size: 10px; }
-        body.landscape-mode .sig-item div:first-child { margin-bottom: 15px !important; }
-        body.landscape-mode .content-wrapper { padding: 5px 10px; }
+        /* ── REGRA: Todo conteúdo da carta deve caber em 1 página ── */
+        .letter * { page-break-inside: avoid; }
+        .letter .block { margin-bottom: 6px !important; }
+        .letter .block p { margin-bottom: 5px !important; line-height: 1.35 !important; }
+
+        /* ── Modo Paisagem: compactação extra ── */
+        body.landscape-mode { font-size: 9.5px; line-height: 1.2; }
+        body.landscape-mode .letter { font-size: 9.5px; line-height: 1.2; margin-bottom: 5px; }
+        body.landscape-mode .block { margin-bottom: 3px !important; }
+        body.landscape-mode .block p { margin-bottom: 3px !important; line-height: 1.2 !important; }
+        body.landscape-mode .block-recipient { margin-bottom: 4px !important; }
+        body.landscape-mode .block-reference { margin-bottom: 3px !important; }
+        body.landscape-mode .block-closing { margin-top: 5px !important; margin-bottom: 2px !important; }
+        body.landscape-mode .signature-block { margin-top: 6px !important; }
+        body.landscape-mode .sig-item { font-size: 9px; }
+        body.landscape-mode .sig-item div:first-child { margin-bottom: 10px !important; }
+        body.landscape-mode .content-wrapper { padding: 3px 8px; }
 
         @media print {
-            body { font-size: 11px; }
-            body.landscape-mode { font-size: 9.5px; }
+            body { font-size: 10.5px; }
+            body.landscape-mode { font-size: 9px; }
             .content-wrapper { padding: 0; }
-            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.5cm 0.8cm' : '0.8cm 1cm'}; }
+            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.4cm 0.6cm' : '0.6cm 0.8cm'}; }
         }
     </style>
 </head>
 <body${printLandscape ? ' class="landscape-mode"' : ''}>
-    <script>window.onload = function() { setTimeout(() => { window.print(); }, 500); };</script>
+    <script>
+    window.onload = function() {
+        // Auto-scale: mede o conteúdo e reduz se necessário para caber em 1 página
+        setTimeout(function() {
+            var wrapper = document.querySelector('.content-wrapper');
+            if (!wrapper) { window.print(); return; }
+            
+            var isLandscape = document.body.classList.contains('landscape-mode');
+            // Altura útil da página (A4 menos margens e header/footer)
+            var pageH = isLandscape ? 490 : 750;
+            var headerH = ${topMargin};
+            var footerH = ${bottomMargin};
+            var availableH = pageH - headerH - footerH;
+            
+            var contentH = wrapper.scrollHeight;
+            
+            if (contentH > availableH) {
+                var scale = Math.max(0.65, availableH / contentH);
+                wrapper.style.transform = 'scale(' + scale + ')';
+                wrapper.style.transformOrigin = 'top left';
+                wrapper.style.width = (100 / scale) + '%';
+            }
+            
+            setTimeout(function() { window.print(); }, 300);
+        }, 400);
+    };
+    </script>
 
     <div class="fixed-header">
         ${headerImage
