@@ -48,12 +48,12 @@ export class LetterRenderer {
                 </div>`;
 
             case LetterBlockType.COMMERCIAL:
-                return `<div class="block block-commercial" style="margin-bottom: 15px; text-align: justify;">
+                return `<div class="block block-commercial" style="margin-bottom: 15px; text-align: justify; page-break-inside: avoid;">
                     ${this.renderParagraphs(formatted)}
                 </div>`;
 
             case LetterBlockType.PRICING_SUMMARY:
-                return `<div class="block block-pricing" style="margin-bottom: 15px;">
+                return `<div class="block block-pricing" style="margin-bottom: 15px; page-break-inside: avoid;">
                     ${this.renderParagraphs(formatted)}
                 </div>`;
 
@@ -63,7 +63,7 @@ export class LetterRenderer {
                 </div>`;
 
             case LetterBlockType.EXECUTION:
-                return `<div class="block block-execution" style="margin-bottom: 15px; text-align: justify;">
+                return `<div class="block block-execution" style="margin-bottom: 15px; text-align: justify; page-break-inside: avoid;">
                     ${this.renderParagraphs(formatted)}
                 </div>`;
 
@@ -73,7 +73,7 @@ export class LetterRenderer {
                 </div>`;
 
             case LetterBlockType.CLOSING:
-                return `<div class="block block-closing" style="margin-bottom: 10px; margin-top: 30px;">
+                return `<div class="block block-closing" style="margin-bottom: 10px; margin-top: 30px; page-break-inside: avoid;">
                     <div style="text-align: right; margin-bottom: 20px;">${formatted.split('\n')[0]}</div>
                     <div style="text-align: left;">${formatted.split('\n').slice(1).join('<br/>').trim()}</div>
                 </div>`;

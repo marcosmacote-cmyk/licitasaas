@@ -11,6 +11,7 @@ import {
     AlertTriangle, XCircle, Info, ChevronRight, ChevronLeft,
     Loader2, Save, RefreshCw, Lock, Unlock, Sparkles,
     FileText, Table2, FileStack, ListOrdered, BarChart3,
+    Zap, ChevronDown,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../../types';
 import type { ProposalLetterResult, LetterBlock, ValidationResult, LetterExportMode } from './types';
@@ -82,6 +83,17 @@ const BLOCK_LABELS: Record<string, { icon: string; color: string }> = {
     [LetterBlockType.SIGNATURE]:       { icon: '✍️', color: '#334155' },
 };
 
+// Agrupamento visual para revisão
+const BLOCK_GROUPS = [
+    { label: 'Identificação e Endereçamento', ids: [LetterBlockType.RECIPIENT, LetterBlockType.REFERENCE, LetterBlockType.QUALIFICATION] },
+    { label: 'Corpo Principal da Proposta', ids: [LetterBlockType.OBJECT, LetterBlockType.COMMERCIAL, LetterBlockType.PRICING_SUMMARY, LetterBlockType.VALIDITY] },
+    { label: 'Informações Complementares', ids: [LetterBlockType.EXECUTION, LetterBlockType.BANKING] },
+    { label: 'Fechamento e Assinatura', ids: [LetterBlockType.CLOSING, LetterBlockType.SIGNATURE] },
+];
+
+// Blocos que merecem atenção especial na revisão
+const ATTENTION_BLOCKS = new Set<string>([LetterBlockType.OBJECT, LetterBlockType.PRICING_SUMMARY, LetterBlockType.QUALIFICATION]);
+
 export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const [step, setStep] = useState<WizardStep>('config');
     const [validation, setValidation] = useState<ValidationResult | null>(null);
@@ -91,6 +103,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
     const [editBuffer, setEditBuffer] = useState('');
     const [selectedExportMode, setSelectedExportMode] = useState<LetterExportMode>('FULL');
+    const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
 
     const stepIndex = STEPS.findIndex(s => s.id === step);
 
@@ -381,7 +394,28 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
+                            <button onClick={async () => {
+                                // Modo rápido: validar → gerar → ir para revisão
+                                const validator = new ProposalLetterValidator();
+                                const result = validator.validate(normalizedData);
+                                setValidation(result);
+                                if (result.isValid) {
+                                    await handleGenerate();
+                                } else {
+                                    setStep('validation');
+                                }
+                            }} style={{
+                                padding: 'var(--space-2) var(--space-5)', borderRadius: 'var(--radius-lg)',
+                                background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
+                                color: 'white', border: 'none',
+                                fontWeight: 700, fontSize: 'var(--text-md)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                opacity: isGenerating ? 0.6 : 1,
+                            }} disabled={isGenerating}>
+                                {isGenerating ? <Loader2 size={16} className="spin" /> : <Zap size={16} />}
+                                Gerar Rápido
+                            </button>
                             <button onClick={handleValidate} style={{
                                 padding: 'var(--space-2) var(--space-6)', borderRadius: 'var(--radius-lg)',
                                 background: 'var(--color-primary)', color: 'white', border: 'none',
@@ -530,79 +564,123 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                            {letterResult.blocks.filter(b => b.visible).map(block => {
-                                const meta = BLOCK_LABELS[block.id] || { icon: '📄', color: '#64748B' };
-                                const isEditing = editingBlockId === block.id;
+                        {/* Blocos agrupados por seção */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                            {BLOCK_GROUPS.map(group => {
+                                const groupBlocks = letterResult.blocks.filter(b => b.visible && (group.ids as string[]).includes(b.id));
+                                if (groupBlocks.length === 0) return null;
 
                                 return (
-                                    <div key={block.id} style={{
-                                        borderRadius: 'var(--radius-lg)',
-                                        border: isEditing ? `2px solid ${meta.color}` : '1px solid var(--color-border)',
-                                        overflow: 'hidden', transition: 'border-color 0.2s',
-                                    }}>
-                                        {/* Block header */}
+                                    <div key={group.label}>
+                                        {/* Group separator */}
                                         <div style={{
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                            padding: 'var(--space-2) var(--space-3)',
-                                            background: `${meta.color}08`, borderBottom: '1px solid var(--color-border)',
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                                                <span>{meta.icon}</span>
-                                                <span style={{ color: meta.color }}>{block.label}</span>
-                                                {block.aiGenerated && (
-                                                    <span style={{
-                                                        fontSize: '0.65rem', padding: '1px 6px', borderRadius: '99px',
-                                                        background: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(59,130,246,0.15))',
-                                                        color: 'var(--color-ai)', fontWeight: 700,
-                                                    }}>🤖 IA</span>
-                                                )}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                {block.editable ? (
-                                                    isEditing ? (
-                                                        <>
-                                                            <button onClick={handleSaveEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-success)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Salvar</button>
-                                                            <button onClick={handleCancelEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Cancelar</button>
-                                                        </>
-                                                    ) : (
-                                                        <button onClick={() => handleStartEdit(block)} style={{
-                                                            fontSize: '0.7rem', padding: '2px 8px', background: 'none',
-                                                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                                                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                                                            color: 'var(--color-text-secondary)',
-                                                        }}>
-                                                            <Unlock size={10} /> Editar
-                                                        </button>
-                                                    )
-                                                ) : (
-                                                    <span style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                                        <Lock size={10} /> Fixo
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
+                                            fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                                            color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-2)',
+                                            paddingBottom: 'var(--space-1)', borderBottom: '1px solid var(--color-border)',
+                                        }}>{group.label}</div>
 
-                                        {/* Block content */}
-                                        <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
-                                            {isEditing ? (
-                                                <textarea value={editBuffer} onChange={e => setEditBuffer(e.target.value)}
-                                                    style={{
-                                                        width: '100%', minHeight: '120px', padding: 'var(--space-3)',
-                                                        borderRadius: 'var(--radius-md)', border: `1px solid ${meta.color}40`,
-                                                        fontSize: 'var(--text-sm)', lineHeight: 1.6, resize: 'vertical',
-                                                        background: 'var(--color-bg-base)',
-                                                    }}
-                                                />
-                                            ) : (
-                                                <div style={{
-                                                    fontSize: 'var(--text-sm)', lineHeight: 1.65,
-                                                    color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap',
-                                                    maxHeight: '200px', overflow: 'auto',
-                                                }}>
-                                                    {block.content || <em style={{ color: 'var(--color-text-tertiary)' }}>Bloco vazio</em>}
-                                                </div>
-                                            )}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                            {groupBlocks.map(block => {
+                                                const meta = BLOCK_LABELS[block.id] || { icon: '📄', color: '#64748B' };
+                                                const isEditing = editingBlockId === block.id;
+                                                const isCollapsed = collapsedBlocks.has(block.id);
+                                                const needsAttention = ATTENTION_BLOCKS.has(block.id);
+                                                const isLongContent = (block.content || '').length > 300;
+
+                                                return (
+                                                    <div key={block.id} style={{
+                                                        borderRadius: 'var(--radius-lg)',
+                                                        border: isEditing ? `2px solid ${meta.color}`
+                                                            : needsAttention ? `1px solid ${meta.color}30`
+                                                            : '1px solid var(--color-border)',
+                                                        overflow: 'hidden', transition: 'border-color 0.2s',
+                                                    }}>
+                                                        {/* Block header */}
+                                                        <div style={{
+                                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                            padding: '6px var(--space-3)',
+                                                            background: needsAttention ? `${meta.color}06` : 'var(--color-bg-elevated)',
+                                                            borderBottom: isCollapsed ? 'none' : '1px solid var(--color-border)',
+                                                            cursor: 'pointer',
+                                                        }} onClick={() => {
+                                                            if (!isEditing) {
+                                                                setCollapsedBlocks(prev => {
+                                                                    const next = new Set(prev);
+                                                                    next.has(block.id) ? next.delete(block.id) : next.add(block.id);
+                                                                    return next;
+                                                                });
+                                                            }
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                                                                {isCollapsed ? <ChevronRight size={13} style={{ color: 'var(--color-text-tertiary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--color-text-tertiary)' }} />}
+                                                                <span>{meta.icon}</span>
+                                                                <span style={{ color: meta.color }}>{block.label}</span>
+                                                                {block.aiGenerated && (
+                                                                    <span style={{
+                                                                        fontSize: '0.6rem', padding: '1px 5px', borderRadius: '99px',
+                                                                        background: 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(59,130,246,0.12))',
+                                                                        color: 'var(--color-ai)', fontWeight: 700,
+                                                                    }}>IA</span>
+                                                                )}
+                                                                {needsAttention && !block.aiGenerated && (
+                                                                    <span style={{
+                                                                        fontSize: '0.6rem', padding: '1px 5px', borderRadius: '99px',
+                                                                        background: 'rgba(245,158,11,0.1)', color: '#D97706', fontWeight: 600,
+                                                                    }}>Conferir</span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+                                                                {block.editable ? (
+                                                                    isEditing ? (
+                                                                        <>
+                                                                            <button onClick={handleSaveEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-success)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Salvar</button>
+                                                                            <button onClick={handleCancelEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Cancelar</button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <button onClick={() => { handleStartEdit(block); setCollapsedBlocks(prev => { const n = new Set(prev); n.delete(block.id); return n; }); }} style={{
+                                                                            fontSize: '0.7rem', padding: '2px 8px', background: 'none',
+                                                                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                                                                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                                                                            color: 'var(--color-text-secondary)',
+                                                                        }}>
+                                                                            <Unlock size={10} /> Editar
+                                                                        </button>
+                                                                    )
+                                                                ) : (
+                                                                    <span style={{ fontSize: '0.6rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                                        <Lock size={10} /> Fixo
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Block content — collapsible */}
+                                                        {!isCollapsed && (
+                                                            <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
+                                                                {isEditing ? (
+                                                                    <textarea value={editBuffer} onChange={e => setEditBuffer(e.target.value)}
+                                                                        style={{
+                                                                            width: '100%', minHeight: '120px', padding: 'var(--space-3)',
+                                                                            borderRadius: 'var(--radius-md)', border: `1px solid ${meta.color}40`,
+                                                                            fontSize: 'var(--text-sm)', lineHeight: 1.6, resize: 'vertical',
+                                                                            background: 'var(--color-bg-base)',
+                                                                        }}
+                                                                    />
+                                                                ) : (
+                                                                    <div style={{
+                                                                        fontSize: 'var(--text-sm)', lineHeight: 1.65,
+                                                                        color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap',
+                                                                        maxHeight: isLongContent ? '250px' : 'none',
+                                                                        overflow: isLongContent ? 'auto' : 'visible',
+                                                                    }}>
+                                                                        {block.content || <em style={{ color: 'var(--color-text-tertiary)' }}>Bloco vazio</em>}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 );

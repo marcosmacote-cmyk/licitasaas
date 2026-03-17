@@ -36,5 +36,8 @@ export { LetterRenderer } from './LetterRenderer';
 export { LetterPdfExporter } from './LetterPdfExporter';
 export type { PdfExportOptions } from './LetterPdfExporter';
 
+// Sanitizer
+export { TextSanitizer } from './TextSanitizer';
+
 // Utils
 export { numberToWords, currencyToWords } from './utils/numberToWords';

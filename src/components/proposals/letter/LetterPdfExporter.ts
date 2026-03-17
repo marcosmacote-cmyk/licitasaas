@@ -95,6 +95,7 @@ export class LetterPdfExporter {
         table.summary td { padding: 4px 5px; border-bottom: 1px solid #ddd; }
         .totals { width: 250px; float: right; margin-top: 10px; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
+        .totals-clearfix { clear: both; height: 1px; }
         .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 40px; }
         .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 12px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
@@ -125,11 +126,11 @@ export class LetterPdfExporter {
         ${footerImage
             ? `<img src="${footerImage}" alt="Rodapé" style="max-height: ${footerImageHeight}px;" />`
             : `<div style="border-top: 1px solid #ddd; padding: 10px 0; font-size: 10px; color: #444; margin: 0 40px;">
-                ${data.company.address || 'Endereço não informado'}<br/>
-                ${data.company.email || ''} ${data.company.phone ? ' | Tel: ' + data.company.phone : ''}
+                ${data.company.address || data.company.razaoSocial}<br/>
+                ${data.company.email || ''}${data.company.phone ? ' | Tel: ' + data.company.phone : ''}
                </div>`
         }
-        <div class="gen-info">Gerado por LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | Builder v${result.meta.builderVersion}</div>
+        <div class="gen-info">Gerado por LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')}</div>
     </div>
 
     <table class="print-wrapper">
@@ -140,10 +141,12 @@ export class LetterPdfExporter {
                 ${showLetter ? `<div class="letter">${letterHtml}</div>` : ''}
                 ${summaryTableHtml}
                 ${showSpreadsheet || showAnalyticalTable ? `
-                    <h3 style="font-size: 14px; margin-bottom: 10px;">
+                    ${showLetter ? '<div style="page-break-before: always; border-top: 2px solid #333; margin-top: 30px; padding-top: 15px;"></div>' : ''}
+                    <h3 style="font-size: 14px; margin-bottom: 10px; font-weight: bold;">
                         ${mode === 'SPREADSHEET' ? 'Planilha de Preços' : 'Planilha de Formação de Preços'}
                     </h3>
                     ${itemsTableHtml}
+                    <div class="totals-clearfix"></div>
                 ` : ''}
             </div>
         </td></tr></tbody>

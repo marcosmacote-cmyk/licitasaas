@@ -11,8 +11,9 @@ import type {
     ProposalLetterData, LetterBlock, ProposalLetterResult,
 } from './types';
 import { LetterBlockType } from './types';
+import { TextSanitizer } from './TextSanitizer';
 
-const BUILDER_VERSION = '2.0.0';
+const BUILDER_VERSION = '2.1.0';
 
 export class ProposalLetterBuilder {
     private data: ProposalLetterData;
@@ -61,21 +62,26 @@ export class ProposalLetterBuilder {
 
         // Assign order and filter visible
         allBlocks.forEach((b, i) => { b.order = i; });
-        const visibleBlocks = allBlocks.filter(b => b.visible);
+
+        // ── Sanitização final obrigatória ──
+        const sanitizer = new TextSanitizer();
+        const sanitizedBlocks = sanitizer.sanitizeAll(allBlocks);
+
+        const visibleBlocks = sanitizedBlocks.filter(b => b.visible);
 
         const plainText = visibleBlocks
             .map(b => b.content)
             .join('\n\n');
 
         return {
-            blocks: allBlocks,
+            blocks: sanitizedBlocks,
             plainText,
-            htmlContent: '', // Renderizado pelo LetterRenderer (Fase 3)
+            htmlContent: '',
             validation: { isValid: true, errors: [], warnings: [] },
             meta: {
                 generatedAt: new Date().toISOString(),
                 builderVersion: BUILDER_VERSION,
-                aiBlockIds: allBlocks.filter(b => b.aiGenerated).map(b => b.id),
+                aiBlockIds: sanitizedBlocks.filter(b => b.aiGenerated).map(b => b.id),
                 dataHash: this.computeHash(),
             },
         };
@@ -102,11 +108,12 @@ export class ProposalLetterBuilder {
         const parts: string[] = [];
 
         if (ref.modalidade) parts.push(ref.modalidade);
-        if (ref.numero) parts.push(`nº ${ref.numero}`);
-        if (ref.ano) parts.push(`/${ref.ano}`);
+        if (ref.numero) {
+            const numStr = ref.ano ? `${ref.numero}/${ref.ano}` : ref.numero;
+            parts.push(`nº ${numStr}`);
+        }
 
-        let content = 'Ref: ';
-        content += parts.join(' ');
+        let content = 'Ref: ' + parts.join(' ');
 
         if (ref.processo) {
             content += ` — Processo Administrativo nº ${ref.processo}`;
@@ -206,22 +213,22 @@ export class ProposalLetterBuilder {
 
         // Valor Global por extenso
         const extenso = p.totalValueExtended || currencyToWords(p.totalValue);
-        lines.push(`Valor Global da Proposta: ${fmt(p.totalValue)} (${extenso}).`);
+        lines.push(`Valor Global: ${fmt(p.totalValue)} (${extenso}).`);
 
-        // BDI
+        // BDI — só mostra se > 0
         if (p.bdiPercentage > 0) {
             lines.push(`BDI aplicado: ${p.bdiPercentage.toFixed(2)}%.`);
         }
 
-        // Desconto
+        // Desconto — só mostra se > 0
         if (p.discountPercentage > 0) {
             lines.push(`Desconto linear aplicado: ${p.discountPercentage.toFixed(2)}%.`);
         }
 
-        // Referência à planilha
-        lines.push(`Conforme Planilha de Formação de Preços em anexo, contendo ${p.itemCount} item(ns).`);
+        // Referência à planilha com pluralização correta
+        const itemLabel = p.itemCount === 1 ? '1 item' : `${p.itemCount} itens`;
+        lines.push(`Conforme Planilha de Formação de Preços em anexo, contendo ${itemLabel}.`);
 
-        // NÃO permite override — valores devem vir do cálculo
         return this.createBlock(LetterBlockType.PRICING_SUMMARY, 'Resumo de Preços',
             lines.join('\n'), { required: true, editable: false });
     }
@@ -241,7 +248,9 @@ export class ProposalLetterBuilder {
 
     private buildExecutionBlock(): LetterBlock {
         const e = this.data.execution;
-        const hasData = e.executionLocation || e.executionDeadline || e.contractDuration;
+        // Filtra campos com valor real (ignora 'Não informado', 'N/A', etc.)
+        const isUseful = (v?: string) => v && !/^(não informado|n\/a|—|-|\.{3})$/i.test(v.trim());
+        const hasData = isUseful(e.executionLocation) || isUseful(e.executionDeadline) || isUseful(e.contractDuration);
         const aiContent = this.aiBlocks.get(LetterBlockType.EXECUTION);
 
         if (!hasData && !aiContent && !this.overrides.has(LetterBlockType.EXECUTION)) {
@@ -259,9 +268,9 @@ export class ProposalLetterBuilder {
             isAi = true;
         } else {
             const lines: string[] = [];
-            if (e.executionLocation) lines.push(`Local de execução/entrega: ${e.executionLocation}.`);
-            if (e.executionDeadline) lines.push(`Prazo de execução/entrega: ${e.executionDeadline}.`);
-            if (e.contractDuration) lines.push(`Vigência do contrato: ${e.contractDuration}.`);
+            if (isUseful(e.executionLocation)) lines.push(`Local de execução/entrega: ${e.executionLocation}.`);
+            if (isUseful(e.executionDeadline)) lines.push(`Prazo de execução/entrega: ${e.executionDeadline}.`);
+            if (isUseful(e.contractDuration)) lines.push(`Vigência do contrato: ${e.contractDuration}.`);
             content = lines.join('\n');
         }
 
@@ -271,20 +280,19 @@ export class ProposalLetterBuilder {
 
     private buildBankingBlock(): LetterBlock {
         const b = this.data.banking;
-        const hasData = b.bank || b.agency || b.account || b.pix;
+        const hasRealData = b.bank || b.agency || b.account || b.pix;
+
+        // Sem dados bancários → ocultar bloco (opt-in)
+        if (!hasRealData && !this.overrides.has(LetterBlockType.BANKING)) {
+            return this.createBlock(LetterBlockType.BANKING, 'Dados Bancários',
+                '', { required: false, visible: false, editable: true });
+        }
 
         const lines = ['Dados bancários para pagamento:'];
-
-        if (hasData) {
-            lines.push(`Banco: ${b.bank || '_______________'}`);
-            lines.push(`Agência: ${b.agency || '_______________'}`);
-            lines.push(`${b.accountType || 'Conta Corrente'}: ${b.account || '_______________'}`);
-            if (b.pix) lines.push(`PIX: ${b.pix}`);
-        } else {
-            lines.push('Banco: _______________');
-            lines.push('Agência: _______________');
-            lines.push('Conta Corrente: _______________');
-        }
+        if (b.bank) lines.push(`Banco: ${b.bank}`);
+        if (b.agency) lines.push(`Agência: ${b.agency}`);
+        if (b.account) lines.push(`${b.accountType || 'Conta Corrente'}: ${b.account}`);
+        if (b.pix) lines.push(`PIX: ${b.pix}`);
 
         const content = this.resolve(LetterBlockType.BANKING, lines.join('\n'));
 
@@ -362,11 +370,13 @@ export class ProposalLetterBuilder {
             parts.push(`com sede em ${c.city}/${c.state}`);
         }
 
+        // Representante legal com conectivos naturais
         if (c.contactName) {
-            parts.push(`neste ato representada por ${c.contactName}`);
+            let repText = `neste ato representada por ${c.contactName}`;
             if (c.contactCpf) {
-                parts.push(`portador(a) do CPF nº ${c.contactCpf}`);
+                repText += `, portador(a) do CPF nº ${c.contactCpf}`;
             }
+            parts.push(repText);
         }
 
         return parts.join(', ') + ',';
