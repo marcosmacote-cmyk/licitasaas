@@ -3512,59 +3512,76 @@ REGRAS:
             }
 
             if (blockId === 'executionBlock') {
+                // Provide FULL contract conditions as context, not just 1 field
                 const execContext = contractCond?.local_execucao || contractCond?.prazo_execucao || '';
+                const contractCondJson = JSON.stringify(contractCond || {}, null, 0).substring(0, 3000);
                 blockPromises.push((async () => {
                     const tStart = Date.now();
                     const prompt = `Você é um analista especialista em editais de licitação pública brasileira.
 
 TAREFA: Extraia do edital abaixo APENAS os seguintes dados (se existirem):
-1. LOCAL de execução/entrega dos serviços ou bens
-2. PRAZO de execução, entrega ou conclusão
+1. LOCAL COMPLETO de execução/entrega dos serviços ou bens (endereço completo, cidade, UF)
+2. PRAZO de execução, entrega ou conclusão (em dias, meses ou conforme consta)
 3. VIGÊNCIA do contrato (se mencionado)
 
 DADOS DO EDITAL:
 Título: ${bidding.title}
 ${execContext ? `Dados já identificados: ${execContext}` : ''}
+Condições contratuais (JSON):
+${contractCondJson}
 Resumo do Edital:
-${fullSummary.substring(0, 3000)}
+${fullSummary.substring(0, 4000)}
 
-REGRAS:
-- Responda em frases curtas e objetivas, sem markdown.
+REGRAS CRÍTICAS:
+- Responda em frases COMPLETAS e objetivas, sem markdown.
+- NUNCA trunque o texto no meio de uma palavra ou frase.
+- Cada informação deve terminar com ponto final.
 - Inclua APENAS os dados que existirem no edital.
 - Se nenhum dado for encontrado, retorne exatamente: ""
 - NÃO invente informações.
-- Formato: "Local de execução: X. Prazo de execução: Y. Vigência contratual: Z."`;
+- Formato obrigatório: "Local de execução: [endereço completo]. Prazo de execução: [prazo]. Vigência contratual: [vigência]."`;
 
                     const result = await callGeminiWithRetry(ai.models, {
                         model: 'gemini-2.5-flash',
                         contents: prompt,
-                        config: { temperature: 0.1, maxOutputTokens: 512 },
+                        config: { temperature: 0.1, maxOutputTokens: 1024 },
                     });
-                    return { blockId: 'executionBlock', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
+                    let content = result.text?.trim() || '';
+                    // Post-generation truncation guard
+                    if (content && content.length > 20 && !/[.;:!?)"\u201D]$/.test(content)) {
+                        console.warn(`[AI Letter Blocks] executionBlock appears truncated: "...${content.slice(-30)}"`);
+                        content += ' [verificar — texto possivelmente incompleto]';
+                    }
+                    return { blockId: 'executionBlock', content, durationMs: Date.now() - tStart };
                 })());
             }
 
             if (blockId === 'commercialExtras') {
+                const contractCondJson = JSON.stringify(contractCond || {}, null, 0).substring(0, 3000);
                 blockPromises.push((async () => {
                     const tStart = Date.now();
                     const prompt = `Você é um analista especialista em licitações públicas brasileiras (Lei 14.133/2021).
 
 TAREFA: Analise as condições financeiras e comerciais ESPECÍFICAS deste edital e extraia APENAS:
-- Condições de pagamento específicas (prazo, forma, documentos exigidos)
+- Condições de pagamento específicas (prazo, forma, documentos exigidos para liquidação)
 - Exigência de garantia contratual (tipo e percentual)
 - Critério de reajuste de preços
 - Condições sobre composição de BDI
 - Exigências específicas sobre a proposta (formato, prazo, documentos adicionais)
 
 DADOS FINANCEIROS DO EDITAL:
-${pricingInfo ? `Considerações sobre preços: ${pricingInfo.substring(0, 2000)}` : 'Não disponível'}
+${pricingInfo ? `Considerações sobre preços: ${pricingInfo.substring(0, 3000)}` : 'Não disponível'}
+Condições contratuais (JSON):
+${contractCondJson}
 
 Resumo do Edital:
-${fullSummary.substring(0, 2000)}
+${fullSummary.substring(0, 4000)}
 
-REGRAS:
+REGRAS CRÍTICAS:
 - NÃO inclua declarações genéricas sobre tributos, custos ou encargos (já estão na carta padrão).
 - Retorne APENAS condições ESPECÍFICAS deste edital, em frases declarativas formais.
+- Cada frase/cláusula DEVE terminar com ponto final.
+- NUNCA trunque o texto no meio de uma palavra ou frase — complete a sentença.
 - Se não houver condições específicas além das padrão, retorne exatamente: ""
 - NÃO invente informações.
 - Sem markdown, sem títulos, sem numeração.`;
@@ -3572,9 +3589,15 @@ REGRAS:
                     const result = await callGeminiWithRetry(ai.models, {
                         model: 'gemini-2.5-flash',
                         contents: prompt,
-                        config: { temperature: 0.1, maxOutputTokens: 1024 },
+                        config: { temperature: 0.1, maxOutputTokens: 2048 },
                     });
-                    return { blockId: 'commercialExtras', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
+                    let content = result.text?.trim() || '';
+                    // Post-generation truncation guard
+                    if (content && content.length > 20 && !/[.;:!?)"\u201D]$/.test(content)) {
+                        console.warn(`[AI Letter Blocks] commercialExtras appears truncated: "...${content.slice(-30)}"`);
+                        content += ' [verificar — texto possivelmente incompleto]';
+                    }
+                    return { blockId: 'commercialExtras', content, durationMs: Date.now() - tStart };
                 })());
             }
         }
