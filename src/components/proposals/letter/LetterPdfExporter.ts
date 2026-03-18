@@ -108,16 +108,22 @@ export class LetterPdfExporter {
         .letter .block p { margin-bottom: 3px; line-height: 1.25; }
         .letter .block-closing { margin-top: 6px; margin-bottom: 2px; }
 
-        /* Modo Paisagem */
-        body.landscape-mode { font-size: 9.5px; line-height: 1.15; }
-        body.landscape-mode .letter { font-size: 9px; line-height: 1.15; margin-bottom: 2px; }
-        body.landscape-mode .letter .block { margin-bottom: 2px; }
-        body.landscape-mode .letter .block p { margin-bottom: 1px; line-height: 1.15; }
-        body.landscape-mode .block-closing { margin-top: 3px; margin-bottom: 1px; }
-        body.landscape-mode .signature-block { margin-top: 3px; }
-        body.landscape-mode .sig-item { font-size: 8.5px; }
-        body.landscape-mode .sig-item div:first-child { margin-bottom: 6px; }
-        body.landscape-mode .content-wrapper { padding: 1px 8px; }
+        /* Modo Paisagem — !important necessário para sobrepor estilos inline do Renderer */
+        body.landscape-mode { font-size: 9px !important; line-height: 1.1 !important; }
+        body.landscape-mode .letter { font-size: 8.5px !important; line-height: 1.1 !important; margin-bottom: 0 !important; }
+        body.landscape-mode .letter .block { margin-bottom: 1px !important; }
+        body.landscape-mode .letter .block p { margin-bottom: 0 !important; line-height: 1.1 !important; font-size: 8.5px !important; }
+        body.landscape-mode .letter .block-title { margin-bottom: 3px !important; }
+        body.landscape-mode .letter .block-title p { font-size: 11px !important; }
+        body.landscape-mode .letter .block-recipient { margin-bottom: 2px !important; }
+        body.landscape-mode .letter .block-recipient p { font-size: 9px !important; }
+        body.landscape-mode .letter .block-reference { margin-bottom: 2px !important; }
+        body.landscape-mode .letter .block-reference p { font-size: 9px !important; }
+        body.landscape-mode .letter .block-closing { margin-top: 2px !important; margin-bottom: 0 !important; }
+        body.landscape-mode .signature-block { margin-top: 2px !important; }
+        body.landscape-mode .sig-item { font-size: 8px !important; }
+        body.landscape-mode .sig-item div:first-child { margin-bottom: 4px !important; }
+        body.landscape-mode .content-wrapper { padding: 0 8px !important; }
 
         @media print {
             body { font-size: 10.5px; }
