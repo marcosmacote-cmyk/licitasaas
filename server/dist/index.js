@@ -273,7 +273,7 @@ app.post('/api/tenants', async (req, res) => {
 app.put('/api/companies/:id/proposal-template', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const { headerImage, footerImage, headerHeight, footerHeight, defaultLetterContent, contactName, contactCpf, signatureMode, validityDays, } = req.body;
+        const { headerImage, footerImage, headerHeight, footerHeight, defaultLetterContent, defaultSignatureConfig, contactName, contactCpf, } = req.body;
         const updateData = {
             defaultProposalHeader: headerImage,
             defaultProposalFooter: footerImage,
@@ -281,13 +281,13 @@ app.put('/api/companies/:id/proposal-template', authenticateToken, async (req, r
             defaultProposalFooterHeight: footerHeight,
             defaultLetterContent: defaultLetterContent,
         };
-        // Campos opcionais de assinatura/configuração
+        // Campos opcionais
         if (contactName !== undefined)
             updateData.contactName = contactName;
         if (contactCpf !== undefined)
             updateData.contactCpf = contactCpf;
-        // signatureMode e validityDays não têm campos diretos no CompanyProfile,
-        // mas já estão salvos dentro do JSON defaultLetterContent
+        if (defaultSignatureConfig !== undefined)
+            updateData.defaultSignatureConfig = defaultSignatureConfig;
         await prisma.companyProfile.update({
             where: { id, tenantId: req.user.tenantId },
             data: updateData
@@ -594,7 +594,7 @@ app.put('/api/companies/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Company not found or unauthorized' });
         }
         // Only allow updating editable fields — strip out id, tenantId, relations
-        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state } = req.body;
+        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state, defaultSignatureConfig } = req.body;
         const safeData = {};
         if (razaoSocial !== undefined)
             safeData.razaoSocial = razaoSocial;
@@ -620,6 +620,8 @@ app.put('/api/companies/:id', authenticateToken, async (req, res) => {
             safeData.city = city;
         if (state !== undefined)
             safeData.state = state;
+        if (defaultSignatureConfig !== undefined)
+            safeData.defaultSignatureConfig = defaultSignatureConfig;
         const updatedCompany = await prisma.companyProfile.update({
             where: { id },
             data: safeData,

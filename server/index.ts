@@ -270,9 +270,8 @@ app.put('/api/companies/:id/proposal-template', authenticateToken, async (req: a
         const { id } = req.params;
         const {
             headerImage, footerImage, headerHeight, footerHeight,
-            defaultLetterContent,
+            defaultLetterContent, defaultSignatureConfig,
             contactName, contactCpf,
-            signatureMode, validityDays,
         } = req.body;
 
         const updateData: any = {
@@ -283,11 +282,10 @@ app.put('/api/companies/:id/proposal-template', authenticateToken, async (req: a
             defaultLetterContent: defaultLetterContent,
         };
 
-        // Campos opcionais de assinatura/configuração
+        // Campos opcionais
         if (contactName !== undefined) updateData.contactName = contactName;
         if (contactCpf !== undefined) updateData.contactCpf = contactCpf;
-        // signatureMode e validityDays não têm campos diretos no CompanyProfile,
-        // mas já estão salvos dentro do JSON defaultLetterContent
+        if (defaultSignatureConfig !== undefined) updateData.defaultSignatureConfig = defaultSignatureConfig;
 
         await prisma.companyProfile.update({
             where: { id, tenantId: req.user.tenantId },
@@ -618,7 +616,7 @@ app.put('/api/companies/:id', authenticateToken, async (req: any, res) => {
         }
 
         // Only allow updating editable fields — strip out id, tenantId, relations
-        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state } = req.body;
+        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state, defaultSignatureConfig } = req.body;
         const safeData: any = {};
         if (razaoSocial !== undefined) safeData.razaoSocial = razaoSocial;
         if (cnpj !== undefined) safeData.cnpj = cnpj;
@@ -632,6 +630,7 @@ app.put('/api/companies/:id', authenticateToken, async (req: any, res) => {
         if (address !== undefined) safeData.address = address;
         if (city !== undefined) safeData.city = city;
         if (state !== undefined) safeData.state = state;
+        if (defaultSignatureConfig !== undefined) safeData.defaultSignatureConfig = defaultSignatureConfig;
 
         const updatedCompany = await prisma.companyProfile.update({
             where: { id },

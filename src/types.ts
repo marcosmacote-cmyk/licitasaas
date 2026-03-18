@@ -104,6 +104,7 @@ export interface CompanyProfile {
     defaultProposalHeaderHeight?: number;
     defaultProposalFooterHeight?: number;
     defaultLetterContent?: string;
+    defaultSignatureConfig?: string; // JSON: { sigLegal, sigTech, sigCompany, bankData, signatureMode, validityDays }
 }
 
 export type DocumentStatus = 'Válido' | 'Vencendo' | 'Vencido' | 'Alerta' | 'Crítico';

@@ -103,11 +103,17 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
             setSigTech({ name: '', registration: '', role: 'Responsável Técnico' });
         }
 
-        // Restaurar dados bancários e extras do template salvo (JSON)
+        // Restaurar dados bancários e extras do cadastro da empresa (campo dedicado)
+        // Prioridade: defaultSignatureConfig > defaultLetterContent (legado)
+        let configSource = '';
         try {
-            const saved = co.defaultLetterContent;
-            if (saved && saved.startsWith('{')) {
-                const parsed = JSON.parse(saved);
+            if (co.defaultSignatureConfig) {
+                configSource = co.defaultSignatureConfig;
+            } else if (co.defaultLetterContent && co.defaultLetterContent.startsWith('{')) {
+                configSource = co.defaultLetterContent; // Fallback legado
+            }
+            if (configSource) {
+                const parsed = JSON.parse(configSource);
                 if (parsed.bankData) setBankData(parsed.bankData);
                 if (parsed.sigLegal) setSigLegal(parsed.sigLegal);
                 if (parsed.sigTech) setSigTech(parsed.sigTech);
@@ -336,15 +342,19 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
         setIsSavingTemplate(true);
         try {
-            // Salvar TODAS as configurações como JSON no defaultLetterContent
-            const templateConfig = {
-                letterContent,
+            // Config de assinatura/banco para o campo dedicado da empresa
+            const signatureConfig = {
                 sigLegal,
                 sigTech,
                 sigCompany,
                 bankData,
                 validityDays,
                 signatureMode,
+            };
+            // Template da carta (inclui tudo para backward compat)
+            const templateConfig = {
+                letterContent,
+                ...signatureConfig,
             };
             const res = await fetch(`${API_BASE_URL}/api/companies/${selectedCompanyId}/proposal-template`, {
                 method: 'PUT', headers,
@@ -354,6 +364,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     headerHeight: headerImageHeight,
                     footerHeight: footerImageHeight,
                     defaultLetterContent: JSON.stringify(templateConfig),
+                    defaultSignatureConfig: JSON.stringify(signatureConfig),
                     contactName: sigLegal.name,
                     contactCpf: sigLegal.cpf,
                 })

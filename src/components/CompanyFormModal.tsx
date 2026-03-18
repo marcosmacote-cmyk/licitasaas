@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Tag, Mail, Phone, Save, Info, MapPin } from 'lucide-react';
+import { Building2, Tag, Mail, Phone, Save, Info, MapPin, Landmark } from 'lucide-react';
 import type { CompanyProfile } from '../types';
 import { Modal, FormField, Input, Textarea, Button } from './ui';
+
+interface SignatureConfig {
+    bankData?: { bank: string; agency: string; account: string; accountType: string; pix: string };
+    signatureMode?: string;
+    validityDays?: number;
+}
 
 interface Props {
     initialData?: CompanyProfile | null;
@@ -16,16 +22,37 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
         isHeadquarters: false,
     });
 
+    // Dados bancários extraídos do JSON
+    const [sigConfig, setSigConfig] = useState<SignatureConfig>({
+        bankData: { bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' },
+        signatureMode: 'LEGAL',
+        validityDays: 60,
+    });
+
     useEffect(() => {
         if (initialData) {
             setFormData(initialData);
+            // Restaurar config de assinatura do JSON salvo
+            try {
+                const saved = initialData.defaultSignatureConfig;
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    setSigConfig({
+                        bankData: parsed.bankData || { bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' },
+                        signatureMode: parsed.signatureMode || 'LEGAL',
+                        validityDays: parsed.validityDays || 60,
+                    });
+                }
+            } catch { /* ignore */ }
         }
     }, [initialData]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state } = formData;
-        onSave({ razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state });
+        // Salvar config de assinatura como JSON
+        const defaultSignatureConfig = JSON.stringify(sigConfig);
+        onSave({ razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state, defaultSignatureConfig });
     };
 
     const footer = (
@@ -54,7 +81,7 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
             onClose={onClose}
             title={initialData ? 'Editar Empresa' : 'Cadastrar Empresa'}
             subtitle="Configure os dados cadastrais da proponente."
-            maxWidth="600px"
+            maxWidth="650px"
             footer={footer}
         >
             <form onSubmit={handleSubmit}>
@@ -207,6 +234,60 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                                         />
                                     </FormField>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Dados Bancários para Proposta ── */}
+                    <div className="col-span-full">
+                        <div className="card p-6" style={{ border: '1px solid rgba(20, 184, 166, 0.2)', background: 'rgba(20, 184, 166, 0.02)' }}>
+                            <div className="flex-gap" style={{ gap: 'var(--space-2)', color: '#14B8A6', marginBottom: 'var(--space-4)' }}>
+                                <Landmark size={16} />
+                                <span className="form-label mb-0" style={{ color: '#14B8A6' }}>Dados Bancários para Proposta</span>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400, marginLeft: 4 }}>(opcional — aparecerá na carta proposta)</span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
+                                <FormField label="Banco">
+                                    <Input
+                                        placeholder="Ex: Banco do Brasil"
+                                        value={sigConfig.bankData?.bank || ''}
+                                        onChange={(e) => setSigConfig({ ...sigConfig, bankData: { ...sigConfig.bankData!, bank: e.target.value } })}
+                                    />
+                                </FormField>
+                                <FormField label="Agência">
+                                    <Input
+                                        placeholder="Ex: 1234-5"
+                                        value={sigConfig.bankData?.agency || ''}
+                                        onChange={(e) => setSigConfig({ ...sigConfig, bankData: { ...sigConfig.bankData!, agency: e.target.value } })}
+                                    />
+                                </FormField>
+                                <FormField label="Conta">
+                                    <Input
+                                        placeholder="Ex: 12345-6"
+                                        value={sigConfig.bankData?.account || ''}
+                                        onChange={(e) => setSigConfig({ ...sigConfig, bankData: { ...sigConfig.bankData!, account: e.target.value } })}
+                                    />
+                                </FormField>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+                                <FormField label="Tipo de Conta">
+                                    <select
+                                        className="form-select"
+                                        value={sigConfig.bankData?.accountType || 'Conta Corrente'}
+                                        onChange={(e) => setSigConfig({ ...sigConfig, bankData: { ...sigConfig.bankData!, accountType: e.target.value } })}
+                                        style={{ background: 'var(--color-bg-base)' }}
+                                    >
+                                        <option value="Conta Corrente">Conta Corrente</option>
+                                        <option value="Conta Poupança">Conta Poupança</option>
+                                    </select>
+                                </FormField>
+                                <FormField label="Chave PIX">
+                                    <Input
+                                        placeholder="CNPJ, e-mail, telefone ou chave aleatória"
+                                        value={sigConfig.bankData?.pix || ''}
+                                        onChange={(e) => setSigConfig({ ...sigConfig, bankData: { ...sigConfig.bankData!, pix: e.target.value } })}
+                                    />
+                                </FormField>
                             </div>
                         </div>
                     </div>
