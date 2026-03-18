@@ -80,14 +80,13 @@ export class LetterPdfExporter {
     <title>Proposta Comercial - ${data.company.razaoSocial}</title>
     <style>
         /* ── REGRA: Todo o conteúdo da carta deve caber em UMA ÚNICA PÁGINA ── */
-        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.2; font-size: 10.5px; margin: 0; padding: 0; }
+        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.25; font-size: 11px; margin: 0; padding: 0; }
         .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-        .fixed-footer .gen-info { font-size: 7px; color: #999; margin-top: 1px; }
-        .content-wrapper { padding: 2px 12px; }
-        .letter { margin-bottom: 2px; text-align: justify; font-size: 10px; line-height: 1.2; }
+        .content-wrapper { padding: 2px 15px; }
+        .letter { margin-bottom: 2px; text-align: justify; font-size: 10.5px; line-height: 1.25; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
         table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
         table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; }
@@ -97,17 +96,17 @@ export class LetterPdfExporter {
         .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
         .totals-clearfix { clear: both; height: 1px; }
-        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 4px; }
-        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10px; }
+        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 6px; }
+        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
         table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
         table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
 
-        /* Espaçamento ultra-compacto para caber em 1 página */
-        .letter .block { margin-bottom: 3px; }
-        .letter .block p { margin-bottom: 2px; line-height: 1.2; }
-        .letter .block-closing { margin-top: 4px; margin-bottom: 2px; }
+        /* Espaçamento compacto harmonioso para caber em 1 página */
+        .letter .block { margin-bottom: 4px; }
+        .letter .block p { margin-bottom: 3px; line-height: 1.25; }
+        .letter .block-closing { margin-top: 6px; margin-bottom: 2px; }
 
         /* Modo Paisagem */
         body.landscape-mode { font-size: 9.5px; line-height: 1.15; }
@@ -121,7 +120,7 @@ export class LetterPdfExporter {
         body.landscape-mode .content-wrapper { padding: 1px 8px; }
 
         @media print {
-            body { font-size: 10px; }
+            body { font-size: 10.5px; }
             body.landscape-mode { font-size: 9px; }
             .content-wrapper { padding: 0; }
             @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.3cm 0.5cm' : '0.5cm 0.8cm'}; }
@@ -154,7 +153,6 @@ export class LetterPdfExporter {
                 ${data.company.email || ''}${data.company.phone ? ' | Tel: ' + data.company.phone : ''}
                </div>`
         }
-        <div class="gen-info">Gerado por LicitaSaaS em ${new Date().toLocaleDateString('pt-BR')}</div>
     </div>
 
     <table class="print-wrapper">
