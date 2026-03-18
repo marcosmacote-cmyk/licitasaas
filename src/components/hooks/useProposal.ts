@@ -66,31 +66,31 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
     const selectedCompany = companies.find(c => c.id === selectedCompanyId);
 
-    // ── Inicializar dados de assinatura/banco quando empresa muda ──
+    // ── Inicializar dados de assinatura/banco quando empresa ou processo muda ──
     useEffect(() => {
-        if (!selectedCompany) return;
-        const co = selectedCompany;
+        if (!selectedCompanyId) return;
 
-        // ─── 1. Fonte primária: JSON dedicado (defaultSignatureConfig) ───
-        let loadedFromJson = false;
-        try {
-            const raw = co.defaultSignatureConfig;
-            if (raw) {
-                const cfg = JSON.parse(raw);
-                if (cfg.sigLegal)  { setSigLegal(cfg.sigLegal); loadedFromJson = true; }
-                if (cfg.sigTech)   { setSigTech(cfg.sigTech); loadedFromJson = true; }
-                if (cfg.sigCompany) setSigCompany(cfg.sigCompany);
-                if (cfg.bankData)  setBankData(cfg.bankData);
-                if (cfg.signatureMode) setSignatureMode(cfg.signatureMode as 'LEGAL' | 'TECH' | 'BOTH');
-                if (cfg.validityDays)  setValidityDays(cfg.validityDays);
-            }
-        } catch { /* ignore */ }
+        // Buscar dados frescos da empresa no servidor (evita usar cache desatualizado)
+        const loadSignatureDefaults = async () => {
+            let co = companies.find(c => c.id === selectedCompanyId);
 
-        // ─── 2. Fallback legado: defaultLetterContent JSON ───
-        if (!loadedFromJson) {
+            // Tentar buscar dados frescos do servidor
             try {
-                const raw = co.defaultLetterContent;
-                if (raw && raw.startsWith('{')) {
+                const res = await fetch(`${API_BASE_URL}/api/companies`, { headers });
+                if (res.ok) {
+                    const freshCompanies = await res.json();
+                    const freshCo = freshCompanies.find((c: any) => c.id === selectedCompanyId);
+                    if (freshCo) co = freshCo;
+                }
+            } catch { /* usa dados em memória como fallback */ }
+
+            if (!co) return;
+
+            // ─── 1. Fonte primária: JSON dedicado (defaultSignatureConfig) ───
+            let loadedFromJson = false;
+            try {
+                const raw = (co as any).defaultSignatureConfig;
+                if (raw) {
                     const cfg = JSON.parse(raw);
                     if (cfg.sigLegal)  { setSigLegal(cfg.sigLegal); loadedFromJson = true; }
                     if (cfg.sigTech)   { setSigTech(cfg.sigTech); loadedFromJson = true; }
@@ -100,33 +100,49 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     if (cfg.validityDays)  setValidityDays(cfg.validityDays);
                 }
             } catch { /* ignore */ }
-        }
 
-        // ─── 3. Fallback final: campos diretos do BD (primeira vez, sem JSON) ───
-        if (!loadedFromJson) {
-            setSigLegal({
-                name: co.contactName || '',
-                cpf: co.contactCpf || '',
-                role: 'Representante Legal',
-            });
-            setSigCompany({
-                razaoSocial: co.razaoSocial || '',
-                cnpj: co.cnpj || '',
-            });
-            // Resp. técnico: pega nome até a primeira vírgula
-            const techQual = co.technicalQualification || '';
-            if (techQual) {
-                const techName = techQual.split(',')[0].trim();
-                // Registro: qualquer padrão CREA/CAU/CRA/Carteira Profissional
-                const regMatch = techQual.match(/((?:CREA|CAU|CRA|CONFEA|Carteira\s+Profissional)[^,]*)/i);
-                const techReg = regMatch ? regMatch[1].trim() : '';
-                setSigTech({ name: techName, registration: techReg, role: 'Responsável Técnico' });
-            } else {
-                setSigTech({ name: '', registration: '', role: 'Responsável Técnico' });
+            // ─── 2. Fallback legado: defaultLetterContent JSON ───
+            if (!loadedFromJson) {
+                try {
+                    const raw = (co as any).defaultLetterContent;
+                    if (raw && raw.startsWith('{')) {
+                        const cfg = JSON.parse(raw);
+                        if (cfg.sigLegal)  { setSigLegal(cfg.sigLegal); loadedFromJson = true; }
+                        if (cfg.sigTech)   { setSigTech(cfg.sigTech); loadedFromJson = true; }
+                        if (cfg.sigCompany) setSigCompany(cfg.sigCompany);
+                        if (cfg.bankData)  setBankData(cfg.bankData);
+                        if (cfg.signatureMode) setSignatureMode(cfg.signatureMode as 'LEGAL' | 'TECH' | 'BOTH');
+                        if (cfg.validityDays)  setValidityDays(cfg.validityDays);
+                    }
+                } catch { /* ignore */ }
             }
-            setBankData({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
-        }
-    }, [selectedCompany?.id]);
+
+            // ─── 3. Fallback final: campos diretos do BD (primeira vez, sem JSON) ───
+            if (!loadedFromJson) {
+                setSigLegal({
+                    name: (co as any).contactName || '',
+                    cpf: (co as any).contactCpf || '',
+                    role: 'Representante Legal',
+                });
+                setSigCompany({
+                    razaoSocial: (co as any).razaoSocial || '',
+                    cnpj: (co as any).cnpj || '',
+                });
+                const techQual = (co as any).technicalQualification || '';
+                if (techQual) {
+                    const techName = techQual.split(',')[0].trim();
+                    const regMatch = techQual.match(/((?:CREA|CAU|CRA|CONFEA|Carteira\s+Profissional)[^,]*)/i);
+                    const techReg = regMatch ? regMatch[1].trim() : '';
+                    setSigTech({ name: techName, registration: techReg, role: 'Responsável Técnico' });
+                } else {
+                    setSigTech({ name: '', registration: '', role: 'Responsável Técnico' });
+                }
+                setBankData({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
+            }
+        };
+
+        loadSignatureDefaults();
+    }, [selectedCompanyId, selectedBiddingId]);
 
     // Load proposals when bidding changes
     useEffect(() => {
