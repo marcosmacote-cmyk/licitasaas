@@ -468,13 +468,17 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         exportExcelProposal(selectedBiddingId, items, bdi);
     };
 
-    const handleSaveLetter = async () => {
+    const handleSaveLetter = async (blocks?: any[]) => {
         if (!proposal) return;
         setIsSaving(true);
         try {
+            // Se temos blocos estruturados, salvar como JSON envelope
+            const contentToSave = blocks && blocks.length > 0
+                ? JSON.stringify({ v: 2, blocks, plainText: letterContent })
+                : letterContent;
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
-                body: JSON.stringify({ letterContent }),
+                body: JSON.stringify({ letterContent: contentToSave }),
             });
             showSaveMsg('Carta proposta salva!');
             await loadProposals();

@@ -5,7 +5,7 @@
  * ══════════════════════════════════════════════════════════════
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
     Settings, CheckCircle2, Cpu, Edit3, Printer,
     AlertTriangle, XCircle, Info, ChevronRight, ChevronLeft,
@@ -57,8 +57,9 @@ interface ProposalLetterWizardProps {
     handleSaveCompanyTemplate: () => void;
     isSavingTemplate: boolean;
     // Letter I/O
+    letterContent: string;
     setLetterContent: (v: string) => void;
-    handleSaveLetter: () => void;
+    handleSaveLetter: (blocks?: any[]) => void;
     handlePrintProposal: (type: 'FULL' | 'LETTER' | 'SPREADSHEET') => void;
     isSaving: boolean;
     printLandscape?: boolean;
@@ -265,12 +266,38 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         setEditBuffer('');
     };
 
+    // ── Restaurar blocos salvos ao montar ──
+    const hasRestoredRef = useRef(false);
+    useEffect(() => {
+        if (hasRestoredRef.current || !props.letterContent || letterResult) return;
+        try {
+            const parsed = JSON.parse(props.letterContent);
+            if (parsed && parsed.v === 2 && Array.isArray(parsed.blocks) && parsed.blocks.length > 0) {
+                // Restaurar blocos salvos
+                const restoredResult: ProposalLetterResult = {
+                    blocks: parsed.blocks,
+                    plainText: parsed.plainText || parsed.blocks.filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n'),
+                    htmlContent: '',
+                    validation: { isValid: true, errors: [], warnings: [] },
+                    meta: { generatedAt: new Date().toISOString(), builderVersion: 'restored', aiBlockIds: [], dataHash: '' },
+                };
+                setLetterResult(restoredResult);
+                setStep('review');
+                hasRestoredRef.current = true;
+            }
+        } catch {
+            // Não é JSON — texto legado, ignora (o usuário gera do zero)
+        }
+    }, [props.letterContent, letterResult]);
+
     // ── Save ──
     const handleSave = () => {
         if (letterResult) {
             props.setLetterContent(letterResult.plainText);
+            props.handleSaveLetter(letterResult.blocks);
+        } else {
+            props.handleSaveLetter();
         }
-        props.handleSaveLetter();
     };
 
     // ── Export ──

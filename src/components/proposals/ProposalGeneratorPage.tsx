@@ -454,6 +454,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     handleSaveConfig={p.handleSaveConfig}
                     handleSaveCompanyTemplate={p.handleSaveCompanyTemplate}
                     isSavingTemplate={p.isSavingTemplate}
+                    letterContent={p.letterContent}
                     setLetterContent={p.setLetterContent}
                     handleSaveLetter={p.handleSaveLetter}
                     handlePrintProposal={p.handlePrintProposal}
