@@ -125,9 +125,6 @@ export class LetterPdfExporter {
         body.landscape-mode .sig-item div:first-child { margin-bottom: 4px !important; }
         body.landscape-mode .content-wrapper { padding: 0 8px !important; }
 
-        /* Numeração de página discreta */
-        .page-number { position: fixed; bottom: 3px; right: 15px; font-size: 8px; color: #aaa; z-index: 200; }
-        body.landscape-mode .page-number { bottom: 2px; right: 10px; font-size: 7px; }
 
         @media print {
             body { font-size: 10.5px; }
@@ -144,16 +141,7 @@ export class LetterPdfExporter {
 <body${printLandscape ? ' class="landscape-mode"' : ''}>
     <script>
     window.onload = function() {
-        // Calcula total de páginas para exibição no preview
-        setTimeout(function() {
-            var pageHeight = window.innerHeight || document.documentElement.clientHeight;
-            var docHeight = document.body.scrollHeight;
-            var totalPages = Math.max(1, Math.ceil(docHeight / pageHeight));
-            var el = document.getElementById('pageNum');
-            if (el) el.textContent = '1/' + totalPages;
-            // Imprimir após carregamento completo
-            setTimeout(function() { window.print(); }, 300);
-        }, 200);
+        setTimeout(function() { window.print(); }, 500);
     };
     </script>
 
@@ -176,7 +164,6 @@ export class LetterPdfExporter {
                </div>`
         }
     </div>
-    <div class="page-number" id="pageNum"></div>
 
     <table class="print-wrapper">
         <thead><tr><td></td></tr></thead>
