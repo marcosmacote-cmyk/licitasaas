@@ -79,14 +79,15 @@ export class LetterPdfExporter {
     <meta charset="UTF-8">
     <title>Proposta Comercial - ${data.company.razaoSocial}</title>
     <style>
-        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.4; font-size: 11.5px; margin: 0; padding: 0; }
+        /* ── REGRA: Todo o conteúdo da carta deve caber em UMA ÚNICA PÁGINA ── */
+        body { font-family: 'Arial', sans-serif; color: #111; line-height: 1.2; font-size: 10.5px; margin: 0; padding: 0; }
         .fixed-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-header img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
         .fixed-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; background: #fff; z-index: 100; padding: 0; }
         .fixed-footer img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-        .fixed-footer .gen-info { font-size: 7px; color: #999; margin-top: 2px; }
-        .content-wrapper { padding: 6px 15px; }
-        .letter { margin-bottom: 8px; text-align: justify; font-size: 11px; line-height: 1.4; }
+        .fixed-footer .gen-info { font-size: 7px; color: #999; margin-top: 1px; }
+        .content-wrapper { padding: 2px 12px; }
+        .letter { margin-bottom: 2px; text-align: justify; font-size: 10px; line-height: 1.2; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; table-layout: auto; }
         table.items th { border-bottom: 2px solid #222; padding: 6px 4px; text-align: left; background: #f5f5f5; font-size: 10px; overflow: hidden; }
         table.items td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 10px; word-wrap: break-word; overflow: visible; }
@@ -96,34 +97,34 @@ export class LetterPdfExporter {
         .totals { width: 250px; margin-left: auto; margin-top: 10px; page-break-inside: avoid; }
         .totals tr th, .totals tr td { padding: 4px; text-align: right; border-bottom: 1px solid #ddd; font-size: 11px; }
         .totals-clearfix { clear: both; height: 1px; }
-        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 12px; }
-        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 11px; }
+        .signature-block { text-align: center; page-break-inside: avoid; clear: both; margin-top: 4px; }
+        .sig-item { display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10px; }
         table.print-wrapper { width: 100%; border: none; border-collapse: collapse; }
         table.print-wrapper > thead > tr > td { height: ${topMargin}px; border: none; padding: 0; }
         table.print-wrapper > tfoot > tr > td { height: ${bottomMargin}px; border: none; padding: 0; }
         table.print-wrapper > tbody > tr > td { border: none; padding: 0; vertical-align: top; }
 
-        /* Espaçamento compacto mas harmonicamente legível */
-        .letter .block { margin-bottom: 6px; }
-        .letter .block p { margin-bottom: 5px; line-height: 1.4; }
-        .letter .block-closing { margin-top: 10px; margin-bottom: 3px; }
+        /* Espaçamento ultra-compacto para caber em 1 página */
+        .letter .block { margin-bottom: 3px; }
+        .letter .block p { margin-bottom: 2px; line-height: 1.2; }
+        .letter .block-closing { margin-top: 4px; margin-bottom: 2px; }
 
         /* Modo Paisagem */
-        body.landscape-mode { font-size: 10px; line-height: 1.25; }
-        body.landscape-mode .letter { font-size: 10px; line-height: 1.25; margin-bottom: 4px; }
-        body.landscape-mode .letter .block { margin-bottom: 4px; }
-        body.landscape-mode .letter .block p { margin-bottom: 3px; line-height: 1.25; }
-        body.landscape-mode .block-closing { margin-top: 5px; margin-bottom: 2px; }
-        body.landscape-mode .signature-block { margin-top: 6px; }
-        body.landscape-mode .sig-item { font-size: 9.5px; }
-        body.landscape-mode .sig-item div:first-child { margin-bottom: 10px; }
-        body.landscape-mode .content-wrapper { padding: 3px 10px; }
+        body.landscape-mode { font-size: 9.5px; line-height: 1.15; }
+        body.landscape-mode .letter { font-size: 9px; line-height: 1.15; margin-bottom: 2px; }
+        body.landscape-mode .letter .block { margin-bottom: 2px; }
+        body.landscape-mode .letter .block p { margin-bottom: 1px; line-height: 1.15; }
+        body.landscape-mode .block-closing { margin-top: 3px; margin-bottom: 1px; }
+        body.landscape-mode .signature-block { margin-top: 3px; }
+        body.landscape-mode .sig-item { font-size: 8.5px; }
+        body.landscape-mode .sig-item div:first-child { margin-bottom: 6px; }
+        body.landscape-mode .content-wrapper { padding: 1px 8px; }
 
         @media print {
-            body { font-size: 11px; }
-            body.landscape-mode { font-size: 9.5px; }
+            body { font-size: 10px; }
+            body.landscape-mode { font-size: 9px; }
             .content-wrapper { padding: 0; }
-            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.4cm 0.6cm' : '0.6cm 1cm'}; }
+            @page { size: ${printLandscape ? 'landscape' : 'portrait'}; margin: ${printLandscape ? '0.3cm 0.5cm' : '0.5cm 0.8cm'}; }
         }
     </style>
 </head>
