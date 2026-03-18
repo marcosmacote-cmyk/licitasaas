@@ -339,13 +339,24 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         if (!proposal) return;
         setIsSaving(true);
         try {
+            // 1. Salvar itens
             const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
                 method: 'POST', headers,
                 body: JSON.stringify({ items, replaceAll: true }),
             });
+            // 2. Salvar configs (BDI, desconto linear, arredondamento) junto
+            await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
+                method: 'PUT', headers,
+                body: JSON.stringify({
+                    bdiPercentage: bdi,
+                    taxPercentage: discount,
+                    socialCharges: roundingMode === 'TRUNCATE' ? 1 : 0,
+                    validityDays,
+                }),
+            });
             if (res.ok) {
                 await loadProposals();
-                showSaveMsg('Todos os itens foram salvos!');
+                showSaveMsg('Planilha e configurações salvas!');
                 setIsBulkEditing(false);
             }
         } catch (e) {
@@ -353,6 +364,28 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleRestoreReferencePrice = () => {
+        if (!proposal) return;
+        const restoredItems = items.map(it => {
+            if (!it.referencePrice) return it;
+            // Custo = referência / (1 + BDI/100) para que unitPrice ≈ referencePrice
+            const restoredCost = bdi > 0
+                ? it.referencePrice / (1 + bdi / 100)
+                : it.referencePrice;
+            const updated = {
+                ...it,
+                unitCost: Math.round(restoredCost * 100) / 100,
+                discountPercentage: 0, // Limpa desconto individual
+            };
+            const calc = calculateItem(updated, bdi, 0, roundingMode);
+            updated.unitPrice = calc.unitPrice;
+            updated.totalPrice = calc.totalPrice;
+            return updated;
+        });
+        setDiscount(0); // Reseta desconto linear
+        setItems(restoredItems);
     };
 
     const handleSaveCompanyTemplate = async () => {
@@ -563,5 +596,6 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         handleSaveConfig, handleImageUpload,
         handleExportExcel,
         handleSaveLetter, handlePrintProposal,
+        handleRestoreReferencePrice,
     };
 }

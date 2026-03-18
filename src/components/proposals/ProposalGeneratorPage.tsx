@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import {
     Plus, Trash2, Save, FileText, Loader2,
     DollarSign, Package, AlertTriangle, Edit3,
     ChevronDown, ChevronUp, Briefcase, Cpu, ScanSearch,
-    Building2, TrendingUp, ClipboardList,
+    Building2, TrendingUp, ClipboardList, RotateCcw,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
@@ -22,6 +23,7 @@ const fmtNum = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits:
 
 export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }: Props) {
     const p = useProposal({ biddings, companies, initialBiddingId });
+    const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
 
     return (
         <>
@@ -244,6 +246,15 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 {p.isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />} Salvar Planilha
                             </button>
 
+                            <button onClick={() => setShowRestoreConfirm(true)} style={{
+                                padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
+                                background: 'rgba(245,158,11,0.08)', color: 'var(--color-warning)', border: '1px solid rgba(245,158,11,0.3)',
+                                fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                            }} title="Restaurar preços para os valores de referência estimados">
+                                <RotateCcw size={14} /> Restaurar Referência
+                            </button>
+
                             <button onClick={p.handleExportExcel} style={{
                                 padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
                                 background: 'var(--color-success-hover)', color: 'white', border: 'none',
@@ -271,7 +282,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                     <th className="prop-th">Unid.</th>
                                     <th className="prop-th">Qtd.</th>
                                     <th className="prop-th">Mult.</th>
-                                    <th className="prop-th">Desc. (%)</th>
+                                    <th className="prop-th">Desc. Total (%)</th>
                                     <th className="prop-th">Custo Unit.</th>
                                     <th className="prop-th" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>Preço Unit.</th>
                                     <th className="prop-th" style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>Total</th>
@@ -332,7 +343,19 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                                 )}
                                             </td>
                                             <td className="prop-td-center">
-                                                {isEditing ? <input type="number" value={item.discountPercentage || 0} onChange={e => p.updateItem(item.id, 'discountPercentage', parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '50px', textAlign: 'center' }} step="0.1" /> : (item.discountPercentage ? `${item.discountPercentage}%` : '-')}
+                                                {isEditing ? <input type="number" value={item.discountPercentage || 0} onChange={e => p.updateItem(item.id, 'discountPercentage', parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '50px', textAlign: 'center' }} step="0.1" /> : (() => {
+                                                    // Desconto Total = diferença percentual entre referência e preço atual
+                                                    if (item.referencePrice && item.referencePrice > 0) {
+                                                        const totalDisc = ((item.referencePrice - item.unitPrice) / item.referencePrice * 100);
+                                                        const isNegative = totalDisc < 0;
+                                                        return <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isNegative ? 'var(--color-danger)' : totalDisc > 0 ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}>
+                                                            {totalDisc > 0 ? '-' : ''}{Math.abs(totalDisc).toFixed(1)}%
+                                                        </span>;
+                                                    }
+                                                    // Sem referência: mostra desconto aplicado (individual ou linear)
+                                                    const appliedDisc = item.discountPercentage || p.discount || 0;
+                                                    return appliedDisc > 0 ? `${appliedDisc}%` : '-';
+                                                })()}
                                             </td>
                                             <td className="prop-td-center">
                                                 {isEditing ? <input type="number" value={item.unitCost} onChange={e => p.updateItem(item.id, 'unitCost', parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '90px', textAlign: 'right' }} step="0.01" /> : fmt(item.unitCost)}
@@ -569,6 +592,15 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                 confirmLabel="Remover"
                 onConfirm={p.executeDeleteItem}
                 onCancel={() => p.setConfirmDeleteItemId(null)}
+            />
+            <ConfirmDialog
+                open={showRestoreConfirm}
+                title="Restaurar Preços de Referência"
+                message="Tem certeza que deseja restaurar os preços de referência? Todos os custos unitários serão recalculados com base nos valores estimados do edital, e os descontos (linear e individuais) serão zerados."
+                variant="danger"
+                confirmLabel="Restaurar"
+                onConfirm={() => { p.handleRestoreReferencePrice(); setShowRestoreConfirm(false); }}
+                onCancel={() => setShowRestoreConfirm(false)}
             />
         </>
     );
