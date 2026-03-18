@@ -273,10 +273,24 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         try {
             const parsed = JSON.parse(props.letterContent);
             if (parsed && parsed.v === 2 && Array.isArray(parsed.blocks) && parsed.blocks.length > 0) {
-                // Restaurar blocos salvos
+                // Reconstruir o bloco de preços com o valor ATUAL da planilha
+                const builder = new ProposalLetterBuilder(normalizedData);
+                const freshResult = builder.build();
+                const freshPricingBlock = freshResult.blocks.find(
+                    (b: LetterBlock) => b.id === LetterBlockType.PRICING_SUMMARY
+                );
+
+                // Restaurar blocos salvos, mas substituir o pricing pelo atualizado
+                const restoredBlocks = parsed.blocks.map((b: LetterBlock) => {
+                    if (b.id === LetterBlockType.PRICING_SUMMARY && freshPricingBlock) {
+                        return { ...b, content: freshPricingBlock.content };
+                    }
+                    return b;
+                });
+
                 const restoredResult: ProposalLetterResult = {
-                    blocks: parsed.blocks,
-                    plainText: parsed.plainText || parsed.blocks.filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n'),
+                    blocks: restoredBlocks,
+                    plainText: restoredBlocks.filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n'),
                     htmlContent: '',
                     validation: { isValid: true, errors: [], warnings: [] },
                     meta: { generatedAt: new Date().toISOString(), builderVersion: 'restored', aiBlockIds: [], dataHash: '' },
@@ -288,7 +302,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         } catch {
             // Não é JSON — texto legado, ignora (o usuário gera do zero)
         }
-    }, [props.letterContent, letterResult]);
+    }, [props.letterContent, letterResult, normalizedData]);
 
     // ── Save ──
     const handleSave = () => {
