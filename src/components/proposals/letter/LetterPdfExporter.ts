@@ -190,7 +190,7 @@ export class LetterPdfExporter {
     /**
      * Tabela completa de itens (mesma que exportServices, mas usando dados do Builder).
      */
-    private buildItemsTable(items: ProposalItem[], totalValue: number, discountPct: number, validityDays: number): string {
+    private buildItemsTable(items: ProposalItem[], totalValue: number, _discountPct: number, validityDays: number): string {
         const rows = items.map((it, i) => {
             const peso = totalValue > 0 ? ((it.totalPrice || 0) / totalValue) * 100 : 0;
             return `<tr style="border-bottom: 1px solid #ddd;">
@@ -206,6 +206,9 @@ export class LetterPdfExporter {
                 <td style="padding: 4px 6px; text-align: right; font-size: 0.8em; color: #555;">${peso.toFixed(1)}%</td>
             </tr>`;
         }).join('');
+
+        const refTotal = items.reduce((sum, it) => sum + ((it.quantity || 0) * (it.multiplier || 1) * (it.referencePrice || it.unitCost || 0)), 0);
+        const totalDiscountPct = refTotal > 0 ? ((refTotal - totalValue) / refTotal * 100) : 0;
 
         return `<table class="items">
             <thead><tr>
@@ -224,7 +227,7 @@ export class LetterPdfExporter {
         </table>
         <table class="totals"><tbody>
             <tr><th style="font-size: 1.1em;">TOTAL GLOBAL</th><td style="font-size: 1.1em; font-weight: bold;">${fmt(totalValue)}</td></tr>
-            ${discountPct > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Linear</th><td style="font-weight: normal; color: #555;">${fmtNum(discountPct)}%</td></tr>` : ''}
+            ${totalDiscountPct > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Total</th><td style="font-weight: normal; color: #555;">${fmtNum(totalDiscountPct)}%</td></tr>` : ''}
             <tr><th style="font-weight: normal; color: #555;">Validade</th><td style="font-weight: normal; color: #555;">${validityDays} dias</td></tr>
         </tbody></table>`;
     }

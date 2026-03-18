@@ -61,7 +61,7 @@ export function generateProposalPdf(
     footerImageHeight: number,
     signatureMode: 'LEGAL' | 'TECH' | 'BOTH',
     printLandscape: boolean,
-    discountPercentage: number = 0,
+    _discountPercentage: number = 0,
     exportType: 'FULL' | 'LETTER' | 'SPREADSHEET' = 'FULL'
 ) {
     const printWindow = window.open('', '_blank');
@@ -89,6 +89,9 @@ export function generateProposalPdf(
     `}).join('');
 
     const finalTotal = totalItemsValue; // Discount is already in unit prices
+    // Desconto total efetivo: diferença entre referência total e total real
+    const refTotal = items.reduce((sum, it) => sum + ((it.quantity || 0) * (it.multiplier || 1) * (it.referencePrice || it.unitCost || 0)), 0);
+    const totalDiscountPct = refTotal > 0 ? ((refTotal - finalTotal) / refTotal * 100) : 0;
 
     let letterHtml = (letterContent || 'Nenhuma carta proposta redigida.');
     const qualificationText = company?.qualification || '';
@@ -245,7 +248,7 @@ export function generateProposalPdf(
             <table class="totals">
                 <tbody>
                     <tr><th style="font-size: 1.1em;">TOTAL GLOBAL</th><td style="font-size: 1.1em; font-weight: bold;">${fmt(finalTotal)}</td></tr>
-                    ${discountPercentage > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Linear</th><td style="font-weight: normal; color: #555;">${fmtNum(discountPercentage)}%</td></tr>` : ''}
+                    ${totalDiscountPct > 0 ? `<tr><th style="font-weight: normal; color: #555;">Desconto Total</th><td style="font-weight: normal; color: #555;">${fmtNum(totalDiscountPct)}%</td></tr>` : ''}
                     <tr><th style="font-weight: normal; color: #555;">Validade</th><td style="font-weight: normal; color: #555;">${validityDays} dias</td></tr>
                 </tbody>
             </table>

@@ -309,7 +309,7 @@ export class ProposalLetterBuilder {
 
         // Desconto — só mostra se > 0
         if (p.discountPercentage > 0) {
-            lines.push(`Desconto linear aplicado: ${p.discountPercentage.toFixed(2)}%.`);
+            lines.push(`Desconto total aplicado: ${p.discountPercentage.toFixed(2)}%.`);
         }
 
         // Referência à planilha com pluralização correta
