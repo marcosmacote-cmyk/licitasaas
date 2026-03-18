@@ -46,6 +46,12 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [printLandscape, setPrintLandscape] = useState(false);
 
+    // ── Dados de Assinatura e Bancários (persistem entre abas) ──
+    const [sigLegal, setSigLegal] = useState({ name: '', cpf: '', role: 'Representante Legal' });
+    const [sigTech, setSigTech] = useState({ name: '', registration: '', role: 'Responsável Técnico' });
+    const [sigCompany, setSigCompany] = useState({ razaoSocial: '', cnpj: '' });
+    const [bankData, setBankData] = useState({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
+
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -59,6 +65,58 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
 
     const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
     const selectedCompany = companies.find(c => c.id === selectedCompanyId);
+
+    // ── Inicializar dados de assinatura/banco quando empresa muda ──
+    useEffect(() => {
+        if (!selectedCompany) return;
+        const co = selectedCompany;
+
+        // Parsear CPF embutido no nome
+        let rawName = co.contactName || '';
+        let rawCpf = co.contactCpf || '';
+        const cpfInName = rawName.match(/\s*CPF[:\s]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i);
+        if (cpfInName) {
+            if (!rawCpf) rawCpf = cpfInName[1];
+            rawName = rawName.replace(cpfInName[0], '').trim();
+        }
+        setSigLegal({ name: rawName, cpf: rawCpf, role: 'Representante Legal' });
+
+        // Parsear razão social / CNPJ
+        let rawRazao = co.razaoSocial || '';
+        let rawCnpj = co.cnpj || '';
+        const cnpjInRazao = rawRazao.match(/\s*CNPJ[:\s]*([\d.\/-]+)/i);
+        if (cnpjInRazao) {
+            if (!rawCnpj) rawCnpj = cnpjInRazao[1];
+            rawRazao = rawRazao.replace(cnpjInRazao[0], '').trim();
+        }
+        setSigCompany({ razaoSocial: rawRazao, cnpj: rawCnpj });
+
+        // Parsear responsável técnico
+        const techQual = co.technicalQualification || '';
+        if (techQual) {
+            const regRe = /\s*((?:CREA|CAU|CRA|CONFEA)[-\s]*[A-Z]{0,2}[\s-]*(?:N[\u00bao\u00b0]?\s*)?[\d.\/-]+(?:\s*[-\u2013]\s*(?:RPN|D)\s*(?:N[\u00bao\u00b0]?\s*)?[\d.\/-]+)?)/i;
+            const regMatch = techQual.match(regRe);
+            const techReg = regMatch ? regMatch[1].trim() : '';
+            const techName = regMatch ? techQual.replace(regMatch[0], '').trim() : techQual.split(/[,\n]/)[0].trim();
+            setSigTech({ name: techName, registration: techReg, role: 'Responsável Técnico' });
+        } else {
+            setSigTech({ name: '', registration: '', role: 'Responsável Técnico' });
+        }
+
+        // Restaurar dados bancários e extras do template salvo (JSON)
+        try {
+            const saved = co.defaultLetterContent;
+            if (saved && saved.startsWith('{')) {
+                const parsed = JSON.parse(saved);
+                if (parsed.bankData) setBankData(parsed.bankData);
+                if (parsed.sigLegal) setSigLegal(parsed.sigLegal);
+                if (parsed.sigTech) setSigTech(parsed.sigTech);
+                if (parsed.sigCompany) setSigCompany(parsed.sigCompany);
+                if (parsed.validityDays) setValidityDays(parsed.validityDays);
+                if (parsed.signatureMode) setSignatureMode(parsed.signatureMode as 'LEGAL' | 'TECH' | 'BOTH');
+            }
+        } catch { /* ignore parse errors */ }
+    }, [selectedCompany?.id]);
 
     // Load proposals when bidding changes
     useEffect(() => {
@@ -271,24 +329,22 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
     };
 
-    const handleSaveCompanyTemplate = async (extraData?: {
-        sigLegal?: { name: string; cpf: string; role: string };
-        sigTech?: { name: string; registration: string; role: string };
-        sigCompany?: { razaoSocial: string; cnpj: string };
-        bankData?: { bank: string; agency: string; account: string; accountType: string; pix: string };
-        validityDays?: number;
-        signatureMode?: string;
-    }) => {
+    const handleSaveCompanyTemplate = async () => {
         if (!selectedCompanyId) {
             toast.warning('Selecione uma empresa primeiro.');
             return;
         }
         setIsSavingTemplate(true);
         try {
-            // Salvar configurações extras como JSON no defaultLetterContent
+            // Salvar TODAS as configurações como JSON no defaultLetterContent
             const templateConfig = {
                 letterContent,
-                ...(extraData || {}),
+                sigLegal,
+                sigTech,
+                sigCompany,
+                bankData,
+                validityDays,
+                signatureMode,
             };
             const res = await fetch(`${API_BASE_URL}/api/companies/${selectedCompanyId}/proposal-template`, {
                 method: 'PUT', headers,
@@ -298,18 +354,13 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     headerHeight: headerImageHeight,
                     footerHeight: footerImageHeight,
                     defaultLetterContent: JSON.stringify(templateConfig),
-                    // Dados que têm campos próprios no CompanyProfile
-                    contactName: extraData?.sigLegal?.name,
-                    contactCpf: extraData?.sigLegal?.cpf,
-                    razaoSocial: extraData?.sigCompany?.razaoSocial,
-                    cnpj: extraData?.sigCompany?.cnpj,
-                    signatureMode: signatureMode,
-                    validityDays: extraData?.validityDays,
+                    contactName: sigLegal.name,
+                    contactCpf: sigLegal.cpf,
                 })
             });
             if (res.ok) {
-                toast.success('Template padrão da empresa salvo!');
-                showSaveMsg('Template padrão da empresa salvo!');
+                toast.success('Padrão da empresa salvo com sucesso!');
+                showSaveMsg('Padrão da empresa salvo!');
             } else {
                 const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
                 toast.error(err.error || 'Erro ao salvar template.');
@@ -452,6 +503,11 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         headerImageHeight, setHeaderImageHeight,
         footerImageHeight, setFooterImageHeight,
         printLandscape, setPrintLandscape,
+        // Assinatura e Banco (persistem entre abas)
+        sigLegal, setSigLegal,
+        sigTech, setSigTech,
+        sigCompany, setSigCompany,
+        bankData, setBankData,
         // Computed
         subtotal, total,
         // Handlers

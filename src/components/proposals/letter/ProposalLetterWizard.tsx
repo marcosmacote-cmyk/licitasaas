@@ -54,14 +54,7 @@ interface ProposalLetterWizardProps {
     setFooterImageHeight: (v: number) => void;
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => void;
     handleSaveConfig: () => void;
-    handleSaveCompanyTemplate: (extraData?: {
-        sigLegal?: { name: string; cpf: string; role: string };
-        sigTech?: { name: string; registration: string; role: string };
-        sigCompany?: { razaoSocial: string; cnpj: string };
-        bankData?: { bank: string; agency: string; account: string; accountType: string; pix: string };
-        validityDays?: number;
-        signatureMode?: string;
-    }) => void;
+    handleSaveCompanyTemplate: () => void;
     isSavingTemplate: boolean;
     // Letter I/O
     setLetterContent: (v: string) => void;
@@ -70,6 +63,15 @@ interface ProposalLetterWizardProps {
     isSaving: boolean;
     printLandscape?: boolean;
     setPrintLandscape?: (v: boolean) => void;
+    // Assinatura e Dados Bancários (gerenciados pelo hook, persistem entre abas)
+    sigLegal: { name: string; cpf: string; role: string };
+    setSigLegal: (v: { name: string; cpf: string; role: string }) => void;
+    sigTech: { name: string; registration: string; role: string };
+    setSigTech: (v: { name: string; registration: string; role: string }) => void;
+    sigCompany: { razaoSocial: string; cnpj: string };
+    setSigCompany: (v: { razaoSocial: string; cnpj: string }) => void;
+    bankData: { bank: string; agency: string; account: string; accountType: string; pix: string };
+    setBankData: (v: { bank: string; agency: string; account: string; accountType: string; pix: string }) => void;
 }
 
 const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
@@ -119,53 +121,11 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const [selectedExportMode, setSelectedExportMode] = useState<LetterExportMode>('FULL');
     const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
 
-    // ── Dados Bancários (preenchimento manual, restaura do template salvo) ──
-    const [bankData, setBankData] = useState<{
-        bank: string; agency: string; account: string; accountType: string; pix: string;
-    }>(() => {
-        // Tentar carregar do template salvo (defaultLetterContent como JSON)
-        try {
-            const saved = props.company?.defaultLetterContent;
-            if (saved && saved.startsWith('{')) {
-                const parsed = JSON.parse(saved);
-                if (parsed.bankData) return parsed.bankData;
-            }
-        } catch { /* ignore */ }
-        return { bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' };
-    });
-
     // ── Tipo de Proposta (Inicial ou Readequada) ──
     const [proposalType, setProposalType] = useState<'INICIAL' | 'READEQUADA'>('INICIAL');
 
-    // ── Dados de Assinatura editáveis ──
-    // Parsear dados sujos do banco (nome+CPF grudados, razão+CNPJ grudados)
-    const [sigLegal, setSigLegal] = useState(() => {
-        let rawName = props.company?.contactName || '';
-        let rawCpf = props.company?.contactCpf || '';
-        // Se o nome contém CPF embutido, separar
-        const cpfInName = rawName.match(/\s*CPF[:\s]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i);
-        if (cpfInName) {
-            if (!rawCpf) rawCpf = cpfInName[1];
-            rawName = rawName.replace(cpfInName[0], '').trim();
-        }
-        return { name: rawName, cpf: rawCpf, role: 'Representante Legal' };
-    });
-    const [sigTech, setSigTech] = useState({
-        name: (props.company as any)?.technicalResponsible || '',
-        registration: (props.company as any)?.technicalRegistration || '',
-        role: 'Responsável Técnico',
-    });
-    const [sigCompany, setSigCompany] = useState(() => {
-        let rawRazao = props.company?.razaoSocial || '';
-        let rawCnpj = props.company?.cnpj || '';
-        // Se a razão social contém CNPJ embutido, separar
-        const cnpjInRazao = rawRazao.match(/\s*CNPJ[:\s]*([\d.\/-]+)/i);
-        if (cnpjInRazao) {
-            if (!rawCnpj) rawCnpj = cnpjInRazao[1];
-            rawRazao = rawRazao.replace(cnpjInRazao[0], '').trim();
-        }
-        return { razaoSocial: rawRazao, cnpj: rawCnpj };
-    });
+    // Atalhos para dados de assinatura/banco (vêm do hook via props, persistem entre abas)
+    const { sigLegal, setSigLegal, sigTech, setSigTech, sigCompany, setSigCompany, bankData, setBankData } = props;
 
     const stepIndex = STEPS.findIndex(s => s.id === step);
 
@@ -425,8 +385,8 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                                     <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Representante Legal</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
-                                        <input value={sigLegal.name} onChange={e => setSigLegal(s => ({ ...s, name: e.target.value }))} placeholder="Nome completo" className="prop-input" style={{ fontSize: '0.8rem' }} />
-                                        <input value={sigLegal.cpf} onChange={e => setSigLegal(s => ({ ...s, cpf: e.target.value }))} placeholder="CPF" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                        <input value={sigLegal.name} onChange={e => setSigLegal({ ...sigLegal, name: e.target.value })} placeholder="Nome completo" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                        <input value={sigLegal.cpf} onChange={e => setSigLegal({ ...sigLegal, cpf: e.target.value })} placeholder="CPF" className="prop-input" style={{ fontSize: '0.8rem' }} />
                                     </div>
                                 </div>
                             )}
@@ -436,8 +396,8 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                                     <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#F97316', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Responsável Técnico</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
-                                        <input value={sigTech.name} onChange={e => setSigTech(s => ({ ...s, name: e.target.value }))} placeholder="Nome do responsável técnico" className="prop-input" style={{ fontSize: '0.8rem' }} />
-                                        <input value={sigTech.registration} onChange={e => setSigTech(s => ({ ...s, registration: e.target.value }))} placeholder="CREA/CAU/Registro" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                        <input value={sigTech.name} onChange={e => setSigTech({ ...sigTech, name: e.target.value })} placeholder="Nome do responsável técnico" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                        <input value={sigTech.registration} onChange={e => setSigTech({ ...sigTech, registration: e.target.value })} placeholder="CREA/CAU/Registro" className="prop-input" style={{ fontSize: '0.8rem' }} />
                                     </div>
                                 </div>
                             )}
@@ -446,8 +406,8 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#8B5CF6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Empresa</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
-                                    <input value={sigCompany.razaoSocial} onChange={e => setSigCompany(s => ({ ...s, razaoSocial: e.target.value }))} placeholder="Razão Social" className="prop-input" style={{ fontSize: '0.8rem' }} />
-                                    <input value={sigCompany.cnpj} onChange={e => setSigCompany(s => ({ ...s, cnpj: e.target.value }))} placeholder="CNPJ" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                    <input value={sigCompany.razaoSocial} onChange={e => setSigCompany({ ...sigCompany, razaoSocial: e.target.value })} placeholder="Razão Social" className="prop-input" style={{ fontSize: '0.8rem' }} />
+                                    <input value={sigCompany.cnpj} onChange={e => setSigCompany({ ...sigCompany, cnpj: e.target.value })} placeholder="CNPJ" className="prop-input" style={{ fontSize: '0.8rem' }} />
                                 </div>
                             </div>
                         </div>
@@ -492,11 +452,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 </div>
                             </div>
                             <div style={{ borderTop: '1px solid rgba(37, 99, 235, 0.1)', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button onClick={() => props.handleSaveCompanyTemplate({
-                                    sigLegal, sigTech, sigCompany, bankData,
-                                    validityDays: props.validityDays,
-                                    signatureMode: props.signatureMode,
-                                })} disabled={props.isSavingTemplate} style={{
+                                <button onClick={() => props.handleSaveCompanyTemplate()} disabled={props.isSavingTemplate} style={{
                                     padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 600,
                                     background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
                                     color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
@@ -571,19 +527,19 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div>
                                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Banco</label>
                                     <input type="text" value={bankData.bank} placeholder="Ex: Banco do Brasil"
-                                        onChange={e => setBankData(prev => ({ ...prev, bank: e.target.value }))}
+                                        onChange={e => setBankData({ ...bankData, bank: e.target.value })}
                                         className="prop-input" style={{ fontSize: '0.8rem' }} />
                                 </div>
                                 <div>
                                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Agência</label>
                                     <input type="text" value={bankData.agency} placeholder="Ex: 1234-5"
-                                        onChange={e => setBankData(prev => ({ ...prev, agency: e.target.value }))}
+                                        onChange={e => setBankData({ ...bankData, agency: e.target.value })}
                                         className="prop-input" style={{ fontSize: '0.8rem' }} />
                                 </div>
                                 <div>
                                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Conta</label>
                                     <input type="text" value={bankData.account} placeholder="Ex: 12345-6"
-                                        onChange={e => setBankData(prev => ({ ...prev, account: e.target.value }))}
+                                        onChange={e => setBankData({ ...bankData, account: e.target.value })}
                                         className="prop-input" style={{ fontSize: '0.8rem' }} />
                                 </div>
                             </div>
@@ -591,7 +547,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div>
                                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Tipo de Conta</label>
                                     <select value={bankData.accountType}
-                                        onChange={e => setBankData(prev => ({ ...prev, accountType: e.target.value }))}
+                                        onChange={e => setBankData({ ...bankData, accountType: e.target.value })}
                                         className="prop-input" style={{ padding: '6px 8px', fontSize: '0.8rem' }}>
                                         <option value="Conta Corrente">Conta Corrente</option>
                                         <option value="Conta Poupança">Conta Poupança</option>
@@ -600,7 +556,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div>
                                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Chave PIX</label>
                                     <input type="text" value={bankData.pix} placeholder="CNPJ, e-mail, telefone ou chave aleatória"
-                                        onChange={e => setBankData(prev => ({ ...prev, pix: e.target.value }))}
+                                        onChange={e => setBankData({ ...bankData, pix: e.target.value })}
                                         className="prop-input" style={{ fontSize: '0.8rem' }} />
                                 </div>
                             </div>

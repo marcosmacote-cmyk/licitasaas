@@ -460,6 +460,14 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     isSaving={p.isSaving}
                     printLandscape={p.printLandscape}
                     setPrintLandscape={p.setPrintLandscape}
+                    sigLegal={p.sigLegal}
+                    setSigLegal={p.setSigLegal}
+                    sigTech={p.sigTech}
+                    setSigTech={p.setSigTech}
+                    sigCompany={p.sigCompany}
+                    setSigCompany={p.setSigCompany}
+                    bankData={p.bankData}
+                    setBankData={p.setBankData}
                 />
             )}
             {p.activeTab === 'letter' && (!p.proposal || !p.selectedBidding || !p.selectedCompany) && (
