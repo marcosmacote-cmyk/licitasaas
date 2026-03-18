@@ -221,13 +221,13 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-bg-base)', padding: '6px var(--space-3)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', marginRight: 'var(--space-2)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>BDI:</span>
-                                    <input type="number" value={p.bdi} onChange={e => p.setBdi(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} step="0.01" />
+                                    <input type="number" value={p.bdi} onChange={e => p.setBdi(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '70px', height: '28px' }} step="0.01" />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                                 <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }}></div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>Desc. Linear:</span>
-                                    <input type="number" value={p.discount} onChange={e => p.setDiscount(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} step="0.01" />
+                                    <input type="number" value={p.discount} onChange={e => p.setDiscount(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '70px', height: '28px' }} step="0.01" />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                             </div>

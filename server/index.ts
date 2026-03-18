@@ -3034,9 +3034,11 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
             const bdi = existing.bdiPercentage || 0;
             const linearDisc = existing.taxPercentage || 0;
             const itemDisc = item.discountPercentage ?? 0;
-            const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
+            // Descontos cumulativos: linear + individual (compostos)
+            const linearFactor = 1 - linearDisc / 100;
+            const itemFactor = 1 - itemDisc / 100;
 
-            const rawUnitPrice = (item.unitCost || 0) * (1 + bdi / 100) * (1 - applicableDiscount / 100);
+            const rawUnitPrice = (item.unitCost || 0) * (1 + bdi / 100) * linearFactor * itemFactor;
             const unitPrice = roundFn(rawUnitPrice);
 
             const multiplier = item.multiplier ?? 1;
@@ -3093,13 +3095,15 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
         const bdi = proposal.bdiPercentage || 0;
         const linearDisc = proposal.taxPercentage || 0;
         const itemDisc = discountPercentage ?? 0;
-        const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
+        // Descontos cumulativos: linear + individual (compostos)
+        const linearFactor = 1 - linearDisc / 100;
+        const itemFactor = 1 - itemDisc / 100;
 
         const finalUnitCost = unitCost !== undefined ? unitCost : 0;
         const finalQuantity = quantity !== undefined ? quantity : 0;
         const finalMultiplier = multiplier !== undefined ? multiplier : 1;
 
-        const unitPrice = finalUnitCost * (1 + bdi / 100) * (1 - applicableDiscount / 100);
+        const unitPrice = finalUnitCost * (1 + bdi / 100) * linearFactor * itemFactor;
         const totalPrice = finalQuantity * finalMultiplier * unitPrice;
 
         const updated = await prisma.proposalItem.update({

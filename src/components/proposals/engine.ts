@@ -13,10 +13,12 @@ export function calculateItem(
     const multiplier = item.multiplier || 1;
     const itemDisc = item.discountPercentage || 0;
 
-    // Unit Price including BDI
-    // Formula: Price = Cost * (1 + BDI/100) * (1 - (ItemDisc > 0 ? ItemDisc : LinearDisc)/100)
-    const applicableDiscount = itemDisc > 0 ? itemDisc : discountPercentage;
-    const rawUnitPrice = unitCost * (1 + bdiPercentage / 100) * (1 - applicableDiscount / 100);
+    // Unit Price including BDI and CUMULATIVE discounts
+    // Formula: Price = Cost * (1 + BDI/100) * (1 - LinearDisc/100) * (1 - ItemDisc/100)
+    // Descontos são acumulativos: linear se aplica a todos, individual se aplica em cima
+    const linearFactor = 1 - discountPercentage / 100;
+    const itemFactor = 1 - itemDisc / 100;
+    const rawUnitPrice = unitCost * (1 + bdiPercentage / 100) * linearFactor * itemFactor;
 
     let unitPrice: number;
     if (roundingMode === 'ROUND') {
