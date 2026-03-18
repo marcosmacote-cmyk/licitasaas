@@ -71,57 +71,61 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         if (!selectedCompany) return;
         const co = selectedCompany;
 
-        // Parsear CPF embutido no nome
-        let rawName = co.contactName || '';
-        let rawCpf = co.contactCpf || '';
-        const cpfInName = rawName.match(/\s*CPF[:\s]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i);
-        if (cpfInName) {
-            if (!rawCpf) rawCpf = cpfInName[1];
-            rawName = rawName.replace(cpfInName[0], '').trim();
-        }
-        setSigLegal({ name: rawName, cpf: rawCpf, role: 'Representante Legal' });
-
-        // Parsear razão social / CNPJ
-        let rawRazao = co.razaoSocial || '';
-        let rawCnpj = co.cnpj || '';
-        const cnpjInRazao = rawRazao.match(/\s*CNPJ[:\s]*([\d.\/-]+)/i);
-        if (cnpjInRazao) {
-            if (!rawCnpj) rawCnpj = cnpjInRazao[1];
-            rawRazao = rawRazao.replace(cnpjInRazao[0], '').trim();
-        }
-        setSigCompany({ razaoSocial: rawRazao, cnpj: rawCnpj });
-
-        // Parsear responsável técnico
-        const techQual = co.technicalQualification || '';
-        if (techQual) {
-            const regRe = /\s*((?:CREA|CAU|CRA|CONFEA)[-\s]*[A-Z]{0,2}[\s-]*(?:N[\u00bao\u00b0]?\s*)?[\d.\/-]+(?:\s*[-\u2013]\s*(?:RPN|D)\s*(?:N[\u00bao\u00b0]?\s*)?[\d.\/-]+)?)/i;
-            const regMatch = techQual.match(regRe);
-            const techReg = regMatch ? regMatch[1].trim() : '';
-            const techName = regMatch ? techQual.replace(regMatch[0], '').trim() : techQual.split(/[,\n]/)[0].trim();
-            setSigTech({ name: techName, registration: techReg, role: 'Responsável Técnico' });
-        } else {
-            setSigTech({ name: '', registration: '', role: 'Responsável Técnico' });
-        }
-
-        // Restaurar dados bancários e extras do cadastro da empresa (campo dedicado)
-        // Prioridade: defaultSignatureConfig > defaultLetterContent (legado)
-        let configSource = '';
+        // ─── 1. Fonte primária: JSON dedicado (defaultSignatureConfig) ───
+        let loadedFromJson = false;
         try {
-            if (co.defaultSignatureConfig) {
-                configSource = co.defaultSignatureConfig;
-            } else if (co.defaultLetterContent && co.defaultLetterContent.startsWith('{')) {
-                configSource = co.defaultLetterContent; // Fallback legado
+            const raw = co.defaultSignatureConfig;
+            if (raw) {
+                const cfg = JSON.parse(raw);
+                if (cfg.sigLegal)  { setSigLegal(cfg.sigLegal); loadedFromJson = true; }
+                if (cfg.sigTech)   { setSigTech(cfg.sigTech); loadedFromJson = true; }
+                if (cfg.sigCompany) setSigCompany(cfg.sigCompany);
+                if (cfg.bankData)  setBankData(cfg.bankData);
+                if (cfg.signatureMode) setSignatureMode(cfg.signatureMode as 'LEGAL' | 'TECH' | 'BOTH');
+                if (cfg.validityDays)  setValidityDays(cfg.validityDays);
             }
-            if (configSource) {
-                const parsed = JSON.parse(configSource);
-                if (parsed.bankData) setBankData(parsed.bankData);
-                if (parsed.sigLegal) setSigLegal(parsed.sigLegal);
-                if (parsed.sigTech) setSigTech(parsed.sigTech);
-                if (parsed.sigCompany) setSigCompany(parsed.sigCompany);
-                if (parsed.validityDays) setValidityDays(parsed.validityDays);
-                if (parsed.signatureMode) setSignatureMode(parsed.signatureMode as 'LEGAL' | 'TECH' | 'BOTH');
+        } catch { /* ignore */ }
+
+        // ─── 2. Fallback legado: defaultLetterContent JSON ───
+        if (!loadedFromJson) {
+            try {
+                const raw = co.defaultLetterContent;
+                if (raw && raw.startsWith('{')) {
+                    const cfg = JSON.parse(raw);
+                    if (cfg.sigLegal)  { setSigLegal(cfg.sigLegal); loadedFromJson = true; }
+                    if (cfg.sigTech)   { setSigTech(cfg.sigTech); loadedFromJson = true; }
+                    if (cfg.sigCompany) setSigCompany(cfg.sigCompany);
+                    if (cfg.bankData)  setBankData(cfg.bankData);
+                    if (cfg.signatureMode) setSignatureMode(cfg.signatureMode as 'LEGAL' | 'TECH' | 'BOTH');
+                    if (cfg.validityDays)  setValidityDays(cfg.validityDays);
+                }
+            } catch { /* ignore */ }
+        }
+
+        // ─── 3. Fallback final: campos diretos do BD (primeira vez, sem JSON) ───
+        if (!loadedFromJson) {
+            setSigLegal({
+                name: co.contactName || '',
+                cpf: co.contactCpf || '',
+                role: 'Representante Legal',
+            });
+            setSigCompany({
+                razaoSocial: co.razaoSocial || '',
+                cnpj: co.cnpj || '',
+            });
+            // Resp. técnico: pega nome até a primeira vírgula
+            const techQual = co.technicalQualification || '';
+            if (techQual) {
+                const techName = techQual.split(',')[0].trim();
+                // Registro: qualquer padrão CREA/CAU/CRA/Carteira Profissional
+                const regMatch = techQual.match(/((?:CREA|CAU|CRA|CONFEA|Carteira\s+Profissional)[^,]*)/i);
+                const techReg = regMatch ? regMatch[1].trim() : '';
+                setSigTech({ name: techName, registration: techReg, role: 'Responsável Técnico' });
+            } else {
+                setSigTech({ name: '', registration: '', role: 'Responsável Técnico' });
             }
-        } catch { /* ignore parse errors */ }
+            setBankData({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
+        }
     }, [selectedCompany?.id]);
 
     // Load proposals when bidding changes
@@ -342,7 +346,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
         setIsSavingTemplate(true);
         try {
-            // Config de assinatura/banco para o campo dedicado da empresa
+            // Config de assinatura/banco → campo dedicado da empresa
             const signatureConfig = {
                 sigLegal,
                 sigTech,
@@ -351,7 +355,6 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                 validityDays,
                 signatureMode,
             };
-            // Template da carta (inclui tudo para backward compat)
             const templateConfig = {
                 letterContent,
                 ...signatureConfig,
@@ -370,7 +373,18 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                 })
             });
             if (res.ok) {
-                toast.success('Padrão da empresa salvo com sucesso!');
+                // ── Atualizar o company no array local para que o useEffect não sobrescreva ──
+                const idx = companies.findIndex(c => c.id === selectedCompanyId);
+                if (idx !== -1) {
+                    companies[idx] = {
+                        ...companies[idx],
+                        defaultSignatureConfig: JSON.stringify(signatureConfig),
+                        defaultLetterContent: JSON.stringify(templateConfig),
+                        contactName: sigLegal.name,
+                        contactCpf: sigLegal.cpf,
+                    };
+                }
+                toast.success('Dados salvos no cadastro da empresa!');
                 showSaveMsg('Padrão da empresa salvo!');
             } else {
                 const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
