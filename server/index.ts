@@ -268,15 +268,26 @@ app.post('/api/tenants', async (req, res) => {
 app.put('/api/companies/:id/proposal-template', authenticateToken, async (req: any, res) => {
     try {
         const { id } = req.params;
-        const { headerImage, footerImage, headerHeight, footerHeight, defaultLetterContent } = req.body;
+        const {
+            headerImage, footerImage, headerHeight, footerHeight,
+            defaultLetterContent,
+            contactName, contactCpf,
+            signatureMode, validityDays,
+        } = req.body;
 
         const updateData: any = {
             defaultProposalHeader: headerImage,
             defaultProposalFooter: footerImage,
             defaultProposalHeaderHeight: headerHeight,
             defaultProposalFooterHeight: footerHeight,
-            defaultLetterContent: defaultLetterContent
+            defaultLetterContent: defaultLetterContent,
         };
+
+        // Campos opcionais de assinatura/configuração
+        if (contactName !== undefined) updateData.contactName = contactName;
+        if (contactCpf !== undefined) updateData.contactCpf = contactCpf;
+        // signatureMode e validityDays não têm campos diretos no CompanyProfile,
+        // mas já estão salvos dentro do JSON defaultLetterContent
 
         await prisma.companyProfile.update({
             where: { id, tenantId: req.user.tenantId },

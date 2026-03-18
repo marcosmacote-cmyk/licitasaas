@@ -271,13 +271,25 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
     };
 
-    const handleSaveCompanyTemplate = async () => {
+    const handleSaveCompanyTemplate = async (extraData?: {
+        sigLegal?: { name: string; cpf: string; role: string };
+        sigTech?: { name: string; registration: string; role: string };
+        sigCompany?: { razaoSocial: string; cnpj: string };
+        bankData?: { bank: string; agency: string; account: string; accountType: string; pix: string };
+        validityDays?: number;
+        signatureMode?: string;
+    }) => {
         if (!selectedCompanyId) {
             toast.warning('Selecione uma empresa primeiro.');
             return;
         }
         setIsSavingTemplate(true);
         try {
+            // Salvar configurações extras como JSON no defaultLetterContent
+            const templateConfig = {
+                letterContent,
+                ...(extraData || {}),
+            };
             const res = await fetch(`${API_BASE_URL}/api/companies/${selectedCompanyId}/proposal-template`, {
                 method: 'PUT', headers,
                 body: JSON.stringify({
@@ -285,7 +297,14 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     footerImage,
                     headerHeight: headerImageHeight,
                     footerHeight: footerImageHeight,
-                    defaultLetterContent: letterContent
+                    defaultLetterContent: JSON.stringify(templateConfig),
+                    // Dados que têm campos próprios no CompanyProfile
+                    contactName: extraData?.sigLegal?.name,
+                    contactCpf: extraData?.sigLegal?.cpf,
+                    razaoSocial: extraData?.sigCompany?.razaoSocial,
+                    cnpj: extraData?.sigCompany?.cnpj,
+                    signatureMode: signatureMode,
+                    validityDays: extraData?.validityDays,
                 })
             });
             if (res.ok) {

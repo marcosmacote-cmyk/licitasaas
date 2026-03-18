@@ -54,7 +54,14 @@ interface ProposalLetterWizardProps {
     setFooterImageHeight: (v: number) => void;
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => void;
     handleSaveConfig: () => void;
-    handleSaveCompanyTemplate: () => void;
+    handleSaveCompanyTemplate: (extraData?: {
+        sigLegal?: { name: string; cpf: string; role: string };
+        sigTech?: { name: string; registration: string; role: string };
+        sigCompany?: { razaoSocial: string; cnpj: string };
+        bankData?: { bank: string; agency: string; account: string; accountType: string; pix: string };
+        validityDays?: number;
+        signatureMode?: string;
+    }) => void;
     isSavingTemplate: boolean;
     // Letter I/O
     setLetterContent: (v: string) => void;
@@ -112,10 +119,20 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const [selectedExportMode, setSelectedExportMode] = useState<LetterExportMode>('FULL');
     const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set());
 
-    // ── Dados Bancários (preenchimento manual) ──
+    // ── Dados Bancários (preenchimento manual, restaura do template salvo) ──
     const [bankData, setBankData] = useState<{
         bank: string; agency: string; account: string; accountType: string; pix: string;
-    }>({ bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' });
+    }>(() => {
+        // Tentar carregar do template salvo (defaultLetterContent como JSON)
+        try {
+            const saved = props.company?.defaultLetterContent;
+            if (saved && saved.startsWith('{')) {
+                const parsed = JSON.parse(saved);
+                if (parsed.bankData) return parsed.bankData;
+            }
+        } catch { /* ignore */ }
+        return { bank: '', agency: '', account: '', accountType: 'Conta Corrente', pix: '' };
+    });
 
     // ── Tipo de Proposta (Inicial ou Readequada) ──
     const [proposalType, setProposalType] = useState<'INICIAL' | 'READEQUADA'>('INICIAL');
@@ -475,7 +492,11 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 </div>
                             </div>
                             <div style={{ borderTop: '1px solid rgba(37, 99, 235, 0.1)', paddingTop: '12px', marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <button onClick={props.handleSaveCompanyTemplate} disabled={props.isSavingTemplate} style={{
+                                <button onClick={() => props.handleSaveCompanyTemplate({
+                                    sigLegal, sigTech, sigCompany, bankData,
+                                    validityDays: props.validityDays,
+                                    signatureMode: props.signatureMode,
+                                })} disabled={props.isSavingTemplate} style={{
                                     padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)', fontWeight: 600,
                                     background: 'var(--color-bg-base)', border: '1px solid var(--color-primary)',
                                     color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
