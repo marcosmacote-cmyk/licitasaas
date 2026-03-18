@@ -41,10 +41,28 @@ export class LetterRenderer {
     /**
      * Renderiza um bloco individual em HTML.
      * Todos os parágrafos: text-align: justify, SEM text-indent.
+     * Blocos do corpo principal recebem título de seção em negrito.
      */
     renderBlock(block: LetterBlock): string {
         const escaped = this.escapeHtml(block.content);
         const formatted = this.formatText(escaped);
+
+        // ── Mapa de títulos de seção (corpo principal da proposta) ──
+        const SECTION_TITLES: Record<string, string> = {
+            [LetterBlockType.OBJECT]:               'DO OBJETO',
+            [LetterBlockType.COMMERCIAL]:            'DAS DECLARAÇÕES',
+            [LetterBlockType.PRICING_SUMMARY]:       'DO RESUMO DE PREÇOS',
+            [LetterBlockType.VALIDITY]:              'DA VALIDADE DA PROPOSTA',
+            [LetterBlockType.PROPOSAL_CONDITIONS]:   'DAS CONDIÇÕES DA PROPOSTA',
+            [LetterBlockType.EXECUTION]:             'DAS CONDIÇÕES DE EXECUÇÃO',
+            [LetterBlockType.BANKING]:               'DOS DADOS BANCÁRIOS',
+        };
+
+        // Helper: gera o header HTML do tópico (se aplicável)
+        const sectionTitle = SECTION_TITLES[block.type];
+        const titleHtml = sectionTitle
+            ? `<p style="margin: 0 0 4px 0; font-weight: bold; font-size: 11px; letter-spacing: 0.3px;">${sectionTitle}</p>\n`
+            : '';
 
         switch (block.type) {
             case LetterBlockType.TITLE:
@@ -69,37 +87,37 @@ export class LetterRenderer {
 
             case LetterBlockType.OBJECT:
                 return `<div class="block block-object" style="margin-bottom: 8px; text-align: justify;">
-                    <p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
+                    ${titleHtml}<p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
                 </div>`;
 
             case LetterBlockType.COMMERCIAL:
                 return `<div class="block block-commercial" style="margin-bottom: 8px; text-align: justify; page-break-inside: avoid;">
-                    ${this.renderParagraphs(formatted)}
+                    ${titleHtml}${this.renderParagraphs(formatted)}
                 </div>`;
 
             case LetterBlockType.PRICING_SUMMARY:
                 return `<div class="block block-pricing" style="margin-bottom: 8px; page-break-inside: avoid;">
-                    ${this.renderParagraphs(formatted)}
+                    ${titleHtml}${this.renderParagraphs(formatted)}
                 </div>`;
 
             case LetterBlockType.VALIDITY:
                 return `<div class="block block-validity" style="margin-bottom: 8px; text-align: justify;">
-                    <p style="margin: 0; line-height: 1.4;">${formatted}</p>
+                    ${titleHtml}<p style="margin: 0; line-height: 1.4;">${formatted}</p>
                 </div>`;
 
             case LetterBlockType.PROPOSAL_CONDITIONS:
                 return `<div class="block block-conditions" style="margin-bottom: 8px; text-align: justify; page-break-inside: avoid;">
-                    ${this.renderParagraphs(formatted)}
+                    ${titleHtml}${this.renderParagraphs(formatted)}
                 </div>`;
 
             case LetterBlockType.EXECUTION:
                 return `<div class="block block-execution" style="margin-bottom: 8px; text-align: justify; page-break-inside: avoid;">
-                    ${this.renderParagraphs(formatted)}
+                    ${titleHtml}${this.renderParagraphs(formatted)}
                 </div>`;
 
             case LetterBlockType.BANKING:
                 return `<div class="block block-banking" style="margin-bottom: 8px;">
-                    <p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
+                    ${titleHtml}<p style="margin: 0; line-height: 1.4;">${formatted.replace(/\n/g, '<br/>')}</p>
                 </div>`;
 
             case LetterBlockType.CLOSING:
