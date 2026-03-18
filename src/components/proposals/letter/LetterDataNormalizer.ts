@@ -185,12 +185,17 @@ export class LetterDataNormalizer {
             totalPrice: it.totalPrice,
         }));
 
+        // Desconto total real: diferença entre referência e total atual
+        const refTotal = items.reduce((sum, it) => sum + ((it.quantity || 0) * (it.multiplier || 1) * (it.referencePrice || it.unitCost || 0)), 0);
+        const totalDiscountPct = refTotal > 0 ? ((refTotal - totalValue) / refTotal * 100) : 0;
+
         return {
             totalValue,
             totalValueExtended: currencyToWords(totalValue),
             estimatedValue: input.bidding.estimatedValue > 0 ? input.bidding.estimatedValue : undefined,
             bdiPercentage: input.bdiPercentage || input.proposal.bdiPercentage || 0,
             discountPercentage: input.discountPercentage || input.proposal.taxPercentage || 0,
+            totalDiscountPercentage: totalDiscountPct > 0 ? totalDiscountPct : 0,
             items: itemSummaries,
             itemCount: items.length,
         };

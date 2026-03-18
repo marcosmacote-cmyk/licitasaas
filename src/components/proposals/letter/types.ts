@@ -85,6 +85,7 @@ export interface ProposalLetterData {
         estimatedValue?: number;
         bdiPercentage: number;
         discountPercentage: number;
+        totalDiscountPercentage?: number;
         items: ProposalItemSummary[];
         itemCount: number;
     };

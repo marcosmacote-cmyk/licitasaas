@@ -307,9 +307,10 @@ export class ProposalLetterBuilder {
             lines.push(`BDI aplicado: ${p.bdiPercentage.toFixed(2)}%.`);
         }
 
-        // Desconto — só mostra se > 0
-        if (p.discountPercentage > 0) {
-            lines.push(`Desconto total aplicado: ${p.discountPercentage.toFixed(2)}%.`);
+        // Desconto total — usa o desconto real efetivo (referência vs. atual)
+        const totalDisc = p.totalDiscountPercentage || 0;
+        if (totalDisc > 0) {
+            lines.push(`Desconto total aplicado: ${totalDisc.toFixed(2)}%.`);
         }
 
         // Referência à planilha com pluralização correta
