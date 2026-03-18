@@ -221,13 +221,13 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-bg-base)', padding: '6px var(--space-3)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', marginRight: 'var(--space-2)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>BDI:</span>
-                                    <input type="number" value={p.bdi} onChange={e => p.setBdi(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} />
+                                    <input type="number" value={p.bdi} onChange={e => p.setBdi(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} step="0.01" />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                                 <div style={{ width: '1px', height: '20px', background: 'var(--color-border)' }}></div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>Desc. Linear:</span>
-                                    <input type="number" value={p.discount} onChange={e => p.setDiscount(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} />
+                                    <input type="number" value={p.discount} onChange={e => p.setDiscount(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '55px', height: '28px' }} step="0.01" />
                                     <span style={{ fontSize: '0.75rem' }}>%</span>
                                 </div>
                             </div>
@@ -349,12 +349,12 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                                         const totalDisc = ((item.referencePrice - item.unitPrice) / item.referencePrice * 100);
                                                         const isNegative = totalDisc < 0;
                                                         return <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isNegative ? 'var(--color-danger)' : totalDisc > 0 ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}>
-                                                            {totalDisc > 0 ? '-' : ''}{Math.abs(totalDisc).toFixed(1)}%
+                                                            {totalDisc > 0 ? '-' : ''}{Math.abs(totalDisc).toFixed(2)}%
                                                         </span>;
                                                     }
                                                     // Sem referência: mostra desconto aplicado (individual ou linear)
                                                     const appliedDisc = item.discountPercentage || p.discount || 0;
-                                                    return appliedDisc > 0 ? `${appliedDisc}%` : '-';
+                                                    return appliedDisc > 0 ? `${appliedDisc.toFixed(2)}%` : '-';
                                                 })()}
                                             </td>
                                             <td className="prop-td-center">
@@ -363,7 +363,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                             <td className="prop-td-center" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{fmt(item.unitPrice)}</td>
                                             <td className="prop-td-center" style={{ fontWeight: 700 }}>{fmt(item.totalPrice)}</td>
                                             <td className="prop-td-center" style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-                                                {p.total > 0 ? ((item.totalPrice / p.total) * 100).toFixed(1) + '%' : '0%'}
+                                                {p.total > 0 ? ((item.totalPrice / p.total) * 100).toFixed(2) + '%' : '0.00%'}
                                             </td>
                                             <td className="prop-td-center">
                                                 {item.referencePrice ? (

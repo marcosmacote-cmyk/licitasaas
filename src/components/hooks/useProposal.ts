@@ -339,12 +339,8 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         if (!proposal) return;
         setIsSaving(true);
         try {
-            // 1. Salvar itens
-            const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
-                method: 'POST', headers,
-                body: JSON.stringify({ items, replaceAll: true }),
-            });
-            // 2. Salvar configs (BDI, desconto linear, arredondamento) junto
+            // 1. Salvar configs PRIMEIRO (BDI, desconto linear, arredondamento)
+            // para que o servidor use os valores corretos ao recalcular preços dos itens
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
                 body: JSON.stringify({
@@ -353,6 +349,11 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     socialCharges: roundingMode === 'TRUNCATE' ? 1 : 0,
                     validityDays,
                 }),
+            });
+            // 2. Agora salvar itens (servidor recalcula com os valores atualizados)
+            const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
+                method: 'POST', headers,
+                body: JSON.stringify({ items, replaceAll: true }),
             });
             if (res.ok) {
                 await loadProposals();
