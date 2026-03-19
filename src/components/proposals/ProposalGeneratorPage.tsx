@@ -374,16 +374,33 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                     const isEditing = p.isBulkEditing || p.editingItemId === item.id;
                                     const overRef = item.referencePrice && item.unitPrice > item.referencePrice;
                                     const parts = (item.itemNumber || '').split('.');
-                                    const lote = parts.length > 1 ? parts[0] : '-';
-                                    const itemNum = parts.length > 1 ? parts.slice(1).join('.') : (parts[0] || '-');
+                                    const lote = parts.length > 1 ? parts[0] : '';
+                                    const itemNum = parts.length > 1 ? parts.slice(1).join('.') : (parts[0] || '');
+
+                                    const updateLoteItem = (newLote: string, newItem: string) => {
+                                        const composed = newLote && newLote !== '-' ? `${newLote}.${newItem}` : newItem;
+                                        p.updateItem(item.id, 'itemNumber', composed);
+                                    };
 
                                     return (
                                         <tr key={item.id} style={{
                                             borderBottom: '1px solid var(--color-border)',
                                             background: overRef ? 'rgba(239,68,68,0.03)' : undefined,
                                         }}>
-                                            <td className="prop-td-center">{lote}</td>
-                                            <td className="prop-td-center">{itemNum}</td>
+                                            <td className="prop-td-center">
+                                                {isEditing ? (
+                                                    <input value={lote} onChange={e => updateLoteItem(e.target.value, itemNum)} className="prop-input" style={{ width: '36px', textAlign: 'center' }} placeholder="-" />
+                                                ) : (
+                                                    <span onClick={() => p.setEditingItemId(item.id)} className="cursor-pointer" title="Clique para editar">{lote || '-'}</span>
+                                                )}
+                                            </td>
+                                            <td className="prop-td-center">
+                                                {isEditing ? (
+                                                    <input value={itemNum} onChange={e => updateLoteItem(lote, e.target.value)} className="prop-input" style={{ width: '36px', textAlign: 'center' }} placeholder="-" />
+                                                ) : (
+                                                    <span onClick={() => p.setEditingItemId(item.id)} className="cursor-pointer" title="Clique para editar">{itemNum || '-'}</span>
+                                                )}
+                                            </td>
                                             <td className="prop-td">
                                                 {isEditing ? (
                                                     <input value={item.description} onChange={e => p.updateItem(item.id, 'description', e.target.value)} className="prop-input" autoFocus />
