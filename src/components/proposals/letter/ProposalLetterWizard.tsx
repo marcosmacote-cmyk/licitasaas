@@ -476,65 +476,6 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         }
     };
 
-    // ── Export Both (Inicial + Readequada) ──
-    // IMPORTANTE: Ambas as janelas são abertas IMEDIATAMENTE do clique do usuário.
-    // Se usarmos setTimeout/afterprint para abrir a segunda, o browser bloqueia como popup.
-    const handleExportBoth = useCallback(() => {
-        if (!letterResult) return;
-
-        const normalizer = new LetterDataNormalizer();
-        const exporter = new LetterPdfExporter();
-        const exportConfig = {
-            mode: selectedExportMode,
-            headerImage: props.headerImage,
-            footerImage: props.footerImage,
-            headerImageHeight: props.headerImageHeight,
-            footerImageHeight: props.footerImageHeight,
-            printLandscape: props.printLandscape,
-            items: props.items,
-        };
-
-        // Helper: inject sig data into normalized data
-        const injectSigData = (data: any) => {
-            data.signature.legalRepresentative = { name: sigLegal.name, cpf: sigLegal.cpf, role: sigLegal.role };
-            if (sigTech.name) data.signature.technicalRepresentative = { name: sigTech.name, registration: sigTech.registration, role: sigTech.role };
-            data.company.razaoSocial = sigCompany.razaoSocial;
-            data.company.cnpj = sigCompany.cnpj;
-            data.company.contactName = sigLegal.name;
-            data.company.contactCpf = sigLegal.cpf;
-        };
-
-        // 1) Gerar PDF INICIAL (abre imediatamente, print em 500ms)
-        const dataI = normalizer.normalize({
-            bidding: props.bidding, company: props.company, proposal: props.proposal,
-            items: props.items, totalValue: props.totalValue,
-            signatureMode: props.signatureMode, validityDays: props.validityDays,
-            bdiPercentage: props.bdi, discountPercentage: props.discount,
-            bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
-        });
-        (dataI.meta as any).proposalType = 'INICIAL';
-        injectSigData(dataI);
-        const builderI = new ProposalLetterBuilder(dataI);
-        const resultI = builderI.build();
-        exporter.export({ ...exportConfig, result: resultI, data: dataI, printDelay: 500 });
-
-        // 2) Gerar PDF READEQUADA (abre imediatamente, print em 2500ms — tempo para o 1º terminar)
-        const effectiveTotal = props.adjustedTotal || props.totalValue;
-        const effectiveBdi = props.adjustedBdi ?? props.bdi;
-        const effectiveDiscount = props.adjustedDiscount ?? props.discount;
-        const dataR = normalizer.normalize({
-            bidding: props.bidding, company: props.company, proposal: props.proposal,
-            items: props.items, totalValue: effectiveTotal,
-            signatureMode: props.signatureMode, validityDays: props.validityDays,
-            bdiPercentage: effectiveBdi, discountPercentage: effectiveDiscount,
-            bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
-        });
-        (dataR.meta as any).proposalType = 'READEQUADA';
-        injectSigData(dataR);
-        const builderR = new ProposalLetterBuilder(dataR);
-        const resultR = builderR.build();
-        exporter.export({ ...exportConfig, result: resultR, data: dataR, printDelay: 2500 });
-    }, [letterResult, normalizedData, selectedExportMode, props, bankData, sigLegal, sigTech, sigCompany]);
 
     // ════════════════════════════════════
     // RENDER
@@ -1200,17 +1141,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 }}>
                                     <Printer size={18} /> Exportar PDF
                                 </button>
-                                {props.adjustedEnabled && (
-                                    <button onClick={handleExportBoth} style={{
-                                        padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
-                                        background: 'linear-gradient(135deg, #B45309, #92400E)',
-                                        color: 'white', border: 'none', fontWeight: 700, fontSize: 'var(--text-md)',
-                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                                        boxShadow: '0 4px 14px rgba(180,83,9,0.3)',
-                                    }}>
-                                        <FileStack size={18} /> Exportar Ambas (Inicial + Readequada)
-                                    </button>
-                                )}
+
                             </div>
                         </div>
                     </div>
