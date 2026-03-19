@@ -353,6 +353,69 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         }
     };
 
+    // ── Export Both (Inicial + Readequada) ──
+    const handleExportBoth = useCallback(() => {
+        if (!letterResult) return;
+
+        const normalizer = new LetterDataNormalizer();
+        const exporter = new LetterPdfExporter();
+        const exportConfig = {
+            mode: selectedExportMode,
+            headerImage: props.headerImage,
+            footerImage: props.footerImage,
+            headerImageHeight: props.headerImageHeight,
+            footerImageHeight: props.footerImageHeight,
+            printLandscape: props.printLandscape,
+            items: props.items,
+        };
+
+        // 1) Gerar PDF INICIAL
+        const dataInicial = normalizer.normalize({
+            bidding: props.bidding, company: props.company, proposal: props.proposal,
+            items: props.items, totalValue: props.totalValue,
+            signatureMode: props.signatureMode, validityDays: props.validityDays,
+            bdiPercentage: props.bdi, discountPercentage: props.discount,
+            bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
+        });
+        (dataInicial.meta as any).proposalType = 'INICIAL';
+        dataInicial.signature.legalRepresentative = { name: sigLegal.name, cpf: sigLegal.cpf, role: sigLegal.role };
+        if (sigTech.name) dataInicial.signature.technicalRepresentative = { name: sigTech.name, registration: sigTech.registration, role: sigTech.role };
+        dataInicial.company.razaoSocial = sigCompany.razaoSocial;
+        dataInicial.company.cnpj = sigCompany.cnpj;
+        dataInicial.company.contactName = sigLegal.name;
+        dataInicial.company.contactCpf = sigLegal.cpf;
+
+        const builderInicial = new ProposalLetterBuilder(dataInicial);
+        const resultInicial = builderInicial.build();
+        exporter.export({ ...exportConfig, result: resultInicial, data: dataInicial });
+
+        // 2) Gerar PDF READEQUADA (com delay para abrir a segunda janela)
+        setTimeout(() => {
+            const effectiveTotal = props.adjustedTotal || props.totalValue;
+            const effectiveBdi = props.adjustedBdi ?? props.bdi;
+            const effectiveDiscount = props.adjustedDiscount ?? props.discount;
+
+            const dataReadequada = normalizer.normalize({
+                bidding: props.bidding, company: props.company, proposal: props.proposal,
+                items: props.items, totalValue: effectiveTotal,
+                signatureMode: props.signatureMode, validityDays: props.validityDays,
+                bdiPercentage: effectiveBdi, discountPercentage: effectiveDiscount,
+                bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
+            });
+            (dataReadequada.meta as any).proposalType = 'READEQUADA';
+            dataReadequada.signature.legalRepresentative = { name: sigLegal.name, cpf: sigLegal.cpf, role: sigLegal.role };
+            if (sigTech.name) dataReadequada.signature.technicalRepresentative = { name: sigTech.name, registration: sigTech.registration, role: sigTech.role };
+            dataReadequada.company.razaoSocial = sigCompany.razaoSocial;
+            dataReadequada.company.cnpj = sigCompany.cnpj;
+            dataReadequada.company.contactName = sigLegal.name;
+            dataReadequada.company.contactCpf = sigLegal.cpf;
+
+            const builderReadequada = new ProposalLetterBuilder(dataReadequada);
+            const resultReadequada = builderReadequada.build();
+            exporter.export({ ...exportConfig, result: resultReadequada, data: dataReadequada });
+        }, 1500);
+    }, [letterResult, normalizedData, selectedExportMode, props, bankData, sigLegal, sigTech, sigCompany]);
+
     // ════════════════════════════════════
     // RENDER
     // ════════════════════════════════════
@@ -1015,6 +1078,17 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 }}>
                                     <Printer size={18} /> Exportar PDF
                                 </button>
+                                {props.adjustedEnabled && (
+                                    <button onClick={handleExportBoth} style={{
+                                        padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                        background: 'linear-gradient(135deg, #B45309, #92400E)',
+                                        color: 'white', border: 'none', fontWeight: 700, fontSize: 'var(--text-md)',
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                                        boxShadow: '0 4px 14px rgba(180,83,9,0.3)',
+                                    }}>
+                                        <FileStack size={18} /> Exportar Ambas (Inicial + Readequada)
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
