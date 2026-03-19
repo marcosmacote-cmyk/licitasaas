@@ -3553,7 +3553,9 @@ Retorne APENAS um JSON array, onde cada elemento corresponde a um item:
 IMPORTANTE:
 - Seja REALISTA nos valores — use preços de mercado brasileiro
 - Inclua TODOS os elementos relevantes, sem omissões
-- A soma de (quantity × unitValue) de todas as linhas deve ≈ preço unitário do item
+- A soma de (quantity × unitValue) de TODAS as linhas DEVE SER IGUAL ao preço unitário do item
+- Use o LUCRO como variável de equilíbrio: ajuste a margem de lucro para que o total BATA EXATAMENTE com o preço unitário
+- Exemplo: se custos diretos + indiretos + tributos = R$ 35,00 e preço unitário = R$ 41,98, o lucro deve ser EXATAMENTE R$ 6,98
 - NÃO retorne texto, markdown ou explicações — APENAS o JSON`;
 
         const result = await callGeminiWithRetry(ai.models, {
@@ -3584,13 +3586,82 @@ IMPORTANTE:
             }
         }
 
-        // Add IDs to lines and calculate totalValue
-        for (const comp of compositions) {
+        // Add IDs to lines, calculate totalValue, and FINE-TUNE to match unit price exactly
+        for (let idx = 0; idx < compositions.length && idx < items.length; idx++) {
+            const comp = compositions[idx];
+            const targetPrice = items[idx].unitPrice || 0;
             if (!comp.lines) comp.lines = [];
+
+            // Step 1: Add IDs and calculate line totals
             for (const line of comp.lines) {
                 line.id = `cl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 line.totalValue = Math.round((line.quantity || 0) * (line.unitValue || 0) * 100) / 100;
                 line.source = line.source || 'IA';
+            }
+
+            // Step 2: Calculate current grand total
+            const currentTotal = comp.lines.reduce((s: number, l: any) => s + (l.totalValue || 0), 0);
+            const diff = Math.round((targetPrice - currentTotal) * 100) / 100;
+
+            // Step 3: If there's a difference, adjust LUCRO line to compensate
+            if (Math.abs(diff) >= 0.01 && targetPrice > 0) {
+                // Find existing LUCRO line
+                let lucroLine = comp.lines.find((l: any) => l.group === 'LUCRO');
+
+                if (lucroLine) {
+                    // Adjust the LUCRO line value
+                    lucroLine.unitValue = Math.round((lucroLine.unitValue + diff / (lucroLine.quantity || 1)) * 100) / 100;
+                    lucroLine.totalValue = Math.round((lucroLine.quantity || 1) * lucroLine.unitValue * 100) / 100;
+                    
+                    // If LUCRO became negative, distribute via DESPESAS_OPERACIONAIS instead
+                    if (lucroLine.unitValue < 0) {
+                        // Revert LUCRO
+                        lucroLine.unitValue = Math.round((lucroLine.unitValue - diff / (lucroLine.quantity || 1)) * 100) / 100;
+                        lucroLine.totalValue = Math.round((lucroLine.quantity || 1) * lucroLine.unitValue * 100) / 100;
+                        
+                        // Add/adjust DESPESAS_OPERACIONAIS
+                        let despLine = comp.lines.find((l: any) => l.group === 'DESPESAS_OPERACIONAIS');
+                        if (despLine) {
+                            despLine.unitValue = Math.round((despLine.unitValue + diff / (despLine.quantity || 1)) * 100) / 100;
+                            despLine.totalValue = Math.round((despLine.quantity || 1) * despLine.unitValue * 100) / 100;
+                        } else {
+                            comp.lines.push({
+                                id: `cl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                                group: 'DESPESAS_OPERACIONAIS',
+                                description: 'Ajuste operacional',
+                                unit: 'VB',
+                                quantity: 1,
+                                unitValue: diff,
+                                totalValue: diff,
+                                source: 'Ajuste',
+                            });
+                        }
+                    }
+                } else {
+                    // Create LUCRO line with the difference
+                    comp.lines.push({
+                        id: `cl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                        group: 'LUCRO',
+                        description: 'Margem de lucro',
+                        unit: 'VB',
+                        quantity: 1,
+                        unitValue: diff,
+                        totalValue: diff,
+                        source: 'IA',
+                    });
+                }
+
+                // Final verification — recalculate and micro-adjust if needed (rounding quirks)
+                const finalTotal = comp.lines.reduce((s: number, l: any) => s + (l.totalValue || 0), 0);
+                const microDiff = Math.round((targetPrice - finalTotal) * 100) / 100;
+                if (Math.abs(microDiff) >= 0.01) {
+                    const adjustLine = comp.lines.find((l: any) => l.group === 'LUCRO') || comp.lines[comp.lines.length - 1];
+                    adjustLine.unitValue = Math.round((adjustLine.unitValue + microDiff / (adjustLine.quantity || 1)) * 100) / 100;
+                    adjustLine.totalValue = Math.round((adjustLine.quantity || 1) * adjustLine.unitValue * 100) / 100;
+                }
+
+                const adjustedTotal = comp.lines.reduce((s: number, l: any) => s + (l.totalValue || 0), 0);
+                console.log(`[AI Composition] Item ${idx + 1}: ajustado ${currentTotal.toFixed(2)} → ${adjustedTotal.toFixed(2)} (alvo: ${targetPrice.toFixed(2)}, diff original: ${diff.toFixed(2)})`);
             }
         }
 
