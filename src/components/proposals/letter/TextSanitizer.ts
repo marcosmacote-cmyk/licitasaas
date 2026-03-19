@@ -159,8 +159,9 @@ export class TextSanitizer {
             'pelo', 'pela', 'pelos', 'pelas', 'o', 'a', 'os', 'as', 'um', 'uma',
         ]);
 
-        // Match sequences of 3+ ALL CAPS words on the SAME line ([ \t]+ = horizontal space only)
-        return text.replace(/\b([A-ZÀ-Ú]{2,}(?:[ \t]+[A-ZÀ-Ú]{2,}){2,})\b/g, (match) => {
+        // Match sequences of 3+ ALL CAPS words on the SAME line.
+        // First word must be 2+ chars; subsequent can be 1+ (allows connectors E, A, O, etc.)
+        return text.replace(/\b([A-ZÀ-Ú]{2,}(?:[ \t]+[A-ZÀ-Ú]+){2,})\b/g, (match) => {
             const words = match.split(/[ \t]+/);
             return words.map((word, i) => {
                 if (ACRONYMS.has(word)) return word;
