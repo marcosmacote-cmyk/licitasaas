@@ -25,6 +25,7 @@ export interface PdfExportOptions {
     footerImageHeight: number;
     printLandscape?: boolean;
     printDelay?: number; // ms before triggering print (default: 500)
+    compositionHtml?: string; // HTML das composições para anexar ao final
 }
 
 export class LetterPdfExporter {
@@ -181,6 +182,10 @@ export class LetterPdfExporter {
                     </h3>
                     ${itemsTableHtml}
                     <div class="totals-clearfix"></div>
+                ` : ''}
+                ${opts.compositionHtml ? `
+                    <div style="page-break-before: always;"></div>
+                    ${opts.compositionHtml}
                 ` : ''}
             </div>
         </td></tr></tbody>

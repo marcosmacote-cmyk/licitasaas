@@ -23,7 +23,7 @@ import { LetterDataNormalizer } from './LetterDataNormalizer';
 import { ProposalLetterBuilder } from './ProposalLetterBuilder';
 import { ProposalLetterValidator } from './ProposalLetterValidator';
 import { LetterPdfExporter } from './LetterPdfExporter';
-import { exportCompositionPdf } from '../composition/compositionPdfExporter';
+import { exportCompositionPdf, buildCompositionInlineHtml } from '../composition/compositionPdfExporter';
 import type { AiLetterBlocksResponse } from './types';
 import { API_BASE_URL } from '../../../config';
 
@@ -452,57 +452,57 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     const handleExport = () => {
         const isCompositionOnly = selectedExportMode === 'COMPOSITION_ONLY';
         const isFullWithComp = selectedExportMode === 'FULL_WITH_COMPOSITION';
+        const isFullWithoutComp = selectedExportMode === 'FULL_WITHOUT_COMPOSITION';
 
-        // Resolve the base mode (for letter/spreadsheet export)
-        const baseMode: LetterExportMode = isCompositionOnly ? 'FULL' 
-            : isFullWithComp ? 'FULL' 
-            : selectedExportMode === 'FULL_WITHOUT_COMPOSITION' ? 'FULL' 
-            : selectedExportMode;
-
-        // Export letter/spreadsheet (skip for composition-only)
-        if (!isCompositionOnly) {
-            if (letterResult) {
-                const exporter = new LetterPdfExporter();
-                exporter.export({
-                    result: letterResult,
-                    data: normalizedData,
-                    items: props.items,
-                    mode: baseMode,
-                    headerImage: props.headerImage,
-                    footerImage: props.footerImage,
-                    headerImageHeight: props.headerImageHeight,
-                    footerImageHeight: props.footerImageHeight,
-                    printLandscape: props.printLandscape,
-                });
-            } else {
-                // Fallback to legacy exporter
-                if (baseMode === 'LETTER' || baseMode === 'LETTER_WITH_SUMMARY' || baseMode === 'LETTER_ANALYTICAL') {
-                    props.handlePrintProposal('LETTER');
-                } else if (baseMode === 'SPREADSHEET') {
-                    props.handlePrintProposal('SPREADSHEET');
-                } else {
-                    props.handlePrintProposal('FULL');
-                }
-            }
+        // ── COMPOSITION_ONLY: abre PDF de composições separado ──
+        if (isCompositionOnly) {
+            exportCompositionPdf({
+                items: props.items,
+                bdi: props.bdi,
+                company: props.company,
+                headerImage: props.headerImage,
+                footerImage: props.footerImage,
+                headerImageHeight: props.headerImageHeight,
+                footerImageHeight: props.footerImageHeight,
+                printLandscape: true,
+                processTitle: props.bidding?.title,
+                processNumber: props.bidding?.modality,
+            });
+            return;
         }
 
-        // Export compositions if needed
-        if (isCompositionOnly || isFullWithComp) {
-            const delay = isCompositionOnly ? 0 : 600;
-            setTimeout(() => {
-                exportCompositionPdf({
-                    items: props.items,
-                    bdi: props.bdi,
-                    company: props.company,
-                    headerImage: props.headerImage,
-                    footerImage: props.footerImage,
-                    headerImageHeight: props.headerImageHeight,
-                    footerImageHeight: props.footerImageHeight,
-                    printLandscape: true,
-                    processTitle: props.bidding?.title,
-                    processNumber: props.bidding?.modality,
-                });
-            }, delay);
+        // ── FULL_WITH_COMPOSITION: gera proposta + composições no MESMO PDF ──
+        // ── FULL_WITHOUT_COMPOSITION / FULL / outros modos: proposta normal ──
+        const baseMode: LetterExportMode = (isFullWithComp || isFullWithoutComp) ? 'FULL' : selectedExportMode;
+
+        // Gerar composição inline HTML apenas para FULL_WITH_COMPOSITION
+        const compositionHtml = isFullWithComp
+            ? buildCompositionInlineHtml(props.items, props.bdi)
+            : undefined;
+
+        if (letterResult) {
+            const exporter = new LetterPdfExporter();
+            exporter.export({
+                result: letterResult,
+                data: normalizedData,
+                items: props.items,
+                mode: baseMode,
+                headerImage: props.headerImage,
+                footerImage: props.footerImage,
+                headerImageHeight: props.headerImageHeight,
+                footerImageHeight: props.footerImageHeight,
+                printLandscape: props.printLandscape,
+                compositionHtml,
+            });
+        } else {
+            // Fallback to legacy exporter (sem suporte a composição inline)
+            if (baseMode === 'LETTER' || baseMode === 'LETTER_WITH_SUMMARY' || baseMode === 'LETTER_ANALYTICAL') {
+                props.handlePrintProposal('LETTER');
+            } else if (baseMode === 'SPREADSHEET') {
+                props.handlePrintProposal('SPREADSHEET');
+            } else {
+                props.handlePrintProposal('FULL');
+            }
         }
     };
 
