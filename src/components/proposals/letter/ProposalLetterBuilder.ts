@@ -265,10 +265,7 @@ export class ProposalLetterBuilder {
             'com a devida comunicação formal para esta empresa.'
         );
 
-        // d) Local de execução
-        if (isUseful(e.executionLocation)) {
-            lines.push(`Local de execução: ${e.executionLocation!.replace(/\s*\[.*\]\s*$/, '').trim()}.`);
-        }
+        // d) Local de execução — REMOVIDO: já aparece em "Condições de Execução (Complementar)"
 
         // e) Condições específicas da IA (filtradas pela blacklist)
         const aiExtras = this.aiBlocks.get('commercialExtras');
@@ -389,7 +386,8 @@ export class ProposalLetterBuilder {
 
     private buildClosingBlock(): LetterBlock {
         const localDate = this.data.signature.localDate || this.deriveLocalDate();
-        const content = `${localDate}\n\nAtenciosamente,`;
+        const dateLine = localDate.endsWith('.') ? localDate : `${localDate}.`;
+        const content = `${dateLine}\n\nAtenciosamente,`;
 
         return this.createBlock(LetterBlockType.CLOSING, 'Encerramento',
             content, { required: true, editable: false });
