@@ -314,7 +314,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                     {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Desc.Total Readequada(%)</th>}
                                     {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Unit.Readequada</th>}
                                     {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Total Readequado</th>}
-                                    {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Δ%</th>}
+                                    {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)', minWidth: '50px' }}>Δ%</th>}
                                     <th className="prop-th" style={{ width: '60px' }}></th>
                                 </tr>
                             </thead>
@@ -525,8 +525,12 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                         <span style={{ fontWeight: 500, color: '#B45309' }}>{p.adjustedBdi.toFixed(2)}%</span>
                                     </div>
                                     <div style={{ padding: 'var(--space-3) var(--space-5)', background: 'rgba(180,83,9,0.06)', borderBottom: '1px solid rgba(180,83,9,0.15)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                                        <span style={{ color: '#92400E', fontWeight: 600 }}>Desc. Linear Readequada</span>
-                                        <span style={{ fontWeight: 500, color: '#B45309' }}>{p.adjustedDiscount.toFixed(2)}%</span>
+                                        <span style={{ color: '#92400E', fontWeight: 600 }}>Desc. Total Readequada</span>
+                                        <span style={{ fontWeight: 500, color: '#B45309' }}>{(() => {
+                                            const refTotal = p.items.reduce((s, it) => s + ((it.referencePrice || 0) * (it.quantity || 0) * (it.multiplier || 1)), 0);
+                                            if (refTotal > 0) return ((refTotal - p.adjustedTotal) / refTotal * 100).toFixed(2) + '%';
+                                            return p.adjustedDiscount.toFixed(2) + '%';
+                                        })()}</span>
                                     </div>
                                     <div style={{
                                         padding: 'var(--space-4) var(--space-5)',
