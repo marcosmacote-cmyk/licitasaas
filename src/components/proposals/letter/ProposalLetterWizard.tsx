@@ -201,7 +201,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
         try {
             // Step 1: Fetch AI blocks
-            setGenerationProgress(prev => [...prev, '🤖 Solicitando redação IA para blocos variáveis...']);
+            setGenerationProgress(prev => [...prev, '[IA] Solicitando redação IA para blocos variáveis...']);
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -219,17 +219,17 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                     aiBlocks = aiData.blocks || {};
                     const timings = aiData.timings || {};
                     Object.entries(timings).forEach(([k, ms]) => {
-                        setGenerationProgress(prev => [...prev, `✅ ${k} redigido (${(ms / 1000).toFixed(1)}s)`]);
+                        setGenerationProgress(prev => [...prev, `[OK] ${k} redigido (${(ms / 1000).toFixed(1)}s)`]);
                     });
                 } else {
-                    setGenerationProgress(prev => [...prev, '⚠️ IA indisponível — usando dados estruturais']);
+                    setGenerationProgress(prev => [...prev, '[!] IA indisponível — usando dados estruturais']);
                 }
             } catch {
-                setGenerationProgress(prev => [...prev, '⚠️ Erro na IA — carta gerada sem trechos variáveis']);
+                setGenerationProgress(prev => [...prev, '[!] Erro na IA — carta gerada sem trechos variáveis']);
             }
 
             // Step 2: Build letter
-            setGenerationProgress(prev => [...prev, '🔧 Compondo blocos estruturais...']);
+            setGenerationProgress(prev => [...prev, '[...] Compondo blocos estruturais...']);
             const builder = new ProposalLetterBuilder(normalizedData);
             if (aiBlocks.objectBlock) builder.setAiContent(LetterBlockType.OBJECT, aiBlocks.objectBlock);
             if (aiBlocks.executionBlock) builder.setAiContent(LetterBlockType.EXECUTION, aiBlocks.executionBlock);
@@ -252,14 +252,14 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
             const aiCount = result.meta.aiBlockIds.length;
             setGenerationProgress(prev => [
                 ...prev,
-                `✅ Carta composta: ${visibleCount} blocos (${aiCount} com IA)`,
-                '🎉 Pronto para revisão!'
+                `[OK] Carta composta: ${visibleCount} blocos (${aiCount} com IA)`,
+                '[OK] Pronto para revisão!'
             ]);
 
             // Auto-advance after 1.5s
             setTimeout(() => setStep('review'), 1500);
         } catch (e: any) {
-            setGenerationProgress(prev => [...prev, `❌ Erro: ${e.message || 'Desconhecido'}`]);
+            setGenerationProgress(prev => [...prev, `[x] Erro: ${e.message || 'Desconhecido'}`]);
         } finally {
             setIsGenerating(false);
         }
@@ -656,8 +656,8 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                         color: proposalType === 'INICIAL' ? '#fff' : 'var(--color-text-secondary)',
                                         border: `2px solid ${proposalType === 'INICIAL' ? '#1E40AF' : 'var(--color-border)'}`,
                                     }}>
-                                    📋 PROPOSTA DE PREÇOS INICIAL
-                                    {savedLetterInicial && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: proposalType === 'INICIAL' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}>✓ salva</span>}
+                                    <ClipboardList size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> PROPOSTA DE PREÇOS INICIAL
+                                    {savedLetterInicial && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: proposalType === 'INICIAL' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}><CheckCircle2 size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> salva</span>}
                                 </button>
                                 <button
                                     onClick={() => handleSwitchProposalType('READEQUADA')}
@@ -670,9 +670,9 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                         border: `2px solid ${proposalType === 'READEQUADA' ? '#B45309' : 'var(--color-border)'}`,
                                         opacity: props.adjustedEnabled ? 1 : 0.4,
                                     }}>
-                                    🔄 PROPOSTA DE PREÇOS READEQUADA
+                                    <RefreshCw size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> PROPOSTA DE PREÇOS READEQUADA
                                     {!props.adjustedEnabled && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2 }}>(ative o cenário na planilha)</span>}
-                                    {props.adjustedEnabled && savedLetterReadequada && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: proposalType === 'READEQUADA' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}>✓ salva</span>}
+                                    {props.adjustedEnabled && savedLetterReadequada && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: proposalType === 'READEQUADA' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}><CheckCircle2 size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> salva</span>}
                                 </button>
                             </div>
                         </div>
@@ -799,8 +799,8 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 </div>
                                 {validation.errors.map((e, i) => (
                                     <div key={i} style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) 0', borderTop: i > 0 ? '1px solid rgba(239,68,68,0.1)' : 'none' }}>
-                                        <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>❌ {e.message}</span>
-                                        {e.suggestion && <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', marginTop: 2 }}>💡 {e.suggestion}</div>}
+                                        <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}><XCircle size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />{e.message}</span>
+                                        {e.suggestion && <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', marginTop: 2 }}><Sparkles size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />{e.suggestion}</div>}
                                     </div>
                                 ))}
                             </div>
@@ -817,8 +817,8 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 </div>
                                 {validation.warnings.map((w, i) => (
                                     <div key={i} style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) 0', borderTop: i > 0 ? '1px solid rgba(245,158,11,0.1)' : 'none' }}>
-                                        <span style={{ color: 'var(--color-warning)' }}>⚠️ {w.message}</span>
-                                        {w.suggestion && <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', marginTop: 2 }}>💡 {w.suggestion}</div>}
+                                        <span style={{ color: 'var(--color-warning)' }}><AlertTriangle size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />{w.message}</span>
+                                        {w.suggestion && <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem', marginTop: 2 }}><Sparkles size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />{w.suggestion}</div>}
                                     </div>
                                 ))}
                             </div>
@@ -868,9 +868,9 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div key={i} style={{
                                     padding: 'var(--space-2) 0', fontSize: 'var(--text-sm)',
                                     borderTop: i > 0 ? '1px solid var(--color-border)' : 'none',
-                                    color: msg.startsWith('❌') ? 'var(--color-danger)'
-                                        : msg.startsWith('⚠️') ? 'var(--color-warning)'
-                                        : msg.startsWith('✅') || msg.startsWith('🎉') ? 'var(--color-success)'
+                                    color: msg.startsWith('[x]') ? 'var(--color-danger)'
+                                        : msg.startsWith('[!]') ? 'var(--color-warning)'
+                                        : msg.startsWith('[OK]') ? 'var(--color-success)'
                                         : 'var(--color-text-secondary)',
                                     fontWeight: i === generationProgress.length - 1 ? 600 : 400,
                                     animation: i === generationProgress.length - 1 ? 'fadeIn 0.3s ease-in' : 'none',

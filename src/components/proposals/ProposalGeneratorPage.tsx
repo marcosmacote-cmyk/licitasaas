@@ -4,6 +4,7 @@ import {
     DollarSign, Package, AlertTriangle, Edit3,
     ChevronDown, ChevronUp, Briefcase, Cpu, ScanSearch,
     Building2, TrendingUp, ClipboardList, RotateCcw,
+    BarChart3, RefreshCw, CheckCircle2,
 } from 'lucide-react';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
@@ -154,7 +155,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     background: 'var(--color-success-bg)', border: '1px solid rgba(34,197,94,0.3)',
                     color: 'var(--color-success)', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)',
                 }}>
-                    ✓ {p.saveMessage}
+                    <CheckCircle2 size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> {p.saveMessage}
                 </div>
             )}
             {/* ── Proposal Info + Actions ── */}
@@ -280,7 +281,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                                 textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
                                                 color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border)',
                                             }}>
-                                                📊 Planilha Original
+                                                <BarChart3 size={14} /> Planilha Original
                                                 <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>(preços referência)</span>
                                             </button>
                                             <button onClick={() => { p.handleExportExcel('INICIAL'); setShowExportMenu(false); }} style={{
@@ -289,7 +290,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                                 textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
                                                 color: 'var(--color-primary)', borderBottom: '1px solid var(--color-border)',
                                             }}>
-                                                📄 Planilha Inicial
+                                                <FileText size={14} /> Planilha Inicial
                                                 <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>(BDI + desconto)</span>
                                             </button>
                                             <button onClick={() => { p.handleExportExcel('READEQUADA'); setShowExportMenu(false); }} style={{
@@ -300,7 +301,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                                 color: p.adjustedEnabled ? '#B45309' : 'var(--color-text-tertiary)',
                                                 opacity: p.adjustedEnabled ? 1 : 0.5,
                                             }} disabled={!p.adjustedEnabled}>
-                                                🔄 Planilha Readequada
+                                                <RefreshCw size={14} /> Planilha Readequada
                                                 <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{p.adjustedEnabled ? '(cenário readequado)' : '(ative o cenário)'}</span>
                                             </button>
                                         </div>
@@ -319,7 +320,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-3)', padding: '8px var(--space-4)', borderRadius: 'var(--radius-lg)', border: `1px solid ${p.adjustedEnabled ? 'rgba(180,83,9,0.3)' : 'var(--color-border)'}`, background: p.adjustedEnabled ? 'rgba(180,83,9,0.04)' : 'var(--color-bg-base)' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: p.adjustedEnabled ? '#B45309' : 'var(--color-text-secondary)' }}>
                             <input type="checkbox" checked={p.adjustedEnabled} onChange={e => p.setAdjustedEnabled(e.target.checked)} />
-                            🔄 Habilitar Cenário Proposta Readequada
+                             <RefreshCw size={14} /> Habilitar Cenário Proposta Readequada
                         </label>
                         {p.adjustedEnabled && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginLeft: 'var(--space-3)', background: 'rgba(180,83,9,0.06)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(180,83,9,0.15)' }}>
