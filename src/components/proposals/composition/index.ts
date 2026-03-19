@@ -4,3 +4,4 @@ export type { CostGroup, CostCompositionLine, ItemCostComposition, CompositionMa
 export { COST_GROUP_META, COMPOSITION_UNITS, getCostGroupMeta } from './types';
 export { calculateCompositionTotals, serializeComposition, deserializeComposition } from './compositionEngine';
 export { COMPOSITION_TEMPLATES, applyTemplate } from './compositionTemplates';
+export { exportCompositionPdf } from './compositionPdfExporter';

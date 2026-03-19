@@ -8,14 +8,16 @@ import { useState, useCallback, useEffect } from 'react';
 import {
     BarChart3, ChevronLeft, Package, Layers, Copy,
     AlertTriangle, CheckCircle2, Save, Loader2, Cpu,
+    Printer, FileStack, FileText,
 } from 'lucide-react';
-import type { ProposalItem } from '../../../types';
+import type { ProposalItem, CompanyProfile, BiddingProcess } from '../../../types';
 import type { CompositionMap, ItemCostComposition } from './types';
 import {
     calculateCompositionTotals, deserializeComposition,
     serializeComposition, recalcComposition, createEmptyComposition,
 } from './compositionEngine';
 import { ItemCompositionEditor } from './ItemCompositionEditor';
+import { exportCompositionPdf } from './compositionPdfExporter';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (v: number) => v.toFixed(2) + '%';
@@ -27,9 +29,18 @@ interface Props {
     isSaving: boolean;
     onAiComposition: () => Promise<Record<string, any>>;
     isAiCompositionLoading: boolean;
+    // Export props
+    company?: CompanyProfile;
+    bidding?: BiddingProcess;
+    headerImage?: string;
+    footerImage?: string;
+    headerImageHeight?: number;
+    footerImageHeight?: number;
+    // Print handler for legacy full-proposal export
+    onPrintProposal?: (mode: 'FULL' | 'LETTER' | 'SPREADSHEET') => void;
 }
 
-export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiComposition, isAiCompositionLoading }: Props) {
+export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiComposition, isAiCompositionLoading, company, bidding, headerImage, footerImage, headerImageHeight, footerImageHeight, onPrintProposal }: Props) {
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [compositions, setCompositions] = useState<CompositionMap>({});
     const [copySourceId, setCopySourceId] = useState<string | null>(null);
@@ -303,6 +314,89 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                     </div>
                     <div style={{ fontWeight: 600 }}>
                         BDI referência da planilha: <span style={{ color: 'var(--color-primary)' }}>{fmtPct(bdi)}</span>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Export Bar ── */}
+            {items.length > 0 && (
+                <div style={{
+                    marginTop: 'var(--space-3)', padding: 'var(--space-4)',
+                    borderRadius: 'var(--radius-lg)',
+                    background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(99,102,241,0.03))',
+                    border: '1px solid rgba(37,99,235,0.12)',
+                }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Printer size={14} color="var(--color-primary)" /> Exportar PDF
+                    </div>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                        {/* Composições Apenas */}
+                        <button
+                            onClick={() => exportCompositionPdf({
+                                items, bdi, company,
+                                headerImage, footerImage,
+                                headerImageHeight, footerImageHeight,
+                                printLandscape: true,
+                                processTitle: bidding?.title,
+                                processNumber: bidding?.modality,
+                            })}
+                            style={{
+                                flex: 1, padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                border: '1px solid var(--color-border)', background: 'var(--color-bg-base)',
+                                cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                minWidth: 180,
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)'; (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-light)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)'; (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                        >
+                            <div style={{ color: 'var(--color-primary)', marginBottom: 6 }}><Layers size={22} /></div>
+                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Composições Apenas</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 3 }}>Todas as composições de preços unitários</div>
+                        </button>
+                        {/* Proposta Completa COM Composição */}
+                        <button
+                            onClick={() => {
+                                // First export the full proposal
+                                if (onPrintProposal) onPrintProposal('FULL');
+                                // Then export compositions separately
+                                setTimeout(() => exportCompositionPdf({
+                                    items, bdi, company,
+                                    headerImage, footerImage,
+                                    headerImageHeight, footerImageHeight,
+                                    printLandscape: true,
+                                    processTitle: bidding?.title,
+                                    processNumber: bidding?.modality,
+                                }), 600);
+                            }}
+                            style={{
+                                flex: 1, padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                border: '2px solid var(--color-primary)', background: 'var(--color-primary-light)',
+                                cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                minWidth: 180,
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(37,99,235,0.12)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-light)'; }}
+                        >
+                            <div style={{ color: 'var(--color-primary)', marginBottom: 6 }}><FileStack size={22} /></div>
+                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Completa c/ Composição</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 3 }}>Carta + Planilha + Composições</div>
+                        </button>
+                        {/* Proposta Completa SEM Composição */}
+                        <button
+                            onClick={() => { if (onPrintProposal) onPrintProposal('FULL'); }}
+                            style={{
+                                flex: 1, padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                border: '1px solid var(--color-border)', background: 'var(--color-bg-base)',
+                                cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                minWidth: 180,
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)'; (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-light)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)'; (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-base)'; }}
+                        >
+                            <div style={{ color: 'var(--color-text-tertiary)', marginBottom: 6 }}><FileText size={22} /></div>
+                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)' }}>Completa s/ Composição</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 3 }}>Carta + Planilha (sem composições)</div>
+                        </button>
                     </div>
                 </div>
             )}
