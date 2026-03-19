@@ -32,16 +32,17 @@ export class LetterPdfExporter {
     /**
      * Gera e abre a janela de impressão.
      */
-    export(options: PdfExportOptions): void {
+    export(options: PdfExportOptions): Window | null {
         const printWindow = window.open('', '_blank');
         if (!printWindow) {
             console.warn('[LetterPdfExporter] Pop-up blocked. Please allow pop-ups.');
-            return;
+            return null;
         }
 
         const html = this.buildFullHtml(options);
         printWindow.document.write(html);
         printWindow.document.close();
+        return printWindow;
     }
 
     /**

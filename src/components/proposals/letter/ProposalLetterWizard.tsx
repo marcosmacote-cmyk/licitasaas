@@ -490,51 +490,75 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
             items: props.items,
         };
 
-        // 1) Gerar PDF INICIAL
-        const dataInicial = normalizer.normalize({
-            bidding: props.bidding, company: props.company, proposal: props.proposal,
-            items: props.items, totalValue: props.totalValue,
-            signatureMode: props.signatureMode, validityDays: props.validityDays,
-            bdiPercentage: props.bdi, discountPercentage: props.discount,
-            bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
-        });
-        (dataInicial.meta as any).proposalType = 'INICIAL';
-        dataInicial.signature.legalRepresentative = { name: sigLegal.name, cpf: sigLegal.cpf, role: sigLegal.role };
-        if (sigTech.name) dataInicial.signature.technicalRepresentative = { name: sigTech.name, registration: sigTech.registration, role: sigTech.role };
-        dataInicial.company.razaoSocial = sigCompany.razaoSocial;
-        dataInicial.company.cnpj = sigCompany.cnpj;
-        dataInicial.company.contactName = sigLegal.name;
-        dataInicial.company.contactCpf = sigLegal.cpf;
+        // Helper: inject sig data into normalized data
+        const injectSigData = (data: any) => {
+            data.signature.legalRepresentative = { name: sigLegal.name, cpf: sigLegal.cpf, role: sigLegal.role };
+            if (sigTech.name) data.signature.technicalRepresentative = { name: sigTech.name, registration: sigTech.registration, role: sigTech.role };
+            data.company.razaoSocial = sigCompany.razaoSocial;
+            data.company.cnpj = sigCompany.cnpj;
+            data.company.contactName = sigLegal.name;
+            data.company.contactCpf = sigLegal.cpf;
+        };
 
-        const builderInicial = new ProposalLetterBuilder(dataInicial);
-        const resultInicial = builderInicial.build();
-        exporter.export({ ...exportConfig, result: resultInicial, data: dataInicial });
-
-        // 2) Gerar PDF READEQUADA (com delay para abrir a segunda janela)
-        setTimeout(() => {
+        // Preparar dados da READEQUADA (será usado quando a primeira terminar)
+        const openReadequada = () => {
             const effectiveTotal = props.adjustedTotal || props.totalValue;
             const effectiveBdi = props.adjustedBdi ?? props.bdi;
             const effectiveDiscount = props.adjustedDiscount ?? props.discount;
 
-            const dataReadequada = normalizer.normalize({
+            const dataR = normalizer.normalize({
                 bidding: props.bidding, company: props.company, proposal: props.proposal,
                 items: props.items, totalValue: effectiveTotal,
                 signatureMode: props.signatureMode, validityDays: props.validityDays,
                 bdiPercentage: effectiveBdi, discountPercentage: effectiveDiscount,
                 bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
             });
-            (dataReadequada.meta as any).proposalType = 'READEQUADA';
-            dataReadequada.signature.legalRepresentative = { name: sigLegal.name, cpf: sigLegal.cpf, role: sigLegal.role };
-            if (sigTech.name) dataReadequada.signature.technicalRepresentative = { name: sigTech.name, registration: sigTech.registration, role: sigTech.role };
-            dataReadequada.company.razaoSocial = sigCompany.razaoSocial;
-            dataReadequada.company.cnpj = sigCompany.cnpj;
-            dataReadequada.company.contactName = sigLegal.name;
-            dataReadequada.company.contactCpf = sigLegal.cpf;
+            (dataR.meta as any).proposalType = 'READEQUADA';
+            injectSigData(dataR);
 
-            const builderReadequada = new ProposalLetterBuilder(dataReadequada);
-            const resultReadequada = builderReadequada.build();
-            exporter.export({ ...exportConfig, result: resultReadequada, data: dataReadequada });
-        }, 1500);
+            const builderR = new ProposalLetterBuilder(dataR);
+            const resultR = builderR.build();
+            exporter.export({ ...exportConfig, result: resultR, data: dataR });
+        };
+
+        // 1) Gerar PDF INICIAL
+        const dataI = normalizer.normalize({
+            bidding: props.bidding, company: props.company, proposal: props.proposal,
+            items: props.items, totalValue: props.totalValue,
+            signatureMode: props.signatureMode, validityDays: props.validityDays,
+            bdiPercentage: props.bdi, discountPercentage: props.discount,
+            bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
+        });
+        (dataI.meta as any).proposalType = 'INICIAL';
+        injectSigData(dataI);
+
+        const builderI = new ProposalLetterBuilder(dataI);
+        const resultI = builderI.build();
+        const printWin = exporter.export({ ...exportConfig, result: resultI, data: dataI });
+
+        // 2) Encadear PDF READEQUADA — usando afterprint + fallback com flag anti-duplo
+        if (printWin) {
+            let fired = false;
+            const fireOnce = () => {
+                if (fired) return;
+                fired = true;
+                setTimeout(openReadequada, 500);
+            };
+
+            // afterprint: dispara quando o usuário fecha o diálogo de impressão
+            printWin.addEventListener('afterprint', fireOnce);
+
+            // Fallback: se o usuário fecha a aba sem imprimir (ou afterprint não disparou)
+            const checkClosed = setInterval(() => {
+                if (printWin.closed) {
+                    clearInterval(checkClosed);
+                    fireOnce();
+                }
+            }, 1000);
+
+            // Limpar interval quando afterprint disparar
+            printWin.addEventListener('afterprint', () => clearInterval(checkClosed));
+        }
     }, [letterResult, normalizedData, selectedExportMode, props, bankData, sigLegal, sigTech, sigCompany]);
 
     // ════════════════════════════════════
