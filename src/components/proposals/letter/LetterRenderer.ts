@@ -138,26 +138,39 @@ export class LetterRenderer {
 
     /**
      * Renderiza bloco de assinatura com layout lado-a-lado quando BOTH.
-     * Espaçamento compacto para caber na mesma página.
+     * Formato fixo por linha:
+     *   ___________________________________
+     *   Nome do Representante
+     *   CPF: xxx.xxx.xxx-xx
+     *   Cargo / Função
+     *   RAZÃO SOCIAL DA EMPRESA
+     *   CNPJ: xx.xxx.xxx/xxxx-xx
      */
     private renderSignature(formatted: string): string {
         const sections = formatted.split(/\n\n+/).filter(s => s.trim());
 
+        const renderSigItem = (section: string, width: string) => {
+            const lines = section.split('\n').filter(l => l.trim());
+            const linesHtml = lines.map(line => {
+                // Linha de underline — renderizar como separador visual
+                if (/^_{5,}$/.test(line.trim())) {
+                    return `<div style="margin: 12px auto 4px; width: 220px; border-top: 1px solid #333;"></div>`;
+                }
+                return `<div>${line}</div>`;
+            }).join('\n');
+
+            return `<div class="sig-item" style="display: inline-block; width: ${width}; vertical-align: top; text-align: center; font-size: 10.5px; line-height: 1.5;">
+                ${linesHtml}
+            </div>`;
+        };
+
         if (sections.length === 1) {
             return `<div class="block block-signature signature-block" style="margin-top: 6px; text-align: center; page-break-inside: avoid;">
-                <div class="sig-item" style="display: inline-block; text-align: center; font-size: 10.5px;">
-                    <div style="margin-bottom: 18px;"></div>
-                    ${sections[0].replace(/\n/g, '<br/>')}
-                </div>
+                ${renderSigItem(sections[0], 'auto')}
             </div>`;
         }
 
-        const sigHtml = sections.map(s =>
-            `<div class="sig-item" style="display: inline-block; width: 45%; vertical-align: top; text-align: center; font-size: 10.5px;">
-                <div style="margin-bottom: 18px;"></div>
-                ${s.replace(/\n/g, '<br/>')}
-            </div>`
-        ).join('');
+        const sigHtml = sections.map(s => renderSigItem(s, '45%')).join('');
 
         return `<div class="block block-signature signature-block" style="margin-top: 6px; text-align: center; page-break-inside: avoid;">
             ${sigHtml}

@@ -1024,7 +1024,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                                                         maxHeight: isLongContent ? '250px' : 'none',
                                                                         overflow: isLongContent ? 'auto' : 'visible',
                                                                         fontWeight: block.type === LetterBlockType.TITLE ? 700 : 'normal',
-                                                                        textAlign: block.type === LetterBlockType.TITLE ? 'center' : 'left',
+                                                                        textAlign: block.type === LetterBlockType.TITLE || block.type === LetterBlockType.SIGNATURE ? 'center' : 'left',
                                                                         letterSpacing: block.type === LetterBlockType.TITLE ? '0.5px' : 'normal',
                                                                     }}>
                                                                         {block.content || <em style={{ color: 'var(--color-text-tertiary)' }}>Bloco vazio</em>}
