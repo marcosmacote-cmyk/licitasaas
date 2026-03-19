@@ -10,7 +10,7 @@ import {
     Settings, CheckCircle2, Cpu, Edit3, Printer,
     AlertTriangle, XCircle, Info, ChevronRight, ChevronLeft,
     Loader2, Save, RefreshCw, Lock, Unlock, Sparkles,
-    FileText, Table2, FileStack, ListOrdered, BarChart3,
+    FileText, Table2, FileStack, ListOrdered, BarChart3, Layers,
     Zap, ChevronDown,
     Mail, ClipboardList, Building2, FileEdit, Scale,
     DollarSign, CalendarDays, Wrench, Landmark, MailCheck, PenTool, File,
@@ -23,6 +23,7 @@ import { LetterDataNormalizer } from './LetterDataNormalizer';
 import { ProposalLetterBuilder } from './ProposalLetterBuilder';
 import { ProposalLetterValidator } from './ProposalLetterValidator';
 import { LetterPdfExporter } from './LetterPdfExporter';
+import { exportCompositionPdf } from '../composition/compositionPdfExporter';
 import type { AiLetterBlocksResponse } from './types';
 import { API_BASE_URL } from '../../../config';
 
@@ -449,30 +450,59 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
     // ── Export ──
     const handleExport = () => {
-        // If we have structured letterResult, use the new exporter
-        if (letterResult) {
-            const exporter = new LetterPdfExporter();
-            exporter.export({
-                result: letterResult,
-                data: normalizedData,
-                items: props.items,
-                mode: selectedExportMode,
-                headerImage: props.headerImage,
-                footerImage: props.footerImage,
-                headerImageHeight: props.headerImageHeight,
-                footerImageHeight: props.footerImageHeight,
-                printLandscape: props.printLandscape,
-            });
-            return;
+        const isCompositionOnly = selectedExportMode === 'COMPOSITION_ONLY';
+        const isFullWithComp = selectedExportMode === 'FULL_WITH_COMPOSITION';
+
+        // Resolve the base mode (for letter/spreadsheet export)
+        const baseMode: LetterExportMode = isCompositionOnly ? 'FULL' 
+            : isFullWithComp ? 'FULL' 
+            : selectedExportMode === 'FULL_WITHOUT_COMPOSITION' ? 'FULL' 
+            : selectedExportMode;
+
+        // Export letter/spreadsheet (skip for composition-only)
+        if (!isCompositionOnly) {
+            if (letterResult) {
+                const exporter = new LetterPdfExporter();
+                exporter.export({
+                    result: letterResult,
+                    data: normalizedData,
+                    items: props.items,
+                    mode: baseMode,
+                    headerImage: props.headerImage,
+                    footerImage: props.footerImage,
+                    headerImageHeight: props.headerImageHeight,
+                    footerImageHeight: props.footerImageHeight,
+                    printLandscape: props.printLandscape,
+                });
+            } else {
+                // Fallback to legacy exporter
+                if (baseMode === 'LETTER' || baseMode === 'LETTER_WITH_SUMMARY' || baseMode === 'LETTER_ANALYTICAL') {
+                    props.handlePrintProposal('LETTER');
+                } else if (baseMode === 'SPREADSHEET') {
+                    props.handlePrintProposal('SPREADSHEET');
+                } else {
+                    props.handlePrintProposal('FULL');
+                }
+            }
         }
 
-        // Fallback to legacy exporter
-        if (selectedExportMode === 'LETTER' || selectedExportMode === 'LETTER_WITH_SUMMARY' || selectedExportMode === 'LETTER_ANALYTICAL') {
-            props.handlePrintProposal('LETTER');
-        } else if (selectedExportMode === 'SPREADSHEET') {
-            props.handlePrintProposal('SPREADSHEET');
-        } else {
-            props.handlePrintProposal('FULL');
+        // Export compositions if needed
+        if (isCompositionOnly || isFullWithComp) {
+            const delay = isCompositionOnly ? 0 : 600;
+            setTimeout(() => {
+                exportCompositionPdf({
+                    items: props.items,
+                    bdi: props.bdi,
+                    company: props.company,
+                    headerImage: props.headerImage,
+                    footerImage: props.footerImage,
+                    headerImageHeight: props.headerImageHeight,
+                    footerImageHeight: props.footerImageHeight,
+                    printLandscape: true,
+                    processTitle: props.bidding?.title,
+                    processNumber: props.bidding?.modality,
+                });
+            }, delay);
         }
     };
 
@@ -1110,6 +1140,29 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                         <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)' }}>{opt.label}</div>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{opt.desc}</div>
                                     </div>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Composição de Preços */}
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-2)', paddingBottom: 'var(--space-1)', borderBottom: '1px solid var(--color-border)' }}>
+                            Composição de Preços
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
+                            {([
+                                { mode: 'COMPOSITION_ONLY' as const, icon: <Layers size={22} />, label: 'Composições Apenas', desc: 'Todas as composições de preços unitários' },
+                                { mode: 'FULL_WITH_COMPOSITION' as const, icon: <FileStack size={22} />, label: 'Completa c/ Composição', desc: 'Carta + Planilha + Composições' },
+                                { mode: 'FULL_WITHOUT_COMPOSITION' as const, icon: <FileText size={22} />, label: 'Completa s/ Composição', desc: 'Carta + Planilha (sem composições)' },
+                            ]).map(opt => (
+                                <button key={opt.mode} onClick={() => setSelectedExportMode(opt.mode)} style={{
+                                    padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                    border: selectedExportMode === opt.mode ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    background: selectedExportMode === opt.mode ? 'var(--color-primary-light)' : 'var(--color-bg-base)',
+                                    cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                }}>
+                                    <div style={{ color: selectedExportMode === opt.mode ? 'var(--color-primary)' : 'var(--color-text-tertiary)', marginBottom: 6 }}>{opt.icon}</div>
+                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)' }}>{opt.label}</div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 3 }}>{opt.desc}</div>
                                 </button>
                             ))}
                         </div>

@@ -671,13 +671,6 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     isSaving={p.isSaving}
                     onAiComposition={p.handleAiComposition}
                     isAiCompositionLoading={p.isAiCompositionLoading}
-                    company={p.selectedCompany}
-                    bidding={p.selectedBidding}
-                    headerImage={p.headerImage}
-                    footerImage={p.footerImage}
-                    headerImageHeight={p.headerImageHeight}
-                    footerImageHeight={p.footerImageHeight}
-                    onPrintProposal={p.handlePrintProposal}
                 />
             )}
 

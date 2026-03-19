@@ -194,7 +194,10 @@ export type LetterExportMode =
     | 'SPREADSHEET'         // Planilha apenas
     | 'FULL'                // Carta + Planilha
     | 'LETTER_WITH_SUMMARY' // Carta com resumo dos itens
-    | 'LETTER_ANALYTICAL';  // Carta com detalhamento analítico
+    | 'LETTER_ANALYTICAL'   // Carta com detalhamento analítico
+    | 'COMPOSITION_ONLY'    // Apenas composições de preços
+    | 'FULL_WITH_COMPOSITION'   // Carta + Planilha + Composições
+    | 'FULL_WITHOUT_COMPOSITION'; // Carta + Planilha (sem composições) — alias de FULL
 
 // ── Content Classification ──
 // Classifica trechos extraídos do edital para filtrar o que pode entrar na carta
