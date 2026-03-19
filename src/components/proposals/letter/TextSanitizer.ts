@@ -20,6 +20,7 @@ export class TextSanitizer {
         const FIXED_FORMAT_BLOCKS = new Set<string>([
             LetterBlockType.SIGNATURE,
             LetterBlockType.CLOSING,
+            LetterBlockType.OBJECT,   // Texto do edital — preservar casing original
         ]);
 
         return blocks.map(block => ({

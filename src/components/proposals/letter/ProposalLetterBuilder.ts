@@ -186,7 +186,13 @@ export class ProposalLetterBuilder {
         if (this.overrides.has(LetterBlockType.OBJECT)) {
             content = this.overrides.get(LetterBlockType.OBJECT)!;
         } else if (editalObject) {
-            content = `Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${editalObject}, conforme especificações constantes deste Edital e de seus anexos.`;
+            // Se o objeto já termina com referência ("conforme...", "nos termos...", etc.),
+            // não duplicar o sufixo padrão.
+            const hasTrailingRef = /(?:conforme|nos termos|de acordo com|segundo)[^.]{0,80}$/i.test(editalObject);
+            const suffix = hasTrailingRef
+                ? '.'                                                          // só fechar com ponto
+                : ', conforme especificações constantes deste Edital e de seus anexos.';
+            content = `Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o seguinte objeto:\n\n${editalObject}${suffix}`;
         } else {
             content = 'Vem, respeitosamente, perante Vossa Senhoria, apresentar proposta comercial para o objeto descrito no Edital em referência, conforme especificações constantes deste Edital e de seus anexos.';
         }
