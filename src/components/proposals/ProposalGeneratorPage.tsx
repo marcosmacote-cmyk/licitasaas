@@ -543,7 +543,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                             fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-success)',
                                         }}>
-                                            <span>Economia vs. Inicial</span>
+                                            <span>Desconto vs. Inicial</span>
                                             <span>-{((p.total - p.adjustedTotal) / p.total * 100).toFixed(2)}% ({fmt(p.total - p.adjustedTotal)})</span>
                                         </div>
                                     )}
