@@ -73,6 +73,11 @@ interface ProposalLetterWizardProps {
     setSigCompany: (v: { razaoSocial: string; cnpj: string }) => void;
     bankData: { bank: string; agency: string; account: string; accountType: string; pix: string };
     setBankData: (v: { bank: string; agency: string; account: string; accountType: string; pix: string }) => void;
+    // Adjusted scenario data
+    adjustedEnabled?: boolean;
+    adjustedBdi?: number;
+    adjustedDiscount?: number;
+    adjustedTotal?: number;
 }
 
 const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
@@ -133,16 +138,21 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     // ── Normalizer ──
     const normalizedData = useMemo(() => {
         const normalizer = new LetterDataNormalizer();
+        const isReadequada = proposalType === 'READEQUADA' && props.adjustedEnabled;
+        const effectiveTotal = isReadequada ? (props.adjustedTotal || props.totalValue) : props.totalValue;
+        const effectiveBdi = isReadequada ? (props.adjustedBdi ?? props.bdi) : props.bdi;
+        const effectiveDiscount = isReadequada ? (props.adjustedDiscount ?? props.discount) : props.discount;
+
         const data = normalizer.normalize({
             bidding: props.bidding,
             company: props.company,
             proposal: props.proposal,
             items: props.items,
-            totalValue: props.totalValue,
+            totalValue: effectiveTotal,
             signatureMode: props.signatureMode,
             validityDays: props.validityDays,
-            bdiPercentage: props.bdi,
-            discountPercentage: props.discount,
+            bdiPercentage: effectiveBdi,
+            discountPercentage: effectiveDiscount,
             bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix)
                 ? bankData : undefined,
         });
@@ -169,7 +179,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         return data;
     }, [props.bidding, props.company, props.proposal, props.items, props.totalValue,
         props.signatureMode, props.validityDays, props.bdi, props.discount, bankData,
-        proposalType, sigLegal, sigTech, sigCompany]);
+        proposalType, sigLegal, sigTech, sigCompany, props.adjustedEnabled, props.adjustedBdi, props.adjustedDiscount, props.adjustedTotal]);
 
     // ── Validate ──
     const handleValidate = useCallback(() => {
@@ -526,14 +536,17 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 </button>
                                 <button
                                     onClick={() => setProposalType('READEQUADA')}
+                                    disabled={!props.adjustedEnabled}
                                     style={{
                                         flex: 1, padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
-                                        fontSize: 'var(--text-sm)', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+                                        fontSize: 'var(--text-sm)', fontWeight: 700, cursor: props.adjustedEnabled ? 'pointer' : 'not-allowed', transition: 'all 0.2s',
                                         background: proposalType === 'READEQUADA' ? '#B45309' : 'var(--color-bg-base)',
                                         color: proposalType === 'READEQUADA' ? '#fff' : 'var(--color-text-secondary)',
                                         border: `2px solid ${proposalType === 'READEQUADA' ? '#B45309' : 'var(--color-border)'}`,
+                                        opacity: props.adjustedEnabled ? 1 : 0.4,
                                     }}>
                                     🔄 PROPOSTA DE PREÇOS READEQUADA
+                                    {!props.adjustedEnabled && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2 }}>(ative o cenário na planilha)</span>}
                                 </button>
                             </div>
                         </div>
@@ -550,9 +563,11 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <div><strong>Empresa:</strong> {props.company.razaoSocial}</div>
                                 <div><strong>CNPJ:</strong> {props.company.cnpj}</div>
                                 <div><strong>Processo:</strong> {props.bidding.modality} — {props.bidding.title?.substring(0, 60)}</div>
-                                <div><strong>Valor:</strong> {props.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                                <div><strong>Valor:</strong> {(proposalType === 'READEQUADA' && props.adjustedEnabled ? (props.adjustedTotal || props.totalValue) : props.totalValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    {proposalType === 'READEQUADA' && props.adjustedEnabled && <span style={{ color: '#B45309', fontWeight: 600 }}> (readequada)</span>}
+                                </div>
                                 <div><strong>Itens:</strong> {props.items.length}</div>
-                                <div><strong>BDI:</strong> {props.bdi}% | <strong>Desconto:</strong> {props.discount}%</div>
+                                <div><strong>BDI:</strong> {proposalType === 'READEQUADA' && props.adjustedEnabled ? (props.adjustedBdi ?? props.bdi) : props.bdi}% | <strong>Desconto:</strong> {proposalType === 'READEQUADA' && props.adjustedEnabled ? (props.adjustedDiscount ?? props.discount) : props.discount}%</div>
                             </div>
                         </div>
 

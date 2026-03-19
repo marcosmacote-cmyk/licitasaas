@@ -643,6 +643,10 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     setSigCompany={p.setSigCompany}
                     bankData={p.bankData}
                     setBankData={p.setBankData}
+                    adjustedEnabled={p.adjustedEnabled}
+                    adjustedBdi={p.adjustedBdi}
+                    adjustedDiscount={p.adjustedDiscount}
+                    adjustedTotal={p.adjustedTotal}
                 />
             )}
             {p.activeTab === 'letter' && (!p.proposal || !p.selectedBidding || !p.selectedCompany) && (
