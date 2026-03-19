@@ -6,6 +6,7 @@ import { resolveStage, isModuleAllowed } from '../../governance';
 import { calculateItem, calculateTotals, calculateAdjustedItem, calculateAdjustedTotals } from '../proposals/engine';
 import type { RoundingMode } from '../proposals/engine';
 import { exportExcelProposal, generateProposalPdf } from '../proposals/exportServices';
+import type { ExcelExportType } from '../proposals/exportServices';
 
 interface UseProposalOptions {
     biddings: BiddingProcess[];
@@ -544,9 +545,9 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         reader.readAsDataURL(file);
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = (type: ExcelExportType = 'INICIAL') => {
         if (!proposal || items.length === 0) return;
-        exportExcelProposal(selectedBiddingId, items, bdi);
+        exportExcelProposal(selectedBiddingId, items, bdi, discount, roundingMode, type, adjustedBdi, adjustedDiscount);
     };
 
     const handleSaveLetter = async (blocks?: any[]) => {

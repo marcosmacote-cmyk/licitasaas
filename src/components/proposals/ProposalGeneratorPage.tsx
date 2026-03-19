@@ -24,6 +24,7 @@ const fmtNum = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits:
 export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }: Props) {
     const p = useProposal({ biddings, companies, initialBiddingId });
     const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+    const [showExportMenu, setShowExportMenu] = useState(false);
 
     return (
         <>
@@ -255,14 +256,57 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 <RotateCcw size={14} /> Restaurar Referência
                             </button>
 
-                            <button onClick={p.handleExportExcel} style={{
-                                padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
-                                background: 'var(--color-success-hover)', color: 'white', border: 'none',
-                                fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-                            }}>
-                                <Save size={14} /> Exportar Planilha
-                            </button>
+                            <div style={{ position: 'relative' }}>
+                                <button onClick={() => setShowExportMenu(!showExportMenu)} style={{
+                                    padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)',
+                                    background: 'var(--color-success-hover)', color: 'white', border: 'none',
+                                    fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
+                                }}>
+                                    <Save size={14} /> Exportar Planilha <ChevronDown size={12} />
+                                </button>
+                                {showExportMenu && (
+                                    <>
+                                        <div onClick={() => setShowExportMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                                        <div style={{
+                                            position: 'absolute', top: '100%', right: 0, marginTop: '4px',
+                                            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                            borderRadius: 'var(--radius-lg)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                                            zIndex: 999, minWidth: '220px', overflow: 'hidden',
+                                        }}>
+                                            <button onClick={() => { p.handleExportExcel('ORIGINAL'); setShowExportMenu(false); }} style={{
+                                                width: '100%', padding: '10px 16px', border: 'none', background: 'transparent',
+                                                fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
+                                                textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
+                                                color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border)',
+                                            }}>
+                                                📊 Planilha Original
+                                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>(preços referência)</span>
+                                            </button>
+                                            <button onClick={() => { p.handleExportExcel('INICIAL'); setShowExportMenu(false); }} style={{
+                                                width: '100%', padding: '10px 16px', border: 'none', background: 'transparent',
+                                                fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', cursor: 'pointer',
+                                                textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
+                                                color: 'var(--color-primary)', borderBottom: '1px solid var(--color-border)',
+                                            }}>
+                                                📄 Planilha Inicial
+                                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>(BDI + desconto)</span>
+                                            </button>
+                                            <button onClick={() => { p.handleExportExcel('READEQUADA'); setShowExportMenu(false); }} style={{
+                                                width: '100%', padding: '10px 16px', border: 'none',
+                                                background: p.adjustedEnabled ? 'transparent' : 'rgba(0,0,0,0.03)',
+                                                fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', cursor: p.adjustedEnabled ? 'pointer' : 'not-allowed',
+                                                textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
+                                                color: p.adjustedEnabled ? '#B45309' : 'var(--color-text-tertiary)',
+                                                opacity: p.adjustedEnabled ? 1 : 0.5,
+                                            }} disabled={!p.adjustedEnabled}>
+                                                🔄 Planilha Readequada
+                                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{p.adjustedEnabled ? '(cenário readequado)' : '(ative o cenário)'}</span>
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
 
                             <button className="btn btn-outline" onClick={p.handleAddItem}
                                 style={{ padding: '6px var(--space-4)', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-md)' }}>
