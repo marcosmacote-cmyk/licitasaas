@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile, PriceProposal, ProposalItem } from '../../types';
 import { useToast } from '../ui';
 import { resolveStage, isModuleAllowed } from '../../governance';
-import { calculateItem, calculateTotals } from '../proposals/engine';
+import { calculateItem, calculateTotals, calculateAdjustedItem, calculateAdjustedTotals } from '../proposals/engine';
 import type { RoundingMode } from '../proposals/engine';
 import { exportExcelProposal, generateProposalPdf } from '../proposals/exportServices';
 
@@ -32,6 +32,12 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const [isBulkEditing, setIsBulkEditing] = useState(false);
     const [showConfig, setShowConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
+
+    // ── Cenário Proposta Ajustada ──
+    const [adjustedEnabled, setAdjustedEnabled] = useState(false);
+    const [adjustedBdi, setAdjustedBdi] = useState(0);
+    const [adjustedDiscount, setAdjustedDiscount] = useState(0);
+    const [adjustedLetterContent, setAdjustedLetterContent] = useState('');
 
     // Tab & letter
     const [activeTab, setActiveTab] = useState<'items' | 'letter'>('items');
@@ -171,6 +177,13 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     setSignatureMode(latest.signatureMode || 'LEGAL');
                     setHeaderImageHeight(latest.headerImageHeight || 150);
                     setFooterImageHeight(latest.footerImageHeight || 100);
+                    // Cenário Ajustada
+                    if (latest.adjustedBdi != null || latest.adjustedDiscount != null) {
+                        setAdjustedEnabled(true);
+                        setAdjustedBdi(latest.adjustedBdi ?? latest.bdiPercentage ?? 0);
+                        setAdjustedDiscount(latest.adjustedDiscount ?? 0);
+                        setAdjustedLetterContent(latest.adjustedLetterContent || '');
+                    }
                 }
             }
         } catch (e) {
@@ -326,14 +339,21 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const handleRecalculateAll = () => {
         const updatedItems = items.map(it => {
             const calc = calculateItem(it, bdi, discount, roundingMode);
-            return { ...it, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
+            const updated = { ...it, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
+            // Recalcular cenário ajustado se habilitado
+            if (adjustedEnabled) {
+                const adjCalc = calculateAdjustedItem(updated, adjustedBdi, adjustedDiscount, roundingMode);
+                updated.adjustedUnitPrice = adjCalc.adjustedUnitPrice;
+                updated.adjustedTotalPrice = adjCalc.adjustedTotalPrice;
+            }
+            return updated;
         });
         setItems(updatedItems);
     };
 
     useEffect(() => {
         if (proposal) handleRecalculateAll();
-    }, [bdi, discount, roundingMode]);
+    }, [bdi, discount, roundingMode, adjustedBdi, adjustedDiscount, adjustedEnabled]);
 
     const handleSaveAllItems = async () => {
         if (!proposal) return;
@@ -341,14 +361,25 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         try {
             // 1. Salvar configs PRIMEIRO (BDI, desconto linear, arredondamento)
             // para que o servidor use os valores corretos ao recalcular preços dos itens
+            const configBody: any = {
+                bdiPercentage: bdi,
+                taxPercentage: discount,
+                socialCharges: roundingMode === 'TRUNCATE' ? 1 : 0,
+                validityDays,
+            };
+            // Incluir dados da ajustada se habilitada
+            if (adjustedEnabled) {
+                configBody.adjustedBdi = adjustedBdi;
+                configBody.adjustedDiscount = adjustedDiscount;
+                configBody.adjustedTotalValue = adjustedTotal;
+            } else {
+                configBody.adjustedBdi = null;
+                configBody.adjustedDiscount = null;
+                configBody.adjustedTotalValue = null;
+            }
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
-                body: JSON.stringify({
-                    bdiPercentage: bdi,
-                    taxPercentage: discount,
-                    socialCharges: roundingMode === 'TRUNCATE' ? 1 : 0,
-                    validityDays,
-                }),
+                body: JSON.stringify(configBody),
             });
             // 2. Agora salvar itens (servidor recalcula com os valores atualizados)
             const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
@@ -555,6 +586,20 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     // Totals
     const totalsCalculated = useMemo(() => calculateTotals(items), [items]);
     const { subtotal, total } = totalsCalculated;
+    const adjustedTotals = useMemo(() => adjustedEnabled ? calculateAdjustedTotals(items) : { subtotal: 0, total: 0 }, [items, adjustedEnabled]);
+    const adjustedTotal = adjustedTotals.total;
+
+    // Função para atualizar item no cenário ajustado
+    const updateAdjustedItem = (itemId: string, field: string, value: any) => {
+        setItems(prev => prev.map(it => {
+            if (it.id !== itemId) return it;
+            const updated = { ...it, [field]: value };
+            const adjCalc = calculateAdjustedItem(updated, adjustedBdi, adjustedDiscount, roundingMode);
+            updated.adjustedUnitPrice = adjCalc.adjustedUnitPrice;
+            updated.adjustedTotalPrice = adjCalc.adjustedTotalPrice;
+            return updated;
+        }));
+    };
 
     return {
         // Selection
@@ -589,6 +634,13 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         bankData, setBankData,
         // Computed
         subtotal, total,
+        // ── Cenário Ajustada ──
+        adjustedEnabled, setAdjustedEnabled,
+        adjustedBdi, setAdjustedBdi,
+        adjustedDiscount, setAdjustedDiscount,
+        adjustedTotal,
+        adjustedLetterContent, setAdjustedLetterContent,
+        updateAdjustedItem,
         // Handlers
         handleCreateProposal, handleAiPopulate,
         handleAddItem, updateItem,

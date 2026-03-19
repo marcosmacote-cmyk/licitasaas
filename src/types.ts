@@ -191,6 +191,11 @@ export interface ProposalItem {
     model?: string;
     costComposition?: string;
     sortOrder: number;
+    // ── Cenário Proposta Ajustada ──
+    adjustedUnitCost?: number;
+    adjustedUnitPrice?: number;
+    adjustedTotalPrice?: number;
+    adjustedItemDiscount?: number;
 }
 
 export interface PriceProposal {
@@ -216,6 +221,11 @@ export interface PriceProposal {
     validityDays: number;
     createdAt: string;
     updatedAt: string;
+    // ── Cenário Proposta Ajustada ──
+    adjustedBdi?: number;
+    adjustedDiscount?: number;
+    adjustedTotalValue?: number;
+    adjustedLetterContent?: string;
     items: ProposalItem[];
     biddingProcess?: BiddingProcess;
     company?: CompanyProfile;

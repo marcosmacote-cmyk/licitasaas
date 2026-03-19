@@ -271,6 +271,29 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                         </div>
                     </div>
 
+                    {/* ── Cenário Ajustada Toggle ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-3)', padding: '8px var(--space-4)', borderRadius: 'var(--radius-lg)', border: `1px solid ${p.adjustedEnabled ? 'rgba(180,83,9,0.3)' : 'var(--color-border)'}`, background: p.adjustedEnabled ? 'rgba(180,83,9,0.04)' : 'var(--color-bg-base)' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: p.adjustedEnabled ? '#B45309' : 'var(--color-text-secondary)' }}>
+                            <input type="checkbox" checked={p.adjustedEnabled} onChange={e => p.setAdjustedEnabled(e.target.checked)} />
+                            🔄 Habilitar Cenário Proposta Ajustada
+                        </label>
+                        {p.adjustedEnabled && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginLeft: 'var(--space-3)', background: 'rgba(180,83,9,0.06)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(180,83,9,0.15)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: '#B45309', whiteSpace: 'nowrap' }}>BDI Ajust.:</span>
+                                    <input type="number" value={p.adjustedBdi} onChange={e => p.setAdjustedBdi(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '70px', height: '28px' }} step="0.01" />
+                                    <span style={{ fontSize: '0.75rem', color: '#B45309' }}>%</span>
+                                </div>
+                                <div style={{ width: '1px', height: '20px', background: 'rgba(180,83,9,0.2)' }}></div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: '#B45309', whiteSpace: 'nowrap' }}>Desc. Linear Ajust.:</span>
+                                    <input type="number" value={p.adjustedDiscount} onChange={e => p.setAdjustedDiscount(parseFloat(e.target.value) || 0)} className="prop-input" style={{ width: '70px', height: '28px' }} step="0.01" />
+                                    <span style={{ fontSize: '0.75rem', color: '#B45309' }}>%</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                             <thead>
@@ -288,6 +311,10 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                     <th className="prop-th" style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>Total</th>
                                     <th className="prop-th">% Peso</th>
                                     <th className="prop-th" style={{ width: '50px' }}>Ref. Est.</th>
+                                    {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Desc.Ajust.(%)</th>}
+                                    {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Unit.Ajust.</th>}
+                                    {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Total Ajust.</th>}
+                                    {p.adjustedEnabled && <th className="prop-th" style={{ color: '#B45309', fontWeight: 700, background: 'rgba(180,83,9,0.06)' }}>Δ%</th>}
                                     <th className="prop-th" style={{ width: '60px' }}></th>
                                 </tr>
                             </thead>
@@ -373,6 +400,39 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                                     </span>
                                                 ) : '-'}
                                             </td>
+                                            {/* ── Colunas Cenário Ajustada ── */}
+                                            {p.adjustedEnabled && (
+                                                <td className="prop-td-center" style={{ background: 'rgba(180,83,9,0.03)' }}>
+                                                    {isEditing ? (
+                                                        <input type="number" value={item.adjustedItemDiscount || 0}
+                                                            onChange={e => p.updateAdjustedItem(item.id, 'adjustedItemDiscount', parseFloat(e.target.value) || 0)}
+                                                            className="prop-input" style={{ width: '55px', textAlign: 'center' }} step="0.1" />
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.75rem', color: '#B45309' }}>
+                                                            {(item.adjustedItemDiscount || 0) > 0 ? `${(item.adjustedItemDiscount || 0).toFixed(2)}%` : '-'}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            )}
+                                            {p.adjustedEnabled && (
+                                                <td className="prop-td-center" style={{ fontWeight: 600, color: '#B45309', background: 'rgba(180,83,9,0.03)' }}>
+                                                    {fmt(item.adjustedUnitPrice || 0)}
+                                                </td>
+                                            )}
+                                            {p.adjustedEnabled && (
+                                                <td className="prop-td-center" style={{ fontWeight: 700, color: '#92400E', background: 'rgba(180,83,9,0.03)' }}>
+                                                    {fmt(item.adjustedTotalPrice || 0)}
+                                                </td>
+                                            )}
+                                            {p.adjustedEnabled && (
+                                                <td className="prop-td-center" style={{ background: 'rgba(180,83,9,0.03)' }}>
+                                                    {item.unitPrice > 0 ? (
+                                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: (item.adjustedUnitPrice || 0) <= item.unitPrice ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                                                            {(((item.adjustedUnitPrice || 0) - item.unitPrice) / item.unitPrice * 100).toFixed(1)}%
+                                                        </span>
+                                                    ) : '-'}
+                                                </td>
+                                            )}
                                             <td className="prop-td-center">
                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                     {isEditing ? (
@@ -446,6 +506,41 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                     </div>
                                 )}
                             </div>
+                            {/* ── Totais Cenário Ajustada ── */}
+                            {p.adjustedEnabled && (
+                                <div style={{
+                                    minWidth: '300px', borderRadius: 'var(--radius-xl)',
+                                    overflow: 'hidden', border: '2px solid rgba(180,83,9,0.3)',
+                                }}>
+                                    <div style={{ padding: 'var(--space-3) var(--space-5)', background: 'rgba(180,83,9,0.06)', borderBottom: '1px solid rgba(180,83,9,0.15)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                        <span style={{ color: '#92400E', fontWeight: 600 }}>BDI Ajustada</span>
+                                        <span style={{ fontWeight: 500, color: '#B45309' }}>{p.adjustedBdi.toFixed(2)}%</span>
+                                    </div>
+                                    <div style={{ padding: 'var(--space-3) var(--space-5)', background: 'rgba(180,83,9,0.06)', borderBottom: '1px solid rgba(180,83,9,0.15)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                        <span style={{ color: '#92400E', fontWeight: 600 }}>Desc. Linear Ajustada</span>
+                                        <span style={{ fontWeight: 500, color: '#B45309' }}>{p.adjustedDiscount.toFixed(2)}%</span>
+                                    </div>
+                                    <div style={{
+                                        padding: 'var(--space-4) var(--space-5)',
+                                        background: 'linear-gradient(135deg, rgba(180,83,9,0.08), rgba(146,64,14,0.06))',
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    }}>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Ajustada</span>
+                                        <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#B45309' }}>{fmt(p.adjustedTotal)}</span>
+                                    </div>
+                                    {p.total > 0 && (
+                                        <div style={{
+                                            padding: 'var(--space-2) var(--space-5)',
+                                            background: 'rgba(34,197,94,0.06)', borderTop: '1px solid rgba(34,197,94,0.2)',
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-success)',
+                                        }}>
+                                            <span>Economia vs. Inicial</span>
+                                            <span>-{((p.total - p.adjustedTotal) / p.total * 100).toFixed(2)}% ({fmt(p.total - p.adjustedTotal)})</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

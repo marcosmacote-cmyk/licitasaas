@@ -2949,7 +2949,8 @@ app.post('/api/proposals', authenticateToken, async (req: any, res) => {
 // PUT update proposal
 app.put('/api/proposals/:id', authenticateToken, async (req: any, res) => {
     try {
-        const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity } = req.body;
+        const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity,
+            adjustedBdi, adjustedDiscount, adjustedTotalValue, adjustedLetterContent } = req.body;
 
         const existing = await prisma.priceProposal.findFirst({
             where: { id: req.params.id, tenantId: req.user.tenantId },
@@ -2973,6 +2974,11 @@ app.put('/api/proposals/:id', authenticateToken, async (req: any, res) => {
                 footerImageHeight: footerImageHeight ?? existing.footerImageHeight,
                 signatureMode: signatureMode ?? existing.signatureMode,
                 signatureCity: signatureCity !== undefined ? signatureCity : existing.signatureCity,
+                // Cenário Proposta Ajustada
+                adjustedBdi: adjustedBdi !== undefined ? adjustedBdi : existing.adjustedBdi,
+                adjustedDiscount: adjustedDiscount !== undefined ? adjustedDiscount : existing.adjustedDiscount,
+                adjustedTotalValue: adjustedTotalValue !== undefined ? adjustedTotalValue : existing.adjustedTotalValue,
+                adjustedLetterContent: adjustedLetterContent !== undefined ? adjustedLetterContent : existing.adjustedLetterContent,
             },
             include: { items: { orderBy: { sortOrder: 'asc' } }, company: true },
         });
@@ -3062,17 +3068,23 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
                     brand: item.brand || null,
                     model: item.model || null,
                     sortOrder: item.sortOrder ?? i,
+                    // Cenário Ajustada
+                    adjustedUnitCost: item.adjustedUnitCost ?? null,
+                    adjustedUnitPrice: item.adjustedUnitPrice ?? null,
+                    adjustedTotalPrice: item.adjustedTotalPrice ?? null,
+                    adjustedItemDiscount: item.adjustedItemDiscount ?? 0,
                 },
             });
             created.push(dbItem);
         }
 
-        // Recalculate total
+        // Recalculate totals
         const allItems = await prisma.proposalItem.findMany({ where: { proposalId } });
         const totalValue = allItems.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0);
-        await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
+        const adjustedTotalValue = allItems.reduce((sum: number, it: any) => sum + (it.adjustedTotalPrice || 0), 0);
+        await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue, ...(adjustedTotalValue > 0 ? { adjustedTotalValue } : {}) } });
 
-        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}`);
+        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}${adjustedTotalValue > 0 ? `, adjusted: R$ ${adjustedTotalValue.toFixed(2)}` : ''}`);
         res.json({ items: created, totalValue });
     } catch (error: any) {
         console.error('[Proposals] POST items error:', error.message);

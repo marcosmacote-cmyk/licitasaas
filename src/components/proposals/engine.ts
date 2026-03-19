@@ -52,3 +52,55 @@ export function calculateTotals(items: ProposalItem[]) {
         total
     };
 }
+
+// ══════════════════════════════════════
+// Cenário Proposta Ajustada
+// Mesma lógica de cálculo, com BDI e desconto independentes.
+// Se adjustedUnitCost for null, herda unitCost.
+// ══════════════════════════════════════
+
+export function calculateAdjustedItem(
+    item: Partial<ProposalItem>,
+    adjustedBdi: number,
+    adjustedDiscount: number = 0,
+    roundingMode: RoundingMode = 'ROUND'
+) {
+    const quantity = item.quantity || 0;
+    const unitCost = item.adjustedUnitCost ?? item.unitCost ?? 0;
+    const multiplier = item.multiplier || 1;
+    const itemDisc = item.adjustedItemDiscount || 0;
+
+    const linearFactor = 1 - adjustedDiscount / 100;
+    const itemFactor = 1 - itemDisc / 100;
+    const rawUnitPrice = unitCost * (1 + adjustedBdi / 100) * linearFactor * itemFactor;
+
+    let adjustedUnitPrice: number;
+    if (roundingMode === 'ROUND') {
+        adjustedUnitPrice = Math.round(rawUnitPrice * 100) / 100;
+    } else {
+        adjustedUnitPrice = Math.floor(rawUnitPrice * 100) / 100;
+    }
+
+    const rawTotalPrice = quantity * multiplier * adjustedUnitPrice;
+    let adjustedTotalPrice: number;
+    if (roundingMode === 'ROUND') {
+        adjustedTotalPrice = Math.round(rawTotalPrice * 100) / 100;
+    } else {
+        adjustedTotalPrice = Math.floor(rawTotalPrice * 100) / 100;
+    }
+
+    return {
+        adjustedUnitPrice,
+        adjustedTotalPrice
+    };
+}
+
+export function calculateAdjustedTotals(items: ProposalItem[]) {
+    const total = items.reduce((sum, it) => sum + (it.adjustedTotalPrice || 0), 0);
+    const subtotal = items.reduce((sum, it) => sum + ((it.quantity || 0) * (it.multiplier || 1) * (it.adjustedUnitCost ?? it.unitCost ?? 0)), 0);
+
+    return {
+        subtotal,
+        total
+    };
+}

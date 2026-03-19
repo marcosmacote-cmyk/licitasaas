@@ -199,6 +199,12 @@ model PriceProposal {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // ── Cenário Proposta Ajustada ──
+  adjustedBdi            Float?
+  adjustedDiscount       Float?
+  adjustedTotalValue     Float?
+  adjustedLetterContent  String?
+
   items          ProposalItem[]
   biddingProcess BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
   company        CompanyProfile @relation(fields: [companyProfileId], references: [id])
@@ -223,6 +229,12 @@ model ProposalItem {
   discountPercentage Float?  @default(0) // Individual discount per item
   costComposition    String?
   sortOrder          Int     @default(0)
+
+  // ── Cenário Proposta Ajustada ──
+  adjustedUnitCost      Float?  // null = herda unitCost
+  adjustedUnitPrice     Float?
+  adjustedTotalPrice    Float?
+  adjustedItemDiscount  Float?  @default(0)
 
   proposal PriceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 }
