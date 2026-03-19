@@ -3513,6 +3513,10 @@ ${itemsContext}
 3. Use os seguintes grupos de custo (campo "group"):
    - MATERIAL: matéria-prima, insumos, peças
    - MAO_DE_OBRA: salários, encargos, benefícios
+     REGRA OBRIGATÓRIA para MAO_DE_OBRA: a "description" DEVE ser o NOME DO PROFISSIONAL/CARGO que executa o trabalho, NUNCA o nome do processo.
+     Exemplos CORRETOS: "Costureiro (Incl. Encargos)", "Auxiliar de Corte (Incl. Encargos)", "Cortador (Incl. Encargos)", "Operador de Máquina (Incl. Encargos)", "Eletricista (Incl. Encargos)", "Pedreiro (Incl. Encargos)", "Servente (Incl. Encargos)"
+     Exemplos ERRADOS (NÃO USAR): "Corte de tecido", "Costura e acabamento", "Revisão e embalagem", "Manutenção elétrica"
+     SEMPRE adicione "(Incl. Encargos)" ao final da description de MAO_DE_OBRA.
    - EQUIPAMENTO: máquinas, ferramentas (depreciação/aluguel)
    - FRETE: frete, transporte, logística
    - TERCEIROS: serviços subcontratados
@@ -3543,7 +3547,7 @@ Retorne APENAS um JSON array, onde cada elemento corresponde a um item:
     "templateUsed": "AI_GENERATED",
     "lines": [
       { "group": "MATERIAL", "description": "Tecido algodão 100%", "unit": "M", "quantity": 2.5, "unitValue": 8.50 },
-      { "group": "MAO_DE_OBRA", "description": "Costura e acabamento", "unit": "HORA", "quantity": 1.5, "unitValue": 12.00 },
+      { "group": "MAO_DE_OBRA", "description": "Costureiro (Incl. Encargos)", "unit": "HORA", "quantity": 1.5, "unitValue": 12.00 },
       { "group": "TRIBUTOS", "description": "PIS (0,65%)", "unit": "VB", "quantity": 1, "unitValue": 0.35 },
       { "group": "LUCRO", "description": "Margem de lucro", "unit": "VB", "quantity": 1, "unitValue": 4.20 }
     ]

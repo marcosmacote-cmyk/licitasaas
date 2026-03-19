@@ -192,13 +192,13 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
                         <Package size={16} /> Planilha de Preços
                     </button>
-                    <button onClick={() => p.setActiveTab('letter')} className={`tab-btn${p.activeTab === 'letter' ? ' active' : ''}`}
-                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
-                        <FileText size={16} /> Carta Proposta Redigida
-                    </button>
                     <button onClick={() => p.setActiveTab('composition')} className={`tab-btn${p.activeTab === 'composition' ? ' active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
                         <ClipboardList size={16} /> Composição de Preços
+                    </button>
+                    <button onClick={() => p.setActiveTab('letter')} className={`tab-btn${p.activeTab === 'letter' ? ' active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
+                        <FileText size={16} /> Carta Proposta Redigida
                     </button>
                 </div>
             )}

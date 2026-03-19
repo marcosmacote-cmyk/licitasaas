@@ -178,7 +178,7 @@ export class LetterPdfExporter {
                 ${showSpreadsheet || showAnalyticalTable ? `
                     ${showLetter ? '<div style="page-break-before: always; border-top: 2px solid #333; margin-top: 30px; padding-top: 15px;"></div>' : ''}
                     <h3 style="font-size: 14px; margin-bottom: 10px; font-weight: bold;">
-                        ${mode === 'SPREADSHEET' ? 'Planilha de Preços' : 'Planilha de Formação de Preços'}
+                        ${mode === 'SPREADSHEET' ? 'Planilha de Preços' : 'Planilha Orçamentária Detalhada'}
                     </h3>
                     ${itemsTableHtml}
                     <div class="totals-clearfix"></div>
