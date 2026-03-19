@@ -27,9 +27,12 @@ interface Props {
     isSaving: boolean;
     onAiComposition: () => Promise<Record<string, any>>;
     isAiCompositionLoading: boolean;
+    adjustedEnabled?: boolean;
+    adjustedBdi?: number;
+    adjustedDiscount?: number;
 }
 
-export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiComposition, isAiCompositionLoading }: Props) {
+export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiComposition, isAiCompositionLoading, adjustedEnabled, adjustedBdi, adjustedDiscount: _adjustedDiscount }: Props) {
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [compositions, setCompositions] = useState<CompositionMap>({});
     const [copySourceId, setCopySourceId] = useState<string | null>(null);
@@ -94,8 +97,14 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                         </div>
                         <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
                             Preço unitário na planilha: <strong style={{ color: 'var(--color-primary)' }}>{fmt(selectedItem.unitPrice)}</strong>
+                            {adjustedEnabled && selectedItem.adjustedUnitPrice ? (
+                                <> · Preço readequado: <strong style={{ color: '#B45309' }}>{fmt(selectedItem.adjustedUnitPrice)}</strong></>
+                            ) : null}
                             {' · '}Custo unitário: {fmt(selectedItem.unitCost)}
                             {' · '}BDI planilha: {fmtPct(bdi)}
+                            {adjustedEnabled && adjustedBdi != null ? (
+                                <> · <strong style={{ color: '#B45309' }}>BDI Readequada: {fmtPct(adjustedBdi)}</strong></>
+                            ) : null}
                         </div>
                     </div>
                     <button
@@ -196,6 +205,8 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                             <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>Tributos</th>
                             <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>Lucro</th>
                             <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-primary)' }}>Total Comp.</th>
+                            {adjustedEnabled && <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#B45309', background: 'rgba(180,83,9,0.06)' }}>Unit.Readequado</th>}
+                            {adjustedEnabled && <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#B45309', background: 'rgba(180,83,9,0.06)' }}>Δ%</th>}
                             <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>BDI Impl.</th>
                             <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)' }}>Status</th>
                             <th style={{ padding: '10px 14px', textAlign: 'center', width: 60 }}></th>
@@ -233,6 +244,7 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                                         <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.description?.substring(0, 60) || '(sem descrição)'}</div>
                                         <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
                                             Preço planilha: {fmt(item.unitPrice)}
+                                            {adjustedEnabled && item.adjustedUnitPrice ? (<> · <span style={{ color: '#B45309', fontWeight: 600 }}>Readequado: {fmt(item.adjustedUnitPrice)}</span></>) : null}
                                         </div>
                                     </td>
                                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>{hasComp ? fmt(totals!.totalDirect) : '-'}</td>
@@ -240,6 +252,17 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>{hasComp ? fmt(totals!.totalTaxes) : '-'}</td>
                                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 500 }}>{hasComp ? fmt(totals!.profit) : '-'}</td>
                                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--color-primary)' }}>{hasComp ? fmt(totals!.grandTotal) : '-'}</td>
+                                    {adjustedEnabled && (() => {
+                                        const adjPrice = item.adjustedUnitPrice || 0;
+                                        return <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#B45309', background: 'rgba(180,83,9,0.04)' }}>{adjPrice > 0 ? fmt(adjPrice) : '-'}</td>;
+                                    })()}
+                                    {adjustedEnabled && (() => {
+                                        const adjPrice = item.adjustedUnitPrice || 0;
+                                        const compTotal = hasComp ? totals!.grandTotal : item.unitPrice;
+                                        const delta = compTotal > 0 ? ((adjPrice - compTotal) / compTotal * 100) : 0;
+                                        const isNeg = delta < 0;
+                                        return <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: isNeg ? 'var(--color-success)' : delta > 0 ? 'var(--color-danger)' : 'var(--color-text-tertiary)', background: 'rgba(180,83,9,0.04)' }}>{adjPrice > 0 ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%` : '-'}</td>;
+                                    })()}
                                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{hasComp ? fmtPct(totals!.bdiImplicit) : '-'}</td>
                                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                                         {!hasComp ? (
@@ -276,7 +299,7 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                         })}
                         {items.length === 0 && (
                             <tr>
-                                <td colSpan={10} style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)' }}>
+                                <td colSpan={adjustedEnabled ? 12 : 10} style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)' }}>
                                     <Package size={28} style={{ opacity: 0.3, margin: '0 auto var(--space-2)' }} />
                                     <div>Nenhum item na proposta. Adicione itens na aba "Planilha de Preços".</div>
                                 </td>
@@ -301,8 +324,11 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                             <strong>{items.filter(i => (compositions[i.id]?.lines.length || 0) > 0).length}</strong> de {items.length} itens com composição detalhada
                         </span>
                     </div>
-                    <div style={{ fontWeight: 600 }}>
-                        BDI referência da planilha: <span style={{ color: 'var(--color-primary)' }}>{fmtPct(bdi)}</span>
+                    <div style={{ fontWeight: 600, display: 'flex', gap: 'var(--space-4)' }}>
+                        <span>BDI referência: <span style={{ color: 'var(--color-primary)' }}>{fmtPct(bdi)}</span></span>
+                        {adjustedEnabled && adjustedBdi != null && (
+                            <span>BDI Readequada: <span style={{ color: '#B45309', fontWeight: 700 }}>{fmtPct(adjustedBdi)}</span></span>
+                        )}
                     </div>
                 </div>
             )}

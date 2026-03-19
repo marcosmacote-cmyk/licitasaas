@@ -453,12 +453,14 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         const isCompositionOnly = selectedExportMode === 'COMPOSITION_ONLY';
         const isFullWithComp = selectedExportMode === 'FULL_WITH_COMPOSITION';
         const isFullWithoutComp = selectedExportMode === 'FULL_WITHOUT_COMPOSITION';
+        const isReadequada = proposalType === 'READEQUADA' && props.adjustedEnabled;
+        const effectiveBdi = isReadequada ? (props.adjustedBdi ?? props.bdi) : props.bdi;
 
         // ── COMPOSITION_ONLY: abre PDF de composições separado ──
         if (isCompositionOnly) {
             exportCompositionPdf({
                 items: props.items,
-                bdi: props.bdi,
+                bdi: effectiveBdi,
                 company: props.company,
                 headerImage: props.headerImage,
                 footerImage: props.footerImage,
@@ -467,6 +469,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                 printLandscape: true,
                 processTitle: props.bidding?.title,
                 processNumber: props.bidding?.modality,
+                isReadequada,
             });
             return;
         }
@@ -477,7 +480,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
         // Gerar composição inline HTML apenas para FULL_WITH_COMPOSITION
         const compositionHtml = isFullWithComp
-            ? buildCompositionInlineHtml(props.items, props.bdi)
+            ? buildCompositionInlineHtml(props.items, effectiveBdi, isReadequada)
             : undefined;
 
         if (letterResult) {

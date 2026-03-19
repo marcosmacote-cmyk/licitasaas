@@ -27,12 +27,13 @@ export interface CompositionExportOptions {
     printLandscape?: boolean;
     processTitle?: string;
     processNumber?: string;
+    isReadequada?: boolean;
 }
 
 /**
  * Gera o HTML de composição de um único item (compacto — cabe em 1 página)
  */
-function buildItemCompositionHtml(item: ProposalItem, bdi: number, isLast: boolean): string {
+function buildItemCompositionHtml(item: ProposalItem, bdi: number, isLast: boolean, isReadequada?: boolean): string {
     const comp = deserializeComposition(item.costComposition, item.id);
     if (!comp.lines || comp.lines.length === 0) {
         return `
@@ -106,6 +107,7 @@ function buildItemCompositionHtml(item: ProposalItem, bdi: number, isLast: boole
             </table>
             <div style="font-size: 7.5px; color: #999; margin-top: 3px; padding-top: 2px; border-top: 1px dashed #e0e0e0;">
                 Unid: <strong>${item.unit}</strong> | Qtd: <strong>${fmtNum(item.quantity)}</strong> | Custo Unit: <strong>${fmt(item.unitCost)}</strong> | BDI: <strong>${fmtPct(bdi)}</strong>
+                ${isReadequada && item.adjustedUnitPrice ? `| <strong style="color: #B45309;">Preço Readequado: ${fmt(item.adjustedUnitPrice)}</strong>` : ''}
             </div>
         </div>
         <table class="comp-table">
@@ -159,7 +161,7 @@ export function exportCompositionPdf(options: CompositionExportOptions): Window 
 
     // Build all item compositions
     const compositionsHtml = items.map((item, idx) =>
-        buildItemCompositionHtml(item, bdi, idx === items.length - 1)
+        buildItemCompositionHtml(item, bdi, idx === items.length - 1, options.isReadequada)
     ).join('');
 
     const html = `<!DOCTYPE html>
@@ -262,9 +264,9 @@ export function exportCompositionPdf(options: CompositionExportOptions): Window 
  * Gera APENAS o HTML inline das composições (sem documento completo).
  * Para ser embutido dentro do LetterPdfExporter via compositionHtml.
  */
-export function buildCompositionInlineHtml(items: ProposalItem[], bdi: number): string {
+export function buildCompositionInlineHtml(items: ProposalItem[], bdi: number, isReadequada?: boolean): string {
     const compositionsHtml = items.map((item, idx) =>
-        buildItemCompositionHtml(item, bdi, idx === items.length - 1)
+        buildItemCompositionHtml(item, bdi, idx === items.length - 1, isReadequada)
     ).join('');
 
     return `

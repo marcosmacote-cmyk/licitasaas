@@ -693,6 +693,9 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     isSaving={p.isSaving}
                     onAiComposition={p.handleAiComposition}
                     isAiCompositionLoading={p.isAiCompositionLoading}
+                    adjustedEnabled={p.adjustedEnabled}
+                    adjustedBdi={p.adjustedBdi}
+                    adjustedDiscount={p.adjustedDiscount}
                 />
             )}
 
