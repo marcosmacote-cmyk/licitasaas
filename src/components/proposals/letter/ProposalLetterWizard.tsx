@@ -130,6 +130,10 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     // ── Tipo de Proposta (Inicial ou Readequada) ──
     const [proposalType, setProposalType] = useState<'INICIAL' | 'READEQUADA'>('INICIAL');
 
+    // ── Cache local de cartas salvas por tipo ──
+    const [savedLetterInicial, setSavedLetterInicial] = useState<ProposalLetterResult | null>(null);
+    const [savedLetterReadequada, setSavedLetterReadequada] = useState<ProposalLetterResult | null>(null);
+
     // Atalhos para dados de assinatura/banco (vêm do hook via props, persistem entre abas)
     const { sigLegal, setSigLegal, sigTech, setSigTech, sigCompany, setSigCompany, bankData, setBankData } = props;
 
@@ -234,6 +238,13 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
             const result = builder.build();
             setLetterResult(result);
 
+            // Auto-save no cache do tipo atual
+            if (proposalType === 'READEQUADA') {
+                setSavedLetterReadequada(result);
+            } else {
+                setSavedLetterInicial(result);
+            }
+
             // Sync with textarea (backward compat)
             props.setLetterContent(result.plainText);
 
@@ -276,28 +287,122 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         setEditBuffer('');
     };
 
-    // ── Restaurar blocos salvos ao montar ──
+    // ── Troca de tipo com restauração ──
+    const handleSwitchProposalType = useCallback((newType: 'INICIAL' | 'READEQUADA') => {
+        if (newType === proposalType) return;
+
+        // Salvar a versão atual no cache antes de trocar
+        if (letterResult) {
+            if (proposalType === 'INICIAL') {
+                setSavedLetterInicial(letterResult);
+            } else {
+                setSavedLetterReadequada(letterResult);
+            }
+        }
+
+        // Trocar tipo
+        setProposalType(newType);
+
+        // Verificar se a versão destino tem cache salvo
+        const cachedVersion = newType === 'INICIAL' ? savedLetterInicial : savedLetterReadequada;
+        if (cachedVersion) {
+            setLetterResult(cachedVersion);
+            setStep('review');
+        } else {
+            setLetterResult(null);
+            setStep('config');
+        }
+    }, [proposalType, letterResult, savedLetterInicial, savedLetterReadequada]);
+
+    // ── Restaurar blocos salvos ao montar (suporta v2 e v3) ──
     const hasRestoredRef = useRef(false);
     useEffect(() => {
-        if (hasRestoredRef.current || !props.letterContent || letterResult) return;
+        if (hasRestoredRef.current || !props.letterContent) return;
         try {
             const parsed = JSON.parse(props.letterContent);
+
+            // v3: envelope com ambas versões
+            if (parsed && parsed.v === 3) {
+                const restoreVersion = (versionData: any, nd: any): ProposalLetterResult | null => {
+                    if (!versionData || !Array.isArray(versionData.blocks) || versionData.blocks.length === 0) return null;
+                    const builder = new ProposalLetterBuilder(nd);
+                    const freshResult = builder.build();
+                    const freshPricingBlock = freshResult.blocks.find((b: LetterBlock) => b.id === LetterBlockType.PRICING_SUMMARY);
+                    const restoredBlocks = versionData.blocks.map((b: LetterBlock) => {
+                        if (b.id === LetterBlockType.PRICING_SUMMARY && freshPricingBlock) return { ...b, content: freshPricingBlock.content };
+                        return b;
+                    });
+                    return {
+                        blocks: restoredBlocks,
+                        plainText: restoredBlocks.filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n'),
+                        htmlContent: '',
+                        validation: { isValid: true, errors: [], warnings: [] },
+                        meta: { generatedAt: new Date().toISOString(), builderVersion: 'restored', aiBlockIds: [], dataHash: '' },
+                    };
+                };
+
+                // Restaurar versão inicial
+                if (parsed.inicial) {
+                    const normalizer = new LetterDataNormalizer();
+                    const dataI = normalizer.normalize({
+                        bidding: props.bidding, company: props.company, proposal: props.proposal,
+                        items: props.items, totalValue: props.totalValue,
+                        signatureMode: props.signatureMode, validityDays: props.validityDays,
+                        bdiPercentage: props.bdi, discountPercentage: props.discount,
+                    });
+                    (dataI.meta as any).proposalType = 'INICIAL';
+                    const restoredI = restoreVersion(parsed.inicial, dataI);
+                    if (restoredI) setSavedLetterInicial(restoredI);
+                }
+
+                // Restaurar versão readequada
+                if (parsed.readequada && props.adjustedEnabled) {
+                    const normalizer = new LetterDataNormalizer();
+                    const dataR = normalizer.normalize({
+                        bidding: props.bidding, company: props.company, proposal: props.proposal,
+                        items: props.items, totalValue: props.adjustedTotal || props.totalValue,
+                        signatureMode: props.signatureMode, validityDays: props.validityDays,
+                        bdiPercentage: props.adjustedBdi ?? props.bdi, discountPercentage: props.adjustedDiscount ?? props.discount,
+                    });
+                    (dataR.meta as any).proposalType = 'READEQUADA';
+                    const restoredR = restoreVersion(parsed.readequada, dataR);
+                    if (restoredR) setSavedLetterReadequada(restoredR);
+                }
+
+                // Carregar a versão inicial como ativa
+                if (parsed.inicial) {
+                    const normalizer = new LetterDataNormalizer();
+                    const dataI = normalizer.normalize({
+                        bidding: props.bidding, company: props.company, proposal: props.proposal,
+                        items: props.items, totalValue: props.totalValue,
+                        signatureMode: props.signatureMode, validityDays: props.validityDays,
+                        bdiPercentage: props.bdi, discountPercentage: props.discount,
+                    });
+                    (dataI.meta as any).proposalType = 'INICIAL';
+                    const restoredI = restoreVersion(parsed.inicial, dataI);
+                    if (restoredI) {
+                        setLetterResult(restoredI);
+                        setStep('review');
+                    }
+                }
+
+                hasRestoredRef.current = true;
+                return;
+            }
+
+            // v2: envelope de versão única (legado)
             if (parsed && parsed.v === 2 && Array.isArray(parsed.blocks) && parsed.blocks.length > 0) {
-                // Reconstruir o bloco de preços com o valor ATUAL da planilha
                 const builder = new ProposalLetterBuilder(normalizedData);
                 const freshResult = builder.build();
                 const freshPricingBlock = freshResult.blocks.find(
                     (b: LetterBlock) => b.id === LetterBlockType.PRICING_SUMMARY
                 );
-
-                // Restaurar blocos salvos, mas substituir o pricing pelo atualizado
                 const restoredBlocks = parsed.blocks.map((b: LetterBlock) => {
                     if (b.id === LetterBlockType.PRICING_SUMMARY && freshPricingBlock) {
                         return { ...b, content: freshPricingBlock.content };
                     }
                     return b;
                 });
-
                 const restoredResult: ProposalLetterResult = {
                     blocks: restoredBlocks,
                     plainText: restoredBlocks.filter((b: any) => b.visible).map((b: any) => b.content).join('\n\n'),
@@ -306,22 +411,38 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                     meta: { generatedAt: new Date().toISOString(), builderVersion: 'restored', aiBlockIds: [], dataHash: '' },
                 };
                 setLetterResult(restoredResult);
+                setSavedLetterInicial(restoredResult);
                 setStep('review');
                 hasRestoredRef.current = true;
             }
         } catch {
-            // Não é JSON — texto legado, ignora (o usuário gera do zero)
+            // Não é JSON — texto legado, ignora
         }
-    }, [props.letterContent, letterResult, normalizedData]);
+    }, [props.letterContent]);
 
-    // ── Save ──
+    // ── Save (v3: envelope com ambas versões) ──
     const handleSave = () => {
+        // Salvar versão atual no cache local
         if (letterResult) {
-            props.setLetterContent(letterResult.plainText);
-            props.handleSaveLetter(letterResult.blocks);
-        } else {
-            props.handleSaveLetter();
+            if (proposalType === 'READEQUADA') {
+                setSavedLetterReadequada(letterResult);
+            } else {
+                setSavedLetterInicial(letterResult);
+            }
         }
+
+        // Construir envelope v3 com ambas versões
+        const inicialData = proposalType === 'INICIAL' ? letterResult : savedLetterInicial;
+        const readequadaData = proposalType === 'READEQUADA' ? letterResult : savedLetterReadequada;
+
+        const envelope = {
+            v: 3,
+            inicial: inicialData ? { blocks: inicialData.blocks, plainText: inicialData.plainText } : null,
+            readequada: readequadaData ? { blocks: readequadaData.blocks, plainText: readequadaData.plainText } : null,
+        };
+
+        props.setLetterContent(JSON.stringify(envelope));
+        props.handleSaveLetter();
     };
 
     // ── Export ──
@@ -587,7 +708,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             </div>
                             <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                                 <button
-                                    onClick={() => setProposalType('INICIAL')}
+                                    onClick={() => handleSwitchProposalType('INICIAL')}
                                     style={{
                                         flex: 1, padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
                                         fontSize: 'var(--text-sm)', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
@@ -596,9 +717,10 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                         border: `2px solid ${proposalType === 'INICIAL' ? '#1E40AF' : 'var(--color-border)'}`,
                                     }}>
                                     📋 PROPOSTA DE PREÇOS INICIAL
+                                    {savedLetterInicial && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: proposalType === 'INICIAL' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}>✓ salva</span>}
                                 </button>
                                 <button
-                                    onClick={() => setProposalType('READEQUADA')}
+                                    onClick={() => handleSwitchProposalType('READEQUADA')}
                                     disabled={!props.adjustedEnabled}
                                     style={{
                                         flex: 1, padding: '10px var(--space-4)', borderRadius: 'var(--radius-md)',
@@ -610,6 +732,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                     }}>
                                     🔄 PROPOSTA DE PREÇOS READEQUADA
                                     {!props.adjustedEnabled && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2 }}>(ative o cenário na planilha)</span>}
+                                    {props.adjustedEnabled && savedLetterReadequada && <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 400, marginTop: 2, color: proposalType === 'READEQUADA' ? 'rgba(255,255,255,0.7)' : 'var(--color-success)' }}>✓ salva</span>}
                                 </button>
                             </div>
                         </div>
