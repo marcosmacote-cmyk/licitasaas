@@ -18,12 +18,16 @@ export function exportExcelProposal(
 
     if (exportType === 'ORIGINAL') {
         // ── Planilha Original: preços de referência ──
-        const headers = ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Preço Ref. Unit.', 'Valor Total'];
+        const headers = ['Lote', 'Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Preço Ref. Unit.', 'Valor Total'];
         const rows = items.map((it, i) => {
             const refPrice = it.referencePrice || it.unitCost || 0;
             const total = (it.quantity || 0) * (it.multiplier || 1) * refPrice;
+            const parts = (it.itemNumber || String(i + 1)).split('.');
+            const lote = parts.length > 1 ? parts[0] : '-';
+            const itemNum = parts.length > 1 ? parts.slice(1).join('.') : parts[0];
             return [
-                it.itemNumber || String(i + 1),
+                lote,
+                itemNum,
                 it.description,
                 it.brand || '',
                 it.model || '',
@@ -34,8 +38,8 @@ export function exportExcelProposal(
                 Math.round(total * 100) / 100,
             ];
         });
-        const totalRef = rows.reduce((s, r) => s + (r[8] as number), 0);
-        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL', Math.round(totalRef * 100) / 100]);
+        const totalRef = rows.reduce((s, r) => s + (r[9] as number), 0);
+        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL', Math.round(totalRef * 100) / 100]);
 
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
@@ -45,15 +49,19 @@ export function exportExcelProposal(
     } else if (exportType === 'READEQUADA') {
         // ── Planilha Readequada: valores readequados reais ──
         const totalAdj = items.reduce((s, it) => s + (it.adjustedTotalPrice || 0), 0);
-        const headers = ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Custo Unit.', 'Preço Unit. Readequado', 'Valor Total', 'Desc.Total(%)', '% Peso'];
+        const headers = ['Lote', 'Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Custo Unit.', 'Preço Unit. Readequado', 'Valor Total', 'Desc.Total(%)', '% Peso'];
         const rows = items.map((it, i) => {
             const adjUnitPrice = it.adjustedUnitPrice || 0;
             const adjTotalPrice = it.adjustedTotalPrice || 0;
             const refPrice = it.referencePrice || 0;
             const discPct = refPrice > 0 ? ((refPrice - adjUnitPrice) / refPrice * 100) : (adjustedDiscount || 0);
             const peso = totalAdj > 0 ? (adjTotalPrice / totalAdj * 100) : 0;
+            const parts = (it.itemNumber || String(i + 1)).split('.');
+            const lote = parts.length > 1 ? parts[0] : '-';
+            const itemNum = parts.length > 1 ? parts.slice(1).join('.') : parts[0];
             return [
-                it.itemNumber || String(i + 1),
+                lote,
+                itemNum,
                 it.description,
                 it.brand || '',
                 it.model || '',
@@ -68,7 +76,7 @@ export function exportExcelProposal(
             ];
         });
         // Linha de total
-        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL READEQUADO', Math.round(totalAdj * 100) / 100, null as any, '100%']);
+        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL READEQUADO', Math.round(totalAdj * 100) / 100, null as any, '100%']);
         // Linha de info
         rows.push([]);
         rows.push(['BDI Readequada (%)', adjustedBdi] as any);
@@ -83,13 +91,17 @@ export function exportExcelProposal(
     } else {
         // ── Planilha Inicial: valores iniciais reais ──
         const totalInit = items.reduce((s, it) => s + (it.totalPrice || 0), 0);
-        const headers = ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Custo Unit.', 'Preço Unit.', 'Valor Total', 'Desc.Total(%)', '% Peso'];
+        const headers = ['Lote', 'Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Custo Unit.', 'Preço Unit.', 'Valor Total', 'Desc.Total(%)', '% Peso'];
         const rows = items.map((it, i) => {
             const refPrice = it.referencePrice || 0;
             const discPct = refPrice > 0 ? ((refPrice - it.unitPrice) / refPrice * 100) : (discountPercentage || 0);
             const peso = totalInit > 0 ? (it.totalPrice / totalInit * 100) : 0;
+            const parts = (it.itemNumber || String(i + 1)).split('.');
+            const lote = parts.length > 1 ? parts[0] : '-';
+            const itemNum = parts.length > 1 ? parts.slice(1).join('.') : parts[0];
             return [
-                it.itemNumber || String(i + 1),
+                lote,
+                itemNum,
                 it.description,
                 it.brand || '',
                 it.model || '',
@@ -104,7 +116,7 @@ export function exportExcelProposal(
             ];
         });
         // Linha de total
-        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL GLOBAL', Math.round(totalInit * 100) / 100, null as any, '100%']);
+        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL GLOBAL', Math.round(totalInit * 100) / 100, null as any, '100%']);
         // Linha de info
         rows.push([]);
         rows.push(['BDI (%)', bdiPercentage] as any);
@@ -150,9 +162,13 @@ export function generateProposalPdf(
     const totalItemsValue = items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
     const itemsHtml = items.map((it, i) => {
         const peso = totalItemsValue > 0 ? ((it.totalPrice || 0) / totalItemsValue) * 100 : 0;
+        const parts = (it.itemNumber || String(i + 1)).split('.');
+        const lote = parts.length > 1 ? parts[0] : '-';
+        const itemNum = parts.length > 1 ? parts.slice(1).join('.') : parts[0];
         return `
         <tr style="border-bottom: 1px solid #ddd;">
-            <td style="padding: 4px 6px; text-align: center;">${it.itemNumber || i + 1}</td>
+            <td style="padding: 4px 6px; text-align: center;">${lote}</td>
+            <td style="padding: 4px 6px; text-align: center;">${itemNum}</td>
             <td style="padding: 4px 6px; text-align: justify; hyphens: auto;">${it.description}</td>
             <td style="padding: 4px 6px; text-align: center;">${it.brand || '-'}</td>
             <td style="padding: 4px 6px; text-align: center;">${it.model || '-'}</td>
@@ -307,7 +323,8 @@ export function generateProposalPdf(
             <table class="items">
                 <thead>
                     <tr>
-                        <th style="text-align:center; width: 35px;">Item</th>
+                        <th style="text-align:center; width: 30px;">Lote</th>
+                        <th style="text-align:center; width: 30px;">Item</th>
                         <th style="width: auto;">Descrição detalhada</th>
                         <th style="text-align:center; width: 55px;">Marca</th>
                         <th style="text-align:center; width: 55px;">Modelo</th>

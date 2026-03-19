@@ -348,7 +348,8 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                             <thead>
                                 <tr style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(99,102,241,0.04))', borderBottom: '2px solid var(--color-border)' }}>
-                                    <th className="prop-th" style={{ width: 32, color: 'var(--color-text-tertiary)' }}>#</th>
+                                    <th className="prop-th" style={{ width: 38, color: 'var(--color-text-tertiary)' }}>Lote</th>
+                                    <th className="prop-th" style={{ width: 38, color: 'var(--color-text-tertiary)' }}>Item</th>
                                     <th className="prop-th" style={{ textAlign: 'left', minWidth: '200px', color: 'var(--color-text-primary)', fontWeight: 700 }}>Descrição do Item</th>
                                     <th className="prop-th">Marca</th>
                                     <th className="prop-th">Modelo</th>
@@ -372,13 +373,17 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 {p.items.map((item) => {
                                     const isEditing = p.isBulkEditing || p.editingItemId === item.id;
                                     const overRef = item.referencePrice && item.unitPrice > item.referencePrice;
+                                    const parts = (item.itemNumber || '').split('.');
+                                    const lote = parts.length > 1 ? parts[0] : '-';
+                                    const itemNum = parts.length > 1 ? parts.slice(1).join('.') : (parts[0] || '-');
 
                                     return (
                                         <tr key={item.id} style={{
                                             borderBottom: '1px solid var(--color-border)',
                                             background: overRef ? 'rgba(239,68,68,0.03)' : undefined,
                                         }}>
-                                            <td className="prop-td-center">{item.itemNumber}</td>
+                                            <td className="prop-td-center">{lote}</td>
+                                            <td className="prop-td-center">{itemNum}</td>
                                             <td className="prop-td">
                                                 {isEditing ? (
                                                     <input value={item.description} onChange={e => p.updateItem(item.id, 'description', e.target.value)} className="prop-input" autoFocus />

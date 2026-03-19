@@ -200,8 +200,12 @@ export class LetterPdfExporter {
     private buildItemsTable(items: ProposalItem[], totalValue: number, _discountPct: number, validityDays: number): string {
         const rows = items.map((it, i) => {
             const peso = totalValue > 0 ? ((it.totalPrice || 0) / totalValue) * 100 : 0;
+            const parts = (it.itemNumber || String(i + 1)).split('.');
+            const lote = parts.length > 1 ? parts[0] : '-';
+            const itemNum = parts.length > 1 ? parts.slice(1).join('.') : parts[0];
             return `<tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 4px 6px; text-align: center;">${it.itemNumber || i + 1}</td>
+                <td style="padding: 4px 6px; text-align: center;">${lote}</td>
+                <td style="padding: 4px 6px; text-align: center;">${itemNum}</td>
                 <td style="padding: 4px 6px; text-align: justify; hyphens: auto;">${this.esc(it.description)}</td>
                 <td style="padding: 4px 6px; text-align: center;">${it.brand || '-'}</td>
                 <td style="padding: 4px 6px; text-align: center;">${it.model || '-'}</td>
@@ -219,7 +223,8 @@ export class LetterPdfExporter {
 
         return `<table class="items">
             <thead><tr>
-                <th style="text-align:center; width: 35px;">Item</th>
+                <th style="text-align:center; width: 30px;">Lote</th>
+                <th style="text-align:center; width: 30px;">Item</th>
                 <th style="width: auto;">Descrição detalhada</th>
                 <th style="text-align:center; width: 55px;">Marca</th>
                 <th style="text-align:center; width: 55px;">Modelo</th>
@@ -245,21 +250,26 @@ export class LetterPdfExporter {
     private buildSummaryTable(items: ProposalItem[], totalValue: number, validityDays: number): string {
         if (items.length === 0) return '';
 
-        const rows = items.map((it, i) =>
-            `<tr>
-                <td style="text-align: center;">${it.itemNumber || i + 1}</td>
+        const rows = items.map((it, i) => {
+            const parts = (it.itemNumber || String(i + 1)).split('.');
+            const lote = parts.length > 1 ? parts[0] : '-';
+            const itemNum = parts.length > 1 ? parts.slice(1).join('.') : parts[0];
+            return `<tr>
+                <td style="text-align: center;">${lote}</td>
+                <td style="text-align: center;">${itemNum}</td>
                 <td>${this.esc((it.description || '').substring(0, 80))}${(it.description || '').length > 80 ? '...' : ''}</td>
                 <td style="text-align: center;">${it.unit}</td>
                 <td style="text-align: center;">${fmtNum(it.quantity)}</td>
                 <td style="text-align: right;">${fmt(it.totalPrice)}</td>
-            </tr>`
-        ).join('');
+            </tr>`;
+        }).join('');
 
         return `<div style="margin: 20px 0; page-break-inside: avoid;">
             <h4 style="font-size: 12px; margin-bottom: 8px; color: #333;">Quadro Resumo dos Itens</h4>
             <table class="summary">
                 <thead><tr>
-                    <th style="width: 50px; text-align: center;">Item</th>
+                    <th style="width: 30px; text-align: center;">Lote</th>
+                    <th style="width: 30px; text-align: center;">Item</th>
                     <th>Descrição</th>
                     <th style="width: 45px; text-align: center;">Unid</th>
                     <th style="width: 55px; text-align: center;">Qtd</th>
