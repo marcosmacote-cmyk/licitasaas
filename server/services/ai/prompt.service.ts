@@ -603,6 +603,24 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     - referencePrice: valor numérico SEM texto (ex: 15000.00, não "R$ 15.000,00")
     - Se a planilha contém sub-itens (composição de custos), extraia apenas os itens PRINCIPAIS (totalizadores)
 
+36. ORGANIZAÇÃO DE LOTES E ITENS (itemNumber) — REGRA OBRIGATÓRIA:
+    O campo itemNumber DEVE seguir o padrão hierárquico que reflita a organização de LOTES e ITENS do edital.
+    
+    FORMATOS VÁLIDOS (use o que melhor refletir o edital):
+    - SEM lotes: "1", "2", "3", "4" (numeração sequencial simples)
+    - COM lotes, item único por lote: "1", "2", "3" (cada lote = 1 item)
+    - COM lotes, múltiplos itens por lote: "1.1", "1.2", "1.3", "2.1", "2.2" (Lote.Item)
+    - COM subgrupos: "1.1.1", "1.1.2", "1.2.1" (Grupo.Subgrupo.Item)
+    
+    REGRAS DE ORDENAÇÃO:
+    - Retorne os itens SEMPRE na ordem natural: 1, 2, 3... ou 1.1, 1.2, 2.1, 2.2...
+    - NUNCA misture formatos (ex: "1", "1.1", "2" no mesmo array)
+    - Se o edital usa "Lote 1 - Item 1", converta para "1.1"
+    - Se o edital usa "Grupo A / Item 1", use numeração sequencial "1.1", "1.2" etc.
+    - Se o edital lista "Item 1", "Item 2" sem lotes, use "1", "2"
+    - PRESERVE a numeração original do edital quando ela for numérica
+    - Se a numeração do edital for alfanumérica (ex: "A.1", "B.2"), converta para numérica ("1.1", "2.1")
+
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
   "process_identification": {

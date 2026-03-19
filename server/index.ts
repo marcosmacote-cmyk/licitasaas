@@ -3193,6 +3193,21 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req: any, res) 
         if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
         const ai = new GoogleGenAI({ apiKey });
 
+        // ── Helper: natural sort items by itemNumber (1, 2, 1.1, 1.2, 2.1, etc.) ──
+        const naturalSortItems = (items: any[]) => {
+            return items.sort((a, b) => {
+                const partsA = String(a.itemNumber || '').split('.').map(Number);
+                const partsB = String(b.itemNumber || '').split('.').map(Number);
+                const maxLen = Math.max(partsA.length, partsB.length);
+                for (let i = 0; i < maxLen; i++) {
+                    const va = partsA[i] ?? 0;
+                    const vb = partsB[i] ?? 0;
+                    if (va !== vb) return va - vb;
+                }
+                return 0;
+            });
+        };
+
         const biddingItems = bidding.aiAnalysis.biddingItems || '';
         const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
         const schemaV2 = bidding.aiAnalysis.schemaV2 as any;
@@ -3238,6 +3253,15 @@ REGRAS:
 6. Se a quantidade não estiver clara, use 1
 7. MUITO IMPORTANTE: Procure ativamente por períodos ou múltiplos que devam ser multiplicados. Por exemplo, se a licitação é para o ano todo e os pagamentos são mensais (12 meses), a quantidade é X e o MULTIPLICADOR é 12. Retorne 'multiplier': 12 e 'multiplierLabel': 'Meses'. Caso contrário, retorne 1.
 
+ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
+8. O campo itemNumber DEVE seguir padrão hierárquico organizado:
+   - SEM lotes: "1", "2", "3" (numeração sequencial)
+   - COM lotes, múltiplos itens: "1.1", "1.2", "2.1", "2.2" (Lote.Item)
+   - COM subgrupos: "1.1.1", "1.1.2" (Grupo.Subgrupo.Item)
+9. Se o edital usa "Lote 1 - Item 1", converta para "1.1"
+10. Retorne os itens SEMPRE na ordem natural crescente: 1, 2, 3... ou 1.1, 1.2, 2.1...
+11. NUNCA misture formatos no mesmo array
+
 Responda APENAS com um JSON array, sem markdown:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
 
@@ -3257,7 +3281,7 @@ Responda APENAS com um JSON array, sem markdown:
             catch { return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) }); }
 
             console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
-            return res.json({ items, totalItems: items.length, source: 'legacy_biddingItems' });
+            return res.json({ items: naturalSortItems(items), totalItems: items.length, source: 'legacy_biddingItems' });
         }
 
         // ── Strategy 2: Download planilhas from PNCP catalog (new analyses) ──
@@ -3403,6 +3427,16 @@ REGRAS:
 6. Para valores monetários, use ponto como separador decimal (ex: 1234.56)
 7. Multiplier = 1 para itens de obra (não há recorrência mensal)
 
+ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
+8. O campo itemNumber DEVE seguir padrão hierárquico organizado:
+   - SEM lotes: "1", "2", "3" (numeração sequencial)
+   - COM lotes, múltiplos itens: "1.1", "1.2", "2.1", "2.2" (Lote.Item)
+   - COM subgrupos: "1.1.1", "1.1.2" (Grupo.Subgrupo.Item)
+9. Se a planilha usa numeração como "1.1", "1.2", "2.1", PRESERVE tal numeração
+10. Se a planilha usa "Lote 1 - Item 1" ou "Grupo A / Item 1", converta para "1.1", "1.2"
+11. Retorne os itens SEMPRE na ordem natural crescente
+12. NUNCA misture formatos no mesmo array
+
 ${pricingInfo ? `INFORMAÇÕES ADICIONAIS DE PREÇO:\n${pricingInfo}\n` : ''}
 
 Responda APENAS com um JSON array válido:
@@ -3445,7 +3479,7 @@ Responda APENAS com um JSON array válido:
 
         console.log(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
         res.json({ 
-            items, 
+            items: naturalSortItems(items), 
             totalItems: items.length, 
             source: 'pncp_planilha',
             planilhas: downloadedNames
