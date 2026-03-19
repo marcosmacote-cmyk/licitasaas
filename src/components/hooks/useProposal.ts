@@ -425,6 +425,69 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
     };
 
+    // ── Composição IA — gerar composição automática para todos os itens ──
+    const [isAiCompositionLoading, setIsAiCompositionLoading] = useState(false);
+    const handleAiComposition = async (): Promise<Record<string, any>> => {
+        if (!proposal || !selectedBiddingId || items.length === 0) return {};
+        setIsAiCompositionLoading(true);
+        try {
+            const itemsPayload = items.map(it => ({
+                id: it.id,
+                itemNumber: it.itemNumber,
+                description: it.description,
+                unit: it.unit,
+                quantity: it.quantity,
+                unitPrice: it.unitPrice,
+                unitCost: it.unitCost,
+            }));
+
+            const res = await fetch(`${API_BASE_URL}/api/proposals/ai-composition`, {
+                method: 'POST', headers,
+                body: JSON.stringify({ biddingProcessId: selectedBiddingId, items: itemsPayload }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                toast.error(err.error || 'Erro na composição IA');
+                return {};
+            }
+
+            const data = await res.json();
+            const compositions = data.compositions || [];
+            
+            // Map AI compositions to items by order (AI returns in same order as input)
+            const resultMap: Record<string, any> = {};
+            const updatedItems = [...items];
+            for (let i = 0; i < compositions.length && i < items.length; i++) {
+                const comp = compositions[i];
+                const itemId = items[i].id;
+                const composition = {
+                    itemId,
+                    lines: comp.lines || [],
+                    templateUsed: 'AI_GENERATED',
+                };
+                const json = JSON.stringify(composition);
+                resultMap[itemId] = composition;
+                updatedItems[i] = { ...updatedItems[i], costComposition: json };
+            }
+
+            // Save all at once
+            setItems(updatedItems);
+            await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
+                method: 'POST', headers,
+                body: JSON.stringify({ items: updatedItems, replaceAll: true }),
+            });
+
+            showSaveMsg(`Composição IA gerada para ${compositions.length} item(ns)!`);
+            return resultMap;
+        } catch (e) {
+            toast.error('Erro na composição IA.');
+            return {};
+        } finally {
+            setIsAiCompositionLoading(false);
+        }
+    };
+
     const handleRestoreReferencePrice = () => {
         if (!proposal) return;
         const restoredItems = items.map(it => {
@@ -676,5 +739,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         handleSaveLetter, handlePrintProposal,
         handleRestoreReferencePrice,
         handleSaveComposition,
+        // Composição IA
+        isAiCompositionLoading, handleAiComposition,
     };
 }

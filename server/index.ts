@@ -3073,6 +3073,8 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
                     adjustedUnitPrice: item.adjustedUnitPrice ?? null,
                     adjustedTotalPrice: item.adjustedTotalPrice ?? null,
                     adjustedItemDiscount: item.adjustedItemDiscount ?? 0,
+                    // Composição de Preços
+                    costComposition: item.costComposition || null,
                 },
             });
             created.push(dbItem);
@@ -3451,6 +3453,156 @@ Responda APENAS com um JSON array válido:
     } catch (error: any) {
         console.error('[AI Populate] Error:', error.message);
         res.status(500).json({ error: 'AI populate failed: ' + (error.message || 'Unknown') });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// AI Cost Composition — Specialist in unit price composition
+// Generates detailed cost breakdowns for exequibilidade proof
+// ═══════════════════════════════════════════════════════════════════════
+app.post('/api/proposals/ai-composition', authenticateToken, async (req: any, res) => {
+    try {
+        const { biddingProcessId, items } = req.body;
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'items array is required (with id, description, unit, quantity, unitPrice)' });
+        }
+
+        // Get bidding context
+        const bidding = await prisma.biddingProcess.findFirst({
+            where: { id: biddingProcessId, tenantId: req.user.tenantId },
+            include: { aiAnalysis: true },
+        });
+
+        if (!bidding) return res.status(404).json({ error: 'Bidding process not found' });
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+        const ai = new GoogleGenAI({ apiKey });
+
+        const schemaV2 = bidding.aiAnalysis?.schemaV2 as any;
+        const pricingInfo = bidding.aiAnalysis?.pricingConsiderations || '';
+        const processId = schemaV2?.process_identification || {};
+        const modalidade = bidding.modality || processId?.modalidade || '';
+        const objeto = processId?.objeto_completo || processId?.objeto || bidding.summary || '';
+
+        const t0 = Date.now();
+        console.log(`[AI Composition] Generating compositions for ${items.length} item(s), bidding: ${biddingProcessId}`);
+
+        // Build items context
+        const itemsContext = items.map((it: any, idx: number) => 
+            `Item ${it.itemNumber || idx + 1}: "${it.description}" | Unid: ${it.unit} | Qtd: ${it.quantity} | Preço Unit.: R$ ${(it.unitPrice || 0).toFixed(2)}`
+        ).join('\n');
+
+        const prompt = `Você é um engenheiro de custos especialista em composição de preços unitários para licitações públicas brasileiras (Lei 14.133/2021, Acórdãos do TCU sobre BDI).
+
+═══ SEU PAPEL ═══
+Gerar composições de preços unitários REALISTAS e DETALHADAS para cada item abaixo, comprovando a viabilidade (exequibilidade) do preço ofertado.
+
+═══ CONTEXTO DA LICITAÇÃO ═══
+Objeto: ${objeto.substring(0, 1500)}
+Modalidade: ${modalidade}
+${pricingInfo ? `Informações de preço do edital:\n${pricingInfo.substring(0, 1500)}` : ''}
+
+═══ ITENS PARA COMPOR ═══
+${itemsContext}
+
+═══ REGRAS CRÍTICAS ═══
+1. Para CADA item, gere uma composição detalhada com elementos de custo REAIS e COERENTES
+2. O TOTAL da composição deve ser PRÓXIMO ao preço unitário informado (tolerância de ±5%)
+3. Use os seguintes grupos de custo (campo "group"):
+   - MATERIAL: matéria-prima, insumos, peças
+   - MAO_DE_OBRA: salários, encargos, benefícios
+   - EQUIPAMENTO: máquinas, ferramentas (depreciação/aluguel)
+   - FRETE: frete, transporte, logística
+   - TERCEIROS: serviços subcontratados
+   - ADMIN_CENTRAL: administração central (% sobre custo direto, tipicamente 3-6%)
+   - CUSTOS_FINANCEIROS: custo financeiro (% sobre custo direto, tipicamente 0.5-2%)
+   - SEGUROS: seguros e garantias (% sobre custo direto, tipicamente 0.3-1%)
+   - RISCOS: riscos e imprevistos (tipicamente 0.5-1.5%)
+   - DESPESAS_OPERACIONAIS: despesas operacionais gerais
+   - TRIBUTOS: impostos (PIS 0.65%, COFINS 3%, ISSQN/ICMS conforme tipo)
+   - LUCRO: margem de lucro (tipicamente 5-10%)
+
+4. Cada linha da composição deve ter:
+   - group: um dos grupos acima
+   - description: descrição específica do insumo/custo
+   - unit: unidade de medida (UN, KG, M, M², HORA, DIA, MÊS, VB, %, etc.)
+   - quantity: quantidade ou coeficiente
+   - unitValue: valor unitário do insumo
+   
+5. Os custos indiretos (ADMIN_CENTRAL, CUSTOS_FINANCEIROS, SEGUROS, RISCOS) geralmente são percentuais sobre o custo direto total
+6. TRIBUTOS são calculados sobre o preço de venda
+7. LUCRO é percentual sobre o custo direto
+
+═══ FORMATO DE RESPOSTA ═══
+Retorne APENAS um JSON array, onde cada elemento corresponde a um item:
+[
+  {
+    "itemId": "id_do_item",
+    "templateUsed": "AI_GENERATED",
+    "lines": [
+      { "group": "MATERIAL", "description": "Tecido algodão 100%", "unit": "M", "quantity": 2.5, "unitValue": 8.50 },
+      { "group": "MAO_DE_OBRA", "description": "Costura e acabamento", "unit": "HORA", "quantity": 1.5, "unitValue": 12.00 },
+      { "group": "TRIBUTOS", "description": "PIS (0,65%)", "unit": "VB", "quantity": 1, "unitValue": 0.35 },
+      { "group": "LUCRO", "description": "Margem de lucro", "unit": "VB", "quantity": 1, "unitValue": 4.20 }
+    ]
+  }
+]
+
+IMPORTANTE:
+- Seja REALISTA nos valores — use preços de mercado brasileiro
+- Inclua TODOS os elementos relevantes, sem omissões
+- A soma de (quantity × unitValue) de todas as linhas deve ≈ preço unitário do item
+- NÃO retorne texto, markdown ou explicações — APENAS o JSON`;
+
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { 
+                temperature: 0.2, 
+                maxOutputTokens: 65536,
+                responseMimeType: 'application/json'
+            },
+        });
+
+        const responseText = result.text?.trim() || '';
+        const duration = Date.now() - t0;
+        console.log(`[AI Composition] Response: ${responseText.length} chars in ${duration}ms`);
+
+        let compositions: any[];
+        try {
+            const parsed = JSON.parse(responseText);
+            compositions = Array.isArray(parsed) ? parsed : (parsed.compositions || parsed.data || [parsed]);
+        } catch {
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                try { compositions = JSON.parse(jsonMatch[0]); }
+                catch { return res.status(500).json({ error: 'AI returned invalid JSON', raw: responseText.substring(0, 300) }); }
+            } else {
+                return res.status(500).json({ error: 'AI returned no extractable data' });
+            }
+        }
+
+        // Add IDs to lines and calculate totalValue
+        for (const comp of compositions) {
+            if (!comp.lines) comp.lines = [];
+            for (const line of comp.lines) {
+                line.id = `cl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                line.totalValue = Math.round((line.quantity || 0) * (line.unitValue || 0) * 100) / 100;
+                line.source = line.source || 'IA';
+            }
+        }
+
+        console.log(`[AI Composition] ✅ Generated ${compositions.length} compositions with ${compositions.reduce((s: number, c: any) => s + (c.lines?.length || 0), 0)} total lines in ${duration}ms`);
+        res.json({ 
+            compositions, 
+            totalItems: compositions.length,
+            durationMs: duration,
+        });
+    } catch (error: any) {
+        console.error('[AI Composition] Error:', error.message);
+        res.status(500).json({ error: 'AI composition failed: ' + (error.message || 'Unknown') });
     }
 });
 

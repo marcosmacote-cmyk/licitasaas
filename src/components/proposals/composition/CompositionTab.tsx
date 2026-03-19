@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
     BarChart3, ChevronLeft, Package, Layers, Copy,
-    AlertTriangle, CheckCircle2, Save, Loader2,
+    AlertTriangle, CheckCircle2, Save, Loader2, Cpu,
 } from 'lucide-react';
 import type { ProposalItem } from '../../../types';
 import type { CompositionMap, ItemCostComposition } from './types';
@@ -25,9 +25,11 @@ interface Props {
     bdi: number;
     onSaveComposition: (itemId: string, compositionJson: string) => Promise<void>;
     isSaving: boolean;
+    onAiComposition: () => Promise<Record<string, any>>;
+    isAiCompositionLoading: boolean;
 }
 
-export function CompositionTab({ items, bdi, onSaveComposition, isSaving }: Props) {
+export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiComposition, isAiCompositionLoading }: Props) {
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [compositions, setCompositions] = useState<CompositionMap>({});
     const [copySourceId, setCopySourceId] = useState<string | null>(null);
@@ -147,21 +149,39 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving }: Prop
                         </div>
                     </div>
                 </div>
-                {copySourceId && (
-                    <div style={{
-                        padding: '6px 14px', borderRadius: 'var(--radius-lg)',
-                        background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.15)',
-                        fontSize: 'var(--text-sm)', color: 'var(--color-primary)', fontWeight: 600,
-                        display: 'flex', alignItems: 'center', gap: 6,
-                    }}>
-                        <Copy size={13} />
-                        Clique em um item para colar a composição
-                        <button onClick={() => setCopySourceId(null)} style={{
-                            background: 'none', border: 'none', color: 'var(--color-text-tertiary)',
-                            cursor: 'pointer', padding: '2px 6px', fontSize: 'var(--text-xs)',
-                        }}>✕</button>
-                    </div>
-                )}
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                    {copySourceId && (
+                        <div style={{
+                            padding: '6px 14px', borderRadius: 'var(--radius-lg)',
+                            background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.15)',
+                            fontSize: 'var(--text-sm)', color: 'var(--color-primary)', fontWeight: 600,
+                            display: 'flex', alignItems: 'center', gap: 6,
+                        }}>
+                            <Copy size={13} />
+                            Clique em um item para colar
+                            <button onClick={() => setCopySourceId(null)} style={{
+                                background: 'none', border: 'none', color: 'var(--color-text-tertiary)',
+                                cursor: 'pointer', padding: '2px 6px', fontSize: 'var(--text-xs)',
+                            }}>✕</button>
+                        </div>
+                    )}
+                    <button
+                        onClick={onAiComposition}
+                        disabled={isAiCompositionLoading || items.length === 0}
+                        style={{
+                            padding: '8px 18px', borderRadius: 'var(--radius-lg)',
+                            background: 'linear-gradient(135deg, var(--color-ai, #8b5cf6), var(--color-primary))',
+                            color: 'white', border: 'none',
+                            fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            boxShadow: '0 4px 14px rgba(139,92,246,0.3)',
+                            opacity: isAiCompositionLoading ? 0.7 : 1,
+                        }}
+                    >
+                        {isAiCompositionLoading ? <Loader2 size={14} className="spin" /> : <Cpu size={14} />}
+                        {isAiCompositionLoading ? 'Gerando Composições...' : 'Composição IA'}
+                    </button>
+                </div>
             </div>
 
             {/* Items Table */}
