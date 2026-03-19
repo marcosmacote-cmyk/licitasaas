@@ -550,14 +550,12 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         exportExcelProposal(selectedBiddingId, items, bdi, discount, roundingMode, type, adjustedBdi, adjustedDiscount);
     };
 
-    const handleSaveLetter = async (blocks?: any[]) => {
+    const handleSaveLetter = async (contentOverride?: string) => {
         if (!proposal) return;
         setIsSaving(true);
         try {
-            // Se temos blocos estruturados, salvar como JSON envelope
-            const contentToSave = blocks && blocks.length > 0
-                ? JSON.stringify({ v: 2, blocks, plainText: letterContent })
-                : letterContent;
+            // contentOverride permite passar conteúdo diretamente (evita race condition do setState)
+            const contentToSave = contentOverride || letterContent;
             await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}`, {
                 method: 'PUT', headers,
                 body: JSON.stringify({ letterContent: contentToSave }),

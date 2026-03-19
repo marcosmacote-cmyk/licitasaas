@@ -24,6 +24,7 @@ export interface PdfExportOptions {
     headerImageHeight: number;
     footerImageHeight: number;
     printLandscape?: boolean;
+    printDelay?: number; // ms before triggering print (default: 500)
 }
 
 export class LetterPdfExporter {
@@ -142,7 +143,7 @@ export class LetterPdfExporter {
 <body${printLandscape ? ' class="landscape-mode"' : ''}>
     <script>
     window.onload = function() {
-        setTimeout(function() { window.print(); }, 500);
+        setTimeout(function() { window.print(); }, ${opts.printDelay ?? 500});
     };
     </script>
 

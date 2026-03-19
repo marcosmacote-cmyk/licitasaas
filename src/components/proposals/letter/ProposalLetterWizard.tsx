@@ -59,7 +59,7 @@ interface ProposalLetterWizardProps {
     // Letter I/O
     letterContent: string;
     setLetterContent: (v: string) => void;
-    handleSaveLetter: (blocks?: any[]) => void;
+    handleSaveLetter: (contentOverride?: string) => void;
     handlePrintProposal: (type: 'FULL' | 'LETTER' | 'SPREADSHEET') => void;
     isSaving: boolean;
     printLandscape?: boolean;
@@ -441,8 +441,10 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
             readequada: readequadaData ? { blocks: readequadaData.blocks, plainText: readequadaData.plainText } : null,
         };
 
-        props.setLetterContent(JSON.stringify(envelope));
-        props.handleSaveLetter();
+        const envelopeStr = JSON.stringify(envelope);
+        props.setLetterContent(envelopeStr);
+        // Passar diretamente para evitar race condition do setState assíncrono
+        props.handleSaveLetter(envelopeStr);
     };
 
     // ── Export ──
@@ -475,6 +477,8 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
     };
 
     // ── Export Both (Inicial + Readequada) ──
+    // IMPORTANTE: Ambas as janelas são abertas IMEDIATAMENTE do clique do usuário.
+    // Se usarmos setTimeout/afterprint para abrir a segunda, o browser bloqueia como popup.
     const handleExportBoth = useCallback(() => {
         if (!letterResult) return;
 
@@ -500,28 +504,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
             data.company.contactCpf = sigLegal.cpf;
         };
 
-        // Preparar dados da READEQUADA (será usado quando a primeira terminar)
-        const openReadequada = () => {
-            const effectiveTotal = props.adjustedTotal || props.totalValue;
-            const effectiveBdi = props.adjustedBdi ?? props.bdi;
-            const effectiveDiscount = props.adjustedDiscount ?? props.discount;
-
-            const dataR = normalizer.normalize({
-                bidding: props.bidding, company: props.company, proposal: props.proposal,
-                items: props.items, totalValue: effectiveTotal,
-                signatureMode: props.signatureMode, validityDays: props.validityDays,
-                bdiPercentage: effectiveBdi, discountPercentage: effectiveDiscount,
-                bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
-            });
-            (dataR.meta as any).proposalType = 'READEQUADA';
-            injectSigData(dataR);
-
-            const builderR = new ProposalLetterBuilder(dataR);
-            const resultR = builderR.build();
-            exporter.export({ ...exportConfig, result: resultR, data: dataR });
-        };
-
-        // 1) Gerar PDF INICIAL
+        // 1) Gerar PDF INICIAL (abre imediatamente, print em 500ms)
         const dataI = normalizer.normalize({
             bidding: props.bidding, company: props.company, proposal: props.proposal,
             items: props.items, totalValue: props.totalValue,
@@ -531,34 +514,26 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
         });
         (dataI.meta as any).proposalType = 'INICIAL';
         injectSigData(dataI);
-
         const builderI = new ProposalLetterBuilder(dataI);
         const resultI = builderI.build();
-        const printWin = exporter.export({ ...exportConfig, result: resultI, data: dataI });
+        exporter.export({ ...exportConfig, result: resultI, data: dataI, printDelay: 500 });
 
-        // 2) Encadear PDF READEQUADA — usando afterprint + fallback com flag anti-duplo
-        if (printWin) {
-            let fired = false;
-            const fireOnce = () => {
-                if (fired) return;
-                fired = true;
-                setTimeout(openReadequada, 500);
-            };
-
-            // afterprint: dispara quando o usuário fecha o diálogo de impressão
-            printWin.addEventListener('afterprint', fireOnce);
-
-            // Fallback: se o usuário fecha a aba sem imprimir (ou afterprint não disparou)
-            const checkClosed = setInterval(() => {
-                if (printWin.closed) {
-                    clearInterval(checkClosed);
-                    fireOnce();
-                }
-            }, 1000);
-
-            // Limpar interval quando afterprint disparar
-            printWin.addEventListener('afterprint', () => clearInterval(checkClosed));
-        }
+        // 2) Gerar PDF READEQUADA (abre imediatamente, print em 2500ms — tempo para o 1º terminar)
+        const effectiveTotal = props.adjustedTotal || props.totalValue;
+        const effectiveBdi = props.adjustedBdi ?? props.bdi;
+        const effectiveDiscount = props.adjustedDiscount ?? props.discount;
+        const dataR = normalizer.normalize({
+            bidding: props.bidding, company: props.company, proposal: props.proposal,
+            items: props.items, totalValue: effectiveTotal,
+            signatureMode: props.signatureMode, validityDays: props.validityDays,
+            bdiPercentage: effectiveBdi, discountPercentage: effectiveDiscount,
+            bankingData: (bankData.bank || bankData.agency || bankData.account || bankData.pix) ? bankData : undefined,
+        });
+        (dataR.meta as any).proposalType = 'READEQUADA';
+        injectSigData(dataR);
+        const builderR = new ProposalLetterBuilder(dataR);
+        const resultR = builderR.build();
+        exporter.export({ ...exportConfig, result: resultR, data: dataR, printDelay: 2500 });
     }, [letterResult, normalizedData, selectedExportMode, props, bankData, sigLegal, sigTech, sigCompany]);
 
     // ════════════════════════════════════
