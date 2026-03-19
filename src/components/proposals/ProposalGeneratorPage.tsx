@@ -10,6 +10,7 @@ import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
 import { useProposal } from '../hooks/useProposal';
 import { ProposalLetterWizard } from './letter/ProposalLetterWizard';
+import { CompositionTab } from './composition';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -194,6 +195,10 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     <button onClick={() => p.setActiveTab('letter')} className={`tab-btn${p.activeTab === 'letter' ? ' active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
                         <FileText size={16} /> Carta Proposta Redigida
+                    </button>
+                    <button onClick={() => p.setActiveTab('composition')} className={`tab-btn${p.activeTab === 'composition' ? ' active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
+                        <ClipboardList size={16} /> Composição de Preços
                     </button>
                 </div>
             )}
@@ -655,6 +660,16 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     <FileText size={32} style={{ margin: '0 auto var(--space-3)', opacity: 0.3 }} />
                     <p>Selecione a licitação, empresa e inicie a proposta para acessar a carta.</p>
                 </div>
+            )}
+
+            {/* ── Composition Tab ── */}
+            {p.activeTab === 'composition' && p.proposal && (
+                <CompositionTab
+                    items={p.items}
+                    bdi={p.bdi}
+                    onSaveComposition={p.handleSaveComposition}
+                    isSaving={p.isSaving}
+                />
             )}
 
             {/* ────────── EMPTY STATE ────────── */}

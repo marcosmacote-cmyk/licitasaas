@@ -41,7 +41,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const [adjustedLetterContent, setAdjustedLetterContent] = useState('');
 
     // Tab & letter
-    const [activeTab, setActiveTab] = useState<'items' | 'letter'>('items');
+    const [activeTab, setActiveTab] = useState<'items' | 'letter' | 'composition'>('items');
     const [letterContent, setLetterContent] = useState('');
 
     // Config states
@@ -399,6 +399,32 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
     };
 
+    // ── Salvar Composição de Preços ──
+    const handleSaveComposition = async (itemId: string, compositionJson: string) => {
+        if (!proposal) return;
+        setIsSaving(true);
+        try {
+            // Atualizar o item localmente com o JSON da composição
+            const updatedItems = items.map(it =>
+                it.id === itemId ? { ...it, costComposition: compositionJson } : it
+            );
+            setItems(updatedItems);
+
+            // Salvar todos os itens (inclui costComposition)
+            const res = await fetch(`${API_BASE_URL}/api/proposals/${proposal.id}/items`, {
+                method: 'POST', headers,
+                body: JSON.stringify({ items: updatedItems, replaceAll: true }),
+            });
+            if (res.ok) {
+                showSaveMsg('Composição de preços salva!');
+            }
+        } catch (e) {
+            toast.error('Erro ao salvar composição.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleRestoreReferencePrice = () => {
         if (!proposal) return;
         const restoredItems = items.map(it => {
@@ -649,5 +675,6 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         handleExportExcel,
         handleSaveLetter, handlePrintProposal,
         handleRestoreReferencePrice,
+        handleSaveComposition,
     };
 }
