@@ -67,25 +67,25 @@ function buildItemCompositionHtml(item: ProposalItem, bdi: number, isLast: boole
         const catPct = totals.grandTotal > 0 ? (catTotal / totals.grandTotal * 100) : 0;
 
         // Category header
-        rowsHtml += `<tr style="background: ${cat.color}06;">
-            <td colspan="5" style="font-weight: 700; color: ${cat.color}; padding: 2px 6px; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.04em; border-top: 1.5px solid ${cat.color}30;">
+        rowsHtml += `<tr style="background: ${cat.color}08;">
+            <td colspan="5" style="font-weight: 700; color: ${cat.color}; padding: 3px 6px; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.04em; border-top: 1.5px solid ${cat.color}30;">
                 ${cat.label}
             </td>
-            <td style="text-align: right; font-weight: 700; color: ${cat.color}; padding: 2px 6px; font-size: 8px; border-top: 1.5px solid ${cat.color}30;">${fmt(catTotal)}</td>
-            <td style="text-align: right; font-weight: 600; color: ${cat.color}; padding: 2px 6px; font-size: 7.5px; border-top: 1.5px solid ${cat.color}30;">${fmtPct(catPct)}</td>
+            <td style="text-align: right; font-weight: 700; color: ${cat.color}; padding: 3px 6px; font-size: 8px; border-top: 1.5px solid ${cat.color}30;">${fmt(catTotal)}</td>
+            <td style="text-align: right; font-weight: 600; color: ${cat.color}; padding: 3px 6px; font-size: 7.5px; border-top: 1.5px solid ${cat.color}30;">${fmtPct(catPct)}</td>
         </tr>`;
 
         for (const line of catLines) {
             const meta = getCostGroupMeta(line.group);
             const linePct = totals.grandTotal > 0 ? (line.totalValue / totals.grandTotal * 100) : 0;
             rowsHtml += `<tr>
-                <td style="padding: 1px 6px 1px 14px; color: #666; font-size: 7.5px; white-space: nowrap;">${meta.label}</td>
-                <td style="padding: 1px 4px;">${esc(line.description)}</td>
-                <td style="padding: 1px 4px; text-align: center;">${line.unit}</td>
-                <td style="padding: 1px 4px; text-align: right;">${fmtNum(line.quantity)}</td>
-                <td style="padding: 1px 4px; text-align: right;">${fmt(line.unitValue)}</td>
-                <td style="padding: 1px 4px; text-align: right;">${fmt(line.totalValue)}</td>
-                <td style="padding: 1px 4px; text-align: right; color: #666;">${fmtPct(linePct)}</td>
+                <td style="padding: 2px 6px 2px 14px; color: #555; font-size: 7.5px; white-space: nowrap;">${meta.label}</td>
+                <td style="padding: 2px 4px; text-align: justify; hyphens: auto; word-break: break-word;">${esc(line.description)}</td>
+                <td style="padding: 2px 4px; text-align: center; white-space: nowrap;">${line.unit}</td>
+                <td style="padding: 2px 4px; text-align: right; white-space: nowrap;">${fmtNum(line.quantity)}</td>
+                <td style="padding: 2px 4px; text-align: right; white-space: nowrap;">${fmt(line.unitValue)}</td>
+                <td style="padding: 2px 4px; text-align: right; white-space: nowrap;">${fmt(line.totalValue)}</td>
+                <td style="padding: 2px 4px; text-align: right; color: #555; white-space: nowrap;">${fmtPct(linePct)}</td>
             </tr>`;
         }
     }
@@ -95,7 +95,7 @@ function buildItemCompositionHtml(item: ProposalItem, bdi: number, isLast: boole
         <div class="comp-header">
             <table style="width: 100%; border: none; border-collapse: collapse;">
                 <tr>
-                    <td style="padding: 0; vertical-align: top; border: none;">
+                    <td style="padding: 0; vertical-align: top; border: none; text-align: justify; hyphens: auto; word-break: break-word;">
                         <strong>Item ${item.itemNumber}:</strong> ${esc(item.description || '')}
                     </td>
                     <td style="padding: 0 0 0 10px; vertical-align: top; text-align: right; white-space: nowrap; width: 120px; border: none;">
@@ -104,8 +104,8 @@ function buildItemCompositionHtml(item: ProposalItem, bdi: number, isLast: boole
                     </td>
                 </tr>
             </table>
-            <div style="font-size: 7.5px; color: #999; margin-top: 2px;">
-                Unid: ${item.unit} | Qtd: ${fmtNum(item.quantity)} | Custo Unit: ${fmt(item.unitCost)} | BDI: ${fmtPct(bdi)}
+            <div style="font-size: 7.5px; color: #999; margin-top: 3px; padding-top: 2px; border-top: 1px dashed #e0e0e0;">
+                Unid: <strong>${item.unit}</strong> | Qtd: <strong>${fmtNum(item.quantity)}</strong> | Custo Unit: <strong>${fmt(item.unitCost)}</strong> | BDI: <strong>${fmtPct(bdi)}</strong>
             </div>
         </div>
         <table class="comp-table">
@@ -195,8 +195,8 @@ export function exportCompositionPdf(options: CompositionExportOptions): Window 
             overflow: hidden; margin-bottom: 6px;
         }
         .comp-header {
-            background: #f8fafc; padding: 4px 8px; border-bottom: 1px solid #ddd;
-            font-size: 8.5px; line-height: 1.25;
+            background: #f8fafc; padding: 5px 10px; border-bottom: 1px solid #ddd;
+            font-size: 8.5px; line-height: 1.3; text-align: justify; hyphens: auto; word-break: break-word;
         }
         .comp-table { width: 100%; border-collapse: collapse; font-size: 8px; }
         .comp-table th {
@@ -204,7 +204,7 @@ export function exportCompositionPdf(options: CompositionExportOptions): Window 
             padding: 2px 6px; font-size: 7px; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.03em; color: #475569;
         }
-        .comp-table td { padding: 1px 4px; font-size: 8px; border-bottom: 1px solid #f0f0f0; }
+        .comp-table td { padding: 2px 4px; font-size: 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
         
         @media print {
             @page {
@@ -270,10 +270,10 @@ export function buildCompositionInlineHtml(items: ProposalItem[], bdi: number): 
     return `
     <style>
         .comp-item { border: 1px solid #ddd; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
-        .comp-header { background: #f8fafc; padding: 4px 8px; border-bottom: 1px solid #ddd; font-size: 8.5px; line-height: 1.25; }
+        .comp-header { background: #f8fafc; padding: 5px 10px; border-bottom: 1px solid #ddd; font-size: 8.5px; line-height: 1.3; text-align: justify; hyphens: auto; word-break: break-word; }
         .comp-table { width: 100%; border-collapse: collapse; font-size: 8px; }
         .comp-table th { background: #f1f5f9; border-bottom: 1.5px solid #cbd5e1; padding: 2px 6px; font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #475569; }
-        .comp-table td { padding: 1px 4px; font-size: 8px; border-bottom: 1px solid #f0f0f0; }
+        .comp-table td { padding: 2px 4px; font-size: 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
     </style>
     <h3 style="font-size: 11px; margin-bottom: 6px; font-weight: bold; text-align: center; color: #1e3a5f; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1.5px solid #2563eb; padding-bottom: 4px;">
         Composição de Preços Unitários
