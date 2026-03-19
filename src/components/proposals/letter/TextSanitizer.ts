@@ -8,6 +8,7 @@
  */
 
 import type { LetterBlock } from './types';
+import { LetterBlockType } from './types';
 
 export class TextSanitizer {
 
@@ -15,9 +16,17 @@ export class TextSanitizer {
      * Sanitiza todos os blocos visíveis in-place.
      */
     sanitizeAll(blocks: LetterBlock[]): LetterBlock[] {
+        // Blocos com formatação fixa NÃO devem ser sanitizados
+        const FIXED_FORMAT_BLOCKS = new Set<string>([
+            LetterBlockType.SIGNATURE,
+            LetterBlockType.CLOSING,
+        ]);
+
         return blocks.map(block => ({
             ...block,
-            content: block.visible ? this.sanitize(block.content) : block.content,
+            content: (block.visible && !FIXED_FORMAT_BLOCKS.has(block.type))
+                ? this.sanitize(block.content)
+                : block.content,
         }));
     }
 
@@ -150,9 +159,9 @@ export class TextSanitizer {
             'pelo', 'pela', 'pelos', 'pelas', 'o', 'a', 'os', 'as', 'um', 'uma',
         ]);
 
-        // Match sequences of 3+ ALL CAPS words (at least 2 chars each)
-        return text.replace(/\b([A-ZÀ-Ú]{2,}(?:\s+[A-ZÀ-Ú]{2,}){2,})\b/g, (match) => {
-            const words = match.split(/\s+/);
+        // Match sequences of 3+ ALL CAPS words on the SAME line ([ \t]+ = horizontal space only)
+        return text.replace(/\b([A-ZÀ-Ú]{2,}(?:[ \t]+[A-ZÀ-Ú]{2,}){2,})\b/g, (match) => {
+            const words = match.split(/[ \t]+/);
             return words.map((word, i) => {
                 if (ACRONYMS.has(word)) return word;
                 if (i > 0 && LOWERCASE_WORDS.has(word.toLowerCase())) return word.toLowerCase();
