@@ -16,16 +16,13 @@ export function exportExcelProposal(
 ) {
     if (items.length === 0) return;
 
-    const roundFormula = roundingMode === 'ROUND' ? 'ROUND' : 'TRUNC';
-
     if (exportType === 'ORIGINAL') {
-        // Planilha Original: preços de referência (sem BDI, sem desconto)
-        const ws = XLSX.utils.aoa_to_sheet([
-            ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Multiplicador', 'Preço Ref. Unit.', 'Valor Total']
-        ]);
-        items.forEach((it, i) => {
+        // ── Planilha Original: preços de referência ──
+        const headers = ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Preço Ref. Unit.', 'Valor Total'];
+        const rows = items.map((it, i) => {
             const refPrice = it.referencePrice || it.unitCost || 0;
-            const row = [
+            const total = (it.quantity || 0) * (it.multiplier || 1) * refPrice;
+            return [
                 it.itemNumber || String(i + 1),
                 it.description,
                 it.brand || '',
@@ -33,28 +30,29 @@ export function exportExcelProposal(
                 it.unit,
                 it.quantity,
                 it.multiplier,
-                refPrice,
-                { f: `ROUND(F${i + 2} * G${i + 2} * H${i + 2}, 2)` }
+                Math.round(refPrice * 100) / 100,
+                Math.round(total * 100) / 100,
             ];
-            XLSX.utils.sheet_add_aoa(ws, [row], { origin: -1 });
         });
-        const totalRow = items.length + 2;
-        XLSX.utils.sheet_add_aoa(ws, [[null, null, null, null, null, null, null, 'TOTAL', { f: `SUM(I2:I${totalRow - 1})` }]], { origin: -1 });
+        const totalRef = rows.reduce((s, r) => s + (r[8] as number), 0);
+        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL', Math.round(totalRef * 100) / 100]);
 
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Original');
         XLSX.writeFile(wb, `Planilha_Original_${biddingId.substring(0, 6)}.xlsx`);
 
     } else if (exportType === 'READEQUADA') {
-        // Planilha Readequada: preços readequados
-        const ws = XLSX.utils.aoa_to_sheet([
-            ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Multiplicador', 'Custo Unit.', 'Preço Unit. Readequado', 'Valor Total', '% Peso']
-        ]);
-        items.forEach((it, i) => {
-            const rowIdx = i + 2;
-            const adjCost = it.adjustedUnitCost ?? it.unitCost ?? 0;
-            const adjItemDisc = it.adjustedItemDiscount || 0;
-            const row = [
+        // ── Planilha Readequada: valores readequados reais ──
+        const totalAdj = items.reduce((s, it) => s + (it.adjustedTotalPrice || 0), 0);
+        const headers = ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Custo Unit.', 'Preço Unit. Readequado', 'Valor Total', 'Desc.Total(%)', '% Peso'];
+        const rows = items.map((it, i) => {
+            const adjUnitPrice = it.adjustedUnitPrice || 0;
+            const adjTotalPrice = it.adjustedTotalPrice || 0;
+            const refPrice = it.referencePrice || 0;
+            const discPct = refPrice > 0 ? ((refPrice - adjUnitPrice) / refPrice * 100) : (adjustedDiscount || 0);
+            const peso = totalAdj > 0 ? (adjTotalPrice / totalAdj * 100) : 0;
+            return [
                 it.itemNumber || String(i + 1),
                 it.description,
                 it.brand || '',
@@ -62,33 +60,35 @@ export function exportExcelProposal(
                 it.unit,
                 it.quantity,
                 it.multiplier,
-                adjCost,
-                { f: `${roundFormula}(H${rowIdx} * (1 + $M$1/100) * (1 - $O$1/100) * (1 - ${adjItemDisc}/100), 2)` },
-                { f: `ROUND(F${rowIdx} * G${rowIdx} * I${rowIdx}, 2)` },
-                { f: `J${rowIdx} / $J$${items.length + 2}` }
+                it.adjustedUnitCost ?? it.unitCost ?? 0,
+                Math.round(adjUnitPrice * 100) / 100,
+                Math.round(adjTotalPrice * 100) / 100,
+                Math.round(discPct * 100) / 100,
+                Math.round(peso * 100) / 100,
             ];
-            XLSX.utils.sheet_add_aoa(ws, [row], { origin: -1 });
         });
-        const totalRow = items.length + 2;
-        XLSX.utils.sheet_add_aoa(ws, [[null, null, null, null, null, null, null, null, 'TOTAL READEQUADO', { f: `SUM(J2:J${totalRow - 1})` }, '100%']], { origin: -1 });
+        // Linha de total
+        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL READEQUADO', Math.round(totalAdj * 100) / 100, null as any, '100%']);
+        // Linha de info
+        rows.push([]);
+        rows.push(['BDI Readequada (%)', adjustedBdi] as any);
+        rows.push(['Desc. Linear Readequada (%)', adjustedDiscount] as any);
+        rows.push(['Arredondamento', roundingMode === 'TRUNCATE' ? 'Truncar' : 'Arredondar'] as any);
 
-        ws['M1'] = { v: adjustedBdi, t: 'n' };
-        ws['L1'] = { v: 'BDI Readequada (%)' };
-        ws['O1'] = { v: adjustedDiscount, t: 'n' };
-        ws['N1'] = { v: 'Desc Lin Readequada (%)' };
-
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Readequada');
         XLSX.writeFile(wb, `Planilha_Readequada_${biddingId.substring(0, 6)}.xlsx`);
 
     } else {
-        // Planilha Inicial (padrão): preços com BDI e desconto iniciais
-        const ws = XLSX.utils.aoa_to_sheet([
-            ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Multiplicador', 'Custo Unit.', 'Preço Unit.', 'Valor Total', '% Peso']
-        ]);
-        items.forEach((it, i) => {
-            const rowIdx = i + 2;
-            const row = [
+        // ── Planilha Inicial: valores iniciais reais ──
+        const totalInit = items.reduce((s, it) => s + (it.totalPrice || 0), 0);
+        const headers = ['Item', 'Descrição', 'Marca', 'Modelo', 'Unid', 'Qtd', 'Mult.', 'Custo Unit.', 'Preço Unit.', 'Valor Total', 'Desc.Total(%)', '% Peso'];
+        const rows = items.map((it, i) => {
+            const refPrice = it.referencePrice || 0;
+            const discPct = refPrice > 0 ? ((refPrice - it.unitPrice) / refPrice * 100) : (discountPercentage || 0);
+            const peso = totalInit > 0 ? (it.totalPrice / totalInit * 100) : 0;
+            return [
                 it.itemNumber || String(i + 1),
                 it.description,
                 it.brand || '',
@@ -97,20 +97,21 @@ export function exportExcelProposal(
                 it.quantity,
                 it.multiplier,
                 it.unitCost,
-                { f: `${roundFormula}(H${rowIdx} * (1 + $M$1/100) * (1 - $O$1/100) * (1 - ${it.discountPercentage || 0}/100), 2)` },
-                { f: `ROUND(F${rowIdx} * G${rowIdx} * I${rowIdx}, 2)` },
-                { f: `J${rowIdx} / $J$${items.length + 2}` }
+                Math.round(it.unitPrice * 100) / 100,
+                Math.round(it.totalPrice * 100) / 100,
+                Math.round(discPct * 100) / 100,
+                Math.round(peso * 100) / 100,
             ];
-            XLSX.utils.sheet_add_aoa(ws, [row], { origin: -1 });
         });
-        const totalRow = items.length + 2;
-        XLSX.utils.sheet_add_aoa(ws, [[null, null, null, null, null, null, null, null, 'TOTAL GLOBAL', { f: `SUM(J2:J${totalRow - 1})` }, '100%']], { origin: -1 });
+        // Linha de total
+        rows.push([null as any, null as any, null as any, null as any, null as any, null as any, null as any, null as any, 'TOTAL GLOBAL', Math.round(totalInit * 100) / 100, null as any, '100%']);
+        // Linha de info
+        rows.push([]);
+        rows.push(['BDI (%)', bdiPercentage] as any);
+        rows.push(['Desc. Linear (%)', discountPercentage] as any);
+        rows.push(['Arredondamento', roundingMode === 'TRUNCATE' ? 'Truncar' : 'Arredondar'] as any);
 
-        ws['M1'] = { v: bdiPercentage, t: 'n' };
-        ws['L1'] = { v: 'BDI (%)' };
-        ws['O1'] = { v: discountPercentage, t: 'n' };
-        ws['N1'] = { v: 'Desc Lin (%)' };
-
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Proposta');
         XLSX.writeFile(wb, `Proposta_Precos_${biddingId.substring(0, 6)}.xlsx`);
