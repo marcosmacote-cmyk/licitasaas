@@ -997,7 +997,7 @@ INSTRUÇÕES RÍGIDAS:
 
 2. EXTENSÃO (${(() => { const c = FAMILY_LENGTH_CONSTRAINTS[family]; return `${c.minParagraphs} a ${c.maxParagraphs} parágrafos — ${c.styleHint}`; })()}):
    Estrutura recomendada:
-   a) QUALIFICAÇÃO: "${facts.empresaRazaoSocial}", CNPJ "${facts.empresaCnpj}"${facts.representanteNome ? `, representada por "${facts.representanteNome}"` : ''}
+   a) QUALIFICAÇÃO COMPLETA (OBRIGATÓRIA em qualquer estilo): "${facts.empresaRazaoSocial}", CNPJ "${facts.empresaCnpj}"${facts.empresaEndereco ? `, com sede ${facts.empresaEndereco}` : ''}${facts.representanteNome ? `, neste ato representada por seu ${facts.representanteCargo || 'Representante Legal'} ${facts.representanteNome}${facts.representanteCpf ? `, CPF ${facts.representanteCpf}` : ''}` : ''}
    b) REFERÊNCIA: "${facts.orgaoLicitante}", Edital nº "${facts.editalNumero}", Processo nº "${facts.processoNumero}"
    c) DECLARAÇÃO PRINCIPAL: fundamento legal pertinente
    d) CIÊNCIA DAS SANÇÕES + FECHO FORMAL

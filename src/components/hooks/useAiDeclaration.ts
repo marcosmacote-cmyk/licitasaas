@@ -407,7 +407,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
         const drawFooter = () => {
             let fy = ph;
-            if (layout.footerText) { doc.setFontSize(7.5); doc.setTextColor(100); doc.setFont('helvetica', 'italic'); const ftLines = doc.splitTextToSize(layout.footerText, mw); fy = ph - 6; doc.text(ftLines, pw / 2, fy, { align: 'center' }); fy -= ftLines.length * 3 + 2; }
+            if (layout.footerText) { doc.setFontSize(7.5); doc.setTextColor(100); doc.setFont('helvetica', 'italic'); const ftLines = doc.splitTextToSize(layout.footerText, mw); fy = ph - 14; doc.text(ftLines, pw / 2, fy, { align: 'center' }); fy -= ftLines.length * 3 + 2; }
             if (layout.footerImage) { const imgY = layout.footerText ? fy - layout.footerImageHeight : ph - layout.footerImageHeight - 5; const imgX = (pw - layout.footerImageWidth) / 2; doc.addImage(layout.footerImage, 'PNG', imgX, imgY, layout.footerImageWidth, layout.footerImageHeight); }
         };
 
