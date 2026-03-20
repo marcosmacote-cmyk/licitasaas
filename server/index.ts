@@ -1351,8 +1351,8 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 3; // Reduced from 5 — edital + TR + 1 extra is enough
-        const MAX_TOTAL_PDF_SIZE_KB = 15000; // Reduced from 30MB — 15MB budget
+        const MAX_PDF_PARTS = 10; // Multi-part editals can have 5-10 parts
+        const MAX_TOTAL_PDF_SIZE_KB = 50000; // 50MB budget — large editals with TR + annexes
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
@@ -1368,16 +1368,19 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             // Publicações / Atas / Avisos
             'aviso_publicac', 'aviso publicac', 'aviso_licitac',
             'aviso_de_licit', 'aviso de licit', 'aviso_licit',
+            'aviso_de_publicac', 'aviso de publicac',
             'quadro_de_aviso', 'quadro de aviso',
             'd.o.u', 'diario_oficial', 'diario oficial',
             'retificac', 'errata', 'ata_sessao', 'ata_da_sessao',
             'comprovante', 'recibo_garantia', 'modelo_recibo_garantia',
             'minuta_contrato', 'minuta contrato', 'minuta_de_contrato',
-            // Projetos de engenharia / plantas / memoriais (não contribuem para habilitação)
+            // Projetos de engenharia / plantas / memoriais / peças gráficas
             'projeto_arq', 'projeto arq', 'planta_', 'planta ',
             'memorial_descritivo', 'memorial descritivo',
             'croqui', 'layout_', 'layout ',
             'detalhamento_', 'det_arq', 'det arq',
+            'pecas_graficas', 'pecas graficas', 'peas_grficas', 'peas_graficas',
+            'desenho_tecnico', 'desenho tecnico', 'peca_grafica',
         ];
 
         // Keywords that indicate edital/TR content (should NOT be excluded even if "Outros Documentos")
@@ -1525,7 +1528,14 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                         for (const entryName of zipEntries) {
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
+                            const entrySizeKB = pdfBuffer.length / 1024;
                             if (pdfBuffer.length > 0) {
+                                if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                    console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                    discardedFiles.push(`${entryName} (ZIP, ${Math.round(entrySizeKB)}KB)`);
+                                    continue;
+                                }
+                                totalPdfSizeAccum += entrySizeKB;
                                 const safeName = `pncp_${req.user.tenantId}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
 
@@ -1568,6 +1578,13 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
                             if (rarFile.extraction && rarFile.extraction.length > 0) {
                                 const pdfBuffer = Buffer.from(rarFile.extraction);
+                                const entrySizeKB = pdfBuffer.length / 1024;
+                                if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                    console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
+                                    discardedFiles.push(`${rarFile.fileHeader.name} (RAR, ${Math.round(entrySizeKB)}KB)`);
+                                    continue;
+                                }
+                                totalPdfSizeAccum += entrySizeKB;
 
                                 const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
