@@ -1,4 +1,4 @@
-import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2, ChevronDown, ChevronUp, FileSignature, Building2, Briefcase } from 'lucide-react';
+import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2, ChevronDown, ChevronUp, FileSignature, Building2, Briefcase, ArrowLeft, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { ConfirmDialog } from '../ui';
 import { useAiDeclaration } from '../hooks/useAiDeclaration';
@@ -14,191 +14,330 @@ interface Props {
 
 export function AiDeclarationGenerator({ biddings, companies, onSave, initialBiddingId }: Props) {
     const d = useAiDeclaration({ biddings, companies, onSave, initialBiddingId });
+    const hasResult = !!d.generatedText || d.isGenerating;
 
     return (
         <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 380px) 1fr', gap: 'var(--space-6)', alignItems: 'start' }}>
+        {!hasResult ? (
+            /* ═══════════════════════════════════════════
+               STEP 1: Wizard focado — O que gerar?
+               ═══════════════════════════════════════════ */
+            <WizardStep1 d={d} companies={companies} />
+        ) : (
+            /* ═══════════════════════════════════════════
+               STEP 2: Editor + Refinamento
+               ═══════════════════════════════════════════ */
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 340px) 1fr', gap: 'var(--space-6)', alignItems: 'start' }}>
 
-            {/* ─────────────── LEFT: Configuration ─────────────── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', position: 'sticky', top: 'var(--space-4)' }}>
+                {/* LEFT: Refinement sidebar */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', position: 'sticky', top: 'var(--space-4)' }}>
 
-                {/* ── AI Config Card ── */}
-                <div style={{
-                    borderRadius: 'var(--radius-xl)',
-                    border: '1px solid rgba(139,92,246,0.2)',
-                    overflow: 'hidden',
-                    background: 'var(--color-bg-surface)',
-                    boxShadow: '0 2px 12px rgba(139,92,246,0.06)',
-                }}>
-                    {/* Card header */}
+                    {/* Back + Summary */}
                     <div style={{
-                        padding: 'var(--space-5) var(--space-5)',
-                        background: 'linear-gradient(135deg, rgba(139,92,246,0.07) 0%, rgba(37,99,235,0.04) 60%, transparent 100%)',
-                        borderBottom: '1px solid rgba(139,92,246,0.12)',
-                        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                        borderRadius: 'var(--radius-xl)',
+                        border: '1px solid rgba(139,92,246,0.2)',
+                        overflow: 'hidden',
+                        background: 'var(--color-bg-surface)',
+                        boxShadow: '0 2px 12px rgba(139,92,246,0.06)',
                     }}>
+                        {/* Header with back */}
                         <div style={{
-                            width: 40, height: 40, borderRadius: 'var(--radius-lg)',
-                            background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(37,99,235,0.1))',
-                            border: '1px solid rgba(139,92,246,0.25)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                            padding: 'var(--space-3) var(--space-4)',
+                            background: 'linear-gradient(135deg, rgba(139,92,246,0.07) 0%, rgba(37,99,235,0.04) 60%, transparent 100%)',
+                            borderBottom: '1px solid rgba(139,92,246,0.12)',
+                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                         }}>
-                            <Sparkles size={19} color="var(--color-ai)" strokeWidth={1.75} />
+                            <button
+                                className="icon-btn"
+                                onClick={() => { d.setGeneratedText(''); }}
+                                title="Voltar e configurar"
+                                style={{ padding: 4, flexShrink: 0 }}
+                            >
+                                <ArrowLeft size={16} color="var(--color-ai)" />
+                            </button>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {d.declarationType || 'Declaração'}
+                                </div>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {companies.find(c => c.id === d.selectedCompanyId)?.razaoSocial || ''}
+                                </div>
+                            </div>
+                            <button
+                                className="btn btn-outline"
+                                style={{ fontSize: '0.7rem', padding: '4px 10px', gap: 4, flexShrink: 0 }}
+                                onClick={d.handleGenerate}
+                                disabled={d.isGenerating}
+                            >
+                                {d.isGenerating ? <Loader2 size={11} className="spin" /> : <RotateCcw size={11} />}
+                                Regenerar
+                            </button>
                         </div>
-                        <div>
-                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Configuração da Declaração</div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>Configure e gere declarações formais a partir do edital</div>
+
+                        <div style={{ padding: 'var(--space-4)' }}>
+                            {/* Destinatário — auto-populated */}
+                            <LayoutSection label="Destinatário">
+                                <input className="decl-small-input" style={{ marginBottom: 6 }} placeholder="Agente de Contratação / Pregoeiro" value={d.layout.addresseeName} onChange={(e) => d.updateLayout({ addresseeName: e.target.value })} />
+                                <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '38px', resize: 'none' }} placeholder="Órgão / Pregão nº..." value={d.layout.addresseeOrg} onChange={(e) => d.updateLayout({ addresseeOrg: e.target.value })} />
+                            </LayoutSection>
+
+                            {/* Emitente — toggle sutil */}
+                            <IssuerTypeSelector
+                                issuerType={d.issuerType}
+                                setIssuerType={d.setIssuerType}
+                                selectedCompanyId={d.selectedCompanyId}
+                                companies={companies}
+                            />
                         </div>
                     </div>
 
-                    {/* Fields */}
-                    <div style={{ padding: 'var(--space-5)' }}>
-                        <ConfigField label="Licitação Alvo" icon={<Briefcase size={10} />}>
-                            <select className="form-select" value={d.selectedBiddingId} onChange={(e) => d.handleBiddingChange(e.target.value)}>
-                                <option value="">— Selecione a licitação com análise IA —</option>
-                                {d.biddingsWithAnalysis.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-                            </select>
-                        </ConfigField>
+                    {/* Layout & Assinatura (collapsible) */}
+                    <LayoutSettingsPanel d={d} />
+                </div>
 
-                        <ConfigField label="Empresa Emitente" icon={<Building2 size={10} />}>
-                            <select className="form-select" value={d.selectedCompanyId} onChange={(e) => d.handleCompanyChange(e.target.value)}>
-                                <option value="">— Selecione a empresa —</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
-                            </select>
-                        </ConfigField>
+                {/* RIGHT: Editor & Preview */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                    <div style={{
+                        borderRadius: 'var(--radius-xl)',
+                        border: '1px solid var(--color-border)',
+                        overflow: 'hidden',
+                        background: 'var(--color-bg-surface)',
+                        minHeight: 640,
+                        display: 'flex', flexDirection: 'column',
+                    }}>
+                        <EditorToolbar d={d} />
 
-                        <ConfigField label="Tipo de Declaração" icon={<FileSignature size={10} />}>
-                            {d.declarationTypesFromEdital.length === 0 ? (
-                                /* Sem tipos detectados: input livre */
-                                d.selectedBiddingId ? (
-                                    <input
-                                        className="form-select"
-                                        placeholder="Digite o tipo de declaração desejado..."
-                                        value={d.declarationType}
-                                        onChange={(e) => d.setDeclarationType(e.target.value)}
-                                        style={{ fontSize: 'var(--text-sm)' }}
-                                    />
-                                ) : (
-                                    <div style={{
-                                        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                                        background: 'var(--color-bg-body)',
-                                        border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)',
-                                        color: 'var(--color-text-tertiary)',
-                                    }}>
-                                        Selecione uma licitação acima.
-                                    </div>
-                                )
-                            ) : (
-                                /* Tipos detectados: select + opção "Outro" */
-                                <>
-                                    <select className="form-select" value={d.declarationType} onChange={(e) => {
-                                        if (e.target.value === '__custom__') d.setDeclarationType('');
-                                        else d.setDeclarationType(e.target.value);
-                                    }}>
-                                        {d.declarationTypesFromEdital.map((t: string, i: number) => <option key={i} value={t}>{t}</option>)}
-                                        <option value="__custom__">✏️ Outro tipo...</option>
-                                    </select>
-                                    {!d.declarationTypesFromEdital.includes(d.declarationType) && (
-                                        <input
-                                            className="form-select"
-                                            placeholder="Descreva o tipo de declaração..."
-                                            value={d.declarationType}
-                                            onChange={(e) => d.setDeclarationType(e.target.value)}
-                                            style={{ fontSize: 'var(--text-sm)', marginTop: 'var(--space-1)' }}
-                                            autoFocus
-                                        />
-                                    )}
-                                </>
-                            )}
-                        </ConfigField>
-
-                        {/* Issuer type */}
-                        <IssuerTypeSelector
-                            issuerType={d.issuerType}
-                            setIssuerType={d.setIssuerType}
-                            selectedCompanyId={d.selectedCompanyId}
-                            companies={companies}
-                        />
-
-                        {/* Optional instructions — collapsed by default */}
-                        <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
-
-                        {/* Destinatário — auto-populated from bidding */}
-                        {d.selectedBiddingId && (
-                            <div style={{
-                                marginTop: 'var(--space-2)', padding: 'var(--space-3)',
-                                borderRadius: 'var(--radius-md)',
-                                border: '1px solid var(--color-border)',
-                                background: 'var(--color-bg-body)',
-                            }}>
-                                <label className="decl-small-label" style={{ marginBottom: 4 }}>Destinatário</label>
-                                <input className="form-select" style={{ fontSize: '0.8rem', marginBottom: 6 }} placeholder="Agente de Contratação / Pregoeiro" value={d.layout.addresseeName} onChange={(e) => d.updateLayout({ addresseeName: e.target.value })} />
-                                <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '38px', resize: 'none' }} placeholder="Órgão / Pregão nº..." value={d.layout.addresseeOrg} onChange={(e) => d.updateLayout({ addresseeOrg: e.target.value })} />
+                        {d.isGenerating && !d.generatedText ? (
+                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                                <Loader2 size={36} className="spin" color="var(--color-ai)" />
+                                <div style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>Gerando declaração com IA...</div>
+                            </div>
+                        ) : (
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                <DeclarationPreview
+                                    layout={d.layout}
+                                    declarationType={d.declarationType}
+                                    generatedText={d.generatedText}
+                                    setGeneratedText={d.setGeneratedText}
+                                />
                             </div>
                         )}
+                    </div>
+                </div>
+            </div>
+        )}
+        <ConfirmDialog
+            open={!!d.confirmAction}
+            title={d.confirmAction?.type === 'deleteLayout' ? 'Excluir Layout' : 'Limpar Layout'}
+            message={d.confirmAction?.type === 'deleteLayout' ? 'Excluir este layout permanentemente? Esta ação não pode ser desfeita.' : 'Limpar todos os campos deste layout?'}
+            variant={d.confirmAction?.type === 'deleteLayout' ? 'danger' : 'warning'}
+            confirmLabel={d.confirmAction?.type === 'deleteLayout' ? 'Excluir' : 'Limpar'}
+            onConfirm={() => d.confirmAction?.onConfirm()}
+            onCancel={() => d.setConfirmAction(null)}
+        />
+        </>
+    );
+}
 
-                        {/* Generate CTA */}
-                        <button
-                            className="btn btn-primary"
-                            style={{
-                                width: '100%', height: '50px', gap: 'var(--space-2)', marginTop: 'var(--space-3)',
-                                background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
-                                border: 'none', borderRadius: 'var(--radius-xl)',
-                                boxShadow: '0 6px 20px rgba(139,92,246,0.28)',
-                                fontSize: 'var(--text-md)', fontWeight: 800, letterSpacing: '-0.01em',
-                            }}
-                            onClick={d.handleGenerate}
-                            disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType}
-                        >
-                            {d.isGenerating ? <Loader2 size={20} className="spin" /> : <Sparkles size={20} />}
-                            {d.isGenerating ? 'Gerando declaração...' : 'Gerar Declaração'}
-                        </button>
+// ═══════════════════════════════════════════════
+// STEP 1 — Wizard Focado
+// ═══════════════════════════════════════════════
+
+function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>; companies: CompanyProfile[] }) {
+    return (
+        <div style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-8)', alignItems: 'start' }}>
+
+            {/* LEFT: Config */}
+            <div style={{
+                borderRadius: 'var(--radius-xl)',
+                border: '1px solid rgba(139,92,246,0.2)',
+                overflow: 'hidden',
+                background: 'var(--color-bg-surface)',
+                boxShadow: '0 4px 24px rgba(139,92,246,0.08)',
+            }}>
+                {/* Header */}
+                <div style={{
+                    padding: 'var(--space-6) var(--space-6)',
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.07) 0%, rgba(37,99,235,0.04) 60%, transparent 100%)',
+                    borderBottom: '1px solid rgba(139,92,246,0.12)',
+                    display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                }}>
+                    <div style={{
+                        width: 44, height: 44, borderRadius: 'var(--radius-lg)',
+                        background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(37,99,235,0.1))',
+                        border: '1px solid rgba(139,92,246,0.25)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                        <Sparkles size={22} color="var(--color-ai)" strokeWidth={1.75} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Nova Declaração</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', marginTop: 3 }}>Gere declarações formais a partir do edital com IA</div>
                     </div>
                 </div>
 
-                {/* ── Layout & Assinatura (collapsible) ── */}
-                <LayoutSettingsPanel d={d} />
+                {/* Fields */}
+                <div style={{ padding: 'var(--space-5) var(--space-6)' }}>
+                    <ConfigField label="Licitação" icon={<Briefcase size={10} />} stepNumber={1}>
+                        <select className="form-select" value={d.selectedBiddingId} onChange={(e) => d.handleBiddingChange(e.target.value)}>
+                            <option value="">— Selecione a licitação —</option>
+                            {d.biddingsWithAnalysis.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                        </select>
+                    </ConfigField>
+
+                    <ConfigField label="Empresa" icon={<Building2 size={10} />} stepNumber={2}>
+                        <select className="form-select" value={d.selectedCompanyId} onChange={(e) => d.handleCompanyChange(e.target.value)}>
+                            <option value="">— Selecione a empresa —</option>
+                            {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
+                        </select>
+                    </ConfigField>
+
+                    <ConfigField label="Tipo de Declaração" icon={<FileSignature size={10} />} stepNumber={3}>
+                        {d.declarationTypesFromEdital.length === 0 ? (
+                            d.selectedBiddingId ? (
+                                <input
+                                    className="form-select"
+                                    placeholder="Digite o tipo de declaração desejado..."
+                                    value={d.declarationType}
+                                    onChange={(e) => d.setDeclarationType(e.target.value)}
+                                    style={{ fontSize: 'var(--text-sm)' }}
+                                />
+                            ) : (
+                                <div style={{
+                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                                    background: 'var(--color-bg-body)',
+                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)',
+                                    color: 'var(--color-text-tertiary)',
+                                }}>
+                                    Selecione uma licitação acima.
+                                </div>
+                            )
+                        ) : (
+                            <>
+                                <select className="form-select" value={d.declarationType} onChange={(e) => {
+                                    if (e.target.value === '__custom__') d.setDeclarationType('');
+                                    else d.setDeclarationType(e.target.value);
+                                }}>
+                                    {d.declarationTypesFromEdital.map((t: string, i: number) => <option key={i} value={t}>{t}</option>)}
+                                    <option value="__custom__">✏️ Outro tipo...</option>
+                                </select>
+                                {!d.declarationTypesFromEdital.includes(d.declarationType) && (
+                                    <input
+                                        className="form-select"
+                                        placeholder="Descreva o tipo de declaração..."
+                                        value={d.declarationType}
+                                        onChange={(e) => d.setDeclarationType(e.target.value)}
+                                        style={{ fontSize: 'var(--text-sm)', marginTop: 'var(--space-1)' }}
+                                        autoFocus
+                                    />
+                                )}
+                            </>
+                        )}
+                    </ConfigField>
+
+                    {/* Instruções adicionais — sutil */}
+                    <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
+
+                    {/* Generate CTA */}
+                    <button
+                        className="btn btn-primary"
+                        style={{
+                            width: '100%', height: '52px', gap: 'var(--space-2)', marginTop: 'var(--space-2)',
+                            background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
+                            border: 'none', borderRadius: 'var(--radius-xl)',
+                            boxShadow: d.selectedBiddingId && d.selectedCompanyId && d.declarationType ? '0 6px 24px rgba(139,92,246,0.30)' : undefined,
+                            fontSize: 'var(--text-md)', fontWeight: 800, letterSpacing: '-0.01em',
+                            opacity: (!d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType) ? 0.5 : 1,
+                            transition: 'all 0.2s',
+                        }}
+                        onClick={d.handleGenerate}
+                        disabled={d.isGenerating || !d.selectedBiddingId || !d.selectedCompanyId || !d.declarationType}
+                    >
+                        {d.isGenerating ? <Loader2 size={20} className="spin" /> : <Sparkles size={20} />}
+                        {d.isGenerating ? 'Gerando declaração...' : 'Gerar Declaração'}
+                    </button>
+                </div>
             </div>
 
-            {/* ─────────────── RIGHT: Editor & Preview ─────────────── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {/* RIGHT: Info panel */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+                {/* Feature cards */}
                 <div style={{
-                    borderRadius: 'var(--radius-xl)',
-                    border: '1px solid var(--color-border)',
-                    overflow: 'hidden',
-                    background: 'var(--color-bg-surface)',
-                    minHeight: 640,
-                    display: 'flex', flexDirection: 'column',
+                    display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
+                    padding: 'var(--space-8) var(--space-6)',
                 }}>
-                    {/* Editor toolbar */}
-                    <EditorToolbar d={d} />
-
-                    {/* Content */}
-                    {!d.generatedText && !d.isGenerating ? (
-                        <EditorEmptyState />
-                    ) : (
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                            <DeclarationPreview
-                                layout={d.layout}
-                                declarationType={d.declarationType}
-                                generatedText={d.generatedText}
-                                setGeneratedText={d.setGeneratedText}
-                            />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                        <div style={{
+                            width: 48, height: 48, borderRadius: 'var(--radius-xl)',
+                            background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(37,99,235,0.08))',
+                            border: '1px solid rgba(139,92,246,0.2)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                            <FileText size={22} color="var(--color-ai)" strokeWidth={1.6} />
                         </div>
-                    )}
+                        <div>
+                            <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-ai)', marginBottom: 2 }}>Estúdio Documental</div>
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Gerador de Declarações</div>
+                        </div>
+                    </div>
+
+                    <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', lineHeight: 1.7, maxWidth: 360 }}>
+                        Selecione a <strong>licitação</strong> e o <strong>tipo</strong>, e a IA irá gerar a declaração formal com base nas exigências do edital.
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                        {[
+                            { icon: '✨', title: 'Inteligência do Edital', desc: 'Texto gerado com base na análise IA do edital' },
+                            { icon: '⚖️', title: 'Rigor Jurídico', desc: 'Linguagem formal aderente à Lei 14.133/2021' },
+                            { icon: '📝', title: 'Editável', desc: 'Revise e ajuste o texto antes de exportar' },
+                            { icon: '📄', title: 'PDF Pronto', desc: 'Exporta como PDF com cabeçalho e assinatura' },
+                        ].map((f, i) => (
+                            <div key={i} style={{
+                                display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)',
+                                padding: 'var(--space-3) var(--space-4)',
+                                borderRadius: 'var(--radius-lg)',
+                                background: 'var(--color-bg-surface)',
+                                border: '1px solid var(--color-border)',
+                            }}>
+                                <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{f.icon}</span>
+                                <div>
+                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 1 }}>{f.title}</div>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>{f.desc}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Ghost document outline */}
+                <div style={{ padding: 'var(--space-6)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
+                    <div style={{ opacity: 0.18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 3 }}>
+                            <div style={{ width: 50, height: 14, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                        </div>
+                        <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 6, marginBottom: 6, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                            <div style={{ height: 6, width: '65%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                            <div style={{ height: 6, width: '45%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 6 }}>
+                            <div style={{ height: 6, width: '40%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                            <div style={{ height: 6, width: '55%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                            <div style={{ height: 8, width: '50%', borderRadius: 3, background: 'var(--color-ai)', opacity: 0.5 }} />
+                        </div>
+                        {[95, 85, 90, 70, 88, 75, 55].map((w, i) => (
+                            <div key={i} style={{ height: 6, width: `${w}%`, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                        ))}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginTop: 18 }}>
+                            <div style={{ height: 1, width: '45%', background: 'var(--color-text-tertiary)' }} />
+                            <div style={{ height: 6, width: '35%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                            <div style={{ height: 5, width: '30%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-            <ConfirmDialog
-                open={!!d.confirmAction}
-                title={d.confirmAction?.type === 'deleteLayout' ? 'Excluir Layout' : 'Limpar Layout'}
-                message={d.confirmAction?.type === 'deleteLayout' ? 'Excluir este layout permanentemente? Esta ação não pode ser desfeita.' : 'Limpar todos os campos deste layout?'}
-                variant={d.confirmAction?.type === 'deleteLayout' ? 'danger' : 'warning'}
-                confirmLabel={d.confirmAction?.type === 'deleteLayout' ? 'Excluir' : 'Limpar'}
-                onConfirm={() => d.confirmAction?.onConfirm()}
-                onCancel={() => d.setConfirmAction(null)}
-            />
-        </>
     );
 }
 
@@ -206,7 +345,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
 // Sub-components
 // ═══════════════════════════════════════════════
 
-function ConfigField({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+function ConfigField({ label, icon, children, stepNumber }: { label: string; icon?: React.ReactNode; children: React.ReactNode; stepNumber?: number }) {
     return (
         <div style={{ marginBottom: 'var(--space-4)' }}>
             <label style={{
@@ -215,7 +354,15 @@ function ConfigField({ label, icon, children }: { label: string; icon?: React.Re
                 letterSpacing: '0.07em', color: 'var(--color-text-tertiary)',
                 marginBottom: 'var(--space-1)',
             }}>
-                {icon && <span style={{ opacity: 0.7 }}>{icon}</span>}
+                {stepNumber && (
+                    <span style={{
+                        width: 16, height: 16, borderRadius: '50%',
+                        background: 'var(--color-primary)', color: 'white',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.58rem', fontWeight: 800, letterSpacing: 0, flexShrink: 0,
+                    }}>{stepNumber}</span>
+                )}
+                {icon && !stepNumber && <span style={{ opacity: 0.7 }}>{icon}</span>}
                 {label}
             </label>
             {children}
@@ -286,8 +433,9 @@ function IssuerTypeSelector({ issuerType, setIssuerType, selectedCompanyId, comp
     selectedCompanyId: string; companies: CompanyProfile[];
 }) {
     const hasTechQual = selectedCompanyId && companies.find(c => c.id === selectedCompanyId)?.technicalQualification;
+    if (!hasTechQual && issuerType === 'company') return null; // Hide if no RT and already on company
     return (
-        <ConfigField label="Emitente da Declaração">
+        <LayoutSection label="Emitente da Declaração">
             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                 <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', cursor: 'pointer', border: issuerType === 'company' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'company' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'company' ? 600 : 400, transition: 'all 0.15s' }}>
                     <input type="radio" name="issuerType" checked={issuerType === 'company'} onChange={() => setIssuerType('company')} style={{ accentColor: 'var(--color-primary)', width: 13, height: 13 }} />
@@ -301,12 +449,12 @@ function IssuerTypeSelector({ issuerType, setIssuerType, selectedCompanyId, comp
             {issuerType === 'technical' && !hasTechQual && (
                 <p style={{ color: 'var(--color-danger)', fontSize: '0.72rem', marginTop: 4, marginBottom: 0 }}>Cadastre a qualificação técnica na aba Documentos → editar empresa.</p>
             )}
-        </ConfigField>
+        </LayoutSection>
     );
 }
 
 function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState(true); // Start collapsed
 
     return (
         <div style={{
@@ -319,7 +467,7 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
             <div
                 style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: 'var(--space-4) var(--space-5)',
+                    padding: 'var(--space-3) var(--space-4)',
                     background: collapsed ? 'var(--color-bg-surface)' : 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(99,102,241,0.02))',
                     borderBottom: collapsed ? 'none' : '1px solid var(--color-border)',
                     cursor: 'pointer',
@@ -327,51 +475,49 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
                 onClick={() => setCollapsed(c => !c)}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <div style={{ width: 26, height: 26, borderRadius: 'var(--radius-sm)', background: 'rgba(37,99,235,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Settings2 size={14} color="var(--color-primary)" />
+                    <div style={{ width: 24, height: 24, borderRadius: 'var(--radius-sm)', background: 'rgba(37,99,235,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Settings2 size={13} color="var(--color-primary)" />
                     </div>
                     <div>
-                        <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Layout &amp; Assinatura</div>
-                        {collapsed && <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)' }}>Cabeçalho, rodapé, destinatário e signatário</div>}
+                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Layout &amp; Assinatura</div>
+                        {collapsed && <div style={{ fontSize: '0.62rem', color: 'var(--color-text-tertiary)' }}>Cabeçalho, rodapé e signatário</div>}
                     </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     {!collapsed && (
                         <>
-                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: 4 }} onClick={(e) => { e.stopPropagation(); d.handleSaveLayout(); }}>
-                                {d.layoutSaved ? <CheckCircle2 size={11} color="var(--color-success)" /> : <Save size={11} />}
+                            <button className="btn btn-outline" style={{ fontSize: '0.68rem', padding: '2px 8px', gap: 3 }} onClick={(e) => { e.stopPropagation(); d.handleSaveLayout(); }}>
+                                {d.layoutSaved ? <CheckCircle2 size={10} color="var(--color-success)" /> : <Save size={10} />}
                                 {d.layoutSaved ? 'Salvo!' : 'Salvar'}
                             </button>
-                            <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '3px 8px', gap: 4 }} onClick={(e) => { e.stopPropagation(); d.handleCreateLayout(); }}>
-                                <Plus size={11} /> Novo
+                            <button className="btn btn-outline" style={{ fontSize: '0.68rem', padding: '2px 8px', gap: 3 }} onClick={(e) => { e.stopPropagation(); d.handleCreateLayout(); }}>
+                                <Plus size={10} /> Novo
                             </button>
                         </>
                     )}
-                    {collapsed ? <ChevronDown size={15} color="var(--color-text-tertiary)" /> : <ChevronUp size={15} color="var(--color-text-tertiary)" />}
+                    {collapsed ? <ChevronDown size={14} color="var(--color-text-tertiary)" /> : <ChevronUp size={14} color="var(--color-text-tertiary)" />}
                 </div>
             </div>
 
             {!collapsed && (
-                <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
+                <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
                     {/* Layout selector */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 'var(--space-2)', marginBottom: 'var(--space-3)', alignItems: 'center' }}>
-                        <select className="form-select" style={{ fontSize: '0.8rem' }} value={d.currentLayoutId} onChange={(e) => d.handleSwitchLayout(e.target.value)}>
+                        <select className="form-select" style={{ fontSize: '0.78rem' }} value={d.currentLayoutId} onChange={(e) => d.handleSwitchLayout(e.target.value)}>
                             {d.layouts.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                         </select>
                         <button className="icon-btn" style={{ color: 'var(--color-danger)', opacity: d.layouts.length > 1 ? 1 : 0.3 }} onClick={d.handleDeleteLayout} disabled={d.layouts.length <= 1}>
-                            <Trash2 size={14} />
+                            <Trash2 size={13} />
                         </button>
                     </div>
 
-                    <div style={{ marginBottom: 'var(--space-4)' }}>
+                    <div style={{ marginBottom: 'var(--space-3)' }}>
                         <label className="decl-small-label">Nome do Layout</label>
                         <input className="decl-small-input" value={d.layoutName} onChange={(e) => d.handleUpdateLayoutName(e.target.value)} placeholder="Ex: Layout Empresa A" />
                     </div>
 
-
-
                     {/* Local / Data — inline */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
                         <div>
                             <label className="decl-small-label">Local</label>
                             <input className="decl-small-input" value={d.layout.signatureCity} onChange={(e) => d.updateLayout({ signatureCity: e.target.value })} />
@@ -382,7 +528,7 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
                         </div>
                     </div>
 
-                    {/* Signatário — grouped block */}
+                    {/* Signatário */}
                     <LayoutSection label="Bloco de Assinatura">
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
                             <div><label className="decl-small-label">Nome</label><input className="decl-small-input" placeholder="NOME COMPLETO" value={d.layout.signatoryName} onChange={(e) => d.updateLayout({ signatoryName: e.target.value })} /></div>
@@ -421,8 +567,8 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
 
 function LayoutSection({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-body)', border: '1px solid var(--color-border)' }}>
-            <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-2)' }}>
+        <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-body)', border: '1px solid var(--color-border)' }}>
+            <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-2)' }}>
                 {label}
             </div>
             {children}
@@ -434,18 +580,18 @@ function EditorToolbar({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
     return (
         <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: 'var(--space-4) var(--space-6)',
+            padding: 'var(--space-3) var(--space-5)',
             borderBottom: '1px solid var(--color-border)',
             background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(99,102,241,0.02))',
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(37,99,235,0.1), rgba(99,102,241,0.06))', border: '1px solid rgba(37,99,235,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <FileText size={17} color="var(--color-primary)" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, rgba(37,99,235,0.1), rgba(99,102,241,0.06))', border: '1px solid rgba(37,99,235,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <FileText size={15} color="var(--color-primary)" />
                 </div>
                 <div>
-                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Documento Gerado</div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--color-text-tertiary)' }}>
-                        {d.generatedText ? 'Clique no texto para editar diretamente' : 'Aguardando configuração e geração'}
+                    <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.1 }}>Documento Gerado</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>
+                        {d.generatedText ? 'Clique no texto para editar diretamente' : 'Aguardando geração'}
                     </div>
                 </div>
             </div>
@@ -456,108 +602,19 @@ function EditorToolbar({ d }: { d: ReturnType<typeof useAiDeclaration> }) {
                     </span>
                 )}
                 <button className="btn btn-outline" onClick={d.handleAddToDocuments} disabled={!d.generatedText || d.isSaving}
-                    style={{ fontSize: '0.78rem', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    {d.isSaving ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
+                    style={{ fontSize: '0.75rem', padding: 'var(--space-2) var(--space-3)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {d.isSaving ? <Loader2 size={12} className="spin" /> : <Save size={12} />}
                     Vincular ao Dossiê
                 </button>
                 <button className="btn" onClick={d.handleExportPDF} disabled={!d.generatedText}
                     style={{
-                        fontSize: '0.78rem', padding: 'var(--space-2) var(--space-4)',
+                        fontSize: '0.75rem', padding: 'var(--space-2) var(--space-3)',
                         background: 'linear-gradient(135deg, var(--color-success), rgba(21,128,61,0.9))',
                         color: 'white', boxShadow: d.generatedText ? '0 3px 10px rgba(34,197,94,0.25)' : undefined,
-                        display: 'flex', alignItems: 'center', gap: 5,
+                        display: 'flex', alignItems: 'center', gap: 4,
                     }}>
-                    <Download size={13} /> Baixar PDF
+                    <Download size={12} /> Baixar PDF
                 </button>
-            </div>
-        </div>
-    );
-}
-
-function EditorEmptyState() {
-    return (
-        <div style={{
-            flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr',
-            minHeight: 500,
-        }}>
-            {/* LEFT: call to action */}
-            <div style={{
-                display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 'var(--space-5)',
-                padding: 'var(--space-12) var(--space-10)',
-                borderRight: '1px solid var(--color-border)',
-                background: 'linear-gradient(160deg, rgba(139,92,246,0.03) 0%, transparent 60%)',
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <div style={{
-                        width: 52, height: 52, borderRadius: 'var(--radius-xl)',
-                        background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(37,99,235,0.08))',
-                        border: '1px solid rgba(139,92,246,0.2)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                        <Sparkles size={24} color="var(--color-ai)" strokeWidth={1.6} />
-                    </div>
-                    <div>
-                        <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-ai)', marginBottom: 2 }}>Em espera</div>
-                        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Estúdio Documental</div>
-                    </div>
-                </div>
-
-                <p style={{ margin: 0, fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)', lineHeight: 1.65, maxWidth: 280 }}>
-                    Configure a <strong>licitação</strong>, <strong>empresa emitente</strong> e <strong>tipo de declaração</strong> ao lado,
-                    e clique em <strong>Gerar Declaração</strong>.
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                    {[
-                        'Texto ajustado automaticamente ao tipo de declaração',
-                        'Estrutura formal de documento jurídico-administrativo',
-                        'Editável diretamente antes de exportar',
-                        'Exporta como PDF pronto para assinatura',
-                    ].map((f, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                            <span style={{ color: 'var(--color-ai)', opacity: 0.7, marginTop: 1, flexShrink: 0 }}>·</span>
-                            {f}
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* RIGHT: ghost document outline */}
-            <div style={{
-                display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                padding: 'var(--space-10) var(--space-8)',
-                background: 'var(--color-bg-body)',
-            }}>
-                <div style={{ opacity: 0.22, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {/* Logo placeholder */}
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
-                        <div style={{ width: 60, height: 16, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                    </div>
-                    {/* Header line */}
-                    <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 8, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-                        <div style={{ height: 7, width: '70%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                        <div style={{ height: 7, width: '50%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                    </div>
-                    {/* Addressee */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
-                        <div style={{ height: 7, width: '45%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                        <div style={{ height: 7, width: '60%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                    </div>
-                    {/* Title */}
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-                        <div style={{ height: 10, width: '55%', borderRadius: 3, background: 'var(--color-ai)', opacity: 0.6 }} />
-                    </div>
-                    {/* Body lines */}
-                    {[100, 88, 95, 75, 92, 80, 60].map((w, i) => (
-                        <div key={i} style={{ height: 7, width: `${w}%`, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                    ))}
-                    {/* Signature */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 24 }}>
-                        <div style={{ height: 1, width: '50%', background: 'var(--color-text-tertiary)' }} />
-                        <div style={{ height: 7, width: '40%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                        <div style={{ height: 6, width: '35%', borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
-                    </div>
-                </div>
             </div>
         </div>
     );
