@@ -149,10 +149,11 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const favoritos = favStore.items as PncpBiddingItem[];
 
     // Computed: filtered favorites by active list
+    // "default" (Favoritos Gerais) → show ALL from ALL lists
     const filteredFavoritos = useMemo(() => {
-        const items = activeFavListId
-            ? favStore.items.filter(f => f._listId === activeFavListId)
-            : favStore.items;
+        const items = (!activeFavListId || activeFavListId === 'default')
+            ? favStore.items
+            : favStore.items.filter(f => f._listId === activeFavListId);
         return [...items].sort((a, b) => {
             const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
             const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
@@ -259,7 +260,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         }
     };
 
-    const favListItemCount = (listId: string) => favStore.items.filter(f => f._listId === listId).length;
+    // Count items for fav list — "default" shows ALL
+    const favListItemCount = (listId: string) => 
+        listId === 'default' ? favStore.items.length : favStore.items.filter(f => f._listId === listId).length;
 
     const exportFavoritesToPdf = () => {
         const itemsToExport = filteredFavoritos;
@@ -348,8 +351,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         return ['Pesquisas Gerais', ...rest];
     }, [savedSearches]);
 
+    // "Pesquisas Gerais" → show ALL from ALL lists
     const filteredSavedSearches = useMemo(() => {
-        if (!activeSearchListName) return savedSearches;
+        if (!activeSearchListName || activeSearchListName === 'Pesquisas Gerais') return savedSearches;
         return savedSearches.filter(s => (s.listName || 'Pesquisas Gerais') === activeSearchListName);
     }, [savedSearches, activeSearchListName]);
 
