@@ -906,25 +906,34 @@ RESUMO ESTRUTURADO DO EDITAL (Base compulsória):
 ${bidding.aiAnalysis?.schemaV2 ? buildModuleContext(bidding.aiAnalysis.schemaV2, 'declaration') : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
 
 INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
-1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário para conferir validade perante a Lei 14.133/2021.
-2. PRECISÃO TÉCNICA: Utilize terminologia jurídica moderna da nova Lei de Licitações. Evite termos arcaicos, mas mantenha a sobriedade e a autoridade de um documento oficial.
-3. TÍTULO: Gere um título técnico e resumido. NUNCA inclua citações de artigos de lei, incisos ou parágrafos no TÍTULO (Ex: NÃO use "Art. 63" ou "Lei 14.133" no título). O título deve ser puramente descritivo (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO DE TRABALHO INFANTIL").
-4. NOMES COMPLETOS: No corpo do texto, NUNCA abrevie nomes de pessoas ou da empresa. Transcreva exatamente como fornecido na qualificação.
 
-5. DECLARAÇÃO DE EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", a declaração DEVE citar nominalmente os dados do "RESPONSÁVEL TÉCNICO VINCULADO" fornecidos acima. NÃO utilize placeholders (Ex: [NOME]) se os dados estiverem disponíveis no contexto. Utilize espaços extras apenas para membros ADICIONAIS além do RT principal.
+1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário.
 
-${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}` : ''}
+2. ROBUSTEZ E PROFUNDIDADE (CRÍTICO): A declaração NÃO pode ser genérica ou superficial. DEVE conter TODOS estes elementos:
+   a) QUALIFICAÇÃO COMPLETA da empresa/profissional (razão social, CNPJ, endereço, representante legal com nome completo, CPF, cargo)
+   b) REFERÊNCIA EXPRESSA ao processo licitatório: citar o órgão "${orgaoName}", o Edital nº "${editalNum}", o Processo nº "${processNum}", a modalidade e o objeto
+   c) DECLARAÇÃO PRINCIPAL com fundamento legal específico — citar artigos, incisos e parágrafos da Lei 14.133/2021 ou legislação pertinente ao tipo de declaração
+   d) COMPROMISSOS: declarar que comunicará qualquer alteração superveniente e que manterá as condições declaradas durante toda a vigência do certame
+   e) CIÊNCIA DAS SANÇÕES: declarar ciência das penalidades previstas no art. 155 e seguintes da Lei 14.133/2021 por declaração falsa ou inverídica
+   f) FECHO: "Por ser expressão da verdade, firma a presente declaração para todos os fins de direito."
+   A declaração DEVE ter entre 5 e 12 parágrafos. Declarações com menos de 4 parágrafos serão consideradas INSUFICIENTES.
 
-6. REGRAS CRÍTICAS DE SAÍDA (FORMATO JSON):
-- Sua resposta DEVE conter APENAS o objeto JSON puro.
-- NUNCA use blocos de código markdown (como \`\`\`json ou \`\`\`).
-- FORMATO OBRIGATÓRIO: { "title": "...", "text": "..." }
-- O campo "text" deve começar DIRETAMENTE com a qualificação unificada: "${isTechnical ? '[Nome], [nacionalidade], [CREA/CAU], etc, DECLARA...' : 'A empresa [Razão Social], CNPJ [CNPJ], DECLARA...'}"
-- PROIBIÇÃO ABSOLUTA: NÃO inclua Local, Data, Nome do Signatário ou Cargo ao final do "text". O corpo deve terminar no ponto final da última frase da declaração. QUALQUER menção a "Lugar, Data" ou "Nome da Empresa" no final será considerada um erro grave.
-- EQUIPE TÉCNICA: Se for sobre pessoal técnico, APÓS citar o RT principal, adicione OBRIGATORIAMENTE um parágrafo: "[INDICAR AQUI OUTROS MEMBROS DA EQUIPE SE HOUVER: Nome, CPF e Qualificação]".
-- Texto LIMPO, sem negritos (**), sem aspas extras, sem quebras de linha desnecessárias dentro do JSON.
+3. TÍTULO: Gere um título técnico e descritivo. NUNCA inclua citações de artigos de lei no TÍTULO.
 
-7. CITAÇÃO DO ÓRGÃO E EDITAL: O corpo da declaração DEVE citar explicitamente o nome do órgão licitante ("${orgaoName}") e o número do edital ("${editalNum}") ou processo ("${processNum}"), quando disponíveis. Exemplo: "...referente ao Edital nº [número], promovido pela/pelo [Órgão]...". NUNCA usar genéricos como "referente ao processo licitatório em epígrafe" quando os dados estiverem disponíveis.`;
+4. NOMES COMPLETOS: NUNCA abrevie nomes de pessoas ou da empresa. Transcreva exatamente como fornecido.
+
+5. EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", a declaração DEVE citar nominalmente os dados do "RESPONSÁVEL TÉCNICO VINCULADO" fornecidos acima. NÃO utilize placeholders se os dados estiverem disponíveis. Adicione espaço para membros adicionais.
+
+${customPrompt ? `6. INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}
+` : ''}
+7. REGRAS DE SAÍDA (FORMATO JSON):
+- Responda APENAS com o objeto JSON puro. NUNCA use blocos markdown.
+- FORMATO: { "title": "...", "text": "..." }
+- O "text" deve começar com a qualificação: "${isTechnical ? 'Eu, [Nome], [nacionalidade], [profissão], inscrito no CREA/CAU sob nº..., DECLARO...' : 'A empresa [Razão Social], inscrita no CNPJ sob nº [CNPJ], com sede em [endereço], neste ato representada por [nome], [cargo], portador(a) do CPF nº [CPF], DECLARA...'}"
+- PROIBIÇÃO: NÃO inclua Local, Data ou Assinatura no "text" — são adicionados pelo sistema.
+- Texto LIMPO sem formatação markdown.
+
+8. CITAÇÃO DO ÓRGÃO E EDITAL: CITE explicitamente "${orgaoName}" e "Edital nº ${editalNum}" ou "Processo nº ${processNum}" no corpo. NUNCA use genéricos como "processo em epígrafe" quando os dados estiverem disponíveis.`;
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
@@ -934,7 +943,7 @@ ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${c
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
-                temperature: 0.7,
+                temperature: 0.3,
                 maxOutputTokens: 4096,
                 systemInstruction: DECLARATION_SYSTEM_PROMPT
             }
