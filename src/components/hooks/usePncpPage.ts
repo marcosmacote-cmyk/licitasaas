@@ -128,6 +128,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const [viewingAnalysisProcess, setViewingAnalysisProcess] = useState<BiddingProcess | null>(null);
     const [analyzedPncpItem, setAnalyzedPncpItem] = useState<PncpBiddingItem | null>(null);
     const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
+    const [analysisProgress, setAnalysisProgress] = useState<{ step: number; total: number; percent: number; message: string; detail?: string } | null>(null);
 
     // ─── Multi-list Favorites State ───
     const [favStore, setFavStore] = useState<FavStore>(loadFavStore);
@@ -557,6 +558,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         if (analyzingItemId) return;
         setAnalyzingItemId(item.id);
         setAnalyzedPncpItem(item);
+        setAnalysisProgress({ step: 0, total: 8, percent: 0, message: 'Iniciando análise...' });
         try {
             const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE_URL}/api/pncp/analyze`, {
@@ -564,9 +566,42 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ orgao_cnpj: item.orgao_cnpj, ano: item.ano, numero_sequencial: item.numero_sequencial, link_sistema: item.link_sistema })
             });
-            if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || 'Falha na análise IA'); }
 
-            const aiData = await response.json();
+            // Read SSE stream
+            const reader = response.body?.getReader();
+            if (!reader) throw new Error('Falha ao abrir stream');
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let aiData: any = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                // Parse SSE events ("data: {...}\n\n")
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || ''; // keep incomplete chunk
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+                        if (event.type === 'progress') {
+                            setAnalysisProgress({ step: event.step, total: event.total, percent: event.percent, message: event.message, detail: event.detail });
+                        } else if (event.type === 'result') {
+                            aiData = event.payload;
+                        } else if (event.type === 'error') {
+                            throw new Error(event.error || 'Erro desconhecido');
+                        }
+                    } catch (parseErr: any) {
+                        if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
+                    }
+                }
+            }
+
+            if (!aiData) throw new Error('Nenhum resultado recebido do servidor');
+
             const processObj = aiData.process || {};
             const analysisObj = aiData.analysis || {};
 
@@ -604,13 +639,12 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             setViewingAnalysisProcess(fakeProcess);
         } catch (error: any) {
             console.error('PNCP AI Analysis error:', error);
-            // Check for extraction insufficient error for a more helpful message
             if (error.message?.includes('insuficiente')) {
                 toast.error(`Análise IA indisponível: A IA não conseguiu extrair dados suficientes dos documentos deste edital. Os PDFs podem estar escaneados, protegidos ou em formato não-textual.`);
             } else {
                 toast.error(`Erro na análise IA: ${error.message}`);
             }
-        } finally { setAnalyzingItemId(null); }
+        } finally { setAnalyzingItemId(null); setAnalysisProgress(null); }
     };
 
     const handleSaveProcess = async (data: Partial<BiddingProcess>, aiData?: any) => {
@@ -657,7 +691,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // Modal state
         editingProcess, setEditingProcess,
         // AI state
-        analyzingItemId, pncpAnalysis, setPncpAnalysis,
+        analyzingItemId, analysisProgress, pncpAnalysis, setPncpAnalysis,
         viewingAnalysisProcess, setViewingAnalysisProcess,
         analyzedPncpItem, setAnalyzedPncpItem,
         pendingAiAnalysis, setPendingAiAnalysis,

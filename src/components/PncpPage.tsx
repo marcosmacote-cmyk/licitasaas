@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -579,7 +579,8 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 const isOnKanban = items.some(p => p.link && p.link === item.link_sistema);
 
                                 return (
-                                    <tr key={item.id} style={{ transition: 'background 0.15s' }}
+                                    <React.Fragment key={item.id}>
+                                    <tr style={{ transition: 'background 0.15s' }}
                                         onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
                                         onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
                                     >
@@ -703,7 +704,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                     title="Analisar edital com IA (busca PDFs do PNCP automaticamente)"
                                                 >
                                                     {p.analyzingItemId === item.id ? (
-                                                        <><Loader2 size={14} className="spinner" /> Analisando...</>
+                                                        <><Loader2 size={14} className="spinner" /> {p.analysisProgress ? `${p.analysisProgress.percent}%` : 'Analisando...'}</>
                                                     ) : (
                                                         <><Brain size={14} /> IA</>
                                                     )}
@@ -721,7 +722,52 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                             </div>
                                         </td>
                                     </tr>
-                                )
+                                    {/* ── AI Analysis Progress Bar (inline under analyzing row) ── */}
+                                    {p.analyzingItemId === item.id && p.analysisProgress && (
+                                        <tr>
+                                            <td colSpan={6} style={{ padding: 0, border: 'none' }}>
+                                                <div style={{
+                                                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%)',
+                                                    borderBottom: '1px solid rgba(99,102,241,0.15)',
+                                                    padding: '10px 16px',
+                                                    display: 'flex', alignItems: 'center', gap: '12px',
+                                                    animation: 'fadeIn 0.3s ease',
+                                                }}>
+                                                    <Loader2 size={16} className="spinner" style={{ color: 'var(--color-ai)', flexShrink: 0 }} />
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                                                {p.analysisProgress!.message}
+                                                            </span>
+                                                            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
+                                                                Etapa {p.analysisProgress!.step}/{p.analysisProgress!.total}
+                                                            </span>
+                                                        </div>
+                                                        {/* Progress bar */}
+                                                        <div style={{
+                                                            width: '100%', height: '6px',
+                                                            background: 'rgba(99,102,241,0.12)',
+                                                            borderRadius: '3px', overflow: 'hidden',
+                                                        }}>
+                                                            <div style={{
+                                                                width: `${p.analysisProgress!.percent}%`,
+                                                                height: '100%',
+                                                                background: 'linear-gradient(90deg, var(--color-primary), var(--color-ai))',
+                                                                borderRadius: '3px',
+                                                                transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                            }} />
+                                                        </div>
+                                                        {p.analysisProgress!.detail && (
+                                                            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '3px', display: 'block' }}>
+                                                                {p.analysisProgress!.detail}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>)
                             })
                         )}
                     </tbody>

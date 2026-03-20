@@ -1307,16 +1307,48 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
 
 // PNCP AI Analysis — analyzes a PNCP edital directly by fetching its PDF files
 app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
+    // ── SSE Setup ──
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+    });
+    res.flushHeaders();
+
+    const TOTAL_STEPS = 8;
+    const sendProgress = (step: number, message: string, detail?: string) => {
+        try {
+            res.write(`data: ${JSON.stringify({
+                type: 'progress', step, total: TOTAL_STEPS, message, detail,
+                percent: Math.round((step / TOTAL_STEPS) * 100)
+            })}\n\n`);
+        } catch (_) { /* connection closed */ }
+    };
+    const sendError = (error: string, details?: string) => {
+        try {
+            res.write(`data: ${JSON.stringify({ type: 'error', error, details })}\n\n`);
+            res.end();
+        } catch (_) { /* connection closed */ }
+    };
+    const sendResult = (payload: any) => {
+        try {
+            res.write(`data: ${JSON.stringify({ type: 'result', payload })}\n\n`);
+            res.end();
+        } catch (_) { /* connection closed */ }
+    };
+
     try {
         const { orgao_cnpj, ano, numero_sequencial, link_sistema } = req.body;
         if (!orgao_cnpj || !ano || !numero_sequencial) {
-            return res.status(400).json({ error: 'orgao_cnpj, ano e numero_sequencial são obrigatórios' });
+            return sendError('orgao_cnpj, ano e numero_sequencial são obrigatórios');
         }
 
         const agent = new https.Agent({ rejectUnauthorized: false });
         const JSZip = require('jszip');
 
         // 1. Fetch edital attachments from PNCP API (correct endpoint: /api/pncp/v1/)
+        sendProgress(1, 'Buscando documentos no PNCP...', 'Consultando lista de anexos do edital');
         const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}/arquivos`;
         console.log(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
 
@@ -1461,7 +1493,9 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         console.log(`[PNCP-AI] 📋 Catálogo completo: ${pncpAttachments.length} arquivos — ${JSON.stringify(purposeCounts)}`);
 
         console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
+        sendProgress(2, 'Baixando documentos...', `${filteredArquivos.length} arquivos relevantes de ${arquivos.length} total`);
 
+        let dlIndex = 0;
         for (const arq of filteredArquivos) {
             if (pdfParts.length >= MAX_PDF_PARTS) break;
 
@@ -1471,6 +1505,8 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             if (!fileUrl || !arq.statusAtivo) continue;
 
             try {
+                dlIndex++;
+                sendProgress(2, `Baixando documento ${dlIndex}/${filteredArquivos.length}...`, `"${fileName}"`);
                 console.log(`[PNCP-AI] Downloading: "${fileName}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId}) from ${fileUrl}`);
                 const fileRes = await axios.get(fileUrl, {
                     httpsAgent: agent,
@@ -1620,10 +1656,10 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         }
 
         if (pdfParts.length === 0) {
-            return res.status(400).json({
-                error: 'Nenhum arquivo PDF encontrado para este edital no PNCP.',
-                details: `Encontramos ${arquivos.length} arquivo(s) mas nenhum era PDF ou ZIP com PDFs.`
-            });
+            return sendError(
+                'Nenhum arquivo PDF encontrado para este edital no PNCP.',
+                `Encontramos ${arquivos.length} arquivo(s) mas nenhum era PDF ou ZIP com PDFs.`
+            );
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1641,9 +1677,11 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
         };
         console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
 
+        sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
+
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
-            return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
+            return sendError('GEMINI_API_KEY não configurada');
         }
         const ai = new GoogleGenAI({ apiKey });
         const analysisStartTime = Date.now();
@@ -1673,6 +1711,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             return `Doc${i + 1}: ${sizeKB}KB`;
         });
         const totalPdfSizeKB = pdfParts.reduce((sum: number, p: any) => sum + Buffer.from(p.inlineData.data, 'base64').length, 0) / 1024;
+        sendProgress(4, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${pdfParts.length} PDFs (${Math.round(totalPdfSizeKB)}KB)`);
         console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} PDFs, ${Math.round(totalPdfSizeKB)}KB total — ${pdfSizes.join(', ')})...`);
         let extractionJson: any;
         const t1Start = Date.now();
@@ -1828,23 +1867,12 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             console.error(`[PNCP-V2] ❌ FALHA FACTUAL DURA: ${extractedReqs} exigências (mín: ${MIN_REQUIREMENTS}), ${extractedEvidence} evidências (mín: ${MIN_EVIDENCE}), sem identificação do processo`);
             v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
             const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
-            return res.status(422).json({
-                error: 'Extração factual insuficiente',
-                details: `A IA não conseguiu extrair dados suficientes dos ${pdfParts.length} documento(s). ` +
+            return sendError(
+                'Extração factual insuficiente',
+                `A IA não conseguiu extrair dados suficientes dos ${pdfParts.length} documento(s). ` +
                     `Foram encontradas apenas ${extractedReqs} exigência(s) e ${extractedEvidence} evidência(s). ` +
-                    `Isso pode indicar que os documentos estão escaneados com baixa qualidade, protegidos, ou em formato não-textual.`,
-                diagnostics: {
-                    pdfs_sent: pdfParts.length,
-                    pdf_sizes: pdfSizes,
-                    requirements_found: extractedReqs,
-                    evidence_found: extractedEvidence,
-                    has_process_id: hasProcessId,
-                    parse_repaired: pipelineHealth.parseRepairs > 0,
-                    time_seconds: parseFloat(totalDuration),
-                    downloaded_files: downloadedFiles
-                },
-                _extraction_insufficient: true
-            });
+                    `Isso pode indicar que os documentos estão escaneados com baixa qualidade, protegidos, ou em formato não-textual.`
+            );
         }
 
         // Soft warning: Low quality extraction (still continues)
@@ -1881,6 +1909,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         if (missingCategories.length > 0) {
             console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')}`);
+            sendProgress(5, 'Completando categorias faltantes...', `${missingCategories.length} categorias precisam re-extração`);
             console.log(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
 
             const missingCatLabels: Record<string, string> = {
@@ -1962,6 +1991,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
 
 
         // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
+        sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
         console.log(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
         let normalizationJson: any = {};
         const extractionJsonCompact = JSON.stringify(extractionJson);  // Compact — saves ~20-30% tokens
@@ -2482,6 +2512,7 @@ Responda APENAS com JSON array:
 
         const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
         const totalReqs = Object.values(v2Result.requirements).reduce((sum, arr) => sum + arr.length, 0);
+        sendProgress(7, 'Validando completude da análise...', `${totalReqs} exigências, ${v2Result.evidence_registry.length} evidências`);
         console.log(`[PNCP-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
             `Modelos: ${uniqueModels.join('+')} | ` +
             `${totalReqs} exigências | ${v2Result.legal_risk_review.critical_points.length} riscos | ` +
@@ -2602,11 +2633,12 @@ Responda APENAS com JSON array:
         };
 
         console.log(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
-        res.json(finalPayload);
+        sendProgress(8, 'Análise concluída!', `Score: ${combinedScore}% • ${totalReqs} exigências • ${v2Result.legal_risk_review.critical_points.length} riscos`);
+        sendResult(finalPayload);
 
     } catch (error: any) {
         console.error('[PNCP-V2] Error:', error?.message || error);
-        res.status(500).json({ error: `Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}` });
+        sendError(`Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}`);
     }
 });
 
