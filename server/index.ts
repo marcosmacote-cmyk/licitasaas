@@ -1415,7 +1415,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
 
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 10; // Multi-part editals can have 5-10 parts
+        const MAX_PDF_PARTS = 15; // Multi-part editals can have 10-15 parts in large RARs
         const MAX_TOTAL_PDF_SIZE_KB = 50000; // 50MB budget — large editals with TR + annexes
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
@@ -1446,6 +1446,34 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
             'pecas_graficas', 'pecas graficas', 'peas_grficas', 'peas_graficas',
             'desenho_tecnico', 'desenho tecnico', 'peca_grafica',
         ];
+
+        // ── Smart-Sort: priorizar PDFs dentro de RAR/ZIP por relevância ──
+        const ARCHIVE_EXCLUDE_PATTERNS = [
+            'relatorio_fot', 'relatorio fot', 'relatório fot',
+            'licenca_ambiental', 'licença ambiental', 'licenca ambiental',
+            'art_de_projeto', 'art de projeto', 'anotacao_responsabilidade',
+            'marco_zero', 'marco zero',
+        ];
+
+        const archivePriorityScore = (name: string): number => {
+            const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            // Máxima prioridade: edital principal
+            if ((n.includes('edital') || n.includes('edital_bll') || n.includes('edital bll')) && !n.includes('modelo')) return 0;
+            if (n.includes('termo_referencia') || n.includes('termo de referencia') || n.includes('tr_')) return 1;
+            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orcamentaria')) return 2;
+            if (n.includes('cronograma')) return 3;
+            if (n.includes('bdi') || n.includes('encargos')) return 4;
+            if (n.includes('composic')) return 5;
+            if (n.includes('memoria') || n.includes('calculo')) return 6;
+            // Prioridade média: documentos complementares
+            if (n.includes('memorial')) return 50;
+            if (n.includes('projeto') || n.includes('pavimentac')) return 60;
+            // Baixa prioridade: fotos, licenças, ARTs
+            if (n.includes('relatorio_fot') || n.includes('relatorio fot') || n.includes('foto') || n.includes('marco_zero') || n.includes('marco zero')) return 90;
+            if (n.includes('licenca') || n.includes('licença')) return 91;
+            if (n.includes('art_') || n.includes('art ') || n.includes('anotacao')) return 92;
+            return 40; // Default
+        };
 
         // Keywords that indicate edital/TR content (should NOT be excluded even if "Outros Documentos")
         const ESSENTIAL_KEYWORDS = [
@@ -1588,10 +1616,16 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                     console.log(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
                         const zip = await JSZip.loadAsync(buffer);
-                        const zipEntries = Object.keys(zip.files).filter((name: string) =>
-                            name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir
-                        );
-                        console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
+                        let zipEntries = Object.keys(zip.files).filter((name: string) => {
+                            if (!name.toLowerCase().endsWith('.pdf') || zip.files[name].dir) return false;
+                            const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
+                            if (excluded) { console.log(`[PNCP-AI] 🚫 ZIP: Excluído "${name}" (padrão filtrado)`); discardedFiles.push(`${name} (ZIP, filtrado)`); }
+                            return !excluded;
+                        });
+                        // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
+                        zipEntries.sort((a, b) => archivePriorityScore(a) - archivePriorityScore(b));
+                        console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s) (sorted): ${zipEntries.join(', ')}`);
 
                         for (const entryName of zipEntries) {
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
@@ -1635,12 +1669,17 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                         const extractor = await createExtractorFromData({ data: new Uint8Array(buffer).buffer });
                         const extracted = extractor.extract({});
                         const files = [...extracted.files];
-                        const pdfFiles = files.filter(f =>
-                            f.fileHeader.name.toLowerCase().endsWith('.pdf') &&
-                            !f.fileHeader.flags.directory &&
-                            f.extraction
-                        );
-                        console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+                        const pdfFiles = files.filter(f => {
+                            if (!f.fileHeader.name.toLowerCase().endsWith('.pdf')) return false;
+                            if (f.fileHeader.flags.directory || !f.extraction) return false;
+                            const n = f.fileHeader.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
+                            if (excluded) { console.log(`[PNCP-AI] 🚫 RAR: Excluído "${f.fileHeader.name}" (padrão filtrado)`); discardedFiles.push(`${f.fileHeader.name} (RAR, filtrado)`); }
+                            return !excluded;
+                        });
+                        // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
+                        pdfFiles.sort((a, b) => archivePriorityScore(a.fileHeader.name) - archivePriorityScore(b.fileHeader.name));
+                        console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s) (sorted): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
 
                         for (const rarFile of pdfFiles) {
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
