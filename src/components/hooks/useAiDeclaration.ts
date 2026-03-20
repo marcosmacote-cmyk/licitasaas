@@ -373,21 +373,27 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         for (const para of paragraphs) {
             const trimmed = para.trim();
             if (!trimmed) continue;
-            const isNumbered = /^\d+[\.)]\ /.test(trimmed);
+            const isNumbered = /^\d+[\.)\ ]/.test(trimmed);
             const indent = isNumbered ? 8 : 0;
             const textWidth = mw - indent;
             const paraLines = doc.splitTextToSize(trimmed, textWidth);
             const paraHeight = paraLines.length * lh;
 
             if (y + paraHeight <= contentMaxY) {
-                doc.text(trimmed, m + indent, y, { align: 'justify', maxWidth: textWidth });
-                y += paraHeight;
+                // Cabe inteiro na página — renderiza linha a linha
+                for (const line of paraLines) {
+                    doc.text(line, m + indent, y);
+                    y += lh;
+                }
             } else {
-                const linesAvailable = Math.floor((contentMaxY - y) / lh);
-                if (linesAvailable > 0) { const firstChunk = paraLines.slice(0, linesAvailable).join(' '); doc.text(firstChunk, m + indent, y, { align: 'justify', maxWidth: textWidth }); }
-                y = newPage(); resetBodyFont();
-                const remainingLines = paraLines.slice(linesAvailable > 0 ? linesAvailable : 0);
-                if (remainingLines.length > 0) { const rest = remainingLines.join(' '); doc.text(rest, m + indent, y, { align: 'justify', maxWidth: textWidth }); y += remainingLines.length * lh; }
+                // Não cabe — divide entre páginas, linha a linha
+                for (let li = 0; li < paraLines.length; li++) {
+                    if (y + lh > contentMaxY) {
+                        y = newPage(); resetBodyFont();
+                    }
+                    doc.text(paraLines[li], m + indent, y);
+                    y += lh;
+                }
             }
             y += 3;
         }

@@ -12,10 +12,10 @@ export const DECLARATION_SYSTEM_PROMPT = `Você é um gerador formal de declara�
 3. NÃO invente afirmações que não possam ser verificadas.
 4. NÃO varie demais a redação — use modelos consagrados de declarações licitatórias.
 5. NÃO inclua compromissos inexistentes no edital.
-6. SINALIZE campos que precisam ser preenchidos pela empresa: [NOME DA EMPRESA], [CNPJ], [ENDEREÇO], etc.
-7. SINALIZE quando informação essencial estiver AUSENTE na análise.
-8. Cada declaração deve ser AUTOCONTIDA — não depender de contexto externo.
-9. Use vocabulário canônico de licitações (outorga, declara para os devidos fins, etc.).
+6. USE os dados da empresa/profissional fornecidos no contexto. NÃO use placeholders como [NOME] ou [CNPJ] quando os dados já foram fornecidos. Use colchetes APENAS para dados opcionais que devem ser preenchidos manualmente (ex: membros adicionais da equipe técnica).
+7. Cada declaração deve ser AUTOCONTIDA — não depender de contexto externo.
+8. Use vocabulário canônico de licitações (outorga, declara para os devidos fins, etc.).
+9. CITE explicitamente o órgão licitante e o número do edital/processo no corpo da declaração quando estes dados forem fornecidos no contexto.
 
 ═══ TIPOS COMUNS ═══
 
@@ -26,20 +26,19 @@ export const DECLARATION_SYSTEM_PROMPT = `Você é um gerador formal de declara�
 - Declaração de conhecimento do edital e seus anexos
 - Declaração de visita técnica (quando obrigatória)
 - Declaração de disponibilidade de pessoal/equipamento
+- Declaração de indicação de pessoal técnico / equipe técnica
 - Declaração específica (conforme exigência do edital)
 
-═══ FORMATO ═══
+═══ FORMATO DE SAÍDA ═══
 
-DECLARAÇÃO DE [TIPO]
+Responda EXCLUSIVAMENTE com um objeto JSON puro:
+{ "title": "DECLARAÇÃO DE ...", "text": "A empresa ... DECLARA ..." }
 
-[NOME DA EMPRESA], inscrita no CNPJ sob nº [CNPJ], com sede na [ENDEREÇO], neste ato representada por [REPRESENTANTE], [CARGO], portador do CPF [CPF] e RG [RG], DECLARA, para os devidos fins e sob as penas da lei, que [CONTEÚDO DA DECLARAÇÃO].
-
-[CIDADE], [DATA].
-
-___________________________
-[NOME DO REPRESENTANTE]
-[CARGO]
-[CPF]`;
+REGRAS DO JSON:
+- Sem blocos de código markdown
+- O campo "text" contém APENAS o corpo da declaração (qualificação + conteúdo)
+- NÃO inclua local, data, assinatura ou nome do signatário no "text" — estes são adicionados automaticamente pelo sistema
+- Texto limpo, sem negritos (**), sem aspas extras`;
 
 export const DECLARATION_USER_INSTRUCTION = `Gere a declaração solicitada com base nas condições do edital.
 
