@@ -86,6 +86,7 @@ export interface AuthoritativeFacts {
     empresaRazaoSocial: string;        // Alinhado a CompanyProfile.razaoSocial
     empresaCnpj: string;               // Alinhado a CompanyProfile.cnpj
     empresaEndereco?: string;          // Extraído de qualification ou CompanyProfile.address
+    qualificacaoCompleta?: string;     // Texto completo de CompanyProfile.qualification — passado à IA literalmente
 
     // ── Representante Legal (fonte: qualification parsing) ──
     representanteNome?: string;        // Extraído via regex de CompanyProfile.qualification

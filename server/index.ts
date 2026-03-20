@@ -973,10 +973,8 @@ ${issuerBlock}
 ╠══════════════════════════════════════════════════════════════╣
 ║  Empresa: ${facts.empresaRazaoSocial}
 ║  CNPJ: ${facts.empresaCnpj}
-║  Endereço: ${facts.empresaEndereco || 'Conforme qualificação acima'}
-║  Representante: ${facts.representanteNome || 'Conforme qualificação acima'}
-║  CPF: ${facts.representanteCpf || 'Conforme qualificação acima'}
-║  Cargo: ${facts.representanteCargo || 'Representante Legal'}
+║  QUALIFICAÇÃO COMPLETA (transcrever LITERALMENTE como abertura da declaração):
+║  ${facts.qualificacaoCompleta || `${facts.empresaRazaoSocial}, inscrita no CNPJ sob o nº ${facts.empresaCnpj}${facts.empresaEndereco ? `, com sede ${facts.empresaEndereco}` : ''}${facts.representanteNome ? `, neste ato representada por seu ${facts.representanteCargo || 'Representante Legal'} ${facts.representanteNome}${facts.representanteCpf ? `, CPF ${facts.representanteCpf}` : ''}` : ''}`}
 ║  Órgão: ${facts.orgaoLicitante}
 ║  Modalidade: ${facts.modalidade}
 ║  Edital nº: ${facts.editalNumero || 'Não identificado'}
@@ -997,7 +995,7 @@ INSTRUÇÕES RÍGIDAS:
 
 2. EXTENSÃO (${(() => { const c = FAMILY_LENGTH_CONSTRAINTS[family]; return `${c.minParagraphs} a ${c.maxParagraphs} parágrafos — ${c.styleHint}`; })()}):
    Estrutura recomendada:
-   a) QUALIFICAÇÃO COMPLETA (OBRIGATÓRIA em qualquer estilo): "${facts.empresaRazaoSocial}", CNPJ "${facts.empresaCnpj}"${facts.empresaEndereco ? `, com sede ${facts.empresaEndereco}` : ''}${facts.representanteNome ? `, neste ato representada por seu ${facts.representanteCargo || 'Representante Legal'} ${facts.representanteNome}${facts.representanteCpf ? `, CPF ${facts.representanteCpf}` : ''}` : ''}
+   a) QUALIFICAÇÃO COMPLETA (REGRA INVIOLÁVEL): Transcreva LITERALMENTE o texto da QUALIFICAÇÃO COMPLETA dos Fatos Autoritativos acima como parágrafo de abertura. NÃO resuma. NÃO omita campos. Inclua TODOS os dados pessoais do representante (nacionalidade, estado civil, profissão, nascimento, CPF, RG, endereço comercial).
    b) REFERÊNCIA: "${facts.orgaoLicitante}", Edital nº "${facts.editalNumero}", Processo nº "${facts.processoNumero}"
    c) DECLARAÇÃO PRINCIPAL: fundamento legal pertinente
    d) CIÊNCIA DAS SANÇÕES + FECHO FORMAL
@@ -1130,6 +1128,7 @@ app.post('/api/generate-declaration', authenticateToken, async (req: any, res) =
             empresaRazaoSocial: company.razaoSocial,
             empresaCnpj: company.cnpj,
             empresaEndereco: companyAddress,
+            qualificacaoCompleta: qual.trim() || undefined,
             representanteNome: representanteName,
             representanteCpf: representanteCpf,
             representanteCargo: representanteCargo,
