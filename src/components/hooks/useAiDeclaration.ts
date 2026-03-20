@@ -152,6 +152,36 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         }
     }, [selectedBiddingId]);
 
+    // Auto-update destinatário whenever bidding changes (including initialBiddingId)
+    useEffect(() => {
+        if (!selectedBiddingId) return;
+        const b = biddings.find(x => x.id === selectedBiddingId);
+        if (!b) return;
+
+        const tit = (b.title || '').trim();
+        const mod = (b.modality || '').trim();
+        const dashParts = tit.split(/\s+-\s+/);
+        const parts: string[] = [];
+
+        if (dashParts.length >= 2) {
+            const firstPart = dashParts[0].trim();
+            const orgPart = dashParts.slice(1).join(' - ').trim();
+            if (orgPart) parts.push(orgPart);
+            if (/\d/.test(firstPart)) {
+                const editalRef = firstPart.startsWith(mod) ? firstPart : `${mod} ${firstPart}`.trim();
+                parts.push(editalRef);
+            }
+        } else {
+            const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
+            parts.push(cleanTitle ? `${mod} nº ${cleanTitle}` : tit);
+        }
+
+        updateLayout({
+            addresseeOrg: parts.join('\n'),
+            addresseeName: 'Agente de Contratação',
+        });
+    }, [selectedBiddingId, biddings]);
+
     // Ensure date is always today on mount
     useEffect(() => {
         const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -236,36 +266,9 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         return [];
     }, [selectedBiddingId, biddings]);
 
-    // ── Bidding change handler ──
     const handleBiddingChange = (biddingId: string) => {
-        setSelectedBiddingId(biddingId);
+        setSelectedBiddingId(biddingId); // useEffect acima cuida do destinatário
         setDeclarationType('');
-        const b = biddings.find(x => x.id === biddingId);
-        if (b) {
-            // Anti-contaminação: extrair órgão do TÍTULO (confiável), não do schemaV2 (pode ser de outro certame)
-            const tit = (b.title || '').trim();
-            const mod = (b.modality || '').trim();
-            const dashParts = tit.split(/\s+-\s+/);
-            const parts: string[] = [];
-
-            if (dashParts.length >= 2) {
-                const firstPart = dashParts[0].trim();
-                const orgPart = dashParts.slice(1).join(' - ').trim();
-                if (orgPart) parts.push(orgPart);
-                if (/\d/.test(firstPart)) {
-                    const editalRef = firstPart.startsWith(mod) ? firstPart : `${mod} ${firstPart}`.trim();
-                    parts.push(editalRef);
-                }
-            } else {
-                const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
-                parts.push(cleanTitle ? `${mod} nº ${cleanTitle}` : tit);
-            }
-
-            updateLayout({
-                addresseeOrg: parts.join('\n'),
-                addresseeName: 'Agente de Contratação',
-            });
-        }
     };
 
     // Auto-select first declaration type
@@ -284,6 +287,14 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         if (matchingLayout && matchingLayout.id !== currentLayoutId) {
             setCurrentLayoutId(matchingLayout.id);
             setLayoutName(matchingLayout.name);
+            // Não precisa atualizar empresa — layout já tem os dados corretos
+            return;
+        }
+
+        // Se não encontrou layout da empresa, limpar imagens de outra empresa
+        const currentLay = layouts.find(l => l.id === currentLayoutId);
+        if (currentLay?.signatoryCompany && currentLay.signatoryCompany !== c.razaoSocial) {
+            updateLayout({ headerImage: null, footerImage: null });
         }
 
         const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
@@ -327,7 +338,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
         }
-    }, [issuerType, selectedCompanyId, companies, updateLayout, layouts, currentLayoutId]);
+    }, [issuerType, selectedCompanyId, companies, updateLayout]);
 
     const handleCompanyChange = (companyId: string) => setSelectedCompanyId(companyId);
 
