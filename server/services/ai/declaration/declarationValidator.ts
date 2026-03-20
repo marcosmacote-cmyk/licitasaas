@@ -24,7 +24,7 @@ import type {
     DeclarationQualityReport,
 } from './declarationTypes';
 
-import { VALIDATION_CODES, SEVERITY_PENALTIES } from './declarationTypes';
+import { VALIDATION_CODES, SEVERITY_PENALTIES, FAMILY_LENGTH_CONSTRAINTS } from './declarationTypes';
 
 // ═══════════════════════════════════════════════════════════════
 // TIPOS INTERNOS
@@ -214,10 +214,25 @@ const VALIDATION_RULES: ValidationRule[] = [
     {
         code: VALIDATION_CODES.STRUCTURE_TOO_SHORT,
         severity: 'minor',
-        check: (text, _lower, _facts) => {
+        check: (text, _lower, facts) => {
             const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 30);
-            if (paragraphs.length < 4) {
-                return `Declaração com apenas ${paragraphs.length} parágrafo(s) substantivo(s) (mínimo recomendado: 4).`;
+            const constraints = FAMILY_LENGTH_CONSTRAINTS[facts.declarationFamily] || FAMILY_LENGTH_CONSTRAINTS.CUSTOM_GENERIC;
+            if (paragraphs.length < constraints.minParagraphs) {
+                return `Declaração com apenas ${paragraphs.length} parágrafo(s) substantivo(s) (mínimo para ${facts.declarationFamily}: ${constraints.minParagraphs}).`;
+            }
+            return null;
+        },
+    },
+
+    {
+        code: VALIDATION_CODES.STRUCTURE_TOO_LONG,
+        severity: 'major',
+        check: (text, _lower, facts) => {
+            const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 30);
+            const constraints = FAMILY_LENGTH_CONSTRAINTS[facts.declarationFamily] || FAMILY_LENGTH_CONSTRAINTS.CUSTOM_GENERIC;
+            if (paragraphs.length > constraints.maxParagraphs + 2) {
+                // +2 de tolerância para não penalizar marginalmente
+                return `Declaração com ${paragraphs.length} parágrafos — excessivamente extensa para família ${facts.declarationFamily} (máximo recomendado: ${constraints.maxParagraphs}). Reduza prolixidade.`;
             }
             return null;
         },

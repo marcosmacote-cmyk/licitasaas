@@ -258,6 +258,12 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                         )}
                     </ConfigField>
 
+                    {/* Style selector */}
+                    <DeclarationStyleSelector
+                        style={d.declarationStyle}
+                        setStyle={d.setDeclarationStyle}
+                    />
+
                     {/* Instruções adicionais — sutil */}
                     <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
 
@@ -389,6 +395,55 @@ function ConfigField({ label, icon, children, stepNumber }: { label: string; ico
                 {label}
             </label>
             {children}
+        </div>
+    );
+}
+
+const STYLE_OPTIONS: { value: 'objetiva' | 'formal' | 'robusta'; label: string; desc: string }[] = [
+    { value: 'objetiva', label: '📝 Objetiva', desc: 'Direta, sem prolixidade' },
+    { value: 'formal', label: '⚖️ Formal', desc: 'Completa e moderada' },
+    { value: 'robusta', label: '📜 Robusta', desc: 'Detalhada e extensa' },
+];
+
+function DeclarationStyleSelector({ style, setStyle }: {
+    style: 'objetiva' | 'formal' | 'robusta';
+    setStyle: (v: 'objetiva' | 'formal' | 'robusta') => void;
+}) {
+    return (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+            <label style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.07em', color: 'var(--color-text-tertiary)',
+                marginBottom: 'var(--space-1)',
+            }}>
+                Estilo de Redação
+            </label>
+            <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
+                {STYLE_OPTIONS.map(opt => (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        title={opt.desc}
+                        onClick={() => setStyle(opt.value)}
+                        style={{
+                            flex: 1, padding: '6px 8px',
+                            borderRadius: 'var(--radius-md)',
+                            border: style === opt.value ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                            background: style === opt.value ? 'var(--color-primary-light)' : 'var(--color-bg-body)',
+                            cursor: 'pointer',
+                            fontSize: '0.72rem', fontWeight: style === opt.value ? 700 : 400,
+                            color: style === opt.value ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                            transition: 'all 0.15s',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+                            lineHeight: 1.2,
+                        }}
+                    >
+                        <span>{opt.label}</span>
+                        <span style={{ fontSize: '0.58rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{opt.desc}</span>
+                    </button>
+                ))}
+            </div>
         </div>
     );
 }

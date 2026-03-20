@@ -7,6 +7,7 @@
 // Types & Constants
 export type {
     DeclarationFamily,
+    DeclarationStyle,
     DeclarationIssuerType,
     AuthoritativeFacts,
     DeclarationValidationIssue,
@@ -22,6 +23,7 @@ export {
     DECLARATION_PROMPT_VERSION,
     VALIDATION_CODES,
     SEVERITY_PENALTIES,
+    FAMILY_LENGTH_CONSTRAINTS,
 } from './declarationTypes';
 
 // Parser

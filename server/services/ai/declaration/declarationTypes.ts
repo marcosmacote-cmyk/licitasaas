@@ -31,6 +31,25 @@ export type DeclarationFamily =
     | 'CORPORATE_STATUS'        // ME/EPP, enquadramento, regularidade fiscal/econômica
     | 'CUSTOM_GENERIC';         // Declarações atípicas não classificáveis
 
+/**
+ * Estilo de redação solicitado pelo usuário.
+ * Default: 'objetiva' (anti-prolixidade).
+ */
+export type DeclarationStyle = 'objetiva' | 'formal' | 'robusta';
+
+/** Restrições de extensão por família — usadas no prompt builder e validator */
+export const FAMILY_LENGTH_CONSTRAINTS: Record<DeclarationFamily, {
+    minParagraphs: number;
+    maxParagraphs: number;
+    styleHint: string;
+}> = {
+    SIMPLE_COMPLIANCE:      { minParagraphs: 2, maxParagraphs: 4,  styleHint: 'Objetiva e concisa. 2 a 3 parágrafos. Sem contextualização longa.' },
+    OPERATIONAL_COMMITMENT: { minParagraphs: 3, maxParagraphs: 6,  styleHint: 'Formal e completa. 3 a 5 parágrafos.' },
+    TECHNICAL_PERSONAL:     { minParagraphs: 3, maxParagraphs: 8,  styleHint: 'Extensão estritamente necessária para dados técnicos.' },
+    CORPORATE_STATUS:       { minParagraphs: 2, maxParagraphs: 5,  styleHint: 'Formal e precisa. 2 a 4 parágrafos.' },
+    CUSTOM_GENERIC:         { minParagraphs: 2, maxParagraphs: 6,  styleHint: 'Adequada ao tipo solicitado. Sem prolixidade.' },
+};
+
 // ═══════════════════════════════════════════════════════════════
 // 2. FATOS AUTORITATIVOS
 // ═══════════════════════════════════════════════════════════════
@@ -233,6 +252,7 @@ export const VALIDATION_CODES = {
     ORGAO_CORRECT_MISSING: 'ORGAO_CORRECT_MISSING',
     PLACEHOLDER_FOUND: 'PLACEHOLDER_FOUND',
     STRUCTURE_TOO_SHORT: 'STRUCTURE_TOO_SHORT',
+    STRUCTURE_TOO_LONG: 'STRUCTURE_TOO_LONG',
     EDITAL_CONTAMINATED: 'EDITAL_CONTAMINATED',
     PROCESS_CONTAMINATED: 'PROCESS_CONTAMINATED',
 } as const;

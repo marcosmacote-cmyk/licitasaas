@@ -19,8 +19,9 @@ import {
     summarizeReport,
     repairDeclaration,
     createGeminiRepairFn,
+    FAMILY_LENGTH_CONSTRAINTS,
 } from "./services/ai/declaration";
-import type { AuthoritativeFacts, DeclarationFamily } from "./services/ai/declaration";
+import type { AuthoritativeFacts, DeclarationFamily, DeclarationStyle } from "./services/ai/declaration";
 import { evaluateModuleQuality } from "./services/ai/modules/moduleQualityEvaluator";
 import { evaluateHumanReview } from "./services/ai/modules/humanReviewPolicy";
 import { submitFeedback, getFeedbackByModule, getFeedbackStats, AIExecutionFeedback } from "./services/ai/governance/feedbackService";
@@ -957,6 +958,7 @@ function buildDeclarationPrompt(
     issuerBlock: string,
     customPrompt: string | undefined,
     isTechnical: boolean,
+    style: DeclarationStyle = 'objetiva',
 ): string {
     return `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas (Lei 14.133/2021).
 Sua tarefa é redigir a declaração abaixo com RIGOR JURÍDICO MÁXIMO e ABSOLUTA FIDELIDADE FACTUAL.
@@ -993,13 +995,13 @@ INSTRUÇÕES RÍGIDAS:
 
 1. FIDELIDADE: Se o edital impuser texto específico para "${facts.declarationType}", transcreva-o integralmente.
 
-2. ESTRUTURA OBRIGATÓRIA (mínimo 5 parágrafos):
-   a) QUALIFICAÇÃO: usar EXATAMENTE "${facts.empresaRazaoSocial}", CNPJ "${facts.empresaCnpj}"${facts.representanteNome ? `, representada por "${facts.representanteNome}"` : ''}
-   b) REFERÊNCIA: citar "${facts.orgaoLicitante}", Edital nº "${facts.editalNumero}", Processo nº "${facts.processoNumero}"
-   c) DECLARAÇÃO PRINCIPAL: fundamento legal com artigos da Lei 14.133/2021
-   d) COMPROMISSOS: comunicar alteração superveniente
-   e) CIÊNCIA DAS SANÇÕES: art. 155 e ss. da Lei 14.133/2021
-   f) FECHO: "Por ser expressão da verdade, firma a presente declaração para todos os fins de direito."
+2. EXTENSÃO (${(() => { const c = FAMILY_LENGTH_CONSTRAINTS[family]; return `${c.minParagraphs} a ${c.maxParagraphs} parágrafos — ${c.styleHint}`; })()}):
+   Estrutura recomendada:
+   a) QUALIFICAÇÃO: "${facts.empresaRazaoSocial}", CNPJ "${facts.empresaCnpj}"${facts.representanteNome ? `, representada por "${facts.representanteNome}"` : ''}
+   b) REFERÊNCIA: "${facts.orgaoLicitante}", Edital nº "${facts.editalNumero}", Processo nº "${facts.processoNumero}"
+   c) DECLARAÇÃO PRINCIPAL: fundamento legal pertinente
+   d) CIÊNCIA DAS SANÇÕES + FECHO FORMAL
+   Para ${family === 'SIMPLE_COMPLIANCE' ? 'esta família, os blocos a) e b) PODEM ser fundidos em 1 parágrafo. NÃO desdobre artificialmente.' : 'famílias complexas, use parágrafos separados.'}${ family === 'SIMPLE_COMPLIANCE' ? '\n   REGRA ANTI-PROLIXIDADE: NÃO descreva o objeto, NÃO recontar histórico, NÃO multiplique compromissos além do necessário.' : ''}
 
 3. NOMES: Transcreva EXATAMENTE como nos FATOS AUTORITATIVOS. NUNCA abrevie, NUNCA invente dados.
 
@@ -1009,13 +1011,21 @@ ${facts.representanteNome ? '' : '\n   EXCEÇÃO: O nome do representante não f
 5. EQUIPE TÉCNICA: ${family === 'TECHNICAL_PERSONAL' ? 'Cite NOMINALMENTE os dados do RT fornecidos acima.' : 'N/A para este tipo.'}
 
 ${customPrompt ? `6. INSTRUÇÃO DO USUÁRIO: ${customPrompt}\n` : ''}
-7. FORMATO JSON PURO:
+${(() => {
+    const styleDirectives: Record<DeclarationStyle, string> = {
+        objetiva: '7. ESTILO: OBJETIVA — Vá direto ao ponto. Sem contextualização do objeto. Sem histórico do processo. Mínimo de parágrafos possível dentro do range da família.',
+        formal: '7. ESTILO: FORMAL — Linguagem jurídica completa com todos os blocos. Use extensão moderada.',
+        robusta: '7. ESTILO: ROBUSTA — Texto detalhado com referências extensas, compromissos explícitos e fundamentação legal ampla.',
+    };
+    return styleDirectives[style] || styleDirectives.objetiva;
+})()}
+8. FORMATO JSON PURO:
    { "title": "DECLARAÇÃO DE ...", "text": "A empresa ..." }
    - SEM blocos markdown. SEM negritos. SEM ${'```'}.
    - O "text" começa com qualificação: "${isTechnical ? 'Eu, [Nome], [profissão], inscrito no CREA/CAU..., DECLARO...' : `A empresa ${facts.empresaRazaoSocial}, inscrita no CNPJ sob nº ${facts.empresaCnpj}...DECLARA...`}"
    - NÃO inclua Local, Data, Assinatura — o sistema adiciona.
 
-8. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.`;
+9. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.`;
 }
 
 // ── Step 8-12: Agora modularizados em services/ai/declaration/ ──
@@ -1051,8 +1061,9 @@ function extractFromQualification(qualification: string, field: 'address' | 'nam
 app.post('/api/generate-declaration', authenticateToken, async (req: any, res) => {
     try {
         // ── Step 1: Receber request ──
-        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt } = req.body;
-        console.log(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) BID:${biddingProcessId}`);
+        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle } = req.body;
+        const style: DeclarationStyle = (['objetiva', 'formal', 'robusta'].includes(requestedStyle) ? requestedStyle : 'objetiva') as DeclarationStyle;
+        console.log(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} BID:${biddingProcessId}`);
 
         if (!biddingProcessId || !companyId || !declarationType) {
             return res.status(400).json({ error: 'Missing required parameters' });
@@ -1167,7 +1178,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
             ? buildModuleContext(bidding.aiAnalysis.schemaV2, 'declaration')
             : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500);
 
-        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical);
+        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style);
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });

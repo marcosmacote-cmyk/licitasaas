@@ -7,6 +7,8 @@ import { resolveStage, isModuleAllowed } from '../../governance';
 
 // ── Types ──
 
+export type DeclarationStyleOption = 'objetiva' | 'formal' | 'robusta';
+
 export interface QualityIssue {
     code: string;
     severity: 'critical' | 'major' | 'minor';
@@ -116,6 +118,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     const [declarationType, setDeclarationType] = useState('');
     const [issuerType, setIssuerType] = useState<'company' | 'technical'>('company');
     const [customPrompt, setCustomPrompt] = useState('');
+    const [declarationStyle, setDeclarationStyle] = useState<DeclarationStyleOption>('objetiva');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [generatedText, setGeneratedText] = useState('');
@@ -359,7 +362,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             const response = await fetch(`${API_BASE_URL}/api/generate-declaration`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ biddingProcessId: selectedBiddingId, companyId: selectedCompanyId, declarationType, issuerType, customPrompt, signatureCity: layout.signatureCity, signatureDate: today })
+                body: JSON.stringify({ biddingProcessId: selectedBiddingId, companyId: selectedCompanyId, declarationType, issuerType, customPrompt, style: declarationStyle, signatureCity: layout.signatureCity, signatureDate: today })
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.details || data.error || 'Falha ao gerar');
@@ -518,6 +521,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         // State
         selectedBiddingId, selectedCompanyId, declarationType, setDeclarationType,
         issuerType, setIssuerType, customPrompt, setCustomPrompt,
+        declarationStyle, setDeclarationStyle,
         isGenerating, isSaving, generatedText, setGeneratedText, saveSuccess,
         confirmAction, setConfirmAction, layoutSaved,
         layouts, currentLayoutId, layoutName, qualityReport, qualityWarning,
