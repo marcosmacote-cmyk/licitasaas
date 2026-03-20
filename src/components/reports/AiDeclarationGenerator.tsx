@@ -69,18 +69,46 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
 
                         <ConfigField label="Tipo de Declaração" icon={<FileSignature size={10} />}>
                             {d.declarationTypesFromEdital.length === 0 ? (
-                                <div style={{
-                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                                    background: d.selectedBiddingId ? 'var(--color-warning-bg)' : 'var(--color-bg-body)',
-                                    border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)',
-                                    color: 'var(--color-text-tertiary)',
-                                }}>
-                                    {d.selectedBiddingId ? 'Nenhuma declaração identificada neste edital.' : 'Selecione uma licitação acima.'}
-                                </div>
+                                /* Sem tipos detectados: input livre */
+                                d.selectedBiddingId ? (
+                                    <input
+                                        className="form-select"
+                                        placeholder="Digite o tipo de declaração desejado..."
+                                        value={d.declarationType}
+                                        onChange={(e) => d.setDeclarationType(e.target.value)}
+                                        style={{ fontSize: 'var(--text-sm)' }}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                                        background: 'var(--color-bg-body)',
+                                        border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)',
+                                        color: 'var(--color-text-tertiary)',
+                                    }}>
+                                        Selecione uma licitação acima.
+                                    </div>
+                                )
                             ) : (
-                                <select className="form-select" value={d.declarationType} onChange={(e) => d.setDeclarationType(e.target.value)}>
-                                    {d.declarationTypesFromEdital.map((t, i) => <option key={i} value={t}>{t}</option>)}
-                                </select>
+                                /* Tipos detectados: select + opção "Outro" */
+                                <>
+                                    <select className="form-select" value={d.declarationType} onChange={(e) => {
+                                        if (e.target.value === '__custom__') d.setDeclarationType('');
+                                        else d.setDeclarationType(e.target.value);
+                                    }}>
+                                        {d.declarationTypesFromEdital.map((t: string, i: number) => <option key={i} value={t}>{t}</option>)}
+                                        <option value="__custom__">✏️ Outro tipo...</option>
+                                    </select>
+                                    {!d.declarationTypesFromEdital.includes(d.declarationType) && (
+                                        <input
+                                            className="form-select"
+                                            placeholder="Descreva o tipo de declaração..."
+                                            value={d.declarationType}
+                                            onChange={(e) => d.setDeclarationType(e.target.value)}
+                                            style={{ fontSize: 'var(--text-sm)', marginTop: 'var(--space-1)' }}
+                                            autoFocus
+                                        />
+                                    )}
+                                </>
                             )}
                         </ConfigField>
 

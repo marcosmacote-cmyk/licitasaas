@@ -922,24 +922,56 @@ ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${c
         const result = await callGeminiWithRetry(genAI.models, {
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: { temperature: 0.7, maxOutputTokens: 4096 }
+            config: {
+                temperature: 0.7,
+                maxOutputTokens: 4096,
+                systemInstruction: DECLARATION_SYSTEM_PROMPT
+            }
         });
 
         let rawResponse = (result.text || '').trim();
-        // Extract JSON if it has markdown or extra text
-        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            return res.json({ text: rawResponse.replace(/\*\*/g, ''), title: declarationType.substring(0, 50) });
+
+        // ── Sanitização de artefatos markdown ──
+        const sanitize = (s: string) => s
+            .replace(/\*\*/g, '')           // Negritos markdown
+            .replace(/^#+\s*/gm, '')        // Headers markdown
+            .replace(/```[\s\S]*?```/g, '') // Code blocks
+            .replace(/\n{3,}/g, '\n\n')     // Múltiplas quebras
+            .trim();
+
+        // ── Parsing JSON robusto em 3 camadas ──
+        let parsed: any = null;
+
+        // Camada 1: Parse direto
+        try { parsed = JSON.parse(rawResponse); } catch {}
+
+        // Camada 2: Remover fences markdown e tentar novamente
+        if (!parsed) {
+            const cleaned = rawResponse
+                .replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+            try { parsed = JSON.parse(cleaned); } catch {}
         }
 
-        try {
-            const parsed = JSON.parse(jsonMatch[0]);
+        // Camada 3: Extrair JSON via regex
+        if (!parsed) {
+            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try { parsed = JSON.parse(jsonMatch[0]); } catch {}
+            }
+        }
+
+        // Resultado final
+        if (parsed?.text) {
             res.json({
-                text: parsed.text.replace(/\*\*/g, '').trim(),
-                title: parsed.title.replace(/\*\*/g, '').trim()
+                text: sanitize(parsed.text),
+                title: sanitize(parsed.title || declarationType).substring(0, 80)
             });
-        } catch (e) {
-            res.json({ text: rawResponse.replace(/\*\*/g, ''), title: declarationType.substring(0, 50) });
+        } else {
+            // Fallback: usar resposta bruta sanitizada
+            res.json({
+                text: sanitize(rawResponse),
+                title: declarationType.substring(0, 50)
+            });
         }
     } catch (error: any) {
         console.error("Declaration generation error:", error);

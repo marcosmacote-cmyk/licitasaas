@@ -194,8 +194,21 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     const declarationTypesFromEdital = useMemo(() => {
         if (!selectedBiddingId) return [];
         const b = biddings.find(b => b.id === selectedBiddingId);
-        if (!b?.aiAnalysis?.requiredDocuments) return [];
-        return extractDeclarationTypes(b.aiAnalysis.requiredDocuments);
+        if (!b?.aiAnalysis) return [];
+
+        // 1. Priorizar schemaV2.operational_outputs.declaration_routes (estruturado)
+        const schema = b.aiAnalysis.schemaV2;
+        if (schema?.operational_outputs?.declaration_routes?.length > 0) {
+            return schema.operational_outputs.declaration_routes.map(
+                (d: any) => typeof d === 'string' ? d : (d.name || d.title || JSON.stringify(d))
+            );
+        }
+
+        // 2. Fallback para requiredDocuments (heurística de keywords)
+        if (b.aiAnalysis.requiredDocuments) {
+            return extractDeclarationTypes(b.aiAnalysis.requiredDocuments);
+        }
+        return [];
     }, [selectedBiddingId, biddings]);
 
     // ── Bidding change handler ──
@@ -239,9 +252,10 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         const cpfMatch = qual.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
         if (cpfMatch) cpf = `CPF nº: ${cpfMatch[0]}`;
 
-        let fullName = c.contactName || '';
+        let fullName = '';
         const nameMatch = qual.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,.(0-9]{3,60})(?=\s*,\s*|,\s*brasileir|,\s*solteir|$)/i);
-        if (nameMatch?.[1]) { const d = nameMatch[1].trim(); if (d.split(' ').length > (fullName.split(' ').length || 0)) fullName = d; }
+        if (nameMatch?.[1]) fullName = nameMatch[1].trim();
+        if (!fullName) fullName = c.contactName || '';
 
         if (issuerType === 'technical' && c.technicalQualification) {
             const techLines = c.technicalQualification.split('\n').filter(l => l.trim());
@@ -272,12 +286,16 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         if (!selectedBiddingId || !selectedCompanyId || !declarationType) {
             toast.warning('Selecione licitação, empresa e tipo de declaração.'); return;
         }
+        // Atualizar data para o dia da geração
+        const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+        updateLayout({ signatureDate: today });
+
         setIsGenerating(true); setSaveSuccess(false);
         try {
             const response = await fetch(`${API_BASE_URL}/api/generate-declaration`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ biddingProcessId: selectedBiddingId, companyId: selectedCompanyId, declarationType, issuerType, customPrompt, signatureCity: layout.signatureCity, signatureDate: layout.signatureDate })
+                body: JSON.stringify({ biddingProcessId: selectedBiddingId, companyId: selectedCompanyId, declarationType, issuerType, customPrompt, signatureCity: layout.signatureCity, signatureDate: today })
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.details || data.error || 'Falha ao gerar');
