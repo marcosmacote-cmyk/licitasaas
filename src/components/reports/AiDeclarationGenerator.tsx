@@ -107,6 +107,47 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                     }}>
                         <EditorToolbar d={d} />
 
+                        {/* Quality Badge */}
+                        {d.qualityReport && !d.isGenerating && d.generatedText && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                                padding: 'var(--space-2) var(--space-4)',
+                                borderBottom: '1px solid var(--color-border)',
+                                background: d.qualityReport.grade === 'A' ? 'rgba(34,197,94,0.06)' :
+                                    d.qualityReport.grade === 'B' ? 'rgba(245,158,11,0.06)' :
+                                    d.qualityReport.grade === 'C' ? 'rgba(245,158,11,0.08)' :
+                                    'rgba(239,68,68,0.06)',
+                                fontSize: '0.75rem',
+                            }}>
+                                <span style={{
+                                    padding: '2px 8px', borderRadius: 'var(--radius-full)', fontWeight: 800,
+                                    fontSize: '0.7rem', letterSpacing: '0.05em',
+                                    background: d.qualityReport.grade === 'A' ? 'var(--color-success)' :
+                                        d.qualityReport.grade === 'B' ? 'var(--color-warning)' :
+                                        d.qualityReport.grade === 'C' ? 'var(--color-warning)' :
+                                        'var(--color-danger)',
+                                    color: 'white',
+                                }}>
+                                    {d.qualityReport.grade} {d.qualityReport.score}%
+                                </span>
+                                <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                                    Fidelidade Factual
+                                </span>
+                                {d.qualityReport.corrected && (
+                                    <span style={{
+                                        padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                                        background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)',
+                                        fontSize: '0.65rem', fontWeight: 700,
+                                    }}>
+                                        ⚡ Auto-corrigido
+                                    </span>
+                                )}
+                                <span style={{ marginLeft: 'auto', color: 'var(--color-text-tertiary)', fontSize: '0.65rem', fontStyle: 'italic' }}>
+                                    {d.qualityReport.family.replace(/_/g, ' ')}
+                                </span>
+                            </div>
+                        )}
+
                         {d.isGenerating && !d.generatedText ? (
                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 'var(--space-4)' }}>
                                 <Loader2 size={36} className="spin" color="var(--color-ai)" />

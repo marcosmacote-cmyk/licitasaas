@@ -102,6 +102,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [confirmAction, setConfirmAction] = useState<{ type: 'deleteLayout' | 'resetLayout'; onConfirm: () => void } | null>(null);
     const [layoutSaved, setLayoutSaved] = useState(false);
+    const [qualityReport, setQualityReport] = useState<{ score: number; grade: string; issues: string[]; corrections: string[]; corrected: boolean; family: string } | null>(null);
     const [layouts, setLayouts] = useState<LayoutConfig[]>(loadLayouts);
     const [currentLayoutId, setCurrentLayoutId] = useState<string>(layouts[0]?.id || 'default');
     const [layoutName, setLayoutName] = useState(layouts.find(l => l.id === currentLayoutId)?.name || 'Layout Principal');
@@ -343,6 +344,18 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             if (!response.ok) throw new Error(data.details || data.error || 'Falha ao gerar');
             setGeneratedText(data.text);
             if (data.title) setDeclarationType(data.title.toUpperCase());
+            // Capturar qualityReport da API v4
+            if (data.quality) {
+                setQualityReport(data.quality);
+                if (data.quality.corrected) {
+                    toast.warning(`Declaração auto-corrigida: ${data.quality.corrections.join('; ')}`);
+                }
+                if (data.quality.grade === 'D') {
+                    toast.error('⚠️ Qualidade baixa detectada. Revise a declaração com atenção.');
+                }
+            } else {
+                setQualityReport(null);
+            }
         } catch (error: any) { toast.error(`Erro ao gerar declaração: ${error.message}`); }
         finally { setIsGenerating(false); }
     };
@@ -483,7 +496,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         issuerType, setIssuerType, customPrompt, setCustomPrompt,
         isGenerating, isSaving, generatedText, setGeneratedText, saveSuccess,
         confirmAction, setConfirmAction, layoutSaved,
-        layouts, currentLayoutId, layoutName,
+        layouts, currentLayoutId, layoutName, qualityReport,
         // Computed
         layout, biddingsWithAnalysis, declarationTypesFromEdital,
         // Layout actions
