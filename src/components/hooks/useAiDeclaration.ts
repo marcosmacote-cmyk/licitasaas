@@ -217,24 +217,53 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         setDeclarationType('');
         const b = biddings.find(x => x.id === biddingId);
         if (b) {
-            const mod = (b.modality || '').trim();
-            const tit = (b.title || '').trim();
-            const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
-            const finalOrg = cleanTitle ? `${mod} nº ${cleanTitle}` : tit;
-
-            // Auto-preencher órgão a partir do schemaV2
+            // Prioridade 1: schemaV2.process_identification
             const schema = b.aiAnalysis?.schemaV2;
-            const orgao = schema?.process_identification?.orgao || '';
-            const editalNum = schema?.process_identification?.numero_edital || '';
-            const addresseeParts: string[] = [];
-            if (orgao) addresseeParts.push(orgao);
-            if (editalNum) addresseeParts.push(`Edital nº ${editalNum}`);
-            if (!orgao && !editalNum) addresseeParts.push(finalOrg);
+            const orgaoFromSchema = (schema as any)?.process_identification?.orgao || '';
+            const editalFromSchema = (schema as any)?.process_identification?.numero_edital || '';
+            const modalidadeFromSchema = (schema as any)?.process_identification?.modalidade || '';
 
-            updateLayout({
-                addresseeOrg: addresseeParts.join('\n'),
-                addresseeName: 'Agente de Contratação',
-            });
+            if (orgaoFromSchema || editalFromSchema) {
+                // SchemaV2 preenchido — usar dados estruturados
+                const parts: string[] = [];
+                if (orgaoFromSchema) parts.push(orgaoFromSchema);
+                const editalRef = editalFromSchema
+                    ? `${modalidadeFromSchema || b.modality || ''} nº ${editalFromSchema}`.trim()
+                    : '';
+                if (editalRef) parts.push(editalRef);
+                updateLayout({
+                    addresseeOrg: parts.join('\n'),
+                    addresseeName: 'Agente de Contratação',
+                });
+            } else {
+                // Fallback: extrair do título (ex: "Pregão Eletrônico 001/2026-SRP - Secretaria Municipal de Saúde - Canindé")
+                const tit = (b.title || '').trim();
+                const mod = (b.modality || '').trim();
+                // Tentar separar por " - " para isolar o órgão do número do edital
+                const dashParts = tit.split(/\s+-\s+/);
+                const parts: string[] = [];
+
+                if (dashParts.length >= 2) {
+                    // Primeira parte é geralmente a modalidade+número, o restante é o órgão
+                    const firstPart = dashParts[0].trim();
+                    const orgPart = dashParts.slice(1).join(' - ').trim();
+                    if (orgPart) parts.push(orgPart);
+                    // Se a primeira parte parece modalidade+número, usar como referência do edital
+                    if (/\d/.test(firstPart)) {
+                        const editalRef = firstPart.startsWith(mod) ? firstPart : `${mod} ${firstPart}`.trim();
+                        parts.push(editalRef);
+                    }
+                } else {
+                    // Sem separador — usar título completo
+                    const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
+                    parts.push(cleanTitle ? `${mod} nº ${cleanTitle}` : tit);
+                }
+
+                updateLayout({
+                    addresseeOrg: parts.join('\n'),
+                    addresseeName: 'Agente de Contratação',
+                });
+            }
         }
     };
 
