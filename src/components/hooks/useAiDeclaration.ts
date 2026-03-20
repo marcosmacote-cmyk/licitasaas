@@ -242,53 +242,29 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         setDeclarationType('');
         const b = biddings.find(x => x.id === biddingId);
         if (b) {
-            // Prioridade 1: schemaV2.process_identification
-            const schema = b.aiAnalysis?.schemaV2;
-            const orgaoFromSchema = (schema as any)?.process_identification?.orgao || '';
-            const editalFromSchema = (schema as any)?.process_identification?.numero_edital || '';
-            const modalidadeFromSchema = (schema as any)?.process_identification?.modalidade || '';
+            // Anti-contaminação: extrair órgão do TÍTULO (confiável), não do schemaV2 (pode ser de outro certame)
+            const tit = (b.title || '').trim();
+            const mod = (b.modality || '').trim();
+            const dashParts = tit.split(/\s+-\s+/);
+            const parts: string[] = [];
 
-            if (orgaoFromSchema || editalFromSchema) {
-                // SchemaV2 preenchido — usar dados estruturados
-                const parts: string[] = [];
-                if (orgaoFromSchema) parts.push(orgaoFromSchema);
-                const editalRef = editalFromSchema
-                    ? `${modalidadeFromSchema || b.modality || ''} nº ${editalFromSchema}`.trim()
-                    : '';
-                if (editalRef) parts.push(editalRef);
-                updateLayout({
-                    addresseeOrg: parts.join('\n'),
-                    addresseeName: 'Agente de Contratação',
-                });
-            } else {
-                // Fallback: extrair do título (ex: "Pregão Eletrônico 001/2026-SRP - Secretaria Municipal de Saúde - Canindé")
-                const tit = (b.title || '').trim();
-                const mod = (b.modality || '').trim();
-                // Tentar separar por " - " para isolar o órgão do número do edital
-                const dashParts = tit.split(/\s+-\s+/);
-                const parts: string[] = [];
-
-                if (dashParts.length >= 2) {
-                    // Primeira parte é geralmente a modalidade+número, o restante é o órgão
-                    const firstPart = dashParts[0].trim();
-                    const orgPart = dashParts.slice(1).join(' - ').trim();
-                    if (orgPart) parts.push(orgPart);
-                    // Se a primeira parte parece modalidade+número, usar como referência do edital
-                    if (/\d/.test(firstPart)) {
-                        const editalRef = firstPart.startsWith(mod) ? firstPart : `${mod} ${firstPart}`.trim();
-                        parts.push(editalRef);
-                    }
-                } else {
-                    // Sem separador — usar título completo
-                    const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
-                    parts.push(cleanTitle ? `${mod} nº ${cleanTitle}` : tit);
+            if (dashParts.length >= 2) {
+                const firstPart = dashParts[0].trim();
+                const orgPart = dashParts.slice(1).join(' - ').trim();
+                if (orgPart) parts.push(orgPart);
+                if (/\d/.test(firstPart)) {
+                    const editalRef = firstPart.startsWith(mod) ? firstPart : `${mod} ${firstPart}`.trim();
+                    parts.push(editalRef);
                 }
-
-                updateLayout({
-                    addresseeOrg: parts.join('\n'),
-                    addresseeName: 'Agente de Contratação',
-                });
+            } else {
+                const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
+                parts.push(cleanTitle ? `${mod} nº ${cleanTitle}` : tit);
             }
+
+            updateLayout({
+                addresseeOrg: parts.join('\n'),
+                addresseeName: 'Agente de Contratação',
+            });
         }
     };
 
@@ -297,11 +273,18 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         if (declarationTypesFromEdital.length > 0 && !declarationType) setDeclarationType(declarationTypesFromEdital[0]);
     }, [declarationTypesFromEdital]);
 
-    // Auto-populate company data
+    // Auto-populate company data + auto-select matching layout
     useEffect(() => {
         if (!selectedCompanyId) return;
         const c = companies.find(x => x.id === selectedCompanyId);
         if (!c) return;
+
+        // Auto-select layout that matches this company (by signatoryCompany)
+        const matchingLayout = layouts.find(l => l.signatoryCompany && l.signatoryCompany === c.razaoSocial);
+        if (matchingLayout && matchingLayout.id !== currentLayoutId) {
+            setCurrentLayoutId(matchingLayout.id);
+            setLayoutName(matchingLayout.name);
+        }
 
         const addr = c.qualification?.split(/sediada\s+(?:na|no|em)\s+/i)[1]?.split(/,?\s*neste\s+ato/i)[0]?.trim() || '';
         const qual = (c.qualification || '').trim();
@@ -344,7 +327,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                 footerText: `${c.razaoSocial} | CNPJ: ${c.cnpj}${addr ? `\nEnd: ${addr}` : ''}\nTel: ${c.contactPhone || ''} | Email: ${c.contactEmail || ''}`
             });
         }
-    }, [issuerType, selectedCompanyId, companies, updateLayout]);
+    }, [issuerType, selectedCompanyId, companies, updateLayout, layouts, currentLayoutId]);
 
     const handleCompanyChange = (companyId: string) => setSelectedCompanyId(companyId);
 
@@ -449,11 +432,9 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             const paraHeight = paraLines.length * lh;
 
             if (y + paraHeight <= contentMaxY) {
-                // Cabe inteiro na página — renderiza linha a linha
-                for (const line of paraLines) {
-                    doc.text(line, m + indent, y);
-                    y += lh;
-                }
+                // Cabe inteiro na página — renderiza justificado
+                doc.text(trimmed, m + indent, y, { align: 'justify', maxWidth: textWidth });
+                y += paraHeight;
             } else {
                 // Não cabe — divide entre páginas, linha a linha
                 for (let li = 0; li < paraLines.length; li++) {
@@ -473,7 +454,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
         // Location & Date
         if (layout.signatureCity || layout.signatureDate) {
-            doc.setFontSize(10.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(0);
+            doc.setFontSize(10.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(0);
             const dateLine = `${layout.signatureCity}${layout.signatureCity && layout.signatureDate ? ', ' : ''}${layout.signatureDate}.`;
             doc.text(dateLine, pw - m, y, { align: 'right' }); y += 15;
         }

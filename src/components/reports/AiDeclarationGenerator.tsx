@@ -78,12 +78,6 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                         </div>
 
                         <div style={{ padding: 'var(--space-4)' }}>
-                            {/* Destinatário — auto-populated */}
-                            <LayoutSection label="Destinatário">
-                                <input className="decl-small-input" style={{ marginBottom: 6 }} placeholder="Agente de Contratação / Pregoeiro" value={d.layout.addresseeName} onChange={(e) => d.updateLayout({ addresseeName: e.target.value })} />
-                                <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '38px', resize: 'none' }} placeholder="Órgão / Pregão nº..." value={d.layout.addresseeOrg} onChange={(e) => d.updateLayout({ addresseeOrg: e.target.value })} />
-                            </LayoutSection>
-
                             {/* Emitente — toggle sutil */}
                             <IssuerTypeSelector
                                 issuerType={d.issuerType}
@@ -729,11 +723,11 @@ function DeclarationPreview({ layout, declarationType, generatedText, setGenerat
             </div>
 
             {/* Body */}
-            <textarea className="decl-editor-text" value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} placeholder="Texto gerado aqui..." />
+            <textarea className="decl-editor-text" value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} placeholder="Texto gerado aqui..." style={{ textAlign: 'justify' }} />
 
             {/* Location/Date */}
             {(layout.signatureCity || layout.signatureDate) && (
-                <div style={{ textAlign: 'right', marginTop: 20, fontSize: '0.8rem', color: '#333', fontStyle: 'italic' }}>
+                <div style={{ textAlign: 'right', marginTop: 20, fontSize: '0.8rem', color: '#333' }}>
                     {layout.signatureCity}{layout.signatureCity && layout.signatureDate ? ', ' : ''}{layout.signatureDate}.
                 </div>
             )}
