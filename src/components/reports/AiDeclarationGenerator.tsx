@@ -46,8 +46,8 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                             <Sparkles size={19} color="var(--color-ai)" strokeWidth={1.75} />
                         </div>
                         <div>
-                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Configuração da IA</div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>Gere declarações formais a partir do edital analisado</div>
+                            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text-primary)', lineHeight: 1.1, letterSpacing: '-0.02em' }}>Configuração da Declaração</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>Configure e gere declarações formais a partir do edital</div>
                         </div>
                     </div>
 
@@ -122,6 +122,20 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
 
                         {/* Optional instructions — collapsed by default */}
                         <OptionalInstructions value={d.customPrompt} onChange={d.setCustomPrompt} />
+
+                        {/* Destinatário — auto-populated from bidding */}
+                        {d.selectedBiddingId && (
+                            <div style={{
+                                marginTop: 'var(--space-2)', padding: 'var(--space-3)',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--color-border)',
+                                background: 'var(--color-bg-body)',
+                            }}>
+                                <label className="decl-small-label" style={{ marginBottom: 4 }}>Destinatário</label>
+                                <input className="form-select" style={{ fontSize: '0.8rem', marginBottom: 6 }} placeholder="Agente de Contratação / Pregoeiro" value={d.layout.addresseeName} onChange={(e) => d.updateLayout({ addresseeName: e.target.value })} />
+                                <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '38px', resize: 'none' }} placeholder="Órgão / Pregão nº..." value={d.layout.addresseeOrg} onChange={(e) => d.updateLayout({ addresseeOrg: e.target.value })} />
+                            </div>
+                        )}
 
                         {/* Generate CTA */}
                         <button
@@ -354,11 +368,7 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
                         <input className="decl-small-input" value={d.layoutName} onChange={(e) => d.handleUpdateLayoutName(e.target.value)} placeholder="Ex: Layout Empresa A" />
                     </div>
 
-                    {/* Destinatário — grouped block */}
-                    <LayoutSection label="Destinatário">
-                        <input className="form-select" style={{ fontSize: '0.8rem', marginBottom: 6 }} placeholder="Agente de Contratação" value={d.layout.addresseeName} onChange={(e) => d.updateLayout({ addresseeName: e.target.value })} />
-                        <textarea className="form-select" style={{ fontSize: '0.8rem', minHeight: '38px', resize: 'none' }} placeholder="Órgão / Pregão nº..." value={d.layout.addresseeOrg} onChange={(e) => d.updateLayout({ addresseeOrg: e.target.value })} />
-                    </LayoutSection>
+
 
                     {/* Local / Data — inline */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>

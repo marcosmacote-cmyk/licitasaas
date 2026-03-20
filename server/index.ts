@@ -882,6 +882,12 @@ DADOS DO RESPONSÁVEL TÉCNICO VINCULADO:
 ${company.technicalQualification || 'Nenhum profissional técnico cadastrado no sistema.'}`;
         }
 
+        // Extrair dados do órgão e edital do schemaV2
+        const schema = bidding.aiAnalysis?.schemaV2;
+        const orgaoName = (schema as any)?.process_identification?.orgao || '';
+        const editalNum = (schema as any)?.process_identification?.numero_edital || '';
+        const processNum = (schema as any)?.process_identification?.numero_processo || '';
+
         const prompt = `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas, com enfoque na Lei nº 14.133/2021.
 Sua tarefa é redigir uma declaração com RIGOR JURÍDICO MÁXIMO e absoluta fidelidade aos requisitos do edital.
 
@@ -890,6 +896,9 @@ TIPO ORIGINAL: "${declarationType}"
 ${issuerBlock}
 
 LICITAÇÃO:
+Órgão Licitante: ${orgaoName || 'Não identificado'}
+Edital nº: ${editalNum || 'Não identificado'}
+Processo nº: ${processNum || 'Não identificado'}
 Objeto: ${bidding.title}
 Modalidade/Nº: ${bidding.modality || ''}
 
@@ -899,7 +908,7 @@ ${bidding.aiAnalysis?.schemaV2 ? buildModuleContext(bidding.aiAnalysis.schemaV2,
 INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
 1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário para conferir validade perante a Lei 14.133/2021.
 2. PRECISÃO TÉCNICA: Utilize terminologia jurídica moderna da nova Lei de Licitações. Evite termos arcaicos, mas mantenha a sobriedade e a autoridade de um documento oficial.
-3. TÍTULO: Gere um título técnico e resumido. NUNCA inclua citações de artigos de lei, incisos ou parágrafos no TÍTULO (Ex: NÃO use "Art. 63" ou "Lei 14.133" no título). O título deve ser puramente descriptivo (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO DE TRABALHO INFANTIL").
+3. TÍTULO: Gere um título técnico e resumido. NUNCA inclua citações de artigos de lei, incisos ou parágrafos no TÍTULO (Ex: NÃO use "Art. 63" ou "Lei 14.133" no título). O título deve ser puramente descritivo (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO DE TRABALHO INFANTIL").
 4. NOMES COMPLETOS: No corpo do texto, NUNCA abrevie nomes de pessoas ou da empresa. Transcreva exatamente como fornecido na qualificação.
 
 5. DECLARAÇÃO DE EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", a declaração DEVE citar nominalmente os dados do "RESPONSÁVEL TÉCNICO VINCULADO" fornecidos acima. NÃO utilize placeholders (Ex: [NOME]) se os dados estiverem disponíveis no contexto. Utilize espaços extras apenas para membros ADICIONAIS além do RT principal.
@@ -913,7 +922,9 @@ ${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${c
 - O campo "text" deve começar DIRETAMENTE com a qualificação unificada: "${isTechnical ? '[Nome], [nacionalidade], [CREA/CAU], etc, DECLARA...' : 'A empresa [Razão Social], CNPJ [CNPJ], DECLARA...'}"
 - PROIBIÇÃO ABSOLUTA: NÃO inclua Local, Data, Nome do Signatário ou Cargo ao final do "text". O corpo deve terminar no ponto final da última frase da declaração. QUALQUER menção a "Lugar, Data" ou "Nome da Empresa" no final será considerada um erro grave.
 - EQUIPE TÉCNICA: Se for sobre pessoal técnico, APÓS citar o RT principal, adicione OBRIGATORIAMENTE um parágrafo: "[INDICAR AQUI OUTROS MEMBROS DA EQUIPE SE HOUVER: Nome, CPF e Qualificação]".
-- Texto LIMPO, sem negritos (**), sem aspas extras, sem quebras de linha desnecessárias dentro do JSON.`;
+- Texto LIMPO, sem negritos (**), sem aspas extras, sem quebras de linha desnecessárias dentro do JSON.
+
+7. CITAÇÃO DO ÓRGÃO E EDITAL: O corpo da declaração DEVE citar explicitamente o nome do órgão licitante ("${orgaoName}") e o número do edital ("${editalNum}") ou processo ("${processNum}"), quando disponíveis. Exemplo: "...referente ao Edital nº [número], promovido pela/pelo [Órgão]...". NUNCA usar genéricos como "referente ao processo licitatório em epígrafe" quando os dados estiverem disponíveis.`;
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });

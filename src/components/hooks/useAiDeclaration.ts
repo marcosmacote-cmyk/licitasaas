@@ -221,7 +221,20 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             const tit = (b.title || '').trim();
             const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
             const finalOrg = cleanTitle ? `${mod} nº ${cleanTitle}` : tit;
-            updateLayout({ addresseeOrg: finalOrg });
+
+            // Auto-preencher órgão a partir do schemaV2
+            const schema = b.aiAnalysis?.schemaV2;
+            const orgao = schema?.process_identification?.orgao || '';
+            const editalNum = schema?.process_identification?.numero_edital || '';
+            const addresseeParts: string[] = [];
+            if (orgao) addresseeParts.push(orgao);
+            if (editalNum) addresseeParts.push(`Edital nº ${editalNum}`);
+            if (!orgao && !editalNum) addresseeParts.push(finalOrg);
+
+            updateLayout({
+                addresseeOrg: addresseeParts.join('\n'),
+                addresseeName: 'Agente de Contratação',
+            });
         }
     };
 
