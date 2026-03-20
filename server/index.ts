@@ -884,9 +884,29 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado no 
 
         // Extrair dados do órgão e edital do schemaV2
         const schema = bidding.aiAnalysis?.schemaV2;
-        const orgaoName = (schema as any)?.process_identification?.orgao || '';
-        const editalNum = (schema as any)?.process_identification?.numero_edital || '';
-        const processNum = (schema as any)?.process_identification?.numero_processo || '';
+        const orgaoFromSchema = (schema as any)?.process_identification?.orgao || '';
+        const editalFromSchema = (schema as any)?.process_identification?.numero_edital || '';
+        const processFromSchema = (schema as any)?.process_identification?.numero_processo || '';
+
+        // Cross-check: se o órgão do schema não aparece no título do registro, priorizar o título
+        const biddingTitle = (bidding.title || '').trim();
+        const biddingMod = (bidding.modality || '').trim();
+
+        // Extrair órgão do título como fallback (formato: "Modalidade XXX - Órgão - Cidade")
+        let orgaoFromTitle = '';
+        const titleParts = biddingTitle.split(/\s+-\s+/);
+        if (titleParts.length >= 2) {
+            orgaoFromTitle = titleParts.slice(1).join(' - ').trim();
+        }
+
+        // Se schema tem órgão mas ele NÃO aparece no título, há divergência — usar título
+        const schemaMatchesTitle = orgaoFromSchema && biddingTitle.toLowerCase().includes(orgaoFromSchema.toLowerCase().substring(0, 15));
+        const orgaoName = schemaMatchesTitle ? orgaoFromSchema : (orgaoFromTitle || orgaoFromSchema || 'Não identificado');
+        const editalNum = editalFromSchema || '';
+        const processNum = processFromSchema || '';
+
+        // Detectar divergência para gerar alerta no prompt
+        const hasDivergence = orgaoFromSchema && !schemaMatchesTitle;
 
         const prompt = `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas, com enfoque na Lei nº 14.133/2021.
 Sua tarefa é redigir uma declaração com RIGOR JURÍDICO MÁXIMO e absoluta fidelidade aos requisitos do edital.
@@ -895,14 +915,16 @@ TIPO ORIGINAL: "${declarationType}"
 
 ${issuerBlock}
 
-LICITAÇÃO:
-Órgão Licitante: ${orgaoName || 'Não identificado'}
+LICITAÇÃO (DADOS AUTORITATIVOS — fonte primária):
+Título do Processo: ${biddingTitle}
+Modalidade: ${biddingMod}
+Órgão Licitante: ${orgaoName}
 Edital nº: ${editalNum || 'Não identificado'}
 Processo nº: ${processNum || 'Não identificado'}
-Objeto: ${bidding.title}
-Modalidade/Nº: ${bidding.modality || ''}
-
-RESUMO ESTRUTURADO DO EDITAL (Base compulsória):
+${hasDivergence ? `
+⚠️ ALERTA DE DIVERGÊNCIA: O resumo do edital abaixo pode conter referências a um órgão diferente ("${orgaoFromSchema}"). IGNORE essas referências e use EXCLUSIVAMENTE os dados da LICITAÇÃO acima. O órgão correto é "${orgaoName}" e o processo é "${biddingTitle}".
+` : ''}
+RESUMO ESTRUTURADO DO EDITAL (Use apenas para conteúdo das exigências, NÃO para identificação do órgão/processo):
 ${bidding.aiAnalysis?.schemaV2 ? buildModuleContext(bidding.aiAnalysis.schemaV2, 'declaration') : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
 
 INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
