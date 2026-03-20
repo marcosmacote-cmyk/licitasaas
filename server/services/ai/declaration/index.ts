@@ -16,6 +16,7 @@ export type {
     GenerateDeclarationResponse,
     DeclarationOutputV3,
     ValidationCode,
+    SemanticMapping,
 } from './declarationTypes';
 
 export {
@@ -24,6 +25,8 @@ export {
     VALIDATION_CODES,
     SEVERITY_PENALTIES,
     FAMILY_LENGTH_CONSTRAINTS,
+    DECLARATION_SEMANTIC_MAP,
+    ANTI_GENERIC_PHRASES,
 } from './declarationTypes';
 
 // Parser

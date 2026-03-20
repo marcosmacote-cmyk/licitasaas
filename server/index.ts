@@ -20,6 +20,8 @@ import {
     repairDeclaration,
     createGeminiRepairFn,
     FAMILY_LENGTH_CONSTRAINTS,
+    DECLARATION_SEMANTIC_MAP,
+    ANTI_GENERIC_PHRASES,
 } from "./services/ai/declaration";
 import type { AuthoritativeFacts, DeclarationFamily, DeclarationStyle } from "./services/ai/declaration";
 import { evaluateModuleQuality } from "./services/ai/modules/moduleQualityEvaluator";
@@ -959,7 +961,14 @@ function buildDeclarationPrompt(
     customPrompt: string | undefined,
     isTechnical: boolean,
     style: DeclarationStyle = 'objetiva',
+    editalClause?: string,
 ): string {
+    // Buscar mapa semântico que corresponde ao tipo da declaração
+    const declLower = facts.declarationType.toLowerCase();
+    const semanticMatch = DECLARATION_SEMANTIC_MAP.find(m =>
+        m.keywords.some(kw => declLower.includes(kw.toLowerCase()))
+    );
+
     return `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas (Lei 14.133/2021).
 Sua tarefa é redigir a declaração abaixo com RIGOR JURÍDICO MÁXIMO e ABSOLUTA FIDELIDADE FACTUAL.
 
@@ -1017,13 +1026,24 @@ ${(() => {
     };
     return styleDirectives[style] || styleDirectives.objetiva;
 })()}
-8. FORMATO JSON PURO:
+
+${editalClause ? `8. CLÁUSULA DO EDITAL (PRIORIDADE MÁXIMA):
+   Nome exato da exigência: "${editalClause}"
+   USE este nome LITERALMENTE como título ("title") se for um nome de declaração válido.
+   O núcleo declaratório DEVE aderir ao teor exato desta cláusula.\n` : ''}
+${semanticMatch ? `9. ORIENTAÇÃO DE TÍTULO: ${semanticMatch.titleGuidance}
+
+10. COBERTURA SEMÂNTICA EXIGIDA (o núcleo declaratório DEVE cobrir TODOS estes conceitos):
+    ${semanticMatch.coreConceptsMustCover}\n` : ''}
+11. ANTI-GENERICISMO: EVITE frases ornamentais como: ${ANTI_GENERIC_PHRASES.slice(0, 3).map(p => `"${p}"`).join(', ')}. Prefira linguagem seca e assertiva.
+
+12. FORMATO JSON PURO:
    { "title": "DECLARAÇÃO DE ...", "text": "A empresa ..." }
    - SEM blocos markdown. SEM negritos. SEM ${'```'}.
    - O "text" começa com qualificação: "${isTechnical ? 'Eu, [Nome], [profissão], inscrito no CREA/CAU..., DECLARO...' : `A empresa ${facts.empresaRazaoSocial}, inscrita no CNPJ sob nº ${facts.empresaCnpj}...DECLARA...`}"
    - NÃO inclua Local, Data, Assinatura — o sistema adiciona.
 
-9. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.`;
+13. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.`;
 }
 
 // ── Step 8-12: Agora modularizados em services/ai/declaration/ ──
@@ -1177,7 +1197,21 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
             ? buildModuleContext(bidding.aiAnalysis.schemaV2, 'declaration')
             : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500);
 
-        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style);
+        // Extrair cláusula exata do edital (declaration_routes)
+        const oo = (schema as any)?.operational_outputs;
+        let editalClause: string | undefined;
+        if (oo?.declaration_routes?.length > 0) {
+            const matchEntry = oo.declaration_routes.find((d: any) => {
+                const name = typeof d === 'string' ? d : (d.name || d.title || '');
+                return name.toLowerCase().includes(declarationType.toLowerCase().substring(0, 15))
+                    || declarationType.toLowerCase().includes(name.toLowerCase().substring(0, 15));
+            });
+            if (matchEntry) {
+                editalClause = typeof matchEntry === 'string' ? matchEntry : (matchEntry.name || matchEntry.title || undefined);
+            }
+        }
+
+        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style, editalClause);
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });

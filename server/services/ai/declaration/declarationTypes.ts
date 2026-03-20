@@ -50,6 +50,67 @@ export const FAMILY_LENGTH_CONSTRAINTS: Record<DeclarationFamily, {
     CUSTOM_GENERIC:         { minParagraphs: 2, maxParagraphs: 6,  styleHint: 'Adequada ao tipo solicitado. Sem prolixidade.' },
 };
 
+/** Mapa semântico: subtipos de declaração → conceitos obrigatórios no núcleo declaratório + título amplo */
+export interface SemanticMapping {
+    keywords: string[];           // Palavras-chave que ativam este mapa
+    titleGuidance: string;        // Como formular o título
+    coreConceptsMustCover: string; // Conceitos que o núcleo DEVE cobrir
+}
+
+export const DECLARATION_SEMANTIC_MAP: SemanticMapping[] = [
+    {
+        keywords: ['vínculo', 'vinculo', 'impedimento', 'parentesco'],
+        titleGuidance: 'Use "INEXISTÊNCIA DE VÍNCULO FUNCIONAL, EMPREGATÍCIO OU CONTRATUAL COM O MUNICÍPIO" ou o nome exato do edital.',
+        coreConceptsMustCover: 'vínculo empregatício, funcional, contratual, cargo/emprego/função pública, relação incompatível com a lisura do certame',
+    },
+    {
+        keywords: ['menor', 'menores', 'trabalho infantil'],
+        titleGuidance: 'Use "NÃO EMPREGO DE MENORES" ou o nome exato do edital.',
+        coreConceptsMustCover: 'não emprega menor de 18 em trabalho noturno/perigoso/insalubre, não emprega menor de 16 salvo aprendiz a partir de 14 anos, Art. 7º XXXIII CF, Art. 68 V Lei 14.133/2021',
+    },
+    {
+        keywords: ['idoneidade', 'inidoneidade', 'fato impeditivo'],
+        titleGuidance: 'Use "IDONEIDADE" ou "INEXISTÊNCIA DE FATO IMPEDITIVO" ou o nome exato do edital.',
+        coreConceptsMustCover: 'não declarada inidônea, não suspensa de licitar/contratar, não impedida por nenhum órgão ou entidade da administração pública',
+    },
+    {
+        keywords: ['me', 'epp', 'microempresa', 'pequeno porte', 'enquadramento'],
+        titleGuidance: 'Use "ENQUADRAMENTO COMO MICROEMPRESA OU EMPRESA DE PEQUENO PORTE" ou o nome exato do edital.',
+        coreConceptsMustCover: 'enquadra-se como ME/EPP nos termos da LC 123/2006, não incorre nas vedações do §4º do art. 3º, faturamento dentro do limite legal',
+    },
+    {
+        keywords: ['visita', 'vistoria'],
+        titleGuidance: 'Use "DECLARAÇÃO DE VISITA TÉCNICA" ou "DECLARAÇÃO DE CONHECIMENTO DAS CONDIÇÕES LOCAIS" ou o nome exato do edital.',
+        coreConceptsMustCover: 'visitou o local, tomou conhecimento das condições, não alegará desconhecimento posterior',
+    },
+    {
+        keywords: ['reserv', 'cota', 'exclusiv'],
+        titleGuidance: 'Use o nome exato do edital ou "DECLARAÇÃO DE ATENDIMENTO AO CRITÉRIO DE PARTICIPAÇÃO".',
+        coreConceptsMustCover: 'atende ao critério de participação exclusiva ou reservada conforme edital',
+    },
+    {
+        keywords: ['elabor', 'independen', 'proposta'],
+        titleGuidance: 'Use "DECLARAÇÃO DE ELABORAÇÃO INDEPENDENTE DE PROPOSTA" ou o nome exato do edital.',
+        coreConceptsMustCover: 'proposta elaborada de forma independente, sem consulta/acordo com concorrentes, sem coordenação de preços com outro licitante',
+    },
+    {
+        keywords: ['sigilo', 'confidencialidade'],
+        titleGuidance: 'Use o nome exato do edital.',
+        coreConceptsMustCover: 'compromisso de sigilo, não divulgar informações confidenciais, responsabilidade por eventual quebra',
+    },
+];
+
+/** Frases genéricas de IA que devem ser evitadas ou minimizadas */
+export const ANTI_GENERIC_PHRASES = [
+    'em conformidade com as exigências editalícias e os princípios',
+    'em consonância com os ditames legais',
+    'no bojo do presente certame',
+    'em atenção aos princípios norteadores da administração pública',
+    'visando à plena observância',
+    'em estrita obediência aos preceitos',
+];
+
+
 // ═══════════════════════════════════════════════════════════════
 // 2. FATOS AUTORITATIVOS
 // ═══════════════════════════════════════════════════════════════

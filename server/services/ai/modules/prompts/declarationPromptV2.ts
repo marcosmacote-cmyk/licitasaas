@@ -68,6 +68,32 @@ Para declarações simples, os blocos 1+2 podem ser fundidos em um único parág
 - NÃO inclua local, data, assinatura ou nome do signatário no "text" (adicionados pelo sistema)
 - NÃO use negritos (**), markdown ou blocos de código
 
+═══ TÍTULO DA DECLARAÇÃO ═══
+
+1. Se o edital fornecer o NOME EXATO da declaração exigida (via CLÁUSULA DO EDITAL), use-o LITERALMENTE como título.
+2. Se não houver, use um título ABRANGENTE e juridicamente seguro — NUNCA estreito.
+   RUIM: "DECLARAÇÃO DE INEXISTÊNCIA DE VÍNCULO EMPREGATÍCIO COM O MUNICÍPIO" (estreito demais)
+   BOM: "DECLARAÇÃO DE INEXISTÊNCIA DE VÍNCULO COM A ADMINISTRAÇÃO MUNICIPAL" (abrangente)
+3. Quando o prompt incluir ORIENTAÇÃO DE TÍTULO, siga-a.
+
+═══ NÚCLEO DECLARATÓRIO ═══
+
+O conteúdo efetivamente declarado DEVE cobrir TODOS os conceitos pertinentes ao tipo, e não apenas um subconjunto.
+Quando o prompt incluir COBERTURA SEMÂNTICA EXIGIDA, assegure que cada conceito listado conste no texto.
+NÃO se limite ao conceito mais óbvio quando a exigência é mais ampla.
+
+═══ ANTI-GENERICISMO ═══
+
+1. EVITE frases ornamentais que não agregam valor jurídico concreto:
+   ❌ "em conformidade com as exigências editalícias e os princípios da moralidade e impessoalidade"
+   ❌ "em consonância com os ditames legais"
+   ❌ "no bojo do presente certame"
+   ❌ "visando à plena observância"
+2. PREFIRA linguagem seca, assertiva e instrumental:
+   ✅ "DECLARA, sob as penas da lei, que..."
+   ✅ "...em atendimento ao disposto no art. X da Lei Y."
+3. Cada frase DEVE conter informação declaratória efetiva. Se uma frase puder ser removida sem perda de conteúdo, remova-a.
+
 ═══ FORMATO DE SAÍDA ═══
 
 Responda EXCLUSIVAMENTE com JSON puro:
