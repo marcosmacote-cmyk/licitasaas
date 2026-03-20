@@ -7,6 +7,26 @@ import { resolveStage, isModuleAllowed } from '../../governance';
 
 // ── Types ──
 
+export interface QualityIssue {
+    code: string;
+    severity: 'critical' | 'major' | 'minor';
+    message: string;
+}
+
+export interface QualityReportFrontend {
+    score: number;
+    grade: 'A' | 'B' | 'C' | 'D';
+    issues: QualityIssue[];
+    corrections: string[];
+    corrected: boolean;
+    family: string;
+    attempts: number;
+    factualConsistency: boolean;
+    declarationTypeMatch: boolean;
+    structureAdequate: boolean;
+    contaminationDetected: boolean;
+}
+
 export interface LayoutConfig {
     id: string;
     name: string;
@@ -102,7 +122,8 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [confirmAction, setConfirmAction] = useState<{ type: 'deleteLayout' | 'resetLayout'; onConfirm: () => void } | null>(null);
     const [layoutSaved, setLayoutSaved] = useState(false);
-    const [qualityReport, setQualityReport] = useState<{ score: number; grade: string; issues: string[]; corrections: string[]; corrected: boolean; family: string } | null>(null);
+    const [qualityReport, setQualityReport] = useState<QualityReportFrontend | null>(null);
+    const [qualityWarning, setQualityWarning] = useState<string | null>(null);
     const [layouts, setLayouts] = useState<LayoutConfig[]>(loadLayouts);
     const [currentLayoutId, setCurrentLayoutId] = useState<string>(layouts[0]?.id || 'default');
     const [layoutName, setLayoutName] = useState(layouts.find(l => l.id === currentLayoutId)?.name || 'Layout Principal');
@@ -333,7 +354,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
         updateLayout({ signatureDate: today });
 
-        setIsGenerating(true); setSaveSuccess(false);
+        setIsGenerating(true); setSaveSuccess(false); setQualityWarning(null);
         try {
             const response = await fetch(`${API_BASE_URL}/api/generate-declaration`, {
                 method: 'POST',
@@ -344,18 +365,21 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
             if (!response.ok) throw new Error(data.details || data.error || 'Falha ao gerar');
             setGeneratedText(data.text);
             if (data.title) setDeclarationType(data.title.toUpperCase());
-            // Capturar qualityReport da API v4
+            // Capturar qualityReport v5 (backend modular)
             if (data.quality) {
                 setQualityReport(data.quality);
                 if (data.quality.corrected) {
-                    toast.warning(`Declaração auto-corrigida: ${data.quality.corrections.join('; ')}`);
+                    toast.warning(`Declaração auto-corrigida: ${data.quality.corrections.length} problema(s) resolvido(s) automaticamente.`);
                 }
-                if (data.quality.grade === 'D') {
-                    toast.error('⚠️ Qualidade baixa detectada. Revise a declaração com atenção.');
+                if (data.quality.contaminationDetected) {
+                    toast.error('⚠️ Possível contaminação de dados de outro certame detectada. Revise com atenção.');
+                } else if (data.quality.grade === 'D') {
+                    toast.error('⚠️ Qualidade baixa. Revise a declaração antes de exportar.');
                 }
             } else {
                 setQualityReport(null);
             }
+            if (data.warning) setQualityWarning(data.warning);
         } catch (error: any) { toast.error(`Erro ao gerar declaração: ${error.message}`); }
         finally { setIsGenerating(false); }
     };
@@ -496,7 +520,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         issuerType, setIssuerType, customPrompt, setCustomPrompt,
         isGenerating, isSaving, generatedText, setGeneratedText, saveSuccess,
         confirmAction, setConfirmAction, layoutSaved,
-        layouts, currentLayoutId, layoutName, qualityReport,
+        layouts, currentLayoutId, layoutName, qualityReport, qualityWarning,
         // Computed
         layout, biddingsWithAnalysis, declarationTypesFromEdital,
         // Layout actions

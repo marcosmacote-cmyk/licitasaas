@@ -11,6 +11,16 @@ import { CHAT_SYSTEM_PROMPT, CHAT_USER_INSTRUCTION } from "./services/ai/modules
 import { PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION as PETITION_V2_USER_INSTRUCTION } from "./services/ai/modules/prompts/petitionPromptV2";
 import { ORACLE_SYSTEM_PROMPT } from "./services/ai/modules/prompts/oraclePromptV2";
 import { DECLARATION_SYSTEM_PROMPT } from "./services/ai/modules/prompts/declarationPromptV2";
+import {
+    parseAndSanitize as parseDeclaration,
+    validateDeclaration,
+    calculateQualityReport,
+    hasCriticalIssues,
+    summarizeReport,
+    repairDeclaration,
+    createGeminiRepairFn,
+} from "./services/ai/declaration";
+import type { AuthoritativeFacts, DeclarationFamily } from "./services/ai/declaration";
 import { evaluateModuleQuality } from "./services/ai/modules/moduleQualityEvaluator";
 import { evaluateHumanReview } from "./services/ai/modules/humanReviewPolicy";
 import { submitFeedback, getFeedbackByModule, getFeedbackStats, AIExecutionFeedback } from "./services/ai/governance/feedbackService";
@@ -834,112 +844,99 @@ app.post('/api/config/alerts', authenticateToken, async (req: any, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// MÓDULO DECLARAÇÕES IA v4 — Gerador Juridicamente Confiável
+// MÓDULO DECLARAÇÕES IA v5 — Gerador Juridicamente Confiável
+// Fluxo-alvo: 12 etapas com validação + repair IA + re-validação
+// Tipos: AuthoritativeFacts, DeclarationFamily → importados de services/ai/declaration
 // ═══════════════════════════════════════════════════════════════
 
-// ── 1. Tipos e Interfaces ──
 
-interface AuthoritativeFacts {
-    companyName: string;
-    companyCnpj: string;
-    orgaoName: string;
-    editalNum: string;
-    processNum: string;
-    modalidade: string;
-    biddingTitle: string;
-    orgaoFromSchema: string;    // para detectar contaminação
-    hasDivergence: boolean;
-}
+// ── Step 4: Classificação por Família ──
 
-type DeclarationFamily =
-    | 'habilitacao_juridica'
-    | 'regularidade_fiscal'
-    | 'qualificacao_tecnica'
-    | 'qualificacao_economica'
-    | 'compliance_trabalhista'
-    | 'declaracao_geral';
-
-interface QualityReport {
-    score: number;              // 0-100
-    grade: 'A' | 'B' | 'C' | 'D';
-    issues: string[];
-    corrections: string[];
-    corrected: boolean;
-    family: DeclarationFamily;
-}
-
-// ── 2. Classificador de Família Documental ──
-
-function classifyDeclarationFamily(declarationType: string): DeclarationFamily {
+function classifyFamily(declarationType: string): DeclarationFamily {
     const lower = declarationType.toLowerCase();
 
-    // Habilitação Jurídica
-    if (lower.includes('fato impeditivo') || lower.includes('idoneidade') ||
-        lower.includes('falência') || lower.includes('recuperação judicial') ||
-        lower.includes('dissolução') || lower.includes('liquidação'))
-        return 'habilitacao_juridica';
-
-    // Regularidade Fiscal
-    if (lower.includes('fiscal') || lower.includes('tribut') ||
-        lower.includes('fgts') || lower.includes('inss') ||
-        lower.includes('fazenda') || lower.includes('débito'))
-        return 'regularidade_fiscal';
-
-    // Qualificação Técnica
+    // TECHNICAL_PERSONAL — pessoal técnico, equipe, RT
     if (lower.includes('técnic') || lower.includes('equipe') ||
         lower.includes('pessoal') || lower.includes('engenhei') ||
         lower.includes('crea') || lower.includes('cau') ||
-        lower.includes('visita') || lower.includes('atestado') ||
-        lower.includes('equipamento') || lower.includes('disponibilidade'))
-        return 'qualificacao_tecnica';
+        lower.includes('responsável técnico') || lower.includes('indicação'))
+        return 'TECHNICAL_PERSONAL';
 
-    // Qualificação Econômica
-    if (lower.includes('econômic') || lower.includes('financei') ||
+    // CORPORATE_STATUS — enquadramento, ME/EPP, regularidade fiscal, econômica
+    if (lower.includes('me/epp') || lower.includes('microempresa') ||
+        lower.includes('pequeno porte') || lower.includes('enquadramento') ||
+        lower.includes('econômic') || lower.includes('financei') ||
         lower.includes('patrimônio') || lower.includes('balanço') ||
-        lower.includes('me/epp') || lower.includes('microempresa') ||
-        lower.includes('pequeno porte') || lower.includes('enquadramento'))
-        return 'qualificacao_economica';
+        lower.includes('fiscal') || lower.includes('tribut') ||
+        lower.includes('fgts') || lower.includes('inss') ||
+        lower.includes('fazenda') || lower.includes('débito') ||
+        lower.includes('falência') || lower.includes('recuperação judicial'))
+        return 'CORPORATE_STATUS';
 
-    // Compliance Trabalhista
+    // OPERATIONAL_COMMITMENT — compromissos operacionais
+    if (lower.includes('visita') || lower.includes('disponibilidade') ||
+        lower.includes('equipamento') || lower.includes('prazo') ||
+        lower.includes('elaboração independente') || lower.includes('conhecimento') ||
+        lower.includes('atestado') || lower.includes('vistoria'))
+        return 'OPERATIONAL_COMMITMENT';
+
+    // SIMPLE_COMPLIANCE — conformidade legal simples
     if (lower.includes('menor') || lower.includes('trabalho infantil') ||
         lower.includes('art. 7') || lower.includes('xxxiii') ||
-        lower.includes('criança') || lower.includes('adolescente') ||
-        lower.includes('aprendiz'))
-        return 'compliance_trabalhista';
+        lower.includes('fato impeditivo') || lower.includes('idoneidade') ||
+        lower.includes('nepotismo') || lower.includes('impedimento') ||
+        lower.includes('vedação') || lower.includes('proibição') ||
+        lower.includes('inexistência'))
+        return 'SIMPLE_COMPLIANCE';
 
-    return 'declaracao_geral';
+    return 'CUSTOM_GENERIC';
 }
 
-// ── 3. Contexto Específico por Família ──
+// ── Step 5: Contexto Específico do Edital ──
 
-function getFamilySpecificContext(family: DeclarationFamily, schema: any): string {
+function extractFamilyContext(family: DeclarationFamily, schema: any): string {
     if (!schema) return '';
     const sections: string[] = [];
-
-    const qi = schema?.qualification_requirements;
+    const qi = schema?.qualification_requirements || schema?.requirements;
     const oo = schema?.operational_outputs;
     const pi = schema?.process_identification;
+    const pc = schema?.participation_conditions;
 
     switch (family) {
-        case 'habilitacao_juridica':
-            if (qi?.habilitacao_juridica) sections.push(`HABILITAÇÃO JURÍDICA:\n${JSON.stringify(qi.habilitacao_juridica, null, 1)}`);
-            if (qi?.condicoes_participacao) sections.push(`CONDIÇÕES DE PARTICIPAÇÃO:\n${JSON.stringify(qi.condicoes_participacao, null, 1)}`);
+        case 'SIMPLE_COMPLIANCE':
+            if (pc) sections.push(`CONDIÇÕES DE PARTICIPAÇÃO:\n${JSON.stringify(pc, null, 1)}`);
+            if (pi?.objeto) sections.push(`OBJETO: ${pi.objeto_completo || pi.objeto_resumido || pi.objeto}`);
             break;
-        case 'regularidade_fiscal':
-            if (qi?.regularidade_fiscal) sections.push(`REGULARIDADE FISCAL:\n${JSON.stringify(qi.regularidade_fiscal, null, 1)}`);
+
+        case 'OPERATIONAL_COMMITMENT':
+            if (pi?.objeto) sections.push(`OBJETO: ${pi.objeto_completo || pi.objeto_resumido || pi.objeto}`);
+            if (pc?.exige_visita_tecnica) sections.push(`VISITA TÉCNICA: ${pc.visita_tecnica_detalhes || 'Exigida'}`);
+            if (pc?.exige_garantia_proposta) sections.push(`GARANTIA PROPOSTA: ${pc.garantia_proposta_detalhes || 'Exigida'}`);
+            if (pc?.exige_garantia_contratual) sections.push(`GARANTIA CONTRATUAL: ${pc.garantia_contratual_detalhes || 'Exigida'}`);
+            if (oo?.declaration_routes?.length > 0) {
+                sections.push('DECLARAÇÕES PREVISTAS:\n' + oo.declaration_routes.map(
+                    (d: any) => `  • ${typeof d === 'string' ? d : d.name || d.title || JSON.stringify(d)}`
+                ).join('\n'));
+            }
             break;
-        case 'qualificacao_tecnica':
+
+        case 'TECHNICAL_PERSONAL':
+            if (qi?.qualificacao_tecnica_profissional) sections.push(`QUALIFICAÇÃO TÉCNICA PROFISSIONAL:\n${JSON.stringify(qi.qualificacao_tecnica_profissional, null, 1)}`);
+            if (qi?.qualificacao_tecnica_operacional) sections.push(`QUALIFICAÇÃO TÉCNICA OPERACIONAL:\n${JSON.stringify(qi.qualificacao_tecnica_operacional, null, 1)}`);
             if (qi?.qualificacao_tecnica) sections.push(`QUALIFICAÇÃO TÉCNICA:\n${JSON.stringify(qi.qualificacao_tecnica, null, 1)}`);
             if (oo?.technical_requirements) sections.push(`REQUISITOS TÉCNICOS:\n${JSON.stringify(oo.technical_requirements, null, 1)}`);
             break;
-        case 'qualificacao_economica':
+
+        case 'CORPORATE_STATUS':
+            if (qi?.habilitacao_juridica) sections.push(`HABILITAÇÃO JURÍDICA:\n${JSON.stringify(qi.habilitacao_juridica, null, 1)}`);
+            if (qi?.regularidade_fiscal_trabalhista) sections.push(`REGULARIDADE FISCAL:\n${JSON.stringify(qi.regularidade_fiscal_trabalhista, null, 1)}`);
+            if (qi?.regularidade_fiscal) sections.push(`REGULARIDADE FISCAL:\n${JSON.stringify(qi.regularidade_fiscal, null, 1)}`);
+            if (qi?.qualificacao_economico_financeira) sections.push(`QUALIFICAÇÃO ECONÔMICO-FINANCEIRA:\n${JSON.stringify(qi.qualificacao_economico_financeira, null, 1)}`);
             if (qi?.qualificacao_economica) sections.push(`QUALIFICAÇÃO ECONÔMICA:\n${JSON.stringify(qi.qualificacao_economica, null, 1)}`);
+            if (pc?.tratamento_me_epp) sections.push(`TRATAMENTO ME/EPP: ${pc.tratamento_me_epp}`);
             break;
-        case 'compliance_trabalhista':
-            // Contexto geral é suficiente
-            if (pi?.objeto) sections.push(`OBJETO: ${pi.objeto}`);
-            break;
-        default:
+
+        default: // CUSTOM_GENERIC
             if (oo?.declaration_routes?.length > 0) {
                 sections.push('DECLARAÇÕES PREVISTAS NO EDITAL:\n' + oo.declaration_routes.map(
                     (d: any) => `  • ${typeof d === 'string' ? d : d.name || d.title || JSON.stringify(d)}`
@@ -950,150 +947,118 @@ function getFamilySpecificContext(family: DeclarationFamily, schema: any): strin
     return sections.length > 0 ? sections.join('\n\n') : '';
 }
 
-// ── 4. Validador Pós-Geração ──
+// ── Step 6: Prompt Builder ──
 
-function validateDeclarationFacts(text: string, facts: AuthoritativeFacts): { issues: string[]; corrections: string[] } {
-    const issues: string[] = [];
-    const corrections: string[] = [];
-    const lower = text.toLowerCase();
+function buildDeclarationPrompt(
+    facts: AuthoritativeFacts,
+    family: DeclarationFamily,
+    familyContext: string,
+    editalContext: string,
+    issuerBlock: string,
+    customPrompt: string | undefined,
+    isTechnical: boolean,
+): string {
+    return `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas (Lei 14.133/2021).
+Sua tarefa é redigir a declaração abaixo com RIGOR JURÍDICO MÁXIMO e ABSOLUTA FIDELIDADE FACTUAL.
 
-    // 4a. Verificar presença da empresa
-    if (facts.companyName) {
-        const companyKey = facts.companyName.toLowerCase().substring(0, 20);
-        if (!lower.includes(companyKey)) {
-            issues.push('company_name_missing');
-        }
-    }
+TIPO: "${facts.declarationType}"
+FAMÍLIA: ${family}
 
-    // 4b. Verificar presença do CNPJ
-    if (facts.companyCnpj) {
-        const cnpjClean = facts.companyCnpj.replace(/[^\d]/g, '');
-        if (cnpjClean.length >= 14 && !text.replace(/[^\d]/g, '').includes(cnpjClean)) {
-            issues.push('cnpj_missing');
-        }
-    }
+${issuerBlock}
 
-    // 4c. Detectar CONTAMINAÇÃO — dado de outro certame no texto
-    if (facts.hasDivergence && facts.orgaoFromSchema) {
-        const contaminantKey = facts.orgaoFromSchema.toLowerCase().substring(0, 20);
-        if (lower.includes(contaminantKey)) {
-            issues.push('orgao_contaminated');
-        }
-    }
+╔══════════════════════════════════════════════════════════════╗
+║  FATOS AUTORITATIVOS — IMUTÁVEIS (PREVALÊNCIA ABSOLUTA)     ║
+╠══════════════════════════════════════════════════════════════╣
+║  Empresa: ${facts.empresaRazaoSocial}
+║  CNPJ: ${facts.empresaCnpj}
+║  Endereço: ${facts.empresaEndereco || 'Conforme qualificação acima'}
+║  Representante: ${facts.representanteNome || 'Conforme qualificação acima'}
+║  CPF: ${facts.representanteCpf || 'Conforme qualificação acima'}
+║  Cargo: ${facts.representanteCargo || 'Representante Legal'}
+║  Órgão: ${facts.orgaoLicitante}
+║  Modalidade: ${facts.modalidade}
+║  Edital nº: ${facts.editalNumero || 'Não identificado'}
+║  Processo nº: ${facts.processoNumero || 'Não identificado'}
+║  Objeto: ${facts.objeto || 'Conforme edital'}
+║  Título: ${facts.biddingTitle}
+╚══════════════════════════════════════════════════════════════╝
 
-    // 4d. Verificar presença do órgão correto
-    if (facts.orgaoName && facts.orgaoName !== 'Não identificado') {
-        const orgaoKey = facts.orgaoName.toLowerCase().substring(0, 15);
-        if (!lower.includes(orgaoKey)) {
-            issues.push('orgao_correct_missing');
-        }
-    }
+REGRA ABSOLUTA: Os dados acima são a ÚNICA fonte válida para identificação. QUALQUER dado divergente no resumo abaixo DEVE SER IGNORADO.
+${facts.hasDivergence ? `\n⚠️ CONTAMINAÇÃO DETECTADA: O resumo contém referências a "${facts.orgaoFromSchema}" de OUTRO certame. USE EXCLUSIVAMENTE "${facts.orgaoLicitante}".` : ''}
+${familyContext ? `\nCONTEXTO ESPECÍFICO (${family}):\n${familyContext}\n` : ''}
+RESUMO AUXILIAR (APENAS para conteúdo jurídico — NÃO para identificação):
+${editalContext}
 
-    return { issues, corrections };
+INSTRUÇÕES RÍGIDAS:
+
+1. FIDELIDADE: Se o edital impuser texto específico para "${facts.declarationType}", transcreva-o integralmente.
+
+2. ESTRUTURA OBRIGATÓRIA (mínimo 5 parágrafos):
+   a) QUALIFICAÇÃO: usar EXATAMENTE "${facts.empresaRazaoSocial}", CNPJ "${facts.empresaCnpj}"${facts.representanteNome ? `, representada por "${facts.representanteNome}"` : ''}
+   b) REFERÊNCIA: citar "${facts.orgaoLicitante}", Edital nº "${facts.editalNumero}", Processo nº "${facts.processoNumero}"
+   c) DECLARAÇÃO PRINCIPAL: fundamento legal com artigos da Lei 14.133/2021
+   d) COMPROMISSOS: comunicar alteração superveniente
+   e) CIÊNCIA DAS SANÇÕES: art. 155 e ss. da Lei 14.133/2021
+   f) FECHO: "Por ser expressão da verdade, firma a presente declaração para todos os fins de direito."
+
+3. NOMES: Transcreva EXATAMENTE como nos FATOS AUTORITATIVOS. NUNCA abrevie, NUNCA invente dados.
+
+4. SEM PLACEHOLDERS: NÃO use [NOME], [CNPJ] etc. Use os dados reais fornecidos acima. Colchetes APENAS para dados opcionais ausentes.
+${facts.representanteNome ? '' : '\n   EXCEÇÃO: O nome do representante não foi fornecido. Use colchetes: [Nome do Representante Legal]'}
+
+5. EQUIPE TÉCNICA: ${family === 'TECHNICAL_PERSONAL' ? 'Cite NOMINALMENTE os dados do RT fornecidos acima.' : 'N/A para este tipo.'}
+
+${customPrompt ? `6. INSTRUÇÃO DO USUÁRIO: ${customPrompt}\n` : ''}
+7. FORMATO JSON PURO:
+   { "title": "DECLARAÇÃO DE ...", "text": "A empresa ..." }
+   - SEM blocos markdown. SEM negritos. SEM ${'```'}.
+   - O "text" começa com qualificação: "${isTechnical ? 'Eu, [Nome], [profissão], inscrito no CREA/CAU..., DECLARO...' : `A empresa ${facts.empresaRazaoSocial}, inscrita no CNPJ sob nº ${facts.empresaCnpj}...DECLARA...`}"
+   - NÃO inclua Local, Data, Assinatura — o sistema adiciona.
+
+8. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.`;
 }
 
-// ── 5. Reparador Automático ──
+// ── Step 8-12: Agora modularizados em services/ai/declaration/ ──
 
-function repairDeclaration(text: string, facts: AuthoritativeFacts, issues: string[]): { repairedText: string; corrections: string[] } {
-    let repaired = text;
-    const corrections: string[] = [];
+// ── Helpers (qualification parsing — será movido para declarationFacts.ts) ──
 
-    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // 5a. Substituir órgão contaminante pelo correto
-    if (issues.includes('orgao_contaminated') && facts.orgaoFromSchema && facts.orgaoName) {
-        const before = repaired;
-        repaired = repaired.replace(
-            new RegExp(escapeRegex(facts.orgaoFromSchema), 'gi'),
-            facts.orgaoName
-        );
-        if (repaired !== before) {
-            corrections.push(`Órgão corrigido: "${facts.orgaoFromSchema}" → "${facts.orgaoName}"`);
+function extractFromQualification(qualification: string, field: 'address' | 'name' | 'cpf' | 'cargo'): string {
+    if (!qualification) return '';
+    switch (field) {
+        case 'address': {
+            const match = qualification.match(/sediada\s+(?:na|no|em)\s+(.+?)(?:,\s*neste\s+ato|,\s*inscrita|$)/i);
+            return match?.[1]?.trim() || '';
+        }
+        case 'name': {
+            const match = qualification.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,.(0-9]{3,60})(?=\s*,\s*|,\s*brasileir|,\s*solteir|$)/i);
+            return match?.[1]?.trim() || '';
+        }
+        case 'cpf': {
+            const match = qualification.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+            return match?.[0] || '';
+        }
+        case 'cargo': {
+            const match = qualification.match(/(Sócio[\s-]?Administrador|Representante\s+Legal|Diretor|Gerente|Procurador|Sócio|Administrador)/i);
+            return match?.[1]?.trim() || 'Representante Legal';
         }
     }
-
-    // 5b. Se edital/processo do schema diverge, tentar substituir referências numéricas contaminantes
-    if (facts.hasDivergence) {
-        const schemaEdital = (facts as any).editalFromSchema || '';
-        const schemaProcess = (facts as any).processFromSchema || '';
-
-        if (schemaEdital && facts.editalNum && schemaEdital !== facts.editalNum) {
-            const before = repaired;
-            repaired = repaired.replace(
-                new RegExp(escapeRegex(schemaEdital), 'gi'),
-                facts.editalNum
-            );
-            if (repaired !== before) {
-                corrections.push(`Edital corrigido: "${schemaEdital}" → "${facts.editalNum}"`);
-            }
-        }
-
-        if (schemaProcess && facts.processNum && schemaProcess !== facts.processNum) {
-            const before = repaired;
-            repaired = repaired.replace(
-                new RegExp(escapeRegex(schemaProcess), 'gi'),
-                facts.processNum
-            );
-            if (repaired !== before) {
-                corrections.push(`Processo corrigido: "${schemaProcess}" → "${facts.processNum}"`);
-            }
-        }
-    }
-
-    return { repairedText: repaired, corrections };
 }
 
-// ── 6. Calculador de Quality Score ──
-
-function calculateQualityScore(issues: string[], corrections: string[], family: DeclarationFamily): QualityReport {
-    let score = 100;
-
-    // Penalidades por issue
-    for (const issue of issues) {
-        switch (issue) {
-            case 'orgao_contaminated':
-                score -= 30; // Contaminação = penalidade grave
-                break;
-            case 'company_name_missing':
-                score -= 15;
-                break;
-            case 'cnpj_missing':
-                score -= 10;
-                break;
-            case 'orgao_correct_missing':
-                score -= 20;
-                break;
-            default:
-                score -= 5;
-        }
-    }
-
-    // Recuperação parcial se auto-corrigido
-    if (corrections.length > 0) {
-        score = Math.min(score + 15, 95); // Corrigido = recupera pontos mas nunca 100%
-    }
-
-    score = Math.max(0, Math.min(100, score));
-
-    const grade: QualityReport['grade'] =
-        score >= 90 ? 'A' :
-        score >= 70 ? 'B' :
-        score >= 50 ? 'C' : 'D';
-
-    return { score, grade, issues, corrections, corrected: corrections.length > 0, family };
-}
-
-// ── ROTA PRINCIPAL ──
+// ═══════════════════════════════════════════════
+// ROTA PRINCIPAL — 12 STEPS
+// ═══════════════════════════════════════════════
 
 app.post('/api/generate-declaration', authenticateToken, async (req: any, res) => {
     try {
+        // ── Step 1: Receber request ──
         const { biddingProcessId, companyId, declarationType, issuerType, customPrompt } = req.body;
-        console.log(`[Declaration v4] Generating "${declarationType}" (${issuerType || 'company'}) for Company: ${companyId}`);
+        console.log(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) BID:${biddingProcessId}`);
 
         if (!biddingProcessId || !companyId || !declarationType) {
             return res.status(400).json({ error: 'Missing required parameters' });
         }
 
+        // ── Step 2: Buscar dados ──
         const bidding = await prisma.biddingProcess.findUnique({
             where: { id: biddingProcessId, tenantId: req.user.tenantId },
             include: { aiAnalysis: true }
@@ -1107,45 +1072,67 @@ app.post('/api/generate-declaration', authenticateToken, async (req: any, res) =
             return res.status(404).json({ error: 'Bidding or Company not found' });
         }
 
-        // ── [1] BLOCO DE FATOS AUTORITATIVOS IMUTÁVEIS ──
+        // ── Step 3: Montar authoritativeFacts ──
         const schema = bidding.aiAnalysis?.schemaV2;
-        const orgaoFromSchema = (schema as any)?.process_identification?.orgao || '';
-        const editalFromSchema = (schema as any)?.process_identification?.numero_edital || '';
-        const processFromSchema = (schema as any)?.process_identification?.numero_processo || '';
+        const pi = (schema as any)?.process_identification || {};
+        const orgaoFromSchema = pi.orgao || '';
+        const editalFromSchema = pi.numero_edital || '';
+        const processFromSchema = pi.numero_processo || '';
+        const objetoFromSchema = pi.objeto_completo || pi.objeto_resumido || pi.objeto || '';
 
         const biddingTitle = (bidding.title || '').trim();
         const biddingMod = (bidding.modality || '').trim();
 
+        // Cross-check órgão
         let orgaoFromTitle = '';
         const titleParts = biddingTitle.split(/\s+-\s+/);
         if (titleParts.length >= 2) {
             orgaoFromTitle = titleParts.slice(1).join(' - ').trim();
         }
-
         const schemaMatchesTitle = orgaoFromSchema && biddingTitle.toLowerCase().includes(orgaoFromSchema.toLowerCase().substring(0, 15));
         const orgaoName = schemaMatchesTitle ? orgaoFromSchema : (orgaoFromTitle || orgaoFromSchema || 'Não identificado');
         const editalNum = editalFromSchema || '';
         const processNum = processFromSchema || '';
         const hasDivergence = !!(orgaoFromSchema && !schemaMatchesTitle);
 
+        // Extrair dados estruturados da empresa
+        const qual = company.qualification || '';
+        const representanteName = extractFromQualification(qual, 'name') || company.contactName || '';
+        const representanteCpf = extractFromQualification(qual, 'cpf') || company.contactCpf || '';
+        const representanteCargo = extractFromQualification(qual, 'cargo');
+        const companyAddress = company.address || extractFromQualification(qual, 'address') || '';
+
+        // ── Step 4: Classificar família (precisa ser ANTES do facts) ──
+        const family = classifyFamily(declarationType);
+        console.log(`[Declaration v5] Step 4: Family → ${family}`);
+
         const facts: AuthoritativeFacts = {
-            companyName: company.razaoSocial,
-            companyCnpj: company.cnpj,
-            orgaoName,
-            editalNum,
-            processNum,
+            orgaoLicitante: orgaoName,
             modalidade: biddingMod,
+            editalNumero: editalNum,
+            processoNumero: processNum,
+            objeto: objetoFromSchema,
             biddingTitle,
+            declarationType,
+            declarationFamily: family,
+            issuerType: (issuerType || 'company') as 'company' | 'technical',
+            empresaRazaoSocial: company.razaoSocial,
+            empresaCnpj: company.cnpj,
+            empresaEndereco: companyAddress,
+            representanteNome: representanteName,
+            representanteCpf: representanteCpf,
+            representanteCargo: representanteCargo,
             orgaoFromSchema,
+            editalFromSchema,
+            processFromSchema,
             hasDivergence,
         };
 
-        // ── [3] CLASSIFICAÇÃO POR FAMÍLIA DOCUMENTAL ──
-        const family = classifyDeclarationFamily(declarationType);
-        console.log(`[Declaration v4] Family: ${family} | Divergence: ${hasDivergence}`);
+        console.log(`[Declaration v5] Step 3: Facts → org="${orgaoName}" div=${hasDivergence} rep="${representanteName}"`);
 
-        // ── [4] CONTEXTO ESPECÍFICO POR TIPO ──
-        const familyContext = getFamilySpecificContext(family, schema);
+
+        // ── Step 5: Contexto específico ──
+        const familyContext = extractFamilyContext(family, schema);
 
         // ── Issuer Block ──
         const isTechnical = issuerType === 'technical';
@@ -1162,7 +1149,7 @@ DADOS DA EMPRESA VINCULADA:
 ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}
 
-INSTRUÇÃO ESPECIAL (RT): A declaração DEVE ser redigida na PRIMEIRA PESSOA do profissional técnico. Ele é o declarante principal.
+INSTRUÇÃO ESPECIAL (RT): A declaração DEVE ser redigida na PRIMEIRA PESSOA do profissional técnico.
 Exemplo: "Eu, [Nome], [Nacionalidade], [Estado Civil], [Engenheiro Civil], inscrito no CREA sob nº [Nº], CPF nº [CPF], Responsável Técnico pela empresa [Razão Social], DECLARO..."`;
         } else {
             issuerBlock = `EMITENTE: A EMPRESA (por seu representante legal)
@@ -1172,71 +1159,22 @@ ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}
 
 DADOS DO RESPONSÁVEL TÉCNICO VINCULADO:
-${company.technicalQualification || 'Nenhum profissional técnico cadastrado no sistema.'}`;
+${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`;
         }
 
-        // ── [2] PROMPT V3 COM PREVALÊNCIA ABSOLUTA DOS FATOS ──
-        const prompt = `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas, com enfoque na Lei nº 14.133/2021.
-Sua tarefa é redigir uma declaração com RIGOR JURÍDICO MÁXIMO e absoluta fidelidade aos requisitos do edital.
+        // ── Step 6: Montar prompt v3 ──
+        const editalContext = bidding.aiAnalysis?.schemaV2
+            ? buildModuleContext(bidding.aiAnalysis.schemaV2, 'declaration')
+            : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500);
 
-TIPO ORIGINAL: "${declarationType}"
-FAMÍLIA DOCUMENTAL: ${family}
-
-${issuerBlock}
-
-╔══════════════════════════════════════════════════════════════╗
-║  FATOS AUTORITATIVOS — DADOS IMUTÁVEIS (PREVALÊNCIA TOTAL)  ║
-╠══════════════════════════════════════════════════════════════╣
-║  Empresa: ${company.razaoSocial}
-║  CNPJ: ${company.cnpj}
-║  Órgão Licitante: ${orgaoName}
-║  Título do Processo: ${biddingTitle}
-║  Modalidade: ${biddingMod}
-║  Edital nº: ${editalNum || 'Não identificado'}
-║  Processo nº: ${processNum || 'Não identificado'}
-╚══════════════════════════════════════════════════════════════╝
-
-REGRA ABSOLUTA: Os dados acima são a ÚNICA fonte válida para identificação das partes e do processo. QUALQUER dado divergente encontrado no resumo do edital abaixo DEVE SER IGNORADO. Se houver conflito entre o resumo e os FATOS AUTORITATIVOS, os FATOS AUTORITATIVOS PREVALECEM SEMPRE.
-${hasDivergence ? `
-⚠️ ALERTA DE CONTAMINAÇÃO DETECTADA: O resumo do edital contém referências a "${orgaoFromSchema}" que é de OUTRO certame. USE EXCLUSIVAMENTE "${orgaoName}" como órgão.` : ''}
-${familyContext ? `\nCONTEXTO ESPECÍFICO DA FAMÍLIA "${family.toUpperCase()}":\n${familyContext}\n` : ''}
-RESUMO ESTRUTURADO DO EDITAL (Use APENAS para conteúdo das exigências — NÃO para identificação do órgão/processo):
-${bidding.aiAnalysis?.schemaV2 ? buildModuleContext(bidding.aiAnalysis.schemaV2, 'declaration') : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
-
-INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
-
-1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário.
-
-2. ROBUSTEZ E PROFUNDIDADE (CRÍTICO): A declaração NÃO pode ser genérica ou superficial. DEVE conter TODOS estes elementos:
-   a) QUALIFICAÇÃO COMPLETA: usar EXATAMENTE "${company.razaoSocial}" e CNPJ "${company.cnpj}" (não inventar dados)
-   b) REFERÊNCIA EXPRESSA: citar EXATAMENTE o órgão "${orgaoName}", o Edital nº "${editalNum}", o Processo nº "${processNum}"
-   c) DECLARAÇÃO PRINCIPAL com fundamento legal específico — citar artigos da Lei 14.133/2021 pertinentes
-   d) COMPROMISSOS: comunicar alteração superveniente, manter condições durante vigência do certame
-   e) CIÊNCIA DAS SANÇÕES: art. 155 e seguintes da Lei 14.133/2021
-   f) FECHO: "Por ser expressão da verdade, firma a presente declaração para todos os fins de direito."
-   A declaração DEVE ter entre 5 e 12 parágrafos.
-
-3. TÍTULO: Gere um título técnico e descritivo. NUNCA inclua citações de artigos de lei no TÍTULO.
-
-4. NOMES COMPLETOS: NUNCA abrevie nomes. Transcreva exatamente como fornecido nos FATOS AUTORITATIVOS.
-
-5. EQUIPE TÉCNICA: Se for sobre pessoal técnico, cite nominalmente os dados do RT fornecidos acima.
-
-${customPrompt ? `6. INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}
-` : ''}
-7. REGRAS DE SAÍDA (FORMATO JSON):
-- Responda APENAS com o objeto JSON puro. NUNCA use blocos markdown.
-- FORMATO: { "title": "...", "text": "..." }
-- O "text" deve começar com a qualificação: "${isTechnical ? 'Eu, [Nome], [nacionalidade], [profissão], inscrito no CREA/CAU sob nº..., DECLARO...' : 'A empresa [Razão Social], inscrita no CNPJ sob nº [CNPJ], com sede em [endereço], neste ato representada por [nome], [cargo], portador(a) do CPF nº [CPF], DECLARA...'}"
-- PROIBIÇÃO: NÃO inclua Local, Data ou Assinatura no "text" — são adicionados pelo sistema.
-- Texto LIMPO sem formatação markdown.
-
-8. CITAÇÃO DO ÓRGÃO E EDITAL: CITE explicitamente "${orgaoName}" e "Edital nº ${editalNum}" ou "Processo nº ${processNum}". NUNCA use genéricos.`;
+        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical);
 
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
         }
 
+        // ── Step 7: Chamar IA ──
+        console.log(`[Declaration v5] Step 7: Calling Gemini (attempt 1)...`);
         const result = await callGeminiWithRetry(genAI.models, {
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -1247,52 +1185,54 @@ ${customPrompt ? `6. INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): 
             }
         });
 
-        let rawResponse = (result.text || '').trim();
-
-        // ── Sanitização de artefatos markdown ──
-        const sanitize = (s: string) => s
-            .replace(/\*\*/g, '')
-            .replace(/^#+\s*/gm, '')
-            .replace(/```[\s\S]*?```/g, '')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-
-        // ── Parsing JSON robusto em 3 camadas ──
-        let parsed: any = null;
-        try { parsed = JSON.parse(rawResponse); } catch {}
-        if (!parsed) {
-            const cleaned = rawResponse.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-            try { parsed = JSON.parse(cleaned); } catch {}
-        }
-        if (!parsed) {
-            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-            if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch {} }
+        // ── Step 8: Parser + Sanitize (modular) ──
+        const rawResponse = (result.text || '').trim();
+        const parsed = parseDeclaration(rawResponse);
+        if (!parsed || !parsed.text) {
+            return res.status(500).json({ error: 'Falha ao interpretar resposta da IA. Tente novamente.' });
         }
 
-        let finalText = parsed?.text ? sanitize(parsed.text) : sanitize(rawResponse);
-        let finalTitle = parsed?.title ? sanitize(parsed.title).substring(0, 80) : declarationType.substring(0, 50);
+        let finalText = parsed.text;
+        let finalTitle = parsed.title || declarationType.substring(0, 50);
 
-        // ── [5] VALIDAÇÃO PÓS-GERAÇÃO ──
-        const validation = validateDeclarationFacts(finalText, facts);
+        // ── Step 9: Validação pós-geração (15 regras) ──
+        console.log(`[Declaration v5] Step 9: Validating (15 rules)...`);
+        let issues = validateDeclaration(finalText, facts);
+        let corrections: string[] = [];
+        let attempts = 1;
 
-        // ── [6] REPAIR AUTOMÁTICO ──
-        let qualityCorrections: string[] = [];
-        if (validation.issues.length > 0) {
-            console.log(`[Declaration v4] Issues detected: ${validation.issues.join(', ')}. Attempting repair...`);
-            const repair = repairDeclaration(finalText, { ...facts, editalFromSchema, processFromSchema } as any, validation.issues);
-            finalText = repair.repairedText;
-            qualityCorrections = repair.corrections;
+        // ── Step 10: Repair automático via IA (se critical) ──
+        if (hasCriticalIssues(issues)) {
+            console.log(`[Declaration v5] Step 10: ${issues.filter(i => i.severity === 'critical').length} critical issues. Repair via IA...`);
+            attempts = 2;
 
-            if (qualityCorrections.length > 0) {
-                console.log(`[Declaration v4] Auto-corrected: ${qualityCorrections.join('; ')}`);
+            const aiCallFn = createGeminiRepairFn(genAI.models, callGeminiWithRetry);
+            const repair = await repairDeclaration(
+                finalText, finalTitle, issues, facts,
+                validateDeclaration, aiCallFn,
+            );
+
+            if (repair.improved) {
+                finalText = repair.text;
+                finalTitle = repair.title;
+                issues = repair.issuesAfterRepair;
+                corrections = repair.corrections;
             }
         }
 
-        // ── [7] QUALITY REPORT ──
-        const qualityReport = calculateQualityScore(validation.issues, qualityCorrections, family);
-        console.log(`[Declaration v4] Quality: ${qualityReport.grade} (${qualityReport.score}/100)`);
+        // ── Step 11/12: Quality Report + Resposta ──
+        const qualityReport = calculateQualityReport(issues, corrections, family, attempts);
+        console.log(`[Declaration v5] ${summarizeReport(qualityReport)}`);
 
-        // ── Response com qualityReport ──
+        if (qualityReport.grade === 'D' && qualityReport.contaminationDetected) {
+            return res.json({
+                text: finalText,
+                title: finalTitle,
+                quality: qualityReport,
+                warning: 'Qualidade insuficiente. A declaração contém erros factuais que não puderam ser corrigidos automaticamente. Revise manualmente.',
+            });
+        }
+
         res.json({
             text: finalText,
             title: finalTitle,
@@ -1300,7 +1240,7 @@ ${customPrompt ? `6. INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): 
         });
 
     } catch (error: any) {
-        console.error("Declaration generation error:", error);
+        console.error("[Declaration v5] Fatal error:", error);
         res.status(500).json({ error: 'Failed to generate declaration', details: error?.message || 'Erro desconhecido' });
     }
 });

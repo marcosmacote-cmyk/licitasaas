@@ -1,8 +1,8 @@
-import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2, ChevronDown, ChevronUp, FileSignature, Building2, Briefcase, ArrowLeft, RotateCcw } from 'lucide-react';
+import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2, ChevronDown, ChevronUp, FileSignature, Building2, Briefcase, ArrowLeft, RotateCcw, AlertTriangle, Shield, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { ConfirmDialog } from '../ui';
 import { useAiDeclaration } from '../hooks/useAiDeclaration';
-import type { LayoutConfig } from '../hooks/useAiDeclaration';
+import type { LayoutConfig, QualityReportFrontend } from '../hooks/useAiDeclaration';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 
 interface Props {
@@ -69,9 +69,12 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                                 onClick={d.handleGenerate}
                                 disabled={d.isGenerating}
                             >
-                                {d.isGenerating ? <Loader2 size={11} className="spin" /> : <RotateCcw size={11} />}
+                            {d.isGenerating ? <Loader2 size={11} className="spin" /> : <RotateCcw size={11} />}
                                 Regenerar
                             </button>
+                            {d.qualityReport && d.qualityReport.grade === 'D' && !d.isGenerating && (
+                                <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)', fontWeight: 600 }}>⚠️ Baixa</span>
+                            )}
                         </div>
 
                         <div style={{ padding: 'var(--space-4)' }}>
@@ -107,44 +110,23 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                     }}>
                         <EditorToolbar d={d} />
 
-                        {/* Quality Badge */}
+                        {/* Quality Badge Bar */}
                         {d.qualityReport && !d.isGenerating && d.generatedText && (
+                            <QualityBadgeBar report={d.qualityReport} />
+                        )}
+
+                        {/* Non-blocking warning */}
+                        {d.qualityWarning && !d.isGenerating && (
                             <div style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                                display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)',
                                 padding: 'var(--space-2) var(--space-4)',
-                                borderBottom: '1px solid var(--color-border)',
-                                background: d.qualityReport.grade === 'A' ? 'rgba(34,197,94,0.06)' :
-                                    d.qualityReport.grade === 'B' ? 'rgba(245,158,11,0.06)' :
-                                    d.qualityReport.grade === 'C' ? 'rgba(245,158,11,0.08)' :
-                                    'rgba(239,68,68,0.06)',
-                                fontSize: '0.75rem',
+                                borderBottom: '1px solid rgba(245,158,11,0.2)',
+                                background: 'rgba(245,158,11,0.05)',
+                                fontSize: '0.72rem', color: 'var(--color-warning)',
+                                lineHeight: 1.4,
                             }}>
-                                <span style={{
-                                    padding: '2px 8px', borderRadius: 'var(--radius-full)', fontWeight: 800,
-                                    fontSize: '0.7rem', letterSpacing: '0.05em',
-                                    background: d.qualityReport.grade === 'A' ? 'var(--color-success)' :
-                                        d.qualityReport.grade === 'B' ? 'var(--color-warning)' :
-                                        d.qualityReport.grade === 'C' ? 'var(--color-warning)' :
-                                        'var(--color-danger)',
-                                    color: 'white',
-                                }}>
-                                    {d.qualityReport.grade} {d.qualityReport.score}%
-                                </span>
-                                <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                                    Fidelidade Factual
-                                </span>
-                                {d.qualityReport.corrected && (
-                                    <span style={{
-                                        padding: '2px 8px', borderRadius: 'var(--radius-full)',
-                                        background: 'rgba(245,158,11,0.12)', color: 'var(--color-warning)',
-                                        fontSize: '0.65rem', fontWeight: 700,
-                                    }}>
-                                        ⚡ Auto-corrigido
-                                    </span>
-                                )}
-                                <span style={{ marginLeft: 'auto', color: 'var(--color-text-tertiary)', fontSize: '0.65rem', fontStyle: 'italic' }}>
-                                    {d.qualityReport.family.replace(/_/g, ' ')}
-                                </span>
+                                <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+                                <span>{d.qualityWarning}</span>
                             </div>
                         )}
 
@@ -723,6 +705,172 @@ function DeclarationPreview({ layout, declarationType, generatedText, setGenerat
                         {layout.footerText}
                     </div>
                 )}
+            </div>
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════
+// Quality Badge Bar + Details Panel
+// ═══════════════════════════════════════════════
+
+const GRADE_CONFIG = {
+    A: { bg: 'rgba(34,197,94,0.06)', pill: 'var(--color-success)', label: 'Excelente' },
+    B: { bg: 'rgba(245,158,11,0.06)', pill: 'var(--color-warning)', label: 'Boa' },
+    C: { bg: 'rgba(245,158,11,0.08)', pill: '#d97706', label: 'Regular' },
+    D: { bg: 'rgba(239,68,68,0.06)', pill: 'var(--color-danger)', label: 'Insuficiente' },
+} as const;
+
+function QualityChip({ ok, labelOk, labelFail, icon }: { ok: boolean; labelOk: string; labelFail: string; icon?: React.ReactNode }) {
+    return (
+        <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            padding: '2px 8px', borderRadius: 'var(--radius-full)',
+            fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.02em',
+            background: ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+            color: ok ? 'var(--color-success)' : 'var(--color-danger)',
+            whiteSpace: 'nowrap',
+        }}>
+            {icon || (ok ? '✓' : '✗')} {ok ? labelOk : labelFail}
+        </span>
+    );
+}
+
+function QualityBadgeBar({ report }: { report: QualityReportFrontend }) {
+    const [showDetails, setShowDetails] = useState(false);
+    const grade = report.grade as keyof typeof GRADE_CONFIG;
+    const config = GRADE_CONFIG[grade] || GRADE_CONFIG.D;
+
+    return (
+        <div style={{ borderBottom: '1px solid var(--color-border)' }}>
+            {/* Main bar */}
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                padding: 'var(--space-2) var(--space-4)',
+                background: config.bg,
+                fontSize: '0.75rem',
+                flexWrap: 'wrap',
+            }}>
+                {/* Grade pill */}
+                <span style={{
+                    padding: '2px 10px', borderRadius: 'var(--radius-full)', fontWeight: 800,
+                    fontSize: '0.7rem', letterSpacing: '0.05em',
+                    background: config.pill, color: 'white',
+                    minWidth: 52, textAlign: 'center',
+                }}>
+                    {report.grade} {report.score}%
+                </span>
+
+                {/* Boolean chips */}
+                <QualityChip ok={report.factualConsistency} labelOk="Fidelidade" labelFail="Dados divergentes" />
+                <QualityChip ok={report.declarationTypeMatch} labelOk="Tipo" labelFail="Tipo divergente" />
+                <QualityChip ok={report.structureAdequate} labelOk="Estrutura" labelFail="Estrutura fraca" />
+                <QualityChip ok={!report.contaminationDetected} labelOk="Limpo" labelFail="Contaminada" icon={report.contaminationDetected ? <AlertTriangle size={9} /> : <Shield size={9} />} />
+
+                {/* Auto-corrected badge */}
+                {report.corrected && (
+                    <span style={{
+                        padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                        background: 'rgba(139,92,246,0.12)', color: 'var(--color-ai)',
+                        fontSize: '0.62rem', fontWeight: 700,
+                    }}>
+                        ⚡ Auto-corrigido ({report.corrections.length})
+                    </span>
+                )}
+
+                {/* Spacer + family + details toggle */}
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.6rem', fontStyle: 'italic' }}>
+                        {report.family.replace(/_/g, ' ')}
+                    </span>
+                    {report.issues.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setShowDetails(d => !d)}
+                            style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 2,
+                                fontSize: '0.62rem', fontWeight: 600, color: 'var(--color-primary)',
+                                padding: '1px 4px', borderRadius: 'var(--radius-sm)',
+                            }}
+                        >
+                            {showDetails ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                            {report.issues.length} {report.issues.length === 1 ? 'ponto' : 'pontos'}
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Expandable details */}
+            {showDetails && <QualityDetailsPanel report={report} />}
+        </div>
+    );
+}
+
+function QualityDetailsPanel({ report }: { report: QualityReportFrontend }) {
+    const critical = report.issues.filter(i => i.severity === 'critical');
+    const major = report.issues.filter(i => i.severity === 'major');
+    const minor = report.issues.filter(i => i.severity === 'minor');
+
+    const SeverityGroup = ({ label, icon, issues, color }: { label: string; icon: string; issues: typeof report.issues; color: string }) => {
+        if (issues.length === 0) return null;
+        return (
+            <div style={{ marginBottom: 'var(--space-2)' }}>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{icon}</span> {label} ({issues.length})
+                </div>
+                {issues.map((issue, i) => (
+                    <div key={i} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)',
+                        padding: '3px 0', fontSize: '0.7rem', color: 'var(--color-text-secondary)',
+                        lineHeight: 1.35,
+                    }}>
+                        <ChevronRight size={9} style={{ flexShrink: 0, marginTop: 2, color }} />
+                        <span><code style={{ fontSize: '0.6rem', padding: '0 3px', borderRadius: 2, background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>{issue.code}</code> {issue.message}</span>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    return (
+        <div style={{
+            padding: 'var(--space-3) var(--space-4)',
+            background: 'var(--color-bg-body)',
+            borderTop: '1px solid var(--color-border)',
+            maxHeight: 200, overflowY: 'auto',
+        }}>
+            <SeverityGroup label="Crítico" icon="⛔" issues={critical} color="var(--color-danger)" />
+            <SeverityGroup label="Importante" icon="⚠️" issues={major} color="#d97706" />
+            <SeverityGroup label="Informativo" icon="ℹ️" issues={minor} color="var(--color-text-tertiary)" />
+
+            {report.corrections.length > 0 && (
+                <div style={{ marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border)' }}>
+                    <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-success)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 size={10} /> Correções Aplicadas ({report.corrections.length})
+                    </div>
+                    {report.corrections.map((c, i) => (
+                        <div key={i} style={{ fontSize: '0.68rem', color: 'var(--color-success)', padding: '2px 0', display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
+                            <span style={{ flexShrink: 0 }}>✓</span>
+                            <span style={{ color: 'var(--color-text-secondary)' }}>{c}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {report.issues.length === 0 && report.corrections.length === 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '0.72rem', color: 'var(--color-success)', fontWeight: 600 }}>
+                    <Shield size={13} /> Nenhuma inconsistência detectada.
+                </div>
+            )}
+
+            {/* Meta info */}
+            <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-2)', fontSize: '0.6rem', color: 'var(--color-text-tertiary)' }}>
+                <span>Tentativas: {report.attempts}</span>
+                <span>•</span>
+                <span>Score: {report.score}/100</span>
+                <span>•</span>
+                <span>Grade: {report.grade}</span>
             </div>
         </div>
     );
