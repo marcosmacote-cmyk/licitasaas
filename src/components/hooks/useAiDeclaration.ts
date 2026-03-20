@@ -153,6 +153,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
     }, [selectedBiddingId]);
 
     // Auto-update destinatário whenever bidding changes (including initialBiddingId)
+    // Usa setLayouts diretamente para evitar stale closure do updateLayout
     useEffect(() => {
         if (!selectedBiddingId) return;
         const b = biddings.find(x => x.id === selectedBiddingId);
@@ -172,15 +173,17 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                 parts.push(editalRef);
             }
         } else {
-            const cleanTitle = tit.replace(new RegExp(`^${mod}\\s*(nº)?\\s*`, 'i'), '').trim();
-            parts.push(cleanTitle ? `${mod} nº ${cleanTitle}` : tit);
+            // Sem separador " - ": usar título completo como referência
+            parts.push(tit);
         }
 
-        updateLayout({
-            addresseeOrg: parts.join('\n'),
-            addresseeName: 'Agente de Contratação',
-        });
-    }, [selectedBiddingId, biddings]);
+        const addresseeOrg = parts.join('\n');
+        // Escrever direto nos layouts para garantir que atualiza o layout CORRETO (currentLayoutId pode ter mudado)
+        setLayouts(prev => prev.map(l => l.id === currentLayoutId
+            ? { ...l, addresseeOrg, addresseeName: 'Agente de Contratação' }
+            : l
+        ));
+    }, [selectedBiddingId, biddings, currentLayoutId]);
 
     // Ensure date is always today on mount
     useEffect(() => {
