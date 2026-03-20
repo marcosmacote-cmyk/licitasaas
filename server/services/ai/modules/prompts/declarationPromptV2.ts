@@ -48,7 +48,12 @@ Para SIMPLE_COMPLIANCE, a estrutura mínima é:
 
 ═══ ESTRUTURA RECOMENDADA ═══
 
-1. QUALIFICAÇÃO: Razão social, CNPJ — e representante se fornecido. Não abreviar.
+1. QUALIFICAÇÃO COMPLETA (REGRA INVIOLÁVEL — aplica-se a TODOS os estilos e famílias):
+   - Razão social COMPLETA
+   - CNPJ
+   - Endereço COMPLETO (rua, número, bairro, CEP, cidade/UF)
+   - Representante legal: nome COMPLETO, CPF, cargo (Sócio Administrador, etc.)
+   JAMAIS omita qualquer destes campos, mesmo em declarações simples.
 2. REFERÊNCIA: Órgão, edital, modalidade. APENAS dados dos fatos autoritativos.
 3. DECLARAÇÃO PRINCIPAL: Conteúdo declarado com referências legais pertinentes.
 4. CIÊNCIA: Ciência das penalidades (art. 155 e ss. da Lei 14.133/2021).
