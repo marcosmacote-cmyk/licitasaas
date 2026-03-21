@@ -69,6 +69,9 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
   // ── State: Config Panel ──
   const [showConfig, setShowConfig] = useState(false);
   const [monitorConfig, setMonitorConfig] = useState({ keywords: 'suspensa,reaberta,vencedora', phoneNumber: '', telegramChatId: '', isActive: true });
+  const [enabledCategories, setEnabledCategories] = useState<string[]>([]);
+  const [customKeywords, setCustomKeywords] = useState<string[]>([]);
+  const [taxonomy, setTaxonomy] = useState<any>(null);
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingNotif, setTestingNotif] = useState(false);
   const [health, setHealth] = useState<any>(null);
@@ -111,7 +114,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     finally { setLoadingMessages(false); }
   }, []);
 
-  // Fetch config + health on mount
+  // Fetch config + health + taxonomy on mount
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -124,6 +127,20 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
             telegramChatId: data.telegramChatId || '',
             isActive: data.isActive ?? true
           });
+          // Parse new fields
+          try { setEnabledCategories(JSON.parse(data.enabledCategories || '[]')); } catch { /* */ }
+          try { setCustomKeywords(JSON.parse(data.customKeywords || '[]')); } catch { /* */ }
+        }
+      } catch { /* silent */ }
+    };
+    const fetchTaxonomy = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chat-monitor/taxonomy`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          setTaxonomy(data);
+          // Se enabledCategories vazio, usar defaults da taxonomy
+          setEnabledCategories(prev => prev.length > 0 ? prev : (data.defaultEnabled || []));
         }
       } catch { /* silent */ }
     };
@@ -134,6 +151,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
       } catch { /* silent */ }
     };
     fetchConfig();
+    fetchTaxonomy();
     fetchHealth();
   }, []);
 
@@ -214,10 +232,32 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     finally { setTestingNotif(false); }
   };
 
+  const toggleCategory = (catId: string) => {
+    setEnabledCategories(prev =>
+      prev.includes(catId) ? prev.filter(c => c !== catId) : [...prev, catId]
+    );
+  };
+
+  const addCustomKeyword = (kw: string) => {
+    const trimmed = kw.trim().toLowerCase();
+    if (trimmed && !customKeywords.includes(trimmed)) {
+      setCustomKeywords(prev => [...prev, trimmed]);
+    }
+  };
+
+  const removeCustomKeyword = (kw: string) => {
+    setCustomKeywords(prev => prev.filter(k => k !== kw));
+  };
+
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, { method: 'POST', headers, body: JSON.stringify(monitorConfig) });
+      const payload = {
+        ...monitorConfig,
+        enabledCategories,
+        customKeywords,
+      };
+      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, { method: 'POST', headers, body: JSON.stringify(payload) });
       if (res.ok) toast.success('Configurações salvas!');
       else toast.error('Erro ao salvar');
     } catch { toast.error('Falha na conexão.'); }
@@ -272,6 +312,8 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     messagesEndRef,
     // Config
     showConfig, setShowConfig, monitorConfig, setMonitorConfig,
+    enabledCategories, customKeywords, taxonomy,
+    toggleCategory, addCustomKeyword, removeCustomKeyword,
     savingConfig, testingNotif, health, watcherStatus,
     // Computed
     filteredProcesses, selectedProc,

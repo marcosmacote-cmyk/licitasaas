@@ -1,4 +1,5 @@
-import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus } from 'lucide-react';
+import { useState as useLocalState } from 'react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
 import { BackToHubBanner } from './ui/BackToHubBanner';
@@ -17,6 +18,13 @@ function highlightKeywords(text: string, keyword: string | null) {
       : part
   );
 }
+
+// ── Severity styles ──
+const severityConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  critical: { label: '🔴 Crítico', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.06)', border: 'rgba(220, 38, 38, 0.15)' },
+  warning: { label: '⚠️ Atenção', color: '#d97706', bg: 'rgba(217, 119, 6, 0.06)', border: 'rgba(217, 119, 6, 0.15)' },
+  info: { label: 'ℹ️ Informativo', color: '#6b7280', bg: 'rgba(107, 114, 128, 0.06)', border: 'rgba(107, 114, 128, 0.15)' },
+};
 
 // ── Author icon helper ──
 function AuthorIcon({ type }: { type: string | null }) {
@@ -46,6 +54,24 @@ function portalBadge(portal: string) {
   if (p.includes('pncp')) return { label: 'PNCP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' };
   if (p.includes('bll')) return { label: 'BLL', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' };
   return { label: portal || 'Outro', color: 'var(--color-neutral)', bg: 'var(--color-neutral-bg)' };
+}
+
+// ── Custom Keyword Input (with Enter support) ──
+function CustomKeywordInput({ onAdd }: { onAdd: (kw: string) => void }) {
+  const [value, setValue] = useLocalState('');
+  const handleAdd = () => { if (value.trim()) { onAdd(value); setValue(''); } };
+  return (
+    <div style={{ display: 'flex', gap: '4px' }}>
+      <input type="text" className="config-input" value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+        placeholder="Adicionar keyword..." style={{ flex: 1 }} />
+      <button onClick={handleAdd} className="btn btn-ghost"
+        style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)' }}>
+        <Plus size={14} />
+      </button>
+    </div>
+  );
 }
 
 interface Props {
@@ -145,13 +171,79 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
 
       {/* ── Config Panel (collapsible) ── */}
       {c.showConfig && (
-        <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-base)', flexShrink: 0, display: 'grid', gap: 'var(--space-4)', maxHeight: '300px', overflowY: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
+        <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-base)', flexShrink: 0, display: 'grid', gap: 'var(--space-4)', maxHeight: '500px', overflowY: 'auto' }}>
+
+          {/* ── Alert Categories ── */}
+          {c.taxonomy && (
             <div>
-              <label className="config-label"><Bell size={12} /> Palavras-chave de Alerta</label>
-              <input type="text" className="config-input" value={c.monitorConfig.keywords}
-                onChange={(e) => c.setMonitorConfig({...c.monitorConfig, keywords: e.target.value})}
-                placeholder="suspensa, reaberta, vencedora..." />
+              <label className="config-label" style={{ marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Bell size={12} /> Categorias de Alerta
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {(['critical', 'warning', 'info'] as const).map(severity => {
+                  const sc = severityConfig[severity];
+                  const cats = c.taxonomy.categories.filter((cat: any) => cat.severity === severity);
+                  if (cats.length === 0) return null;
+                  return (
+                    <div key={severity} style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: sc.bg, border: `1px solid ${sc.border}` }}>
+                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: sc.color, marginBottom: 'var(--space-2)' }}>
+                        {sc.label}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                        {cats.map((cat: any) => {
+                          const isEnabled = c.enabledCategories.includes(cat.id);
+                          return (
+                            <label key={cat.id}
+                              title={cat.description}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                padding: '4px 10px', borderRadius: 'var(--radius-sm)',
+                                background: isEnabled ? 'white' : 'transparent',
+                                border: `1px solid ${isEnabled ? sc.border : 'transparent'}`,
+                                cursor: 'pointer', fontSize: 'var(--text-sm)',
+                                color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                transition: 'var(--transition-fast)',
+                                boxShadow: isEnabled ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                              }}>
+                              <input type="checkbox" checked={isEnabled}
+                                onChange={() => c.toggleCategory(cat.id)}
+                                style={{ accentColor: sc.color, width: '14px', height: '14px' }} />
+                              <span>{cat.emoji}</span>
+                              <span>{cat.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Custom Keywords + Channels ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', alignItems: 'start' }}>
+            <div>
+              <label className="config-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Plus size={12} /> Palavras-chave Personalizadas
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: 'var(--space-2)', minHeight: '28px' }}>
+                {c.customKeywords.map(kw => (
+                  <span key={kw} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '2px 8px', borderRadius: 'var(--radius-lg)',
+                    background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                    fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)',
+                  }}>
+                    {kw}
+                    <button onClick={() => c.removeCustomKeyword(kw)}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
+                      <X size={12} color="var(--color-primary)" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <CustomKeywordInput onAdd={c.addCustomKeyword} />
             </div>
             <div>
               <label className="config-label"><Phone size={12} color="var(--color-success)" /> WhatsApp</label>
@@ -166,6 +258,8 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                 placeholder="Chat ID ou @usuario" />
             </div>
           </div>
+
+          {/* ── Actions Row ── */}
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
               <button className="btn btn-ghost"

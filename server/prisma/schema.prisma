@@ -287,15 +287,17 @@ model CertificateExperience {
 }
 
 model ChatMonitorConfig {
-  id             String   @id @default(uuid())
-  tenantId       String   @unique
-  keywords       String?  @default("suspensa,reaberta,vencedora")
-  phoneNumber    String?
-  telegramChatId String?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                String   @id @default(uuid())
+  tenantId          String   @unique
+  keywords          String?  @default("suspensa,reaberta,vencedora")
+  customKeywords    String?  @default("[]")
+  enabledCategories String?  @default("[\"convocacao\",\"vencedor\",\"encerramento\",\"prazo_docs\",\"suspensao\",\"reabertura\",\"impugnacao\",\"inabilitacao\",\"negociacao\"]")
+  phoneNumber       String?
+  telegramChatId    String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model ChatMonitorLog {

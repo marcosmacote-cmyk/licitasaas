@@ -5800,12 +5800,52 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
 // ═══════════════════════════════════════════════════════════════════════
 // Chat Monitor Configuration
 // ═══════════════════════════════════════════════════════════════════════
+
+// GET: Taxonomy (static — returns available categories for the UI)
+app.get('/api/chat-monitor/taxonomy', authenticateToken, async (req: any, res) => {
+    try {
+        const { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } = require('./services/monitoring/alertTaxonomy');
+        res.json({
+            categories: ALERT_TAXONOMY.map((c: any) => ({
+                id: c.id,
+                label: c.label,
+                emoji: c.emoji,
+                severity: c.severity,
+                description: c.description,
+                enabledByDefault: c.enabledByDefault,
+            })),
+            bySeverity: {
+                critical: getCategoriesBySeverity().critical.map((c: any) => c.id),
+                warning: getCategoriesBySeverity().warning.map((c: any) => c.id),
+                info: getCategoriesBySeverity().info.map((c: any) => c.id),
+            },
+            defaultEnabled: DEFAULT_ENABLED_CATEGORIES,
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch taxonomy' });
+    }
+});
+
 app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => {
     try {
+        const { DEFAULT_ENABLED_CATEGORIES } = require('./services/monitoring/alertTaxonomy');
         const config = await prisma.chatMonitorConfig.findUnique({
             where: { tenantId: req.user.tenantId }
         });
-        res.json(config || { keywords: "suspensa,reaberta,vencedora", isActive: true });
+        if (!config) {
+            return res.json({
+                keywords: "suspensa,reaberta,vencedora",
+                customKeywords: "[]",
+                enabledCategories: JSON.stringify(DEFAULT_ENABLED_CATEGORIES),
+                isActive: true
+            });
+        }
+        // Garante que configs antigos (sem os novos campos) retornem defaults
+        res.json({
+            ...config,
+            customKeywords: config.customKeywords || "[]",
+            enabledCategories: config.enabledCategories || JSON.stringify(DEFAULT_ENABLED_CATEGORIES),
+        });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch chat monitor config' });
     }
@@ -5813,20 +5853,33 @@ app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => 
 
 app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, phoneNumber, telegramChatId, isActive } = req.body;
+        const { keywords, phoneNumber, telegramChatId, isActive, enabledCategories, customKeywords } = req.body;
+
+        // Serializa arrays para string JSON se necessário
+        const enabledCatStr = enabledCategories
+            ? (typeof enabledCategories === 'string' ? enabledCategories : JSON.stringify(enabledCategories))
+            : undefined;
+        const customKwStr = customKeywords
+            ? (typeof customKeywords === 'string' ? customKeywords : JSON.stringify(customKeywords))
+            : undefined;
+
         const config = await prisma.chatMonitorConfig.upsert({
             where: { tenantId: req.user.tenantId },
             create: {
                 tenantId: req.user.tenantId,
                 keywords,
+                customKeywords: customKwStr,
+                enabledCategories: enabledCatStr,
                 phoneNumber,
                 telegramChatId,
                 isActive: isActive ?? true
             },
             update: {
-                keywords,
-                phoneNumber,
-                telegramChatId,
+                ...(keywords !== undefined && { keywords }),
+                ...(customKwStr !== undefined && { customKeywords: customKwStr }),
+                ...(enabledCatStr !== undefined && { enabledCategories: enabledCatStr }),
+                ...(phoneNumber !== undefined && { phoneNumber }),
+                ...(telegramChatId !== undefined && { telegramChatId }),
                 isActive: isActive ?? true
             }
         });
@@ -6354,11 +6407,12 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
         });
         const existing = new Set(existingLogs.map(l => l.messageId));
 
-        // Get keywords config for this tenant
+        // Get keywords config for this tenant → KeywordDetector
         const config = await prisma.chatMonitorConfig.findUnique({
             where: { tenantId }
         });
-        const keywords = config?.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
+        const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
+        const detector = createDetectorFromConfig(config);
 
         const { DedupService } = require('./services/monitoring/dedup.service');
 
@@ -6378,24 +6432,11 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
             });
             if (isDuplicate) continue;
 
-            const detectedKeyword = keywords.find(k => content.toLowerCase().includes(k)) || null;
-            if (detectedKeyword) alerts++;
+            const detection = detector.detect(content);
+            if (detection.shouldNotify) alerts++;
 
-            let eventCategory = msg.eventCategory;
-            let status = detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-            if (!eventCategory) {
-                const lowerContent = content.toLowerCase();
-                if (lowerContent.includes('encerrado o prazo') || lowerContent.includes('tempo aleatório')) {
-                    eventCategory = '13';
-                    status = 'PENDING_NOTIFICATION';
-                    alerts++;
-                } else if (lowerContent.includes('suspenso') || lowerContent.includes('suspensão')) {
-                    eventCategory = '12';
-                } else if (lowerContent.includes('bom dia') || lowerContent.includes('boa tarde')) {
-                    eventCategory = '10';
-                }
-            }
+            const eventCategory = msg.eventCategory || detection.categoryId || null;
+            const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
 
             await prisma.chatMonitorLog.create({
                 data: {
@@ -6406,9 +6447,9 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
                     content,
                     authorType,
                     authorCnpj: msg.authorCnpj || null,
-                    eventCategory: eventCategory || null,
+                    eventCategory,
                     itemRef: msg.itemRef || null,
-                    detectedKeyword,
+                    detectedKeyword: detection.detectedKeyword,
                     captureSource: msg.captureSource || 'server-worker',
                     status,
                 }
@@ -6457,11 +6498,12 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
         });
         const existing = new Set(existingLogs.map(l => l.messageId));
 
-        // Get keywords config
+        // Get keywords config → KeywordDetector
         const config = await prisma.chatMonitorConfig.findUnique({
             where: { tenantId }
         });
-        const keywords = config?.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
+        const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
+        const detector = createDetectorFromConfig(config);
 
         const { DedupService } = require('./services/monitoring/dedup.service');
 
@@ -6483,26 +6525,11 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
 
             if (isDuplicate) continue;
 
-            const detectedKeyword = keywords.find(k => content.toLowerCase().includes(k)) || null;
-            if (detectedKeyword) alerts++;
+            const detection = detector.detect(content);
+            if (detection.shouldNotify) alerts++;
 
-            // Simple taxonomy logic
-            let eventCategory = msg.eventCategory;
-            let status = detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-            // Enhance taxonomy based on standard patterns if eventCategory is null
-            if (!eventCategory) {
-              const lowerContent = content.toLowerCase();
-              if (lowerContent.includes('encerrado o prazo') || lowerContent.includes('tempo aleatório')) {
-                eventCategory = '13'; // encerramento_prazo
-                status = 'PENDING_NOTIFICATION'; // Auto-alert for closing times
-                alerts++;
-              } else if (lowerContent.includes('suspenso') || lowerContent.includes('suspensão')) {
-                eventCategory = '12'; // suspensao
-              } else if (lowerContent.includes('bom dia') || lowerContent.includes('boa tarde')) {
-                eventCategory = '10'; // saudacao  
-              }
-            }
+            const eventCategory = msg.eventCategory || detection.categoryId || null;
+            const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
 
             await prisma.chatMonitorLog.create({
                 data: {
@@ -6513,9 +6540,9 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
                     content,
                     authorType,
                     authorCnpj: msg.authorCnpj || null,
-                    eventCategory: eventCategory || null,
+                    eventCategory,
                     itemRef: msg.itemRef || null,
-                    detectedKeyword,
+                    detectedKeyword: detection.detectedKeyword,
                     captureSource: msg.captureSource || 'local-watcher',
                     status,
                 }
