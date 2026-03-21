@@ -429,7 +429,7 @@ function App() {
           {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} initialProcessId={moduleContext?.processId} hubOriginId={moduleContext?.hubOriginId} onContextConsumed={() => setModuleContext(null)} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
           {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
           {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} initialContext={moduleContext} onContextConsumed={() => setModuleContext(null)} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
-          {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} biddings={items} hubOriginId={moduleContext?.hubOriginId} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
+          {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} biddings={items} hubOriginId={moduleContext?.hubOriginId} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} onNavigateToHub={(processId) => { setModuleContext({ hubOriginId: processId, processId }); setActiveTab('bidding'); }} />}
           {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}
           {activeTab === 'settings' && <SettingsPage />}
           </Suspense>

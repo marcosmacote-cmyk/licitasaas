@@ -1,4 +1,4 @@
-import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink } from 'lucide-react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
 import { BackToHubBanner } from './ui/BackToHubBanner';
@@ -53,9 +53,10 @@ interface Props {
   biddings?: BiddingProcess[];
   hubOriginId?: string;
   onReturnToHub?: (processId: string) => void;
+  onNavigateToHub?: (processId: string) => void;
 }
 
-export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHub }: Props) {
+export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHub, onNavigateToHub }: Props) {
   const c = useChatMonitor({ companies });
 
   // ── Governance check ──
@@ -285,7 +286,9 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
 
                 return (
                   <div key={proc.id} onClick={() => c.handleSelectProcess(proc.id)}
-                    className={`chat-process-item${isSelected ? ' active' : ''}`}>
+                    onDoubleClick={() => onNavigateToHub?.(proc.id)}
+                    className={`chat-process-item${isSelected ? ' active' : ''}`}
+                    title="Duplo clique para abrir o HUB do processo">
                     {/* Title + Badge */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
                       <span style={{ fontSize: '0.8125rem', fontWeight: proc.unreadCount > 0 ? 700 : 600, color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>
@@ -367,6 +370,13 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     <span style={{ fontSize: 'var(--text-sm)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-surface-hover)', color: 'var(--color-text-secondary)' }}>
                       {c.selectedProc.totalMessages} mensagens
                     </span>
+                    {onNavigateToHub && (
+                      <button title="Abrir HUB do processo"
+                        onClick={() => onNavigateToHub(c.selectedProc!.id)}
+                        style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: 'var(--color-primary)', fontWeight: 600 }}>
+                        <ExternalLink size={13} /> HUB
+                      </button>
+                    )}
                     <button title={c.selectedProc.isImportant ? 'Remover destaque' : 'Marcar como importante'}
                       onClick={(e) => { e.stopPropagation(); c.toggleProcessImportant(c.selectedProc!.id, c.selectedProc!.isImportant); }}
                       style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: 'none', background: c.selectedProc.isImportant ? 'var(--color-warning-bg)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
