@@ -1,4 +1,4 @@
-import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2, ChevronDown, ChevronUp, FileSignature, Building2, Briefcase, ArrowLeft, RotateCcw, AlertTriangle, Shield, ChevronRight } from 'lucide-react';
+import { FileText, Sparkles, Download, Save, Loader2, CheckCircle2, Image, X, Settings2, Plus, Trash2, ChevronDown, ChevronUp, FileSignature, Building2, Briefcase, ArrowLeft, RotateCcw, AlertTriangle, Shield, ChevronRight, Scale, PenLine, FileDown, Zap, Ban, Info } from 'lucide-react';
 import { useState } from 'react';
 import { ConfirmDialog } from '../ui';
 import { useAiDeclaration } from '../hooks/useAiDeclaration';
@@ -73,7 +73,7 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                                 Regenerar
                             </button>
                             {d.qualityReport && d.qualityReport.grade === 'D' && !d.isGenerating && (
-                                <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)', fontWeight: 600 }}>⚠️ Baixa</span>
+                                <span style={{ fontSize: '0.6rem', color: 'var(--color-danger)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2 }}><AlertTriangle size={10} /> Baixa</span>
                             )}
                         </div>
 
@@ -236,7 +236,7 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                                     else d.setDeclarationType(e.target.value);
                                 }}>
                                     {d.declarationTypesFromEdital.map((t: string, i: number) => <option key={i} value={t}>{t}</option>)}
-                                    <option value="__custom__">✏️ Outro tipo...</option>
+                                    <option value="__custom__">Outro tipo...</option>
                                 </select>
                                 {!d.declarationTypesFromEdital.includes(d.declarationType) && (
                                     <input
@@ -310,10 +310,10 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
                         {[
-                            { icon: '✨', title: 'Inteligência do Edital', desc: 'Texto gerado com base na análise IA do edital' },
-                            { icon: '⚖️', title: 'Rigor Jurídico', desc: 'Linguagem formal aderente à Lei 14.133/2021' },
-                            { icon: '📝', title: 'Editável', desc: 'Revise e ajuste o texto antes de exportar' },
-                            { icon: '📄', title: 'PDF Pronto', desc: 'Exporta como PDF com cabeçalho e assinatura' },
+                            { icon: 'sparkles', title: 'Inteligência do Edital', desc: 'Texto gerado com base na análise IA do edital' },
+                            { icon: 'scale', title: 'Rigor Jurídico', desc: 'Linguagem formal aderente à Lei 14.133/2021' },
+                            { icon: 'penline', title: 'Editável', desc: 'Revise e ajuste o texto antes de exportar' },
+                            { icon: 'filedown', title: 'PDF Pronto', desc: 'Exporta como PDF com cabeçalho e assinatura' },
                         ].map((f, i) => (
                             <div key={i} style={{
                                 display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)',
@@ -322,7 +322,12 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                                 background: 'var(--color-bg-surface)',
                                 border: '1px solid var(--color-border)',
                             }}>
-                                <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{f.icon}</span>
+                                <span style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 'var(--radius-md)', background: 'rgba(139,92,246,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {f.icon === 'sparkles' && <Sparkles size={14} color="var(--color-ai)" />}
+                                    {f.icon === 'scale' && <Scale size={14} color="var(--color-ai)" />}
+                                    {f.icon === 'penline' && <PenLine size={14} color="var(--color-ai)" />}
+                                    {f.icon === 'filedown' && <FileDown size={14} color="var(--color-ai)" />}
+                                </span>
                                 <div>
                                     <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 1 }}>{f.title}</div>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>{f.desc}</div>
@@ -393,10 +398,10 @@ function ConfigField({ label, icon, children, stepNumber }: { label: string; ico
     );
 }
 
-const STYLE_OPTIONS: { value: 'objetiva' | 'formal' | 'robusta'; label: string; desc: string }[] = [
-    { value: 'objetiva', label: '📝 Objetiva', desc: 'Direta, sem prolixidade' },
-    { value: 'formal', label: '⚖️ Formal', desc: 'Completa e moderada' },
-    { value: 'robusta', label: '📜 Robusta', desc: 'Detalhada e extensa' },
+const STYLE_OPTIONS: { value: 'objetiva' | 'formal' | 'robusta'; label: string; desc: string; Icon: typeof PenLine }[] = [
+    { value: 'objetiva', label: 'Objetiva', desc: 'Direta, sem prolixidade', Icon: PenLine },
+    { value: 'formal', label: 'Formal', desc: 'Completa e moderada', Icon: Scale },
+    { value: 'robusta', label: 'Robusta', desc: 'Detalhada e extensa', Icon: FileText },
 ];
 
 function DeclarationStyleSelector({ style, setStyle }: {
@@ -433,7 +438,7 @@ function DeclarationStyleSelector({ style, setStyle }: {
                             lineHeight: 1.2,
                         }}
                     >
-                        <span>{opt.label}</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><opt.Icon size={13} /> {opt.label}</span>
                         <span style={{ fontSize: '0.58rem', color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{opt.desc}</span>
                     </button>
                 ))}
@@ -823,7 +828,7 @@ function QualityBadgeBar({ report }: { report: QualityReportFrontend }) {
                         background: 'rgba(139,92,246,0.12)', color: 'var(--color-ai)',
                         fontSize: '0.62rem', fontWeight: 700,
                     }}>
-                        ⚡ Auto-corrigido ({report.corrections.length})
+                        <Zap size={10} /> Auto-corrigido ({report.corrections.length})
                     </span>
                 )}
 
@@ -861,7 +866,7 @@ function QualityDetailsPanel({ report }: { report: QualityReportFrontend }) {
     const major = report.issues.filter(i => i.severity === 'major');
     const minor = report.issues.filter(i => i.severity === 'minor');
 
-    const SeverityGroup = ({ label, icon, issues, color }: { label: string; icon: string; issues: typeof report.issues; color: string }) => {
+    const SeverityGroup = ({ label, icon, issues, color }: { label: string; icon: React.ReactNode; issues: typeof report.issues; color: string }) => {
         if (issues.length === 0) return null;
         return (
             <div style={{ marginBottom: 'var(--space-2)' }}>
@@ -889,9 +894,9 @@ function QualityDetailsPanel({ report }: { report: QualityReportFrontend }) {
             borderTop: '1px solid var(--color-border)',
             maxHeight: 200, overflowY: 'auto',
         }}>
-            <SeverityGroup label="Crítico" icon="⛔" issues={critical} color="var(--color-danger)" />
-            <SeverityGroup label="Importante" icon="⚠️" issues={major} color="#d97706" />
-            <SeverityGroup label="Informativo" icon="ℹ️" issues={minor} color="var(--color-text-tertiary)" />
+            <SeverityGroup label="Crítico" icon={<Ban size={10} />} issues={critical} color="var(--color-danger)" />
+            <SeverityGroup label="Importante" icon={<AlertTriangle size={10} />} issues={major} color="#d97706" />
+            <SeverityGroup label="Informativo" icon={<Info size={10} />} issues={minor} color="var(--color-text-tertiary)" />
 
             {report.corrections.length > 0 && (
                 <div style={{ marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border)' }}>

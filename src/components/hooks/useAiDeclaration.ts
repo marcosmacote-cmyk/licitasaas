@@ -372,9 +372,9 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
                     toast.warning(`Declaração auto-corrigida: ${data.quality.corrections.length} problema(s) resolvido(s) automaticamente.`);
                 }
                 if (data.quality.contaminationDetected) {
-                    toast.error('⚠️ Possível contaminação de dados de outro certame detectada. Revise com atenção.');
+                    toast.error('Possível contaminação de dados de outro certame detectada. Revise com atenção.');
                 } else if (data.quality.grade === 'D') {
-                    toast.error('⚠️ Qualidade baixa. Revise a declaração antes de exportar.');
+                    toast.error('Qualidade baixa. Revise a declaração antes de exportar.');
                 }
             } else {
                 setQualityReport(null);
