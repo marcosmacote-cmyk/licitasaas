@@ -5837,6 +5837,7 @@ app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => 
                 keywords: "suspensa,reaberta,vencedora",
                 customKeywords: "[]",
                 enabledCategories: JSON.stringify(DEFAULT_ENABLED_CATEGORIES),
+                categoryCustomKeywords: "{}",
                 isActive: true
             });
         }
@@ -5845,6 +5846,7 @@ app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => 
             ...config,
             customKeywords: config.customKeywords || "[]",
             enabledCategories: config.enabledCategories || JSON.stringify(DEFAULT_ENABLED_CATEGORIES),
+            categoryCustomKeywords: config.categoryCustomKeywords || "{}",
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch chat monitor config' });
@@ -5853,14 +5855,17 @@ app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => 
 
 app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, phoneNumber, telegramChatId, isActive, enabledCategories, customKeywords } = req.body;
+        const { keywords, phoneNumber, telegramChatId, isActive, enabledCategories, customKeywords, categoryCustomKeywords } = req.body;
 
-        // Serializa arrays para string JSON se necessário
+        // Serializa arrays/objects para string JSON se necessário
         const enabledCatStr = enabledCategories
             ? (typeof enabledCategories === 'string' ? enabledCategories : JSON.stringify(enabledCategories))
             : undefined;
         const customKwStr = customKeywords
             ? (typeof customKeywords === 'string' ? customKeywords : JSON.stringify(customKeywords))
+            : undefined;
+        const catCustomKwStr = categoryCustomKeywords
+            ? (typeof categoryCustomKeywords === 'string' ? categoryCustomKeywords : JSON.stringify(categoryCustomKeywords))
             : undefined;
 
         const config = await prisma.chatMonitorConfig.upsert({
@@ -5870,6 +5875,7 @@ app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) =>
                 keywords,
                 customKeywords: customKwStr,
                 enabledCategories: enabledCatStr,
+                categoryCustomKeywords: catCustomKwStr,
                 phoneNumber,
                 telegramChatId,
                 isActive: isActive ?? true
@@ -5878,6 +5884,7 @@ app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) =>
                 ...(keywords !== undefined && { keywords }),
                 ...(customKwStr !== undefined && { customKeywords: customKwStr }),
                 ...(enabledCatStr !== undefined && { enabledCategories: enabledCatStr }),
+                ...(catCustomKwStr !== undefined && { categoryCustomKeywords: catCustomKwStr }),
                 ...(phoneNumber !== undefined && { phoneNumber }),
                 ...(telegramChatId !== undefined && { telegramChatId }),
                 isActive: isActive ?? true

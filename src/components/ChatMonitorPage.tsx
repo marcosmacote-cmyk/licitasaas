@@ -74,6 +74,30 @@ function CustomKeywordInput({ onAdd }: { onAdd: (kw: string) => void }) {
   );
 }
 
+// ── Category Custom Keyword Input (inline, per category) ──
+function CategoryKeywordInput({ catId, onAdd, color }: { catId: string; onAdd: (catId: string, kw: string) => void; color: string }) {
+  const [value, setValue] = useLocalState('');
+  const handleAdd = () => { if (value.trim()) { onAdd(catId, value); setValue(''); } };
+  return (
+    <div style={{ display: 'flex', gap: '3px', alignItems: 'center', flex: '1 1 auto', maxWidth: '200px' }}>
+      <input type="text" value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+        placeholder="+ palavra..."
+        style={{
+          flex: 1, padding: '2px 6px', borderRadius: 'var(--radius-sm)',
+          border: `1px solid ${color}22`, background: 'white',
+          fontSize: '0.6875rem', color: 'var(--color-text-primary)', outline: 'none',
+          minWidth: '80px',
+        }} />
+      <button onClick={handleAdd}
+        style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
+        <Plus size={12} color={color} />
+      </button>
+    </div>
+  );
+}
+
 interface Props {
   companies: { id: string; name?: string; cnpj?: string; }[];
   biddings?: BiddingProcess[];
@@ -189,28 +213,58 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: sc.color, marginBottom: 'var(--space-2)' }}>
                         {sc.label}
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                         {cats.map((cat: any) => {
                           const isEnabled = c.enabledCategories.includes(cat.id);
+                          const catKws = c.categoryCustomKeywords[cat.id] || [];
                           return (
-                            <label key={cat.id}
-                              title={cat.description}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                padding: '4px 10px', borderRadius: 'var(--radius-sm)',
-                                background: isEnabled ? 'white' : 'transparent',
-                                border: `1px solid ${isEnabled ? sc.border : 'transparent'}`,
-                                cursor: 'pointer', fontSize: 'var(--text-sm)',
-                                color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-                                transition: 'var(--transition-fast)',
-                                boxShadow: isEnabled ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-                              }}>
-                              <input type="checkbox" checked={isEnabled}
-                                onChange={() => c.toggleCategory(cat.id)}
-                                style={{ accentColor: sc.color, width: '14px', height: '14px' }} />
-                              <span>{cat.emoji}</span>
-                              <span>{cat.label}</span>
-                            </label>
+                            <div key={cat.id}>
+                              {/* Checkbox row */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <label
+                                  title={cat.description}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '4px 10px', borderRadius: 'var(--radius-sm)',
+                                    background: isEnabled ? 'white' : 'transparent',
+                                    border: `1px solid ${isEnabled ? sc.border : 'transparent'}`,
+                                    cursor: 'pointer', fontSize: 'var(--text-sm)',
+                                    color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                    transition: 'var(--transition-fast)',
+                                    boxShadow: isEnabled ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                                    flex: '0 0 auto',
+                                  }}>
+                                  <input type="checkbox" checked={isEnabled}
+                                    onChange={() => c.toggleCategory(cat.id)}
+                                    style={{ accentColor: sc.color, width: '14px', height: '14px' }} />
+                                  <span>{cat.emoji}</span>
+                                  <span>{cat.label}</span>
+                                </label>
+                                {/* Keyword tags inline */}
+                                {isEnabled && catKws.length > 0 && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', alignItems: 'center' }}>
+                                    {catKws.map(kw => (
+                                      <span key={kw} style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                        padding: '1px 6px', borderRadius: 'var(--radius-lg)',
+                                        background: 'white', border: `1px solid ${sc.border}`,
+                                        fontSize: '0.6875rem', color: sc.color, fontWeight: 600,
+                                      }}>
+                                        {kw}
+                                        <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
+                                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
+                                          <X size={10} color={sc.color} />
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Inline add input */}
+                                {isEnabled && (
+                                  <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
+                                )}
+                              </div>
+                            </div>
                           );
                         })}
                       </div>

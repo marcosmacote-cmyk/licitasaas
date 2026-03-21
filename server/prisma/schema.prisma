@@ -292,6 +292,7 @@ model ChatMonitorConfig {
   keywords          String?  @default("suspensa,reaberta,vencedora")
   customKeywords    String?  @default("[]")
   enabledCategories String?  @default("[\"convocacao\",\"vencedor\",\"encerramento\",\"prazo_docs\",\"suspensao\",\"reabertura\",\"impugnacao\",\"inabilitacao\",\"negociacao\"]")
+  categoryCustomKeywords String? @default("{}")
   phoneNumber       String?
   telegramChatId    String?
   isActive          Boolean  @default(true)

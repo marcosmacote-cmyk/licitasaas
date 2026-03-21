@@ -71,6 +71,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
   const [monitorConfig, setMonitorConfig] = useState({ keywords: 'suspensa,reaberta,vencedora', phoneNumber: '', telegramChatId: '', isActive: true });
   const [enabledCategories, setEnabledCategories] = useState<string[]>([]);
   const [customKeywords, setCustomKeywords] = useState<string[]>([]);
+  const [categoryCustomKeywords, setCategoryCustomKeywords] = useState<Record<string, string[]>>({});
   const [taxonomy, setTaxonomy] = useState<any>(null);
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingNotif, setTestingNotif] = useState(false);
@@ -130,6 +131,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
           // Parse new fields
           try { setEnabledCategories(JSON.parse(data.enabledCategories || '[]')); } catch { /* */ }
           try { setCustomKeywords(JSON.parse(data.customKeywords || '[]')); } catch { /* */ }
+          try { setCategoryCustomKeywords(JSON.parse(data.categoryCustomKeywords || '{}')); } catch { /* */ }
         }
       } catch { /* silent */ }
     };
@@ -249,6 +251,28 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     setCustomKeywords(prev => prev.filter(k => k !== kw));
   };
 
+  const addCategoryKeyword = (catId: string, kw: string) => {
+    const trimmed = kw.trim().toLowerCase();
+    if (!trimmed) return;
+    setCategoryCustomKeywords(prev => {
+      const existing = prev[catId] || [];
+      if (existing.includes(trimmed)) return prev;
+      return { ...prev, [catId]: [...existing, trimmed] };
+    });
+  };
+
+  const removeCategoryKeyword = (catId: string, kw: string) => {
+    setCategoryCustomKeywords(prev => {
+      const existing = prev[catId] || [];
+      const updated = existing.filter(k => k !== kw);
+      if (updated.length === 0) {
+        const { [catId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [catId]: updated };
+    });
+  };
+
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     try {
@@ -256,6 +280,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
         ...monitorConfig,
         enabledCategories,
         customKeywords,
+        categoryCustomKeywords,
       };
       const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, { method: 'POST', headers, body: JSON.stringify(payload) });
       if (res.ok) toast.success('Configurações salvas!');
@@ -312,8 +337,9 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     messagesEndRef,
     // Config
     showConfig, setShowConfig, monitorConfig, setMonitorConfig,
-    enabledCategories, customKeywords, taxonomy,
+    enabledCategories, customKeywords, categoryCustomKeywords, taxonomy,
     toggleCategory, addCustomKeyword, removeCustomKeyword,
+    addCategoryKeyword, removeCategoryKeyword,
     savingConfig, testingNotif, health, watcherStatus,
     // Computed
     filteredProcesses, selectedProc,

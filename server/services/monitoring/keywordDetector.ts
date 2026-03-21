@@ -7,8 +7,8 @@
  * endpoints /internal/ingest e /local-watcher/messages.
  * 
  * Fluxo:
- * 1. Tenta match por categorias habilitadas (regex → keyword exato)
- * 2. Tenta match por custom keywords do tenant
+ * 1. Tenta match por categorias habilitadas (regex → keyword built-in → keyword custom)
+ * 2. Tenta match por custom keywords avulsos do tenant
  * 3. Retorna resultado com severity e flag shouldNotify
  */
 
@@ -24,12 +24,16 @@ export interface DetectionResult {
 export class KeywordDetector {
   private enabledCategories: AlertCategory[];
   private customKeywords: string[];
+  /** Keywords custom por categoria: { "convocacao": ["intimação"], "suspensao": ["paralisada"] } */
+  private categoryCustomKeywords: Record<string, string[]>;
 
   constructor(
     enabledCategoryIds: string[] | null,
     customKeywords: string[] | null,
     /** Legacy: keywords string separada por vírgula (retrocompatibilidade) */
     legacyKeywords?: string | null,
+    /** Keywords custom por categoria */
+    categoryCustomKeywords?: Record<string, string[]> | null,
   ) {
     // Resolve enabled categories
     const categoryIds = enabledCategoryIds && enabledCategoryIds.length > 0
@@ -39,6 +43,9 @@ export class KeywordDetector {
     this.enabledCategories = ALERT_TAXONOMY.filter(
       cat => categoryIds.includes(cat.id)
     );
+
+    // Store category custom keywords
+    this.categoryCustomKeywords = categoryCustomKeywords || {};
 
     // Resolve custom keywords: usa customKeywords se disponível, senão converte legacy
     if (customKeywords && customKeywords.length > 0) {
@@ -60,7 +67,7 @@ export class KeywordDetector {
 
   /**
    * Detecta alertas no conteúdo de uma mensagem.
-   * Prioridade: categorias (regex → keyword) > custom keywords.
+   * Prioridade: categorias (regex → keyword built-in → keyword custom) > custom keywords avulsos.
    */
   detect(content: string): DetectionResult {
     if (!content || content.length === 0) {
@@ -71,7 +78,7 @@ export class KeywordDetector {
 
     // 1. Match por categorias habilitadas
     for (const cat of this.enabledCategories) {
-      // Regex patterns primeiro (mais precisos, lidam com acentos)
+      // 1a. Regex patterns (mais precisos, lidam com acentos)
       for (const pattern of cat.patterns) {
         if (pattern.test(content)) {
           return {
@@ -83,7 +90,7 @@ export class KeywordDetector {
         }
       }
 
-      // Keyword exato com normalização de acentos
+      // 1b. Keywords built-in com normalização de acentos
       for (const kw of cat.keywords) {
         const normalizedKw = this.normalize(kw.toLowerCase());
         if (normalized.includes(normalizedKw)) {
@@ -95,9 +102,25 @@ export class KeywordDetector {
           };
         }
       }
+
+      // 1c. Keywords custom POR CATEGORIA (adicionadas pelo usuário)
+      const catCustomKws = this.categoryCustomKeywords[cat.id];
+      if (catCustomKws && catCustomKws.length > 0) {
+        for (const kw of catCustomKws) {
+          const normalizedKw = this.normalize(kw.toLowerCase());
+          if (normalized.includes(normalizedKw)) {
+            return {
+              detectedKeyword: kw,
+              categoryId: cat.id,
+              severity: cat.severity,
+              shouldNotify: cat.severity === 'critical' || cat.severity === 'warning',
+            };
+          }
+        }
+      }
     }
 
-    // 2. Custom keywords do tenant
+    // 2. Custom keywords avulsos do tenant (sem categoria)
     for (const kw of this.customKeywords) {
       const normalizedKw = this.normalize(kw);
       if (normalized.includes(normalizedKw)) {
@@ -139,6 +162,7 @@ export class KeywordDetector {
 export function createDetectorFromConfig(config: any): KeywordDetector {
   let enabledCategories: string[] | null = null;
   let customKeywords: string[] | null = null;
+  let categoryCustomKeywords: Record<string, string[]> | null = null;
 
   // Tenta ler novos campos (pós-migration)
   if (config?.enabledCategories) {
@@ -157,9 +181,18 @@ export function createDetectorFromConfig(config: any): KeywordDetector {
     } catch { /* usa vazio */ }
   }
 
+  if (config?.categoryCustomKeywords) {
+    try {
+      categoryCustomKeywords = typeof config.categoryCustomKeywords === 'string'
+        ? JSON.parse(config.categoryCustomKeywords)
+        : config.categoryCustomKeywords;
+    } catch { /* usa vazio */ }
+  }
+
   return new KeywordDetector(
     enabledCategories,
     customKeywords,
     config?.keywords || null, // legacy fallback
+    categoryCustomKeywords,
   );
 }
