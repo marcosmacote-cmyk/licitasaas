@@ -34,6 +34,8 @@ export interface ProcessSummary {
   unreadCount: number;
   isImportant: boolean;
   isArchived: boolean;
+  /** Keyword que detectou encerramento do processo, null se não encerrado */
+  closureDetected: string | null;
   lastMessage: {
     content: string;
     createdAt: string;
@@ -213,6 +215,30 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     } catch { /* silent */ }
   };
 
+  const handleClosureAction = async (processId: string, action: 'lost' | 'archived' | 'dismiss') => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/process-close/${processId}`, {
+        method: 'POST', headers, body: JSON.stringify({ action })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (action === 'dismiss') {
+          // Just clear the closure banner
+          setProcesses(prev => prev.map(p => p.id === processId ? { ...p, closureDetected: null, isArchived: true } : p));
+          toast.success('Closure descartado — logs arquivados');
+        } else {
+          // Remove from monitor list
+          setProcesses(prev => prev.filter(p => p.id !== processId));
+          if (selectedProcessId === processId) setSelectedProcessId(null);
+          toast.success(data.message || `Processo movido para ${action === 'lost' ? 'Perdido' : 'Arquivado'}`);
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(`Erro: ${errData.detail || res.statusText}`);
+      }
+    } catch { toast.error('Falha na conexão'); }
+  };
+
   const handleSelectProcess = (processId: string) => {
     setSelectedProcessId(processId);
     const proc = processes.find(p => p.id === processId);
@@ -350,6 +376,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     // Handlers
     fetchProcesses, handleSelectProcess,
     markProcessRead, toggleProcessImportant, toggleProcessArchive,
+    handleClosureAction,
     handleTestNotification, handleSaveConfig,
   };
 }

@@ -19,6 +19,8 @@ export interface DetectionResult {
   categoryId: string | null;
   severity: AlertSeverity | null;
   shouldNotify: boolean;
+  /** True quando a mensagem indica encerramento do processo */
+  isClosureEvent: boolean;
 }
 
 export class KeywordDetector {
@@ -71,7 +73,7 @@ export class KeywordDetector {
    */
   detect(content: string): DetectionResult {
     if (!content || content.length === 0) {
-      return { detectedKeyword: null, categoryId: null, severity: null, shouldNotify: false };
+      return { detectedKeyword: null, categoryId: null, severity: null, shouldNotify: false, isClosureEvent: false };
     }
 
     const normalized = this.normalize(content.toLowerCase());
@@ -85,7 +87,8 @@ export class KeywordDetector {
             detectedKeyword: cat.label,
             categoryId: cat.id,
             severity: cat.severity,
-            shouldNotify: cat.severity === 'critical' || cat.severity === 'warning',
+            shouldNotify: cat.severity === 'critical' || cat.severity === 'warning' || cat.severity === 'closure',
+            isClosureEvent: !!cat.isClosureCategory,
           };
         }
       }
@@ -98,7 +101,8 @@ export class KeywordDetector {
             detectedKeyword: kw,
             categoryId: cat.id,
             severity: cat.severity,
-            shouldNotify: cat.severity === 'critical' || cat.severity === 'warning',
+            shouldNotify: cat.severity === 'critical' || cat.severity === 'warning' || cat.severity === 'closure',
+            isClosureEvent: !!cat.isClosureCategory,
           };
         }
       }
@@ -113,7 +117,8 @@ export class KeywordDetector {
               detectedKeyword: kw,
               categoryId: cat.id,
               severity: cat.severity,
-              shouldNotify: cat.severity === 'critical' || cat.severity === 'warning',
+              shouldNotify: cat.severity === 'critical' || cat.severity === 'warning' || cat.severity === 'closure',
+              isClosureEvent: !!cat.isClosureCategory,
             };
           }
         }
@@ -129,11 +134,12 @@ export class KeywordDetector {
           categoryId: 'custom',
           severity: 'warning',
           shouldNotify: true,
+          isClosureEvent: false,
         };
       }
     }
 
-    return { detectedKeyword: null, categoryId: null, severity: null, shouldNotify: false };
+    return { detectedKeyword: null, categoryId: null, severity: null, shouldNotify: false, isClosureEvent: false };
   }
 
   /**

@@ -1,4 +1,4 @@
-import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus, BellRing, Trophy, Timer, FileClock, Ban, RotateCcw, Scale, UserX, MessageSquareMore, Megaphone, CalendarClock } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus, BellRing, Trophy, Timer, FileClock, Ban, RotateCcw, Scale, UserX, MessageSquareMore, Megaphone, CalendarClock, Lock } from 'lucide-react';
 import { useState as useLocalState } from 'react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
@@ -24,6 +24,7 @@ const severityConfig: Record<string, { label: string; icon: React.ReactNode; col
   critical: { label: 'Crítico', icon: <XCircle size={14} />, color: '#dc2626', bg: 'rgba(220, 38, 38, 0.06)', border: 'rgba(220, 38, 38, 0.15)' },
   warning: { label: 'Atenção', icon: <AlertTriangle size={14} />, color: '#d97706', bg: 'rgba(217, 119, 6, 0.06)', border: 'rgba(217, 119, 6, 0.15)' },
   info: { label: 'Informativo', icon: <Info size={14} />, color: '#6b7280', bg: 'rgba(107, 114, 128, 0.06)', border: 'rgba(107, 114, 128, 0.15)' },
+  closure: { label: 'Encerramento', icon: <Lock size={14} />, color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.06)', border: 'rgba(124, 58, 237, 0.15)' },
 };
 
 // ── Category icon map ──
@@ -39,6 +40,7 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ size?: number; color?
   'message-square-more': MessageSquareMore,
   'megaphone': Megaphone,
   'calendar-clock': CalendarClock,
+  'lock': Lock,
 };
 
 function CategoryIcon({ icon, size = 14, color }: { icon: string; size?: number; color?: string }) {
@@ -563,6 +565,65 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                   </div>
                 </div>
               </div>
+
+              {/* ── Closure Banner ── */}
+              {c.selectedProc.closureDetected && (
+                <div style={{
+                  margin: '0 var(--space-4)',
+                  padding: 'var(--space-3) var(--space-4)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'linear-gradient(135deg, rgba(220, 38, 38, 0.08), rgba(217, 119, 6, 0.08))',
+                  border: '1px solid rgba(220, 38, 38, 0.2)',
+                  display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                  flexWrap: 'wrap',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '200px' }}>
+                    <div style={{
+                      width: '32px', height: '32px', borderRadius: 'var(--radius-md)',
+                      background: 'rgba(220, 38, 38, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <AlertTriangle size={18} color="#dc2626" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: '#dc2626' }}>
+                        Processo Encerrado
+                      </div>
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
+                        Detectado: <strong>{c.selectedProc.closureDetected}</strong> — Deseja encerrar o monitoramento?
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <button
+                      onClick={() => c.handleClosureAction(c.selectedProc!.id, 'lost')}
+                      style={{
+                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid #dc2626',
+                        background: '#dc2626', color: 'white', cursor: 'pointer',
+                        fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px',
+                      }}>
+                      <XCircle size={13} /> Perdido
+                    </button>
+                    <button
+                      onClick={() => c.handleClosureAction(c.selectedProc!.id, 'archived')}
+                      style={{
+                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)',
+                        background: 'var(--color-bg-surface)', color: 'var(--color-text-secondary)', cursor: 'pointer',
+                        fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px',
+                      }}>
+                      <Archive size={13} /> Arquivar
+                    </button>
+                    <button
+                      onClick={() => c.handleClosureAction(c.selectedProc!.id, 'dismiss')}
+                      style={{
+                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid transparent',
+                        background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer',
+                        fontSize: '0.75rem', fontWeight: 500,
+                      }}>
+                      Manter
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Messages Area */}
               <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4) var(--space-6)' }}>

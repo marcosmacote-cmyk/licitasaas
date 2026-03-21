@@ -10,7 +10,7 @@
  * - enabledByDefault: se a categoria vem habilitada para novos tenants
  */
 
-export type AlertSeverity = 'critical' | 'warning' | 'info';
+export type AlertSeverity = 'critical' | 'warning' | 'info' | 'closure';
 
 export interface AlertCategory {
   id: string;
@@ -21,6 +21,8 @@ export interface AlertCategory {
   patterns: RegExp[];
   description: string;
   enabledByDefault: boolean;
+  /** Se true, indica evento de encerramento do processo */
+  isClosureCategory?: boolean;
 }
 
 export const ALERT_TAXONOMY: AlertCategory[] = [
@@ -199,6 +201,43 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
     description: 'Sessão foi adiada ou reagendada',
     enabledByDefault: false,
   },
+
+  // ══════════════════════════════════════
+  // 🔒 CLOSURE — Encerramento do processo
+  // ══════════════════════════════════════
+  {
+    id: 'encerramento_processo',
+    label: 'Encerramento do Processo',
+    icon: 'lock',
+    severity: 'closure',
+    keywords: [
+      'homologado', 'homologada', 'homologação',
+      'cancelado', 'cancelada', 'cancelamento',
+      'anulado', 'anulada', 'anulação',
+      'revogado', 'revogada', 'revogação',
+      'deserto', 'deserta',
+      'fracassado', 'fracassada',
+      'licitação encerrada', 'processo encerrado',
+    ],
+    patterns: [
+      /homologa[çc][ãa]o\s+(d[oa]\s+)?processo/i,
+      /processo\s+homologad[oa]/i,
+      /cancelamento\s+(d[oa]\s+)?licita/i,
+      /licita[çc][ãa]o\s+cancelad[oa]/i,
+      /processo\s+cancelad[oa]/i,
+      /anula[çc][ãa]o\s+(d[oa]\s+)?processo/i,
+      /processo\s+anulad[oa]/i,
+      /revoga[çc][ãa]o\s+(d[oa]\s+)?processo/i,
+      /processo\s+revogad[oa]/i,
+      /licita[çc][ãa]o\s+(declarad[oa]\s+)?desert[oa]/i,
+      /licita[çc][ãa]o\s+(declarad[oa]\s+)?fracassad[oa]/i,
+      /licita[çc][ãa]o\s+encerrad[oa]/i,
+      /processo\s+encerrad[oa]/i,
+    ],
+    description: 'Processo encerrado (homologado, cancelado, anulado, revogado, deserto ou fracassado)',
+    enabledByDefault: true,
+    isClosureCategory: true,
+  },
 ];
 
 /** IDs de todas as categorias habilitadas por padrão */
@@ -217,5 +256,6 @@ export function getCategoriesBySeverity(): Record<AlertSeverity, AlertCategory[]
     critical: ALERT_TAXONOMY.filter(c => c.severity === 'critical'),
     warning: ALERT_TAXONOMY.filter(c => c.severity === 'warning'),
     info: ALERT_TAXONOMY.filter(c => c.severity === 'info'),
+    closure: ALERT_TAXONOMY.filter(c => c.severity === 'closure'),
   };
 }

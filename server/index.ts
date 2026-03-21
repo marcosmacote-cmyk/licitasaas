@@ -6085,6 +6085,36 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             archivedSet = new Set(archivedLogs.map((k: any) => k.biddingProcessId));
         } catch { /* silent */ }
 
+        // Step 4c: Detect closure events (encerramento_processo category)
+        let closureMap = new Map<string, string>();
+        try {
+            const closureLogs: any[] = await prisma.chatMonitorLog.findMany({
+                where: {
+                    tenantId,
+                    detectedKeyword: { not: null },
+                    // Match closure-related keywords
+                    OR: [
+                        { content: { contains: 'homologad', mode: 'insensitive' } },
+                        { content: { contains: 'cancelad', mode: 'insensitive' } },
+                        { content: { contains: 'anulad', mode: 'insensitive' } },
+                        { content: { contains: 'revogad', mode: 'insensitive' } },
+                        { content: { contains: 'desert', mode: 'insensitive' } },
+                        { content: { contains: 'fracassad', mode: 'insensitive' } },
+                        { content: { contains: 'processo encerrado', mode: 'insensitive' } },
+                        { content: { contains: 'licitação encerrada', mode: 'insensitive' } },
+                    ],
+                    isArchived: false,
+                },
+                select: { biddingProcessId: true, detectedKeyword: true },
+                orderBy: { createdAt: 'desc' },
+            });
+            for (const log of closureLogs) {
+                if (!closureMap.has(log.biddingProcessId)) {
+                    closureMap.set(log.biddingProcessId, log.detectedKeyword || 'Encerrado');
+                }
+            }
+        } catch { /* silent */ }
+
         // Step 5: Build result
         const result = processes.map((p: any) => {
             const total = p._count.chatMonitorLogs || 0;
@@ -6103,6 +6133,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 unreadCount: unreadQueryOk ? (unreadMap.get(p.id) || 0) : total,
                 isImportant: importantSet.has(p.id),
                 isArchived: archivedSet.has(p.id),
+                closureDetected: closureMap.get(p.id) || null,
                 lastMessage: lastMsg ? {
                     content: lastMsg.content,
                     createdAt: lastMsg.createdAt,
@@ -6136,6 +6167,57 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
     } catch (error) {
         console.error('[ChatMonitor] Error fetching processes:', error);
         res.status(500).json({ error: 'Failed to fetch chat monitor processes', details: String(error) });
+    }
+});
+
+// ── Process Closure Action ──
+// Handles closure events: move bidding to Perdido/Arquivado and archive from monitor
+app.post('/api/chat-monitor/process-close/:processId', authenticateToken, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const { action } = req.body; // 'lost' | 'archived' | 'dismiss'
+        const tenantId = req.user.tenantId;
+
+        if (!['lost', 'archived', 'dismiss'].includes(action)) {
+            return res.status(400).json({ error: 'Invalid action. Use: lost, archived, dismiss' });
+        }
+
+        // Map action to bidding status
+        const statusMap: Record<string, string> = {
+            lost: 'Perdido',
+            archived: 'Arquivado',
+        };
+
+        // 1. Update bidding process status (if not dismiss)
+        if (action !== 'dismiss') {
+            await prisma.biddingProcess.update({
+                where: { id: processId, tenantId },
+                data: {
+                    status: statusMap[action],
+                    isMonitored: false,
+                },
+            });
+        }
+
+        // 2. Archive all monitor logs for this process
+        await prisma.chatMonitorLog.updateMany({
+            where: { biddingProcessId: processId, tenantId },
+            data: { isArchived: true },
+        });
+
+        console.log(`[ChatMonitor] Process ${processId} closed with action: ${action}`);
+
+        res.json({
+            success: true,
+            action,
+            newStatus: statusMap[action] || null,
+            message: action === 'dismiss'
+                ? 'Processo mantido no monitoramento (logs arquivados)'
+                : `Processo movido para "${statusMap[action]}" e arquivado do monitoramento`,
+        });
+    } catch (error: any) {
+        console.error('[ChatMonitor] Error closing process:', error?.message || error);
+        res.status(500).json({ error: 'Failed to close process', detail: error?.message });
     }
 });
 
