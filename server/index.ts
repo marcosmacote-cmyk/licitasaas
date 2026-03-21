@@ -5989,6 +5989,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
 
         // Step 3: Safely get unread counts
         let unreadMap = new Map<string, number>();
+        let unreadQueryOk = false;
         try {
             const unreadCounts: any[] = await (prisma.chatMonitorLog as any).groupBy({
                 by: ['biddingProcessId'],
@@ -5996,8 +5997,9 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 _count: { id: true },
             });
             unreadMap = new Map(unreadCounts.map((u: any) => [u.biddingProcessId, u._count.id]));
+            unreadQueryOk = true;
         } catch {
-            // isRead column may not exist yet
+            // isRead column may not exist yet — fall back to total
         }
 
         // Step 4: Get important processes (keyword detected OR manually pinned)
@@ -6036,7 +6038,8 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 isMonitored: p.isMonitored,
                 hasPncpLink: !!(p.link?.includes('editais')),
                 totalMessages: total,
-                unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : total,
+                // If query succeeded: use actual count (0 if not in map). If failed: fall back to total.
+                unreadCount: unreadQueryOk ? (unreadMap.get(p.id) || 0) : total,
                 isImportant: importantSet.has(p.id),
                 isArchived: archivedSet.has(p.id),
                 lastMessage: lastMsg ? {
