@@ -6000,15 +6000,26 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             // isRead column may not exist yet
         }
 
-        // Step 4: Get important (keyword detected) processes
+        // Step 4: Get important processes (keyword detected OR manually pinned)
         let importantSet = new Set<string>();
         try {
             const kwLogs: any[] = await prisma.chatMonitorLog.findMany({
-                where: { tenantId, detectedKeyword: { not: null } },
+                where: { tenantId, OR: [{ detectedKeyword: { not: null } }, { isImportant: true }] },
                 select: { biddingProcessId: true },
                 distinct: ['biddingProcessId'],
             });
             importantSet = new Set(kwLogs.map((k: any) => k.biddingProcessId));
+        } catch { /* silent */ }
+
+        // Step 4b: Get archived processes (ALL logs for process are archived)
+        let archivedSet = new Set<string>();
+        try {
+            const archivedLogs: any[] = await prisma.chatMonitorLog.findMany({
+                where: { tenantId, isArchived: true },
+                select: { biddingProcessId: true },
+                distinct: ['biddingProcessId'],
+            });
+            archivedSet = new Set(archivedLogs.map((k: any) => k.biddingProcessId));
         } catch { /* silent */ }
 
         // Step 5: Build result
@@ -6027,7 +6038,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 totalMessages: total,
                 unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : total,
                 isImportant: importantSet.has(p.id),
-                isArchived: false,
+                isArchived: archivedSet.has(p.id),
                 lastMessage: lastMsg ? {
                     content: lastMsg.content,
                     createdAt: lastMsg.createdAt,
@@ -6268,6 +6279,26 @@ function authenticateWorker(req: any, res: any, next: any) {
     }
     next();
 }
+
+// Internal Worker Heartbeat (updates agentHeartbeats per-tenant)
+app.post('/api/chat-monitor/internal/heartbeat', authenticateWorker, async (req: any, res) => {
+    try {
+        const { activeSessions, tenantIds, machineName } = req.body;
+        const tenants: string[] = tenantIds || [];
+        for (const tid of tenants) {
+            agentHeartbeats.set(tid, {
+                machineName: machineName || 'Server Worker v4.0',
+                activeSessions: activeSessions || 0,
+                agentVersion: '4.0.0',
+                status: 'online',
+                lastHeartbeatAt: new Date(),
+            });
+        }
+        res.json({ success: true, timestamp: new Date() });
+    } catch (error: any) {
+        res.status(500).json({ error: 'Failed to register worker heartbeat' });
+    }
+});
 
 // Get ALL monitored processes across ALL tenants (for centralized worker)
 app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (req: any, res) => {
