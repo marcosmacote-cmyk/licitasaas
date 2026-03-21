@@ -6201,7 +6201,8 @@ app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any,
                 modalityCode: true,
                 processNumber: true,
                 processYear: true,
-                portal: true
+                portal: true,
+                link: true
             }
         });
         res.json(processes);
@@ -6252,6 +6253,150 @@ app.get('/api/chat-monitor/agents/status', authenticateToken, async (req: any, r
 
 // Receives messages from local ComprasNet Watcher
 // ══════════════════════════════════════════
+
+// ── Internal Worker Endpoints (multi-tenant, API key auth) ──
+// Used by the centralized chat worker running on the server.
+// Authenticated via CHAT_WORKER_SECRET instead of user JWT.
+
+const CHAT_WORKER_SECRET = process.env.CHAT_WORKER_SECRET || '';
+
+function authenticateWorker(req: any, res: any, next: any) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.replace('Bearer ', '');
+    if (!CHAT_WORKER_SECRET || token !== CHAT_WORKER_SECRET) {
+        return res.status(403).json({ error: 'Invalid worker secret' });
+    }
+    next();
+}
+
+// Get ALL monitored processes across ALL tenants (for centralized worker)
+app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (req: any, res) => {
+    try {
+        const processes = await prisma.biddingProcess.findMany({
+            where: {
+                isMonitored: true,
+            },
+            select: {
+                id: true,
+                tenantId: true,
+                title: true,
+                uasg: true,
+                modalityCode: true,
+                processNumber: true,
+                processYear: true,
+                portal: true,
+                link: true,
+            }
+        });
+        console.log(`[Worker] Returning ${processes.length} monitored processes across all tenants`);
+        res.json(processes);
+    } catch (error: any) {
+        console.error('[Worker /all-sessions] Error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch all sessions' });
+    }
+});
+
+// Ingest messages from centralized worker (with explicit tenantId)
+app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: any, res) => {
+    try {
+        const { processId, tenantId, messages } = req.body;
+
+        if (!processId || !tenantId || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ error: 'processId, tenantId, and messages[] required' });
+        }
+
+        // Verify process belongs to tenant
+        const processRecord = await prisma.biddingProcess.findFirst({
+            where: { id: processId, tenantId }
+        });
+        if (!processRecord) {
+            return res.status(404).json({ error: 'Process not found for given tenant' });
+        }
+
+        // Get existing messageIds to deduplicate
+        const existingLogs = await prisma.chatMonitorLog.findMany({
+            where: { biddingProcessId: processId },
+            select: { messageId: true }
+        });
+        const existing = new Set(existingLogs.map(l => l.messageId));
+
+        // Get keywords config for this tenant
+        const config = await prisma.chatMonitorConfig.findUnique({
+            where: { tenantId }
+        });
+        const keywords = config?.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
+
+        const { DedupService } = require('./services/monitoring/dedup.service');
+
+        let created = 0;
+        let alerts = 0;
+
+        for (const msg of messages) {
+            const messageId = msg.messageId || null;
+            const content = msg.content || '';
+            const authorType = msg.authorType || 'desconhecido';
+            const fingerprintHash = DedupService.generateFingerprint(processId, messageId, content, authorType);
+
+            if (messageId && existing.has(messageId)) continue;
+
+            const isDuplicate = await prisma.chatMonitorLog.findUnique({
+                where: { fingerprintHash }
+            });
+            if (isDuplicate) continue;
+
+            const detectedKeyword = keywords.find(k => content.toLowerCase().includes(k)) || null;
+            if (detectedKeyword) alerts++;
+
+            let eventCategory = msg.eventCategory;
+            let status = detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED';
+
+            if (!eventCategory) {
+                const lowerContent = content.toLowerCase();
+                if (lowerContent.includes('encerrado o prazo') || lowerContent.includes('tempo aleatório')) {
+                    eventCategory = '13';
+                    status = 'PENDING_NOTIFICATION';
+                    alerts++;
+                } else if (lowerContent.includes('suspenso') || lowerContent.includes('suspensão')) {
+                    eventCategory = '12';
+                } else if (lowerContent.includes('bom dia') || lowerContent.includes('boa tarde')) {
+                    eventCategory = '10';
+                }
+            }
+
+            await prisma.chatMonitorLog.create({
+                data: {
+                    tenantId,
+                    biddingProcessId: processId,
+                    messageId,
+                    fingerprintHash,
+                    content,
+                    authorType,
+                    authorCnpj: msg.authorCnpj || null,
+                    eventCategory: eventCategory || null,
+                    itemRef: msg.itemRef || null,
+                    detectedKeyword,
+                    captureSource: msg.captureSource || 'server-worker',
+                    status,
+                }
+            });
+            if (messageId) existing.add(messageId);
+            created++;
+        }
+
+        if (alerts > 0) {
+            try {
+                const { NotificationService } = require('./services/monitoring/notification.service');
+                await NotificationService.processPendingNotifications();
+            } catch { /* silent */ }
+        }
+
+        console.log(`[Worker Ingest] ${created} msgs saved for ${processId.substring(0, 8)} (tenant ${tenantId.substring(0, 8)}, ${alerts} alerts)`);
+        res.json({ success: true, created, alerts, total: messages.length });
+    } catch (error: any) {
+        console.error('[Worker Ingest] Error:', error.message);
+        res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
+    }
+});
 
 // Receives messages from local ComprasNet Watcher
 app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) => {
