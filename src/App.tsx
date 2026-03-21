@@ -409,6 +409,7 @@ function App() {
           {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { setNavFilter(filter || null); setActiveTab(tab as AppTab); }} />}
           {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)}
+             autoOpenProcessId={moduleContext?.processId} onAutoOpenConsumed={() => setModuleContext(null)}
              onNavigateToModule={(module, processId) => {
               const subTabMap: Record<string, { tab: AppTab; subTab?: string }> = {
                 'intelligence':             { tab: 'intelligence' },

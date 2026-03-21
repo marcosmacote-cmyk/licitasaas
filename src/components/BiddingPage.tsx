@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Plus, LayoutGrid, List, Cpu, Loader2, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
@@ -15,10 +16,23 @@ interface Props {
     initialFilter?: { statuses?: string[]; highlight?: string } | null;
     onFilterConsumed?: () => void;
     onNavigateToModule?: (module: string, processId?: string) => void;
+    autoOpenProcessId?: string | null;
+    onAutoOpenConsumed?: () => void;
 }
 
-export function BiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed, onNavigateToModule }: Props) {
+export function BiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed, onNavigateToModule, autoOpenProcessId, onAutoOpenConsumed }: Props) {
     const b = useBiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed });
+
+    // Auto-open HUB when navigating from another module
+    useEffect(() => {
+        if (autoOpenProcessId && items.length > 0) {
+            const process = items.find(p => p.id === autoOpenProcessId);
+            if (process) {
+                b.handleEdit(process);
+            }
+            onAutoOpenConsumed?.();
+        }
+    }, [autoOpenProcessId, items.length]);
 
     return (
         <div className="page-container">
