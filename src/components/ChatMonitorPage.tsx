@@ -1,4 +1,4 @@
-import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus, BellRing, Trophy, Timer, FileClock, Ban, RotateCcw, Scale, UserX, MessageSquareMore, Megaphone, CalendarClock } from 'lucide-react';
 import { useState as useLocalState } from 'react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
@@ -20,11 +20,32 @@ function highlightKeywords(text: string, keyword: string | null) {
 }
 
 // ── Severity styles ──
-const severityConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  critical: { label: '🔴 Crítico', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.06)', border: 'rgba(220, 38, 38, 0.15)' },
-  warning: { label: '⚠️ Atenção', color: '#d97706', bg: 'rgba(217, 119, 6, 0.06)', border: 'rgba(217, 119, 6, 0.15)' },
-  info: { label: 'ℹ️ Informativo', color: '#6b7280', bg: 'rgba(107, 114, 128, 0.06)', border: 'rgba(107, 114, 128, 0.15)' },
+const severityConfig: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
+  critical: { label: 'Crítico', icon: <XCircle size={14} />, color: '#dc2626', bg: 'rgba(220, 38, 38, 0.06)', border: 'rgba(220, 38, 38, 0.15)' },
+  warning: { label: 'Atenção', icon: <AlertTriangle size={14} />, color: '#d97706', bg: 'rgba(217, 119, 6, 0.06)', border: 'rgba(217, 119, 6, 0.15)' },
+  info: { label: 'Informativo', icon: <Info size={14} />, color: '#6b7280', bg: 'rgba(107, 114, 128, 0.06)', border: 'rgba(107, 114, 128, 0.15)' },
 };
+
+// ── Category icon map ──
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+  'bell-ring': BellRing,
+  'trophy': Trophy,
+  'timer': Timer,
+  'file-clock': FileClock,
+  'ban': Ban,
+  'rotate-ccw': RotateCcw,
+  'scale': Scale,
+  'user-x': UserX,
+  'message-square-more': MessageSquareMore,
+  'megaphone': Megaphone,
+  'calendar-clock': CalendarClock,
+};
+
+function CategoryIcon({ icon, size = 14, color }: { icon: string; size?: number; color?: string }) {
+  const IconComp = CATEGORY_ICONS[icon];
+  if (!IconComp) return null;
+  return <IconComp size={size} color={color} />;
+}
 
 // ── Author icon helper ──
 function AuthorIcon({ type }: { type: string | null }) {
@@ -210,8 +231,8 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                   if (cats.length === 0) return null;
                   return (
                     <div key={severity} style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: sc.bg, border: `1px solid ${sc.border}` }}>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: sc.color, marginBottom: 'var(--space-2)' }}>
-                        {sc.label}
+                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: sc.color, marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {sc.icon} {sc.label}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                         {cats.map((cat: any) => {
@@ -237,7 +258,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                                   <input type="checkbox" checked={isEnabled}
                                     onChange={() => c.toggleCategory(cat.id)}
                                     style={{ accentColor: sc.color, width: '14px', height: '14px' }} />
-                                  <span>{cat.emoji}</span>
+                                  <CategoryIcon icon={cat.icon} size={14} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
                                   <span>{cat.label}</span>
                                 </label>
                                 {/* Keyword tags inline */}

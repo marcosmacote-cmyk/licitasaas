@@ -15,7 +15,7 @@ export type AlertSeverity = 'critical' | 'warning' | 'info';
 export interface AlertCategory {
   id: string;
   label: string;
-  emoji: string;
+  icon: string;
   severity: AlertSeverity;
   keywords: string[];
   patterns: RegExp[];
@@ -30,7 +30,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'convocacao',
     label: 'Convocação',
-    emoji: '🔴',
+    icon: 'bell-ring',
     severity: 'critical',
     keywords: ['convocado', 'convocada', 'convocação', 'convocar'],
     patterns: [
@@ -45,7 +45,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'vencedor',
     label: 'Declaração de Vencedor',
-    emoji: '🏆',
+    icon: 'trophy',
     severity: 'critical',
     keywords: ['vencedor', 'vencedora', 'adjudicado', 'adjudicada', 'homologado', 'homologada'],
     patterns: [
@@ -60,7 +60,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'encerramento',
     label: 'Encerramento de Prazo',
-    emoji: '⏰',
+    icon: 'timer',
     severity: 'critical',
     keywords: ['encerrado o prazo', 'tempo aleatório', 'fase de lances encerrada'],
     patterns: [
@@ -75,7 +75,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'prazo_docs',
     label: 'Prazo de Documentos',
-    emoji: '📋',
+    icon: 'file-clock',
     severity: 'critical',
     keywords: ['prazo para envio', 'envio de documentos', 'anexar documento', 'enviar proposta'],
     patterns: [
@@ -95,7 +95,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'suspensao',
     label: 'Suspensão',
-    emoji: '⚠️',
+    icon: 'ban',
     severity: 'warning',
     keywords: ['suspensa', 'suspenso', 'suspensão'],
     patterns: [
@@ -110,7 +110,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'reabertura',
     label: 'Reabertura',
-    emoji: '🔄',
+    icon: 'rotate-ccw',
     severity: 'warning',
     keywords: ['reaberta', 'reaberto', 'reabertura'],
     patterns: [
@@ -124,7 +124,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'impugnacao',
     label: 'Impugnação / Recurso',
-    emoji: '⚖️',
+    icon: 'scale',
     severity: 'warning',
     keywords: ['impugnação', 'recurso', 'contrarrazão', 'contrarrazões'],
     patterns: [
@@ -139,7 +139,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'inabilitacao',
     label: 'Inabilitação / Desclassificação',
-    emoji: '❌',
+    icon: 'user-x',
     severity: 'warning',
     keywords: ['inabilitado', 'inabilitada', 'desclassificado', 'desclassificada', 'inabilitação', 'desclassificação'],
     patterns: [
@@ -154,7 +154,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'negociacao',
     label: 'Negociação',
-    emoji: '💬',
+    icon: 'message-square-more',
     severity: 'warning',
     keywords: ['negociação', 'negociar', 'contraproposta'],
     patterns: [
@@ -172,7 +172,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'comunicado',
     label: 'Comunicado do Pregoeiro',
-    emoji: '📢',
+    icon: 'megaphone',
     severity: 'info',
     keywords: ['comunico', 'informo', 'comunicamos', 'informamos'],
     patterns: [
@@ -186,7 +186,7 @@ export const ALERT_TAXONOMY: AlertCategory[] = [
   {
     id: 'adiamento',
     label: 'Adiamento',
-    emoji: '📅',
+    icon: 'calendar-clock',
     severity: 'info',
     keywords: ['adiada', 'adiamento', 'reagendada', 'nova data'],
     patterns: [
