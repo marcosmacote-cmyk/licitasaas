@@ -284,7 +284,10 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
       };
       const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, { method: 'POST', headers, body: JSON.stringify(payload) });
       if (res.ok) toast.success('Configurações salvas!');
-      else toast.error('Erro ao salvar');
+      else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(`Erro ao salvar: ${errData.detail || res.statusText}`);
+      }
     } catch { toast.error('Falha na conexão.'); }
     finally { setSavingConfig(false); }
   };

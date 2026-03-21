@@ -5891,8 +5891,9 @@ app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) =>
             }
         });
         res.json(config);
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to save chat monitor config' });
+    } catch (error: any) {
+        console.error('[ChatMonitor Config POST] Error saving config:', error?.message || error);
+        res.status(500).json({ error: 'Failed to save chat monitor config', detail: error?.message });
     }
 });
 
