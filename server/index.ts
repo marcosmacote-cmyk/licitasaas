@@ -22,6 +22,7 @@ import {
     FAMILY_LENGTH_CONSTRAINTS,
     DECLARATION_SEMANTIC_MAP,
     ANTI_GENERIC_PHRASES,
+    validateAndFixTitle,
 } from "./services/ai/declaration";
 import type { AuthoritativeFacts, DeclarationFamily, DeclarationStyle } from "./services/ai/declaration";
 import { evaluateModuleQuality } from "./services/ai/modules/moduleQualityEvaluator";
@@ -1239,10 +1240,23 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
         let finalText = parsed.text;
         let finalTitle = parsed.title || declarationType.substring(0, 50);
 
-        // ── Step 9: Validação pós-geração (15 regras) ──
-        console.log(`[Declaration v5] Step 9: Validating (15 rules)...`);
+        // ── Step 8.5: Title validation & auto-fix (v8) ──
+        const titleResult = validateAndFixTitle(finalTitle, declarationType);
+        if (titleResult.fixed) {
+            console.log(`[Declaration v8] Title fixed: "${finalTitle}" → "${titleResult.title}"`);
+            finalTitle = titleResult.title;
+        }
+
+        // ── Step 9: Validação pós-geração ──
+        console.log(`[Declaration v8] Step 9: Validating...`);
         let issues = validateDeclaration(finalText, facts);
+
+        // Adicionar issue de título se houver
+        if (titleResult.issue) issues.push(titleResult.issue);
+
         let corrections: string[] = [];
+        if (titleResult.correction) corrections.push(titleResult.correction);
+
         let attempts = 1;
 
         // ── Step 10: Repair automático via IA (se critical) ──

@@ -43,7 +43,7 @@ function buildRepairPrompt(
         .map(i => `- [${i.severity.toUpperCase()}] ${i.code}: ${i.message}`)
         .join('\n');
 
-    return `Você recebeu uma declaração licitatória que contém ERROS FACTUAIS detectados automaticamente.
+    return `Você recebeu uma declaração licitatória que contém ERROS detectados automaticamente.
 
 ERROS DETECTADOS:
 ${issueList}
@@ -64,12 +64,19 @@ ${facts.tecnicoRegistro ? `- Registro: ${facts.tecnicoRegistro}` : ''}
 TEXTO ORIGINAL:
 ${text}
 
-INSTRUÇÕES:
+INSTRUÇÕES DE CORREÇÃO:
 1. Corrija APENAS os erros listados acima.
 2. NÃO altere o conteúdo jurídico, argumentação ou estrutura.
 3. Substitua quaisquer referências incorretas pelos FATOS CORRETOS.
 4. Resolva placeholders [NOME], [CNPJ] etc. com os dados fornecidos acima.
 5. Se o texto cita um órgão errado, substitua por "${facts.orgaoLicitante}".
+
+INSTRUÇÕES ESPECÍFICAS POR TIPO DE ERRO:
+${issues.some(i => i.code === 'TITLE_TRUNCATED') ? '- TÍTULO TRUNCADO: O título termina em preposição ou está incompleto. Reformule para formar unidade semântica completa.' : ''}
+${issues.some(i => i.code === 'SEMANTIC_NARROW') ? '- NÚCLEO ESTREITO: O núcleo declaratório cobre poucos conceitos. Amplie para incluir todos os aspectos pertinentes (vínculo empregatício, funcional, contratual, cargo/função pública, etc.).' : ''}
+${issues.some(i => i.code === 'GENERIC_LANGUAGE') ? '- LINGUAGEM GENÉRICA: Remova frases ornamentais que não agregam valor jurídico. Substitua por conteúdo declaratório efetivo.' : ''}
+${issues.some(i => i.code === 'WEAK_CLOSURE') ? '- FECHO FRACO: Inclua fecho formal ("Por ser expressão da verdade, firma a presente declaração para todos os fins de direito") e ciência das sanções (art. 155 Lei 14.133/2021).' : ''}
+
 6. Retorne JSON puro: { "title": "...", "text": "..." }
 7. NÃO use markdown, negritos, ou blocos de código.`;
 }

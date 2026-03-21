@@ -27,6 +27,8 @@ export {
     FAMILY_LENGTH_CONSTRAINTS,
     DECLARATION_SEMANTIC_MAP,
     ANTI_GENERIC_PHRASES,
+    TITLE_FALLBACK_MAP,
+    TITLE_TRAILING_PREPOSITIONS,
 } from './declarationTypes';
 
 // Parser
@@ -40,7 +42,9 @@ export {
     hasCriticalIssues,
     computeCorrections,
     summarizeReport,
+    validateAndFixTitle,
 } from './declarationValidator';
+export type { TitleValidationResult } from './declarationValidator';
 
 // Repair
 export {

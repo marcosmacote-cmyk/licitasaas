@@ -110,6 +110,34 @@ export const ANTI_GENERIC_PHRASES = [
     'em estrita obediência aos preceitos',
 ];
 
+/** Preposições/palavras que NÃO podem encerrar um título */
+export const TITLE_TRAILING_PREPOSITIONS = [
+    'com', 'de', 'para', 'contra', 'sobre', 'em', 'por', 'sob',
+    'do', 'da', 'dos', 'das', 'no', 'na', 'nos', 'nas',
+    'ao', 'à', 'aos', 'às', 'ou', 'e', 'que', 'a', 'o',
+];
+
+/** Biblioteca de títulos fallback canônicos por keyword do tipo */
+export const TITLE_FALLBACK_MAP: { keywords: string[]; title: string }[] = [
+    { keywords: ['menor', 'menores'], title: 'DECLARAÇÃO DE NÃO EMPREGO DE MENORES' },
+    { keywords: ['idoneidade', 'inidoneidade'], title: 'DECLARAÇÃO DE IDONEIDADE' },
+    { keywords: ['fato impeditivo', 'impeditivo'], title: 'DECLARAÇÃO DE INEXISTÊNCIA DE FATO IMPEDITIVO' },
+    { keywords: ['vínculo', 'vinculo', 'parentesco'], title: 'DECLARAÇÃO DE INEXISTÊNCIA DE VÍNCULO COM A ADMINISTRAÇÃO MUNICIPAL' },
+    { keywords: ['me', 'epp', 'microempresa', 'pequeno porte', 'enquadramento'], title: 'DECLARAÇÃO DE ENQUADRAMENTO COMO MICROEMPRESA OU EMPRESA DE PEQUENO PORTE' },
+    { keywords: ['visita', 'vistoria'], title: 'DECLARAÇÃO DE VISITA TÉCNICA' },
+    { keywords: ['equipamento', 'disponibilidade de equip'], title: 'DECLARAÇÃO DE DISPONIBILIDADE DE EQUIPAMENTOS' },
+    { keywords: ['equipe técnica', 'equipe'], title: 'DECLARAÇÃO DE DISPONIBILIDADE DE EQUIPE TÉCNICA' },
+    { keywords: ['responsável técnico', 'indicação'], title: 'DECLARAÇÃO DE INDICAÇÃO DE RESPONSÁVEL TÉCNICO' },
+    { keywords: ['elaboração independente', 'independen'], title: 'DECLARAÇÃO DE ELABORAÇÃO INDEPENDENTE DE PROPOSTA' },
+    { keywords: ['conhecimento', 'aceitação', 'aceite do edital'], title: 'DECLARAÇÃO DE CONHECIMENTO E ACEITAÇÃO DO EDITAL' },
+    { keywords: ['sigilo', 'confidencialidade'], title: 'DECLARAÇÃO DE SIGILO E CONFIDENCIALIDADE' },
+    { keywords: ['reserv', 'cota', 'exclusiv'], title: 'DECLARAÇÃO DE ATENDIMENTO AO CRITÉRIO DE PARTICIPAÇÃO' },
+    { keywords: ['nepotismo'], title: 'DECLARAÇÃO DE INEXISTÊNCIA DE NEPOTISMO' },
+    { keywords: ['trabalho escravo', 'forçado', 'degradante'], title: 'DECLARAÇÃO DE NÃO UTILIZAÇÃO DE TRABALHO DEGRADANTE OU FORÇADO' },
+    { keywords: ['cumprir', 'cumprimento', 'obrigação'], title: 'DECLARAÇÃO DE CUMPRIMENTO DE OBRIGAÇÕES' },
+    { keywords: ['regularidade fiscal', 'fiscal'], title: 'DECLARAÇÃO DE REGULARIDADE FISCAL E TRABALHISTA' },
+];
+
 
 // ═══════════════════════════════════════════════════════════════
 // 2. FATOS AUTORITATIVOS
@@ -117,6 +145,7 @@ export const ANTI_GENERIC_PHRASES = [
 
 /** Tipo do emissor da declaração */
 export type DeclarationIssuerType = 'company' | 'technical';
+
 
 /**
  * Bloco imutável de dados factuais.
@@ -196,6 +225,7 @@ export interface DeclarationValidationIssue {
     message: string;
 }
 
+
 // ═══════════════════════════════════════════════════════════════
 // 4. QUALITY REPORT
 // ═══════════════════════════════════════════════════════════════
@@ -234,6 +264,17 @@ export interface DeclarationQualityReport {
     structureAdequate: boolean;
     /** true se dados de outro certame foram detectados */
     contaminationDetected: boolean;
+
+    // ── v8: Indicadores de acabamento técnico ──
+
+    /** true se título é íntegro (não truncado, não termina em preposição) */
+    titleIntegrity: boolean;
+    /** true se núcleo declaratório cobre conceitos suficientes */
+    semanticCoverage: boolean;
+    /** true se texto não contém linguagem genérica excessiva de IA */
+    stylisticCleanliness: boolean;
+    /** true se peça está pronta para uso (checklist completo) */
+    documentaryReadiness: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -317,6 +358,14 @@ export const VALIDATION_CODES = {
     STRUCTURE_TOO_LONG: 'STRUCTURE_TOO_LONG',
     EDITAL_CONTAMINATED: 'EDITAL_CONTAMINATED',
     PROCESS_CONTAMINATED: 'PROCESS_CONTAMINATED',
+    // v8: Título
+    TITLE_TRUNCATED: 'TITLE_TRUNCATED',
+    TITLE_NARROW: 'TITLE_NARROW',
+    // v8: Semântica
+    SEMANTIC_NARROW: 'SEMANTIC_NARROW',
+    GENERIC_LANGUAGE: 'GENERIC_LANGUAGE',
+    // v8: Fechamento
+    WEAK_CLOSURE: 'WEAK_CLOSURE',
 } as const;
 
 export type ValidationCode = typeof VALIDATION_CODES[keyof typeof VALIDATION_CODES];

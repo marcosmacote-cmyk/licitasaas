@@ -24,7 +24,15 @@ import type {
     DeclarationQualityReport,
 } from './declarationTypes';
 
-import { VALIDATION_CODES, SEVERITY_PENALTIES, FAMILY_LENGTH_CONSTRAINTS } from './declarationTypes';
+import {
+    VALIDATION_CODES,
+    SEVERITY_PENALTIES,
+    FAMILY_LENGTH_CONSTRAINTS,
+    TITLE_TRAILING_PREPOSITIONS,
+    TITLE_FALLBACK_MAP,
+    DECLARATION_SEMANTIC_MAP,
+    ANTI_GENERIC_PHRASES,
+} from './declarationTypes';
 
 // ═══════════════════════════════════════════════════════════════
 // TIPOS INTERNOS
@@ -313,6 +321,70 @@ const VALIDATION_RULES: ValidationRule[] = [
             return null;
         },
     },
+
+    // ── v8: TITLE VALIDATION ──
+
+    {
+        code: VALIDATION_CODES.TITLE_TRUNCATED,
+        severity: 'major',
+        check: (_text, _lower, _facts) => {
+            // This is checked separately via validateTitle(), included here for completeness
+            return null;
+        },
+    },
+
+    // ── v8: SEMANTIC & STYLISTIC VALIDATION ──
+
+    {
+        code: VALIDATION_CODES.GENERIC_LANGUAGE,
+        severity: 'minor',
+        check: (_text, lower, _facts) => {
+            const found = ANTI_GENERIC_PHRASES.filter(phrase => lower.includes(phrase.toLowerCase()));
+            if (found.length >= 2) {
+                return `Linguagem genérica de IA detectada (${found.length} ocorrências): "${found[0]}"...`;
+            }
+            return null;
+        },
+    },
+
+    {
+        code: VALIDATION_CODES.SEMANTIC_NARROW,
+        severity: 'major',
+        check: (_text, lower, facts) => {
+            const declLower = facts.declarationType.toLowerCase();
+            const mapping = DECLARATION_SEMANTIC_MAP.find(m =>
+                m.keywords.some(kw => declLower.includes(kw.toLowerCase()))
+            );
+            if (!mapping) return null;
+
+            // Verificar quantos conceitos do mapa estão presentes no texto
+            const concepts = mapping.coreConceptsMustCover.split(',').map(c => c.trim().toLowerCase());
+            const covered = concepts.filter(c => {
+                const words = c.split(/\s+/).filter(w => w.length > 3);
+                return words.some(w => lower.includes(w));
+            });
+
+            const coverage = concepts.length > 0 ? covered.length / concepts.length : 1;
+            if (coverage < 0.3 && concepts.length > 2) {
+                return `Núcleo declaratório cobre apenas ${Math.round(coverage * 100)}% dos conceitos esperados para "${facts.declarationType}".`;
+            }
+            return null;
+        },
+    },
+
+    {
+        code: VALIDATION_CODES.WEAK_CLOSURE,
+        severity: 'minor',
+        check: (_text, lower, _facts) => {
+            // Verificar se o fecho é assertivo o suficiente
+            const hasStrongClosure = lower.includes('expressão da verdade') || lower.includes('fins de direito');
+            const hasSanctions = lower.includes('sanç') || lower.includes('art. 155') || lower.includes('declaração falsa');
+            if (!hasStrongClosure && !hasSanctions) {
+                return 'Fecho e/ou ciência de sanções insuficientes. A peça pode não estar pronta para uso.';
+            }
+            return null;
+        },
+    },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -436,6 +508,23 @@ export function calculateQualityReport(
                                   issueCodes.has(VALIDATION_CODES.EDITAL_CONTAMINATED) ||
                                   issueCodes.has(VALIDATION_CODES.PROCESS_CONTAMINATED);
 
+    // v8: Indicadores de acabamento técnico
+    const titleIntegrity = !issueCodes.has(VALIDATION_CODES.TITLE_TRUNCATED) &&
+                           !issueCodes.has(VALIDATION_CODES.TITLE_NARROW);
+
+    const semanticCoverage = !issueCodes.has(VALIDATION_CODES.SEMANTIC_NARROW);
+
+    const stylisticCleanliness = !issueCodes.has(VALIDATION_CODES.GENERIC_LANGUAGE);
+
+    const documentaryReadiness = factualConsistency &&
+                                  declarationTypeMatch &&
+                                  structureAdequate &&
+                                  titleIntegrity &&
+                                  semanticCoverage &&
+                                  !contaminationDetected &&
+                                  !issueCodes.has(VALIDATION_CODES.PLACEHOLDER_FOUND) &&
+                                  !issueCodes.has(VALIDATION_CODES.WEAK_CLOSURE);
+
     return {
         score,
         grade,
@@ -448,6 +537,10 @@ export function calculateQualityReport(
         declarationTypeMatch,
         structureAdequate,
         contaminationDetected,
+        titleIntegrity,
+        semanticCoverage,
+        stylisticCleanliness,
+        documentaryReadiness,
     };
 }
 
@@ -479,5 +572,122 @@ export function summarizeReport(report: DeclarationQualityReport): string {
            `issues=${report.issues.length} | ` +
            `corrected=${report.corrected} | ` +
            `factual=${report.factualConsistency} | ` +
-           `contamination=${report.contaminationDetected}`;
+           `title=${report.titleIntegrity} | ` +
+           `semantic=${report.semanticCoverage} | ` +
+           `ready=${report.documentaryReadiness}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v8: TITLE VALIDATION & AUTO-FIX
+// ═══════════════════════════════════════════════════════════════
+
+export interface TitleValidationResult {
+    /** Título final (corrigido ou original) */
+    title: string;
+    /** true se o título foi corrigido */
+    fixed: boolean;
+    /** Issue de validação, se houver */
+    issue?: DeclarationValidationIssue;
+    /** Descrição da correção aplicada */
+    correction?: string;
+}
+
+/**
+ * Valida e corrige o título da declaração.
+ *
+ * Regras:
+ * 1. Não pode terminar em preposição isolada
+ * 2. Deve ter pelo menos 3 palavras
+ * 3. Deve começar com "DECLARAÇÃO"
+ * 4. Se inválido, tenta fallback por keyword do tipo
+ *
+ * @param title           Título gerado pela IA
+ * @param declarationType Tipo da declaração (para match no fallback)
+ */
+export function validateAndFixTitle(
+    title: string,
+    declarationType: string,
+): TitleValidationResult {
+    if (!title || title.trim().length === 0) {
+        const fallback = findTitleFallback(declarationType) || 'DECLARAÇÃO';
+        return {
+            title: fallback,
+            fixed: true,
+            issue: {
+                code: VALIDATION_CODES.TITLE_TRUNCATED,
+                severity: 'major',
+                message: 'Título vazio. Substituído por fallback.',
+            },
+            correction: `TITLE_TRUNCATED: Título vazio → "${fallback}" → CORRIGIDO`,
+        };
+    }
+
+    const trimmed = title.trim().toUpperCase();
+    const words = trimmed.split(/\s+/);
+    const lastWord = words[words.length - 1]?.toLowerCase().replace(/[.,;:!?]$/, '');
+
+    // Regra 1: Termina em preposição isolada
+    if (lastWord && TITLE_TRAILING_PREPOSITIONS.includes(lastWord)) {
+        const fallback = findTitleFallback(declarationType) || trimmed;
+        if (fallback !== trimmed) {
+            return {
+                title: fallback,
+                fixed: true,
+                issue: {
+                    code: VALIDATION_CODES.TITLE_TRUNCATED,
+                    severity: 'major',
+                    message: `Título truncado: termina em preposição "${lastWord}". Corrigido com fallback.`,
+                },
+                correction: `TITLE_TRUNCATED: "${title}" → "${fallback}" → CORRIGIDO`,
+            };
+        }
+    }
+
+    // Regra 2: Muito curto (menos de 3 palavras)
+    if (words.length < 3) {
+        const fallback = findTitleFallback(declarationType) || trimmed;
+        if (fallback !== trimmed) {
+            return {
+                title: fallback,
+                fixed: true,
+                issue: {
+                    code: VALIDATION_CODES.TITLE_TRUNCATED,
+                    severity: 'major',
+                    message: `Título muito curto: apenas ${words.length} palavra(s). Corrigido com fallback.`,
+                },
+                correction: `TITLE_TRUNCATED: "${title}" → "${fallback}" → CORRIGIDO`,
+            };
+        }
+    }
+
+    // Regra 3: Não começa com "DECLARAÇÃO"
+    if (!trimmed.startsWith('DECLARAÇ')) {
+        const fallback = findTitleFallback(declarationType);
+        if (fallback) {
+            return {
+                title: fallback,
+                fixed: true,
+                issue: {
+                    code: VALIDATION_CODES.TITLE_TRUNCATED,
+                    severity: 'minor',
+                    message: `Título não começa com "DECLARAÇÃO". Corrigido.`,
+                },
+                correction: `TITLE_TRUNCATED: "${title}" → "${fallback}" → CORRIGIDO`,
+            };
+        }
+    }
+
+    // Título OK
+    return { title: trimmed, fixed: false };
+}
+
+/** Busca título fallback por keywords do tipo de declaração */
+function findTitleFallback(declarationType: string): string | null {
+    const declLower = declarationType.toLowerCase();
+    for (const entry of TITLE_FALLBACK_MAP) {
+        if (entry.keywords.some(kw => declLower.includes(kw.toLowerCase()))) {
+            return entry.title;
+        }
+    }
+    return null;
 }
