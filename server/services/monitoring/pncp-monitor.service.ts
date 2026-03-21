@@ -151,17 +151,13 @@ export class PncpMonitorService {
             
             // Only log on first occurrence, then silently skip
             if (failures === 1) {
-              console.warn(`[PncpMonitor] ⚠️ "${shortTitle}" — 404 no endpoint de mensagens. Será ignorado.`);
+              console.warn(`[PncpMonitor] ⚠️ "${shortTitle}" — 404 no endpoint de mensagens PNCP. Será ignorado no polling PNCP.`);
             }
             
-            // After 3 consecutive 404s, auto-disable monitoring to stop wasting requests
-            if (failures >= 3) {
-              console.warn(`[PncpMonitor] 🔕 Auto-desativando monitoramento para "${shortTitle}" (3 falhas 404 consecutivas).`);
-              await prisma.biddingProcess.update({
-                where: { id: process.id },
-                data: { isMonitored: false }
-              }).catch(() => {});
-              this.consecutiveFailures.delete(process.id);
+            // After 3 consecutive 404s, just skip silently (do NOT disable isMonitored — 
+            // it would also disable ComprasNet Chat monitoring which shares this flag)
+            if (failures >= 3 && failures % 10 === 0) {
+              console.log(`[PncpMonitor] ⏭️ "${shortTitle}" — ${failures} falhas 404 consecutivas no PNCP. Ignorando silenciosamente.`);
             }
             return;
           }
