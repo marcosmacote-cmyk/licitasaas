@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Cpu, ScanSearch, SignalHigh, CheckCircle, AlertTriangle } from 'lucide-react';
+import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Cpu, ScanSearch, SignalHigh, CheckCircle, AlertTriangle, Building2, FileText, Paperclip, Link2, Pencil } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { AiReportModal } from './AiReportModal';
 import { LiveCountdown, StatusBadge, NextStepBanner } from './ui';
@@ -21,6 +21,7 @@ interface Props {
 export function ProcessFormModal({ initialData, companies, onClose, onSave, onRequestAiAnalysis, onNavigateToModule }: Props) {
     const form = useProcessForm({ initialData, companies, onClose, onSave, onNavigateToModule });
     const [linksExpanded, setLinksExpanded] = useState(false);
+    const [linksEditMode, setLinksEditMode] = useState(false);
 
     return (
         <>
@@ -306,12 +307,12 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                     // Classificar cada link
                                     const classifyLink = (url: string) => {
-                                        if (url.includes('pncp.gov.br')) return { type: 'PNCP', icon: '🏛️', color: '#6366f1', label: 'Portal PNCP' };
-                                        if (url.includes('cnetmobile') || url.includes('comprasnet')) return { type: 'ComprasNet', icon: '💬', color: '#22c55e', label: 'ComprasNet (Chat)' };
-                                        if (url.includes('bllcompras') || url.includes('bll.org')) return { type: 'BLL', icon: '💬', color: '#f59e0b', label: 'BLL Compras (Chat)' };
-                                        if (url.includes('supabase.co') && url.includes('.pdf')) return { type: 'PDF', icon: '📄', color: '#ef4444', label: 'PDF do Edital' };
-                                        if (url.includes('supabase.co')) return { type: 'Arquivo', icon: '📎', color: '#8b5cf6', label: 'Arquivo Anexo' };
-                                        return { type: 'Link', icon: '🔗', color: '#3b82f6', label: 'Link Externo' };
+                                        if (url.includes('pncp.gov.br')) return { type: 'PNCP', IconComp: Building2, color: '#6366f1', label: 'Portal PNCP' };
+                                        if (url.includes('cnetmobile') || url.includes('comprasnet')) return { type: 'ComprasNet', IconComp: MessageSquare, color: '#22c55e', label: 'ComprasNet (Chat)' };
+                                        if (url.includes('bllcompras') || url.includes('bll.org')) return { type: 'BLL', IconComp: MessageSquare, color: '#f59e0b', label: 'BLL Compras (Chat)' };
+                                        if (url.includes('supabase.co') && url.includes('.pdf')) return { type: 'PDF', IconComp: FileText, color: '#ef4444', label: 'PDF do Edital' };
+                                        if (url.includes('supabase.co')) return { type: 'Arquivo', IconComp: Paperclip, color: '#8b5cf6', label: 'Arquivo Anexo' };
+                                        return { type: 'Link', IconComp: Link2, color: '#3b82f6', label: 'Link Externo' };
                                     };
 
                                     return (
@@ -343,8 +344,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                                         <span style={{
                                                                             padding: '2px 8px', borderRadius: '10px', fontSize: '0.65rem',
                                                                             fontWeight: 700, color: 'white', background: info.color, whiteSpace: 'nowrap',
+                                                                            display: 'flex', alignItems: 'center', gap: '3px',
                                                                         }}>
-                                                                            {info.icon} {info.label}
+                                                                            <info.IconComp size={10} /> {info.label}
                                                                         </span>
                                                                         <span style={{
                                                                             flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -368,19 +370,31 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                 </div>
                                             )}
 
-                                            {/* Input de edição dos links */}
-                                            <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
-                                                <div style={{ ...inputContainerStyle, flex: 1 }}>
-                                                    <Globe size={18} color="var(--color-text-tertiary)" />
-                                                    <input type="text" style={inputInnerStyle}
-                                                        placeholder="Link do portal de compras (PNCP, ComprasNet, etc.)"
-                                                        value={externalLinks.join(', ')}
-                                                        onChange={(e) => {
-                                                            const newExternalLinks = e.target.value;
-                                                            const newLink = [newExternalLinks, ...uploadPaths].filter(s => s.trim()).join(', ');
-                                                            form.setFormData(prev => ({ ...prev, link: newLink }));
-                                                        }} />
-                                                </div>
+                                            {/* Botão para editar links + input condicional */}
+                                            <div style={{ marginBottom: '10px' }}>
+                                                <button type="button" onClick={() => setLinksEditMode(prev => !prev)}
+                                                    style={{
+                                                        background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+                                                        fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 600,
+                                                        display: 'flex', alignItems: 'center', gap: '4px',
+                                                    }}>
+                                                    <Pencil size={11} /> {linksEditMode ? 'Ocultar edição' : 'Editar links'}
+                                                </button>
+                                                {linksEditMode && (
+                                                    <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+                                                        <div style={{ ...inputContainerStyle, flex: 1 }}>
+                                                            <Globe size={18} color="var(--color-text-tertiary)" />
+                                                            <input type="text" style={inputInnerStyle}
+                                                                placeholder="Link do portal de compras (PNCP, ComprasNet, etc.)"
+                                                                value={externalLinks.join(', ')}
+                                                                onChange={(e) => {
+                                                                    const newExternalLinks = e.target.value;
+                                                                    const newLink = [newExternalLinks, ...uploadPaths].filter(s => s.trim()).join(', ');
+                                                                    form.setFormData(prev => ({ ...prev, link: newLink }));
+                                                                }} />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Upload section */}
