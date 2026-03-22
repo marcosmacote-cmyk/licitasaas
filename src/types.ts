@@ -170,6 +170,7 @@ export interface PncpBiddingItem {
     municipio: string;
     modalidade_nome: string;
     link_sistema: string;
+    link_comprasnet?: string;
     status: string;
 }
 

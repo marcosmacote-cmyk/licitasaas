@@ -1558,6 +1558,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                 link_sistema: (cnpj && ano && nSeq)
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
                     : (item.linkSistemaOrigem || item.link || ''),
+                link_comprasnet: item.linkSistemaOrigem || '',
                 status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
             };
         }).filter(item => {

@@ -542,7 +542,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             sessionDate: item.data_encerramento_proposta
                 ? new Date(item.data_encerramento_proposta).toISOString()
                 : (item.data_abertura ? new Date(item.data_abertura).toISOString() : new Date().toISOString()),
-            link: item.link_sistema, pncpLink: item.link_sistema,
+            link: [item.link_sistema, item.link_comprasnet].filter(Boolean).join(', '),
+            pncpLink: item.link_sistema,
             risk: aiData?.process?.risk || 'Médio',
             companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
             observations: JSON.stringify([{
@@ -630,7 +631,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
                 sessionDate: item.data_encerramento_proposta || item.data_abertura || new Date().toISOString(),
-                link: item.link_sistema, pncpLink: item.link_sistema, risk: processObj.risk || 'Médio',
+                link: [item.link_sistema, item.link_comprasnet].filter(Boolean).join(', '),
+                pncpLink: item.link_sistema, risk: processObj.risk || 'Médio',
                 companyProfileId: selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(), observations: '[]'
             } as BiddingProcess;
