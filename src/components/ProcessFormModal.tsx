@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Cpu, ScanSearch, SignalHigh, CheckCircle, AlertTriangle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { AiReportModal } from './AiReportModal';
@@ -19,6 +20,7 @@ interface Props {
 
 export function ProcessFormModal({ initialData, companies, onClose, onSave, onRequestAiAnalysis, onNavigateToModule }: Props) {
     const form = useProcessForm({ initialData, companies, onClose, onSave, onNavigateToModule });
+    const [linksExpanded, setLinksExpanded] = useState(false);
 
     return (
         <>
@@ -294,16 +296,79 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                             {/* Link / Upload + PDF Viewer + Credenciais */}
                             <div className="col-span-full">
-                                <label style={labelStyle}>Documentos do Edital / TR</label>
+                                <label style={labelStyle}>Links e Documentos do Processo</label>
 
-                                {/* External Portal Link */}
+                                {/* ── Links individualizados com tipo + expand/collapse ── */}
                                 {(() => {
                                     const allParts = (form.formData.link || '').split(',').map(s => s.trim()).filter(s => s);
                                     const externalLinks = allParts.filter(s => s.startsWith('http'));
                                     const uploadPaths = allParts.filter(s => s.startsWith('/uploads/'));
 
+                                    // Classificar cada link
+                                    const classifyLink = (url: string) => {
+                                        if (url.includes('pncp.gov.br')) return { type: 'PNCP', icon: '🏛️', color: '#6366f1', label: 'Portal PNCP' };
+                                        if (url.includes('cnetmobile') || url.includes('comprasnet')) return { type: 'ComprasNet', icon: '💬', color: '#22c55e', label: 'ComprasNet (Chat)' };
+                                        if (url.includes('bllcompras') || url.includes('bll.org')) return { type: 'BLL', icon: '💬', color: '#f59e0b', label: 'BLL Compras (Chat)' };
+                                        if (url.includes('supabase.co') && url.includes('.pdf')) return { type: 'PDF', icon: '📄', color: '#ef4444', label: 'PDF do Edital' };
+                                        if (url.includes('supabase.co')) return { type: 'Arquivo', icon: '📎', color: '#8b5cf6', label: 'Arquivo Anexo' };
+                                        return { type: 'Link', icon: '🔗', color: '#3b82f6', label: 'Link Externo' };
+                                    };
+
                                     return (
                                         <>
+                                            {/* Chips dos links (expandable) */}
+                                            {externalLinks.length > 0 && (
+                                                <div style={{ marginBottom: '10px' }}>
+                                                    <button type="button" onClick={() => setLinksExpanded(prev => !prev)}
+                                                        style={{
+                                                            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+                                                            fontSize: '0.7rem', color: 'var(--color-primary)', fontWeight: 600,
+                                                            display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px',
+                                                        }}>
+                                                        <span style={{ transform: linksExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▶</span>
+                                                        {externalLinks.length} link(s) detectado(s)
+                                                    </button>
+
+                                                    {linksExpanded && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '12px', borderLeft: '2px solid var(--color-border)' }}>
+                                                            {externalLinks.map((link, idx) => {
+                                                                const info = classifyLink(link);
+                                                                return (
+                                                                    <div key={idx} style={{
+                                                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                                                        padding: '6px 10px', borderRadius: 'var(--radius-md)',
+                                                                        background: 'var(--color-bg-body)', border: '1px solid var(--color-border)',
+                                                                        fontSize: '0.75rem', transition: 'var(--transition-fast)',
+                                                                    }}>
+                                                                        <span style={{
+                                                                            padding: '2px 8px', borderRadius: '10px', fontSize: '0.65rem',
+                                                                            fontWeight: 700, color: 'white', background: info.color, whiteSpace: 'nowrap',
+                                                                        }}>
+                                                                            {info.icon} {info.label}
+                                                                        </span>
+                                                                        <span style={{
+                                                                            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                                            color: 'var(--color-text-secondary)', fontSize: '0.7rem',
+                                                                        }}>
+                                                                            {link.length > 80 ? link.substring(0, 77) + '...' : link}
+                                                                        </span>
+                                                                        <a href={link} target="_blank" rel="noopener noreferrer"
+                                                                            style={{
+                                                                                flexShrink: 0, color: 'var(--color-primary)', display: 'flex',
+                                                                                alignItems: 'center', gap: '3px', fontSize: '0.7rem',
+                                                                                fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap',
+                                                                            }}>
+                                                                            <ExternalLink size={12} /> Abrir
+                                                                        </a>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Input de edição dos links */}
                                             <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
                                                 <div style={{ ...inputContainerStyle, flex: 1 }}>
                                                     <Globe size={18} color="var(--color-text-tertiary)" />
@@ -315,11 +380,6 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                                             const newLink = [newExternalLinks, ...uploadPaths].filter(s => s.trim()).join(', ');
                                                             form.setFormData(prev => ({ ...prev, link: newLink }));
                                                         }} />
-                                                    {externalLinks.length > 0 && externalLinks[0].startsWith('http') && (
-                                                        <a href={externalLinks[0]} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                                                            <ExternalLink size={16} /> Abrir
-                                                        </a>
-                                                    )}
                                                 </div>
                                             </div>
 
