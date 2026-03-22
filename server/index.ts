@@ -6305,6 +6305,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 uasg: p.uasg,
                 companyProfileId: p.companyProfileId,
                 isMonitored: p.isMonitored,
+                link: p.link || null,
                 hasPncpLink: !!(p.link?.includes('editais')),
                 totalMessages: total,
                 // If query succeeded: use actual count (0 if not in map). If failed: fall back to total.
@@ -6334,9 +6335,10 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             const pf = (platform as string).toLowerCase();
             filtered = result.filter((p: any) => {
                 const portal = (p.portal || '').toLowerCase();
-                if (pf === 'comprasnet') return portal.includes('compras') || portal.includes('cnet');
-                if (pf === 'pncp') return portal.includes('pncp');
-                if (pf === 'bll') return portal.includes('bll');
+                const link = (p.link || '').toLowerCase();
+                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras');
+                if (pf === 'pncp') return portal.includes('pncp') || link.includes('pncp.gov.br');
+                if (pf === 'bll') return link.includes('bllcompras') || link.includes('bll.org') || portal.includes('bll');
                 return true;
             });
         }

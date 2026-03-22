@@ -71,11 +71,14 @@ function authorColor(type: string | null) {
   return { bg: 'var(--color-bg-surface)', border: 'var(--color-border)', text: 'var(--color-text-secondary)' };
 }
 
-function portalBadge(portal: string) {
+function portalBadge(portal: string, link?: string) {
   const p = (portal || '').toLowerCase();
-  if (p.includes('compras') || p.includes('cnet')) return { label: 'ComprasNet', color: 'var(--color-success)', bg: 'var(--color-success-bg)' };
-  if (p.includes('pncp')) return { label: 'PNCP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' };
-  if (p.includes('bll')) return { label: 'BLL', color: 'var(--color-warning)', bg: 'var(--color-warning-bg)' };
+  const l = (link || '').toLowerCase();
+  // Verificar link primeiro (mais confiável), depois portal
+  // BLL deve ser verificado ANTES de ComprasNet (ambos podem conter 'compras')
+  if (l.includes('bllcompras') || l.includes('bll.org') || p.includes('bll')) return { label: 'BLL Compras', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' };
+  if (l.includes('cnetmobile') || l.includes('comprasnet') || p.includes('compras') || p.includes('cnet')) return { label: 'ComprasNet', color: 'var(--color-success)', bg: 'var(--color-success-bg)' };
+  if (p.includes('pncp') || l.includes('pncp.gov.br')) return { label: 'PNCP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' };
   return { label: portal || 'Outro', color: 'var(--color-neutral)', bg: 'var(--color-neutral-bg)' };
 }
 
@@ -450,7 +453,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
             ) : (
               c.filteredProcesses.map(proc => {
                 const isSelected = proc.id === c.selectedProcessId;
-                const badge = portalBadge(proc.portal);
+                const badge = portalBadge(proc.portal, (proc as any).link);
                 const company = companies.find(cp => cp.id === proc.companyProfileId);
                 const preview = proc.lastMessage?.content?.substring(0, 80) || '';
                 const lastMsgDate = proc.lastMessage?.createdAt;
@@ -554,7 +557,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
                       {c.selectedProc.uasg && <span>UASG: {c.selectedProc.uasg}</span>}
                       {c.selectedProc.modality && <span>{c.selectedProc.modality}</span>}
-                      <span>{portalBadge(c.selectedProc.portal).label}</span>
+                      <span>{portalBadge(c.selectedProc.portal, (c.selectedProc as any).link).label}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
@@ -700,7 +703,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                             {msg.captureSource && (
                               <div style={{ marginTop: 'var(--space-2)', display: 'flex', justifyContent: 'flex-end' }}>
                                 <span style={{ fontSize: 'var(--text-xs)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
-                                  via {msg.captureSource === 'comprasnet-xhr' ? 'ComprasNet' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
+                                  via {msg.captureSource === 'comprasnet-xhr' || msg.captureSource === 'server-worker' ? 'ComprasNet' : msg.captureSource === 'bll-api' ? 'BLL Compras' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
                                 </span>
                               </div>
                             )}
