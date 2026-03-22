@@ -3107,7 +3107,8 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
 });
 
 // ── Manual backfill: fetch ComprasNet links from PNCP API for all existing processes ──
-app.get('/api/backfill-comprasnet-links', async (req, res) => {
+app.get('/api/backfill-comprasnet-links', async (req: any, res) => {
+    const testMode = req.query.test === '1';
     try {
         const processes = await prisma.biddingProcess.findMany({
             where: {
@@ -3121,41 +3122,60 @@ app.get('/api/backfill-comprasnet-links', async (req, res) => {
             return res.json({ message: 'All processes already have ComprasNet links', updated: 0, total: 0 });
         }
 
-        let updated = 0;
-        const results: any[] = [];
-
-        for (const proc of processes) {
+        // Test mode: debug one process and return
+        if (testMode) {
+            const proc = processes[0];
             const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-            if (!match) { results.push({ id: proc.id, status: 'skip', reason: 'no PNCP pattern' }); continue; }
-
+            if (!match) return res.json({ debug: 'no match', link: proc.link });
             const [, cnpj, ano, seq] = match;
+            const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
             try {
-                const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                if (!apiRes.ok) { results.push({ id: proc.id, status: 'skip', reason: `API ${apiRes.status}` }); continue; }
-
-                const data = await apiRes.json();
-                const comprasNetLink = data.linkSistemaOrigem;
-                const linkProcEletro = data.linkProcessoEletronico;
-
-                if (comprasNetLink && comprasNetLink.trim()) {
-                    await prisma.biddingProcess.update({
-                        where: { id: proc.id },
-                        data: { link: `${proc.link}, ${comprasNetLink}`, isMonitored: true }
-                    });
-                    updated++;
-                    results.push({ id: proc.id, status: 'updated', comprasNetLink });
-                } else {
-                    results.push({ id: proc.id, status: 'skip', reason: 'linkSistemaOrigem is empty/null', linkSistemaOrigem: comprasNetLink, linkProcessoEletronico: linkProcEletro });
-                }
-
-                await new Promise(r => setTimeout(r, 500));
+                const apiRes = await fetch(apiUrl);
+                const text = await apiRes.text();
+                let parsed: any = null;
+                try { parsed = JSON.parse(text); } catch {}
+                return res.json({
+                    processId: proc.id, link: proc.link, apiUrl, httpStatus: apiRes.status,
+                    linkSistemaOrigem: parsed?.linkSistemaOrigem || null,
+                    linkProcessoEletronico: parsed?.linkProcessoEletronico || null,
+                    responseSnippet: text.substring(0, 500),
+                });
             } catch (e) {
-                results.push({ id: proc.id, status: 'error', reason: String(e) });
+                return res.json({ processId: proc.id, apiUrl, error: String(e) });
             }
         }
 
-        console.log(`[Backfill] Manual backfill complete: ${updated}/${processes.length} updated`);
-        res.json({ message: `Backfill complete`, updated, total: processes.length, results });
+        // Full mode: respond immediately, process in background
+        res.json({ message: `Backfill started for ${processes.length} processes. Check server logs.`, total: processes.length });
+
+        (async () => {
+            let updated = 0;
+            for (const proc of processes) {
+                const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                if (!match) continue;
+                const [, cnpj, ano, seq] = match;
+                try {
+                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                    if (!apiRes.ok) { console.log(`[Backfill] ${proc.id.slice(0,8)}: API ${apiRes.status}`); continue; }
+                    const data = await apiRes.json();
+                    const lso = data.linkSistemaOrigem;
+                    if (lso && lso.trim()) {
+                        await prisma.biddingProcess.update({
+                            where: { id: proc.id },
+                            data: { link: `${proc.link}, ${lso}`, isMonitored: true }
+                        });
+                        updated++;
+                        console.log(`[Backfill] ✅ ${proc.id.slice(0,8)}: ${lso.substring(0,80)}`);
+                    } else {
+                        console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: linkSistemaOrigem empty`);
+                    }
+                    await new Promise(r => setTimeout(r, 300));
+                } catch (e) {
+                    console.log(`[Backfill] ❌ ${proc.id.slice(0,8)}: ${e}`);
+                }
+            }
+            console.log(`[Backfill] Complete: ${updated}/${processes.length} updated`);
+        })();
     } catch (error) {
         console.error('[Backfill] Error:', error);
         res.status(500).json({ error: 'Backfill failed', details: error instanceof Error ? error.message : String(error) });
