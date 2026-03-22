@@ -7010,6 +7010,65 @@ app.listen(PORT, async () => {
     
     // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
     // pncpMonitor.startPolling(5);
+
+    // ── One-time backfill: fetch ComprasNet links for existing processes ──
+    (async () => {
+        try {
+            const processes = await prisma.biddingProcess.findMany({
+                where: {
+                    link: { contains: 'pncp.gov.br/app/editais' },
+                    NOT: { link: { contains: 'cnetmobile' } }
+                },
+                select: { id: true, link: true, isMonitored: true }
+            });
+
+            if (processes.length === 0) {
+                console.log('[Backfill] All processes already have ComprasNet links or no PNCP links found.');
+                return;
+            }
+
+            console.log(`[Backfill] Found ${processes.length} processes with PNCP links missing ComprasNet. Fetching...`);
+            let updated = 0;
+
+            for (const proc of processes) {
+                try {
+                    // Extract CNPJ/ANO/SEQ from PNCP link
+                    const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                    if (!match) continue;
+
+                    const [, cnpj, ano, seq] = match;
+                    const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+                    const res = await fetch(apiUrl);
+                    if (!res.ok) continue;
+
+                    const data = await res.json();
+                    const comprasNetLink = data.linkSistemaOrigem;
+
+                    if (comprasNetLink && (comprasNetLink.includes('cnetmobile') || comprasNetLink.includes('comprasnet'))) {
+                        const newLink = `${proc.link}, ${comprasNetLink}`;
+                        await prisma.biddingProcess.update({
+                            where: { id: proc.id },
+                            data: {
+                                link: newLink,
+                                isMonitored: true  // Auto-enable since we now have ComprasNet data
+                            }
+                        });
+                        updated++;
+                        console.log(`[Backfill] ✅ Updated process ${proc.id.slice(0, 8)} with ComprasNet link`);
+                    }
+
+                    // Rate limit: 500ms between API calls to avoid hammering PNCP
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (e) {
+                    // Skip individual failures silently
+                }
+            }
+
+            console.log(`[Backfill] Done. Updated ${updated}/${processes.length} processes with ComprasNet links.`);
+        } catch (e) {
+            console.error('[Backfill] Error:', e);
+        }
+    })();
 });
 
 // Keep event loop alive (required in this environment)
