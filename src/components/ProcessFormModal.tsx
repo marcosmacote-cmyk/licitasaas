@@ -190,38 +190,57 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             {(() => {
                                 const link = form.formData.link || '';
                                 const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+                                const hasPncpLink = link.includes('pncp.gov.br');
+                                const isOtherPlatform = hasPncpLink && !hasComprasNetLink;
+
+                                const bgStyle = hasComprasNetLink
+                                    ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
+                                    : 'var(--color-bg-secondary)';
+                                const borderColor = hasComprasNetLink ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)';
+                                const iconBg = hasComprasNetLink ? 'rgba(34, 197, 94, 0.12)' : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
+                                const iconColor = hasComprasNetLink ? '#22c55e' : isOtherPlatform ? '#6366f1' : '#6b7280';
+
+                                const title = hasComprasNetLink
+                                    ? 'Monitor de Chat será ativado automaticamente'
+                                    : isOtherPlatform
+                                        ? 'Licitação em portal externo'
+                                        : 'Monitor de Chat';
+                                const titleColor = hasComprasNetLink ? '#22c55e' : 'var(--color-text-tertiary)';
+
+                                const subtitle = hasComprasNetLink
+                                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                        <CheckCircle size={11} color="#22c55e" /> Link ComprasNet detectado
+                                      </span>
+                                    : isOtherPlatform
+                                        ? <span>O monitoramento de chat está disponível apenas para processos no ComprasNet/Compras.gov.br</span>
+                                        : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet para ativar o monitoramento
+                                          </span>;
+
+                                const IconComponent = isOtherPlatform ? Globe : SignalHigh;
 
                                 return (
                                     <div style={{
                                         gridColumn: '1 / -1',
                                         padding: 'var(--space-3) var(--space-4)',
                                         borderRadius: 'var(--radius-md)',
-                                        background: hasComprasNetLink
-                                            ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
-                                            : 'var(--color-bg-secondary)',
-                                        border: `1px solid ${hasComprasNetLink ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)'}`,
+                                        background: bgStyle,
+                                        border: `1px solid ${borderColor}`,
                                         display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap',
                                     }}>
                                         <div style={{
                                             width: '28px', height: '28px', borderRadius: 'var(--radius-md)',
-                                            background: hasComprasNetLink ? 'rgba(34, 197, 94, 0.12)' : 'rgba(107, 114, 128, 0.1)',
+                                            background: iconBg,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                         }}>
-                                            <SignalHigh size={16} color={hasComprasNetLink ? '#22c55e' : '#6b7280'} />
+                                            <IconComponent size={16} color={iconColor} />
                                         </div>
                                         <div style={{ flex: 1, minWidth: '200px' }}>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: hasComprasNetLink ? '#22c55e' : 'var(--color-text-tertiary)', marginBottom: '2px' }}>
-                                                {hasComprasNetLink ? 'Monitor de Chat será ativado automaticamente' : 'Monitor de Chat Inativo'}
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: titleColor, marginBottom: '2px' }}>
+                                                {title}
                                             </div>
                                             <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
-                                                {hasComprasNetLink
-                                                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                        <CheckCircle size={11} color="#22c55e" /> Link ComprasNet detectado
-                                                      </span>
-                                                    : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                        <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet no campo "Documentos" acima para ativar
-                                                      </span>
-                                                }
+                                                {subtitle}
                                             </div>
                                         </div>
                                     </div>

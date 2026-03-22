@@ -3107,7 +3107,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
 });
 
 // ── Manual backfill: fetch ComprasNet links from PNCP API for all existing processes ──
-app.get('/api/backfill-comprasnet-links', async (req: any, res) => {
+app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, res) => {
     const testMode = req.query.test === '1';
     try {
         const allProcesses = await prisma.biddingProcess.findMany({
