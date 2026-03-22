@@ -114,7 +114,7 @@ export class BLLMonitor {
         const $ = cheerio.load(html);
         const messages: BLLMessage[] = [];
 
-        $('#MsgProcess tr').each((_, row) => {
+        $('#MsgProcess tr').each((_: number, row: any) => {
             const cells = $(row).find('td');
             if (cells.length < 2) return;
 
