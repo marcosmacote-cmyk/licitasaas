@@ -3059,17 +3059,17 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             companyProfileId = null;
         }
 
-        // ── Auto-enable monitoring if sufficient data ──
+        // ── Auto-enable monitoring if ComprasNet data available ──
         const link = biddingData.link || '';
-        const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-        const hasComprasNetData = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
+        const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+        const hasComprasNetFields = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
 
-        if (pncpMatch || hasComprasNetData) {
+        if (hasComprasNetLink || hasComprasNetFields) {
             biddingData.isMonitored = true;
-            console.log(`[AutoMonitor] Auto-enabled monitoring for new process: PNCP=${!!pncpMatch}, ComprasNet=${hasComprasNetData}`);
+            console.log(`[AutoMonitor] Auto-enabled monitoring for new process: ComprasNetLink=${hasComprasNetLink}, ComprasNetFields=${hasComprasNetFields}`);
         }
 
-        // Auto-backfill pncpLink from link if it contains PNCP URL
+        // Auto-backfill pncpLink from link (mantido para referência futura)
         if (!biddingData.pncpLink && link.includes('pncp.gov.br') && link.includes('editais')) {
             const pncpUrl = link.split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
             if (pncpUrl) biddingData.pncpLink = pncpUrl;
@@ -3101,17 +3101,16 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             ...biddingData
         } = req.body;
 
-        // ── Auto-enable monitoring if sufficient data (only activate, never deactivate) ──
+        // ── Auto-enable monitoring if ComprasNet data available (only activate, never deactivate) ──
         const link = biddingData.link || '';
-        const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-        const hasComprasNetData = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
+        const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+        const hasComprasNetFields = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
 
-        if ((pncpMatch || hasComprasNetData) && biddingData.isMonitored === undefined) {
-            // Only auto-enable if user isn't explicitly setting isMonitored in this request
+        if ((hasComprasNetLink || hasComprasNetFields) && biddingData.isMonitored === undefined) {
             const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
             if (current && !current.isMonitored) {
                 biddingData.isMonitored = true;
-                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}": PNCP=${!!pncpMatch}, ComprasNet=${hasComprasNetData}`);
+                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}": ComprasNetLink=${hasComprasNetLink}, ComprasNetFields=${hasComprasNetFields}`);
             }
         }
 
@@ -7008,8 +7007,8 @@ app.listen(PORT, async () => {
     registerInitialVersions();
     console.log(`[Governance] Version catalog initialized with ${getAllVersions().length} components`);
     
-    // Start Chat Monitor Polling
-    pncpMonitor.startPolling(5); // Run every 5 minutes
+    // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
+    // pncpMonitor.startPolling(5);
 });
 
 // Keep event loop alive (required in this environment)

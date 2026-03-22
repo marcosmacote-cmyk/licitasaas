@@ -228,9 +228,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             {/* ── Monitoring Status Banner ── */}
                             {(() => {
                                 const link = form.formData.link || '';
-                                const hasPncp = /editais\/\d+\/\d+\/\d+/.test(link);
-                                const hasComprasNet = !!(form.formData.uasg && form.formData.modalityCode && form.formData.processNumber && form.formData.processYear);
-                                const canMonitor = hasPncp || hasComprasNet;
+                                const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+                                const hasComprasNetFields = !!(form.formData.uasg && form.formData.modalityCode && form.formData.processNumber && form.formData.processYear);
+                                const canMonitor = hasComprasNetLink || hasComprasNetFields;
 
                                 return (
                                     <div style={{
@@ -252,19 +252,17 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                         </div>
                                         <div style={{ flex: 1, minWidth: '200px' }}>
                                             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: canMonitor ? '#22c55e' : 'var(--color-text-tertiary)', marginBottom: '2px' }}>
-                                                {canMonitor ? 'Monitoramento será ativado automaticamente' : 'Monitoramento Inativo'}
+                                                {canMonitor ? 'Monitor de Chat será ativado automaticamente' : 'Monitor de Chat Inativo'}
                                             </div>
-                                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                    {hasPncp
-                                                        ? <><CheckCircle size={11} color="#22c55e" /> PNCP</>
-                                                        : <><AlertTriangle size={11} color="#9ca3af" /> PNCP</>}
-                                                </span>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                    {hasComprasNet
-                                                        ? <><CheckCircle size={11} color="#22c55e" /> ComprasNet</>
-                                                        : <><AlertTriangle size={11} color="#9ca3af" /> ComprasNet</>}
-                                                </span>
+                                            <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
+                                                {canMonitor
+                                                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                        <CheckCircle size={11} color="#22c55e" /> {hasComprasNetLink ? 'Link ComprasNet detectado' : 'Dados ComprasNet completos'}
+                                                      </span>
+                                                    : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                        <AlertTriangle size={11} color="#9ca3af" /> Adicione o link ComprasNet ou preencha UASG + Nº Processo
+                                                      </span>
+                                                }
                                             </div>
                                         </div>
                                     </div>
