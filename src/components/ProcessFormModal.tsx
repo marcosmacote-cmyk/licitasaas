@@ -194,8 +194,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const link = form.formData.link || '';
                                 const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
                                 const hasBLLLink = link.includes('bllcompras') || link.includes('bll.org');
+                                const hasBNCLink = link.includes('bnccompras');
                                 const hasPncpLink = link.includes('pncp.gov.br');
-                                const isMonitorable = hasComprasNetLink || hasBLLLink;
+                                const isMonitorable = hasComprasNetLink || hasBLLLink || hasBNCLink;
                                 const isOtherPlatform = hasPncpLink && !isMonitorable;
 
                                 const bgStyle = isMonitorable
@@ -205,7 +206,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const iconBg = isMonitorable ? 'rgba(34, 197, 94, 0.12)' : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
                                 const iconColor = isMonitorable ? '#22c55e' : isOtherPlatform ? '#6366f1' : '#6b7280';
 
-                                const platformLabel = hasComprasNetLink ? 'ComprasNet' : hasBLLLink ? 'BLL Compras' : '';
+                                const platformLabel = hasComprasNetLink ? 'ComprasNet' : hasBLLLink ? 'BLL Compras' : hasBNCLink ? 'BNC Compras' : '';
                                 const title = isMonitorable
                                     ? 'Monitor de Chat será ativado automaticamente'
                                     : isOtherPlatform
@@ -218,9 +219,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                         <CheckCircle size={11} color="#22c55e" /> Link {platformLabel} detectado
                                       </span>
                                     : isOtherPlatform
-                                        ? <span>O monitoramento de chat está disponível para processos no ComprasNet ou BLL Compras</span>
+                                        ? <span>O monitoramento de chat está disponível para processos no ComprasNet, BLL ou BNC Compras</span>
                                         : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet ou BLL para ativar o monitoramento
+                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet, BLL ou BNC para ativar o monitoramento
                                           </span>;
 
                                 const IconComponent = isOtherPlatform ? Globe : SignalHigh;
@@ -313,6 +314,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                         if (url.includes('pncp.gov.br')) return { type: 'PNCP', IconComp: Building2, color: '#6366f1', label: 'Portal PNCP' };
                                         if (url.includes('cnetmobile') || url.includes('comprasnet')) return { type: 'ComprasNet', IconComp: MessageSquare, color: '#22c55e', label: 'ComprasNet (Chat)' };
                                         if (url.includes('bllcompras') || url.includes('bll.org')) return { type: 'BLL', IconComp: MessageSquare, color: '#f59e0b', label: 'BLL Compras (Chat)' };
+                                        if (url.includes('bnccompras')) return { type: 'BNC', IconComp: MessageSquare, color: '#3b82f6', label: 'BNC Compras (Chat)' };
                                         if (url.includes('supabase.co') && url.includes('.pdf')) return { type: 'PDF', IconComp: FileText, color: '#ef4444', label: 'PDF do Edital' };
                                         if (url.includes('supabase.co')) return { type: 'Arquivo', IconComp: Paperclip, color: '#8b5cf6', label: 'Arquivo Anexo' };
                                         return { type: 'Link', IconComp: Link2, color: '#3b82f6', label: 'Link Externo' };

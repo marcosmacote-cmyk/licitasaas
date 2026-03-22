@@ -6336,9 +6336,10 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             filtered = result.filter((p: any) => {
                 const portal = (p.portal || '').toLowerCase();
                 const link = (p.link || '').toLowerCase();
-                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras');
+                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras');
                 if (pf === 'pncp') return portal.includes('pncp') || link.includes('pncp.gov.br');
                 if (pf === 'bll') return link.includes('bllcompras') || link.includes('bll.org') || portal.includes('bll');
+                if (pf === 'bnc') return link.includes('bnccompras');
                 return true;
             });
         }
@@ -7229,22 +7230,25 @@ app.listen(PORT, async () => {
     })();
 
     // ══════════════════════════════════════════════════════════════
-    // ── BLL Compras: Polling via API REST (sem browser!) ──
+    // ── Batch Platforms (BLL + BNC): Polling via API REST ──
     // ══════════════════════════════════════════════════════════════
-    const BLL_POLL_INTERVAL_MS = 60_000; // 60 segundos
+    const BATCH_POLL_INTERVAL_MS = 60_000; // 60 segundos
 
-    async function pollBLLProcesses() {
+    async function pollBatchProcesses() {
         try {
-            const { BLLMonitor } = require('./services/monitoring/bll-monitor.service');
+            const { BatchPlatformMonitor } = require('./services/monitoring/batch-platform-monitor.service');
             const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
             const { DedupService } = require('./services/monitoring/dedup.service');
             const { NotificationService } = require('./services/monitoring/notification.service');
 
-            // 1. Buscar todos os processos BLL monitorados (qualquer tenant)
-            const bllProcesses = await prisma.biddingProcess.findMany({
+            // 1. Buscar processos monitorados de TODAS as plataformas Batch
+            const batchProcesses = await prisma.biddingProcess.findMany({
                 where: {
                     isMonitored: true,
-                    link: { contains: 'bllcompras' },
+                    OR: [
+                        { link: { contains: 'bllcompras' } },
+                        { link: { contains: 'bnccompras' } },
+                    ],
                 },
                 select: {
                     id: true,
@@ -7254,24 +7258,26 @@ app.listen(PORT, async () => {
                 },
             });
 
-            if (bllProcesses.length === 0) return;
+            if (batchProcesses.length === 0) return;
 
             let totalNew = 0;
             let totalAlerts = 0;
 
-            for (const proc of bllProcesses) {
+            for (const proc of batchProcesses) {
                 try {
-                    // 2. Extrair param1 da URL BLL (campo multi-link)
-                    const param1 = BLLMonitor.extractParam1(proc.link);
-                    if (!param1) {
-                        continue;
-                    }
+                    // 2. Detectar qual plataforma (BLL ou BNC)
+                    const platform = BatchPlatformMonitor.detectPlatform(proc.link);
+                    if (!platform) continue;
 
-                    // 3. Buscar mensagens via API REST
-                    const messages = await BLLMonitor.fetchMessages(param1);
+                    // 3. Extrair param1 da URL
+                    const param1 = BatchPlatformMonitor.extractParam1(proc.link);
+                    if (!param1) continue;
+
+                    // 4. Buscar mensagens via API REST
+                    const messages = await BatchPlatformMonitor.fetchMessages(param1, platform);
                     if (messages.length === 0) continue;
 
-                    // 4. Deduplicar contra mensagens existentes
+                    // 5. Deduplicar contra mensagens existentes
                     const existingLogs = await prisma.chatMonitorLog.findMany({
                         where: { biddingProcessId: proc.id },
                         select: { messageId: true, fingerprintHash: true },
@@ -7282,7 +7288,7 @@ app.listen(PORT, async () => {
                     const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
                     if (newMessages.length === 0) continue;
 
-                    // 5. Keyword detection para este tenant
+                    // 6. Keyword detection para este tenant
                     const config = await prisma.chatMonitorConfig.findUnique({
                         where: { tenantId: proc.tenantId },
                     });
@@ -7296,7 +7302,6 @@ app.listen(PORT, async () => {
                             proc.id, msg.messageId, msg.content, msg.authorType
                         );
 
-                        // Double dedup: por messageId e por fingerprint
                         if (existingFingerprints.has(fingerprintHash)) continue;
 
                         const detection = detector.detect(msg.content);
@@ -7314,7 +7319,7 @@ app.listen(PORT, async () => {
                                 authorType: msg.authorType,
                                 eventCategory: detection.categoryId || null,
                                 detectedKeyword: detection.detectedKeyword,
-                                captureSource: 'bll-api',
+                                captureSource: platform.captureSource,
                                 status,
                             },
                         });
@@ -7325,7 +7330,7 @@ app.listen(PORT, async () => {
                     }
 
                     if (created > 0) {
-                        console.log(`[BLL Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
+                        console.log(`[${platform.label} Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
                         totalNew += created;
                         totalAlerts += alerts;
                     }
@@ -7333,7 +7338,7 @@ app.listen(PORT, async () => {
                     // Gentil com a API: 1s entre processos
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err: any) {
-                    console.warn(`[BLL Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    console.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
             }
 
@@ -7345,18 +7350,18 @@ app.listen(PORT, async () => {
             }
 
             if (totalNew > 0) {
-                console.log(`[BLL Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${bllProcesses.length} processos BLL`);
+                console.log(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
             }
         } catch (error: any) {
-            console.error('[BLL Poll] Erro no ciclo:', error.message);
+            console.error('[Batch Poll] Erro no ciclo:', error.message);
         }
     }
 
-    // Iniciar polling BLL com delay de 30s para não sobrecarregar startup
+    // Iniciar polling com delay de 30s para não sobrecarregar startup
     setTimeout(() => {
-        console.log(`[BLL Poll] 🚀 Monitor BLL iniciado (intervalo: ${BLL_POLL_INTERVAL_MS / 1000}s)`);
-        pollBLLProcesses(); // Primeira execução imediata
-        setInterval(pollBLLProcesses, BLL_POLL_INTERVAL_MS);
+        console.log(`[Batch Poll] 🚀 Monitor BLL+BNC iniciado (intervalo: ${BATCH_POLL_INTERVAL_MS / 1000}s)`);
+        pollBatchProcesses();
+        setInterval(pollBatchProcesses, BATCH_POLL_INTERVAL_MS);
     }, 30_000);
 });
 
