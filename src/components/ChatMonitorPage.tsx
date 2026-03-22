@@ -1,4 +1,4 @@
-import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus, BellRing, Trophy, Timer, FileClock, Ban, RotateCcw, Scale, UserX, MessageSquareMore, Megaphone, CalendarClock, Lock } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus, BellRing, Trophy, Timer, FileClock, Ban, RotateCcw, Scale, UserX, MessageSquareMore, Megaphone, CalendarClock, Lock, EyeOff } from 'lucide-react';
 import { useState as useLocalState } from 'react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
@@ -496,22 +496,42 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                       )}
                     </div>
 
-                    {/* Message count + unread badge + link warning */}
-                    <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center' }}>
+                    {/* Message count + unread badge + link warning + remove monitoring */}
+                    <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {(proc as any).hasPncpLink === false && proc.totalMessages === 0 ? (
                           <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <AlertTriangle size={10} /> Sem link PNCP — edite o processo
-                        </span>
-                      ) : (
-                        <>
-                          <span>{proc.totalMessages} msgs</span>
-                          {proc.unreadCount > 0 && (
-                            <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
-                              {proc.unreadCount} novas
-                            </span>
-                          )}
-                        </>
-                      )}
+                            <AlertTriangle size={10} /> Sem link PNCP — edite o processo
+                          </span>
+                        ) : (
+                          <>
+                            <span>{proc.totalMessages} msgs</span>
+                            {proc.unreadCount > 0 && (
+                              <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
+                                {proc.unreadCount} novas
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <button
+                        title="Remover monitoramento"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Deseja remover o monitoramento do processo "${proc.title.substring(0, 50)}..."?\n\nO status do processo NÃO será alterado.`)) {
+                            c.removeMonitoring(proc.id);
+                          }
+                        }}
+                        style={{
+                          padding: '3px', borderRadius: 'var(--radius-sm)', border: 'none',
+                          background: 'transparent', cursor: 'pointer', display: 'flex',
+                          alignItems: 'center', opacity: 0.4, transition: 'var(--transition-fast)',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(220, 38, 38, 0.08)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.4'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                      >
+                        <EyeOff size={13} color="var(--color-danger, #dc2626)" />
+                      </button>
                     </div>
                   </div>
                 );

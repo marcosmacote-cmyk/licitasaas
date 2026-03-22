@@ -212,6 +212,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
       });
       setProcesses(prev => prev.map(p => p.id === processId ? { ...p, isArchived: !current } : p));
       if (!current && selectedProcessId === processId) setSelectedProcessId(null);
+    fetchProcesses(true);
     } catch { /* silent */ }
   };
 
@@ -232,6 +233,23 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
           if (selectedProcessId === processId) setSelectedProcessId(null);
           toast.success(data.message || `Processo movido para ${action === 'lost' ? 'Perdido' : 'Arquivado'}`);
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(`Erro: ${errData.detail || res.statusText}`);
+      }
+    } catch { toast.error('Falha na conexão'); }
+  };
+
+  const removeMonitoring = async (processId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/process-close/${processId}`, {
+        method: 'POST', headers, body: JSON.stringify({ action: 'stop-monitoring' })
+      });
+      if (res.ok) {
+        setProcesses(prev => prev.filter(p => p.id !== processId));
+        if (selectedProcessId === processId) setSelectedProcessId(null);
+        toast.success('Monitoramento removido com sucesso.');
+        fetchProcesses(true);
       } else {
         const errData = await res.json().catch(() => ({}));
         toast.error(`Erro: ${errData.detail || res.statusText}`);
@@ -376,7 +394,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     // Handlers
     fetchProcesses, handleSelectProcess,
     markProcessRead, toggleProcessImportant, toggleProcessArchive,
-    handleClosureAction,
+    handleClosureAction, removeMonitoring,
     handleTestNotification, handleSaveConfig,
   };
 }

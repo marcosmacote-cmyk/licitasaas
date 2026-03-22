@@ -6356,8 +6356,8 @@ app.post('/api/chat-monitor/process-close/:processId', authenticateToken, async 
         const { action } = req.body; // 'lost' | 'archived' | 'dismiss'
         const tenantId = req.user.tenantId;
 
-        if (!['lost', 'archived', 'dismiss'].includes(action)) {
-            return res.status(400).json({ error: 'Invalid action. Use: lost, archived, dismiss' });
+        if (!['lost', 'archived', 'dismiss', 'stop-monitoring'].includes(action)) {
+            return res.status(400).json({ error: 'Invalid action. Use: lost, archived, dismiss, stop-monitoring' });
         }
 
         // Map action to bidding status
@@ -6366,7 +6366,21 @@ app.post('/api/chat-monitor/process-close/:processId', authenticateToken, async 
             archived: 'Arquivado',
         };
 
-        // 1. Update bidding process status (if not dismiss)
+        // 1. Update bidding process status (if not dismiss/stop-monitoring)
+        if (action === 'stop-monitoring') {
+            // Only disable monitoring, don't change status or archive logs
+            await prisma.biddingProcess.update({
+                where: { id: processId, tenantId },
+                data: { isMonitored: false },
+            });
+            console.log(`[ChatMonitor] Process ${processId} monitoring stopped (status unchanged)`);
+            return res.json({
+                success: true,
+                action,
+                message: 'Monitoramento removido — o status do processo não foi alterado.',
+            });
+        }
+
         if (action !== 'dismiss') {
             await prisma.biddingProcess.update({
                 where: { id: processId, tenantId },
