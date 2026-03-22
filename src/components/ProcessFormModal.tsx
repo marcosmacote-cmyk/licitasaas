@@ -193,31 +193,34 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             {(() => {
                                 const link = form.formData.link || '';
                                 const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+                                const hasBLLLink = link.includes('bllcompras') || link.includes('bll.org');
                                 const hasPncpLink = link.includes('pncp.gov.br');
-                                const isOtherPlatform = hasPncpLink && !hasComprasNetLink;
+                                const isMonitorable = hasComprasNetLink || hasBLLLink;
+                                const isOtherPlatform = hasPncpLink && !isMonitorable;
 
-                                const bgStyle = hasComprasNetLink
+                                const bgStyle = isMonitorable
                                     ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
                                     : 'var(--color-bg-secondary)';
-                                const borderColor = hasComprasNetLink ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)';
-                                const iconBg = hasComprasNetLink ? 'rgba(34, 197, 94, 0.12)' : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
-                                const iconColor = hasComprasNetLink ? '#22c55e' : isOtherPlatform ? '#6366f1' : '#6b7280';
+                                const borderColor = isMonitorable ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)';
+                                const iconBg = isMonitorable ? 'rgba(34, 197, 94, 0.12)' : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
+                                const iconColor = isMonitorable ? '#22c55e' : isOtherPlatform ? '#6366f1' : '#6b7280';
 
-                                const title = hasComprasNetLink
+                                const platformLabel = hasComprasNetLink ? 'ComprasNet' : hasBLLLink ? 'BLL Compras' : '';
+                                const title = isMonitorable
                                     ? 'Monitor de Chat será ativado automaticamente'
                                     : isOtherPlatform
                                         ? 'Licitação em portal externo'
                                         : 'Monitor de Chat';
-                                const titleColor = hasComprasNetLink ? '#22c55e' : 'var(--color-text-tertiary)';
+                                const titleColor = isMonitorable ? '#22c55e' : 'var(--color-text-tertiary)';
 
-                                const subtitle = hasComprasNetLink
+                                const subtitle = isMonitorable
                                     ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                        <CheckCircle size={11} color="#22c55e" /> Link ComprasNet detectado
+                                        <CheckCircle size={11} color="#22c55e" /> Link {platformLabel} detectado
                                       </span>
                                     : isOtherPlatform
-                                        ? <span>O monitoramento de chat está disponível apenas para processos no ComprasNet/Compras.gov.br</span>
+                                        ? <span>O monitoramento de chat está disponível para processos no ComprasNet ou BLL Compras</span>
                                         : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet para ativar o monitoramento
+                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet ou BLL para ativar o monitoramento
                                           </span>;
 
                                 const IconComponent = isOtherPlatform ? Globe : SignalHigh;

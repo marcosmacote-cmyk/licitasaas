@@ -21,6 +21,7 @@
     "@types/jszip": "^3.4.0",
     "axios": "^1.13.5",
     "body-parser": "^2.2.2",
+    "cheerio": "^1.2.0",
     "date-fns": "^4.1.0",
     "file-saver": "^2.0.5",
     "jspdf": "^4.2.0",
