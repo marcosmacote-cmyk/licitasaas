@@ -1,4 +1,4 @@
-import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Cpu, ScanSearch } from 'lucide-react';
+import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Cpu, ScanSearch, SignalHigh, CheckCircle, AlertTriangle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { AiReportModal } from './AiReportModal';
 import { LiveCountdown, StatusBadge, NextStepBanner } from './ui';
@@ -187,7 +187,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
 
                             {/* ComprasNet Fields */}
-                            {(form.formData.portal?.toLowerCase().includes('compras') || form.formData.portal?.toLowerCase().includes('cnet') || form.formData.link?.toLowerCase().includes('comprasnet') || form.formData.link?.toLowerCase().includes('cnetmobile')) && (
+                            {(form.formData.portal?.toLowerCase().includes('compras') || form.formData.portal?.toLowerCase().includes('cnet') || form.formData.link?.toLowerCase().includes('comprasnet') || form.formData.link?.toLowerCase().includes('cnetmobile') || form.formData.portal?.toLowerCase().includes('gov.br') || form.formData.uasg || form.formData.processNumber) && (
                                 <div style={{ gridColumn: '1 / -1', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--color-border)' }}>
                                     <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         Dados ComprasNet (para monitoramento de chat)
@@ -224,6 +224,52 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     </div>
                                 </div>
                             )}
+
+                            {/* ── Monitoring Status Banner ── */}
+                            {(() => {
+                                const link = form.formData.link || '';
+                                const hasPncp = /editais\/\d+\/\d+\/\d+/.test(link);
+                                const hasComprasNet = !!(form.formData.uasg && form.formData.modalityCode && form.formData.processNumber && form.formData.processYear);
+                                const canMonitor = hasPncp || hasComprasNet;
+
+                                return (
+                                    <div style={{
+                                        gridColumn: '1 / -1',
+                                        padding: 'var(--space-3) var(--space-4)',
+                                        borderRadius: 'var(--radius-md)',
+                                        background: canMonitor
+                                            ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
+                                            : 'var(--color-bg-secondary)',
+                                        border: `1px solid ${canMonitor ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)'}`,
+                                        display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap',
+                                    }}>
+                                        <div style={{
+                                            width: '28px', height: '28px', borderRadius: 'var(--radius-md)',
+                                            background: canMonitor ? 'rgba(34, 197, 94, 0.12)' : 'rgba(107, 114, 128, 0.1)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                        }}>
+                                            <SignalHigh size={16} color={canMonitor ? '#22c55e' : '#6b7280'} />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: '200px' }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: canMonitor ? '#22c55e' : 'var(--color-text-tertiary)', marginBottom: '2px' }}>
+                                                {canMonitor ? 'Monitoramento será ativado automaticamente' : 'Monitoramento Inativo'}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                    {hasPncp
+                                                        ? <><CheckCircle size={11} color="#22c55e" /> PNCP</>
+                                                        : <><AlertTriangle size={11} color="#9ca3af" /> PNCP</>}
+                                                </span>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                    {hasComprasNet
+                                                        ? <><CheckCircle size={11} color="#22c55e" /> ComprasNet</>
+                                                        : <><AlertTriangle size={11} color="#9ca3af" /> ComprasNet</>}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Valor e Data */}
                             <div>

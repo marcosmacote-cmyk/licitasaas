@@ -3059,6 +3059,22 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             companyProfileId = null;
         }
 
+        // ── Auto-enable monitoring if sufficient data ──
+        const link = biddingData.link || '';
+        const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+        const hasComprasNetData = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
+
+        if (pncpMatch || hasComprasNetData) {
+            biddingData.isMonitored = true;
+            console.log(`[AutoMonitor] Auto-enabled monitoring for new process: PNCP=${!!pncpMatch}, ComprasNet=${hasComprasNetData}`);
+        }
+
+        // Auto-backfill pncpLink from link if it contains PNCP URL
+        if (!biddingData.pncpLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+            const pncpUrl = link.split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
+            if (pncpUrl) biddingData.pncpLink = pncpUrl;
+        }
+
         const bidding = await prisma.biddingProcess.create({
             data: { ...biddingData, tenantId, companyProfileId }
         });
@@ -3084,6 +3100,26 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             companyProfileId,
             ...biddingData
         } = req.body;
+
+        // ── Auto-enable monitoring if sufficient data (only activate, never deactivate) ──
+        const link = biddingData.link || '';
+        const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+        const hasComprasNetData = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
+
+        if ((pncpMatch || hasComprasNetData) && biddingData.isMonitored === undefined) {
+            // Only auto-enable if user isn't explicitly setting isMonitored in this request
+            const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
+            if (current && !current.isMonitored) {
+                biddingData.isMonitored = true;
+                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}": PNCP=${!!pncpMatch}, ComprasNet=${hasComprasNetData}`);
+            }
+        }
+
+        // Auto-backfill pncpLink from link
+        if (!biddingData.pncpLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+            const pncpUrl = link.split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
+            if (pncpUrl) biddingData.pncpLink = pncpUrl;
+        }
 
         const bidding = await prisma.biddingProcess.update({
             where: {
