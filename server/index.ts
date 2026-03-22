@@ -3110,12 +3110,13 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
 app.get('/api/backfill-comprasnet-links', async (req: any, res) => {
     const testMode = req.query.test === '1';
     try {
-        const processes = await prisma.biddingProcess.findMany({
-            where: {
-                link: { contains: 'pncp.gov.br/app/editais' },
-                NOT: { link: { contains: 'cnetmobile' } }
-            },
-            select: { id: true, link: true }
+        const allProcesses = await prisma.biddingProcess.findMany({
+            where: { link: { contains: 'pncp.gov.br/app/editais' } },
+            select: { id: true, link: true, isMonitored: true }
+        });
+        const processes = allProcesses.filter(p => {
+            const link = p.link || '';
+            return !link.includes('cnetmobile') && !link.includes('comprasnet-web');
         });
 
         if (processes.length === 0) {
@@ -3149,7 +3150,22 @@ app.get('/api/backfill-comprasnet-links', async (req: any, res) => {
         res.json({ message: `Backfill started for ${processes.length} processes. Check server logs.`, total: processes.length });
 
         (async () => {
+            // Step 1: Clean up duplicate links in all PNCP processes
+            for (const proc of allProcesses) {
+                const parts = (proc.link || '').split(',').map((s: string) => s.trim());
+                const unique = [...new Set(parts)];
+                if (unique.length < parts.length) {
+                    await prisma.biddingProcess.update({
+                        where: { id: proc.id },
+                        data: { link: unique.join(', ') }
+                    });
+                    console.log(`[Backfill] 🧹 ${proc.id.slice(0,8)}: cleaned ${parts.length - unique.length} duplicate links`);
+                }
+            }
+
+            // Step 2: Add ComprasNet links where missing
             let updated = 0;
+            let skippedNonComprasNet = 0;
             for (const proc of processes) {
                 const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (!match) continue;
@@ -3158,14 +3174,24 @@ app.get('/api/backfill-comprasnet-links', async (req: any, res) => {
                     const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
                     if (!apiRes.ok) { console.log(`[Backfill] ${proc.id.slice(0,8)}: API ${apiRes.status}`); continue; }
                     const data = await apiRes.json();
-                    const lso = data.linkSistemaOrigem;
-                    if (lso && lso.trim()) {
-                        await prisma.biddingProcess.update({
-                            where: { id: proc.id },
-                            data: { link: `${proc.link}, ${lso}`, isMonitored: true }
-                        });
-                        updated++;
-                        console.log(`[Backfill] ✅ ${proc.id.slice(0,8)}: ${lso.substring(0,80)}`);
+                    const lso = (data.linkSistemaOrigem || '').trim();
+                    const isComprasNet = lso.includes('cnetmobile') || lso.includes('comprasnet');
+                    
+                    if (lso && isComprasNet) {
+                        // Prevent duplicate links
+                        const existingLinks = (proc.link || '').split(',').map((s: string) => s.trim());
+                        if (!existingLinks.some((el: string) => el.includes('cnetmobile') || el.includes('comprasnet'))) {
+                            const newLink = [...existingLinks, lso].join(', ');
+                            await prisma.biddingProcess.update({
+                                where: { id: proc.id },
+                                data: { link: newLink, isMonitored: true }
+                            });
+                            updated++;
+                            console.log(`[Backfill] ✅ ${proc.id.slice(0,8)}: ComprasNet link added`);
+                        }
+                    } else if (lso) {
+                        skippedNonComprasNet++;
+                        console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: not ComprasNet (${lso.substring(0,60)})`);
                     } else {
                         console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: linkSistemaOrigem empty`);
                     }
@@ -3174,7 +3200,7 @@ app.get('/api/backfill-comprasnet-links', async (req: any, res) => {
                     console.log(`[Backfill] ❌ ${proc.id.slice(0,8)}: ${e}`);
                 }
             }
-            console.log(`[Backfill] Complete: ${updated}/${processes.length} updated`);
+            console.log(`[Backfill] Complete: ${updated} updated, ${skippedNonComprasNet} non-ComprasNet skipped, ${processes.length} total`);
         })();
     } catch (error) {
         console.error('[Backfill] Error:', error);
