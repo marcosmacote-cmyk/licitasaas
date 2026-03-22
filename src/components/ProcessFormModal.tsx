@@ -186,81 +186,40 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 </div>
                             </div>
 
-                            {/* ComprasNet Fields */}
-                            {(form.formData.portal?.toLowerCase().includes('compras') || form.formData.portal?.toLowerCase().includes('cnet') || form.formData.link?.toLowerCase().includes('comprasnet') || form.formData.link?.toLowerCase().includes('cnetmobile') || form.formData.portal?.toLowerCase().includes('gov.br') || form.formData.uasg || form.formData.processNumber) && (
-                                <div style={{ gridColumn: '1 / -1', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--color-border)' }}>
-                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Dados ComprasNet (para monitoramento de chat)
-                                    </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-3)' }}>
-                                        <div>
-                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>UASG</label>
-                                            <input type="text" name="uasg" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
-                                                placeholder="Ex: 943001" value={form.formData.uasg || ''} onChange={form.handleChange} />
-                                        </div>
-                                        <div>
-                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>Cód. Modalidade</label>
-                                            <select name="modalityCode" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
-                                                value={form.formData.modalityCode || ''} onChange={form.handleChange}>
-                                                <option value="">Selecione</option>
-                                                <option value="5">5 - Pregão Eletrônico</option>
-                                                <option value="6">6 - Concorrência Eletrônica</option>
-                                                <option value="1">1 - Convite</option>
-                                                <option value="2">2 - Tomada de Preços</option>
-                                                <option value="3">3 - Concorrência</option>
-                                                <option value="4">4 - Pregão</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>Nº Processo</label>
-                                            <input type="text" name="processNumber" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
-                                                placeholder="Ex: 91398" value={form.formData.processNumber || ''} onChange={form.handleChange} />
-                                        </div>
-                                        <div>
-                                            <label style={{ ...labelStyle, fontSize: '0.7rem' }}>Ano</label>
-                                            <input type="text" name="processYear" style={{ ...inputInnerStyle, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}
-                                                placeholder="Ex: 2025" value={form.formData.processYear || ''} onChange={form.handleChange} />
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* ── Monitoring Status Banner ── */}
+                            {/* ── Monitor de Chat Banner ── */}
                             {(() => {
                                 const link = form.formData.link || '';
                                 const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
-                                const hasComprasNetFields = !!(form.formData.uasg && form.formData.modalityCode && form.formData.processNumber && form.formData.processYear);
-                                const canMonitor = hasComprasNetLink || hasComprasNetFields;
 
                                 return (
                                     <div style={{
                                         gridColumn: '1 / -1',
                                         padding: 'var(--space-3) var(--space-4)',
                                         borderRadius: 'var(--radius-md)',
-                                        background: canMonitor
+                                        background: hasComprasNetLink
                                             ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
                                             : 'var(--color-bg-secondary)',
-                                        border: `1px solid ${canMonitor ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)'}`,
+                                        border: `1px solid ${hasComprasNetLink ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)'}`,
                                         display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap',
                                     }}>
                                         <div style={{
                                             width: '28px', height: '28px', borderRadius: 'var(--radius-md)',
-                                            background: canMonitor ? 'rgba(34, 197, 94, 0.12)' : 'rgba(107, 114, 128, 0.1)',
+                                            background: hasComprasNetLink ? 'rgba(34, 197, 94, 0.12)' : 'rgba(107, 114, 128, 0.1)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                         }}>
-                                            <SignalHigh size={16} color={canMonitor ? '#22c55e' : '#6b7280'} />
+                                            <SignalHigh size={16} color={hasComprasNetLink ? '#22c55e' : '#6b7280'} />
                                         </div>
                                         <div style={{ flex: 1, minWidth: '200px' }}>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: canMonitor ? '#22c55e' : 'var(--color-text-tertiary)', marginBottom: '2px' }}>
-                                                {canMonitor ? 'Monitor de Chat será ativado automaticamente' : 'Monitor de Chat Inativo'}
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: hasComprasNetLink ? '#22c55e' : 'var(--color-text-tertiary)', marginBottom: '2px' }}>
+                                                {hasComprasNetLink ? 'Monitor de Chat será ativado automaticamente' : 'Monitor de Chat Inativo'}
                                             </div>
                                             <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
-                                                {canMonitor
+                                                {hasComprasNetLink
                                                     ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                        <CheckCircle size={11} color="#22c55e" /> {hasComprasNetLink ? 'Link ComprasNet detectado' : 'Dados ComprasNet completos'}
+                                                        <CheckCircle size={11} color="#22c55e" /> Link ComprasNet detectado
                                                       </span>
                                                     : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                        <AlertTriangle size={11} color="#9ca3af" /> Adicione o link ComprasNet ou preencha UASG + Nº Processo
+                                                        <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet no campo "Documentos" acima para ativar
                                                       </span>
                                                 }
                                             </div>
