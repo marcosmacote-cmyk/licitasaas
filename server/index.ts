@@ -3135,8 +3135,9 @@ app.get('/api/backfill-comprasnet-links', async (req, res) => {
 
                 const data = await apiRes.json();
                 const comprasNetLink = data.linkSistemaOrigem;
+                const linkProcEletro = data.linkProcessoEletronico;
 
-                if (comprasNetLink && (comprasNetLink.includes('cnetmobile') || comprasNetLink.includes('comprasnet'))) {
+                if (comprasNetLink && comprasNetLink.trim()) {
                     await prisma.biddingProcess.update({
                         where: { id: proc.id },
                         data: { link: `${proc.link}, ${comprasNetLink}`, isMonitored: true }
@@ -3144,7 +3145,7 @@ app.get('/api/backfill-comprasnet-links', async (req, res) => {
                     updated++;
                     results.push({ id: proc.id, status: 'updated', comprasNetLink });
                 } else {
-                    results.push({ id: proc.id, status: 'skip', reason: 'no ComprasNet link in API response' });
+                    results.push({ id: proc.id, status: 'skip', reason: 'linkSistemaOrigem is empty/null', linkSistemaOrigem: comprasNetLink, linkProcessoEletronico: linkProcEletro });
                 }
 
                 await new Promise(r => setTimeout(r, 500));
