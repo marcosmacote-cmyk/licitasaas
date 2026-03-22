@@ -3060,19 +3060,39 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             companyProfileId = null;
         }
 
-        // ── Auto-enable monitoring if ComprasNet data available ──
+        // ── Auto-enrich: fetch ComprasNet link from PNCP API if missing ──
         const link = biddingData.link || '';
-        const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
-        const hasComprasNetFields = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
+        let hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
 
-        if (hasComprasNetLink || hasComprasNetFields) {
-            biddingData.isMonitored = true;
-            console.log(`[AutoMonitor] Auto-enabled monitoring for new process: ComprasNetLink=${hasComprasNetLink}, ComprasNetFields=${hasComprasNetFields}`);
+        if (!hasComprasNetLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+            try {
+                const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                if (pncpMatch) {
+                    const [, cnpj, ano, seq] = pncpMatch;
+                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                    if (apiRes.ok) {
+                        const apiData = await apiRes.json();
+                        const comprasNetUrl = apiData.linkSistemaOrigem;
+                        if (comprasNetUrl && (comprasNetUrl.includes('cnetmobile') || comprasNetUrl.includes('comprasnet'))) {
+                            biddingData.link = `${link}, ${comprasNetUrl}`;
+                            hasComprasNetLink = true;
+                            console.log(`[AutoEnrich] Fetched ComprasNet link for new process from PNCP API`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[AutoEnrich] Failed to fetch ComprasNet link:', e);
+            }
         }
 
-        // Auto-backfill pncpLink from link (mantido para referência futura)
-        if (!biddingData.pncpLink && link.includes('pncp.gov.br') && link.includes('editais')) {
-            const pncpUrl = link.split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
+        if (hasComprasNetLink) {
+            biddingData.isMonitored = true;
+            console.log(`[AutoMonitor] Auto-enabled monitoring for new process`);
+        }
+
+        // Auto-backfill pncpLink from link
+        if (!biddingData.pncpLink && (biddingData.link || '').includes('pncp.gov.br') && (biddingData.link || '').includes('editais')) {
+            const pncpUrl = (biddingData.link || '').split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
             if (pncpUrl) biddingData.pncpLink = pncpUrl;
         }
 
@@ -3083,6 +3103,61 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
     } catch (error) {
         console.error("Create bidding error:", error);
         res.status(500).json({ error: 'Failed to create bidding', details: error instanceof Error ? error.message : String(error) });
+    }
+});
+
+// ── Manual backfill: fetch ComprasNet links from PNCP API for all existing processes ──
+app.post('/api/backfill-comprasnet-links', authenticateToken, async (req, res) => {
+    try {
+        const processes = await prisma.biddingProcess.findMany({
+            where: {
+                link: { contains: 'pncp.gov.br/app/editais' },
+                NOT: { link: { contains: 'cnetmobile' } }
+            },
+            select: { id: true, link: true }
+        });
+
+        if (processes.length === 0) {
+            return res.json({ message: 'All processes already have ComprasNet links', updated: 0, total: 0 });
+        }
+
+        let updated = 0;
+        const results: any[] = [];
+
+        for (const proc of processes) {
+            const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+            if (!match) { results.push({ id: proc.id, status: 'skip', reason: 'no PNCP pattern' }); continue; }
+
+            const [, cnpj, ano, seq] = match;
+            try {
+                const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                if (!apiRes.ok) { results.push({ id: proc.id, status: 'skip', reason: `API ${apiRes.status}` }); continue; }
+
+                const data = await apiRes.json();
+                const comprasNetLink = data.linkSistemaOrigem;
+
+                if (comprasNetLink && (comprasNetLink.includes('cnetmobile') || comprasNetLink.includes('comprasnet'))) {
+                    await prisma.biddingProcess.update({
+                        where: { id: proc.id },
+                        data: { link: `${proc.link}, ${comprasNetLink}`, isMonitored: true }
+                    });
+                    updated++;
+                    results.push({ id: proc.id, status: 'updated', comprasNetLink });
+                } else {
+                    results.push({ id: proc.id, status: 'skip', reason: 'no ComprasNet link in API response' });
+                }
+
+                await new Promise(r => setTimeout(r, 500));
+            } catch (e) {
+                results.push({ id: proc.id, status: 'error', reason: String(e) });
+            }
+        }
+
+        console.log(`[Backfill] Manual backfill complete: ${updated}/${processes.length} updated`);
+        res.json({ message: `Backfill complete`, updated, total: processes.length, results });
+    } catch (error) {
+        console.error('[Backfill] Error:', error);
+        res.status(500).json({ error: 'Backfill failed', details: error instanceof Error ? error.message : String(error) });
     }
 });
 
@@ -3102,22 +3177,42 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             ...biddingData
         } = req.body;
 
-        // ── Auto-enable monitoring if ComprasNet data available (only activate, never deactivate) ──
+        // ── Auto-enrich: fetch ComprasNet link from PNCP API if missing ──
         const link = biddingData.link || '';
-        const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
-        const hasComprasNetFields = !!(biddingData.uasg && biddingData.modalityCode && biddingData.processNumber && biddingData.processYear);
+        let hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
 
-        if ((hasComprasNetLink || hasComprasNetFields) && biddingData.isMonitored === undefined) {
+        if (!hasComprasNetLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+            try {
+                const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                if (pncpMatch) {
+                    const [, cnpj, ano, seq] = pncpMatch;
+                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                    if (apiRes.ok) {
+                        const apiData = await apiRes.json();
+                        const comprasNetUrl = apiData.linkSistemaOrigem;
+                        if (comprasNetUrl && (comprasNetUrl.includes('cnetmobile') || comprasNetUrl.includes('comprasnet'))) {
+                            biddingData.link = `${link}, ${comprasNetUrl}`;
+                            hasComprasNetLink = true;
+                            console.log(`[AutoEnrich] Fetched ComprasNet link for process "${id}" from PNCP API`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[AutoEnrich] Failed to fetch ComprasNet link:', e);
+            }
+        }
+
+        if (hasComprasNetLink && biddingData.isMonitored === undefined) {
             const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
             if (current && !current.isMonitored) {
                 biddingData.isMonitored = true;
-                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}": ComprasNetLink=${hasComprasNetLink}, ComprasNetFields=${hasComprasNetFields}`);
+                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}"`);
             }
         }
 
         // Auto-backfill pncpLink from link
-        if (!biddingData.pncpLink && link.includes('pncp.gov.br') && link.includes('editais')) {
-            const pncpUrl = link.split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
+        if (!biddingData.pncpLink && (biddingData.link || '').includes('pncp.gov.br') && (biddingData.link || '').includes('editais')) {
+            const pncpUrl = (biddingData.link || '').split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
             if (pncpUrl) biddingData.pncpLink = pncpUrl;
         }
 
