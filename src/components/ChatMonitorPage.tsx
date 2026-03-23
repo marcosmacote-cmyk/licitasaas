@@ -506,20 +506,29 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     {/* Message count + unread badge + link warning + remove monitoring */}
                     <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {(proc as any).hasPncpLink === false && proc.totalMessages === 0 ? (
-                          <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            <AlertTriangle size={10} /> Sem link PNCP — edite o processo
-                          </span>
-                        ) : (
-                          <>
-                            <span>{proc.totalMessages} msgs</span>
-                            {proc.unreadCount > 0 && (
-                              <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
-                                {proc.unreadCount} novas
+                        {(() => {
+                          const pl = (proc.portal || '').toLowerCase();
+                          const ll = ((proc as any).link || '').toLowerCase();
+                          const isPncpBased = pl.includes('pncp') || ll.includes('pncp.gov.br') || pl.includes('compras') || pl.includes('cnet') || ll.includes('comprasnet') || ll.includes('cnetmobile');
+                          const isOtherPlatform = ll.includes('bbmnet') || ll.includes('bllcompras') || ll.includes('bnccompras') || pl.includes('bbmnet') || pl.includes('bll') || pl.includes('bnc');
+                          if ((proc as any).hasPncpLink === false && proc.totalMessages === 0 && isPncpBased && !isOtherPlatform) {
+                            return (
+                              <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                <AlertTriangle size={10} /> Sem link PNCP — edite o processo
                               </span>
-                            )}
-                          </>
-                        )}
+                            );
+                          }
+                          return (
+                            <>
+                              <span>{proc.totalMessages} msgs</span>
+                              {proc.unreadCount > 0 && (
+                                <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
+                                  {proc.unreadCount} novas
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                       <button
                         title="Remover monitoramento"
