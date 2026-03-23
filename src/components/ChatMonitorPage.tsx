@@ -78,6 +78,7 @@ function portalBadge(portal: string, link?: string) {
   // BLL deve ser verificado ANTES de ComprasNet (ambos podem conter 'compras')
   if (l.includes('bllcompras') || l.includes('bll.org') || p.includes('bll')) return { label: 'BLL Compras', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' };
   if (l.includes('bnccompras') || p.includes('bnc')) return { label: 'BNC Compras', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)' };
+  if (l.includes('bbmnet') || l.includes('sala.bbmnet') || p.includes('bbmnet')) return { label: 'BBMNET', color: '#0066cc', bg: 'rgba(0, 102, 204, 0.08)' };
   if (l.includes('cnetmobile') || l.includes('comprasnet') || p.includes('compras') || p.includes('cnet')) return { label: 'ComprasNet', color: 'var(--color-success)', bg: 'var(--color-success-bg)' };
   if (p.includes('pncp') || l.includes('pncp.gov.br')) return { label: 'PNCP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' };
   return { label: portal || 'Outro', color: 'var(--color-neutral)', bg: 'var(--color-neutral-bg)' };
@@ -416,6 +417,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                 style={{ flex: 1, padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
                 <option value="all">Todas plataformas</option>
                 <option value="comprasnet">ComprasNet</option>
+                <option value="bbmnet">BBMNET</option>
                 <option value="pncp">PNCP</option>
                 <option value="bll">BLL</option>
                 <option value="bnc">BNC</option>
@@ -705,7 +707,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                             {msg.captureSource && (
                               <div style={{ marginTop: 'var(--space-2)', display: 'flex', justifyContent: 'flex-end' }}>
                                 <span style={{ fontSize: 'var(--text-xs)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
-                                  via {msg.captureSource === 'comprasnet-xhr' || msg.captureSource === 'server-worker' ? 'ComprasNet' : msg.captureSource === 'bll-api' ? 'BLL Compras' : msg.captureSource === 'bnc-api' ? 'BNC Compras' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
+                                  via {msg.captureSource === 'comprasnet-xhr' || msg.captureSource === 'server-worker' ? 'ComprasNet' : msg.captureSource === 'bbmnet-firestore' ? 'BBMNET' : msg.captureSource === 'bll-api' ? 'BLL Compras' : msg.captureSource === 'bnc-api' ? 'BNC Compras' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
                                 </span>
                               </div>
                             )}

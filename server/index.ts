@@ -107,6 +107,68 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// Generate long-lived worker token (for ComprasNet/BBMNET watchers)
+// Auth: requires CHAT_WORKER_SECRET or valid admin credentials
+app.post('/api/auth/worker-token', async (req, res) => {
+    try {
+        const { email, password, workerSecret, tenantId: requestedTenantId, label } = req.body;
+        const WORKER_SECRET = process.env.CHAT_WORKER_SECRET || '';
+
+        let userId: string;
+        let tenantId: string;
+        let role: string;
+
+        // Auth method 1: Worker Secret + tenantId
+        if (workerSecret && requestedTenantId) {
+            if (!WORKER_SECRET || workerSecret !== WORKER_SECRET) {
+                return res.status(403).json({ error: 'Worker secret inválido' });
+            }
+            // Find an ADMIN user for the given tenant
+            const adminUser = await prisma.user.findFirst({
+                where: { tenantId: requestedTenantId, role: 'ADMIN' }
+            });
+            if (!adminUser) {
+                return res.status(404).json({ error: 'Nenhum admin encontrado para o tenant informado' });
+            }
+            userId = adminUser.id;
+            tenantId = adminUser.tenantId;
+            role = adminUser.role;
+        }
+        // Auth method 2: Admin login credentials
+        else if (email && password) {
+            const user = await prisma.user.findUnique({ where: { email } });
+            if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+                return res.status(401).json({ error: 'Email ou senha inválidos' });
+            }
+            if (user.role !== 'ADMIN') {
+                return res.status(403).json({ error: 'Apenas ADMIN pode gerar worker tokens' });
+            }
+            userId = user.id;
+            tenantId = user.tenantId;
+            role = user.role;
+        } else {
+            return res.status(400).json({ error: 'Forneça {workerSecret, tenantId} ou {email, password}' });
+        }
+
+        const token = jwt.sign(
+            { userId, tenantId, role, purpose: 'worker', label: label || 'generic-worker' },
+            JWT_SECRET,
+            { expiresIn: '365d' }
+        );
+
+        console.log(`[WorkerToken] Generated for tenant ${tenantId}, label: ${label || 'generic-worker'}`);
+        res.json({
+            token,
+            expiresIn: '365 days',
+            tenantId,
+            label: label || 'generic-worker',
+        });
+    } catch (error: any) {
+        console.error('[WorkerToken] Error:', error?.message || error);
+        res.status(500).json({ error: 'Erro ao gerar worker token' });
+    }
+});
+
 // Middleware de Autenticação
 const authenticateToken = (req: any, res: any, next: any) => {
     const authHeader = req.headers['authorization'];
@@ -6336,7 +6398,8 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             filtered = result.filter((p: any) => {
                 const portal = (p.portal || '').toLowerCase();
                 const link = (p.link || '').toLowerCase();
-                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras');
+                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet');
+                if (pf === 'bbmnet') return link.includes('bbmnet') || link.includes('sala.bbmnet') || portal.includes('bbmnet');
                 if (pf === 'pncp') return portal.includes('pncp') || link.includes('pncp.gov.br');
                 if (pf === 'bll') return link.includes('bllcompras') || link.includes('bll.org') || portal.includes('bll');
                 if (pf === 'bnc') return link.includes('bnccompras');
@@ -6541,10 +6604,27 @@ app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any,
             where: {
                 tenantId,
                 isMonitored: true,
-                uasg: { not: null },
-                modalityCode: { not: null },
-                processNumber: { not: null },
-                processYear: { not: null },
+                OR: [
+                    // ComprasNet processes (need uasg + modalityCode)
+                    {
+                        uasg: { not: null },
+                        modalityCode: { not: null },
+                        processNumber: { not: null },
+                        processYear: { not: null },
+                    },
+                    // BBMNET processes (have bbmnet link)
+                    {
+                        link: { contains: 'bbmnet', mode: 'insensitive' },
+                    },
+                    // BLL processes
+                    {
+                        link: { contains: 'bllcompras', mode: 'insensitive' },
+                    },
+                    // BNC processes
+                    {
+                        link: { contains: 'bnccompras', mode: 'insensitive' },
+                    },
+                ],
             },
             select: {
                 id: true,
