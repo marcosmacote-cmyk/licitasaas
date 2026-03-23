@@ -123,22 +123,37 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                             <span>{observations.length}</span>
                         </div>
                     )}
-                    {(item.portal?.toLowerCase().includes('pncp') || item.link?.toLowerCase().includes('pncp.gov.br')) && (
-                        <button
-                            className="icon-btn"
-                            style={{ 
-                                padding: '4px', 
-                                cursor: 'pointer', 
-                                color: item.isMonitored ? 'var(--color-primary)' : 'var(--color-text-tertiary)', 
-                                background: item.isMonitored ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
-                                borderRadius: '50%'
-                            }}
-                            onClick={(e) => { e.stopPropagation(); onToggleMonitor?.(item.id); }}
-                            title={item.isMonitored ? "Monitoramento Ativo (Radar PNCP)" : "Ativar Monitor de Status (Radar PNCP)"}
-                        >
-                            <SignalHigh size={14} className={item.isMonitored ? "pulse-animation" : ""} />
-                        </button>
-                    )}
+                    {(() => {
+                        const p = (item.portal || '').toLowerCase();
+                        const l = (item.link || '').toLowerCase();
+                        const isMonitorable = p.includes('pncp') || l.includes('pncp.gov.br')
+                            || l.includes('cnetmobile') || l.includes('comprasnet') || p.includes('compras') || p.includes('cnet')
+                            || l.includes('bbmnet') || p.includes('bbmnet')
+                            || l.includes('bllcompras') || l.includes('bll.org') || p.includes('bll')
+                            || l.includes('bnccompras') || p.includes('bnc');
+                        if (!isMonitorable) return null;
+                        const platformName = l.includes('bbmnet') || p.includes('bbmnet') ? 'BBMNET'
+                            : l.includes('bllcompras') || p.includes('bll') ? 'BLL'
+                            : l.includes('bnccompras') || p.includes('bnc') ? 'BNC'
+                            : p.includes('pncp') || l.includes('pncp') ? 'PNCP'
+                            : 'ComprasNet';
+                        return (
+                            <button
+                                className="icon-btn"
+                                style={{ 
+                                    padding: '4px', 
+                                    cursor: 'pointer', 
+                                    color: item.isMonitored ? 'var(--color-primary)' : 'var(--color-text-tertiary)', 
+                                    background: item.isMonitored ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                                    borderRadius: '50%'
+                                }}
+                                onClick={(e) => { e.stopPropagation(); onToggleMonitor?.(item.id); }}
+                                title={item.isMonitored ? `Monitoramento Ativo (${platformName})` : `Ativar Monitor de Chat (${platformName})`}
+                            >
+                                <SignalHigh size={14} className={item.isMonitored ? "pulse-animation" : ""} />
+                            </button>
+                        );
+                    })()}
                     {hasAnalysis && (
                         <button
                             className="icon-btn"
