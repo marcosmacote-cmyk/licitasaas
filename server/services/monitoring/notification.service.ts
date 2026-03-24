@@ -134,7 +134,20 @@ export class NotificationService {
           ? `<b>Data/Hora:</b> ${msgTimestamp}\n`
           : `<b>Capturado em:</b> ${new Date(log.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })}\n`;
 
-        const message = `🚨 <b>ALERTA DE CHAT - PNCP</b>\n\n` +
+        // Detect platform name from bidding process link
+        const link = (log.biddingProcess.link || '').toLowerCase();
+        let platformName = 'PNCP';
+        if (link.includes('cnetmobile') || link.includes('comprasnet') || link.includes('comprasgovbr') || link.includes('compras.gov')) {
+          platformName = 'ComprasNet';
+        } else if (link.includes('bbmnet')) {
+          platformName = 'BBMNET';
+        } else if (link.includes('bllcompras') || link.includes('bll.org')) {
+          platformName = 'BLL Compras';
+        } else if (link.includes('bnccompras')) {
+          platformName = 'BNC Compras';
+        }
+
+        const message = `🚨 <b>ALERTA DE CHAT - ${platformName}</b>\n\n` +
                         `<b>Processo:</b> ${log.biddingProcess.title}\n` +
                         timestampLine +
                         `<b>Palavra-chave:</b> ${log.detectedKeyword}\n` +
