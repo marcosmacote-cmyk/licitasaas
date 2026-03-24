@@ -145,6 +145,8 @@ export class NotificationService {
           platformName = 'BLL Compras';
         } else if (link.includes('bnccompras')) {
           platformName = 'BNC Compras';
+        } else if (link.includes('portaldecompraspublicas')) {
+          platformName = 'Portal de Compras Públicas';
         }
 
         const message = `🚨 <b>ALERTA DE CHAT - ${platformName}</b>\n\n` +

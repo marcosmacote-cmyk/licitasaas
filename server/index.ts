@@ -7446,7 +7446,137 @@ app.listen(PORT, async () => {
         pollBatchProcesses();
         setInterval(pollBatchProcesses, BATCH_POLL_INTERVAL_MS);
     }, 30_000);
+
+    // ══════════════════════════════════════════════════════════════
+    // ── Portal de Compras Públicas (PCP): Polling via HTML SSR ──
+    // ══════════════════════════════════════════════════════════════
+    const PCP_POLL_INTERVAL_MS = 90_000; // 90 segundos (mais gentil — HTML é pesado)
+
+    async function pollPCPProcesses() {
+        try {
+            const { PCPMonitor } = require('./services/monitoring/pcp-monitor.service');
+            const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
+            const { DedupService } = require('./services/monitoring/dedup.service');
+            const { NotificationService } = require('./services/monitoring/notification.service');
+
+            // 1. Buscar processos monitorados do Portal de Compras Públicas
+            const pcpProcesses = await prisma.biddingProcess.findMany({
+                where: {
+                    isMonitored: true,
+                    link: { contains: 'portaldecompraspublicas' },
+                },
+                select: {
+                    id: true,
+                    tenantId: true,
+                    title: true,
+                    link: true,
+                },
+            });
+
+            if (pcpProcesses.length === 0) return;
+
+            let totalNew = 0;
+            let totalAlerts = 0;
+
+            for (const proc of pcpProcesses) {
+                try {
+                    // 2. Extrair a URL do PCP
+                    const pcpUrl = PCPMonitor.extractPCPUrl(proc.link);
+                    if (!pcpUrl) continue;
+
+                    // 3. Buscar mensagens via scraping do HTML SSR
+                    const messages = await PCPMonitor.fetchMessages(pcpUrl);
+                    if (messages.length === 0) continue;
+
+                    // 4. Deduplicar contra mensagens existentes
+                    const existingLogs = await prisma.chatMonitorLog.findMany({
+                        where: { biddingProcessId: proc.id },
+                        select: { messageId: true, fingerprintHash: true },
+                    });
+                    const existingIds = new Set(existingLogs.map((l: any) => l.messageId));
+                    const existingFingerprints = new Set(existingLogs.map((l: any) => l.fingerprintHash));
+
+                    const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
+                    if (newMessages.length === 0) continue;
+
+                    // 5. Keyword detection para este tenant
+                    const config = await prisma.chatMonitorConfig.findUnique({
+                        where: { tenantId: proc.tenantId },
+                    });
+                    const detector = createDetectorFromConfig(config);
+
+                    let created = 0;
+                    let alerts = 0;
+
+                    for (const msg of newMessages) {
+                        const fingerprintHash = DedupService.generateFingerprint(
+                            proc.id, msg.messageId, msg.content, msg.authorType
+                        );
+
+                        if (existingFingerprints.has(fingerprintHash)) continue;
+
+                        const detection = detector.detect(msg.content);
+                        if (detection.shouldNotify) alerts++;
+
+                        const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
+
+                        await prisma.chatMonitorLog.create({
+                            data: {
+                                tenantId: proc.tenantId,
+                                biddingProcessId: proc.id,
+                                messageId: msg.messageId,
+                                fingerprintHash,
+                                content: msg.content,
+                                authorType: msg.authorType,
+                                eventCategory: detection.categoryId || null,
+                                detectedKeyword: detection.detectedKeyword,
+                                captureSource: 'pcp-api',
+                                messageTimestamp: (msg as any).timestamp || null,
+                                status,
+                            },
+                        });
+
+                        existingIds.add(msg.messageId);
+                        existingFingerprints.add(fingerprintHash);
+                        created++;
+                    }
+
+                    if (created > 0) {
+                        console.log(`[PCP Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
+                        totalNew += created;
+                        totalAlerts += alerts;
+                    }
+
+                    // Gentil com o servidor: 2s entre processos (HTML é mais pesado)
+                    await new Promise(r => setTimeout(r, 2000));
+                } catch (err: any) {
+                    console.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                }
+            }
+
+            // Processar notificações pendentes se houve alertas
+            if (totalAlerts > 0) {
+                try {
+                    await NotificationService.processPendingNotifications();
+                } catch { /* silent */ }
+            }
+
+            if (totalNew > 0) {
+                console.log(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
+            }
+        } catch (error: any) {
+            console.error('[PCP Poll] Erro no ciclo:', error.message);
+        }
+    }
+
+    // Iniciar polling PCP com delay de 45s (após BLL+BNC)
+    setTimeout(() => {
+        console.log(`[PCP Poll] 🚀 Monitor Portal de Compras Públicas iniciado (intervalo: ${PCP_POLL_INTERVAL_MS / 1000}s)`);
+        pollPCPProcesses();
+        setInterval(pollPCPProcesses, PCP_POLL_INTERVAL_MS);
+    }, 45_000);
 });
 
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);
+
