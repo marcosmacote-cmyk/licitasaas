@@ -3147,7 +3147,13 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             }
         }
 
-        if (hasComprasNetLink) {
+        // Auto-enable monitoring for all supported batch platforms
+        const hasMonitorableLink = hasComprasNetLink
+            || link.includes('portaldecompraspublicas')
+            || link.includes('bllcompras') || link.includes('bll.org')
+            || link.includes('bnccompras');
+
+        if (hasMonitorableLink) {
             biddingData.isMonitored = true;
             console.log(`[AutoMonitor] Auto-enabled monitoring for new process`);
         }
@@ -3311,7 +3317,13 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             }
         }
 
-        if (hasComprasNetLink && biddingData.isMonitored === undefined) {
+        // Auto-enable monitoring for all supported batch platforms
+        const hasMonitorableLink = hasComprasNetLink
+            || link.includes('portaldecompraspublicas')
+            || link.includes('bllcompras') || link.includes('bll.org')
+            || link.includes('bnccompras');
+
+        if (hasMonitorableLink && biddingData.isMonitored === undefined) {
             const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
             if (current && !current.isMonitored) {
                 biddingData.isMonitored = true;
@@ -6398,9 +6410,10 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             filtered = result.filter((p: any) => {
                 const portal = (p.portal || '').toLowerCase();
                 const link = (p.link || '').toLowerCase();
-                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet');
+                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas');
                 if (pf === 'bbmnet') return link.includes('bbmnet') || link.includes('sala.bbmnet') || portal.includes('bbmnet');
                 if (pf === 'pncp') return portal.includes('pncp') || link.includes('pncp.gov.br');
+                if (pf === 'pcp') return link.includes('portaldecompraspublicas') || portal.includes('portal de compras');
                 if (pf === 'bll') return link.includes('bllcompras') || link.includes('bll.org') || portal.includes('bll');
                 if (pf === 'bnc') return link.includes('bnccompras');
                 return true;
