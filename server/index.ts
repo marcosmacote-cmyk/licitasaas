@@ -6491,7 +6491,7 @@ app.get('/api/chat-monitor/messages/:processId', authenticateToken, async (req: 
         const [messages, total] = await Promise.all([
             prisma.chatMonitorLog.findMany({
                 where: { biddingProcessId: processId, tenantId: req.user.tenantId },
-                orderBy: { createdAt: 'asc' },
+                orderBy: { createdAt: 'desc' },
                 skip,
                 take: limitNum,
             }),
