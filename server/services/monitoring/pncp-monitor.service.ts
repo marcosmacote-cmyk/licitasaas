@@ -208,6 +208,16 @@ export class PncpMonitorService {
         }
 
         // Capture ALL messages (not just keyword matches)
+        // Extract original timestamp from PNCP API
+        const rawDate = msg.dataRecebimento || msg.dataEnvio || msg.dataPublicacao || null;
+        let formattedTimestamp: string | null = null;
+        if (rawDate) {
+          try {
+            const d = new Date(rawDate);
+            formattedTimestamp = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          } catch { formattedTimestamp = String(rawDate); }
+        }
+
         await prisma.chatMonitorLog.create({
           data: {
             tenantId: process.tenantId,
@@ -216,6 +226,7 @@ export class PncpMonitorService {
             content: msg.conteudo || '',
             authorType: msg.nomeUsuario || msg.tipo || 'Sistema',
             detectedKeyword: detectedKeyword,
+            messageTimestamp: formattedTimestamp,
             status: detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED'
           }
         });

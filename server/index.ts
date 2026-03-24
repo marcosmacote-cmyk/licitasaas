@@ -6816,6 +6816,7 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
                     itemRef: msg.itemRef || null,
                     detectedKeyword: detection.detectedKeyword,
                     captureSource: msg.captureSource || 'server-worker',
+                    messageTimestamp: msg.timestamp || null,
                     status,
                 }
             });
@@ -6909,6 +6910,7 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
                     itemRef: msg.itemRef || null,
                     detectedKeyword: detection.detectedKeyword,
                     captureSource: msg.captureSource || 'local-watcher',
+                    messageTimestamp: msg.timestamp || null,
                     status,
                 }
             });
@@ -7400,6 +7402,7 @@ app.listen(PORT, async () => {
                                 eventCategory: detection.categoryId || null,
                                 detectedKeyword: detection.detectedKeyword,
                                 captureSource: platform.captureSource,
+                                messageTimestamp: (msg as any).timestamp || null,
                                 status,
                             },
                         });

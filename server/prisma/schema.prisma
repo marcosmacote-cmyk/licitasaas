@@ -316,6 +316,7 @@ model ChatMonitorLog {
   eventCategory    String? // Código de categoria ("8"=convocação, "9"=comunicado, etc.)
   itemRef          String? // Item da disputa ("2", "3", etc.)
   captureSource    String?        @default("pncp-status") // "comprasnet-xhr" ou "pncp-status"
+  messageTimestamp  String? // Data/hora original da mensagem na plataforma (ex: "24/03/2026 16:48:34")
   isRead           Boolean        @default(false)
   isImportant      Boolean        @default(false)
   isArchived       Boolean        @default(false)

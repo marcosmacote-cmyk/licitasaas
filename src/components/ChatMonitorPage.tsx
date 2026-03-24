@@ -703,7 +703,10 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                                 )}
                               </div>
                               <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
-                                {new Date(msg.createdAt).toLocaleDateString('pt-BR')} {new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                {(msg as any).messageTimestamp
+                                  ? `Enviada em ${(msg as any).messageTimestamp}`
+                                  : `${new Date(msg.createdAt).toLocaleDateString('pt-BR')} ${new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                                }
                               </span>
                             </div>
 

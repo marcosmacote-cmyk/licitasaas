@@ -129,8 +129,14 @@ export class NotificationService {
           continue;
         }
 
+        const msgTimestamp = (log as any).messageTimestamp;
+        const timestampLine = msgTimestamp
+          ? `<b>Data/Hora:</b> ${msgTimestamp}\n`
+          : `<b>Capturado em:</b> ${new Date(log.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })}\n`;
+
         const message = `🚨 <b>ALERTA DE CHAT - PNCP</b>\n\n` +
                         `<b>Processo:</b> ${log.biddingProcess.title}\n` +
+                        timestampLine +
                         `<b>Palavra-chave:</b> ${log.detectedKeyword}\n` +
                         `<b>Mensagem:</b> ${log.content}\n\n` +
                         `<i>Verifique agora no LicitaSaaS!</i>`;
