@@ -3150,6 +3150,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         // Auto-enable monitoring for all supported batch platforms
         const hasMonitorableLink = hasComprasNetLink
             || link.includes('portaldecompraspublicas')
+            || link.includes('licitanet.com.br')
             || link.includes('bllcompras') || link.includes('bll.org')
             || link.includes('bnccompras');
 
@@ -3320,6 +3321,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         // Auto-enable monitoring for all supported batch platforms
         const hasMonitorableLink = hasComprasNetLink
             || link.includes('portaldecompraspublicas')
+            || link.includes('licitanet.com.br')
             || link.includes('bllcompras') || link.includes('bll.org')
             || link.includes('bnccompras');
 
@@ -6410,10 +6412,11 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             filtered = result.filter((p: any) => {
                 const portal = (p.portal || '').toLowerCase();
                 const link = (p.link || '').toLowerCase();
-                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas');
+                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas') && !link.includes('licitanet.com.br');
                 if (pf === 'bbmnet') return link.includes('bbmnet') || link.includes('sala.bbmnet') || portal.includes('bbmnet');
                 if (pf === 'pncp') return portal.includes('pncp') || link.includes('pncp.gov.br');
                 if (pf === 'pcp') return link.includes('portaldecompraspublicas') || portal.includes('portal de compras');
+                if (pf === 'licitanet') return link.includes('licitanet.com.br') || portal.includes('licitanet');
                 if (pf === 'bll') return link.includes('bllcompras') || link.includes('bll.org') || portal.includes('bll');
                 if (pf === 'bnc') return link.includes('bnccompras');
                 return true;
@@ -7588,6 +7591,135 @@ app.listen(PORT, async () => {
         pollPCPProcesses();
         setInterval(pollPCPProcesses, PCP_POLL_INTERVAL_MS);
     }, 45_000);
+
+    // ══════════════════════════════════════════════════════════════
+    // ── Licitanet: Polling via API REST JSON pública ──
+    // ══════════════════════════════════════════════════════════════
+    const LICITANET_POLL_INTERVAL_MS = 90_000; // 90 segundos
+
+    async function pollLicitanetProcesses() {
+        try {
+            const { LicitanetMonitor } = require('./services/monitoring/licitanet-monitor.service');
+            const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
+            const { DedupService } = require('./services/monitoring/dedup.service');
+            const { NotificationService } = require('./services/monitoring/notification.service');
+
+            // 1. Buscar processos monitorados da Licitanet
+            const licitanetProcesses = await prisma.biddingProcess.findMany({
+                where: {
+                    isMonitored: true,
+                    link: { contains: 'licitanet.com.br' },
+                },
+                select: {
+                    id: true,
+                    tenantId: true,
+                    title: true,
+                    link: true,
+                },
+            });
+
+            if (licitanetProcesses.length === 0) return;
+
+            let totalNew = 0;
+            let totalAlerts = 0;
+
+            for (const proc of licitanetProcesses) {
+                try {
+                    // 2. Extrair a URL da Licitanet
+                    const licitanetUrl = LicitanetMonitor.extractLicitanetUrl(proc.link);
+                    if (!licitanetUrl) continue;
+
+                    // 3. Buscar mensagens via API REST JSON
+                    const messages = await LicitanetMonitor.fetchMessages(licitanetUrl);
+                    if (messages.length === 0) continue;
+
+                    // 4. Deduplicar contra mensagens existentes
+                    const existingLogs = await prisma.chatMonitorLog.findMany({
+                        where: { biddingProcessId: proc.id },
+                        select: { messageId: true, fingerprintHash: true },
+                    });
+                    const existingIds = new Set(existingLogs.map((l: any) => l.messageId));
+                    const existingFingerprints = new Set(existingLogs.map((l: any) => l.fingerprintHash));
+
+                    const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
+                    if (newMessages.length === 0) continue;
+
+                    // 5. Keyword detection para este tenant
+                    const config = await prisma.chatMonitorConfig.findUnique({
+                        where: { tenantId: proc.tenantId },
+                    });
+                    const detector = createDetectorFromConfig(config);
+
+                    let created = 0;
+                    let alerts = 0;
+
+                    for (const msg of newMessages) {
+                        const fingerprintHash = DedupService.generateFingerprint(
+                            proc.id, msg.messageId, msg.content, msg.authorType
+                        );
+
+                        if (existingFingerprints.has(fingerprintHash)) continue;
+
+                        const detection = detector.detect(msg.content);
+                        if (detection.shouldNotify) alerts++;
+
+                        const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
+
+                        await prisma.chatMonitorLog.create({
+                            data: {
+                                tenantId: proc.tenantId,
+                                biddingProcessId: proc.id,
+                                messageId: msg.messageId,
+                                fingerprintHash,
+                                content: msg.content,
+                                authorType: msg.authorType,
+                                eventCategory: detection.categoryId || null,
+                                detectedKeyword: detection.detectedKeyword,
+                                captureSource: 'licitanet-api',
+                                messageTimestamp: (msg as any).timestamp || null,
+                                status,
+                            },
+                        });
+
+                        existingIds.add(msg.messageId);
+                        existingFingerprints.add(fingerprintHash);
+                        created++;
+                    }
+
+                    if (created > 0) {
+                        console.log(`[Licitanet Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
+                        totalNew += created;
+                        totalAlerts += alerts;
+                    }
+
+                    // Gentil com o servidor: 1s entre processos (API JSON é leve)
+                    await new Promise(r => setTimeout(r, 1000));
+                } catch (err: any) {
+                    console.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                }
+            }
+
+            // Processar notificações pendentes se houve alertas
+            if (totalAlerts > 0) {
+                try {
+                    await NotificationService.processPendingNotifications();
+                } catch { /* silent */ }
+            }
+
+            if (totalNew > 0) {
+                console.log(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
+            }
+        } catch (error: any) {
+            console.error('[Licitanet Poll] Erro no ciclo:', error.message);
+        }
+    }
+
+    // Iniciar polling Licitanet com delay de 60s (após PCP)
+    setTimeout(() => {
+        console.log(`[Licitanet Poll] 🚀 Monitor Licitanet iniciado (intervalo: ${LICITANET_POLL_INTERVAL_MS / 1000}s)`);
+        pollLicitanetProcesses();
+        setInterval(pollLicitanetProcesses, LICITANET_POLL_INTERVAL_MS);
+    }, 60_000);
 });
 
 // Keep event loop alive (required in this environment)
