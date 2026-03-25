@@ -103,16 +103,16 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                             <div key={cert.id} onClick={() => o.setViewingCert(cert)}
                                                 style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: o.viewingCert?.id === cert.id ? '0 4px 12px rgba(0,0,0,0.06), 0 0 0 2px var(--color-primary)' : o.selectedCertIds.has(cert.id) ? '0 0 0 1px var(--color-primary)' : '0 0 0 1px var(--color-border)', background: o.viewingCert?.id === cert.id ? 'var(--color-bg-surface)' : o.selectedCertIds.has(cert.id) ? 'rgba(37, 99, 235, 0.04)' : 'var(--color-bg-surface)', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', flex: 1, paddingRight: '8px' }}>
                                                         <input type="checkbox" checked={o.selectedCertIds.has(cert.id)} onChange={() => {}} onClick={(e) => o.toggleCertSelection(cert.id, e)} style={{ cursor: 'pointer', width: '16px', height: '16px', margin: 0 }} />
                                                         <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center' }}>{cert.type}</span>
-                                                        {cert.category && <span style={{ fontSize: '0.65rem', background: 'var(--color-primary-light)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)', border: '1px solid var(--color-primary-border)', display: 'flex', alignItems: 'center' }}>{cert.category}</span>}
+                                                        {cert.category && <span style={{ fontSize: '0.65rem', background: 'var(--color-primary-light)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)', border: '1px solid var(--color-primary-border)', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{cert.category}</span>}
                                                     </div>
-                                                    <button onClick={(e) => { e.stopPropagation(); o.handleDeleteCert(cert.id); }} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '2px' }}>
+                                                    <button onClick={(e) => { e.stopPropagation(); o.handleDeleteCert(cert.id); }} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>
                                                         <Trash2 size={14} />
                                                     </button>
                                                 </div>
-                                                <h4 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{cert.title}</h4>
+                                                <h4 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', wordBreak: 'break-word', lineHeight: '1.4' }}>{cert.title}</h4>
                                                 <p style={{ margin: '4px 0 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cert.issuer}</p>
                                             </div>
                                         ))}
@@ -235,7 +235,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                 <p style={{ margin: 0, color: 'var(--color-text-tertiary)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-medium)' }}>
                                     <strong>Emissor:</strong> {o.viewingCert.issuer} {o.viewingCert.issueDate && `• ${new Date(o.viewingCert.issueDate).toLocaleDateString()}`}
                                 </p>
-                                <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 'var(--text-base)' }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 'var(--text-base)' }}>
                                     <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}><strong>Empresa Executora:</strong> {o.viewingCert.executingCompany || o.viewingCert.company?.razaoSocial || '-'}</p>
                                     <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}><strong>Responsável Técnico:</strong> {o.viewingCert.technicalResponsible || '-'}</p>
                                 </div>
@@ -260,8 +260,8 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                     {o.viewingCert.experiences?.map((exp, idx) => (
                                         <div key={exp.id || idx} style={{ padding: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx < o.viewingCert!.experiences!.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                                             <div style={{ flex: 1, paddingRight: 'var(--space-4)' }}>
-                                                <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{exp.description}</div>
-                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>{exp.category}</div>
+                                                <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', wordBreak: 'break-word', lineHeight: '1.4' }}>{exp.description}</div>
+                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', fontWeight: 500, marginTop: '4px' }}>{exp.category}</div>
                                             </div>
                                             <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                 <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
