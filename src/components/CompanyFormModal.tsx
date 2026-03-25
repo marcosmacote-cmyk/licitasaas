@@ -140,6 +140,7 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                             icon={<Info size={18} color="var(--color-text-secondary)" />}
                             required
                             placeholder="Ex: Empresa sediada em [Endereço], representada por [Nome], [Cargo], portador do CPF [CPF]..."
+                            minHeight="100px"
                             value={formData.qualification || ''}
                             onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
                         />
@@ -162,7 +163,7 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
                     {/* Canais de Contato */}
                     <div className="col-span-full">
-                        <div className="card p-6">
+                        <div className="p-6" style={{ backgroundColor: 'var(--color-bg-secondary)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-xl)' }}>
                             <div className="flex-gap" style={{ gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                 <Phone size={16} />
                                 <span className="form-label mb-0">Canais de Contato</span>
@@ -204,12 +205,12 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
                     {/* Endereço */}
                     <div className="col-span-full">
-                        <div className="card p-6">
+                        <div className="p-6" style={{ backgroundColor: 'var(--color-bg-secondary)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-xl)' }}>
                             <div className="flex-gap" style={{ gap: 'var(--space-2)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                                 <MapPin size={16} />
                                 <span className="form-label mb-0">Endereço da Sede</span>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-3)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-4)' }}>
                                 <FormField label="Endereço Completo">
                                     <Input
                                         placeholder="Rua X, nº 123, Bairro Y"
@@ -217,7 +218,7 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                     />
                                 </FormField>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 'var(--space-3)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 'var(--space-4)' }}>
                                     <FormField label="Cidade">
                                         <Input
                                             placeholder="Fortaleza"
@@ -240,7 +241,7 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
 
                     {/* ── Dados Bancários para Proposta ── */}
                     <div className="col-span-full">
-                        <div className="card p-6" style={{ border: '1px solid rgba(20, 184, 166, 0.2)', background: 'rgba(20, 184, 166, 0.02)' }}>
+                        <div className="p-6" style={{ border: 'none', boxShadow: '0 0 0 1px rgba(20, 184, 166, 0.4)', background: 'rgba(20, 184, 166, 0.03)', borderRadius: 'var(--radius-xl)' }}>
                             <div className="flex-gap" style={{ gap: 'var(--space-2)', color: '#14B8A6', marginBottom: 'var(--space-4)' }}>
                                 <Landmark size={16} />
                                 <span className="form-label mb-0" style={{ color: '#14B8A6' }}>Dados Bancários para Proposta</span>

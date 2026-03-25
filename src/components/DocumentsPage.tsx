@@ -46,11 +46,12 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                             onClick={() => d.setSelectedCompanyId(company.id)}
                             style={{
                                 padding: 'var(--space-4)',
-                                backgroundColor: d.selectedCompanyId === company.id ? 'var(--color-primary-light)' : 'var(--color-bg-surface)',
-                                border: `1px solid ${d.selectedCompanyId === company.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                                borderRadius: 'var(--radius-lg)',
+                                backgroundColor: d.selectedCompanyId === company.id ? 'rgba(37, 99, 235, 0.03)' : 'var(--color-bg-surface)',
+                                border: 'none',
+                                boxShadow: d.selectedCompanyId === company.id ? '0 0 0 1px var(--color-primary), 0 4px 12px rgba(37, 99, 235, 0.06)' : '0 0 0 1px var(--color-border)',
+                                borderRadius: 'var(--radius-xl)',
                                 cursor: 'pointer',
-                                transition: 'var(--transition-fast)',
+                                transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                             }}
                         >
                             <div className="flex-between" style={{ marginBottom: '8px' }}>
@@ -99,7 +100,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                         CNPJ: {d.activeCompany.cnpj}
                                     </p>
                                 </div>
-                                <div className="flex-gap" style={{ background: 'var(--color-bg-surface-hover)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
+                                <div className="flex-gap" style={{ background: 'var(--color-bg-secondary)', padding: '4px', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                                     <button
                                         className={`tab-btn${d.activeTab === 'documents' ? ' active' : ''}`}
                                         onClick={() => d.setActiveTab('documents')}
@@ -119,7 +120,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
 
                             {d.activeTab === 'documents' && (
                                 <div className="flex-between">
-                                    <div className="flex-gap" style={{ background: 'var(--color-bg-surface-hover)', padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '300px' }}>
+                                    <div className="flex-gap" style={{ background: 'var(--color-bg-surface)', padding: '8px 16px', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: '0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px var(--color-border)', width: '320px', transition: 'all 0.2s ease' }}>
                                         <Search size={16} color="var(--color-text-secondary)" />
                                         <input
                                             type="text"
