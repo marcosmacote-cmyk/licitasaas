@@ -96,9 +96,11 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                                         || l.includes('cnetmobile') || l.includes('comprasnet') || p.includes('compras') || p.includes('cnet')
                                                         || l.includes('bbmnet') || p.includes('bbmnet')
                                                         || l.includes('bllcompras') || l.includes('bll.org') || p.includes('bll')
-                                                        || l.includes('bnccompras') || p.includes('bnc');
+                                                        || l.includes('bnccompras') || p.includes('bnc')
+                                                        || l.includes('m2atecnologia') || p.includes('m2a');
                                                     if (!isMonitorable) return null;
-                                                    const platformName = l.includes('bbmnet') || p.includes('bbmnet') ? 'BBMNET'
+                                                    const platformName = l.includes('m2atecnologia') || p.includes('m2a') ? 'M2A'
+                                                        : l.includes('bbmnet') || p.includes('bbmnet') ? 'BBMNET'
                                                         : l.includes('bllcompras') || p.includes('bll') ? 'BLL'
                                                         : l.includes('bnccompras') || p.includes('bnc') ? 'BNC'
                                                         : p.includes('pncp') || l.includes('pncp') ? 'PNCP'

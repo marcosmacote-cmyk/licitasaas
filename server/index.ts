@@ -3299,7 +3299,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         // ── Auto-enrich: fetch platform link from PNCP API if missing ──
         const link = biddingData.link || '';
         let hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
-        const MONITORABLE_DOMAINS = ['cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org', 'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet'];
+        const MONITORABLE_DOMAINS = ['cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org', 'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia'];
         const hasPlatformLink = MONITORABLE_DOMAINS.some(d => link.includes(d));
 
         if (!hasPlatformLink && link.includes('pncp.gov.br') && link.includes('editais')) {
@@ -3329,7 +3329,8 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             || link.includes('licitanet.com.br')
             || link.includes('licitamaisbrasil.com.br')
             || link.includes('bllcompras') || link.includes('bll.org')
-            || link.includes('bnccompras');
+            || link.includes('bnccompras')
+            || link.includes('m2atecnologia');
 
         if (hasMonitorableLink && biddingData.isMonitored === undefined) {
             const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
@@ -6418,8 +6419,9 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             filtered = result.filter((p: any) => {
                 const portal = (p.portal || '').toLowerCase();
                 const link = (p.link || '').toLowerCase();
-                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas') && !link.includes('licitanet.com.br') && !link.includes('licitamaisbrasil');
+                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas') && !link.includes('licitanet.com.br') && !link.includes('licitamaisbrasil') && !link.includes('m2atecnologia') && !portal.includes('m2a');
                 if (pf === 'bbmnet') return link.includes('bbmnet') || link.includes('sala.bbmnet') || portal.includes('bbmnet');
+                if (pf === 'm2a') return link.includes('m2atecnologia') || portal.includes('m2a');
                 if (pf === 'pncp') return portal.includes('pncp') || link.includes('pncp.gov.br');
                 if (pf === 'pcp') return link.includes('portaldecompraspublicas') || portal.includes('portal de compras');
                 if (pf === 'licitanet') return link.includes('licitanet.com.br') || portal.includes('licitanet');
