@@ -99,7 +99,7 @@ function CustomKeywordInput({ onAdd }: { onAdd: (kw: string) => void }) {
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
         placeholder="Adicionar keyword..." style={{ flex: 1 }} />
       <button onClick={handleAdd} className="btn btn-ghost"
-        style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: 'var(--text-sm)' }}>
+        style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', fontSize: 'var(--text-sm)' }}>
         <Plus size={14} />
       </button>
     </div>
@@ -118,7 +118,7 @@ function CategoryKeywordInput({ catId, onAdd, color }: { catId: string; onAdd: (
         placeholder="+ palavra..."
         style={{
           flex: 1, padding: '2px 6px', borderRadius: 'var(--radius-sm)',
-          border: `1px solid ${color}22`, background: 'white',
+          border: 'none', boxShadow: `0 0 0 1px ${color}30`, background: 'var(--color-bg-base)',
           fontSize: '0.6875rem', color: 'var(--color-text-primary)', outline: 'none',
           minWidth: '80px',
         }} />
@@ -210,7 +210,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
 
           {/* ComprasNet Watcher Status Indicator */}
           {c.watcherStatus && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: c.watcherStatus.isOnline ? 'var(--color-success)' : 'var(--color-text-tertiary)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-sm)', background: c.watcherStatus.isOnline ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)', border: '1px solid ' + (c.watcherStatus.isOnline ? 'rgba(16, 185, 129, 0.2)' : 'var(--color-border)') }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: c.watcherStatus.isOnline ? 'var(--color-success)' : 'var(--color-text-tertiary)', padding: '4px var(--space-3)', borderRadius: 'var(--radius-sm)', background: c.watcherStatus.isOnline ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)', border: 'none', boxShadow: '0 0 0 1px ' + (c.watcherStatus.isOnline ? 'rgba(16, 185, 129, 0.2)' : 'var(--color-border)') }}>
               {c.watcherStatus.isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
               {c.watcherStatus.isOnline ? `Agente ativo (${c.watcherStatus.activeSessions || 0} abas)` : 'Agente offline'}
             </div>
@@ -241,7 +241,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                   const cats = c.taxonomy.categories.filter((cat: any) => cat.severity === severity);
                   if (cats.length === 0) return null;
                   return (
-                    <div key={severity} style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: sc.bg, border: `1px solid ${sc.border}` }}>
+                    <div key={severity} style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: sc.bg, border: 'none', boxShadow: `0 0 0 1px ${sc.border}` }}>
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: sc.color, marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {sc.icon} {sc.label}
                       </div>
@@ -258,12 +258,11 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                                   style={{
                                     display: 'flex', alignItems: 'center', gap: '6px',
                                     padding: '4px 10px', borderRadius: 'var(--radius-sm)',
-                                    background: isEnabled ? 'white' : 'transparent',
-                                    border: `1px solid ${isEnabled ? sc.border : 'transparent'}`,
+                                    background: isEnabled ? 'var(--color-bg-base)' : 'transparent',
+                                    border: 'none', boxShadow: isEnabled ? `0 0 0 1px ${sc.border}, 0 2px 8px rgba(0,0,0,0.04)` : 'none',
                                     cursor: 'pointer', fontSize: 'var(--text-sm)',
                                     color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
                                     transition: 'var(--transition-fast)',
-                                    boxShadow: isEnabled ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
                                     flex: '0 0 auto',
                                   }}>
                                   <input type="checkbox" checked={isEnabled}
@@ -279,7 +278,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                                       <span key={kw} style={{
                                         display: 'inline-flex', alignItems: 'center', gap: '3px',
                                         padding: '1px 6px', borderRadius: 'var(--radius-lg)',
-                                        background: 'white', border: `1px solid ${sc.border}`,
+                                        background: 'var(--color-bg-base)', border: 'none', boxShadow: `0 0 0 1px ${sc.border}`,
                                         fontSize: '0.6875rem', color: sc.color, fontWeight: 600,
                                       }}>
                                         {kw}
@@ -349,7 +348,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
               <button className="btn btn-ghost"
-                style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', border: '1px solid var(--color-border)' }}
+                style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}
                 disabled={c.testingNotif} onClick={c.handleTestNotification}>
                 {c.testingNotif ? <Loader2 size={12} className="spinner" /> : <SignalHigh size={12} />}
                 Testar
@@ -373,7 +372,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
             )}
           </div>
           {/* ComprasNet Watcher Status */}
-          <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16, 185, 129, 0.15)', background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px rgba(16, 185, 129, 0.2)', background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
               {c.watcherStatus?.isOnline ? <Wifi size={14} color="var(--color-success)" /> : <WifiOff size={14} color="var(--color-text-tertiary)" />}
               <div>
@@ -407,18 +406,18 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
               <input type="text" placeholder="Buscar por edital, nº processo, UASG..."
                 value={c.searchQuery} onChange={(e) => c.setSearchQuery(e.target.value)}
-                style={{ width: '100%', padding: 'var(--space-2) var(--space-3) var(--space-2) var(--space-8)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none' }} />
+                style={{ width: '100%', padding: 'var(--space-2) var(--space-3) var(--space-2) var(--space-8)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none' }} />
             </div>
 
             {/* Dropdowns Row */}
             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
               <select value={c.companyFilter} onChange={(e) => c.setCompanyFilter(e.target.value)}
-                style={{ flex: 1, padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+                style={{ flex: 1, padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
                 <option value="all">Todas empresas</option>
                 {companies.map(cp => (<option key={cp.id} value={cp.id}>{cp.name}</option>))}
               </select>
               <select value={c.platformFilter} onChange={(e) => c.setPlatformFilter(e.target.value)}
-                style={{ flex: 1, padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+                style={{ flex: 1, padding: '6px var(--space-2)', borderRadius: 'var(--radius-sm)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
                 <option value="all">Todas plataformas</option>
                 <option value="comprasnet">ComprasNet</option>
                 <option value="bbmnet">BBMNET</option>
@@ -588,7 +587,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     {onNavigateToHub && (
                       <button title="Abrir HUB do processo"
                         onClick={() => onNavigateToHub(c.selectedProc!.id)}
-                        style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'var(--color-primary-light)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: 'var(--color-primary)', fontWeight: 600 }}>
+                        style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: 'none', boxShadow: '0 0 0 1px var(--color-primary)', background: 'var(--color-primary-light)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: 'var(--color-primary)', fontWeight: 600 }}>
                         <ExternalLink size={13} /> HUB
                       </button>
                     )}
@@ -617,7 +616,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                   padding: 'var(--space-3) var(--space-4)',
                   borderRadius: 'var(--radius-md)',
                   background: 'linear-gradient(135deg, rgba(220, 38, 38, 0.08), rgba(217, 119, 6, 0.08))',
-                  border: '1px solid rgba(220, 38, 38, 0.2)',
+                  border: 'none', boxShadow: '0 0 0 1px rgba(220, 38, 38, 0.2), 0 4px 12px rgba(220, 38, 38, 0.05)',
                   display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
                   flexWrap: 'wrap',
                 }}>
@@ -641,7 +640,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     <button
                       onClick={() => c.handleClosureAction(c.selectedProc!.id, 'lost')}
                       style={{
-                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid #dc2626',
+                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', boxShadow: '0 0 0 1px #dc2626',
                         background: '#dc2626', color: 'white', cursor: 'pointer',
                         fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px',
                       }}>
@@ -650,7 +649,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     <button
                       onClick={() => c.handleClosureAction(c.selectedProc!.id, 'archived')}
                       style={{
-                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)',
+                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)',
                         background: 'var(--color-bg-surface)', color: 'var(--color-text-secondary)', cursor: 'pointer',
                         fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px',
                       }}>
@@ -659,7 +658,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     <button
                       onClick={() => c.handleClosureAction(c.selectedProc!.id, 'dismiss')}
                       style={{
-                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid transparent',
+                        padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: 'none',
                         background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer',
                         fontSize: '0.75rem', fontWeight: 500,
                       }}>
@@ -691,8 +690,8 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                           <div key={msg.id} style={{
                             padding: 'var(--space-4) var(--space-5)', borderRadius: 'var(--radius-lg)',
                             background: colors.bg,
-                            border: `1px solid ${hasKeyword ? 'rgba(245, 158, 11, 0.3)' : colors.border}`,
-                            boxShadow: hasKeyword ? '0 0 0 1px rgba(245, 158, 11, 0.1)' : 'none',
+                            border: 'none',
+                            boxShadow: hasKeyword ? '0 0 0 2px rgba(245, 158, 11, 0.4), 0 4px 12px rgba(245, 158, 11, 0.08)' : `0 0 0 1px ${colors.border}`,
                           }}>
                             {/* Author Header */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
