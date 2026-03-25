@@ -245,56 +245,55 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: sc.color, marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {sc.icon} {sc.label}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-3)' }}>
                         {cats.map((cat: any) => {
                           const isEnabled = c.enabledCategories.includes(cat.id);
                           const catKws = c.categoryCustomKeywords[cat.id] || [];
                           return (
-                            <div key={cat.id}>
-                              {/* Checkbox row */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <label
-                                  title={cat.description}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    padding: '4px 10px', borderRadius: 'var(--radius-sm)',
-                                    background: isEnabled ? 'var(--color-bg-base)' : 'transparent',
-                                    border: 'none', boxShadow: isEnabled ? `0 0 0 1px ${sc.border}, 0 2px 8px rgba(0,0,0,0.04)` : 'none',
-                                    cursor: 'pointer', fontSize: 'var(--text-sm)',
-                                    color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-                                    transition: 'var(--transition-fast)',
-                                    flex: '0 0 auto',
-                                  }}>
-                                  <input type="checkbox" checked={isEnabled}
-                                    onChange={() => c.toggleCategory(cat.id)}
-                                    style={{ accentColor: sc.color, width: '14px', height: '14px' }} />
-                                  <CategoryIcon icon={cat.icon} size={14} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
+                            <div key={cat.id} style={{
+                              display: 'flex', flexDirection: 'column', gap: 'var(--space-2)',
+                              padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
+                              background: isEnabled ? 'var(--color-bg-base)' : 'rgba(255, 255, 255, 0.4)',
+                              boxShadow: isEnabled ? `0 0 0 1px ${sc.border}, 0 2px 8px rgba(0,0,0,0.04)` : `0 0 0 1px ${sc.border}40`,
+                              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                            }}>
+                              <label
+                                title={cat.description}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: '8px',
+                                  cursor: 'pointer', fontSize: 'var(--text-sm)',
+                                  color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                }}>
+                                <input type="checkbox" checked={isEnabled}
+                                  onChange={() => c.toggleCategory(cat.id)}
+                                  style={{ accentColor: sc.color, width: '16px', height: '16px', flexShrink: 0 }} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: isEnabled ? 600 : 500 }}>
+                                  <CategoryIcon icon={cat.icon} size={16} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
                                   <span>{cat.label}</span>
-                                </label>
-                                {/* Keyword tags inline */}
-                                {isEnabled && catKws.length > 0 && (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', alignItems: 'center' }}>
-                                    {catKws.map(kw => (
-                                      <span key={kw} style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '3px',
-                                        padding: '1px 6px', borderRadius: 'var(--radius-lg)',
-                                        background: 'var(--color-bg-base)', border: 'none', boxShadow: `0 0 0 1px ${sc.border}`,
-                                        fontSize: '0.6875rem', color: sc.color, fontWeight: 600,
-                                      }}>
-                                        {kw}
-                                        <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
-                                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
-                                          <X size={10} color={sc.color} />
-                                        </button>
-                                      </span>
-                                    ))}
+                                </div>
+                              </label>
+
+                              {isEnabled && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginLeft: '24px' }}>
+                                  {catKws.map(kw => (
+                                    <span key={kw} style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                      padding: '2px 8px', borderRadius: 'var(--radius-lg)',
+                                      background: 'var(--color-bg-surface-hover)', border: 'none', boxShadow: `0 0 0 1px ${sc.border}`,
+                                      fontSize: '0.6875rem', color: sc.color, fontWeight: 600,
+                                    }}>
+                                      {kw}
+                                      <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
+                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
+                                        <X size={12} color={sc.color} />
+                                      </button>
+                                    </span>
+                                  ))}
+                                  <div style={{ flex: '1 1 100px' }}>
+                                    <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
                                   </div>
-                                )}
-                                {/* Inline add input */}
-                                {isEnabled && (
-                                  <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
-                                )}
-                              </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
