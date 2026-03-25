@@ -175,7 +175,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             </div>
 
             {/* ═══ MAIN GRID ═══ */}
-            <div className="grid-2-1 premium-entrance stagger-4">
+            <div className="grid-2-1 premium-entrance stagger-4" style={{ alignItems: 'flex-start' }}>
                 {/* LEFT COLUMN */}
                 <div className="flex-col gap-5">
 
@@ -354,12 +354,12 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     </div>
 
                     {/* AGENDA DO DIA */}
-                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)', display: 'flex', flexDirection: 'column' }}>
                         <div className="flex-between mb-4">
                             <h3 className="dash-section-title mb-0">{selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</h3>
                             {selectedDateKey === m.todayStr && <span className="badge badge-danger" style={{ fontSize: 'var(--text-xs)' }}>HOJE</span>}
                         </div>
-                        <div className="flex-col gap-2" style={{ flex: 1, overflowY: 'auto' }}>
+                        <div className="flex-col gap-2" style={{ maxHeight: '400px', overflowY: 'auto' }}>
                             {selectedEvents.sessions.length === 0 && selectedEvents.reminders.length === 0 && (
                                 <div style={{ textAlign: 'center', padding: 'var(--space-8) 0', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-md)', margin: 'auto' }}>
                                     <CalendarIcon size={28} style={{ opacity: 0.15, marginBottom: 'var(--space-2)' }} />
