@@ -140,5 +140,46 @@ class WorkerAPIClient:
             logger.error(f'Erro no ingest: {e}')
             return {'created': 0, 'alerts': 0, 'error': str(e)}
 
+    async def persist_certame_link(
+        self,
+        process_id: str,
+        certame_id: str,
+    ) -> bool:
+        """
+        Persiste o certame_id descoberto via fuzzy match de volta ao LicitaSaaS.
+
+        Escreve a URL canônica do certame no campo 'link' do processo, garantindo
+        que nas próximas execuções o match seja direto pela Strategy 1 (regex na URL),
+        sem repetir o fuzzy matching — fundamental para estabilidade pós-restart no Railway.
+
+        Endpoint: PATCH /api/chat-monitor/internal/sessions/{processId}/link
+        Idempotente: não atualiza se o link já contém o certame_id.
+        """
+        try:
+            resp = await self._client.patch(
+                f'/api/chat-monitor/internal/sessions/{process_id}/link',
+                json={'certameId': certame_id},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get('updated'):
+                    logger.info(
+                        f'  🔗 [{process_id[:8]}] Link persistido: '
+                        f'certame/{certame_id} → banco atualizado'
+                    )
+                else:
+                    logger.debug(
+                        f'  [{process_id[:8]}] Link já continha certame/{certame_id} (sem mudança)'
+                    )
+                return True
+            else:
+                logger.warning(
+                    f'  [{process_id[:8]}] Falha ao persistir link: HTTP {resp.status_code}'
+                )
+                return False
+        except Exception as e:
+            logger.warning(f'  [{process_id[:8]}] Erro ao persistir certame link: {e}')
+            return False
+
     async def close(self):
         await self._client.aclose()

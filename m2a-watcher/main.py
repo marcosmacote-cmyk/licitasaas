@@ -417,6 +417,13 @@ class M2AWatcher:
                                 if matched_certame:
                                     certame_id = matched_certame['certame_id']
                                     self._process_certame_map[pid] = certame_id
+
+                                    # ── Write-back: persistir certame_id no LicitaSaaS ──
+                                    # Garante match direto (Strategy 1) nos próximos ciclos,
+                                    # incluindo após restart no Railway.
+                                    asyncio.create_task(
+                                        self.api.persist_certame_link(pid, certame_id)
+                                    )
                                 else:
                                     if self._cycle_count <= 2:
                                         logger.warning(
@@ -424,6 +431,7 @@ class M2AWatcher:
                                             f'certame não identificado'
                                         )
                                     continue
+
 
                             # Se WebSocket está ativo, pular polling HTTP (exceto backup)
                             has_ws = pid in self._ws_processes
