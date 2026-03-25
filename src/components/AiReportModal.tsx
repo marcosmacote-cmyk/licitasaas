@@ -112,9 +112,11 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
             }}>
                 {/* Header */}
                 <div style={{
+                    position: 'relative', zIndex: 10,
                     padding: 'var(--space-6) var(--space-10)',
                     background: 'linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-bg-surface-hover) 100%)',
-                    color: 'white', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)'
+                    color: 'white', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>

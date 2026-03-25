@@ -73,9 +73,9 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
     let expiringStyle = {};
     if (highlightExpiring && hoursToSession > 0) {
         if (hoursToSession <= 24) {
-            expiringStyle = { border: '2px solid var(--color-danger)', boxShadow: '0 0 8px rgba(239, 68, 68, 0.3)' };
+            expiringStyle = { boxShadow: '0 0 0 2px var(--color-danger), 0 4px 12px rgba(239, 68, 68, 0.2)' };
         } else if (hoursToSession <= 48) {
-            expiringStyle = { border: '2px solid var(--color-warning)', boxShadow: '0 0 8px rgba(245, 158, 11, 0.3)' };
+            expiringStyle = { boxShadow: '0 0 0 2px var(--color-warning), 0 4px 12px rgba(245, 158, 11, 0.2)' };
         }
     }
 
