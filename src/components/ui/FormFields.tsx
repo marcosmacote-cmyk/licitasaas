@@ -66,9 +66,10 @@ export function Input({ icon, iconRight, inputSize = 'md', style, ...props }: In
       gap: 'var(--space-3)',
       padding: inputSize === 'sm' ? 'var(--space-2) var(--space-3)' : 'var(--space-3) var(--space-4)',
       backgroundColor: 'var(--color-bg-base)',
-      border: '1px solid var(--color-border)',
-      borderRadius: 'var(--radius-md)',
-      transition: 'var(--transition-fast)',
+      border: 'none',
+      boxShadow: '0 0 0 1px var(--color-border)',
+      borderRadius: 'var(--radius-lg)',
+      transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
     }}>
       {icon}
       <input
@@ -105,9 +106,10 @@ export function Textarea({ icon, minHeight = '80px', style, ...props }: Textarea
       gap: 'var(--space-3)',
       padding: 'var(--space-3) var(--space-4)',
       backgroundColor: 'var(--color-bg-base)',
-      border: '1px solid var(--color-border)',
-      borderRadius: 'var(--radius-md)',
-      transition: 'var(--transition-fast)',
+      border: 'none',
+      boxShadow: '0 0 0 1px var(--color-border)',
+      borderRadius: 'var(--radius-lg)',
+      transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
     }}>
       {icon && <div style={{ marginTop: '4px' }}>{icon}</div>}
       <textarea
@@ -153,9 +155,10 @@ export function Select({ icon, options, placeholder, style, ...props }: SelectPr
       gap: 'var(--space-3)',
       padding: 'var(--space-3) var(--space-4)',
       backgroundColor: 'var(--color-bg-base)',
-      border: '1px solid var(--color-border)',
-      borderRadius: 'var(--radius-md)',
-      transition: 'var(--transition-fast)',
+      border: 'none',
+      boxShadow: '0 0 0 1px var(--color-border)',
+      borderRadius: 'var(--radius-lg)',
+      transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
     }}>
       {icon}
       <select

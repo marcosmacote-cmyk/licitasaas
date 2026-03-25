@@ -48,8 +48,8 @@ export function Modal({
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
-        backdropFilter: 'blur(4px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        backdropFilter: 'blur(8px)',
         animation: 'fadeIn 0.2s ease-out',
         padding: 'var(--space-5)',
       }}
@@ -62,10 +62,10 @@ export function Modal({
           width: '100%',
           maxHeight: '90vh',
           borderRadius: 'var(--radius-xl)',
-          boxShadow: 'var(--shadow-xl)',
+          boxShadow: 'var(--shadow-xl), 0 0 0 1px var(--color-border)',
           overflow: 'hidden',
           backgroundColor: 'var(--color-bg-surface)',
-          border: '1px solid var(--color-border)',
+          border: 'none',
           animation: 'slideUp 0.3s ease-out',
           display: 'flex',
           flexDirection: 'column',
@@ -143,7 +143,8 @@ export function Modal({
         {footer && (
           <div style={{
             padding: 'var(--space-4) var(--space-8)',
-            borderTop: '1px solid var(--color-border)',
+            borderTop: 'none',
+            boxShadow: '0 -1px 0 var(--color-border)',
             display: 'flex',
             gap: 'var(--space-3)',
             justifyContent: 'flex-end',

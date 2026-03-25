@@ -30,18 +30,18 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                 top: 0, left: 0, right: 0, bottom: 0,
                 zIndex: 1000,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                backdropFilter: 'blur(4px)',
+                backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                backdropFilter: 'blur(8px)',
                 animation: 'fadeIn 0.2s ease-out'
             }}>
                 <div className="modal-content" style={{
                     maxWidth: form.isEditMode ? '1100px' : '800px',
                     width: '100%', maxHeight: '90vh',
                     borderRadius: 'var(--radius-xl)',
-                    boxShadow: 'var(--shadow-xl)',
+                    boxShadow: 'var(--shadow-xl), 0 0 0 1px var(--color-border)',
                     overflow: 'hidden',
                     backgroundColor: 'var(--color-bg-surface)',
-                    border: '1px solid var(--color-border)',
+                    border: 'none',
                     animation: 'slideUp 0.3s ease-out',
                     display: 'flex', flexDirection: 'column'
                 }}>
@@ -85,20 +85,20 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                         {/* Tab switcher for edit mode */}
                         {form.isEditMode && (
-                            <div style={{ display: 'flex', gap: '2px', marginTop: 'var(--space-3)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-md)', padding: '2px' }}>
+                            <div style={{ display: 'flex', gap: '4px', marginTop: 'var(--space-4)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-full)', padding: '4px', border: '1px solid var(--color-border)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
                                 <button type="button" onClick={() => form.setHubTab('hub')} style={{
-                                    flex: 1, padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
-                                    fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', transition: 'var(--transition-fast)',
+                                    flex: 1, padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-full)', border: 'none', cursor: 'pointer',
+                                    fontSize: '0.8125rem', fontWeight: 700, transition: 'all 0.2s ease',
                                     background: form.hubTab === 'hub' ? 'var(--color-bg-surface)' : 'transparent',
                                     color: form.hubTab === 'hub' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                                    boxShadow: form.hubTab === 'hub' ? 'var(--shadow-sm)' : 'none',
+                                    boxShadow: form.hubTab === 'hub' ? 'var(--shadow-sm), 0 0 0 1px var(--color-border)' : 'none',
                                 }}>Hub Operacional</button>
                                 <button type="button" onClick={() => form.setHubTab('form')} style={{
-                                    flex: 1, padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
-                                    fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', transition: 'var(--transition-fast)',
+                                    flex: 1, padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-full)', border: 'none', cursor: 'pointer',
+                                    fontSize: '0.8125rem', fontWeight: 700, transition: 'all 0.2s ease',
                                     background: form.hubTab === 'form' ? 'var(--color-bg-surface)' : 'transparent',
-                                    color: form.hubTab === 'form' ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                                    boxShadow: form.hubTab === 'form' ? 'var(--shadow-sm)' : 'none',
+                                    color: form.hubTab === 'form' ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                    boxShadow: form.hubTab === 'form' ? 'var(--shadow-sm), 0 0 0 1px var(--color-border)' : 'none',
                                 }}>Dados do Processo</button>
                             </div>
                         )}
@@ -280,18 +280,17 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                         <button key={level} type="button"
                                             onClick={() => form.setFormData(p => ({ ...p, risk: level as RiskTag }))}
                                             style={{
-                                                flex: 1, padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
-                                                border: '1px solid var(--color-border)',
+                                                flex: 1, padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
+                                                border: 'none',
                                                 background: form.formData.risk === level ? 'var(--color-bg-surface-hover)' : 'var(--color-bg-surface)',
                                                 color: form.formData.risk === level ? (
                                                     level === 'Crítico' ? 'var(--color-danger)' :
                                                         level === 'Alto' ? 'var(--color-danger)' :
                                                             level === 'Médio' ? 'var(--color-warning)' : 'var(--color-success)'
                                                 ) : 'var(--color-text-secondary)',
-                                                fontWeight: form.formData.risk === level ? 'var(--font-semibold)' : 'var(--font-normal)',
-                                                boxShadow: form.formData.risk === level ? 'inset 0 2px 4px rgba(0,0,0,0.05)' : 'none',
-                                                transition: 'var(--transition-fast)',
-                                                borderColor: form.formData.risk === level ? 'currentColor' : 'var(--color-border)'
+                                                fontWeight: form.formData.risk === level ? 700 : 500,
+                                                boxShadow: form.formData.risk === level ? 'var(--shadow-sm), inset 0 0 0 2px currentColor' : '0 0 0 1px var(--color-border)',
+                                                transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                                             }}>
                                             {level}
                                         </button>
@@ -617,9 +616,10 @@ const inputContainerStyle: React.CSSProperties = {
     gap: 'var(--space-3)',
     padding: 'var(--space-3) var(--space-4)',
     backgroundColor: 'var(--color-bg-base)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
-    transition: 'var(--transition-fast)',
+    border: 'none',
+    boxShadow: '0 0 0 1px var(--color-border)',
+    borderRadius: 'var(--radius-lg)',
+    transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
 };
 
 const inputInnerStyle: React.CSSProperties = {

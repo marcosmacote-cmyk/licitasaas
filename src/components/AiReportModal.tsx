@@ -102,12 +102,12 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
         <div className="modal-overlay" style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)', animation: 'fadeIn 0.25s ease-out'
+            backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(8px)', animation: 'fadeIn 0.25s ease-out'
         }}>
             <div className="modal-content" style={{
                 maxWidth: '1060px', width: '95%', height: '92vh', borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-xl)', overflow: 'hidden', backgroundColor: 'var(--color-bg-surface)',
-                border: '1px solid var(--color-border)', animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                boxShadow: 'var(--shadow-xl), 0 0 0 1px var(--color-border)', overflow: 'hidden', backgroundColor: 'var(--color-bg-surface)',
+                border: 'none', animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
                 display: 'flex', flexDirection: 'column'
             }}>
                 {/* Header */}
@@ -158,14 +158,26 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 'var(--space-8)' }}>
-                        <button onClick={() => setActiveTab('report')} className="ai-tab-btn"
-                            style={{ color: activeTab === 'report' ? 'var(--color-primary)' : 'var(--color-text-tertiary)', borderBottom: activeTab === 'report' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>
-                            <FileCheck size={18} /> Relatório Analítico
+                    <div style={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: 'var(--radius-full)', border: '1px solid rgba(255,255,255,0.05)', alignSelf: 'flex-start' }}>
+                        <button onClick={() => setActiveTab('report')}
+                            style={{ 
+                                display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 16px', borderRadius: 'var(--radius-full)', border: 'none', cursor: 'pointer',
+                                fontSize: '0.85rem', fontWeight: 700, transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                                color: activeTab === 'report' ? '#fff' : 'rgba(255,255,255,0.6)',
+                                background: activeTab === 'report' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                                boxShadow: activeTab === 'report' ? '0 2px 8px rgba(0,0,0,0.2), inset 0 1px rgba(255,255,255,0.1)' : 'none'
+                             }}>
+                            <FileCheck size={16} /> Relatório Analítico
                         </button>
-                        <button onClick={() => setActiveTab('chat')} className="ai-tab-btn"
-                            style={{ color: activeTab === 'chat' ? 'var(--color-primary)' : 'var(--color-text-tertiary)', borderBottom: activeTab === 'chat' ? '3px solid var(--color-primary)' : '3px solid transparent' }}>
-                            <MessageSquare size={18} /> Consultor de Edital
+                        <button onClick={() => setActiveTab('chat')}
+                            style={{ 
+                                display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 16px', borderRadius: 'var(--radius-full)', border: 'none', cursor: 'pointer',
+                                fontSize: '0.85rem', fontWeight: 700, transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                                color: activeTab === 'chat' ? '#fff' : 'rgba(255,255,255,0.6)',
+                                background: activeTab === 'chat' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                                boxShadow: activeTab === 'chat' ? '0 2px 8px rgba(0,0,0,0.2), inset 0 1px rgba(255,255,255,0.1)' : 'none'
+                             }}>
+                            <MessageSquare size={16} /> Consultor de Edital
                         </button>
                     </div>
                 </div>
@@ -962,17 +974,17 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                                 <div ref={messagesEndRef} />
                             </div>
 
-                            <div style={{ padding: 'var(--space-6) var(--space-10)', background: 'var(--color-bg-surface)', borderTop: '1px solid var(--color-border)' }}>
-                                <div style={{ display: 'flex', gap: 'var(--space-4)', background: 'var(--color-bg-base)', padding: '8px 8px 8px 20px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
+                            <div style={{ padding: 'var(--space-6) var(--space-10)', background: 'var(--color-bg-surface)', borderTop: 'none', boxShadow: '0 -1px 0 var(--color-border)' }}>
+                                <div style={{ display: 'flex', gap: 'var(--space-4)', background: 'var(--color-bg-base)', padding: '8px 8px 8px 20px', borderRadius: 'var(--radius-full)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)' }}>
                                     <input placeholder="Digitar pergunta específica sobre o edital..." style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9375rem', color: 'var(--color-text-primary)' }}
                                         value={inputText} onChange={(e) => setInputText(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isSending} />
                                     <button onClick={() => handleSendMessage()} disabled={!inputText.trim() || isSending}
                                         style={{
-                                            background: 'var(--color-text-primary)', color: 'white', border: 'none', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                            background: 'var(--color-text-primary)', color: 'white', border: 'none', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-full)',
                                             display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', opacity: (!inputText.trim() || isSending) ? 0.5 : 1, transition: 'var(--transition-fast)'
                                         }}>
-                                        <Send size={18} /> Pergunta
+                                        <Send size={18} />
                                     </button>
                                 </div>
                                 <p style={{ margin: '12px 0 0', fontSize: '0.75rem', color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
@@ -984,7 +996,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: 'var(--space-4) var(--space-10)', background: 'var(--color-bg-surface)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: 'var(--space-5) var(--space-10)', background: 'var(--color-bg-surface)', boxShadow: '0 -1px 0 var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
                         <span style={{ fontWeight: 'var(--font-semibold)' }}>ID: {analysis?.id.slice(0, 8)}</span>
                         <span>•</span>
