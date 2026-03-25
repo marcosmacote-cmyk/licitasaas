@@ -590,7 +590,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
                             {/* Representante Legal */}
                             {(props.signatureMode === 'LEGAL' || props.signatureMode === 'BOTH') && (
-                                <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                                     <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Representante Legal</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
                                         <input value={sigLegal.name} onChange={e => setSigLegal({ ...sigLegal, name: e.target.value })} placeholder="Nome completo" className="prop-input" style={{ fontSize: '0.8rem' }} />
@@ -601,7 +601,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
                             {/* Responsável Técnico */}
                             {(props.signatureMode === 'TECH' || props.signatureMode === 'BOTH') && (
-                                <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                                <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                                     <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#F97316', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Responsável Técnico</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
                                         <input value={sigTech.name} onChange={e => setSigTech({ ...sigTech, name: e.target.value })} placeholder="Nome do responsável técnico" className="prop-input" style={{ fontSize: '0.8rem' }} />
@@ -611,7 +611,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             )}
 
                             {/* Empresa */}
-                            <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                            <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#8B5CF6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Empresa</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-2)' }}>
                                     <input value={sigCompany.razaoSocial} onChange={e => setSigCompany({ ...sigCompany, razaoSocial: e.target.value })} placeholder="Razão Social" className="prop-input" style={{ fontSize: '0.8rem' }} />
@@ -713,7 +713,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                         {/* Data summary */}
                         <div style={{
                             background: 'var(--color-bg-elevated)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
-                            border: '1px solid var(--color-border)', marginBottom: 'var(--space-4)',
+                            border: 'none', boxShadow: '0 0 0 1px var(--color-border)', marginBottom: 'var(--space-4)',
                         }}>
                             <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <Info size={14} /> Resumo dos dados que serão usados na carta
@@ -824,7 +824,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                         {/* Errors */}
                         {validation.errors.length > 0 && (
                             <div style={{
-                                background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)',
+                                background: 'rgba(239,68,68,0.06)', border: 'none', boxShadow: '0 0 0 1px rgba(239,68,68,0.2)',
                                 borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)',
                             }}>
                                 <div style={{ fontWeight: 700, color: 'var(--color-danger)', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -842,7 +842,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                         {/* Warnings */}
                         {validation.warnings.length > 0 && (
                             <div style={{
-                                background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)',
+                                background: 'rgba(245,158,11,0.06)', border: 'none', boxShadow: '0 0 0 1px rgba(245,158,11,0.2)',
                                 borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)',
                             }}>
                                 <div style={{ fontWeight: 700, color: 'var(--color-warning)', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -860,7 +860,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                         {/* Success */}
                         {validation.isValid && validation.errors.length === 0 && (
                             <div style={{
-                                background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)',
+                                background: 'rgba(16,185,129,0.06)', border: 'none', boxShadow: '0 0 0 1px rgba(16,185,129,0.2)',
                                 borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', marginBottom: 'var(--space-4)',
                                 color: 'var(--color-success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8,
                             }}>
@@ -895,7 +895,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
 
                         <div style={{
                             background: 'var(--color-bg-elevated)', borderRadius: 'var(--radius-lg)',
-                            border: '1px solid var(--color-border)', padding: 'var(--space-4)',
+                            border: 'none', boxShadow: '0 0 0 1px var(--color-border)', padding: 'var(--space-4)',
                         }}>
                             {generationProgress.map((msg, i) => (
                                 <div key={i} style={{
@@ -973,9 +973,10 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                                 return (
                                                     <div key={block.id} style={{
                                                         borderRadius: 'var(--radius-lg)',
-                                                        border: isEditing ? `2px solid ${meta.color}`
-                                                            : needsAttention ? `1px solid ${meta.color}30`
-                                                            : '1px solid var(--color-border)',
+                                                        border: 'none',
+                                                        boxShadow: isEditing ? `0 0 0 2px ${meta.color}, 0 4px 12px rgba(0,0,0,0.05)`
+                                                            : needsAttention ? `0 0 0 1px ${meta.color}50, 0 2px 8px rgba(0,0,0,0.02)`
+                                                            : '0 0 0 1px var(--color-border), 0 1px 2px rgba(0,0,0,0.02)',
                                                         overflow: 'hidden', transition: 'border-color 0.2s',
                                                     }}>
                                                         {/* Block header */}
@@ -1017,12 +1018,12 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                                                     isEditing ? (
                                                                         <>
                                                                             <button onClick={handleSaveEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-success)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Salvar</button>
-                                                                            <button onClick={handleCancelEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Cancelar</button>
+                                                                            <button onClick={handleCancelEdit} style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'var(--color-bg-elevated)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>Cancelar</button>
                                                                         </>
                                                                     ) : (
                                                                         <button onClick={() => { handleStartEdit(block); setCollapsedBlocks(prev => { const n = new Set(prev); n.delete(block.id); return n; }); }} style={{
                                                                             fontSize: '0.7rem', padding: '2px 8px', background: 'none',
-                                                                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                                                                            border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-md)',
                                                                             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                                                                             color: 'var(--color-text-secondary)',
                                                                         }}>
@@ -1115,7 +1116,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             ]).map(opt => (
                                 <button key={opt.mode} onClick={() => setSelectedExportMode(opt.mode)} style={{
                                     padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)',
-                                    border: selectedExportMode === opt.mode ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    border: 'none', boxShadow: selectedExportMode === opt.mode ? '0 0 0 2px var(--color-primary), 0 4px 12px rgba(0,0,0,0.05)' : '0 0 0 1px var(--color-border)',
                                     background: selectedExportMode === opt.mode ? 'var(--color-primary-light)' : 'var(--color-bg-base)',
                                     cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
                                 }}>
@@ -1133,7 +1134,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             ]).map(opt => (
                                 <button key={opt.mode} onClick={() => setSelectedExportMode(opt.mode)} style={{
                                     padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
-                                    border: selectedExportMode === opt.mode ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    border: 'none', boxShadow: selectedExportMode === opt.mode ? '0 0 0 2px var(--color-primary), 0 4px 12px rgba(0,0,0,0.05)' : '0 0 0 1px var(--color-border)',
                                     background: selectedExportMode === opt.mode ? 'var(--color-primary-light)' : 'var(--color-bg-base)',
                                     cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
                                     display: 'flex', alignItems: 'center', gap: 12,
@@ -1159,7 +1160,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                             ]).map(opt => (
                                 <button key={opt.mode} onClick={() => setSelectedExportMode(opt.mode)} style={{
                                     padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)',
-                                    border: selectedExportMode === opt.mode ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    border: 'none', boxShadow: selectedExportMode === opt.mode ? '0 0 0 2px var(--color-primary), 0 4px 12px rgba(0,0,0,0.05)' : '0 0 0 1px var(--color-border)',
                                     background: selectedExportMode === opt.mode ? 'var(--color-primary-light)' : 'var(--color-bg-base)',
                                     cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
                                 }}>
@@ -1179,7 +1180,7 @@ export function ProposalLetterWizard(props: ProposalLetterWizardProps) {
                                 <label style={{
                                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
                                     padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                                    backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)',
+                                    backgroundColor: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)',
                                     fontSize: 'var(--text-sm)',
                                 }}>
                                     <input type="checkbox" checked={props.printLandscape || false}

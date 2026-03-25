@@ -429,7 +429,7 @@ function DeclarationStyleSelector({ style, setStyle }: {
                         style={{
                             flex: 1, padding: '6px 8px',
                             borderRadius: 'var(--radius-md)',
-                            border: style === opt.value ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                            border: 'none', boxShadow: style === opt.value ? '0 0 0 2px var(--color-primary), 0 4px 12px rgba(0,0,0,0.05)' : '0 0 0 1px var(--color-border)',
                             background: style === opt.value ? 'var(--color-primary-light)' : 'var(--color-bg-body)',
                             cursor: 'pointer',
                             fontSize: '0.72rem', fontWeight: style === opt.value ? 700 : 400,
@@ -515,11 +515,11 @@ function IssuerTypeSelector({ issuerType, setIssuerType, selectedCompanyId, comp
     return (
         <LayoutSection label="Emitente da Declaração">
             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', cursor: 'pointer', border: issuerType === 'company' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'company' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'company' ? 600 : 400, transition: 'all 0.15s' }}>
+                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', cursor: 'pointer', border: 'none', boxShadow: issuerType === 'company' ? '0 0 0 2px var(--color-primary), 0 4px 12px rgba(0,0,0,0.05)' : '0 0 0 1px var(--color-border)', background: issuerType === 'company' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'company' ? 600 : 400, transition: 'all 0.15s' }}>
                     <input type="radio" name="issuerType" checked={issuerType === 'company'} onChange={() => setIssuerType('company')} style={{ accentColor: 'var(--color-primary)', width: 13, height: 13 }} />
                     Empresa (Rep. Legal)
                 </label>
-                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', cursor: hasTechQual ? 'pointer' : 'not-allowed', border: issuerType === 'technical' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: issuerType === 'technical' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'technical' ? 600 : 400, opacity: hasTechQual ? 1 : 0.4, transition: 'all 0.15s' }}>
+                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', cursor: hasTechQual ? 'pointer' : 'not-allowed', border: 'none', boxShadow: issuerType === 'technical' ? '0 0 0 2px var(--color-primary), 0 4px 12px rgba(0,0,0,0.05)' : '0 0 0 1px var(--color-border)', background: issuerType === 'technical' ? 'var(--color-primary-light)' : 'var(--color-bg-body)', fontSize: 'var(--text-sm)', fontWeight: issuerType === 'technical' ? 600 : 400, opacity: hasTechQual ? 1 : 0.4, transition: 'all 0.15s' }}>
                     <input type="radio" name="issuerType" checked={issuerType === 'technical'} onChange={() => setIssuerType('technical')} disabled={!hasTechQual} style={{ accentColor: 'var(--color-primary)', width: 13, height: 13 }} />
                     Profissional Técnico
                 </label>
@@ -646,7 +646,7 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
 
 function LayoutSection({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-body)', border: '1px solid var(--color-border)' }}>
+        <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-body)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
             <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-2)' }}>
                 {label}
             </div>
