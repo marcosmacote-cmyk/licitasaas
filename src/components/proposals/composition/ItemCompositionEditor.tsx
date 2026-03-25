@@ -128,8 +128,8 @@ export function ItemCompositionEditor({ composition, unitPriceFromSheet, unitCos
                                 <div onClick={() => setShowTemplateMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
                                 <div style={{
                                     position: 'absolute', top: '100%', left: 0, marginTop: 4,
-                                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                                    borderRadius: 'var(--radius-lg)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                                    background: 'var(--color-bg-surface)', border: 'none',
+                                    borderRadius: 'var(--radius-lg)', boxShadow: '0 0 0 1px var(--color-border), 0 8px 32px rgba(0,0,0,0.12)',
                                     zIndex: 999, minWidth: 280, overflow: 'hidden',
                                 }}>
                                     {COMPOSITION_TEMPLATES.map(t => (
@@ -343,7 +343,7 @@ export function ItemCompositionEditor({ composition, unitPriceFromSheet, unitCos
             {composition.lines.length > 0 && (
                 <div style={{
                     borderRadius: 'var(--radius-xl)', overflow: 'hidden',
-                    border: '1px solid var(--color-border)',
+                    border: 'none', boxShadow: '0 0 0 1px var(--color-border)',
                 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid var(--color-border)' }}>
                         {[

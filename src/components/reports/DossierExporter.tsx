@@ -102,7 +102,7 @@ function RequirementCard({
             {/* Expanded Document Picker */}
             {isExpanded && !isIgnored && (
                 <div style={{ borderTop: '1px solid var(--color-border)', padding: 'var(--space-4) var(--space-5)', background: 'var(--color-bg-surface)' }}>
-                    <div className="flex-center gap-2 mb-3" style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-body)' }}>
+                    <div className="flex-center gap-2 mb-3" style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px var(--color-border)', background: 'var(--color-bg-body)' }}>
                         <Search size={14} color="var(--color-text-tertiary)" />
                         <input type="text" placeholder="Buscar documento por nome, tipo ou grupo..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                             style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '0.8125rem', color: 'var(--color-text-primary)' }} />
@@ -164,7 +164,7 @@ export function DossierExporter({ biddings, companies, initialBiddingId }: Props
     return (
         <div className="flex-col gap-6">
             {/* ── Top Bar: Config ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-4)', alignItems: 'end', padding: 'var(--space-6)', borderRadius: 'var(--radius-xl)', background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(139,92,246,0.03))', border: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-4)', alignItems: 'end', padding: 'var(--space-6)', borderRadius: 'var(--radius-xl)', background: 'linear-gradient(135deg, rgba(37,99,235,0.03), rgba(139,92,246,0.03))', border: 'none', boxShadow: '0 0 0 1px var(--color-border), 0 4px 12px rgba(0,0,0,0.02)' }}>
                 <div>
                     <label className="form-label flex-center gap-2">
                         <FileArchive size={14} style={{ verticalAlign: '-2px' }} /> Licitação em Preparação
@@ -192,7 +192,7 @@ export function DossierExporter({ biddings, companies, initialBiddingId }: Props
 
                 <div className="flex-col gap-2">
                     <label className="form-label flex-center gap-2 mb-0">Situação</label>
-                    <div style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
                         {(['active', 'expired', 'all'] as const).map(filter => (
                             <button key={filter} onClick={() => d.setDateFilter(filter)}
                                 style={{ padding: '9px 14px', fontSize: '0.75rem', fontWeight: 600, background: d.dateFilter === filter ? 'var(--color-primary)' : 'var(--color-bg-surface)', color: d.dateFilter === filter ? 'white' : 'var(--color-text-secondary)', border: 'none', cursor: 'pointer', borderRight: filter !== 'all' ? '1px solid var(--color-border)' : 'none', transition: 'all 0.15s' }}>

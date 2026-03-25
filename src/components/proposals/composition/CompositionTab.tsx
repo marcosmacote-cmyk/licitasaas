@@ -81,7 +81,7 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
     // ════════════════════════════════════
     if (selectedItem && selectedComp) {
         return (
-            <div className="card" style={{ padding: 'var(--space-5)' }}>
+            <div className="card" style={{ padding: 'var(--space-5)', border: 'none', boxShadow: '0 0 0 1px var(--color-border), 0 4px 20px rgba(0,0,0,0.03)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
                     <button onClick={() => setSelectedItemId(null)} style={{
                         background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.12)',
@@ -138,7 +138,7 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
     // LIST VIEW (all items summary)
     // ════════════════════════════════════
     return (
-        <div className="card" style={{ padding: 'var(--space-5)' }}>
+        <div className="card" style={{ padding: 'var(--space-5)', border: 'none', boxShadow: '0 0 0 1px var(--color-border), 0 4px 20px rgba(0,0,0,0.03)' }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -194,7 +194,7 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
             </div>
 
             {/* Items Table */}
-            <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+            <div style={{ borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                     <thead>
                         <tr style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(99,102,241,0.04))', borderBottom: '2px solid var(--color-border)' }}>
@@ -266,7 +266,7 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{hasComp ? fmtPct(totals!.bdiImplicit) : '-'}</td>
                                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                                         {!hasComp ? (
-                                            <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: 'var(--radius-full)', background: 'var(--color-bg-base)', border: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: 'var(--radius-full)', background: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', color: 'var(--color-text-tertiary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                                 Pendente
                                             </span>
                                         ) : isAligned ? (
@@ -314,7 +314,7 @@ export function CompositionTab({ items, bdi, onSaveComposition, isSaving, onAiCo
                 <div style={{
                     marginTop: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)',
                     borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-base)',
-                    border: '1px solid var(--color-border)',
+                    border: 'none', boxShadow: '0 0 0 1px var(--color-border)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)',
                 }}>

@@ -35,10 +35,10 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                     {/* Back + Summary */}
                     <div style={{
                         borderRadius: 'var(--radius-xl)',
-                        border: '1px solid rgba(139,92,246,0.2)',
+                        border: 'none',
                         overflow: 'hidden',
                         background: 'var(--color-bg-surface)',
-                        boxShadow: '0 2px 12px rgba(139,92,246,0.06)',
+                        boxShadow: '0 0 0 1px rgba(139,92,246,0.15), 0 2px 12px rgba(139,92,246,0.06)',
                     }}>
                         {/* Header with back */}
                         <div style={{
@@ -96,7 +96,8 @@ export function AiDeclarationGenerator({ biddings, companies, onSave, initialBid
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                     <div style={{
                         borderRadius: 'var(--radius-xl)',
-                        border: '1px solid var(--color-border)',
+                        border: 'none',
+                        boxShadow: '0 0 0 1px var(--color-border), 0 4px 12px rgba(0,0,0,0.02)',
                         overflow: 'hidden',
                         background: 'var(--color-bg-surface)',
                         minHeight: 640,
@@ -167,10 +168,10 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
             {/* LEFT: Config */}
             <div style={{
                 borderRadius: 'var(--radius-xl)',
-                border: '1px solid rgba(139,92,246,0.2)',
+                border: 'none',
                 overflow: 'hidden',
                 background: 'var(--color-bg-surface)',
-                boxShadow: '0 4px 24px rgba(139,92,246,0.08)',
+                boxShadow: '0 0 0 1px rgba(139,92,246,0.15), 0 4px 24px rgba(139,92,246,0.08)',
             }}>
                 {/* Header */}
                 <div style={{
@@ -338,7 +339,7 @@ function WizardStep1({ d, companies }: { d: ReturnType<typeof useAiDeclaration>;
                 </div>
 
                 {/* Ghost document outline */}
-                <div style={{ padding: 'var(--space-6)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
+                <div style={{ padding: 'var(--space-6)', background: 'var(--color-bg-body)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                     <div style={{ opacity: 0.18, display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 3 }}>
                             <div style={{ width: 50, height: 14, borderRadius: 3, background: 'var(--color-text-tertiary)' }} />
@@ -536,7 +537,8 @@ function LayoutSettingsPanel({ d }: { d: ReturnType<typeof useAiDeclaration> }) 
     return (
         <div style={{
             borderRadius: 'var(--radius-xl)',
-            border: '1px solid var(--color-border)',
+            border: 'none',
+            boxShadow: '0 0 0 1px var(--color-border)',
             overflow: 'hidden',
             background: 'var(--color-bg-surface)',
         }}>

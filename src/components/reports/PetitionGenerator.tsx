@@ -21,7 +21,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
         <>
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 200px)' }}>
             {/* Left: Configuration */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border), 0 4px 20px rgba(0,0,0,0.03)' }}>
                 {/* Header */}
                 <PetitionSidebarHeader onNew={p.handleNew} onClear={p.handleClear} />
 
@@ -94,7 +94,7 @@ export function PetitionGenerator({ biddings, companies, onSave, initialBiddingI
             </div>
 
             {/* Right: Draft Preview */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden', background: 'var(--color-bg-base)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                 <EditorHeader p={p} />
 
                 <div style={{ flex: 1, padding: 'var(--space-10)', overflowY: 'auto', background: 'var(--color-bg-base)', display: 'flex', justifyContent: 'center' }}>
@@ -203,7 +203,7 @@ function StyleToggleButton({ showStyles, onClick }: { showStyles: boolean; onCli
 
 function StyleConfigPanel({ headerImage, setHeaderImage, footerImage, setFooterImage, headerImageHeight, setHeaderImageHeight, footerImageHeight, setFooterImageHeight, handleImageUpload, handleSaveCompanyTemplate, isSavingTemplate, selectedCompany, selectedCompanyId }: any) {
     return (
-        <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-secondary)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>CABEÇALHO (BANNER PNG/JPG)</label>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
