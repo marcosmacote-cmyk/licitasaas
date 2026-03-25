@@ -6936,6 +6936,50 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
     }
 });
 
+// ── Persist M2A certame_id link (worker write-back for stable matching) ──
+// Called by M2A Watcher after a successful fuzzy-match to persist the canonical
+// certame URL in the process link field. Subsequent runs use Strategy 1 (exact match).
+app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWorker, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const { certameId, certameUrl } = req.body;
+
+        if (!certameId && !certameUrl) {
+            return res.status(400).json({ error: 'certameId or certameUrl required' });
+        }
+
+        // Verify process exists
+        const process = await prisma.biddingProcess.findUnique({
+            where: { id: processId },
+            select: { id: true, link: true, tenantId: true },
+        });
+        if (!process) {
+            return res.status(404).json({ error: 'Process not found' });
+        }
+
+        // Build canonical M2A certame URL if only certameId was provided
+        const canonicalUrl = certameUrl ||
+            `http://precodereferencia.m2atecnologia.com.br/fornecedores/contratacao/contratacao_fornecedor/pregao_eletronico/lei_14133/detalhes/certame/${certameId}/`;
+
+        // Only update if link doesn't already contain this certame ID (idempotent)
+        const currentLink = process.link || '';
+        if (certameId && currentLink.includes(`certame/${certameId}`)) {
+            return res.json({ success: true, updated: false, reason: 'link already contains certame_id' });
+        }
+
+        await prisma.biddingProcess.update({
+            where: { id: processId },
+            data: { link: canonicalUrl },
+        });
+
+        console.log(`[Worker M2A] Link updated for ${processId.substring(0, 8)} → certame/${certameId}`);
+        res.json({ success: true, updated: true, newLink: canonicalUrl });
+    } catch (error: any) {
+        console.error('[Worker M2A] Error updating link:', error.message);
+        res.status(500).json({ error: 'Failed to update process link', details: error.message });
+    }
+});
+
 // Receives messages from local ComprasNet Watcher
 app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) => {
     try {
