@@ -3712,3 +3712,67 @@ table tr.selected td { background: var(--color-primary-light); }
 [data-theme='dark'] .btn-primary:hover {
   box-shadow: 0 4px 24px rgba(59,130,246,0.45);
 }
+
+/* ════════════════════════════════════════
+   OPEARÇÃO ULTRA-PREMIUM (Visual Tokens)
+   ════════════════════════════════════════ */
+
+/* Glassmorphism */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='dark'] .glass-panel {
+  background: rgba(17, 24, 39, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Premium Hover Effects */
+.premium-hover {
+  transition: all var(--transition-spring);
+}
+.premium-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  border-color: var(--color-border-focus);
+}
+
+[data-theme='dark'] .premium-hover:hover {
+  box-shadow: 0 12px 40px -8px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
+  background: linear-gradient(180deg, rgba(31, 42, 61, 0.8) 0%, rgba(17, 24, 39, 0.9) 100%);
+}
+
+/* Glow Text & Icons */
+.glow-text {
+  text-shadow: 0 0 20px currentColor;
+}
+
+.metric-value-premium {
+  font-family: 'Geist', 'Inter', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+/* Smooth Entrance Content */
+@keyframes premiumFadeUp {
+  0% { opacity: 0; transform: translateY(12px) scale(0.99); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.premium-entrance {
+  animation: premiumFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.stagger-1 { animation-delay: 0.05s; opacity: 0; }
+.stagger-2 { animation-delay: 0.1s; opacity: 0; }
+.stagger-3 { animation-delay: 0.15s; opacity: 0; }
+.stagger-4 { animation-delay: 0.2s; opacity: 0; }

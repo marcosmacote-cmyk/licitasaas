@@ -65,18 +65,18 @@ interface MetricCardProps {
 export function MetricCard({ title, value, icon, color = 'var(--color-primary)', bg = 'var(--color-primary-light)', subtitle, onClick }: MetricCardProps) {
   return (
     <div
-      className="card card-interactive dom-metric"
+      className="card card-interactive dom-metric glass-panel premium-hover"
       onClick={onClick}
       style={{ borderTop: `3px solid ${color}` }}
     >
       <div className="dom-metric__body">
         <div>
           <div className="dom-metric__title">{title}</div>
-          <div className="dom-metric__value">{value}</div>
+          <div className="dom-metric__value metric-value-premium" style={{ color }}>{value}</div>
           {subtitle && <div className="dom-metric__sub">{subtitle}</div>}
         </div>
         {icon && (
-          <div className="dom-metric__icon" style={{ color, backgroundColor: bg }}>
+          <div className="dom-metric__icon" style={{ color, backgroundColor: bg, boxShadow: `0 0 16px ${bg}` }}>
             {icon}
           </div>
         )}
@@ -97,8 +97,8 @@ interface AlertCardProps {
 
 export function AlertCard({ type, icon, message, action, onClick }: AlertCardProps) {
   return (
-    <div onClick={onClick} className={`dom-alert dom-alert--${type}${onClick ? ' dom-alert--clickable' : ''}`}>
-      {icon && <div className="dom-alert__icon">{icon}</div>}
+    <div onClick={onClick} className={`dom-alert dom-alert--${type}${onClick ? ' dom-alert--clickable premium-hover' : ''} glass-panel`}>
+      {icon && <div className="dom-alert__icon" style={{ filter: 'drop-shadow(0 0 4px currentColor)' }}>{icon}</div>}
       <span className="dom-alert__msg">{message}</span>
       {action && (
         <span className="dom-alert__action">{action}</span>
@@ -150,10 +150,10 @@ interface RadarCardProps {
 
 export function RadarCard({ title, value, desc, icon, color, bg, action, onClick }: RadarCardProps) {
   return (
-    <div className="card card-interactive dom-radar" onClick={onClick}>
-      <div className="dom-radar__icon" style={{ color, backgroundColor: bg }}>{icon}</div>
+    <div className="card card-interactive dom-radar glass-panel premium-hover" onClick={onClick}>
+      <div className="dom-radar__icon" style={{ color, backgroundColor: bg, boxShadow: `0 0 16px ${bg}` }}>{icon}</div>
       <div className="dom-radar__title">{title}</div>
-      <div className="dom-radar__value">{value}</div>
+      <div className="dom-radar__value metric-value-premium" style={{ color }}>{value}</div>
       <div className="dom-radar__desc">{desc}</div>
       {action && <div className="dom-radar__action" style={{ color }}>{action} →</div>}
     </div>
@@ -174,8 +174,8 @@ interface MissionCardProps {
 export function MissionCard({ type, time, rawDate, title, subtitle, onClick }: MissionCardProps) {
   const isSession = type === 'session';
   return (
-    <div onClick={onClick} className={`dom-mission dom-mission--${type}${onClick ? ' dom-mission--clickable' : ''}`}>
-      <div className="dom-mission__time">{time}</div>
+    <div onClick={onClick} className={`dom-mission dom-mission--${type}${onClick ? ' dom-mission--clickable premium-hover' : ''}`}>
+      <div className="dom-mission__time metric-value-premium">{time}</div>
       <div className="dom-mission__body">
         <div className="dom-mission__title">{title}</div>
         {subtitle && <div className="dom-mission__sub">{subtitle}</div>}

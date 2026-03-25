@@ -119,8 +119,8 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
     return (
         <div className="page-container" style={{ maxWidth: '1400px', margin: '0 auto' }}>
             {/* HEADER */}
-            <div className="breadcrumb"><span className="breadcrumb-current">Painel</span></div>
-            <div className="page-header" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="breadcrumb premium-entrance stagger-1"><span className="breadcrumb-current">Painel</span></div>
+            <div className="page-header premium-entrance stagger-1" style={{ marginBottom: 'var(--space-5)' }}>
                 <div>
                     <h1 className="page-title">Painel de Licitações</h1>
                     <p className="page-subtitle">{today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
@@ -160,7 +160,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             )}
 
             {/* ═══ KPIs ═══ */}
-            <div className="stagger-children grid-4" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="stagger-children grid-4 premium-entrance stagger-2" style={{ marginBottom: 'var(--space-5)' }}>
                 <MetricCard title="Volume no Funil" value={fmt(m.totalValue)} icon={<DollarSign size={18} />} color="var(--color-primary)" bg="var(--color-primary-light)" subtitle={`${m.activeItems.length} processos ativos`} onClick={() => onNavigate?.('bidding', { statuses: ['Captado', 'Em Análise', 'Aprovado para Participação', 'Preparando Documentação', 'Preparando Proposta', 'Em Sessão'] })} />
                 <MetricCard title="Volume Ganho (YTD)" value={fmt(m.wonValue)} icon={<BadgeCheck size={18} />} color="var(--color-success)" bg="var(--color-success-bg)" subtitle={`${m.wonItems.length} licitações vencidas`} onClick={() => onNavigate?.('bidding', { statuses: ['Ganho'] })} />
                 <MetricCard title="Taxa de Sucesso" value={`${m.winRate}%`} icon={<Crosshair size={18} />} color={m.winRate >= 50 ? 'var(--color-success)' : m.winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} bg={m.winRate >= 50 ? 'var(--color-success-bg)' : m.winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'} subtitle={`${m.wonItems.length} de ${m.totalFinished} finalizados`} onClick={() => onNavigate?.('bidding', { statuses: ['Ganho', 'Perdido', 'Não Participar'] })} />
@@ -168,19 +168,19 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             </div>
 
             {/* ═══ PIPELINE ═══ */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)', marginBottom: 'var(--space-5)' }}>
+            <div className="premium-entrance stagger-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)', marginBottom: 'var(--space-5)' }}>
                 {pipelineSteps.map((step, i) => (
                     <PipelineStep key={i} label={step.label} count={step.count} icon={step.icon} color={step.color} action={step.action} onClick={() => onNavigate?.('bidding', { statuses: step.statuses })} />
                 ))}
             </div>
 
             {/* ═══ MAIN GRID ═══ */}
-            <div className="grid-2-1">
+            <div className="grid-2-1 premium-entrance stagger-4">
                 {/* LEFT COLUMN */}
                 <div className="flex-col gap-5">
 
                     {/* MISSÕES DO DIA */}
-                    <div className="card" style={{ padding: 'var(--card-padding)' }}>
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                         <div className="flex-between mb-4">
                             <h3 className="dash-section-title"><Timer size={18} color="var(--color-urgency)" /> Missões do Dia</h3>
                             <span className="badge badge-urgency">{m.todaySessions.length + m.todayReminders.length} pendente{m.todaySessions.length + m.todayReminders.length !== 1 ? 's' : ''}</span>
@@ -208,7 +208,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
                     {/* PRÓXIMAS SESSÕES */}
                     {m.upcomingSessions.length > 0 && (
-                        <div className="card" style={{ padding: 'var(--card-padding)' }}>
+                        <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                             <div className="flex-between mb-3">
                                 <h3 className="dash-section-title"><CalendarIcon size={18} color="var(--color-primary)" /> Próximas Sessões</h3>
                                 <button onClick={() => onNavigate?.('bidding')} className="btn-link" style={{ fontSize: 'var(--text-xs)' }}>
@@ -244,7 +244,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     </div>
 
                     {/* FUNIL */}
-                    <div className="card" style={{ padding: 'var(--card-padding)' }}>
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                         <div className="flex-between mb-2">
                             <h3 className="dash-section-title">Distribuição por Fase</h3>
                             <button onClick={() => onNavigate?.('bidding')} className="btn-link" style={{ fontSize: 'var(--text-xs)' }}>
@@ -265,7 +265,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     </div>
 
                     {/* META MENSAL */}
-                    <div className="card" style={{ padding: 'var(--card-padding)' }}>
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
                             <h3 className="dash-section-title"><TrendingUp size={18} color="var(--color-success)" /> Meta Mensal</h3>
                             <button onClick={() => { setEditingTarget(!editingTarget); setTargetInput(monthlyTarget ? monthlyTarget.toString() : ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -305,7 +305,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                 <div className="flex-col gap-5">
 
                     {/* CALENDÁRIO */}
-                    <div className="card" style={{ padding: 'var(--card-padding)' }}>
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                         <div className="flex-between mb-4">
                             <h3 className="dash-section-title mb-0"><CalendarIcon size={18} color="var(--color-primary)" /> Calendário</h3>
                             <div className="flex-center gap-2">
@@ -354,7 +354,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     </div>
 
                     {/* AGENDA DO DIA */}
-                    <div className="card" style={{ padding: 'var(--card-padding)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)', flex: 1, display: 'flex', flexDirection: 'column' }}>
                         <div className="flex-between mb-4">
                             <h3 className="dash-section-title mb-0">{selectedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</h3>
                             {selectedDateKey === m.todayStr && <span className="badge badge-danger" style={{ fontSize: 'var(--text-xs)' }}>HOJE</span>}
@@ -377,7 +377,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
                     {/* PROCESSOS PARADOS */}
                     {m.stalledProcesses.length > 0 && (
-                        <div className="card" style={{ padding: 'var(--card-padding)' }}>
+                        <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                             <div className="flex-between mb-3">
                                 <h3 className="dash-section-title"><AlertTriangle size={18} color="var(--color-warning)" /> Processos Parados ({m.stalledProcesses.length})</h3>
                                 <button onClick={() => onNavigate?.('bidding')} className="btn-link" style={{ color: 'var(--color-warning)', fontSize: 'var(--text-xs)' }}>
