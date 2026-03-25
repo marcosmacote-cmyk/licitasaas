@@ -33,7 +33,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                         <label className="form-label section-label">Vincular à Empresa</label>
                         <div className="pos-relative">
                             <Building2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
-                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px', background: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease' }}
+                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px', background: 'var(--color-bg-surface)', border: 'none', boxShadow: '0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease', cursor: 'pointer' }}
                                 value={o.selectedCompanyId} onChange={(e) => o.setSelectedCompanyId(e.target.value)}>
                                 <option value="">Selecione a empresa...</option>
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
@@ -45,7 +45,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                         <label className="form-label section-label">Categoria do Acervo</label>
                         <div className="pos-relative">
                             <Layers size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
-                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px', background: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease' }}
+                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px', background: 'var(--color-bg-surface)', border: 'none', boxShadow: '0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease', cursor: 'pointer' }}
                                 value={o.selectedCategory} onChange={(e) => o.setSelectedCategory(e.target.value)}>
                                 <option value="">Selecione uma categoria...</option>
                                 {Object.entries(CATEGORIES_HIERARCHY).map(([group, cats]) => (
@@ -76,7 +76,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                     <div className="input-group pos-relative">
                         <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
                         <input type="text" placeholder="Descreva o que procura no acervo..." className="form-control"
-                            style={{ paddingLeft: '40px', height: '42px', fontSize: 'var(--text-base)', width: '100%', background: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease' }}
+                            style={{ paddingLeft: '40px', height: '42px', fontSize: 'var(--text-base)', width: '100%', background: 'var(--color-bg-surface)', border: 'none', boxShadow: '0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease' }}
                             value={o.searchTerm} onChange={(e) => o.setSearchTerm(e.target.value)} />
                     </div>
                 </div>
@@ -101,12 +101,12 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                     <div style={{ padding: '8px 0 8px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         {certs.map(cert => (
                                             <div key={cert.id} onClick={() => o.setViewingCert(cert)}
-                                                style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: o.selectedCertIds.has(cert.id) ? '0 0 0 2px var(--color-primary)' : '0 0 0 1px var(--color-border)', background: o.viewingCert?.id === cert.id ? 'var(--color-primary-light)' : 'var(--color-bg-surface)', cursor: 'pointer', transition: 'var(--transition-fast)', position: 'relative' }}>
+                                                style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: o.viewingCert?.id === cert.id ? '0 4px 12px rgba(0,0,0,0.06), 0 0 0 2px var(--color-primary)' : o.selectedCertIds.has(cert.id) ? '0 0 0 1px var(--color-primary)' : '0 0 0 1px var(--color-border)', background: o.viewingCert?.id === cert.id ? 'var(--color-bg-surface)' : o.selectedCertIds.has(cert.id) ? 'rgba(37, 99, 235, 0.04)' : 'var(--color-bg-surface)', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                        <input type="checkbox" checked={o.selectedCertIds.has(cert.id)} onChange={() => {}} onClick={(e) => o.toggleCertSelection(cert.id, e)} style={{ cursor: 'pointer', width: '16px', height: '16px' }} />
-                                                        <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{cert.type}</span>
-                                                        {cert.category && <span style={{ fontSize: '0.65rem', background: 'var(--color-primary-light)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)', border: '1px solid var(--color-primary-border)' }}>{cert.category}</span>}
+                                                        <input type="checkbox" checked={o.selectedCertIds.has(cert.id)} onChange={() => {}} onClick={(e) => o.toggleCertSelection(cert.id, e)} style={{ cursor: 'pointer', width: '16px', height: '16px', margin: 0 }} />
+                                                        <span style={{ fontSize: '0.65rem', background: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center' }}>{cert.type}</span>
+                                                        {cert.category && <span style={{ fontSize: '0.65rem', background: 'var(--color-primary-light)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary)', border: '1px solid var(--color-primary-border)', display: 'flex', alignItems: 'center' }}>{cert.category}</span>}
                                                     </div>
                                                     <button onClick={(e) => { e.stopPropagation(); o.handleDeleteCert(cert.id); }} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '2px' }}>
                                                         <Trash2 size={14} />
@@ -256,22 +256,22 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             </div>
                             <div>
                                 <h4 style={{ fontSize: 'var(--text-base)', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', letterSpacing: '0.05em', marginBottom: 'var(--space-3)', fontWeight: 'var(--font-bold)' }}>Experiências Técnicas (Granular)</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
                                     {o.viewingCert.experiences?.map((exp, idx) => (
-                                        <div key={exp.id || idx} style={{ padding: 'var(--space-3)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
-                                            <div style={{ flex: 1 }}>
+                                        <div key={exp.id || idx} style={{ padding: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx < o.viewingCert!.experiences!.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                                            <div style={{ flex: 1, paddingRight: 'var(--space-4)' }}>
                                                 <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{exp.description}</div>
-                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '2px', fontWeight: 'var(--font-semibold)' }}>{exp.category}</div>
+                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>{exp.category}</div>
                                             </div>
-                                            <div style={{ textAlign: 'right', marginLeft: 'var(--space-4)' }}>
-                                                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-primary)' }}>
-                                                    {exp.quantity?.toLocaleString() || '-'} <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{exp.unit}</span>
+                                            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                                                    {exp.quantity?.toLocaleString() || '-'} <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{exp.unit}</span>
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
                                     {(!o.viewingCert.experiences || o.viewingCert.experiences.length === 0) && (
-                                        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Nenhuma experiência técnica listada para este documento.</p>
+                                        <div style={{ padding: 'var(--space-5)', textAlign: 'center', fontSize: '0.9rem', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Nenhuma experiência técnica listada para este documento.</div>
                                     )}
                                 </div>
                             </div>
