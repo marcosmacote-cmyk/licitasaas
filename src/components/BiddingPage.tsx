@@ -122,9 +122,9 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
 
                 {/* ═══ PIPELINE STATUS COUNTERS ═══ */}
                 <div style={{
-                    display: 'flex', gap: 'var(--space-1)', padding: 'var(--space-1)',
-                    background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)',
+                    display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-2)',
+                    background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)',
+                    border: 'none', boxShadow: 'var(--shadow-sm), 0 0 0 1px var(--color-border)',
                 }}>
                     {[
                         { label: 'Captado', count: b.statusCounters.captado, color: 'var(--color-neutral)' },
@@ -134,9 +134,12 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                         { label: 'Vencido', count: b.statusCounters.vencido, color: 'var(--color-success)' },
                         { label: 'Perdido', count: b.statusCounters.perdido, color: 'var(--color-danger)' },
                     ].map(s => (
-                        <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', transition: 'all 150ms' }}>
-                            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: s.count > 0 ? s.color : 'var(--color-text-tertiary)', lineHeight: 1.2 }}>{s.count}</div>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginTop: '2px' }}>{s.label}</div>
+                        <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-lg)', transition: 'all 150ms' }}
+                             onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.count > 0 ? s.color : 'var(--color-text-tertiary)', lineHeight: 1.2 }}>{s.count}</div>
+                            <div style={{ fontSize: '0.75rem', color: s.count > 0 ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px' }}>{s.label}</div>
                         </div>
                     ))}
                 </div>

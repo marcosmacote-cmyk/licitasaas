@@ -928,21 +928,29 @@ textarea:focus-visible {
 .kanban-column {
   min-width: 320px;
   width: 320px;
-  background-color: var(--kanban-column-bg);
-  border-radius: var(--radius-lg);
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
   max-height: 100%;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+[data-theme='dark'] .kanban-column {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .kanban-column-header {
-  padding: var(--space-4);
-  font-weight: var(--font-semibold);
+  padding: var(--space-4) var(--space-5);
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--color-border);
+  /* border-bottom removed for a cleaner look */
 }
 
 .column-badge {
@@ -965,27 +973,26 @@ textarea:focus-visible {
 
 .kanban-card {
   background: var(--color-bg-surface);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  box-shadow: var(--shadow-xs);
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--color-border);
+  border: 1px solid transparent;
   cursor: grab;
-  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
 .kanban-card:hover {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08), var(--shadow-md);
-  border-color: var(--color-border-focus);
+  box-shadow: var(--shadow-md), 0 0 0 1px rgba(37, 99, 235, 0.3);
   transform: translateY(-2px);
 }
 
 .kanban-card:active {
   cursor: grabbing;
-  transform: translateY(0) scale(1.01);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(0) scale(1.02);
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--color-primary);
 }
 
 .kanban-card-title {
