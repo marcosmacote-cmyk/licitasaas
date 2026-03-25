@@ -6647,6 +6647,10 @@ app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any,
                     {
                         link: { contains: 'bnccompras', mode: 'insensitive' },
                     },
+                    // M2A Compras processes
+                    {
+                        link: { contains: 'm2atecnologia', mode: 'insensitive' },
+                    },
                 ],
             },
             select: {
@@ -6745,6 +6749,7 @@ app.post('/api/chat-monitor/internal/heartbeat', authenticateWorker, async (req:
 });
 
 // Get ALL monitored processes across ALL tenants (for centralized worker)
+// v3.0: Inclui credenciais do portal vinculado para autenticação dinâmica
 app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (req: any, res) => {
     try {
         const processes = await prisma.biddingProcess.findMany({
@@ -6761,10 +6766,77 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
                 processYear: true,
                 portal: true,
                 link: true,
+                companyProfileId: true,
+                company: {
+                    select: {
+                        razaoSocial: true,
+                        credentials: {
+                            select: {
+                                platform: true,
+                                url: true,
+                                login: true,
+                                password: true,
+                            }
+                        }
+                    }
+                }
             }
         });
-        console.log(`[Worker] Returning ${processes.length} monitored processes across all tenants`);
-        res.json(processes);
+
+        // Match best credential per process based on portal/link
+        const enriched = processes.map((p: any) => {
+            const creds = p.company?.credentials || [];
+            const link = (p.link || '').toLowerCase();
+            const portal = (p.portal || '').toLowerCase();
+
+            // Smart matching: score each credential
+            let bestCred: any = null;
+            let bestScore = 0;
+
+            for (const c of creds) {
+                const cp = (c.platform || '').toLowerCase();
+                const cu = (c.url || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+                let score = 0;
+
+                // Exact URL match (strongest signal)
+                if (cu && link && (link.includes(cu) || cu.includes(link.split('/')[2] || ''))) score += 10;
+                // Platform name match
+                if (cp && portal && (cp.includes(portal) || portal.includes(cp))) score += 5;
+                if (cp && link && link.includes(cp.replace(/\s+/g, ''))) score += 5;
+                // Domain-level match
+                const linkDomain = link.split('/')[2] || '';
+                const credDomain = cu.split('/')[0] || '';
+                if (linkDomain && credDomain && (linkDomain.includes(credDomain) || credDomain.includes(linkDomain))) score += 8;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestCred = c;
+                }
+            }
+
+            return {
+                id: p.id,
+                tenantId: p.tenantId,
+                title: p.title,
+                uasg: p.uasg,
+                modalityCode: p.modalityCode,
+                processNumber: p.processNumber,
+                processYear: p.processYear,
+                portal: p.portal,
+                link: p.link,
+                companyProfileId: p.companyProfileId,
+                companyName: p.company?.razaoSocial || null,
+                portalCredentials: bestCred ? {
+                    login: bestCred.login,
+                    password: bestCred.password,
+                    url: bestCred.url,
+                    platform: bestCred.platform,
+                } : null,
+            };
+        });
+
+        console.log(`[Worker] Returning ${enriched.length} monitored processes across all tenants (${enriched.filter((p: any) => p.portalCredentials).length} with credentials)`);
+        res.json(enriched);
     } catch (error: any) {
         console.error('[Worker /all-sessions] Error:', error.message);
         res.status(500).json({ error: 'Failed to fetch all sessions' });
