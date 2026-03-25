@@ -17,7 +17,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
         <>
         <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', height: 'calc(100vh - 250px)' }}>
             {/* Left Column: List and Upload */}
-            <div className="card flex-col" style={{ padding: 'var(--space-4)', overflow: 'hidden' }}>
+            <div className="flex-col" style={{ background: 'var(--color-bg-surface)', padding: 'var(--space-4)', overflow: 'hidden', borderRadius: 'var(--radius-xl)', boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 0 0 1px var(--color-border)' }}>
                 <div className="mb-5">
                     <h3 className="flex-center gap-2" style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--text-xl)' }}>
                         <FileBadge size={20} color="var(--color-primary)" /> Acervo Técnico
@@ -28,12 +28,12 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                 </div>
 
                 {/* Upload Zone */}
-                <div style={{ marginBottom: 'var(--space-5)', background: 'var(--color-bg-secondary)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                <div style={{ marginBottom: 'var(--space-5)', background: 'var(--color-bg-secondary)', padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                     <div className="mb-4">
                         <label className="form-label section-label">Vincular à Empresa</label>
                         <div className="pos-relative">
                             <Building2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
-                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px' }}
+                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px', background: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease' }}
                                 value={o.selectedCompanyId} onChange={(e) => o.setSelectedCompanyId(e.target.value)}>
                                 <option value="">Selecione a empresa...</option>
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.razaoSocial}</option>)}
@@ -45,7 +45,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                         <label className="form-label section-label">Categoria do Acervo</label>
                         <div className="pos-relative">
                             <Layers size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
-                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px' }}
+                            <select className="form-control" style={{ width: '100%', paddingLeft: '36px', fontSize: 'var(--text-base)', height: '42px', background: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease' }}
                                 value={o.selectedCategory} onChange={(e) => o.setSelectedCategory(e.target.value)}>
                                 <option value="">Selecione uma categoria...</option>
                                 {Object.entries(CATEGORIES_HIERARCHY).map(([group, cats]) => (
@@ -76,7 +76,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                     <div className="input-group pos-relative">
                         <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)', zIndex: 1 }} />
                         <input type="text" placeholder="Descreva o que procura no acervo..." className="form-control"
-                            style={{ paddingLeft: '40px', height: '42px', fontSize: 'var(--text-base)', width: '100%' }}
+                            style={{ paddingLeft: '40px', height: '42px', fontSize: 'var(--text-base)', width: '100%', background: 'var(--color-bg-base)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', borderRadius: 'var(--radius-lg)', transition: 'all 0.2s ease' }}
                             value={o.searchTerm} onChange={(e) => o.setSearchTerm(e.target.value)} />
                     </div>
                 </div>
@@ -90,7 +90,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                     ) : (
                         Object.entries(o.groupedCertificates).map(([companyName, certs]) => (
                             <div key={companyName} style={{ marginBottom: '4px' }}>
-                                <div onClick={() => o.toggleCompanyExpansion(companyName)} style={{ padding: 'var(--space-3)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', border: '1px solid var(--color-border)', transition: 'var(--transition-fast)' }}>
+                                <div onClick={() => o.toggleCompanyExpansion(companyName)} style={{ padding: 'var(--space-3)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', transition: 'var(--transition-fast)' }}>
                                     <Building2 size={16} color="var(--color-primary)" />
                                     <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{companyName}</span>
                                     <span style={{ fontSize: '0.7rem', background: 'var(--color-border)', padding: '2px 6px', borderRadius: '10px', minWidth: '20px', textAlign: 'center' }}>{certs.length}</span>
@@ -101,7 +101,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                     <div style={{ padding: '8px 0 8px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         {certs.map(cert => (
                                             <div key={cert.id} onClick={() => o.setViewingCert(cert)}
-                                                style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: `1px solid ${o.viewingCert?.id === cert.id ? 'var(--color-primary)' : 'var(--color-border)'}`, background: o.viewingCert?.id === cert.id ? 'var(--color-primary-light)' : 'var(--color-bg-surface)', cursor: 'pointer', transition: 'var(--transition-fast)', position: 'relative', boxShadow: o.selectedCertIds.has(cert.id) ? '0 0 0 2px var(--color-primary)' : 'none' }}>
+                                                style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: o.selectedCertIds.has(cert.id) ? '0 0 0 2px var(--color-primary)' : '0 0 0 1px var(--color-border)', background: o.viewingCert?.id === cert.id ? 'var(--color-primary-light)' : 'var(--color-bg-surface)', cursor: 'pointer', transition: 'var(--transition-fast)', position: 'relative' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                         <input type="checkbox" checked={o.selectedCertIds.has(cert.id)} onChange={() => {}} onClick={(e) => o.toggleCertSelection(cert.id, e)} style={{ cursor: 'pointer', width: '16px', height: '16px' }} />
@@ -127,7 +127,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
             {/* Right Column: Details and Analysis */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', overflowY: 'auto', paddingBottom: 'var(--space-6)' }}>
                 {/* Comparison Header */}
-                <div className="card" style={{ padding: 'var(--space-5)', border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)' }}>
+                <div style={{ padding: 'var(--space-5)', border: 'none', borderRadius: 'var(--radius-xl)', boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 0 0 1px var(--color-border)', background: 'var(--color-bg-surface)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                         <h3 style={{ margin: 0, fontSize: 'var(--text-xl)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                             <HardHat size={22} color="var(--color-warning)" /> Oráculo de Somatório
@@ -169,7 +169,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
 
                 {/* Analysis Results */}
                 {o.analysisResult && (
-                    <div className="card" style={{ padding: 'var(--space-6)', border: `2px solid ${o.analysisResult.overallStatus === 'Apto' ? 'var(--color-success)' : o.analysisResult.overallStatus === 'Risco' ? 'var(--color-warning)' : 'var(--color-danger)'}`, background: 'var(--color-bg-surface)' }}>
+                    <div style={{ padding: 'var(--space-6)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: `0 4px 16px rgba(0,0,0,0.08), 0 0 0 2px ${o.analysisResult.overallStatus === 'Apto' ? 'var(--color-success)' : o.analysisResult.overallStatus === 'Risco' ? 'var(--color-warning)' : 'var(--color-danger)'}`, background: 'var(--color-bg-surface)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
                             {o.analysisResult.overallStatus === 'Apto' ? <CheckCircle2 color="var(--color-success)" size={36} /> :
                                 o.analysisResult.overallStatus === 'Risco' ? <AlertTriangle color="var(--color-warning)" size={36} /> :
@@ -224,7 +224,7 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
 
                 {/* Certificate Details */}
                 {o.viewingCert ? (
-                    <div className="card" style={{ padding: 'var(--space-6)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
+                    <div style={{ padding: 'var(--space-6)', borderRadius: 'var(--radius-xl)', background: 'var(--color-bg-surface)', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 0 0 1px var(--color-border)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-6)' }}>
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
