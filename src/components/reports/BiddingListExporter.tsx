@@ -134,21 +134,21 @@ export function BiddingListExporter({ biddings, companies }: Props) {
 
     const getStatusBadgeStyle = (status: string): React.CSSProperties => {
         const s = status.toLowerCase();
-        if (s === 'vencido') return { background: 'rgba(34,197,94,0.1)', color: 'var(--color-success)', border: '1px solid rgba(34,197,94,0.25)' };
-        if (s === 'perdido' || s === 'sem sucesso') return { background: 'rgba(239,68,68,0.08)', color: 'var(--color-danger)', border: '1px solid rgba(239,68,68,0.2)' };
-        if (s === 'participando') return { background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', border: '1px solid rgba(37,99,235,0.2)' };
-        if (s === 'em análise de edital') return { background: 'rgba(99,102,241,0.08)', color: 'rgba(99,102,241,0.9)', border: '1px solid rgba(99,102,241,0.2)' };
-        if (s === 'preparando documentação') return { background: 'rgba(245,158,11,0.08)', color: 'var(--color-warning)', border: '1px solid rgba(245,158,11,0.2)' };
-        if (s === 'captado') return { background: 'var(--color-bg-body)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' };
-        if (s === 'monitorando') return { background: 'rgba(37,99,235,0.06)', color: 'var(--color-primary)', border: '1px solid rgba(37,99,235,0.15)' };
-        if (s === 'recurso') return { background: 'rgba(245,158,11,0.08)', color: '#d97706', border: '1px solid rgba(245,158,11,0.2)' };
-        if (s === 'desclassificado') return { background: 'rgba(239,68,68,0.06)', color: 'var(--color-danger)', border: '1px solid rgba(239,68,68,0.15)' };
-        return { background: 'var(--color-bg-body)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' };
+        if (s === 'vencido') return { background: 'rgba(34,197,94,0.1)', color: 'var(--color-success)', border: 'none', boxShadow: '0 0 0 1px rgba(34,197,94,0.25)' };
+        if (s === 'perdido' || s === 'sem sucesso') return { background: 'rgba(239,68,68,0.08)', color: 'var(--color-danger)', border: 'none', boxShadow: '0 0 0 1px rgba(239,68,68,0.2)' };
+        if (s === 'participando') return { background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', border: 'none', boxShadow: '0 0 0 1px rgba(37,99,235,0.2)' };
+        if (s === 'em análise de edital') return { background: 'rgba(99,102,241,0.08)', color: 'rgba(99,102,241,0.9)', border: 'none', boxShadow: '0 0 0 1px rgba(99,102,241,0.2)' };
+        if (s === 'preparando documentação') return { background: 'rgba(245,158,11,0.08)', color: 'var(--color-warning)', border: 'none', boxShadow: '0 0 0 1px rgba(245,158,11,0.2)' };
+        if (s === 'captado') return { background: 'var(--color-bg-body)', color: 'var(--color-text-secondary)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' };
+        if (s === 'monitorando') return { background: 'rgba(37,99,235,0.06)', color: 'var(--color-primary)', border: 'none', boxShadow: '0 0 0 1px rgba(37,99,235,0.15)' };
+        if (s === 'recurso') return { background: 'rgba(245,158,11,0.08)', color: '#d97706', border: 'none', boxShadow: '0 0 0 1px rgba(245,158,11,0.2)' };
+        if (s === 'desclassificado') return { background: 'rgba(239,68,68,0.06)', color: 'var(--color-danger)', border: 'none', boxShadow: '0 0 0 1px rgba(239,68,68,0.15)' };
+        return { background: 'var(--color-bg-body)', color: 'var(--color-text-secondary)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' };
     };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-            <div style={{ borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)', overflow: 'hidden', background: 'var(--color-bg-surface)', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+            <div style={{ borderRadius: 'var(--radius-xl)', border: 'none', overflow: 'hidden', background: 'var(--color-bg-surface)', boxShadow: '0 0 0 1px var(--color-border), 0 2px 12px rgba(0,0,0,0.04)' }}>
 
                 {/* ── Module Header ── */}
                 <div style={{
@@ -158,7 +158,7 @@ export function BiddingListExporter({ biddings, companies }: Props) {
                     borderBottom: '1px solid var(--color-border)',
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg)', background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-lg)', background: 'rgba(37,99,235,0.1)', border: 'none', boxShadow: '0 0 0 1px rgba(37,99,235,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <TableProperties size={18} color="var(--color-primary)" />
                         </div>
                         <div>
@@ -176,9 +176,9 @@ export function BiddingListExporter({ biddings, companies }: Props) {
                         {isConfigOpen && (
                             <div style={{
                                 position: 'absolute', top: '100%', right: 0, marginTop: 'var(--space-2)',
-                                background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                                background: 'var(--color-bg-surface)', border: 'none',
                                 borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', zIndex: 100,
-                                boxShadow: 'var(--shadow-lg)', minWidth: '200px',
+                                boxShadow: '0 0 0 1px var(--color-border), var(--shadow-lg)', minWidth: '200px',
                             }}>
                                 <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)' }}>Colunas visíveis</div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -204,7 +204,7 @@ export function BiddingListExporter({ biddings, companies }: Props) {
 
                 {/* ── Filter bar ── */}
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-body)' }}>
-                    <div style={{ flex: 1, maxWidth: 360, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', background: 'var(--color-bg-surface)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                    <div style={{ flex: 1, maxWidth: 360, display: 'flex', alignItems: 'center', gap: 'var(--space-2)', background: 'var(--color-bg-surface)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                         <Search size={14} color="var(--color-text-tertiary)" />
                         <input
                             type="text"
@@ -265,7 +265,7 @@ export function BiddingListExporter({ biddings, companies }: Props) {
                                 <tr>
                                     <td colSpan={visibleColumns.length} style={{ padding: 'var(--space-16)', textAlign: 'center' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                            <div style={{ width: 52, height: 52, borderRadius: 'var(--radius-xl)', background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <div style={{ width: 52, height: 52, borderRadius: 'var(--radius-xl)', background: 'rgba(37,99,235,0.06)', border: 'none', boxShadow: '0 0 0 1px rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                 <Search size={22} color="var(--color-primary)" strokeWidth={1.5} />
                                             </div>
                                             <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', fontSize: 'var(--text-md)' }}>Nenhum processo encontrado</div>

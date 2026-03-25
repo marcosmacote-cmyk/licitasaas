@@ -337,7 +337,7 @@ export function DocumentExpirationList({ companies }: Props) {
             {/* ── Toolbar: Search + Filters Toggle + Export ── */}
             <div className="card" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-4)' }}>
                 {/* Search */}
-                <div style={{ flex: 1, maxWidth: '360px', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', background: 'var(--color-bg-body)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                <div style={{ flex: 1, maxWidth: '360px', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', background: 'var(--color-bg-body)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>
                     <Search size={16} color="var(--color-text-secondary)" />
                     <input
                         type="text"
@@ -386,7 +386,7 @@ export function DocumentExpirationList({ companies }: Props) {
                 <div style={{
                     display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)',
                     background: 'var(--color-bg-surface)', padding: 'var(--space-4)',
-                    borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)',
                     animation: 'slideDown 0.2s ease-out'
                 }}>
                     <div>
@@ -449,7 +449,7 @@ export function DocumentExpirationList({ companies }: Props) {
             </div>
 
             {/* ── Document Table ── */}
-            <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', overflow: 'hidden' }}>
                 <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr>
@@ -535,11 +535,11 @@ function SummaryCard({ label, value, total, color, bg, icon, active, onClick }: 
             onClick={onClick}
             style={{
                 padding: 'var(--space-4) var(--space-5)', borderRadius: 'var(--radius-xl)',
-                border: active ? `2px solid ${color}` : '1px solid var(--color-border)',
+                border: 'none',
                 background: active ? bg : 'var(--color-bg-surface)',
                 cursor: 'pointer', textAlign: 'left',
                 transition: 'var(--transition-fast)',
-                boxShadow: active ? `0 4px 16px ${bg}` : '0 1px 4px rgba(0,0,0,0.04)',
+                boxShadow: active ? `0 0 0 2px ${color}, 0 4px 16px ${bg}` : '0 0 0 1px var(--color-border), 0 1px 4px rgba(0,0,0,0.04)',
             }}
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>

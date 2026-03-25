@@ -76,8 +76,8 @@ export function PerformanceDashboard({ biddings }: Props) {
     // ── tooltip shared style ──
     const tooltipStyle = {
         borderRadius: '10px',
-        border: '1px solid var(--color-border)',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+        border: 'none',
+        boxShadow: '0 0 0 1px var(--color-border), 0 4px 16px rgba(0,0,0,0.12)',
         fontSize: '0.8rem',
         background: 'var(--color-bg-surface)',
         color: 'var(--color-text-primary)',
@@ -94,14 +94,14 @@ export function PerformanceDashboard({ biddings }: Props) {
                 background: 'linear-gradient(135deg, var(--color-bg-surface) 0%, rgba(37,99,235,0.03) 60%, rgba(139,92,246,0.02) 100%)',
                 padding: 'var(--space-5) var(--space-6)',
                 borderRadius: 'var(--radius-xl)',
-                border: '1px solid rgba(37,99,235,0.12)',
-                boxShadow: '0 2px 12px rgba(37,99,235,0.06)',
+                border: 'none',
+                boxShadow: '0 0 0 1px rgba(37,99,235,0.12), 0 2px 12px rgba(37,99,235,0.06)',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
                     <div style={{
                         width: 44, height: 44, borderRadius: 'var(--radius-lg)',
                         background: 'linear-gradient(135deg, rgba(37,99,235,0.12), rgba(99,102,241,0.08))',
-                        border: '1px solid rgba(37,99,235,0.2)',
+                        border: 'none', boxShadow: '0 0 0 1px rgba(37,99,235,0.2)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         flexShrink: 0,
                     }}>
@@ -126,7 +126,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                 <div style={{
                     display: 'flex', gap: 3,
                     background: 'var(--color-bg-body)', padding: 3,
-                    borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)',
                 }}>
                     {PERIOD_OPTIONS.map(opt => (
                         <button
@@ -239,7 +239,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '4px 14px', borderRadius: 9999,
-                    background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+                    background: 'var(--color-bg-surface)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)',
                     fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
                     letterSpacing: '0.1em', color: 'var(--color-text-tertiary)',
                 }}>
@@ -256,9 +256,9 @@ export function PerformanceDashboard({ biddings }: Props) {
 
                 {/* Modality Bar Chart */}
                 <div style={{
-                    borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-xl)', border: 'none',
                     background: 'var(--color-bg-surface)',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                    boxShadow: '0 0 0 1px var(--color-border), 0 2px 12px rgba(0,0,0,0.04)',
                     overflow: 'hidden',
                 }}>
                     <div style={{
@@ -267,7 +267,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                         borderBottom: '1px solid var(--color-border)',
                         background: 'linear-gradient(135deg, rgba(37,99,235,0.03), transparent)',
                     }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(37,99,235,0.08)', border: 'none', boxShadow: '0 0 0 1px rgba(37,99,235,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <FileStack size={16} color="var(--color-primary)" />
                         </div>
                         <div>
@@ -306,9 +306,9 @@ export function PerformanceDashboard({ biddings }: Props) {
 
                 {/* Status Donut Chart */}
                 <div style={{
-                    borderRadius: 'var(--radius-xl)', border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-xl)', border: 'none',
                     background: 'var(--color-bg-surface)',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                    boxShadow: '0 0 0 1px var(--color-border), 0 2px 12px rgba(0,0,0,0.04)',
                     overflow: 'hidden',
                 }}>
                     <div style={{
@@ -317,7 +317,7 @@ export function PerformanceDashboard({ biddings }: Props) {
                         borderBottom: '1px solid var(--color-border)',
                         background: 'linear-gradient(135deg, rgba(37,99,235,0.03), transparent)',
                     }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'rgba(37,99,235,0.08)', border: 'none', boxShadow: '0 0 0 1px rgba(37,99,235,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <PieIcon size={16} color="var(--color-primary)" />
                         </div>
                         <div>
@@ -374,9 +374,9 @@ function KpiCard({
     return (
         <div style={{
             padding: 'var(--space-5)', borderRadius: 'var(--radius-xl)',
-            border: `1px solid ${borderColor}`,
+            border: 'none',
             background: 'var(--color-bg-surface)',
-            boxShadow: `0 2px 12px ${shadowColor}`,
+            boxShadow: `0 0 0 1px ${borderColor}, 0 2px 12px ${shadowColor}`,
             display: 'flex', flexDirection: 'column',
         }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
@@ -385,7 +385,7 @@ function KpiCard({
                 </div>
                 <div style={{
                     width: 30, height: 30, borderRadius: 'var(--radius-md)',
-                    background: iconBg, border: `1px solid ${iconBorder}`,
+                    background: iconBg, border: 'none', boxShadow: `0 0 0 1px ${iconBorder}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
                     {icon}
