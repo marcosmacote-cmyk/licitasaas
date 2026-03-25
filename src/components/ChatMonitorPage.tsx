@@ -76,6 +76,7 @@ function portalBadge(portal: string, link?: string) {
   const l = (link || '').toLowerCase();
   // Verificar link primeiro (mais confiável), depois portal
   // BLL deve ser verificado ANTES de ComprasNet (ambos podem conter 'compras')
+  if (l.includes('licitamaisbrasil') || p.includes('licita mais brasil') || p.includes('licitamaisbrasil')) return { label: 'Licita+Brasil', color: '#0d9488', bg: 'rgba(13, 148, 136, 0.08)' };
   if (l.includes('licitanet.com.br') || p.includes('licitanet')) return { label: 'Licitanet', color: '#e85d04', bg: 'rgba(232, 93, 4, 0.08)' };
   if (l.includes('portaldecompraspublicas') || p.includes('portal de compras')) return { label: 'PCP', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)' };
   if (l.includes('bllcompras') || l.includes('bll.org') || p.includes('bll')) return { label: 'BLL Compras', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' };
@@ -423,6 +424,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                 <option value="pncp">PNCP</option>
                 <option value="pcp">Portal de Compras Públicas</option>
                 <option value="licitanet">Licitanet</option>
+                <option value="licitamaisbrasil">Licita Mais Brasil</option>
                 <option value="bll">BLL</option>
                 <option value="bnc">BNC</option>
               </select>
@@ -514,7 +516,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                           const pl = (proc.portal || '').toLowerCase();
                           const ll = ((proc as any).link || '').toLowerCase();
                           const isPncpBased = pl.includes('pncp') || ll.includes('pncp.gov.br') || pl.includes('compras') || pl.includes('cnet') || ll.includes('comprasnet') || ll.includes('cnetmobile');
-                          const isOtherPlatform = ll.includes('bbmnet') || ll.includes('bllcompras') || ll.includes('bnccompras') || ll.includes('portaldecompraspublicas') || ll.includes('licitanet.com.br') || pl.includes('bbmnet') || pl.includes('bll') || pl.includes('bnc') || pl.includes('portal de compras') || pl.includes('licitanet');
+                          const isOtherPlatform = ll.includes('bbmnet') || ll.includes('bllcompras') || ll.includes('bnccompras') || ll.includes('portaldecompraspublicas') || ll.includes('licitanet.com.br') || ll.includes('licitamaisbrasil') || pl.includes('bbmnet') || pl.includes('bll') || pl.includes('bnc') || pl.includes('portal de compras') || pl.includes('licitanet') || pl.includes('licitamaisbrasil');
                           if ((proc as any).hasPncpLink === false && proc.totalMessages === 0 && isPncpBased && !isOtherPlatform) {
                             return (
                               <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -723,7 +725,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                             {msg.captureSource && (
                               <div style={{ marginTop: 'var(--space-2)', display: 'flex', justifyContent: 'flex-end' }}>
                                 <span style={{ fontSize: 'var(--text-xs)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
-                                  via {msg.captureSource === 'comprasnet-xhr' || msg.captureSource === 'server-worker' ? 'ComprasNet' : msg.captureSource === 'bbmnet-firestore' ? 'BBMNET' : msg.captureSource === 'bll-api' ? 'BLL Compras' : msg.captureSource === 'bnc-api' ? 'BNC Compras' : msg.captureSource === 'pcp-api' ? 'PCP' : msg.captureSource === 'licitanet-api' ? 'Licitanet' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
+                                  via {msg.captureSource === 'comprasnet-xhr' || msg.captureSource === 'server-worker' ? 'ComprasNet' : msg.captureSource === 'bbmnet-firestore' ? 'BBMNET' : msg.captureSource === 'bll-api' ? 'BLL Compras' : msg.captureSource === 'bnc-api' ? 'BNC Compras' : msg.captureSource === 'pcp-api' ? 'PCP' : msg.captureSource === 'licitanet-api' ? 'Licitanet' : msg.captureSource === 'licitamaisbrasil-api' ? 'Licita+Brasil' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
                                 </span>
                               </div>
                             )}

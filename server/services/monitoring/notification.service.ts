@@ -147,6 +147,8 @@ export class NotificationService {
           platformName = 'BNC Compras';
         } else if (link.includes('portaldecompraspublicas')) {
           platformName = 'Portal de Compras Públicas';
+        } else if (link.includes('licitamaisbrasil')) {
+          platformName = 'Licita Mais Brasil';
         } else if (link.includes('licitanet.com.br')) {
           platformName = 'Licitanet';
         }

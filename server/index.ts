@@ -3122,11 +3122,13 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             companyProfileId = null;
         }
 
-        // ── Auto-enrich: fetch ComprasNet link from PNCP API if missing ──
+        // ── Auto-enrich: fetch platform link from PNCP API if missing ──
         const link = biddingData.link || '';
         let hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+        const MONITORABLE_DOMAINS = ['cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org', 'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet'];
+        const hasPlatformLink = MONITORABLE_DOMAINS.some(d => link.includes(d));
 
-        if (!hasComprasNetLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+        if (!hasPlatformLink && link.includes('pncp.gov.br') && link.includes('editais')) {
             try {
                 const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
@@ -3134,16 +3136,16 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                     const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
                     if (apiRes.ok) {
                         const apiData = await apiRes.json();
-                        const comprasNetUrl = apiData.linkSistemaOrigem;
-                        if (comprasNetUrl && (comprasNetUrl.includes('cnetmobile') || comprasNetUrl.includes('comprasnet'))) {
-                            biddingData.link = `${link}, ${comprasNetUrl}`;
-                            hasComprasNetLink = true;
-                            console.log(`[AutoEnrich] Fetched ComprasNet link for new process from PNCP API`);
+                        const platformUrl = apiData.linkSistemaOrigem;
+                        if (platformUrl && MONITORABLE_DOMAINS.some(d => platformUrl.includes(d))) {
+                            biddingData.link = `${link}, ${platformUrl}`;
+                            if (platformUrl.includes('cnetmobile') || platformUrl.includes('comprasnet')) hasComprasNetLink = true;
+                            console.log(`[AutoEnrich] Fetched platform link for new process from PNCP API: ${platformUrl.substring(0, 60)}`);
                         }
                     }
                 }
             } catch (e) {
-                console.warn('[AutoEnrich] Failed to fetch ComprasNet link:', e);
+                console.warn('[AutoEnrich] Failed to fetch platform link:', e);
             }
         }
 
@@ -3151,6 +3153,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         const hasMonitorableLink = hasComprasNetLink
             || link.includes('portaldecompraspublicas')
             || link.includes('licitanet.com.br')
+            || link.includes('licitamaisbrasil.com.br')
             || link.includes('bllcompras') || link.includes('bll.org')
             || link.includes('bnccompras');
 
@@ -3293,11 +3296,13 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             ...biddingData
         } = req.body;
 
-        // ── Auto-enrich: fetch ComprasNet link from PNCP API if missing ──
+        // ── Auto-enrich: fetch platform link from PNCP API if missing ──
         const link = biddingData.link || '';
         let hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+        const MONITORABLE_DOMAINS = ['cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org', 'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet'];
+        const hasPlatformLink = MONITORABLE_DOMAINS.some(d => link.includes(d));
 
-        if (!hasComprasNetLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+        if (!hasPlatformLink && link.includes('pncp.gov.br') && link.includes('editais')) {
             try {
                 const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
@@ -3305,16 +3310,16 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                     const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
                     if (apiRes.ok) {
                         const apiData = await apiRes.json();
-                        const comprasNetUrl = apiData.linkSistemaOrigem;
-                        if (comprasNetUrl && (comprasNetUrl.includes('cnetmobile') || comprasNetUrl.includes('comprasnet'))) {
-                            biddingData.link = `${link}, ${comprasNetUrl}`;
-                            hasComprasNetLink = true;
-                            console.log(`[AutoEnrich] Fetched ComprasNet link for process "${id}" from PNCP API`);
+                        const platformUrl = apiData.linkSistemaOrigem;
+                        if (platformUrl && MONITORABLE_DOMAINS.some(d => platformUrl.includes(d))) {
+                            biddingData.link = `${link}, ${platformUrl}`;
+                            if (platformUrl.includes('cnetmobile') || platformUrl.includes('comprasnet')) hasComprasNetLink = true;
+                            console.log(`[AutoEnrich] Fetched platform link for process "${id}" from PNCP API: ${platformUrl.substring(0, 60)}`);
                         }
                     }
                 }
             } catch (e) {
-                console.warn('[AutoEnrich] Failed to fetch ComprasNet link:', e);
+                console.warn('[AutoEnrich] Failed to fetch platform link:', e);
             }
         }
 
@@ -3322,6 +3327,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         const hasMonitorableLink = hasComprasNetLink
             || link.includes('portaldecompraspublicas')
             || link.includes('licitanet.com.br')
+            || link.includes('licitamaisbrasil.com.br')
             || link.includes('bllcompras') || link.includes('bll.org')
             || link.includes('bnccompras');
 
@@ -6412,11 +6418,12 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             filtered = result.filter((p: any) => {
                 const portal = (p.portal || '').toLowerCase();
                 const link = (p.link || '').toLowerCase();
-                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas') && !link.includes('licitanet.com.br');
+                if (pf === 'comprasnet') return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas') && !link.includes('licitanet.com.br') && !link.includes('licitamaisbrasil');
                 if (pf === 'bbmnet') return link.includes('bbmnet') || link.includes('sala.bbmnet') || portal.includes('bbmnet');
                 if (pf === 'pncp') return portal.includes('pncp') || link.includes('pncp.gov.br');
                 if (pf === 'pcp') return link.includes('portaldecompraspublicas') || portal.includes('portal de compras');
                 if (pf === 'licitanet') return link.includes('licitanet.com.br') || portal.includes('licitanet');
+                if (pf === 'licitamaisbrasil') return link.includes('licitamaisbrasil.com.br') || portal.includes('licita mais brasil') || portal.includes('licitamaisbrasil');
                 if (pf === 'bll') return link.includes('bllcompras') || link.includes('bll.org') || portal.includes('bll');
                 if (pf === 'bnc') return link.includes('bnccompras');
                 return true;
@@ -7720,6 +7727,135 @@ app.listen(PORT, async () => {
         pollLicitanetProcesses();
         setInterval(pollLicitanetProcesses, LICITANET_POLL_INTERVAL_MS);
     }, 60_000);
+
+    // ══════════════════════════════════════════════════════════════
+    // ── Licita Mais Brasil: Polling via API REST JSON autenticada ──
+    // ══════════════════════════════════════════════════════════════
+    const LMB_POLL_INTERVAL_MS = 90_000; // 90 segundos
+
+    async function pollLMBProcesses() {
+        try {
+            const { LicitaMaisBrasilMonitor } = require('./services/monitoring/licitamaisbrasil-monitor.service');
+            const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
+            const { DedupService } = require('./services/monitoring/dedup.service');
+            const { NotificationService } = require('./services/monitoring/notification.service');
+
+            // 1. Buscar processos monitorados da Licita Mais Brasil
+            const lmbProcesses = await prisma.biddingProcess.findMany({
+                where: {
+                    isMonitored: true,
+                    link: { contains: 'licitamaisbrasil.com.br' },
+                },
+                select: {
+                    id: true,
+                    tenantId: true,
+                    title: true,
+                    link: true,
+                },
+            });
+
+            if (lmbProcesses.length === 0) return;
+
+            let totalNew = 0;
+            let totalAlerts = 0;
+
+            for (const proc of lmbProcesses) {
+                try {
+                    // 2. Extrair a URL da Licita Mais Brasil
+                    const lmbUrl = LicitaMaisBrasilMonitor.extractLMBUrl(proc.link);
+                    if (!lmbUrl) continue;
+
+                    // 3. Buscar mensagens via API REST autenticada
+                    const messages = await LicitaMaisBrasilMonitor.fetchMessages(lmbUrl);
+                    if (messages.length === 0) continue;
+
+                    // 4. Deduplicar contra mensagens existentes
+                    const existingLogs = await prisma.chatMonitorLog.findMany({
+                        where: { biddingProcessId: proc.id },
+                        select: { messageId: true, fingerprintHash: true },
+                    });
+                    const existingIds = new Set(existingLogs.map((l: any) => l.messageId));
+                    const existingFingerprints = new Set(existingLogs.map((l: any) => l.fingerprintHash));
+
+                    const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
+                    if (newMessages.length === 0) continue;
+
+                    // 5. Keyword detection para este tenant
+                    const config = await prisma.chatMonitorConfig.findUnique({
+                        where: { tenantId: proc.tenantId },
+                    });
+                    const detector = createDetectorFromConfig(config);
+
+                    let created = 0;
+                    let alerts = 0;
+
+                    for (const msg of newMessages) {
+                        const fingerprintHash = DedupService.generateFingerprint(
+                            proc.id, msg.messageId, msg.content, msg.authorType
+                        );
+
+                        if (existingFingerprints.has(fingerprintHash)) continue;
+
+                        const detection = detector.detect(msg.content);
+                        if (detection.shouldNotify) alerts++;
+
+                        const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
+
+                        await prisma.chatMonitorLog.create({
+                            data: {
+                                tenantId: proc.tenantId,
+                                biddingProcessId: proc.id,
+                                messageId: msg.messageId,
+                                fingerprintHash,
+                                content: msg.content,
+                                authorType: msg.authorType,
+                                eventCategory: detection.categoryId || null,
+                                detectedKeyword: detection.detectedKeyword,
+                                captureSource: 'licitamaisbrasil-api',
+                                messageTimestamp: (msg as any).timestamp || null,
+                                status,
+                            },
+                        });
+
+                        existingIds.add(msg.messageId);
+                        existingFingerprints.add(fingerprintHash);
+                        created++;
+                    }
+
+                    if (created > 0) {
+                        console.log(`[LMB Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
+                        totalNew += created;
+                        totalAlerts += alerts;
+                    }
+
+                    // Gentil com o servidor: 1.5s entre processos (API autenticada)
+                    await new Promise(r => setTimeout(r, 1500));
+                } catch (err: any) {
+                    console.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                }
+            }
+
+            // Processar notificações pendentes se houve alertas
+            if (totalAlerts > 0) {
+                try {
+                    await NotificationService.processPendingNotifications();
+                } catch { /* silent */ }
+            }
+
+            if (totalNew > 0) {
+                console.log(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
+            }
+        } catch (error: any) {
+            console.error('[LMB Poll] Erro no ciclo:', error.message);
+        }
+    }
+
+    // Iniciar polling LMB com delay de 75s (após Licitanet)
+    setTimeout(() => {
+        console.log(`[LMB Poll] 🚀 Monitor Licita Mais Brasil iniciado (intervalo: ${LMB_POLL_INTERVAL_MS / 1000}s)`);
+        pollLMBProcesses();
+        setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
+    }, 75_000);
 });
 
 // Keep event loop alive (required in this environment)
