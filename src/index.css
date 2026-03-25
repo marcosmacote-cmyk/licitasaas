@@ -3719,19 +3719,19 @@ table tr.selected td { background: var(--color-primary-light); }
 
 /* Glassmorphism */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.85); /* Mais leitoso para cobrir fundos mistos */
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 0, 0, 0.06); /* Borda visível mas sutil no Light Mode */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 12px 24px -8px rgba(0, 0, 0, 0.03); /* Sombra mais nítida de assentamento */
 }
 
 [data-theme='dark'] .glass-panel {
-  background: rgba(17, 24, 39, 0.65);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  background: rgba(17, 24, 39, 0.55);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Borda iluminada */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05); /* Luz interna no topo */
 }
 
 /* Premium Hover Effects */
@@ -3740,8 +3740,8 @@ table tr.selected td { background: var(--color-primary-light); }
 }
 .premium-hover:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,0.05) inset;
-  border-color: var(--color-border-focus);
+  box-shadow: 0 16px 32px -8px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.02) inset;
+  border-color: rgba(0,0,0,0.12);
 }
 
 [data-theme='dark'] .premium-hover:hover {
