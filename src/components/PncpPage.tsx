@@ -241,7 +241,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             )}
 
             {/* Search Card */}
-            <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)', background: 'var(--color-bg-surface)' }}>
+            <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: 'var(--shadow-md), 0 0 0 1px var(--color-border)' }}>
                 <form onSubmit={p.handleSearch}>
                     {/* Main Search Row */}
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'end', flexWrap: 'wrap' }}>
@@ -255,8 +255,12 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                     value={p.keywords}
                                     onChange={(e) => p.setKeywords(e.target.value)}
                                     style={{
-                                        paddingLeft: '42px',
+                                        paddingLeft: '44px',
+                                        paddingTop: '12px',
+                                        paddingBottom: '12px',
                                         fontSize: '0.9375rem',
+                                        height: '48px',
+                                        borderRadius: 'var(--radius-lg)'
                                     }}
                                     className="form-select"
                                 />
@@ -265,14 +269,14 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
                         <div style={{ flex: 1, minWidth: '180px' }}>
                             <label className="form-label">Status</label>
-                            <select value={p.status} onChange={(e) => p.setStatus(e.target.value)} className="form-select">
+                            <select value={p.status} onChange={(e) => p.setStatus(e.target.value)} className="form-select" style={{ height: '48px', borderRadius: 'var(--radius-lg)' }}>
                                 {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                         </div>
 
                         <div style={{ minWidth: '120px' }}>
                             <label className="form-label">Estado (UF)</label>
-                            <select value={p.selectedUf} onChange={(e) => p.setSelectedUf(e.target.value)} className="form-select">
+                            <select value={p.selectedUf} onChange={(e) => p.setSelectedUf(e.target.value)} className="form-select" style={{ height: '48px', borderRadius: 'var(--radius-lg)' }}>
                                 <option value="">Brasil (Todas as UFs)</option>
                                 <optgroup label="Agrupamento por Região">
                                     <option value="AC,AP,AM,PA,RO,RR,TO">Região Norte</option>
@@ -288,7 +292,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         </div>
 
                         <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'end' }}>
-                            <button type="submit" className="btn btn-primary" disabled={p.loading} style={{ padding: 'var(--space-3) var(--space-5)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' as any, height: '44px' }}>
+                            <button type="submit" className="btn btn-primary" disabled={p.loading} style={{ padding: '0 var(--space-6)', borderRadius: 'var(--radius-lg)', gap: 'var(--space-2)', fontSize: '0.9375rem', fontWeight: 'var(--font-semibold)' as any, height: '48px' }}>
                                 {p.loading ? <Loader2 size={18} className="spinner" /> : <Search size={18} />}
                                 Buscar
                             </button>
@@ -545,7 +549,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             </div>
 
             {/* Results Table */}
-            <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: 'var(--shadow-sm), 0 0 0 1px var(--color-border)', overflow: 'hidden' }}>
                 <table className="table" style={{ width: '100%' }}>
                     <thead>
                         <tr>
