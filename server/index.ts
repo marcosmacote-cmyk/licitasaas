@@ -3100,6 +3100,85 @@ Responda APENAS com JSON array:
     }
 });
 
+// ══════════════════════════════════════════
+// ── Portal Normalization & Monitoring Helpers ──
+// ══════════════════════════════════════════
+
+// Canonical list of monitorable platform domains (used in create, update, and backfill)
+const MONITORABLE_DOMAINS = [
+    'cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org',
+    'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia',
+    'precodereferencia', 'compras.fortaleza.ce.gov.br',
+];
+
+// Map platform canonical names → domains they use (for credential matching)
+const PLATFORM_DOMAINS: Record<string, string[]> = {
+    'ComprasNet':                ['cnetmobile', 'comprasnet', 'compras.gov.br', 'gov.br/compras'],
+    'M2A':                       ['m2atecnologia', 'precodereferencia'],
+    'BLL':                       ['bllcompras', 'bll.org'],
+    'BBMNET':                    ['bbmnet'],
+    'BNC':                       ['bnccompras'],
+    'Licita Mais Brasil':        ['licitamaisbrasil'],
+    'Portal de Compras Públicas': ['portaldecompraspublicas'],
+    'Licitanet':                 ['licitanet.com.br'],
+};
+
+/**
+ * Normaliza o campo "portal" para um nome canônico.
+ * Resolve as 18+ variações digitadas livremente pelos usuários.
+ */
+function normalizePortal(portal: string, link?: string): string {
+    if (!portal && !link) return 'Não Informado';
+    const p = (portal || '').toLowerCase().trim();
+    const l = (link || '').toLowerCase();
+
+    // Prioridade 1: Inferir pelo link (mais confiável que texto livre)
+    if (l) {
+        if (l.includes('m2atecnologia') || l.includes('precodereferencia')) return 'M2A';
+        if (l.includes('bbmnet')) return 'BBMNET';
+        if (l.includes('bllcompras') || l.includes('bll.org')) return 'BLL';
+        if (l.includes('bnccompras')) return 'BNC';
+        if (l.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
+        if (l.includes('portaldecompraspublicas')) return 'Portal de Compras Públicas';
+        if (l.includes('licitanet.com.br')) return 'Licitanet';
+        if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras')) return 'ComprasNet';
+    }
+
+    // Prioridade 2: Normalizar o texto do portal
+    if (p.includes('m2a') || p.includes('m2atecnologia')) return 'M2A';
+    if (p.includes('bbmnet')) return 'BBMNET';
+    if (p.includes('bll')) return 'BLL';
+    if (p.includes('bnc')) return 'BNC';
+    if (p.includes('licita mais') || p.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
+    if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
+    if (p.includes('licitanet')) return 'Licitanet';
+    if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile')) return 'ComprasNet';
+
+    // Prioridade 3: Se contém "pncp" sozinho, pode ser ComprasNet ou outro
+    if (p.includes('pncp') && !l) return portal; // Manter original se só tem PNCP
+
+    return portal || 'Não Informado'; // Preservar se não reconhecido
+}
+
+/**
+ * Detecta se um link contém domínio de plataforma monitorável.
+ */
+function hasMonitorableDomain(link: string): boolean {
+    const l = link.toLowerCase();
+    return MONITORABLE_DOMAINS.some(d => l.includes(d));
+}
+
+/**
+ * Detecta a plataforma canônica a partir de um link.
+ */
+function detectPlatformFromLink(link: string): string | null {
+    const l = link.toLowerCase();
+    for (const [platform, domains] of Object.entries(PLATFORM_DOMAINS)) {
+        if (domains.some(d => l.includes(d))) return platform;
+    }
+    return null;
+}
+
 // Bidding Processes
 app.get('/api/biddings', authenticateToken, async (req: any, res) => {
     try {
@@ -3122,24 +3201,31 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             companyProfileId = null;
         }
 
-        // ── Auto-enrich: fetch platform link from PNCP API if missing ──
-        const link = biddingData.link || '';
-        let hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
-        const MONITORABLE_DOMAINS = ['cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org', 'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet'];
-        const hasPlatformLink = MONITORABLE_DOMAINS.some(d => link.includes(d));
+        // ── Step 0: Normalize portal name ──
+        biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
 
-        if (!hasPlatformLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+        // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
+        let enrichedLink = biddingData.link || '';
+        const hasPlatformLink = hasMonitorableDomain(enrichedLink);
+
+        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
             try {
-                const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
                     const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
                     if (apiRes.ok) {
                         const apiData = await apiRes.json();
-                        const platformUrl = apiData.linkSistemaOrigem;
-                        if (platformUrl && MONITORABLE_DOMAINS.some(d => platformUrl.includes(d))) {
-                            biddingData.link = `${link}, ${platformUrl}`;
-                            if (platformUrl.includes('cnetmobile') || platformUrl.includes('comprasnet')) hasComprasNetLink = true;
+                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                            // Prevent duplicates
+                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                            if (!existingParts.some((part: string) => part === platformUrl)) {
+                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                biddingData.link = enrichedLink;
+                            }
+                            // Re-normalize portal with the enriched link
+                            biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
                             console.log(`[AutoEnrich] Fetched platform link for new process from PNCP API: ${platformUrl.substring(0, 60)}`);
                         }
                     }
@@ -3149,22 +3235,16 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // Auto-enable monitoring for all supported batch platforms
-        const hasMonitorableLink = hasComprasNetLink
-            || link.includes('portaldecompraspublicas')
-            || link.includes('licitanet.com.br')
-            || link.includes('licitamaisbrasil.com.br')
-            || link.includes('bllcompras') || link.includes('bll.org')
-            || link.includes('bnccompras');
-
-        if (hasMonitorableLink) {
+        // ── Step 2: Auto-enable monitoring for all supported platforms ──
+        if (hasMonitorableDomain(enrichedLink)) {
             biddingData.isMonitored = true;
-            console.log(`[AutoMonitor] Auto-enabled monitoring for new process`);
+            console.log(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
         }
 
-        // Auto-backfill pncpLink from link
-        if (!biddingData.pncpLink && (biddingData.link || '').includes('pncp.gov.br') && (biddingData.link || '').includes('editais')) {
-            const pncpUrl = (biddingData.link || '').split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
+        // ── Step 3: Auto-backfill pncpLink from link ──
+        if (!biddingData.pncpLink) {
+            const allLinks = (biddingData.link || '').split(',').map((s: string) => s.trim());
+            const pncpUrl = allLinks.find((s: string) => s.includes('pncp.gov.br/app/editais'));
             if (pncpUrl) biddingData.pncpLink = pncpUrl;
         }
 
@@ -3178,28 +3258,30 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
     }
 });
 
-// ── Manual backfill: fetch ComprasNet links from PNCP API for all existing processes ──
-app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, res) => {
+// ── Universal backfill: fetch platform links from PNCP API for ALL platforms ──
+app.post('/api/backfill-platform-links', authenticateToken, async (req: any, res) => {
     const testMode = req.query.test === '1';
     try {
+        // Fetch all processes with PNCP link but missing platform link
         const allProcesses = await prisma.biddingProcess.findMany({
-            where: { link: { contains: 'pncp.gov.br/app/editais' } },
-            select: { id: true, link: true, isMonitored: true }
+            where: { link: { contains: 'pncp.gov.br' } },
+            select: { id: true, link: true, portal: true, isMonitored: true, pncpLink: true }
         });
         const processes = allProcesses.filter(p => {
-            const link = p.link || '';
-            return !link.includes('cnetmobile') && !link.includes('comprasnet-web');
+            const link = (p.link || '').toLowerCase();
+            // Keep processes that don't have ANY monitorable domain yet
+            return !hasMonitorableDomain(link);
         });
 
         if (processes.length === 0) {
-            return res.json({ message: 'All processes already have ComprasNet links', updated: 0, total: 0 });
+            return res.json({ message: 'All PNCP processes already have platform links', updated: 0, total: allProcesses.length });
         }
 
         // Test mode: debug one process and return
         if (testMode) {
             const proc = processes[0];
             const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-            if (!match) return res.json({ debug: 'no match', link: proc.link });
+            if (!match) return res.json({ debug: 'no match in link', link: proc.link });
             const [, cnpj, ano, seq] = match;
             const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
             try {
@@ -3208,9 +3290,9 @@ app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, r
                 let parsed: any = null;
                 try { parsed = JSON.parse(text); } catch {}
                 return res.json({
-                    processId: proc.id, link: proc.link, apiUrl, httpStatus: apiRes.status,
+                    processId: proc.id, link: proc.link, portal: proc.portal, apiUrl, httpStatus: apiRes.status,
                     linkSistemaOrigem: parsed?.linkSistemaOrigem || null,
-                    linkProcessoEletronico: parsed?.linkProcessoEletronico || null,
+                    detectedPlatform: parsed?.linkSistemaOrigem ? detectPlatformFromLink(parsed.linkSistemaOrigem) : null,
                     responseSnippet: text.substring(0, 500),
                 });
             } catch (e) {
@@ -3219,12 +3301,12 @@ app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, r
         }
 
         // Full mode: respond immediately, process in background
-        res.json({ message: `Backfill started for ${processes.length} processes. Check server logs.`, total: processes.length });
+        res.json({ message: `Universal backfill started for ${processes.length} processes (${allProcesses.length} total PNCP). Check server logs.`, total: processes.length });
 
         (async () => {
             // Step 1: Clean up duplicate links in all PNCP processes
             for (const proc of allProcesses) {
-                const parts = (proc.link || '').split(',').map((s: string) => s.trim());
+                const parts = (proc.link || '').split(',').map((s: string) => s.trim()).filter(Boolean);
                 const unique = [...new Set(parts)];
                 if (unique.length < parts.length) {
                     await prisma.biddingProcess.update({
@@ -3235,9 +3317,23 @@ app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, r
                 }
             }
 
-            // Step 2: Add ComprasNet links where missing
+            // Step 2: Normalize portals for ALL processes (not just ones missing links)
+            let portalNormalized = 0;
+            for (const proc of allProcesses) {
+                const normalized = normalizePortal(proc.portal || '', proc.link);
+                if (normalized !== proc.portal) {
+                    await prisma.biddingProcess.update({
+                        where: { id: proc.id },
+                        data: { portal: normalized }
+                    });
+                    portalNormalized++;
+                    console.log(`[Backfill] 🏷️ ${proc.id.slice(0,8)}: portal "${proc.portal}" → "${normalized}"`);
+                }
+            }
+
+            // Step 3: Add platform links where missing (ALL platforms, not just ComprasNet)
             let updated = 0;
-            let skippedNonComprasNet = 0;
+            let noLinkAvailable = 0;
             for (const proc of processes) {
                 const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (!match) continue;
@@ -3247,24 +3343,31 @@ app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, r
                     if (!apiRes.ok) { console.log(`[Backfill] ${proc.id.slice(0,8)}: API ${apiRes.status}`); continue; }
                     const data = await apiRes.json();
                     const lso = (data.linkSistemaOrigem || '').trim();
-                    const isComprasNet = lso.includes('cnetmobile') || lso.includes('comprasnet');
-                    
-                    if (lso && isComprasNet) {
+
+                    if (lso && hasMonitorableDomain(lso)) {
                         // Prevent duplicate links
                         const existingLinks = (proc.link || '').split(',').map((s: string) => s.trim());
-                        if (!existingLinks.some((el: string) => el.includes('cnetmobile') || el.includes('comprasnet'))) {
+                        if (!existingLinks.includes(lso)) {
                             const newLink = [...existingLinks, lso].join(', ');
+                            const detectedPlatform = detectPlatformFromLink(lso);
+                            const updateData: any = { link: newLink, isMonitored: true };
+                            if (detectedPlatform) updateData.portal = detectedPlatform;
+                            // Auto-backfill pncpLink if missing
+                            if (!proc.pncpLink) {
+                                const pncpUrl = existingLinks.find((s: string) => s.includes('pncp.gov.br/app/editais'));
+                                if (pncpUrl) updateData.pncpLink = pncpUrl;
+                            }
                             await prisma.biddingProcess.update({
                                 where: { id: proc.id },
-                                data: { link: newLink, isMonitored: true }
+                                data: updateData
                             });
                             updated++;
-                            console.log(`[Backfill] ✅ ${proc.id.slice(0,8)}: ComprasNet link added`);
+                            console.log(`[Backfill] ✅ ${proc.id.slice(0,8)}: ${detectedPlatform || 'platform'} link added (${lso.substring(0,60)})`);
                         }
                     } else if (lso) {
-                        skippedNonComprasNet++;
-                        console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: not ComprasNet (${lso.substring(0,60)})`);
+                        console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: non-monitorable link (${lso.substring(0,60)})`);
                     } else {
+                        noLinkAvailable++;
                         console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: linkSistemaOrigem empty`);
                     }
                     await new Promise(r => setTimeout(r, 300));
@@ -3272,11 +3375,48 @@ app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, r
                     console.log(`[Backfill] ❌ ${proc.id.slice(0,8)}: ${e}`);
                 }
             }
-            console.log(`[Backfill] Complete: ${updated} updated, ${skippedNonComprasNet} non-ComprasNet skipped, ${processes.length} total`);
+            console.log(`[Backfill] ✅ Complete: ${updated} enriched, ${portalNormalized} portals normalized, ${noLinkAvailable} empty, ${processes.length} total`);
         })();
     } catch (error) {
         console.error('[Backfill] Error:', error);
         res.status(500).json({ error: 'Backfill failed', details: error instanceof Error ? error.message : String(error) });
+    }
+});
+
+// Keep backward-compatible alias
+app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, res) => {
+    // Redirect to universal backfill
+    res.redirect(307, `/api/backfill-platform-links${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`);
+});
+
+// ── Normalize portals for ALL existing processes ──
+app.post('/api/admin/normalize-portals', authenticateToken, async (req: any, res) => {
+    try {
+        const allProcesses = await prisma.biddingProcess.findMany({
+            where: { tenantId: req.user.tenantId },
+            select: { id: true, portal: true, link: true }
+        });
+
+        let updated = 0;
+        const changes: Array<{ id: string; from: string; to: string }> = [];
+
+        for (const proc of allProcesses) {
+            const normalized = normalizePortal(proc.portal || '', proc.link);
+            if (normalized !== proc.portal) {
+                await prisma.biddingProcess.update({
+                    where: { id: proc.id },
+                    data: { portal: normalized }
+                });
+                changes.push({ id: proc.id.slice(0, 8), from: proc.portal || '(vazio)', to: normalized });
+                updated++;
+            }
+        }
+
+        console.log(`[NormalizePortals] ${updated}/${allProcesses.length} portals normalized for tenant ${req.user.tenantId}`);
+        res.json({ message: `${updated} portals normalized`, total: allProcesses.length, updated, changes });
+    } catch (error) {
+        console.error('[NormalizePortals] Error:', error);
+        res.status(500).json({ error: 'Failed to normalize portals' });
     }
 });
 
@@ -3296,24 +3436,34 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             ...biddingData
         } = req.body;
 
-        // ── Auto-enrich: fetch platform link from PNCP API if missing ──
-        const link = biddingData.link || '';
-        let hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
-        const MONITORABLE_DOMAINS = ['cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org', 'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia'];
-        const hasPlatformLink = MONITORABLE_DOMAINS.some(d => link.includes(d));
+        // ── Step 0: Normalize portal name ──
+        if (biddingData.portal !== undefined) {
+            biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
+        }
 
-        if (!hasPlatformLink && link.includes('pncp.gov.br') && link.includes('editais')) {
+        // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
+        let enrichedLink = biddingData.link || '';
+        const hasPlatformLink = hasMonitorableDomain(enrichedLink);
+
+        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
             try {
-                const pncpMatch = link.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
                     const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
                     if (apiRes.ok) {
                         const apiData = await apiRes.json();
-                        const platformUrl = apiData.linkSistemaOrigem;
-                        if (platformUrl && MONITORABLE_DOMAINS.some(d => platformUrl.includes(d))) {
-                            biddingData.link = `${link}, ${platformUrl}`;
-                            if (platformUrl.includes('cnetmobile') || platformUrl.includes('comprasnet')) hasComprasNetLink = true;
+                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                            if (!existingParts.some((part: string) => part === platformUrl)) {
+                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                biddingData.link = enrichedLink;
+                            }
+                            // Re-normalize portal with enriched link
+                            if (biddingData.portal !== undefined) {
+                                biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
+                            }
                             console.log(`[AutoEnrich] Fetched platform link for process "${id}" from PNCP API: ${platformUrl.substring(0, 60)}`);
                         }
                     }
@@ -3323,26 +3473,19 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // Auto-enable monitoring for all supported batch platforms
-        const hasMonitorableLink = hasComprasNetLink
-            || link.includes('portaldecompraspublicas')
-            || link.includes('licitanet.com.br')
-            || link.includes('licitamaisbrasil.com.br')
-            || link.includes('bllcompras') || link.includes('bll.org')
-            || link.includes('bnccompras')
-            || link.includes('m2atecnologia');
-
-        if (hasMonitorableLink && biddingData.isMonitored === undefined) {
+        // ── Step 2: Auto-enable monitoring for all supported platforms ──
+        if (hasMonitorableDomain(enrichedLink) && biddingData.isMonitored === undefined) {
             const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
             if (current && !current.isMonitored) {
                 biddingData.isMonitored = true;
-                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}"`);
+                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
             }
         }
 
-        // Auto-backfill pncpLink from link
-        if (!biddingData.pncpLink && (biddingData.link || '').includes('pncp.gov.br') && (biddingData.link || '').includes('editais')) {
-            const pncpUrl = (biddingData.link || '').split(',').map((s: string) => s.trim()).find((s: string) => s.includes('pncp.gov.br'));
+        // ── Step 3: Auto-backfill pncpLink from link ──
+        if (!biddingData.pncpLink) {
+            const allLinks = (biddingData.link || '').split(',').map((s: string) => s.trim());
+            const pncpUrl = allLinks.find((s: string) => s.includes('pncp.gov.br/app/editais'));
             if (pncpUrl) biddingData.pncpLink = pncpUrl;
         }
 
@@ -6786,30 +6929,45 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
             }
         });
 
-        // Match best credential per process based on portal/link
+        // Match best credential per process based on portal/link (v2 — with PLATFORM_DOMAINS fallback)
         const enriched = processes.map((p: any) => {
             const creds = p.company?.credentials || [];
             const link = (p.link || '').toLowerCase();
-            const portal = (p.portal || '').toLowerCase();
+            const rawPortal = (p.portal || '');
+            const normalizedPortal = normalizePortal(rawPortal, p.link || '');
 
             // Smart matching: score each credential
             let bestCred: any = null;
             let bestScore = 0;
+
+            // Get expected domains for this process's normalized portal
+            const expectedDomains = PLATFORM_DOMAINS[normalizedPortal] || [];
 
             for (const c of creds) {
                 const cp = (c.platform || '').toLowerCase();
                 const cu = (c.url || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
                 let score = 0;
 
-                // Exact URL match (strongest signal)
+                // Layer 1: Exact URL match (strongest signal)
                 if (cu && link && (link.includes(cu) || cu.includes(link.split('/')[2] || ''))) score += 10;
-                // Platform name match
-                if (cp && portal && (cp.includes(portal) || portal.includes(cp))) score += 5;
-                if (cp && link && link.includes(cp.replace(/\s+/g, ''))) score += 5;
-                // Domain-level match
+
+                // Layer 2: Domain-level match (link domain vs credential URL domain)
                 const linkDomain = link.split('/')[2] || '';
                 const credDomain = cu.split('/')[0] || '';
                 if (linkDomain && credDomain && (linkDomain.includes(credDomain) || credDomain.includes(linkDomain))) score += 8;
+
+                // Layer 3: Platform name match (normalized portal vs credential platform)
+                const normalizedCredPlatform = normalizePortal(c.platform || '', c.url || '');
+                if (normalizedCredPlatform === normalizedPortal) score += 7;
+                if (cp && link && link.includes(cp.replace(/\s+/g, ''))) score += 5;
+
+                // Layer 4: PLATFORM_DOMAINS fallback — match credential URL against expected domains
+                if (expectedDomains.length > 0 && cu) {
+                    if (expectedDomains.some(d => cu.includes(d))) score += 6;
+                }
+                // Also check if credential platform maps to any of expected domains
+                const credPlatformDomains = PLATFORM_DOMAINS[normalizedCredPlatform] || [];
+                if (expectedDomains.length > 0 && credPlatformDomains.some(d => expectedDomains.includes(d))) score += 5;
 
                 if (score > bestScore) {
                     bestScore = score;
@@ -6826,7 +6984,7 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
                 modalityCode: p.modalityCode,
                 processNumber: p.processNumber,
                 processYear: p.processYear,
-                portal: p.portal,
+                portal: normalizedPortal, // Send normalized portal to workers
                 link: p.link,
                 companyProfileId: p.companyProfileId,
                 companyName: p.company?.razaoSocial || null,
