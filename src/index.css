@@ -1620,6 +1620,9 @@ input:checked + .slider:before {
   padding: var(--card-padding);
   position: relative;
   overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   /* Border-top colorida injetada via style no componente */
   transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
@@ -1630,7 +1633,7 @@ input:checked + .slider:before {
   box-shadow: var(--shadow-md);
 }
 
-.dom-metric__body { display: flex; justify-content: space-between; align-items: flex-start; }
+.dom-metric__body { display: flex; justify-content: space-between; align-items: flex-start; flex: 1; }
 
 .dom-metric__title {
   font-size: var(--text-xs);
@@ -1700,6 +1703,7 @@ input:checked + .slider:before {
   transition: all var(--transition-fast);
   text-align: left;
   width: 100%;
+  height: 100%;
 }
 
 .dom-pipeline--active {
@@ -1759,9 +1763,11 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   gap: var(--space-2);
   transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+  height: 100%;
 }
 
 .dom-radar.card-interactive:hover {
