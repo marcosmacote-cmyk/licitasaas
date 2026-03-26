@@ -172,7 +172,7 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
       padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)',
       background: 'var(--color-bg-base)', flexShrink: 0,
       display: 'flex', flexDirection: 'column', gap: 'var(--space-3)',
-      maxHeight: '480px', overflowY: 'auto',
+      maxHeight: 'min(70vh, 600px)', overflowY: 'auto',
     }}>
 
       {/* ═══ Section 1: Alert Keywords ═══ */}
@@ -203,29 +203,29 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
                     const catKws = c.categoryCustomKeywords[cat.id] || [];
                     return (
                       <div key={cat.id} style={{
-                        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px',
+                        display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '12px',
                         padding: '4px 8px', borderRadius: 'var(--radius-sm)',
                         background: isEnabled ? 'var(--color-bg-surface-hover)' : 'transparent',
                         opacity: isEnabled ? 1 : 0.6,
                         transition: 'all 0.15s ease',
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '180px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '180px', flexShrink: 0 }}>
                           <input type="checkbox" checked={isEnabled}
                             onChange={() => c.toggleCategory(cat.id)}
                             style={{ accentColor: sc.color, width: '13px', height: '13px', flexShrink: 0, cursor: 'pointer' }} />
                           <CategoryIcon icon={cat.icon} size={13} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
-                          <span style={{ fontSize: '0.8125rem', fontWeight: isEnabled ? 600 : 400, color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', cursor: 'pointer' }} onClick={() => c.toggleCategory(cat.id)}>
+                          <span style={{ fontSize: '0.8125rem', fontWeight: isEnabled ? 600 : 400, color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => c.toggleCategory(cat.id)}>
                             {cat.label}
                           </span>
                         </div>
                         {isEnabled && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', flex: 1 }}>
+                          <div style={{ display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', gap: '4px', alignItems: 'center', flex: 1, paddingBottom: '4px', scrollbarWidth: 'thin' }}>
                             {catKws.map((kw: string) => (
                               <span key={kw} style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '3px',
-                                padding: '1px 6px', borderRadius: '10px',
-                                background: `${sc.color}10`, boxShadow: `0 0 0 1px ${sc.color}25`,
-                                fontSize: '0.625rem', color: sc.color, fontWeight: 600,
+                                padding: '2px 8px', borderRadius: '12px',
+                                background: `${sc.color}15`, border: `1px solid ${sc.color}30`,
+                                fontSize: '0.625rem', color: sc.color, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0
                               }}>
                                 {kw}
                                 <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
@@ -234,7 +234,9 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
                                 </button>
                               </span>
                             ))}
-                            <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
+                            <div style={{ flexShrink: 0, width: '150px' }}>
+                              <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -251,13 +253,13 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
           <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             <Plus size={12} /> Palavras-chave extras
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', gap: '4px', alignItems: 'center', paddingBottom: '4px', scrollbarWidth: 'thin' }}>
             {c.customKeywords.map((kw: string) => (
               <span key={kw} style={{
                 display: 'inline-flex', alignItems: 'center', gap: '4px',
                 padding: '2px 8px', borderRadius: 'var(--radius-lg)',
                 background: 'var(--color-primary-light)', color: 'var(--color-primary)',
-                fontSize: '0.6875rem', fontWeight: 600,
+                fontSize: '0.6875rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0
               }}>
                 {kw}
                 <button onClick={() => c.removeCustomKeyword(kw)}
@@ -266,7 +268,7 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
                 </button>
               </span>
             ))}
-            <div style={{ width: '180px' }}>
+            <div style={{ flexShrink: 0, width: '180px' }}>
               <CustomKeywordInput onAdd={c.addCustomKeyword} />
             </div>
           </div>
