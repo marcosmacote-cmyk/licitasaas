@@ -176,8 +176,33 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 <label style={labelStyle}>Portal / Origem *</label>
                                 <div style={inputContainerStyle}>
                                     <Globe size={18} color="var(--color-text-tertiary)" />
-                                    <input type="text" name="portal" style={inputInnerStyle}
-                                        placeholder="Ex: ComprasNet" value={form.formData.portal || ''} onChange={form.handleChange} />
+                                    {(!form.formData.portal || [
+                                        "ComprasNet", "BLL", "BNC", "Licitações-e (BB)", 
+                                        "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet"
+                                    ].includes(form.formData.portal)) && form.formData.portal !== 'Outro_Manual_Entry' ? (
+                                        <select name="portal" style={inputInnerStyle} value={form.formData.portal || ''} onChange={(e) => {
+                                            if (e.target.value === 'Outro') {
+                                                form.setFormData(prev => ({ ...prev, portal: 'Outro_Manual_Entry' }));
+                                            } else {
+                                                form.handleChange(e);
+                                            }
+                                        }}>
+                                            <option value="">-- Selecione --</option>
+                                            {["ComprasNet", "BLL", "BNC", "Licitações-e (BB)", "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                            <option value="Outro">Outro...</option>
+                                        </select>
+                                    ) : (
+                                        <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: '8px' }}>
+                                            <input type="text" name="portal" style={inputInnerStyle}
+                                                placeholder="Nome do portal" 
+                                                value={form.formData.portal === 'Outro_Manual_Entry' ? '' : (form.formData.portal || '')} 
+                                                onChange={(e) => form.setFormData(prev => ({ ...prev, portal: e.target.value }))} autoFocus />
+                                            <button type="button" onClick={() => form.setFormData(prev => ({ ...prev, portal: '' }))}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', padding: '2px', display: 'flex' }} title="Voltar para a lista">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div>
@@ -191,13 +216,37 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                             {/* ── Monitor de Chat Banner ── */}
                             {(() => {
-                                const link = form.formData.link || '';
-                                const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
-                                const hasBLLLink = link.includes('bllcompras') || link.includes('bll.org');
-                                const hasBNCLink = link.includes('bnccompras');
-                                const hasPncpLink = link.includes('pncp.gov.br');
-                                const isMonitorable = hasComprasNetLink || hasBLLLink || hasBNCLink;
-                                const isOtherPlatform = hasPncpLink && !isMonitorable;
+                                const link = (form.formData.link || '').toLowerCase();
+                                const portal = (form.formData.portal || '').toLowerCase();
+                                
+                                const isComprasNet = link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('comprasnet');
+                                const isBLL = link.includes('bllcompras') || link.includes('bll.org') || portal === 'bll';
+                                const isBNC = link.includes('bnccompras') || portal.includes('bnc');
+                                const isM2A = link.includes('m2atecnologia') || portal.includes('m2a');
+                                const isBBMNet = link.includes('bbmnet') || portal.includes('bbmnet');
+                                
+                                const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet;
+                                const isOtherPlatform = link.includes('pncp.gov.br') && !isMonitorable;
+
+                                let hasCredentials = true;
+                                if (isMonitorable && form.formData.companyProfileId) {
+                                    if (!form.credentials || form.credentials.length === 0) {
+                                        hasCredentials = false;
+                                    } else {
+                                        const scored = form.credentials.map(cred => {
+                                            const cp = cred.platform.toLowerCase();
+                                            const cu = (cred.url || '').toLowerCase();
+                                            let score = 0;
+                                            if (isComprasNet && (cp.includes('comprasnet') || cu.includes('comprasnet'))) score++;
+                                            if (isBLL && (cp.includes('bll') || cu.includes('bll'))) score++;
+                                            if (isBNC && (cp.includes('bnc') || cu.includes('bnc'))) score++;
+                                            if (isM2A && (cp.includes('m2a') || cu.includes('m2a'))) score++;
+                                            if (isBBMNet && (cp.includes('bbmnet') || cu.includes('bbmnet'))) score++;
+                                            return score;
+                                        });
+                                        hasCredentials = Math.max(...scored) > 0;
+                                    }
+                                }
 
                                 const bgStyle = isMonitorable
                                     ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
@@ -206,9 +255,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const iconBg = isMonitorable ? 'rgba(34, 197, 94, 0.12)' : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
                                 const iconColor = isMonitorable ? '#22c55e' : isOtherPlatform ? '#6366f1' : '#6b7280';
 
-                                const platformLabel = hasComprasNetLink ? 'ComprasNet' : hasBLLLink ? 'BLL Compras' : hasBNCLink ? 'BNC Compras' : '';
+                                const platformLabel = isComprasNet ? 'ComprasNet' : isBLL ? 'BLL' : isBNC ? 'BNC' : isM2A ? 'M2A' : isBBMNet ? 'BBMNet' : '';
                                 const title = isMonitorable
-                                    ? 'Monitor de Chat será ativado automaticamente'
+                                    ? 'Monitoramento M2A suportado'
                                     : isOtherPlatform
                                         ? 'Licitação em portal externo'
                                         : 'Monitor de Chat';
@@ -216,40 +265,61 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                 const subtitle = isMonitorable
                                     ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                        <CheckCircle size={11} color="#22c55e" /> Link {platformLabel} detectado
+                                        <CheckCircle size={11} color="#22c55e" /> Detectado para {platformLabel}. O chat será monitorado.
                                       </span>
                                     : isOtherPlatform
-                                        ? <span>O monitoramento de chat está disponível para processos no ComprasNet, BLL ou BNC Compras</span>
+                                        ? <span>Monitoramento apenas para ComprasNet, BLL, BNC, M2A e BBMNet.</span>
                                         : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o link do ComprasNet, BLL ou BNC para ativar o monitoramento
+                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o portal correto para ativar o webhook M2A
                                           </span>;
 
                                 const IconComponent = isOtherPlatform ? Globe : SignalHigh;
 
                                 return (
-                                    <div style={{
-                                        gridColumn: '1 / -1',
-                                        padding: 'var(--space-3) var(--space-4)',
-                                        borderRadius: 'var(--radius-md)',
-                                        background: bgStyle,
-                                        border: `1px solid ${borderColor}`,
-                                        display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap',
-                                    }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', gridColumn: '1 / -1' }}>
                                         <div style={{
-                                            width: '28px', height: '28px', borderRadius: 'var(--radius-md)',
-                                            background: iconBg,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                            padding: 'var(--space-3) var(--space-4)',
+                                            borderRadius: 'var(--radius-md)',
+                                            background: bgStyle,
+                                            border: `1px solid ${borderColor}`,
+                                            display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap',
                                         }}>
-                                            <IconComponent size={16} color={iconColor} />
-                                        </div>
-                                        <div style={{ flex: 1, minWidth: '200px' }}>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: titleColor, marginBottom: '2px' }}>
-                                                {title}
+                                            <div style={{
+                                                width: '28px', height: '28px', borderRadius: 'var(--radius-md)',
+                                                background: iconBg,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                            }}>
+                                                <IconComponent size={16} color={iconColor} />
                                             </div>
-                                            <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
-                                                {subtitle}
+                                            <div style={{ flex: 1, minWidth: '200px' }}>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: titleColor, marginBottom: '2px' }}>
+                                                    {title}
+                                                </div>
+                                                <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
+                                                    {subtitle}
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {isMonitorable && !hasCredentials && form.formData.companyProfileId && (
+                                            <div style={{
+                                                padding: 'var(--space-3) var(--space-4)',
+                                                borderRadius: 'var(--radius-md)',
+                                                background: 'rgba(239, 68, 68, 0.06)',
+                                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                                display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)'
+                                            }}>
+                                                <AlertTriangle size={16} color="var(--color-danger)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                                <div>
+                                                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-danger)', marginBottom: '2px' }}>
+                                                        Credenciais Ausentes para o Portal
+                                                    </div>
+                                                    <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
+                                                        A empresa selecionada não possui credenciais salvas para o portal {platformLabel}. O monitoramento de chat do LicitaSaaS não funcionará até que você adicione as credenciais no menu "Minhas Empresas".
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()}
