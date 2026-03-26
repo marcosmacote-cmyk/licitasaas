@@ -81,76 +81,124 @@ def match_process_to_certame(
     
     Estratégias (em ordem de prioridade):
     1. Match por certame_id no link (se a URL contém /certame/{id}/)
-    2. Match por título/objeto (similaridade de texto > 0.4)
+    2. Match por summary/objeto (o campo 'summary' contém a descrição do objeto
+       da licitação, que é muito mais similar ao título do certame M2A)
+    3. Fallback: match por título (threshold baixo)
+    
+    O problema original: o título no LicitaSaaS é o NÚMERO do pregão
+    (ex: "Pregão Eletrônico nº PE001-2026-SME - Prefeitura Municipal de X"),
+    enquanto o certame M2A tem o OBJETO (ex: "CONTRATAÇÃO DE EMPRESA PARA
+    PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE ESCOLAR"). São textos completamente
+    diferentes! O campo 'summary' resolve isso.
     
     Retorna o certame com melhor score ou None.
     """
     link = (process.get('link', '') or '').lower()
     title = process.get('title', '') or ''
+    summary = process.get('summary', '') or ''
 
-    # Estratégia 1: certame_id direto no link
+    # ── Estratégia 1: certame_id direto no link (match instantâneo) ──
     certame_match = re.search(r'detalhes/certame/(\d+)', link)
     if certame_match:
         cid = certame_match.group(1)
         for c in certames:
             if c['certame_id'] == cid:
+                logger.info(f'  🔗 Match direto via link: certame #{cid}')
                 return c
 
-    # Estratégia 2: Match por título/objeto
+    # ── Estratégia 2: Match por summary (objeto da licitação) ──
+    # O summary contém a descrição do objeto, muito mais parecido com o título M2A
+    SUMMARY_THRESHOLD = 0.35
+    TITLE_THRESHOLD = 0.30  # Mais baixo para fallback
+
     best_score = 0.0
     best_match = None
-    all_scores = []  # For debug logging
+    match_source = ''
+    all_scores = []
 
     for c in certames:
         ctitle = c.get('title', '')
         if not ctitle:
             continue
 
-        score = text_similarity(title, ctitle)
+        # Score por summary (fonte primária — alto peso)
+        summary_score = 0.0
+        if summary:
+            summary_score = _compute_match_score(summary, ctitle)
 
-        # Bonus: se o título do processo contém palavras-chave do certame
-        title_words = set(normalize_text(title).split())
-        certame_words = set(normalize_text(ctitle).split())
-        # Remove palavras muito comuns
-        stopwords = {
-            'de', 'do', 'da', 'dos', 'das', 'e', 'em', 'para', 'no', 'na',
-            'nos', 'nas', 'a', 'o', 'as', 'os', 'um', 'uma', 'uns',
-            'contratacao', 'empresa', 'servicos', 'prestacao', 'municipal',
-            'prefeitura', 'registro', 'precos',
-        }
-        title_important = title_words - stopwords
-        certame_important = certame_words - stopwords
-        if title_important and certame_important:
-            overlap = len(title_important & certame_important)
-            total = max(len(title_important), len(certame_important))
-            word_score = overlap / total if total > 0 else 0
-            # Combine: 60% text similarity + 40% word overlap
-            score = 0.6 * score + 0.4 * word_score
+        # Score por título (fallback — peso menor)
+        title_score = _compute_match_score(title, ctitle)
 
-        all_scores.append((score, c.get('certame_id', '?'), ctitle[:60]))
+        # Usar o melhor score entre summary e title
+        if summary_score >= title_score:
+            score = summary_score
+            source = 'summary'
+        else:
+            score = title_score
+            source = 'title'
+
+        all_scores.append((score, source, c.get('certame_id', '?'), ctitle[:60]))
 
         if score > best_score:
             best_score = score
             best_match = c
+            match_source = source
 
-    # Debug: log top 3 candidates (only on first 3 cycles)
+    # Debug: log top 3 candidates
     if all_scores:
-        all_scores.sort(reverse=True)
+        all_scores.sort(reverse=True, key=lambda x: x[0])
         top3 = all_scores[:3]
-        logger.info(
-            f'  📊 Match candidates for "{title[:40]}":'
-        )
-        for rank, (sc, cid, ct) in enumerate(top3, 1):
-            logger.info(f'     #{rank} score={sc:.3f} certame={cid} "{ct}"')
+        src_label = f'summary="{summary[:40]}"' if summary else f'title="{title[:40]}"'
+        logger.info(f'  📊 Match candidates ({src_label}):')
+        for rank, (sc, src, cid, ct) in enumerate(top3, 1):
+            logger.info(f'     #{rank} score={sc:.3f} via={src} certame={cid} "{ct}"')
 
-    if best_match and best_score >= 0.35:
+    # Determinar threshold baseado na fonte
+    threshold = SUMMARY_THRESHOLD if match_source == 'summary' else TITLE_THRESHOLD
+
+    if best_match and best_score >= threshold:
         logger.info(
-            f'  🎯 Match: score={best_score:.2f} | '
+            f'  🎯 Match ({match_source}): score={best_score:.2f} | '
             f'certame #{best_match["certame_id"]} ↔ "{title[:50]}"'
         )
         return best_match
 
     return None
+
+
+def _compute_match_score(text_a: str, text_b: str) -> float:
+    """
+    Calcula score de match composto: 60% similaridade de texto + 40% word overlap.
+    """
+    if not text_a or not text_b:
+        return 0.0
+
+    # Score base: similaridade de sequência
+    sim_score = text_similarity(text_a, text_b)
+
+    # Bonus: word overlap (palavras importantes em comum)
+    a_words = set(normalize_text(text_a).split())
+    b_words = set(normalize_text(text_b).split())
+
+    stopwords = {
+        'de', 'do', 'da', 'dos', 'das', 'e', 'em', 'para', 'no', 'na',
+        'nos', 'nas', 'a', 'o', 'as', 'os', 'um', 'uma', 'uns',
+        'contratacao', 'empresa', 'servicos', 'prestacao', 'municipal',
+        'prefeitura', 'registro', 'precos', 'futura', 'eventual',
+        'visando', 'mediante',
+    }
+
+    a_important = a_words - stopwords
+    b_important = b_words - stopwords
+
+    word_score = 0.0
+    if a_important and b_important:
+        overlap = len(a_important & b_important)
+        total = max(len(a_important), len(b_important))
+        word_score = overlap / total if total > 0 else 0
+
+    # Combine: 60% text similarity + 40% word overlap
+    return 0.6 * sim_score + 0.4 * word_score
 
 
 class M2AWatcher:
