@@ -130,6 +130,251 @@ function CategoryKeywordInput({ catId, onAdd, color }: { catId: string; onAdd: (
   );
 }
 
+// ── Collapsible Section helper ──
+function ConfigSection({ title, icon, defaultOpen = false, badge, children }: {
+  title: string; icon: React.ReactNode; defaultOpen?: boolean; badge?: React.ReactNode; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useLocalState(defaultOpen);
+  return (
+    <div style={{
+      borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-surface)',
+      boxShadow: '0 0 0 1px var(--color-border)', overflow: 'hidden',
+      transition: 'all 0.2s ease',
+    }}>
+      <button onClick={() => setOpen(!open)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+        padding: 'var(--space-3) var(--space-4)', background: 'none', border: 'none',
+        cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 600,
+        color: 'var(--color-text-primary)', textAlign: 'left',
+      }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+          {icon} {title}
+        </span>
+        {badge}
+        <span style={{
+          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.2s ease', fontSize: '0.75rem', color: 'var(--color-text-tertiary)',
+        }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Config Panel (redesigned with collapsible sections) ──
+function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
+  return (
+    <div style={{
+      padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)',
+      background: 'var(--color-bg-base)', flexShrink: 0,
+      display: 'flex', flexDirection: 'column', gap: 'var(--space-3)',
+      maxHeight: '480px', overflowY: 'auto',
+    }}>
+
+      {/* ═══ Section 1: Alert Keywords ═══ */}
+      <ConfigSection
+        title="Palavras-chave e Alertas"
+        icon={<Bell size={14} color="var(--color-warning)" />}
+        defaultOpen={true}
+        badge={
+          <span style={{ fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 'var(--radius-lg)', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', fontWeight: 600 }}>
+            {c.enabledCategories.length} categorias ativas
+          </span>
+        }
+      >
+        {/* Category toggles — compact inline layout */}
+        {c.taxonomy && (['critical', 'warning', 'info'] as const).map(severity => {
+          const sc = severityConfig[severity];
+          const cats = c.taxonomy.categories.filter((cat: any) => cat.severity === severity);
+          if (cats.length === 0) return null;
+          return (
+            <div key={severity} style={{
+              padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
+              background: sc.bg, boxShadow: `0 0 0 1px ${sc.border}`,
+            }}>
+              <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: sc.color, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {sc.icon} {sc.label}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {cats.map((cat: any) => {
+                  const isEnabled = c.enabledCategories.includes(cat.id);
+                  const catKws = c.categoryCustomKeywords[cat.id] || [];
+                  return (
+                    <div key={cat.id} style={{
+                      display: 'flex', flexDirection: 'column', gap: '6px',
+                      padding: '8px 12px', borderRadius: 'var(--radius-md)',
+                      background: isEnabled ? 'var(--color-bg-base)' : 'transparent',
+                      boxShadow: isEnabled ? `0 0 0 1px ${sc.border}` : `0 0 0 1px ${sc.border}30`,
+                      opacity: isEnabled ? 1 : 0.6,
+                      transition: 'all 0.15s ease', minWidth: '140px', flex: '1 1 180px', maxWidth: '260px',
+                    }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8125rem' }}>
+                        <input type="checkbox" checked={isEnabled}
+                          onChange={() => c.toggleCategory(cat.id)}
+                          style={{ accentColor: sc.color, width: '14px', height: '14px', flexShrink: 0 }} />
+                        <CategoryIcon icon={cat.icon} size={14} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
+                        <span style={{ fontWeight: isEnabled ? 600 : 400, color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>
+                          {cat.label}
+                        </span>
+                      </label>
+                      {isEnabled && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', alignItems: 'center', marginLeft: '20px' }}>
+                          {catKws.map((kw: string) => (
+                            <span key={kw} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '3px',
+                              padding: '1px 6px', borderRadius: '10px',
+                              background: `${sc.color}10`, boxShadow: `0 0 0 1px ${sc.color}25`,
+                              fontSize: '0.625rem', color: sc.color, fontWeight: 600,
+                            }}>
+                              {kw}
+                              <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
+                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
+                                <X size={10} color={sc.color} />
+                              </button>
+                            </span>
+                          ))}
+                          <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Custom keywords (global) */}
+        <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'rgba(37, 99, 235, 0.04)', boxShadow: '0 0 0 1px rgba(37, 99, 235, 0.12)' }}>
+          <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <Plus size={12} /> Palavras-chave extras
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+            {c.customKeywords.map((kw: string) => (
+              <span key={kw} style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                padding: '2px 8px', borderRadius: 'var(--radius-lg)',
+                background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                fontSize: '0.6875rem', fontWeight: 600,
+              }}>
+                {kw}
+                <button onClick={() => c.removeCustomKeyword(kw)}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
+                  <X size={10} color="var(--color-primary)" />
+                </button>
+              </span>
+            ))}
+            <div style={{ width: '180px' }}>
+              <CustomKeywordInput onAdd={c.addCustomKeyword} />
+            </div>
+          </div>
+          <div style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)', marginTop: '6px' }}>
+            Palavras extras que disparam alertas em qualquer categoria.
+          </div>
+        </div>
+      </ConfigSection>
+
+      {/* ═══ Section 2: Notification Channels ═══ */}
+      <ConfigSection
+        title="Canais de Notificação"
+        icon={<Send size={14} color="var(--color-primary)" />}
+        defaultOpen={false}
+        badge={
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {c.monitorConfig.telegramChatId && <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', fontWeight: 600 }}>Telegram ✓</span>}
+            {c.monitorConfig.phoneNumber && <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(16,185,129,0.08)', color: 'var(--color-success)', fontWeight: 600 }}>WhatsApp ✓</span>}
+          </div>
+        }
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              <Phone size={12} color="var(--color-success)" /> WhatsApp
+            </label>
+            <input type="text" className="config-input" value={c.monitorConfig.phoneNumber}
+              onChange={(e) => c.setMonitorConfig({...c.monitorConfig, phoneNumber: e.target.value})}
+              placeholder="+5585999999999"
+              style={{ fontSize: '0.8125rem' }} />
+          </div>
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              <Send size={12} color="var(--color-primary)" /> Telegram Chat ID
+            </label>
+            <input type="text" className="config-input" value={c.monitorConfig.telegramChatId}
+              onChange={(e) => c.setMonitorConfig({...c.monitorConfig, telegramChatId: e.target.value})}
+              placeholder="Chat ID ou @usuario"
+              style={{ fontSize: '0.8125rem' }} />
+          </div>
+        </div>
+        <button className="btn btn-ghost"
+          style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', alignSelf: 'flex-start' }}
+          disabled={c.testingNotif} onClick={c.handleTestNotification}>
+          {c.testingNotif ? <Loader2 size={12} className="spinner" /> : <SignalHigh size={12} />}
+          Enviar notificação de teste
+        </button>
+      </ConfigSection>
+
+      {/* ═══ Section 3: Agent Status ═══ */}
+      <ConfigSection
+        title="Status do Sistema"
+        icon={c.watcherStatus?.isOnline ? <Wifi size={14} color="var(--color-success)" /> : <WifiOff size={14} color="var(--color-text-tertiary)" />}
+        defaultOpen={false}
+        badge={
+          c.watcherStatus?.isOnline
+            ? <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'var(--color-success-bg)', color: 'var(--color-success)', fontWeight: 600 }}>Online</span>
+            : <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'var(--color-bg-surface-hover)', color: 'var(--color-text-tertiary)', fontWeight: 600 }}>Offline</span>
+        }
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+          {/* Watcher */}
+          <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-success-bg)', boxShadow: '0 0 0 1px rgba(16, 185, 129, 0.15)' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>Agente Local (ComprasNet)</div>
+            <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
+              {c.watcherStatus?.isOnline
+                ? `✓ Sincronizado: ${c.watcherStatus.machineName} (${c.watcherStatus.activeSessions || 0} abas)`
+                : '✕ Offline — inicie o agente na sua máquina'}
+            </div>
+          </div>
+          {/* Health */}
+          {c.health && (
+            <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'rgba(37,99,235,0.04)', boxShadow: '0 0 0 1px rgba(37,99,235,0.1)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>Servidor de Monitoramento</div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  {c.health.lastPollStatus === 'success' ? <CheckCircle size={10} color="var(--color-success)" /> : <AlertTriangle size={10} color="var(--color-warning)" />}
+                  {c.health.lastPollTime ? new Date(c.health.lastPollTime).toLocaleString('pt-BR') : 'Aguardando...'}
+                </span>
+                <span>{c.health.monitoredProcesses || 0} monitorados</span>
+                <span>{c.health.totalAlerts || 0} alertas</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <Info size={10} /> Ative o monitoramento (ícone 📡) no card da licitação para que o sistema capture mensagens do chat.
+        </div>
+      </ConfigSection>
+
+      {/* ═══ Save Bar (always visible when config open) ═══ */}
+      <div style={{
+        display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', alignItems: 'center',
+        padding: 'var(--space-2) 0', borderTop: '1px solid var(--color-border)',
+      }}>
+        <button className="btn btn-primary"
+          style={{ padding: '8px var(--space-5)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', fontWeight: 600 }}
+          disabled={c.savingConfig} onClick={c.handleSaveConfig}>
+          {c.savingConfig ? <Loader2 size={14} className="spinner" /> : <Save size={14} />}
+          Salvar Configurações
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   companies: { id: string; name?: string; cnpj?: string; }[];
   biddings?: BiddingProcess[];
@@ -227,169 +472,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
 
       {/* ── Config Panel (collapsible) ── */}
       {c.showConfig && (
-        <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-base)', flexShrink: 0, display: 'grid', gap: 'var(--space-4)', maxHeight: '500px', overflowY: 'auto' }}>
-
-          {/* ── Alert Categories ── */}
-          {c.taxonomy && (
-            <div>
-              <label className="config-label" style={{ marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Bell size={12} /> Categorias de Alerta
-              </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {(['critical', 'warning', 'info'] as const).map(severity => {
-                  const sc = severityConfig[severity];
-                  const cats = c.taxonomy.categories.filter((cat: any) => cat.severity === severity);
-                  if (cats.length === 0) return null;
-                  return (
-                    <div key={severity} style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: sc.bg, border: 'none', boxShadow: `0 0 0 1px ${sc.border}` }}>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: sc.color, marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {sc.icon} {sc.label}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-3)' }}>
-                        {cats.map((cat: any) => {
-                          const isEnabled = c.enabledCategories.includes(cat.id);
-                          const catKws = c.categoryCustomKeywords[cat.id] || [];
-                          return (
-                            <div key={cat.id} style={{
-                              display: 'flex', flexDirection: 'column', gap: 'var(--space-2)',
-                              padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
-                              background: isEnabled ? 'var(--color-bg-base)' : 'rgba(255, 255, 255, 0.4)',
-                              boxShadow: isEnabled ? `0 0 0 1px ${sc.border}, 0 2px 8px rgba(0,0,0,0.04)` : `0 0 0 1px ${sc.border}40`,
-                              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                            }}>
-                              <label
-                                title={cat.description}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: '8px',
-                                  cursor: 'pointer', fontSize: 'var(--text-sm)',
-                                  color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-                                }}>
-                                <input type="checkbox" checked={isEnabled}
-                                  onChange={() => c.toggleCategory(cat.id)}
-                                  style={{ accentColor: sc.color, width: '16px', height: '16px', flexShrink: 0 }} />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: isEnabled ? 600 : 500 }}>
-                                  <CategoryIcon icon={cat.icon} size={16} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
-                                  <span>{cat.label}</span>
-                                </div>
-                              </label>
-
-                              {isEnabled && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginLeft: '24px' }}>
-                                  {catKws.map(kw => (
-                                    <span key={kw} style={{
-                                      display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                      padding: '2px 8px', borderRadius: 'var(--radius-lg)',
-                                      background: 'var(--color-bg-surface-hover)', border: 'none', boxShadow: `0 0 0 1px ${sc.border}`,
-                                      fontSize: '0.6875rem', color: sc.color, fontWeight: 600,
-                                    }}>
-                                      {kw}
-                                      <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
-                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
-                                        <X size={12} color={sc.color} />
-                                      </button>
-                                    </span>
-                                  ))}
-                                  <div style={{ flex: '1 1 100px' }}>
-                                    <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── Custom Keywords + Channels ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', alignItems: 'start' }}>
-            <div>
-              <label className="config-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Plus size={12} /> Palavras-chave Personalizadas
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: 'var(--space-2)', minHeight: '28px' }}>
-                {c.customKeywords.map(kw => (
-                  <span key={kw} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                    padding: '2px 8px', borderRadius: 'var(--radius-lg)',
-                    background: 'var(--color-primary-light)', color: 'var(--color-primary)',
-                    fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)',
-                  }}>
-                    {kw}
-                    <button onClick={() => c.removeCustomKeyword(kw)}
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
-                      <X size={12} color="var(--color-primary)" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <CustomKeywordInput onAdd={c.addCustomKeyword} />
-            </div>
-            <div>
-              <label className="config-label"><Phone size={12} color="var(--color-success)" /> WhatsApp</label>
-              <input type="text" className="config-input" value={c.monitorConfig.phoneNumber}
-                onChange={(e) => c.setMonitorConfig({...c.monitorConfig, phoneNumber: e.target.value})}
-                placeholder="+5585999999999" />
-            </div>
-            <div>
-              <label className="config-label"><Send size={12} color="var(--color-primary)" /> Telegram Chat ID</label>
-              <input type="text" className="config-input" value={c.monitorConfig.telegramChatId}
-                onChange={(e) => c.setMonitorConfig({...c.monitorConfig, telegramChatId: e.target.value})}
-                placeholder="Chat ID ou @usuario" />
-            </div>
-          </div>
-
-          {/* ── Actions Row ── */}
-          <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-              <button className="btn btn-ghost"
-                style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}
-                disabled={c.testingNotif} onClick={c.handleTestNotification}>
-                {c.testingNotif ? <Loader2 size={12} className="spinner" /> : <SignalHigh size={12} />}
-                Testar
-              </button>
-              <button className="btn btn-primary"
-                style={{ padding: '6px var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)' }}
-                disabled={c.savingConfig} onClick={c.handleSaveConfig}>
-                {c.savingConfig ? <Loader2 size={12} className="spinner" /> : <Save size={12} />}
-                Salvar
-              </button>
-            </div>
-            {c.health && (
-              <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {c.health.lastPollStatus === 'success' ? <CheckCircle size={12} color="var(--color-success)" /> : c.health.lastPollStatus === 'error' ? <XCircle size={12} color="var(--color-danger)" /> : <AlertTriangle size={12} color="var(--color-warning)" />}
-                  {c.health.lastPollTime ? new Date(c.health.lastPollTime).toLocaleString('pt-BR') : 'Aguardando...'}
-                </div>
-                <span>{c.health.monitoredProcesses || 0} monitorados</span>
-                <span>{c.health.totalAlerts || 0} alertas</span>
-              </div>
-            )}
-          </div>
-          {/* ComprasNet Watcher Status */}
-          <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px rgba(16, 185, 129, 0.2)', background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              {c.watcherStatus?.isOnline ? <Wifi size={14} color="var(--color-success)" /> : <WifiOff size={14} color="var(--color-text-tertiary)" />}
-              <div>
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                  Agente Local (ComprasNet)
-                </div>
-                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                  {c.watcherStatus?.isOnline
-                    ? `Sincronizado: ${c.watcherStatus.machineName} (${c.watcherStatus.activeSessions || 0} abas)`
-                    : 'Offline — inicie o agente na sua máquina'}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Info size={10} /> Ative o monitoramento [SignalHigh] no Kanban para que o agente local (ou o servidor PNCP) monitore o processo.
-          </div>
-        </div>
+        <ConfigPanel c={c} />
       )}
 
       {/* ── Split Panel ── */}
