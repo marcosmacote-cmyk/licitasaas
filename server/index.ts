@@ -7576,6 +7576,8 @@ app.listen(PORT, async () => {
 
             for (const proc of batchProcesses) {
                 try {
+                    if (!proc.link) continue;
+
                     // 2. Detectar qual plataforma (BLL ou BNC)
                     const platform = BatchPlatformMonitor.detectPlatform(proc.link);
                     if (!platform) continue;
@@ -7659,6 +7661,8 @@ app.listen(PORT, async () => {
 
             for (const proc of pcpProcesses) {
                 try {
+                    if (!proc.link) continue;
+
                     // 2. Extrair a URL do PCP
                     const pcpUrl = PCPMonitor.extractPCPUrl(proc.link);
                     if (!pcpUrl) continue;
@@ -7738,6 +7742,8 @@ app.listen(PORT, async () => {
 
             for (const proc of licitanetProcesses) {
                 try {
+                    if (!proc.link) continue;
+
                     // 2. Extrair a URL da Licitanet
                     const licitanetUrl = LicitanetMonitor.extractLicitanetUrl(proc.link);
                     if (!licitanetUrl) continue;
@@ -7817,6 +7823,8 @@ app.listen(PORT, async () => {
 
             for (const proc of lmbProcesses) {
                 try {
+                    if (!proc.link) continue;
+
                     // 2. Extrair a URL da Licita Mais Brasil
                     const lmbUrl = LicitaMaisBrasilMonitor.extractLMBUrl(proc.link);
                     if (!lmbUrl) continue;
