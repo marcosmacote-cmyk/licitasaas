@@ -80,7 +80,14 @@ class M2AWebSocketMonitor:
 
     @property
     def is_connected(self) -> bool:
-        return self._connected and self._ws is not None and self._ws.open
+        if not self._connected or self._ws is None:
+            return False
+        if hasattr(self._ws, "open"):
+            return self._ws.open
+        state = getattr(self._ws, "state", None)
+        if state is not None:
+            return getattr(state, "name", str(state).split('.')[-1]) == "OPEN"
+        return True
 
     @property
     def ws_url(self) -> str:
