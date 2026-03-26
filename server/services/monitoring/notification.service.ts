@@ -151,6 +151,8 @@ export class NotificationService {
           platformName = 'Licita Mais Brasil';
         } else if (link.includes('licitanet.com.br')) {
           platformName = 'Licitanet';
+        } else if (link.includes('m2atecnologia') || link.includes('precodereferencia')) {
+          platformName = 'M2A';
         }
 
         const message = `🚨 <b>ALERTA DE CHAT - ${platformName}</b>\n\n` +
