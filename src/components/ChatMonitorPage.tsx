@@ -186,67 +186,65 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
           </span>
         }
       >
-        {/* Category toggles — compact inline layout */}
-        {c.taxonomy && (['critical', 'warning', 'info'] as const).map(severity => {
-          const sc = severityConfig[severity];
-          const cats = c.taxonomy.categories.filter((cat: any) => cat.severity === severity);
-          if (cats.length === 0) return null;
-          return (
-            <div key={severity} style={{
-              padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
-              background: sc.bg, boxShadow: `0 0 0 1px ${sc.border}`,
-            }}>
-              <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: sc.color, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {sc.icon} {sc.label}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {cats.map((cat: any) => {
-                  const isEnabled = c.enabledCategories.includes(cat.id);
-                  const catKws = c.categoryCustomKeywords[cat.id] || [];
-                  return (
-                    <div key={cat.id} style={{
-                      display: 'flex', flexDirection: 'column', gap: '6px',
-                      padding: '8px 12px', borderRadius: 'var(--radius-md)',
-                      background: isEnabled ? 'var(--color-bg-base)' : 'transparent',
-                      boxShadow: isEnabled ? `0 0 0 1px ${sc.border}` : `0 0 0 1px ${sc.border}30`,
-                      opacity: isEnabled ? 1 : 0.6,
-                      transition: 'all 0.15s ease', minWidth: '140px', flex: '1 1 180px', maxWidth: '260px',
-                    }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8125rem' }}>
-                        <input type="checkbox" checked={isEnabled}
-                          onChange={() => c.toggleCategory(cat.id)}
-                          style={{ accentColor: sc.color, width: '14px', height: '14px', flexShrink: 0 }} />
-                        <CategoryIcon icon={cat.icon} size={14} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
-                        <span style={{ fontWeight: isEnabled ? 600 : 400, color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>
-                          {cat.label}
-                        </span>
-                      </label>
-                      {isEnabled && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', alignItems: 'center', marginLeft: '20px' }}>
-                          {catKws.map((kw: string) => (
-                            <span key={kw} style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '3px',
-                              padding: '1px 6px', borderRadius: '10px',
-                              background: `${sc.color}10`, boxShadow: `0 0 0 1px ${sc.color}25`,
-                              fontSize: '0.625rem', color: sc.color, fontWeight: 600,
-                            }}>
-                              {kw}
-                              <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
-                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
-                                <X size={10} color={sc.color} />
-                              </button>
-                            </span>
-                          ))}
-                          <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
+        {/* Elegant Category List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {c.taxonomy && (['critical', 'warning', 'info'] as const).map(severity => {
+            const sc = severityConfig[severity];
+            const cats = c.taxonomy.categories.filter((cat: any) => cat.severity === severity);
+            if (cats.length === 0) return null;
+            return (
+              <div key={severity}>
+                <div style={{ fontSize: '0.625rem', fontWeight: 700, color: sc.color, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {sc.icon} {sc.label}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', borderLeft: `2px solid ${sc.border}`, paddingLeft: '8px' }}>
+                  {cats.map((cat: any) => {
+                    const isEnabled = c.enabledCategories.includes(cat.id);
+                    const catKws = c.categoryCustomKeywords[cat.id] || [];
+                    return (
+                      <div key={cat.id} style={{
+                        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px',
+                        padding: '4px 8px', borderRadius: 'var(--radius-sm)',
+                        background: isEnabled ? 'var(--color-bg-surface-hover)' : 'transparent',
+                        opacity: isEnabled ? 1 : 0.6,
+                        transition: 'all 0.15s ease',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '180px' }}>
+                          <input type="checkbox" checked={isEnabled}
+                            onChange={() => c.toggleCategory(cat.id)}
+                            style={{ accentColor: sc.color, width: '13px', height: '13px', flexShrink: 0, cursor: 'pointer' }} />
+                          <CategoryIcon icon={cat.icon} size={13} color={isEnabled ? sc.color : 'var(--color-text-tertiary)'} />
+                          <span style={{ fontSize: '0.8125rem', fontWeight: isEnabled ? 600 : 400, color: isEnabled ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', cursor: 'pointer' }} onClick={() => c.toggleCategory(cat.id)}>
+                            {cat.label}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        {isEnabled && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', flex: 1 }}>
+                            {catKws.map((kw: string) => (
+                              <span key={kw} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                padding: '1px 6px', borderRadius: '10px',
+                                background: `${sc.color}10`, boxShadow: `0 0 0 1px ${sc.color}25`,
+                                fontSize: '0.625rem', color: sc.color, fontWeight: 600,
+                              }}>
+                                {kw}
+                                <button onClick={() => c.removeCategoryKeyword(cat.id, kw)}
+                                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', lineHeight: 1 }}>
+                                  <X size={10} color={sc.color} />
+                                </button>
+                              </span>
+                            ))}
+                            <CategoryKeywordInput catId={cat.id} onAdd={c.addCategoryKeyword} color={sc.color} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
 
         {/* Custom keywords (global) */}
         <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'rgba(37, 99, 235, 0.04)', boxShadow: '0 0 0 1px rgba(37, 99, 235, 0.12)' }}>
@@ -764,7 +762,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         <p>Nenhuma mensagem capturada para este processo.</p>
                       </div>
                     ) : (
-                      c.selectedMessages.map(msg => {
+                      [...c.selectedMessages].reverse().map(msg => {
                         const colors = authorColor(msg.authorType);
                         const hasKeyword = !!msg.detectedKeyword;
 
