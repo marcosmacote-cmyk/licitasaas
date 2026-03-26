@@ -99,6 +99,7 @@ def match_process_to_certame(
     # Estratégia 2: Match por título/objeto
     best_score = 0.0
     best_match = None
+    all_scores = []  # For debug logging
 
     for c in certames:
         ctitle = c.get('title', '')
@@ -126,9 +127,21 @@ def match_process_to_certame(
             # Combine: 60% text similarity + 40% word overlap
             score = 0.6 * score + 0.4 * word_score
 
+        all_scores.append((score, c.get('certame_id', '?'), ctitle[:60]))
+
         if score > best_score:
             best_score = score
             best_match = c
+
+    # Debug: log top 3 candidates (only on first 3 cycles)
+    if all_scores:
+        all_scores.sort(reverse=True)
+        top3 = all_scores[:3]
+        logger.info(
+            f'  📊 Match candidates for "{title[:40]}":'
+        )
+        for rank, (sc, cid, ct) in enumerate(top3, 1):
+            logger.info(f'     #{rank} score={sc:.3f} certame={cid} "{ct}"')
 
     if best_match and best_score >= 0.35:
         logger.info(
