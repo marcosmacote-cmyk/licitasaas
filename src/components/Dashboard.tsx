@@ -305,12 +305,12 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                 <div className="flex-col gap-5">
 
                     {/* CALENDÁRIO */}
-                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
-                        <div className="flex-between mb-4">
-                            <h3 className="dash-section-title mb-0"><CalendarIcon size={18} color="var(--color-primary)" /> Calendário</h3>
-                            <div className="flex-center gap-2">
+                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)', overflow: 'hidden', minWidth: 0 }}>
+                        <div className="flex-between mb-4" style={{ gap: 'var(--space-2)', minWidth: 0 }}>
+                            <h3 className="dash-section-title mb-0" style={{ flexShrink: 0 }}><CalendarIcon size={18} color="var(--color-primary)" /> Calendário</h3>
+                            <div className="flex-center gap-2" style={{ flexShrink: 0 }}>
                                 <button onClick={prevMonth} className="dash-cal-btn"><ChevronLeft size={14} /></button>
-                                <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-semibold)', minWidth: 120, textAlign: 'center' }}>{monthNames[month]} {year}</span>
+                                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', textAlign: 'center', whiteSpace: 'nowrap' }}>{monthNames[month]} {year}</span>
                                 <button onClick={nextMonth} className="dash-cal-btn"><ChevronRight size={14} /></button>
                             </div>
                         </div>
