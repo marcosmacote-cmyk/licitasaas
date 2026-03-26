@@ -36,6 +36,13 @@ import { matchCompanyToEdital, calculateParticipationScore, generateActionPlan }
 import { buildHybridContext } from "./services/ai/strategy/companyAwareContext";
 import { generateCompanyInsights, recordMatchHistory } from "./services/ai/strategy/companyLearningInsights";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
+import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "./services/monitoring/alertTaxonomy";
+import { NotificationService } from "./services/monitoring/notification.service";
+import { BatchPlatformMonitor } from "./services/monitoring/batch-platform-monitor.service";
+import { PCPMonitor } from "./services/monitoring/pcp-monitor.service";
+import { LicitanetMonitor } from "./services/monitoring/licitanet-monitor.service";
+import { LicitaMaisBrasilMonitor } from "./services/monitoring/licitamaisbrasil-monitor.service";
+import { IngestService } from "./services/monitoring/ingest.service";
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -6290,7 +6297,7 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
 // GET: Taxonomy (static — returns available categories for the UI)
 app.get('/api/chat-monitor/taxonomy', authenticateToken, async (req: any, res) => {
     try {
-        const { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } = require('./services/monitoring/alertTaxonomy');
+
         res.json({
             categories: ALERT_TAXONOMY.map((c: any) => ({
                 id: c.id,
@@ -6314,7 +6321,7 @@ app.get('/api/chat-monitor/taxonomy', authenticateToken, async (req: any, res) =
 
 app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => {
     try {
-        const { DEFAULT_ENABLED_CATEGORIES } = require('./services/monitoring/alertTaxonomy');
+
         const config = await prisma.chatMonitorConfig.findUnique({
             where: { tenantId: req.user.tenantId }
         });
@@ -7104,74 +7111,12 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
             return res.status(404).json({ error: 'Process not found for given tenant' });
         }
 
-        // Get existing messageIds to deduplicate
-        const existingLogs = await prisma.chatMonitorLog.findMany({
-            where: { biddingProcessId: processId },
-            select: { messageId: true }
+        const result = await IngestService.ingestMessages(prisma, {
+            processId, tenantId, messages, captureSource: 'server-worker'
         });
-        const existing = new Set(existingLogs.map(l => l.messageId));
 
-        // Get keywords config for this tenant → KeywordDetector
-        const config = await prisma.chatMonitorConfig.findUnique({
-            where: { tenantId }
-        });
-        const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
-        const detector = createDetectorFromConfig(config);
-
-        const { DedupService } = require('./services/monitoring/dedup.service');
-
-        let created = 0;
-        let alerts = 0;
-
-        for (const msg of messages) {
-            const messageId = msg.messageId || null;
-            const content = msg.content || '';
-            const authorType = msg.authorType || 'desconhecido';
-            const fingerprintHash = DedupService.generateFingerprint(processId, messageId, content, authorType);
-
-            if (messageId && existing.has(messageId)) continue;
-
-            const isDuplicate = await prisma.chatMonitorLog.findUnique({
-                where: { fingerprintHash }
-            });
-            if (isDuplicate) continue;
-
-            const detection = detector.detect(content);
-            if (detection.shouldNotify) alerts++;
-
-            const eventCategory = msg.eventCategory || detection.categoryId || null;
-            const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-            await prisma.chatMonitorLog.create({
-                data: {
-                    tenantId,
-                    biddingProcessId: processId,
-                    messageId,
-                    fingerprintHash,
-                    content,
-                    authorType,
-                    authorCnpj: msg.authorCnpj || null,
-                    eventCategory,
-                    itemRef: msg.itemRef || null,
-                    detectedKeyword: detection.detectedKeyword,
-                    captureSource: msg.captureSource || 'server-worker',
-                    messageTimestamp: msg.timestamp || null,
-                    status,
-                }
-            });
-            if (messageId) existing.add(messageId);
-            created++;
-        }
-
-        if (alerts > 0) {
-            try {
-                const { NotificationService } = require('./services/monitoring/notification.service');
-                await NotificationService.processPendingNotifications();
-            } catch { /* silent */ }
-        }
-
-        console.log(`[Worker Ingest] ${created} msgs saved for ${processId.substring(0, 8)} (tenant ${tenantId.substring(0, 8)}, ${alerts} alerts)`);
-        res.json({ success: true, created, alerts, total: messages.length });
+        console.log(`[Worker Ingest] ${result.created} msgs saved for ${processId.substring(0, 8)} (tenant ${tenantId.substring(0, 8)}, ${result.alerts} alerts)`);
+        res.json(result);
     } catch (error: any) {
         console.error('[Worker Ingest] Error:', error.message);
         res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
@@ -7222,7 +7167,7 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
     }
 });
 
-// Receives messages from local ComprasNet Watcher
+// Receives messages from local ComprasNet / BBMNet Watcher
 app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) => {
     try {
         const { processId, messages } = req.body;
@@ -7233,118 +7178,22 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
         }
 
         // Verify process belongs to tenant
-        const process = await prisma.biddingProcess.findFirst({
+        const processRecord = await prisma.biddingProcess.findFirst({
             where: { id: processId, tenantId }
         });
-        if (!process) {
+        if (!processRecord) {
             return res.status(404).json({ error: 'Process not found or not yours' });
         }
 
-        // Get existing messageIds to deduplicate
-        const existingLogs = await prisma.chatMonitorLog.findMany({
-            where: { biddingProcessId: processId },
-            select: { messageId: true }
+        const result = await IngestService.ingestMessages(prisma, {
+            processId, tenantId, messages, captureSource: 'local-watcher'
         });
-        const existing = new Set(existingLogs.map(l => l.messageId));
 
-        // Get keywords config → KeywordDetector
-        const config = await prisma.chatMonitorConfig.findUnique({
-            where: { tenantId }
-        });
-        const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
-        const detector = createDetectorFromConfig(config);
-
-        const { DedupService } = require('./services/monitoring/dedup.service');
-
-        let created = 0;
-        let alerts = 0;
-
-        for (const msg of messages) {
-            const messageId = msg.messageId || null;
-            const content = msg.content || '';
-            const authorType = msg.authorType || 'desconhecido';
-            const fingerprintHash = DedupService.generateFingerprint(processId, messageId, content, authorType);
-
-            // Double deduplication: skip if messageId OR fingerprintHash exist
-            if ((messageId && existing.has(messageId))) continue;
-            
-            const isDuplicate = await prisma.chatMonitorLog.findUnique({
-                where: { fingerprintHash }
-            });
-
-            if (isDuplicate) continue;
-
-            const detection = detector.detect(content);
-            if (detection.shouldNotify) alerts++;
-
-            const eventCategory = msg.eventCategory || detection.categoryId || null;
-            const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-            await prisma.chatMonitorLog.create({
-                data: {
-                    tenantId,
-                    biddingProcessId: processId,
-                    messageId,
-                    fingerprintHash,
-                    content,
-                    authorType,
-                    authorCnpj: msg.authorCnpj || null,
-                    eventCategory,
-                    itemRef: msg.itemRef || null,
-                    detectedKeyword: detection.detectedKeyword,
-                    captureSource: msg.captureSource || 'local-watcher',
-                    messageTimestamp: msg.timestamp || null,
-                    status,
-                }
-            });
-            if (messageId) {
-                existing.add(messageId);
-            }
-            created++;
-        }
-
-        // Trigger notifications if there were keyword matches
-        if (alerts > 0) {
-            try {
-                const { NotificationService } = require('./services/monitoring/notification.service');
-                await NotificationService.processPendingNotifications();
-            } catch { /* silent */ }
-        }
-
-        console.log(`[Ingest] ${created} msgs saved for process ${processId.substring(0, 8)}... (${alerts} alerts)`);
-        res.json({ success: true, created, alerts, total: messages.length });
+        console.log(`[Ingest] ${result.created} msgs saved for process ${processId.substring(0, 8)}... (${result.alerts} alerts)`);
+        res.json(result);
     } catch (error: any) {
         console.error('[Ingest] Error:', error.message);
         res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
-    }
-});
-
-// GET: /api/chat-monitor/logs - Histórico de atividade do Agente Local (Fase 4)
-app.get('/api/chat-monitor/logs', authenticateToken, async (req, res) => {
-    try {
-        const tenantId = (req as any).user.tenantId;
-        const limit = parseInt(req.query.limit as string) || 50;
-
-        const logs = await prisma.chatMonitorLog.findMany({
-            where: { tenantId },
-            include: {
-                biddingProcess: {
-                    select: {
-                        processNumber: true,
-                        processYear: true,
-                        title: true,
-                        uasg: true
-                    }
-                }
-            },
-            orderBy: { createdAt: 'desc' },
-            take: limit
-        });
-
-        res.json(logs);
-    } catch (error: any) {
-        console.error('[Chat Monitor Logs] Error:', error.message);
-        res.status(500).json({ error: 'Failed to fetch monitor logs' });
     }
 });
 
@@ -7701,10 +7550,7 @@ app.listen(PORT, async () => {
 
     async function pollBatchProcesses() {
         try {
-            const { BatchPlatformMonitor } = require('./services/monitoring/batch-platform-monitor.service');
-            const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
-            const { DedupService } = require('./services/monitoring/dedup.service');
-            const { NotificationService } = require('./services/monitoring/notification.service');
+
 
             // 1. Buscar processos monitorados de TODAS as plataformas Batch
             const batchProcesses = await prisma.biddingProcess.findMany({
@@ -7742,63 +7588,23 @@ app.listen(PORT, async () => {
                     const messages = await BatchPlatformMonitor.fetchMessages(param1, platform);
                     if (messages.length === 0) continue;
 
-                    // 5. Deduplicar contra mensagens existentes
-                    const existingLogs = await prisma.chatMonitorLog.findMany({
-                        where: { biddingProcessId: proc.id },
-                        select: { messageId: true, fingerprintHash: true },
+                    // 5. Ingerir via IngestService (dedup + keyword + notificação)
+                    const result = await IngestService.ingestMessages(prisma, {
+                        processId: proc.id,
+                        tenantId: proc.tenantId,
+                        messages: messages.map((m: any) => ({
+                            messageId: m.messageId,
+                            content: m.content,
+                            authorType: m.authorType,
+                            timestamp: m.timestamp || null,
+                        })),
+                        captureSource: platform.captureSource,
                     });
-                    const existingIds = new Set(existingLogs.map(l => l.messageId));
-                    const existingFingerprints = new Set(existingLogs.map(l => l.fingerprintHash));
 
-                    const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
-                    if (newMessages.length === 0) continue;
-
-                    // 6. Keyword detection para este tenant
-                    const config = await prisma.chatMonitorConfig.findUnique({
-                        where: { tenantId: proc.tenantId },
-                    });
-                    const detector = createDetectorFromConfig(config);
-
-                    let created = 0;
-                    let alerts = 0;
-
-                    for (const msg of newMessages) {
-                        const fingerprintHash = DedupService.generateFingerprint(
-                            proc.id, msg.messageId, msg.content, msg.authorType
-                        );
-
-                        if (existingFingerprints.has(fingerprintHash)) continue;
-
-                        const detection = detector.detect(msg.content);
-                        if (detection.shouldNotify) alerts++;
-
-                        const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-                        await prisma.chatMonitorLog.create({
-                            data: {
-                                tenantId: proc.tenantId,
-                                biddingProcessId: proc.id,
-                                messageId: msg.messageId,
-                                fingerprintHash,
-                                content: msg.content,
-                                authorType: msg.authorType,
-                                eventCategory: detection.categoryId || null,
-                                detectedKeyword: detection.detectedKeyword,
-                                captureSource: platform.captureSource,
-                                messageTimestamp: (msg as any).timestamp || null,
-                                status,
-                            },
-                        });
-
-                        existingIds.add(msg.messageId);
-                        existingFingerprints.add(fingerprintHash);
-                        created++;
-                    }
-
-                    if (created > 0) {
-                        console.log(`[${platform.label} Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
-                        totalNew += created;
-                        totalAlerts += alerts;
+                    if (result.created > 0) {
+                        console.log(`[${platform.label} Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        totalNew += result.created;
+                        totalAlerts += result.alerts;
                     }
 
                     // Gentil com a API: 1s entre processos
@@ -7806,13 +7612,6 @@ app.listen(PORT, async () => {
                 } catch (err: any) {
                     console.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
-            }
-
-            // Processar notificações pendentes se houve alertas
-            if (totalAlerts > 0) {
-                try {
-                    await NotificationService.processPendingNotifications();
-                } catch { /* silent */ }
             }
 
             if (totalNew > 0) {
@@ -7837,10 +7636,7 @@ app.listen(PORT, async () => {
 
     async function pollPCPProcesses() {
         try {
-            const { PCPMonitor } = require('./services/monitoring/pcp-monitor.service');
-            const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
-            const { DedupService } = require('./services/monitoring/dedup.service');
-            const { NotificationService } = require('./services/monitoring/notification.service');
+
 
             // 1. Buscar processos monitorados do Portal de Compras Públicas
             const pcpProcesses = await prisma.biddingProcess.findMany({
@@ -7871,63 +7667,23 @@ app.listen(PORT, async () => {
                     const messages = await PCPMonitor.fetchMessages(pcpUrl);
                     if (messages.length === 0) continue;
 
-                    // 4. Deduplicar contra mensagens existentes
-                    const existingLogs = await prisma.chatMonitorLog.findMany({
-                        where: { biddingProcessId: proc.id },
-                        select: { messageId: true, fingerprintHash: true },
+                    // 4. Ingerir via IngestService
+                    const result = await IngestService.ingestMessages(prisma, {
+                        processId: proc.id,
+                        tenantId: proc.tenantId,
+                        messages: messages.map((m: any) => ({
+                            messageId: m.messageId,
+                            content: m.content,
+                            authorType: m.authorType,
+                            timestamp: m.timestamp || null,
+                        })),
+                        captureSource: 'pcp-api',
                     });
-                    const existingIds = new Set(existingLogs.map((l: any) => l.messageId));
-                    const existingFingerprints = new Set(existingLogs.map((l: any) => l.fingerprintHash));
 
-                    const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
-                    if (newMessages.length === 0) continue;
-
-                    // 5. Keyword detection para este tenant
-                    const config = await prisma.chatMonitorConfig.findUnique({
-                        where: { tenantId: proc.tenantId },
-                    });
-                    const detector = createDetectorFromConfig(config);
-
-                    let created = 0;
-                    let alerts = 0;
-
-                    for (const msg of newMessages) {
-                        const fingerprintHash = DedupService.generateFingerprint(
-                            proc.id, msg.messageId, msg.content, msg.authorType
-                        );
-
-                        if (existingFingerprints.has(fingerprintHash)) continue;
-
-                        const detection = detector.detect(msg.content);
-                        if (detection.shouldNotify) alerts++;
-
-                        const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-                        await prisma.chatMonitorLog.create({
-                            data: {
-                                tenantId: proc.tenantId,
-                                biddingProcessId: proc.id,
-                                messageId: msg.messageId,
-                                fingerprintHash,
-                                content: msg.content,
-                                authorType: msg.authorType,
-                                eventCategory: detection.categoryId || null,
-                                detectedKeyword: detection.detectedKeyword,
-                                captureSource: 'pcp-api',
-                                messageTimestamp: (msg as any).timestamp || null,
-                                status,
-                            },
-                        });
-
-                        existingIds.add(msg.messageId);
-                        existingFingerprints.add(fingerprintHash);
-                        created++;
-                    }
-
-                    if (created > 0) {
-                        console.log(`[PCP Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
-                        totalNew += created;
-                        totalAlerts += alerts;
+                    if (result.created > 0) {
+                        console.log(`[PCP Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        totalNew += result.created;
+                        totalAlerts += result.alerts;
                     }
 
                     // Gentil com o servidor: 2s entre processos (HTML é mais pesado)
@@ -7935,13 +7691,6 @@ app.listen(PORT, async () => {
                 } catch (err: any) {
                     console.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
-            }
-
-            // Processar notificações pendentes se houve alertas
-            if (totalAlerts > 0) {
-                try {
-                    await NotificationService.processPendingNotifications();
-                } catch { /* silent */ }
             }
 
             if (totalNew > 0) {
@@ -7966,10 +7715,7 @@ app.listen(PORT, async () => {
 
     async function pollLicitanetProcesses() {
         try {
-            const { LicitanetMonitor } = require('./services/monitoring/licitanet-monitor.service');
-            const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
-            const { DedupService } = require('./services/monitoring/dedup.service');
-            const { NotificationService } = require('./services/monitoring/notification.service');
+
 
             // 1. Buscar processos monitorados da Licitanet
             const licitanetProcesses = await prisma.biddingProcess.findMany({
@@ -8000,63 +7746,23 @@ app.listen(PORT, async () => {
                     const messages = await LicitanetMonitor.fetchMessages(licitanetUrl);
                     if (messages.length === 0) continue;
 
-                    // 4. Deduplicar contra mensagens existentes
-                    const existingLogs = await prisma.chatMonitorLog.findMany({
-                        where: { biddingProcessId: proc.id },
-                        select: { messageId: true, fingerprintHash: true },
+                    // 4. Ingerir via IngestService
+                    const result = await IngestService.ingestMessages(prisma, {
+                        processId: proc.id,
+                        tenantId: proc.tenantId,
+                        messages: messages.map((m: any) => ({
+                            messageId: m.messageId,
+                            content: m.content,
+                            authorType: m.authorType,
+                            timestamp: m.timestamp || null,
+                        })),
+                        captureSource: 'licitanet-api',
                     });
-                    const existingIds = new Set(existingLogs.map((l: any) => l.messageId));
-                    const existingFingerprints = new Set(existingLogs.map((l: any) => l.fingerprintHash));
 
-                    const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
-                    if (newMessages.length === 0) continue;
-
-                    // 5. Keyword detection para este tenant
-                    const config = await prisma.chatMonitorConfig.findUnique({
-                        where: { tenantId: proc.tenantId },
-                    });
-                    const detector = createDetectorFromConfig(config);
-
-                    let created = 0;
-                    let alerts = 0;
-
-                    for (const msg of newMessages) {
-                        const fingerprintHash = DedupService.generateFingerprint(
-                            proc.id, msg.messageId, msg.content, msg.authorType
-                        );
-
-                        if (existingFingerprints.has(fingerprintHash)) continue;
-
-                        const detection = detector.detect(msg.content);
-                        if (detection.shouldNotify) alerts++;
-
-                        const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-                        await prisma.chatMonitorLog.create({
-                            data: {
-                                tenantId: proc.tenantId,
-                                biddingProcessId: proc.id,
-                                messageId: msg.messageId,
-                                fingerprintHash,
-                                content: msg.content,
-                                authorType: msg.authorType,
-                                eventCategory: detection.categoryId || null,
-                                detectedKeyword: detection.detectedKeyword,
-                                captureSource: 'licitanet-api',
-                                messageTimestamp: (msg as any).timestamp || null,
-                                status,
-                            },
-                        });
-
-                        existingIds.add(msg.messageId);
-                        existingFingerprints.add(fingerprintHash);
-                        created++;
-                    }
-
-                    if (created > 0) {
-                        console.log(`[Licitanet Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
-                        totalNew += created;
-                        totalAlerts += alerts;
+                    if (result.created > 0) {
+                        console.log(`[Licitanet Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        totalNew += result.created;
+                        totalAlerts += result.alerts;
                     }
 
                     // Gentil com o servidor: 1s entre processos (API JSON é leve)
@@ -8064,13 +7770,6 @@ app.listen(PORT, async () => {
                 } catch (err: any) {
                     console.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
-            }
-
-            // Processar notificações pendentes se houve alertas
-            if (totalAlerts > 0) {
-                try {
-                    await NotificationService.processPendingNotifications();
-                } catch { /* silent */ }
             }
 
             if (totalNew > 0) {
@@ -8095,10 +7794,7 @@ app.listen(PORT, async () => {
 
     async function pollLMBProcesses() {
         try {
-            const { LicitaMaisBrasilMonitor } = require('./services/monitoring/licitamaisbrasil-monitor.service');
-            const { createDetectorFromConfig } = require('./services/monitoring/keywordDetector');
-            const { DedupService } = require('./services/monitoring/dedup.service');
-            const { NotificationService } = require('./services/monitoring/notification.service');
+
 
             // 1. Buscar processos monitorados da Licita Mais Brasil
             const lmbProcesses = await prisma.biddingProcess.findMany({
@@ -8129,63 +7825,23 @@ app.listen(PORT, async () => {
                     const messages = await LicitaMaisBrasilMonitor.fetchMessages(lmbUrl);
                     if (messages.length === 0) continue;
 
-                    // 4. Deduplicar contra mensagens existentes
-                    const existingLogs = await prisma.chatMonitorLog.findMany({
-                        where: { biddingProcessId: proc.id },
-                        select: { messageId: true, fingerprintHash: true },
+                    // 4. Ingerir via IngestService
+                    const result = await IngestService.ingestMessages(prisma, {
+                        processId: proc.id,
+                        tenantId: proc.tenantId,
+                        messages: messages.map((m: any) => ({
+                            messageId: m.messageId,
+                            content: m.content,
+                            authorType: m.authorType,
+                            timestamp: m.timestamp || null,
+                        })),
+                        captureSource: 'licitamaisbrasil-api',
                     });
-                    const existingIds = new Set(existingLogs.map((l: any) => l.messageId));
-                    const existingFingerprints = new Set(existingLogs.map((l: any) => l.fingerprintHash));
 
-                    const newMessages = messages.filter((m: any) => !existingIds.has(m.messageId));
-                    if (newMessages.length === 0) continue;
-
-                    // 5. Keyword detection para este tenant
-                    const config = await prisma.chatMonitorConfig.findUnique({
-                        where: { tenantId: proc.tenantId },
-                    });
-                    const detector = createDetectorFromConfig(config);
-
-                    let created = 0;
-                    let alerts = 0;
-
-                    for (const msg of newMessages) {
-                        const fingerprintHash = DedupService.generateFingerprint(
-                            proc.id, msg.messageId, msg.content, msg.authorType
-                        );
-
-                        if (existingFingerprints.has(fingerprintHash)) continue;
-
-                        const detection = detector.detect(msg.content);
-                        if (detection.shouldNotify) alerts++;
-
-                        const status = detection.shouldNotify ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-
-                        await prisma.chatMonitorLog.create({
-                            data: {
-                                tenantId: proc.tenantId,
-                                biddingProcessId: proc.id,
-                                messageId: msg.messageId,
-                                fingerprintHash,
-                                content: msg.content,
-                                authorType: msg.authorType,
-                                eventCategory: detection.categoryId || null,
-                                detectedKeyword: detection.detectedKeyword,
-                                captureSource: 'licitamaisbrasil-api',
-                                messageTimestamp: (msg as any).timestamp || null,
-                                status,
-                            },
-                        });
-
-                        existingIds.add(msg.messageId);
-                        existingFingerprints.add(fingerprintHash);
-                        created++;
-                    }
-
-                    if (created > 0) {
-                        console.log(`[LMB Poll] 📨 ${created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${alerts} alertas)`);
-                        totalNew += created;
-                        totalAlerts += alerts;
+                    if (result.created > 0) {
+                        console.log(`[LMB Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        totalNew += result.created;
+                        totalAlerts += result.alerts;
                     }
 
                     // Gentil com o servidor: 1.5s entre processos (API autenticada)
@@ -8193,13 +7849,6 @@ app.listen(PORT, async () => {
                 } catch (err: any) {
                     console.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
-            }
-
-            // Processar notificações pendentes se houve alertas
-            if (totalAlerts > 0) {
-                try {
-                    await NotificationService.processPendingNotifications();
-                } catch { /* silent */ }
             }
 
             if (totalNew > 0) {
