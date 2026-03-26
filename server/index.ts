@@ -3127,7 +3127,7 @@ const PLATFORM_DOMAINS: Record<string, string[]> = {
  * Normaliza o campo "portal" para um nome canônico.
  * Resolve as 18+ variações digitadas livremente pelos usuários.
  */
-function normalizePortal(portal: string, link?: string): string {
+function normalizePortal(portal: string, link?: string | null): string {
     if (!portal && !link) return 'Não Informado';
     const p = (portal || '').toLowerCase().trim();
     const l = (link || '').toLowerCase();

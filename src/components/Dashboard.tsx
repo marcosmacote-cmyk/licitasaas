@@ -33,6 +33,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
         const saved = localStorage.getItem('dashboard_monthly_target');
         return saved ? Number(saved) : 0;
     });
+    const [editingTarget, setEditingTarget] = useState(false);
     const [targetInput, setTargetInput] = useState('');
     const [auditStats, setAuditStats] = useState({ isLoaded: false, missingCredsCount: 0, invalidLinkCount: 0 });
 
