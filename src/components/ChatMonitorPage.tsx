@@ -139,7 +139,7 @@ function ConfigSection({ title, icon, defaultOpen = false, badge, children }: {
     <div style={{
       borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-surface)',
       boxShadow: '0 0 0 1px var(--color-border)', overflow: 'hidden',
-      transition: 'all 0.2s ease',
+      transition: 'all 0.2s ease', flexShrink: 0,
     }}>
       <button onClick={() => setOpen(!open)} style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
