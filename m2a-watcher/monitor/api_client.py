@@ -20,9 +20,9 @@ class WorkerAPIClient:
     """Cliente HTTP para worker M2A (multi-tenant)."""
 
     def __init__(self):
-        self._base_url = LICITASAAS_API_URL.rstrip('/')
+        self._base_url = LICITASAAS_API_URL.strip().rstrip('/')
         self._headers = {
-            'Authorization': f'Bearer {CHAT_WORKER_SECRET}',
+            'Authorization': f'Bearer {CHAT_WORKER_SECRET.strip()}',
             'Content-Type': 'application/json',
         }
         self._client = httpx.AsyncClient(
