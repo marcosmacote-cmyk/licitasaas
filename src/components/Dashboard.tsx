@@ -33,8 +33,25 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
         const saved = localStorage.getItem('dashboard_monthly_target');
         return saved ? Number(saved) : 0;
     });
-    const [editingTarget, setEditingTarget] = useState(false);
     const [targetInput, setTargetInput] = useState('');
+    const [auditStats, setAuditStats] = useState({ isLoaded: false, missingCredsCount: 0, invalidLinkCount: 0 });
+
+    React.useEffect(() => {
+        const fetchAudit = async () => {
+            try {
+                const res = await fetch('/api/admin/monitoring-audit', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.stats) setAuditStats({ isLoaded: true, ...data.stats });
+                }
+            } catch (e) {
+                console.error('[Dashboard] Error fetching monitoring audit:', e);
+            }
+        };
+        fetchAudit();
+    }, []);
 
     const m = useDashboardMetrics(items, selectedCompanyId);
 
@@ -43,6 +60,17 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
         const alerts: { type: 'danger' | 'warning' | 'urgency'; icon: React.ReactNode; message: string; action: string; count?: number; dest?: string }[] = [];
         const vencidoDocs = m.expiringDocs.filter((d: any) => d.status === 'vencido');
         const alertaDocs = m.expiringDocs.filter((d: any) => d.status === 'critico' || d.status === 'alerta');
+
+        if (auditStats.isLoaded && (auditStats.missingCredsCount > 0 || auditStats.invalidLinkCount > 0)) {
+            alerts.push({ 
+                type: 'danger', 
+                icon: <RadioTower size={16} />, 
+                message: `${auditStats.missingCredsCount + auditStats.invalidLinkCount} processo(s) com falha no monitoramento de chat (credencial ausente ou link).`, 
+                action: 'Verificar →', 
+                count: auditStats.missingCredsCount + auditStats.invalidLinkCount, 
+                dest: 'bidding' 
+            });
+        }
 
         if (vencidoDocs.length > 0) {
             alerts.push({ type: 'danger', icon: <FileWarning size={16} />, message: `${vencidoDocs.length} documento${vencidoDocs.length > 1 ? 's' : ''} vencido${vencidoDocs.length > 1 ? 's' : ''} — impeditivo para participação`, action: 'Renovar agora →', count: vencidoDocs.length, dest: 'companies' });
@@ -60,7 +88,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             alerts.push({ type: 'warning', icon: <ScanSearch size={16} />, message: `${m.needsAiAnalysis.length} edital${m.needsAiAnalysis.length > 1 ? 'is' : ''} em análise sem parecer da IA`, action: 'Analisar com IA →', count: m.needsAiAnalysis.length, dest: 'intelligence' });
         }
         return alerts;
-    }, [m.expiringDocs, m.todaySessions, m.stalledProcesses, m.needsAiAnalysis]);
+    }, [m.expiringDocs, m.todaySessions, m.stalledProcesses, m.needsAiAnalysis, auditStats]);
 
     // ── Funnel Data ──
     const statusCounts = items.reduce((acc, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {} as Record<string, number>);

@@ -3420,6 +3420,88 @@ app.post('/api/admin/normalize-portals', authenticateToken, async (req: any, res
     }
 });
 
+app.get('/api/admin/monitoring-audit', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const biddings = await prisma.biddingProcess.findMany({
+            where: { tenantId, isMonitored: true },
+            select: { 
+                id: true, 
+                portal: true, 
+                link: true, 
+                title: true,
+                companyProfileId: true, 
+                company: { select: { credentials: true } } 
+            }
+        });
+
+        let totalMonitored = biddings.length;
+        let readyCount = 0;
+        let missingCredsCount = 0;
+        let invalidLinkCount = 0;
+
+        const issues: any[] = [];
+
+        for (const b of biddings) {
+            const portal = (b.portal || '').toLowerCase();
+            const link = (b.link || '').toLowerCase();
+            const credentials = b.company?.credentials || [];
+            
+            // Verificação de Link
+            if (!hasMonitorableDomain(link)) {
+                invalidLinkCount++;
+                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Link inválido ou não suportado', link: b.link });
+                // We still check credentials below even if link is bad
+            }
+
+            if (!b.companyProfileId || credentials.length === 0) {
+                missingCredsCount++;
+                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Sem credenciais para a empresa vinculada', companyId: b.companyProfileId });
+                continue;
+            }
+
+            const isComprasNet = portal.includes('comprasnet') || link.includes('comprasnet');
+            const isBLL = portal === 'bll' || link.includes('bll');
+            const isBNC = portal.includes('bnc') || link.includes('bnc');
+            const isM2A = portal.includes('m2a') || link.includes('m2a') || link.includes('precodereferencia');
+            const isBBMNet = portal.includes('bbmnet') || link.includes('bbmnet');
+
+            let hasMatch = false;
+            for (const cred of credentials) {
+                const cp = (cred.platform || '').toLowerCase();
+                const cu = (cred.url || '').toLowerCase();
+                if (isComprasNet && (cp.includes('comprasnet') || cu.includes('comprasnet'))) hasMatch = true;
+                if (isBLL && (cp.includes('bll') || cu.includes('bll'))) hasMatch = true;
+                if (isBNC && (cp.includes('bnc') || cu.includes('bnc'))) hasMatch = true;
+                if (isM2A && (cp.includes('m2a') || cu.includes('m2a'))) hasMatch = true;
+                if (isBBMNet && (cp.includes('bbmnet') || cu.includes('bbmnet'))) hasMatch = true;
+            }
+
+            if (!hasMatch) {
+                missingCredsCount++;
+                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Sem credenciais para este portal', companyId: b.companyProfileId });
+            } else {
+                readyCount++;
+            }
+        }
+
+        res.json({
+            ok: true,
+            stats: {
+                totalMonitored,
+                readyCount,
+                missingCredsCount,
+                invalidLinkCount,
+                issuesCount: issues.length
+            },
+            issues
+        });
+    } catch (e) {
+        console.error('[MonitoringAudit]', e);
+        res.status(500).json({ error: 'Falha na auditoria.' });
+    }
+});
+
 app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
     try {
         const { id } = req.params;
