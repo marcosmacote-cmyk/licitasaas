@@ -6641,8 +6641,8 @@ app.post('/api/chat-monitor/test', authenticateToken, async (req: any, res) => {
         res.json({
             success: true,
             results: result,
-            message: result.telegram === null && result.whatsapp === null
-                ? 'Nenhum canal configurado. Insira um Telegram Chat ID ou WhatsApp.'
+            message: result.telegram === null && result.whatsapp === null && result.email === null
+                ? 'Nenhum canal configurado. Insira um Telegram Chat ID ou WhatsApp nas Configurações.'
                 : 'Teste de notificação enviado! Verifique seus canais.'
         });
     } catch (error: any) {

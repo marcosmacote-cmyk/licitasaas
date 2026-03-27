@@ -1,4 +1,4 @@
-import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Phone, Send, SignalHigh, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus, BellRing, Trophy, Timer, FileClock, Ban, RotateCcw, Scale, UserX, MessageSquareMore, Megaphone, CalendarClock, Lock, EyeOff } from 'lucide-react';
+import { MessageSquare, Search, RefreshCw, Loader2, RadioTower, Gavel, Building2, User, Cpu, Pin, Archive, ArchiveRestore, CheckCheck, Settings, Save, Bell, Send, CheckCircle, XCircle, AlertTriangle, Info, Wifi, WifiOff, ExternalLink, X, Plus, BellRing, Trophy, Timer, FileClock, Ban, RotateCcw, Scale, UserX, MessageSquareMore, Megaphone, CalendarClock, Lock, EyeOff } from 'lucide-react';
 import { useState as useLocalState } from 'react';
 import { useChatMonitor } from './hooks/useChatMonitor';
 import type { TabFilter } from './hooks/useChatMonitor';
@@ -278,45 +278,19 @@ function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
         </div>
       </ConfigSection>
 
-      {/* ═══ Section 2: Notification Channels ═══ */}
-      <ConfigSection
-        title="Canais de Notificação"
-        icon={<Send size={14} color="var(--color-primary)" />}
-        defaultOpen={false}
-        badge={
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {c.monitorConfig.telegramChatId && <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', fontWeight: 600 }}>Telegram ✓</span>}
-            {c.monitorConfig.phoneNumber && <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(16,185,129,0.08)', color: 'var(--color-success)', fontWeight: 600 }}>WhatsApp ✓</span>}
-          </div>
-        }
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-          <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              <Phone size={12} color="var(--color-success)" /> WhatsApp
-            </label>
-            <input type="text" className="config-input" value={c.monitorConfig.phoneNumber}
-              onChange={(e) => c.setMonitorConfig({...c.monitorConfig, phoneNumber: e.target.value})}
-              placeholder="+5585999999999"
-              style={{ fontSize: '0.8125rem' }} />
-          </div>
-          <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              <Send size={12} color="var(--color-primary)" /> Telegram Chat ID
-            </label>
-            <input type="text" className="config-input" value={c.monitorConfig.telegramChatId}
-              onChange={(e) => c.setMonitorConfig({...c.monitorConfig, telegramChatId: e.target.value})}
-              placeholder="Chat ID ou @usuario"
-              style={{ fontSize: '0.8125rem' }} />
-          </div>
+      {/* ═══ Section 2: Notification Channels (managed in Settings) ═══ */}
+      <div style={{
+        padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)',
+        background: 'rgba(37, 99, 235, 0.04)', boxShadow: '0 0 0 1px rgba(37, 99, 235, 0.12)',
+        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+      }}>
+        <Send size={14} color="var(--color-primary)" style={{ flexShrink: 0 }} />
+        <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+          Os canais de notificação (<strong>WhatsApp</strong>, <strong>Telegram</strong> e <strong>E-mail</strong>) são gerenciados em <strong>Configurações → Notificações</strong>.
         </div>
-        <button className="btn btn-ghost"
-          style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', gap: 'var(--space-2)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', alignSelf: 'flex-start' }}
-          disabled={c.testingNotif} onClick={c.handleTestNotification}>
-          {c.testingNotif ? <Loader2 size={12} className="spinner" /> : <SignalHigh size={12} />}
-          Enviar notificação de teste
-        </button>
-      </ConfigSection>
+        {c.monitorConfig.telegramChatId && <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>Telegram ✓</span>}
+        {c.monitorConfig.phoneNumber && <span style={{ fontSize: '0.625rem', padding: '1px 6px', borderRadius: '10px', background: 'rgba(16,185,129,0.08)', color: 'var(--color-success)', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>WhatsApp ✓</span>}
+      </div>
 
       {/* ═══ Section 3: Agent Status ═══ */}
       <ConfigSection

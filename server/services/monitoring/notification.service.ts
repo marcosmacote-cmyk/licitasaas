@@ -101,21 +101,21 @@ export class NotificationService {
    * Envia uma mensagem de teste para validar a configuração.
    * Retorna um objeto com o resultado de cada canal.
    */
-  static async sendTestNotification(tenantId: string): Promise<{ telegram: boolean | null; whatsapp: boolean | null }> {
+  static async sendTestNotification(tenantId: string): Promise<{ telegram: boolean | null; whatsapp: boolean | null; email: boolean | null }> {
     const config = await prisma.chatMonitorConfig.findUnique({
       where: { tenantId }
     });
 
     if (!config) {
-      return { telegram: null, whatsapp: null };
+      return { telegram: null, whatsapp: null, email: null };
     }
 
     const testMessage = `✅ <b>TESTE DE NOTIFICAÇÃO</b>\n\n` +
                         `<b>Status:</b> Sua configuração está funcionando corretamente!\n` +
-                        `<b>Sistema:</b> LicitaSaaS - Monitor de Chat PNCP\n\n` +
+                        `<b>Sistema:</b> LicitaSaaS - Alertas\n\n` +
                         `<i>Esta é uma mensagem de teste. Pode ignorá-la com segurança.</i>`;
 
-    const results = { telegram: null as boolean | null, whatsapp: null as boolean | null };
+    const results = { telegram: null as boolean | null, whatsapp: null as boolean | null, email: null as boolean | null };
 
     if (config.telegramChatId) {
       results.telegram = await this.sendTelegram(tenantId, config.telegramChatId, testMessage);
@@ -123,6 +123,29 @@ export class NotificationService {
 
     if (config.phoneNumber) {
       results.whatsapp = await this.sendWhatsApp(tenantId, config.phoneNumber, testMessage.replace(/<[^>]*>/g, ''));
+    }
+
+    // Test email to all active users
+    try {
+      const activeUsers = await prisma.user.findMany({ where: { tenantId, isActive: true }, select: { email: true } });
+      if (activeUsers.length > 0) {
+        const htmlTestMessage = `
+          <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #2563eb;">Teste de Notificação</h2>
+            <p>Sua configuração de e-mail está funcionando corretamente.</p>
+            <p style="font-size: 12px; color: #9ca3af; margin-top: 24px;">LicitaSaaS — Mensagem de teste automática.</p>
+          </div>`;
+        let emailOk = true;
+        for (const user of activeUsers) {
+          if (user.email) {
+            const sent = await this.sendEmail(tenantId, user.email, 'LicitaSaaS: Teste de Notificação', htmlTestMessage);
+            if (!sent) emailOk = false;
+          }
+        }
+        results.email = emailOk;
+      }
+    } catch {
+      results.email = false;
     }
 
     return results;
