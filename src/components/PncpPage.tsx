@@ -130,24 +130,38 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
                     {/* Search chips */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', width: '100%', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-2)' }}>
-                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)' as any, whiteSpace: 'nowrap' }}>
-                                <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                                Pesquisas Salvas:
-                            </span>
-                            <button 
-                                onClick={p.handleTriggerScan}
-                                className="btn btn-outline"
-                                style={{
-                                    padding: '4px 12px', fontSize: '0.8125rem', gap: '4px',
-                                    borderRadius: 'var(--radius-lg)', color: 'var(--color-primary)', borderColor: 'var(--color-primary)'
-                                }}
-                                title="Fazer uma varredura manual de novas oportunidades para todas as suas pesquisas salvas. Você será notificado via WhatsApp/Telegram se houver novidades."
-                            >
-                                {p.loading ? <Loader2 size={14} className="spinner" /> : <Search size={14} />} 
-                                Forçar Varredura (Scanner)
-                            </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', width: '100%', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)' as any, whiteSpace: 'nowrap' }}>
+                                    <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                    Pesquisas Salvas
+                                </span>
+                            </div>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-bg-surface)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', lineHeight: '1.4', maxWidth: '300px' }}>
+                                    <strong style={{ color: 'var(--color-text-primary)' }}>🤖 Monitoramento Automático Ativo</strong><br/>
+                                    O sistema varre suas listas abaixo a cada 4 horas e alerta sobre novos editais no seu WhatsApp.
+                                </div>
+                                <button 
+                                    onClick={p.handleTriggerScan}
+                                    className="btn btn-outline"
+                                    style={{
+                                        padding: '6px 14px', fontSize: '0.8125rem', gap: '6px',
+                                        borderRadius: 'var(--radius-md)', color: 'var(--color-primary)', borderColor: 'var(--color-primary)'
+                                    }}
+                                    title="Você não precisa clicar aqui no dia a dia. Use apenas se quiser forçar o robô a procurar agora mesmo."
+                                >
+                                    {p.loading ? <Loader2 size={14} className="spinner" /> : <Search size={14} />} 
+                                    Verificar Agora
+                                </button>
+                            </div>
                         </div>
+                        {p.filteredSavedSearches.length === 0 && (
+                            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-tertiary)', padding: 'var(--space-2) 0', fontStyle: 'italic' }}>
+                                Nenhuma pesquisa salva nesta lista. Crie uma pesquisa abaixo e clique em "Salvar Pesquisa".
+                            </div>
+                        )}
                         {p.filteredSavedSearches.map(s => (
                             <div
                                 key={s.id}
