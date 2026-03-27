@@ -299,14 +299,14 @@ export function PerformanceDashboard({ biddings }: Props) {
                             </div>
                         </div>
                     </div>
-                    <div style={{ padding: 'var(--space-5)', height: 290 }}>
+                    <div style={{ padding: 'var(--space-5)', height: 320 }}>
                         <ResponsiveContainer width="100%" height="100%">
-                            <RBarChart data={chartData.modalities} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }}>
+                            <RBarChart data={chartData.modalities.slice(0, 6)} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }}>
                                 <CartesianGrid strokeDasharray="2 4" horizontal={false} stroke="var(--color-border)" />
                                 <XAxis type="number" hide />
                                 <YAxis
-                                    dataKey="name" type="category" width={114}
-                                    style={{ fontSize: '0.71rem' }}
+                                    dataKey="name" type="category" width={130}
+                                    style={{ fontSize: '0.73rem' }}
                                     tick={{ fill: 'var(--color-text-secondary)' }}
                                 />
                                 <Tooltip
@@ -314,8 +314,8 @@ export function PerformanceDashboard({ biddings }: Props) {
                                     contentStyle={tooltipStyle}
                                     formatter={(value) => [`${value ?? 0} processos`, 'Quantidade'] as [string, string]}
                                 />
-                                <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={16}>
-                                    {chartData.modalities.map((_, index) => (
+                                <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
+                                    {chartData.modalities.slice(0, 6).map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Bar>

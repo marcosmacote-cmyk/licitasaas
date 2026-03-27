@@ -408,9 +408,12 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     {m.stalledProcesses.length > 0 && (
                         <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                             <div className="flex-between mb-3">
-                                <h3 className="dash-section-title"><AlertTriangle size={18} color="var(--color-warning)" /> Processos Parados ({m.stalledProcesses.length})</h3>
+                                <div>
+                                    <h3 className="dash-section-title" style={{ marginBottom: '2px' }}><AlertTriangle size={18} color="var(--color-warning)" /> Processos Parados ({m.stalledProcesses.length})</h3>
+                                    <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Sem movimentação no funil há mais de 7 dias</p>
+                                </div>
                                 <button onClick={() => onNavigate?.('bidding')} className="btn-link" style={{ color: 'var(--color-warning)', fontSize: 'var(--text-xs)' }}>
-                                    Resolver <ArrowRight size={12} />
+                                    Mover no funil <ArrowRight size={12} />
                                 </button>
                             </div>
                             <div className="flex-col gap-2">

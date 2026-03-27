@@ -24,6 +24,15 @@ function fixEncoding(str: string): string {
     return str;
 }
 
+// Sanitize CNPJ display: remove extra spaces and ensure standard format
+function formatCnpj(cnpj: string): string {
+    if (!cnpj) return cnpj;
+    // Strip all non-digit characters
+    const digits = cnpj.replace(/\D/g, '');
+    if (digits.length !== 14) return cnpj.trim(); // fallback: just trim
+    return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12,14)}`;
+}
+
 export const MOCK_COMPANIES: CompanyProfile[] = [
     { id: '1', cnpj: '12.345.678/0001-90', razaoSocial: 'Tech Solutions Matriz LTDA', isHeadquarters: true },
     { id: '2', cnpj: '12.345.678/0002-71', razaoSocial: 'Tech Solutions Filial SP', isHeadquarters: false },
@@ -86,7 +95,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 {company.razaoSocial}
                             </div>
                             <div style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>
-                                CNPJ: {company.cnpj}
+                                CNPJ: {formatCnpj(company.cnpj)}
                             </div>
                         </div>
                     ))}
@@ -109,7 +118,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                         {d.activeCompany.razaoSocial}
                                     </h2>
                                     <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-md)' }}>
-                                        CNPJ: {d.activeCompany.cnpj}
+                                        CNPJ: {formatCnpj(d.activeCompany.cnpj)}
                                     </p>
                                 </div>
                                 <div className="flex-gap" style={{ background: 'var(--color-bg-secondary)', padding: '4px', borderRadius: 'var(--radius-lg)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)' }}>

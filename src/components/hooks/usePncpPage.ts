@@ -318,11 +318,14 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string; excludeKeywords?: string }) => {
         if (e) { e.preventDefault(); setPage(1); }
         setLoading(true);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                signal: controller.signal,
                 body: JSON.stringify({
                     keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
                     uf: overrides?.uf ?? selectedUf, pagina: e ? 1 : page,
@@ -340,8 +343,15 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 setResults(items);
                 setTotalResults(typeof data.total === 'number' ? data.total : items.length);
             } else { throw new Error("Erro na busca"); }
-        } catch (e) { console.error(e); toast.error('Falha ao buscar editais. Tente novamente.'); }
-        finally { setLoading(false); }
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                toast.error('A consulta ao PNCP excedeu o tempo limite (30s). A API pode estar indisponível. Tente novamente em alguns minutos.');
+            } else {
+                console.error(e);
+                toast.error('Falha ao buscar editais. Tente novamente.');
+            }
+        }
+        finally { clearTimeout(timeoutId); setLoading(false); }
     };
 
     // ─── Multi-list Saved Searches ───

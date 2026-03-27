@@ -67,8 +67,8 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                 return (
                                     <tr key={item.id} className="table-row-hover" style={{ borderBottom: '1px solid var(--color-border)' }}>
                                         <td onDoubleClick={() => onEditProcess(item)}>
-                                            <div style={{ fontWeight: 500 }}>{item.title}</div>
-                                            {item.summary && <div className="text-truncate" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px', maxWidth: '300px' }}>{item.summary}</div>}
+                                            <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '320px' }} title={item.title}>{item.title}</div>
+                                            {item.summary && <div className="text-truncate" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px', maxWidth: '320px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={item.summary}>{item.summary}</div>}
                                         </td>
                                         <td>
                                             <span className="badge badge-blue">{normalizePortalDisplay(item.portal)}</span>

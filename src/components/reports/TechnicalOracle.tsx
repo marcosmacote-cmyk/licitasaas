@@ -161,9 +161,12 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                         )}
                     </div>
                     {o.selectedCertIds.size === 0 && !o.analysisResult && (
-                        <p style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-base)', color: 'var(--color-danger)', fontWeight: 'var(--font-medium)' }}>
-                            Selecione ao menos um atestado na lista lateral para iniciar a análise.
-                        </p>
+                        <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', background: 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <Info size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-primary)', fontWeight: 'var(--font-medium)' }}>
+                                Selecione ao menos um atestado na lista lateral para iniciar a análise.
+                            </span>
+                        </div>
                     )}
                 </div>
 
@@ -278,12 +281,23 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                         </div>
                     </div>
                 ) : (
-                    <div className="card empty-state--centered" style={{ background: 'var(--color-bg-secondary)', borderStyle: 'dashed' }}>
-                        <FileText size={64} style={{ opacity: 0.1 }} />
-                        <h3 style={{ margin: 0, opacity: 0.5 }}>Detalhes do Acervo</h3>
-                        <p style={{ marginTop: 'var(--space-2)', textAlign: 'center', opacity: 0.5, maxWidth: '300px' }}>
-                            Escolha um atestado na lista para ver o detalhamento ou selecione vários para a análise de somatório.
-                        </p>
+                    <div className="card empty-state--centered" style={{ background: 'var(--color-bg-secondary)', borderStyle: 'dashed', padding: 'var(--space-8)' }}>
+                        <FileText size={48} style={{ opacity: 0.08, marginBottom: 'var(--space-3)' }} />
+                        <h3 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>Nenhum atestado selecionado</h3>
+                        <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', maxWidth: '340px', textAlign: 'left' }}>
+                            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+                                <span style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', borderRadius: 'var(--radius-full)', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--text-sm)', fontWeight: 700, flexShrink: 0 }}>1</span>
+                                <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>Clique em um atestado na lista lateral para ver seus detalhes</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+                                <span style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', borderRadius: 'var(--radius-full)', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--text-sm)', fontWeight: 700, flexShrink: 0 }}>2</span>
+                                <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>Marque os checkboxes para selecionar múltiplos atestados</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+                                <span style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', borderRadius: 'var(--radius-full)', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--text-sm)', fontWeight: 700, flexShrink: 0 }}>3</span>
+                                <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>Use "Analisar Somatório" para verificar a conformidade</span>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
