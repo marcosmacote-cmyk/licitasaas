@@ -3120,7 +3120,7 @@ const MONITORABLE_DOMAINS = [
 
 // Map platform canonical names → domains they use (for credential matching)
 const PLATFORM_DOMAINS: Record<string, string[]> = {
-    'ComprasNet':                ['cnetmobile', 'comprasnet', 'compras.gov.br', 'gov.br/compras'],
+    'Compras.gov.br':            ['cnetmobile', 'comprasnet', 'compras.gov.br', 'gov.br/compras', 'pncp.gov.br'],
     'M2A':                       ['m2atecnologia', 'precodereferencia'],
     'BLL':                       ['bllcompras', 'bll.org'],
     'BBMNET':                    ['bbmnet'],
@@ -3131,67 +3131,58 @@ const PLATFORM_DOMAINS: Record<string, string[]> = {
 };
 
 /**
- * Normaliza o campo "modalidade" para um valor canônico.
- * Resolve variações de casing, acentuação, sufixos (SRP, Nº...), etc.
+ * Normaliza o campo "modalidade" para um valor canônico conforme Lei 14.133/2021.
+ * 
+ * MODALIDADES LICITATÓRIAS (Art. 28):
+ *   - Pregão (eletrônico ou presencial — mesma modalidade)
+ *   - Concorrência (eletrônica, internacional — mesma modalidade)
+ *   - Diálogo Competitivo
+ *   - Concurso
+ *   - Leilão
+ * 
+ * CONTRATAÇÃO DIRETA (Art. 72-75):
+ *   - Dispensa de Licitação
+ *   - Inexigibilidade
+ * 
+ * PROCEDIMENTOS AUXILIARES (Art. 78):
+ *   - Pré-Qualificação, Credenciamento, etc.
  */
 function normalizeModality(raw: string | undefined | null): string {
     if (!raw || !raw.trim()) return '';
-    // Normalize: lowercase, strip accents, trim, remove numbers/Nº suffixes
-    const stripped = raw.trim()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    // Strip accents, lowercase, remove Nº/numbers/SRP suffixes
+    const s = raw.trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
-        .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '') // remove "Nº 90001/2024..."
-        .replace(/\s*-?\s*srp$/i, '')            // remove "- SRP"
-        .replace(/\s*-?\s*sispp$/i, '')          // remove "- SISPP"
-        .replace(/\s+/g, ' ')                     // normaliza espaços
+        .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '')
+        .replace(/\s*-?\s*srp$/i, '')
+        .replace(/\s*-?\s*sispp$/i, '')
+        .replace(/\s+/g, ' ')
         .trim();
 
-    // Exact match table (normalized → canonical)
-    const MODALITY_RULES: [string, string][] = [
-        // Pregão
-        ['pregao eletronico', 'Pregão Eletrônico'],
-        ['pregao eletronico com inversao de fases', 'Pregão Eletrônico'],
-        ['pregao presencial', 'Pregão Presencial'],
-        ['pregao', 'Pregão Eletrônico'],
-        // Concorrência
-        ['concorrencia eletronica internacional', 'Concorrência Eletrônica Internacional'],
-        ['concorrencia eletronica', 'Concorrência Eletrônica'],
-        ['concorrencia', 'Concorrência Eletrônica'],
-        // Dispensa
-        ['dispensa eletronica', 'Dispensa de Licitação'],
-        ['dispensa de licitacao', 'Dispensa de Licitação'],
-        ['dispensa', 'Dispensa de Licitação'],
-        // Pré-Qualificação
-        ['pre-qualificacao para concorrencia eletronica', 'Pré-Qualificação Eletrônica'],
-        ['pre-qualificacao eletronica', 'Pré-Qualificação Eletrônica'],
-        ['pre qualificacao eletronica', 'Pré-Qualificação Eletrônica'],
-        ['pre-qualificacao', 'Pré-Qualificação Eletrônica'],
-        // Licitação genérica
-        ['licitacao eletronica', 'Licitação Eletrônica'],
-        // Outros
-        ['dialogo competitivo', 'Diálogo Competitivo'],
-        ['inexigibilidade', 'Inexigibilidade'],
-        ['leilao', 'Leilão'],
-        ['leilao eletronico', 'Leilão'],
-        ['concurso', 'Concurso'],
-        ['tomada de precos', 'Tomada de Preços'],
-        ['convite', 'Convite'],
-        ['rdc', 'RDC'],
-        ['regime diferenciado de contratacoes', 'RDC'],
-        ['manifestacao de interesse', 'Manifestação de Interesse'],
-        ['chamada publica', 'Chamada Pública'],
-    ];
+    // ── 5 Modalidades Licitatórias (Lei 14.133, Art. 28) ──
+    if (s.includes('pregao')) return 'Pregão';
+    if (s.includes('concorrencia')) return 'Concorrência';
+    if (s.includes('dialogo competitivo')) return 'Diálogo Competitivo';
+    if (s.includes('concurso')) return 'Concurso';
+    if (s.includes('leilao')) return 'Leilão';
 
-    // Try exact match first
-    for (const [pattern, canonical] of MODALITY_RULES) {
-        if (stripped === pattern) return canonical;
-    }
-    // Try partial/includes match (order matters: most specific first)
-    for (const [pattern, canonical] of MODALITY_RULES) {
-        if (stripped.includes(pattern)) return canonical;
-    }
+    // ── Contratação Direta (Art. 72-75) ──
+    if (s.includes('dispensa')) return 'Dispensa';
+    if (s.includes('inexigibilidade')) return 'Inexigibilidade';
 
-    // Fallback: Title Case the original (cleaned) text — don't preserve ALL CAPS
+    // ── Procedimentos Auxiliares (Art. 78) ──
+    if (s.includes('pre-qualificacao') || s.includes('pre qualificacao')) return 'Procedimento Auxiliar';
+    if (s.includes('credenciamento')) return 'Procedimento Auxiliar';
+    if (s.includes('manifestacao de interesse')) return 'Procedimento Auxiliar';
+
+    // ── Termos genéricos → inferir ──
+    if (s.includes('licitacao eletronica') || s.includes('licitacao')) return 'Pregão';
+    if (s.includes('chamada publica')) return 'Chamada Pública';
+    if (s.includes('tomada de precos')) return 'Concorrência';
+    if (s.includes('convite')) return 'Concorrência';
+    if (s === 'rdc' || s.includes('regime diferenciado')) return 'Concorrência';
+
+    // Fallback: Title Case limpo
     return raw.trim()
         .replace(/\s*[Nn][°ºo]?\s*[\d/.]+.*/i, '')
         .replace(/\s*-?\s*SRP$/i, '')
@@ -3201,34 +3192,32 @@ function normalizeModality(raw: string | undefined | null): string {
             if (['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'para', 'em'].includes(lower)) return lower;
             return lower.charAt(0).toUpperCase() + lower.slice(1);
         })
-        .join(' ')
-        .trim();
+        .join(' ').trim();
 }
 
 /**
- * Normaliza o campo "portal" para um nome canônico.
- * Resolve as 18+ variações digitadas livremente pelos usuários.
+ * Normaliza o campo "portal" para o nome canônico da PLATAFORMA.
+ * PNCP é repositório, NÃO plataforma. ComprasNet/Compras.gov.br/PNCP → "Compras.gov.br"
  */
 function normalizePortal(portal: string, link?: string | null): string {
     if (!portal && !link) return 'Não Informado';
     const p = (portal || '').toLowerCase().trim();
     const l = (link || '').toLowerCase();
 
-    // Prioridade 1: Inferir pelo link (mais confiável que texto livre)
+    // Prioridade 1: Inferir pelo link (mais confiável)
     if (l) {
         if (l.includes('m2atecnologia') || l.includes('precodereferencia')) return 'M2A';
-        if (l.includes('bbmnet')) return 'BBMNET';
+        if (l.includes('bbmnet') || l.includes('novabbmnet')) return 'BBMNET';
         if (l.includes('bllcompras') || l.includes('bll.org')) return 'BLL';
         if (l.includes('bnccompras')) return 'BNC';
         if (l.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
         if (l.includes('portaldecompraspublicas')) return 'Portal de Compras Públicas';
         if (l.includes('licitanet.com.br')) return 'Licitanet';
         if (l.includes('bolsadelicitacoes') || l.includes('bfrr.com')) return 'Bolsa de Licitações';
-        if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras')) return 'ComprasNet';
-        if (l.includes('pncp.gov.br')) return 'PNCP';
+        if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras') || l.includes('pncp.gov.br')) return 'Compras.gov.br';
     }
 
-    // Prioridade 2: Normalizar o texto do portal
+    // Prioridade 2: Normalizar texto do portal
     if (p.includes('m2a') || p.includes('m2atecnologia')) return 'M2A';
     if (p.includes('bbmnet')) return 'BBMNET';
     if (p.includes('bll')) return 'BLL';
@@ -3237,10 +3226,9 @@ function normalizePortal(portal: string, link?: string | null): string {
     if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
     if (p.includes('licitanet')) return 'Licitanet';
     if (p.includes('bolsa de licita')) return 'Bolsa de Licitações';
-    if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile')) return 'ComprasNet';
-    if (p.includes('pncp')) return 'PNCP';
+    if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile') || p.includes('pncp')) return 'Compras.gov.br';
 
-    // Prioridade 3: Strip URL-like content and return cleaned name
+    // Prioridade 3: URL crua → tentar extrair plataforma
     if (portal) {
         // Remove embedded URLs: "Nome (https://...)" or "Nome: https://..."
         const cleaned = portal
@@ -3248,6 +3236,16 @@ function normalizePortal(portal: string, link?: string | null): string {
             .replace(/\s*:\s*https?:\/\/[^\s]+/gi, '')
             .trim();
         if (cleaned && cleaned.length > 2) return cleaned;
+
+        // Se é URL pura, extrair domínio
+        const urlMatch = portal.match(/https?:\/\/(?:www\.)?([^/\s]+)/i);
+        if (urlMatch) {
+            const domain = urlMatch[1];
+            // Portais municipais conhecidos
+            if (domain.includes('comprasquixelo') || domain.includes('licitacesmilagres') || domain.includes('licitamoraisjoice'))
+                return 'Portal Municipal';
+            return domain;
+        }
     }
 
     return portal || 'Não Informado';

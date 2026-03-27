@@ -207,31 +207,30 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     };
 
     // ===== FRONTEND NORMALIZATION HELPERS =====
-    // Lightweight client-side normalization to clean up filter display even for old data
+    // Lei 14.133/2021: 5 modalidades + Contratação Direta + Procedimento Auxiliar
     const normalizeModalityFE = (raw: string | undefined | null): string => {
         if (!raw || !raw.trim()) return '';
         const s = raw.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
             .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '')
             .replace(/\s*-?\s*srp$/i, '').replace(/\s*-?\s*sispp$/i, '').replace(/\s+/g, ' ').trim();
-        const rules: [string, string][] = [
-            ['pregao eletronico com inversao de fases', 'Pregão Eletrônico'],
-            ['pregao eletronico', 'Pregão Eletrônico'], ['pregao presencial', 'Pregão Presencial'],
-            ['pregao', 'Pregão Eletrônico'],
-            ['concorrencia eletronica internacional', 'Concorrência Eletrônica Internacional'],
-            ['concorrencia eletronica', 'Concorrência Eletrônica'], ['concorrencia', 'Concorrência Eletrônica'],
-            ['dispensa eletronica', 'Dispensa de Licitação'], ['dispensa de licitacao', 'Dispensa de Licitação'],
-            ['dispensa', 'Dispensa de Licitação'],
-            ['pre-qualificacao para concorrencia eletronica', 'Pré-Qualificação Eletrônica'],
-            ['pre-qualificacao eletronica', 'Pré-Qualificação Eletrônica'], ['pre-qualificacao', 'Pré-Qualificação Eletrônica'],
-            ['licitacao eletronica', 'Licitação Eletrônica'],
-            ['dialogo competitivo', 'Diálogo Competitivo'], ['inexigibilidade', 'Inexigibilidade'],
-            ['leilao', 'Leilão'], ['concurso', 'Concurso'], ['tomada de precos', 'Tomada de Preços'],
-            ['convite', 'Convite'], ['rdc', 'RDC'],
-        ];
-        for (const [p, c] of rules) { if (s === p) return c; }
-        for (const [p, c] of rules) { if (s.includes(p)) return c; }
+        // 5 Modalidades Licitatórias (Art. 28)
+        if (s.includes('pregao')) return 'Pregão';
+        if (s.includes('concorrencia')) return 'Concorrência';
+        if (s.includes('dialogo competitivo')) return 'Diálogo Competitivo';
+        if (s.includes('concurso')) return 'Concurso';
+        if (s.includes('leilao')) return 'Leilão';
+        // Contratação Direta
+        if (s.includes('dispensa')) return 'Dispensa';
+        if (s.includes('inexigibilidade')) return 'Inexigibilidade';
+        // Procedimentos Auxiliares
+        if (s.includes('pre-qualificacao') || s.includes('pre qualificacao') || s.includes('credenciamento') || s.includes('manifestacao de interesse')) return 'Procedimento Auxiliar';
+        // Genéricos
+        if (s.includes('licitacao')) return 'Pregão';
+        if (s.includes('tomada de precos') || s.includes('convite') || s === 'rdc' || s.includes('regime diferenciado')) return 'Concorrência';
+        if (s.includes('chamada publica')) return 'Chamada Pública';
         return raw.trim();
     };
+    // Portal = Plataforma de compras. PNCP/ComprasNet/Compras.gov.br = mesma plataforma
     const normalizePortalFE = (raw: string | undefined | null): string => {
         if (!raw || !raw.trim()) return '';
         const p = raw.trim().toLowerCase();
@@ -240,8 +239,10 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
         if (p.includes('licita mais') || p.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
         if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
         if (p.includes('licitanet')) return 'Licitanet';
-        if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('cnetmobile')) return 'ComprasNet';
-        if (p.includes('pncp')) return 'PNCP';
+        if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('cnetmobile') || p.includes('pncp') || p.includes('gov.br/compras')) return 'Compras.gov.br';
+        // Raw URL → Portal Municipal
+        const urlMatch = raw.trim().match(/https?:\/\/(?:www\.)?([^/\s]+)/i);
+        if (urlMatch) return 'Portal Municipal';
         // Strip embedded URLs
         const cleaned = raw.trim().replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?\s*/gi, '').replace(/\s*:\s*https?:\/\/[^\s]+/gi, '').trim();
         return cleaned && cleaned.length > 2 ? cleaned : raw.trim();
