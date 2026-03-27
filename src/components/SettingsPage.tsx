@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Bell, Shield, Moon, Sun, Monitor, Palette, User, Globe, Clock, Check, ChevronRight } from 'lucide-react';
+import { Settings, Bell, User, Globe, Clock, Check } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export function SettingsPage() {
