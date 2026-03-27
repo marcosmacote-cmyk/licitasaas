@@ -17,6 +17,7 @@ import {
     RadarCard, MissionCard, AgendaItem, ProgressBar,
 } from './ui';
 import { useDashboardMetrics } from './hooks/useDashboardMetrics';
+import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
 
 interface Props {
     items: BiddingProcess[];
@@ -254,8 +255,8 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                                 <div>{d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</div>
                                             </div>
                                             <div className="flex-1">
-                                                <div style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>{d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {item.modality || item.portal}</div>
+                                                <div style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{normalizeTitle(item.title)}</div>
+                                                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>{d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · {normalizeModality(item.modality) || item.portal}</div>
                                             </div>
                                             <LiveCountdown targetDate={item.sessionDate} compact />
                                         </div>
@@ -422,7 +423,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                     return (
                                         <div key={i} onClick={() => onNavigate?.('bidding')} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)', cursor: 'pointer', transition: 'var(--transition-fast)' }}>
                                             <div className="flex-1">
-                                                <div style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                                                <div style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{normalizeTitle(item.title)}</div>
                                                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning)' }}>{item.status} · parado há {daysSince} dias</div>
                                             </div>
                                             <ArrowRight size={14} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />

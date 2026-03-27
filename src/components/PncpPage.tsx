@@ -5,6 +5,7 @@ import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
 import { ConfirmDialog, ListPickerPopover } from './ui';
 import { usePncpPage, UFS, ESFERAS, MODALIDADES, STATUS_OPTIONS } from './hooks/usePncpPage';
+import { normalizeModality } from '../utils/normalizeModality';
 
 interface Props {
     companies: CompanyProfile[];
@@ -630,7 +631,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                     color: 'var(--color-primary)',
                                                     fontSize: 'var(--text-sm)',
                                                     fontWeight: 'var(--font-semibold)' as any,
-                                                }}>{item.modalidade_nome}</span>
+                                                }}>{ normalizeModality(item.modalidade_nome) }</span>
                                             ) : (
                                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
                                             )}
