@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Loader2, LineChart, Server, Clock } from 'lucide-react';
+import { Loader2, LineChart, Server, Clock } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -136,15 +136,6 @@ export function SettingsPage() {
                                 ))}
                             </div>
                         )}
-                    </div>
-                </div>
-
-                {/* Segurança e Acesso */}
-                <div className="card" style={{ padding: 'var(--space-6)', opacity: 0.6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', color: 'var(--color-text-tertiary)' }}>
-                        <Shield size={20} />
-                        <span style={{ fontWeight: 'var(--font-semibold)' }}>Segurança e Acesso</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', padding: '2px var(--space-2)', background: 'var(--color-border)', borderRadius: 'var(--radius-lg)' }}>Em breve</span>
                     </div>
                 </div>
             </div>

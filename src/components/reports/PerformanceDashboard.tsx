@@ -45,14 +45,34 @@ export function PerformanceDashboard({ biddings }: Props) {
     }, [filteredBiddings]);
 
     const chartData = useMemo(() => {
+        // Normalize modality names to canonical forms (Lei 14.133/2021)
+        const normalizeModality = (raw: string): string => {
+            if (!raw) return 'Não informada';
+            const m = raw.toLowerCase().trim();
+            if (m.includes('pregão') || m.includes('pregao')) return 'Pregão';
+            if (m.includes('concorrência') || m.includes('concorrencia')) return 'Concorrência';
+            if (m.includes('diálogo') || m.includes('dialogo')) return 'Diálogo Competitivo';
+            if (m.includes('concurso')) return 'Concurso';
+            if (m.includes('leilão') || m.includes('leilao')) return 'Leilão';
+            if (m.includes('pré-qualificação') || m.includes('pre-qualificacao') || m.includes('pre qualificação')) return 'Procedimento Auxiliar';
+            if (m.includes('credenciamento')) return 'Credenciamento';
+            if (m.includes('dispensa')) return 'Dispensa';
+            if (m.includes('inexigibilidade')) return 'Inexigibilidade';
+            // Fallback: capitalize first letter
+            return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+        };
+
         const modalityMap: Record<string, number> = {};
         const statusMap: Record<string, number> = {};
         filteredBiddings.forEach(b => {
-            modalityMap[b.modality] = (modalityMap[b.modality] || 0) + 1;
+            const normalizedModality = normalizeModality(b.modality);
+            modalityMap[normalizedModality] = (modalityMap[normalizedModality] || 0) + 1;
             statusMap[b.status] = (statusMap[b.status] || 0) + 1;
         });
         return {
-            modalities: Object.entries(modalityMap).map(([name, value]) => ({ name, value })),
+            modalities: Object.entries(modalityMap)
+                .map(([name, value]) => ({ name, value }))
+                .sort((a, b) => b.value - a.value),
             statuses: Object.entries(statusMap).map(([name, value]) => ({ name, value })),
         };
     }, [filteredBiddings]);

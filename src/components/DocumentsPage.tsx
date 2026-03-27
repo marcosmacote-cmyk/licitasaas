@@ -12,6 +12,18 @@ import { CredentialFormModal } from './CredentialFormModal';
 import { Badge, ConfirmDialog } from './ui';
 import { useDocumentsPage, DOCUMENT_GROUPS } from './hooks/useDocumentsPage';
 
+// Fix double-encoded UTF-8 strings (e.g., "ATÃ‰" -> "ATÉ")
+function fixEncoding(str: string): string {
+    if (!str) return str;
+    try {
+        const decoded = decodeURIComponent(escape(str));
+        if (decoded !== str) return decoded;
+    } catch {
+        // Not double-encoded, use as-is
+    }
+    return str;
+}
+
 export const MOCK_COMPANIES: CompanyProfile[] = [
     { id: '1', cnpj: '12.345.678/0001-90', razaoSocial: 'Tech Solutions Matriz LTDA', isHeadquarters: true },
     { id: '2', cnpj: '12.345.678/0002-71', razaoSocial: 'Tech Solutions Filial SP', isHeadquarters: false },
@@ -226,7 +238,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                             style={{ color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'none' }}
                                                         >
                                                             <FileText size={16} />
-                                                            <span style={{ fontSize: '0.875rem', textDecoration: 'underline' }}>{doc.fileName}</span>
+                                                            <span style={{ fontSize: '0.875rem', textDecoration: 'underline' }}>{fixEncoding(doc.fileName)}</span>
                                                         </a>
                                                     </td>
                                                     <td className="docs-td" style={{ textAlign: 'right' }}>

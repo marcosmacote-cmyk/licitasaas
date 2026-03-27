@@ -252,7 +252,7 @@ function App() {
   ];
 
   // Get current page title for header
-  const currentPageLabel = navGroups.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Painel';
+  const currentPageLabel = activeTab === 'settings' ? 'Configurações' : (navGroups.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Painel');
 
   return (
     <ToastProvider>

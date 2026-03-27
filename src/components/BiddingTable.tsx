@@ -19,6 +19,23 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
         if (isNaN(d.getTime())) return 'Data Inválida';
         return format(d, 'dd/MM/yy HH:mm');
     };
+    const normalizePortalDisplay = (portal?: string): string => {
+        if (!portal) return 'Não informado';
+        const p = portal.toLowerCase();
+        if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('cnetmobile') || p.includes('comprasgov')) return 'Compras.gov.br';
+        if (p.includes('bll')) return 'BLL';
+        if (p.includes('bnc')) return 'BNC';
+        if (p.includes('m2a')) return 'M2A';
+        if (p.includes('bbmnet')) return 'BBMNet';
+        if (p.includes('pncp') && !p.includes('compras')) return 'PNCP';
+        if (p.includes('licitamaisbrasil') || p.includes('licita+brasil') || p.includes('licita mais')) return 'Licita+Brasil';
+        if (p.includes('bolsa de licitações') || p.includes('bllcompras') || p.includes('blcompras')) return 'BLL';
+        if (p.includes('portal de compras')) return 'Portal de Compras';
+        if (p.includes('licitações-e') || p.includes('licitacoes-e')) return 'Licitações-e (BB)';
+        if (p.includes('bec')) return 'BEC/SP';
+        if (portal.length > 30) return portal.substring(0, 27) + '...';
+        return portal;
+    };
 
     return (
         <div style={{ backgroundColor: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
@@ -54,7 +71,7 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                             {item.summary && <div className="text-truncate" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px', maxWidth: '300px' }}>{item.summary}</div>}
                                         </td>
                                         <td>
-                                            <span className="badge badge-blue">{item.portal}</span>
+                                            <span className="badge badge-blue">{normalizePortalDisplay(item.portal)}</span>
                                         </td>
                                         <td>{item.modality}</td>
                                         <td>{item.status}</td>

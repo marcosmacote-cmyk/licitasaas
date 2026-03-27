@@ -353,11 +353,22 @@ export function LiveCountdown({ targetDate, compact = false, refreshInterval = 6
     return () => clearInterval(timer);
   }, [refreshInterval]);
 
-  const target = typeof targetDate === 'string' ? new Date(targetDate) : targetDate;
+  let target = typeof targetDate === 'string' ? new Date(targetDate) : targetDate;
+  
+  // Defensive: if targetDate is a numeric-like string or epoch seconds, auto-correct
+  if (typeof targetDate === 'string' && /^\d{10}$/.test(targetDate.trim())) {
+    target = new Date(parseInt(targetDate) * 1000);
+  }
+  
   const now = new Date();
   const diffMs = target.getTime() - now.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  
+  // Guard: invalid date or absurd values (>10 years)
+  if (isNaN(target.getTime()) || Math.abs(diffDays) > 3650) {
+    return <span className="badge badge-neutral">Data inválida</span>;
+  }
 
   let label: string;
   let badgeClass: string;
