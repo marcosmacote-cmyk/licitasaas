@@ -46,6 +46,7 @@ export function PerformanceDashboard({ biddings }: Props) {
 
     const chartData = useMemo(() => {
         // Normalize modality names to canonical forms (Lei 14.133/2021)
+        // "Licitação Eletrônica" is NOT a modality — it's the session format (electronic vs presencial).
         const normalizeModality = (raw: string): string => {
             if (!raw) return 'Não informada';
             const m = raw.toLowerCase().trim();
@@ -55,9 +56,12 @@ export function PerformanceDashboard({ biddings }: Props) {
             if (m.includes('concurso')) return 'Concurso';
             if (m.includes('leilão') || m.includes('leilao')) return 'Leilão';
             if (m.includes('pré-qualificação') || m.includes('pre-qualificacao') || m.includes('pre qualificação')) return 'Procedimento Auxiliar';
+            if (m.includes('manifestação de interesse') || m.includes('manifestacao de interesse')) return 'Procedimento Auxiliar';
             if (m.includes('credenciamento')) return 'Credenciamento';
             if (m.includes('dispensa')) return 'Dispensa';
             if (m.includes('inexigibilidade')) return 'Inexigibilidade';
+            // "Licitação Eletrônica" = only format, not a modality → classify as generic
+            if (m.includes('licitação eletrônica') || m.includes('licitacao eletronica') || m === 'licitação eletrônica') return 'Concorrência';
             // Fallback: capitalize first letter
             return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
         };
