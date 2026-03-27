@@ -43,27 +43,79 @@ export class NotificationService {
   static async sendTelegram(tenantId: string, chatId: string, message: string): Promise<boolean> {
     if (!chatId) return false;
 
-    console.log(`[Notification] Sending Telegram to ${chatId} for tenant ${tenantId}`);
+    console.log(`[Notification] Sending Telegram to ${chatId} for tenant ${tenantId} (${message.length} chars)`);
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (botToken) {
       try {
         const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-        await axios.post(url, {
-          chat_id: chatId,
-          text: message,
-          parse_mode: 'HTML'
-        }, { timeout: 10000 });
+        const MAX_LEN = 4000; // Telegram limit is 4096, leave margin
+
+        // Split long messages into chunks
+        if (message.length > MAX_LEN) {
+          const chunks = this.splitMessage(message, MAX_LEN);
+          console.log(`[Notification] Mensagem dividida em ${chunks.length} partes (total: ${message.length} chars)`);
+          for (const chunk of chunks) {
+            await axios.post(url, {
+              chat_id: chatId,
+              text: chunk,
+              parse_mode: 'HTML'
+            }, { timeout: 15000 });
+            // Small delay between messages to avoid rate limiting
+            await new Promise(r => setTimeout(r, 500));
+          }
+        } else {
+          await axios.post(url, {
+            chat_id: chatId,
+            text: message,
+            parse_mode: 'HTML'
+          }, { timeout: 15000 });
+        }
         console.log(`[Notification] ✅ Telegram enviado com sucesso para ${chatId}`);
         return true;
       } catch (error: any) {
-        console.error(`[Notification] ❌ Telegram falhou para ${chatId}:`, error.message);
+        const detail = error.response?.data?.description || error.message;
+        console.error(`[Notification] ❌ Telegram falhou para ${chatId}: ${detail}`);
+        // If HTML parse error, retry without parse_mode
+        if (detail?.includes('parse') || detail?.includes('HTML')) {
+          try {
+            const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+            const plainMsg = message.replace(/<[^>]*>/g, '');
+            const truncated = plainMsg.length > 4000 ? plainMsg.substring(0, 3997) + '...' : plainMsg;
+            await axios.post(url, { chat_id: chatId, text: truncated }, { timeout: 15000 });
+            console.log(`[Notification] ✅ Telegram enviado (fallback plain text) para ${chatId}`);
+            return true;
+          } catch (e2: any) {
+            console.error(`[Notification] ❌ Telegram fallback também falhou:`, e2.response?.data?.description || e2.message);
+          }
+        }
         return false;
       }
     } else {
       console.log(`[Notification][MOCK] Telegram message para ${chatId}: ${message.substring(0, 80)}...`);
       return true; // Mock success
     }
+  }
+
+  /**
+   * Divide uma mensagem longa em chunks respeitando quebras de linha
+   */
+  private static splitMessage(message: string, maxLen: number): string[] {
+    const chunks: string[] = [];
+    let remaining = message;
+    while (remaining.length > 0) {
+      if (remaining.length <= maxLen) {
+        chunks.push(remaining);
+        break;
+      }
+      // Find a good split point (double newline or single newline)
+      let splitAt = remaining.lastIndexOf('\n\n', maxLen);
+      if (splitAt < maxLen * 0.3) splitAt = remaining.lastIndexOf('\n', maxLen);
+      if (splitAt < maxLen * 0.3) splitAt = maxLen; // Force split
+      chunks.push(remaining.substring(0, splitAt));
+      remaining = remaining.substring(splitAt).replace(/^\n+/, '');
+    }
+    return chunks;
   }
 
   /**

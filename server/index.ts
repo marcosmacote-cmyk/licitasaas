@@ -1533,6 +1533,20 @@ app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res
     }
 });
 
+// ── Reset scanner dedup history (re-send notifications on next scan) ──
+app.post('/api/pncp/scanner/reset', authenticateToken, async (req: any, res) => {
+    try {
+        const deleted = await prisma.opportunityScannerLog.deleteMany({
+            where: { tenantId: req.user.tenantId }
+        });
+        console.log(`[OpportunityScanner] 🔄 Histórico de dedup resetado para tenant ${req.user.tenantId} (${deleted.count} registros removidos)`);
+        res.json({ success: true, deleted: deleted.count, message: `Histórico limpo. ${deleted.count} registros removidos. Próxima varredura reenviará notificações.` });
+    } catch (error) {
+        console.error("Scanner reset error:", error);
+        res.status(500).json({ error: 'Failed to reset scanner history' });
+    }
+});
+
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
