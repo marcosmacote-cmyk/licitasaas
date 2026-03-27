@@ -8,11 +8,8 @@ import { NotificationService } from '../monitoring/notification.service';
  * e notifica o tenant quando novos editais correspondentes são publicados.
  * 
  * Arquitetura:
- *   PncpSavedSearch (DB)  →  PNCP API  →  Dedup (alertHistory)  →  NotificationService
+ *   PncpSavedSearch (DB)  →  PNCP API  →  Dedup (OpportunityScannerLog DB)  →  NotificationService
  */
-
-// In-memory dedup set (survives restart via DB check)
-const notifiedIds = new Set<string>();
 
 // Rate limit: máximo de buscas a cada ciclo para não sobrecarregar PNCP
 const MAX_SEARCHES_PER_CYCLE = 20;
@@ -42,7 +39,7 @@ async function executePncpSearch(search: {
     states: string | null;
 }): Promise<PncpSearchResult[]> {
     const keywords = search.keywords || '';
-    const status = search.status || 'aberta';
+    const status = search.status || 'recebendo_proposta';
 
     // Parse keywords (mesma lógica do endpoint /api/pncp/search)
     let kwList: string[] = [];
@@ -207,6 +204,29 @@ function formatDate(dateStr: string): string {
 }
 
 /**
+ * Verifica se um pncpId já foi notificado para um tenant (usando DB persistente)
+ */
+async function isAlreadyNotified(tenantId: string, pncpId: string): Promise<boolean> {
+    const existing = await prisma.opportunityScannerLog.findUnique({
+        where: { tenantId_pncpId: { tenantId, pncpId } }
+    });
+    return !!existing;
+}
+
+/**
+ * Marca um pncpId como notificado para um tenant (persistido no DB)
+ */
+async function markAsNotified(tenantId: string, pncpId: string, searchId?: string): Promise<void> {
+    try {
+        await prisma.opportunityScannerLog.create({
+            data: { tenantId, pncpId, searchId }
+        });
+    } catch {
+        // Unique constraint violation — already notified. Ok to ignore.
+    }
+}
+
+/**
  * Ciclo principal: executa todas as pesquisas salvas com autoMonitor ativo
  */
 export async function runOpportunityScan() {
@@ -222,7 +242,10 @@ export async function runOpportunityScan() {
             take: MAX_SEARCHES_PER_CYCLE
         });
 
-        if (searches.length === 0) return;
+        if (searches.length === 0) {
+            console.log(`[OpportunityScanner] ⚠️ Nenhuma pesquisa salva encontrada. Configure pesquisas no PNCP.`);
+            return;
+        }
 
         console.log(`[OpportunityScanner] 🔍 Iniciando varredura de ${searches.length} pesquisas salvas...`);
 
@@ -235,7 +258,7 @@ export async function runOpportunityScan() {
         for (const gc of globalConfigs) {
             try {
                 const conf = JSON.parse(gc.config || '{}');
-                // Defaul to true if not explicitly false
+                // Default to true if not explicitly false
                 scannerEnabledMap.set(gc.tenantId, conf.opportunityScannerEnabled !== false);
             } catch {
                 scannerEnabledMap.set(gc.tenantId, true);
@@ -271,17 +294,20 @@ export async function runOpportunityScan() {
                         states: search.states,
                     });
 
-                    // Filtrar apenas resultados novos (não notificados anteriormente)
-                    const newResults = results.filter(r => {
-                        const dedupKey = `${tenantId}:${r.id}`;
-                        if (notifiedIds.has(dedupKey)) return false;
-                        return true;
-                    });
+                    console.log(`[OpportunityScanner] 📋 "${search.name}": ${results.length} resultados encontrados na API PNCP`);
 
-                    // Registrar TODOS como notificados
+                    // Filtrar apenas resultados novos (não notificados anteriormente — via DB)
+                    const newResults: PncpSearchResult[] = [];
+                    for (const r of results) {
+                        const alreadyNotified = await isAlreadyNotified(tenantId, r.id);
+                        if (!alreadyNotified) {
+                            newResults.push(r);
+                        }
+                    }
+
+                    // Registrar TODOS como notificados no DB (persistente)
                     for (const r of newResults) {
-                        const dedupKey = `${tenantId}:${r.id}`;
-                        notifiedIds.add(dedupKey);
+                        await markAsNotified(tenantId, r.id, search.id);
                     }
 
                     // Limitar a 5 novos resultados por pesquisa para não spammar visualmente
@@ -291,6 +317,8 @@ export async function runOpportunityScan() {
 
                     if (newResults.length > 0) {
                         console.log(`[OpportunityScanner] ✅ "${search.name}": ${newResults.length} novos resultados (notificando ${Math.min(newResults.length, 5)})`);
+                    } else {
+                        console.log(`[OpportunityScanner] ⏩ "${search.name}": 0 novos (todos já foram notificados anteriormente)`);
                     }
                 } catch (err: any) {
                     console.warn(`[OpportunityScanner] ❌ Erro na pesquisa "${search.name}": ${err.message}`);
@@ -375,9 +403,9 @@ export async function runOpportunityScan() {
         }
 
         if (totalNewResults > 0) {
-            console.log(`[OpportunityScanner] ✅ Varredura concluída: ${totalNewResults} novas oportunidades encontradas`);
+            console.log(`[OpportunityScanner] ✅ Varredura concluída: ${totalNewResults} novas oportunidades encontradas e notificadas`);
         } else {
-            console.log(`[OpportunityScanner] ✅ Varredura concluída: nenhuma nova oportunidade`);
+            console.log(`[OpportunityScanner] ✅ Varredura concluída: nenhuma nova oportunidade (todos os editais já foram notificados anteriormente)`);
         }
 
     } catch (error: any) {

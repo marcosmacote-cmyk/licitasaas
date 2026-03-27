@@ -23,6 +23,7 @@ model Tenant {
   technicalCertificates TechnicalCertificate[]
   chatMonitorConfig     ChatMonitorConfig?
   chatMonitorLogs       ChatMonitorLog[]
+  opportunityScannerLogs OpportunityScannerLog[]
 }
 
 model User {
@@ -175,6 +176,19 @@ model PncpSavedSearch {
 
   tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   company CompanyProfile? @relation(fields: [companyProfileId], references: [id], onDelete: Cascade)
+}
+
+model OpportunityScannerLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  pncpId    String   // ID do edital no PNCP (numeroControlePNCP)
+  searchId  String?  // ID da pesquisa salva que detectou
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, pncpId])
+  @@index([tenantId, createdAt])
 }
 
 model PriceProposal {
