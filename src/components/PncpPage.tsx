@@ -140,20 +140,41 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-bg-surface)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', lineHeight: '1.4', maxWidth: '300px' }}>
-                                    <strong style={{ color: 'var(--color-text-primary)' }}>🤖 Monitoramento Automático Ativo</strong><br/>
-                                    O sistema varre suas listas abaixo a cada 4 horas e alerta sobre novos editais no seu WhatsApp.
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.opportunityScannerEnabled ? '#10b981' : '#9ca3af', boxShadow: p.opportunityScannerEnabled ? '0 0 8px rgba(16, 185, 129, 0.4)' : 'none' }} />
+                                        <strong style={{ color: 'var(--color-text-primary)' }}>
+                                            {p.opportunityScannerEnabled ? 'Notificações Ativas' : 'Notificações Inativas'}
+                                        </strong>
+                                    </div>
+                                    Monitoramento a cada 4 horas com alertas via WhatsApp das pesquisas abaixo.
                                 </div>
+
+                                <div style={{ height: '32px', width: '1px', background: 'var(--color-border)', margin: '0 var(--space-1)' }} />
+
                                 <button 
-                                    onClick={p.handleTriggerScan}
+                                    onClick={() => p.toggleOpportunityScanner(!p.opportunityScannerEnabled)}
                                     className="btn btn-outline"
                                     style={{
                                         padding: '6px 14px', fontSize: '0.8125rem', gap: '6px',
-                                        borderRadius: 'var(--radius-md)', color: 'var(--color-primary)', borderColor: 'var(--color-primary)'
+                                        borderRadius: 'var(--radius-md)', 
+                                        color: p.opportunityScannerEnabled ? 'var(--color-danger)' : 'var(--color-primary)', 
+                                        borderColor: p.opportunityScannerEnabled ? 'var(--color-danger-border, var(--color-danger))' : 'var(--color-primary)'
                                     }}
-                                    title="Você não precisa clicar aqui no dia a dia. Use apenas se quiser forçar o robô a procurar agora mesmo."
                                 >
-                                    {p.loading ? <Loader2 size={14} className="spinner" /> : <Search size={14} />} 
-                                    Verificar Agora
+                                    {p.opportunityScannerEnabled ? 'Desativar Alertas' : 'Habilitar Notificação'}
+                                </button>
+                                
+                                <button 
+                                    onClick={p.handleTriggerScan}
+                                    className="btn btn-ghost"
+                                    style={{
+                                        padding: '6px', borderRadius: 'var(--radius-md)', color: 'var(--color-text-secondary)',
+                                        cursor: p.loading ? 'wait' : 'pointer'
+                                    }}
+                                    title="Forçar busca manual agora"
+                                    disabled={p.loading}
+                                >
+                                    {p.loading ? <Loader2 size={16} className="spinner" /> : <Search size={16} />} 
                                 </button>
                             </div>
                         </div>

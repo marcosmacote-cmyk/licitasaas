@@ -33,6 +33,8 @@ model User {
   passwordHash String
   role         String  @default("Analista")
   isActive     Boolean @default(true)
+  opportunityScannerEnabled Boolean @default(true)
+
   tenant       Tenant  @relation(fields: [tenantId], references: [id])
 }
 

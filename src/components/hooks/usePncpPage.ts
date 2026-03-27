@@ -305,7 +305,42 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         doc.save(`licitacoes-${listName.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    useEffect(() => { fetchSavedSearches(); }, []);
+    const [opportunityScannerEnabled, setOpportunityScannerEnabled] = useState(true);
+
+    useEffect(() => { 
+        fetchSavedSearches(); 
+        fetchScannerStatus();
+    }, []);
+
+    const fetchScannerStatus = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/status`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) { const data = await res.json(); setOpportunityScannerEnabled(data.enabled !== false); }
+        } catch (e) { console.error("Failed to fetch scanner status", e); }
+    };
+
+    const toggleOpportunityScanner = async (enabled: boolean) => {
+        setOpportunityScannerEnabled(enabled); // optimistic update
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/toggle`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            });
+            if (res.ok) {
+                toast.success(enabled ? 'Notificações automáticas ativadas!' : 'Notificações automáticas desativadas.');
+            } else {
+                toast.error('Erro ao salvar configuração.');
+                setOpportunityScannerEnabled(!enabled); // revert
+            }
+        } catch (e) {
+            console.error(e);
+            toast.error('Falha de conexão ao salvar configuração.');
+            setOpportunityScannerEnabled(!enabled); // revert
+        }
+    };
 
     const fetchSavedSearches = async () => {
         try {
@@ -742,6 +777,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         toggleFavorito, exportFavoritesToPdf,
         handleSearch, handleSaveSearch, startSaveSearch, loadSavedSearch,
         deleteSavedSearch, clearSearch, editingSearch, setEditingSearch, updateSavedSearch,
-        handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess, handleTriggerScan
+        handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess, handleTriggerScan,
+        // Global scanner
+        opportunityScannerEnabled, toggleOpportunityScanner
     };
 }

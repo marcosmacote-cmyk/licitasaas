@@ -177,10 +177,32 @@ export async function runOpportunityScan() {
 
         console.log(`[OpportunityScanner] 🔍 Iniciando varredura de ${searches.length} pesquisas salvas...`);
 
+        // Fetch GlobalConfigs to check if scanner is disabled
+        const tenantIds = Array.from(new Set(searches.map(s => s.tenantId)));
+        const globalConfigs = await prisma.globalConfig.findMany({
+            where: { tenantId: { in: tenantIds } }
+        });
+        const scannerEnabledMap = new Map<string, boolean>();
+        for (const gc of globalConfigs) {
+            try {
+                const conf = JSON.parse(gc.config || '{}');
+                // Defaul to true if not explicitly false
+                scannerEnabledMap.set(gc.tenantId, conf.opportunityScannerEnabled !== false);
+            } catch {
+                scannerEnabledMap.set(gc.tenantId, true);
+            }
+        }
+
         // Agrupar pesquisas por tenant para consolidar notificações
         const byTenant = new Map<string, { searches: typeof searches; config: any }>();
         for (const s of searches) {
             const tenantId = s.tenantId;
+            
+            // Se o tenant desativou o scanner globalmente, ignora as pesquisas dele
+            if (scannerEnabledMap.has(tenantId) && scannerEnabledMap.get(tenantId) === false) {
+                continue;
+            }
+
             if (!byTenant.has(tenantId)) {
                 byTenant.set(tenantId, { searches: [], config: (s.tenant as any).chatMonitorConfig });
             }

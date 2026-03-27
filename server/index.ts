@@ -1473,6 +1473,51 @@ app.delete('/api/pncp/searches/list/:name', authenticateToken, async (req: any, 
         res.status(500).json({ error: 'Failed to delete list' });
     }
 });
+// ── Opportunity Scanner Global Toggle ──
+app.get('/api/pncp/scanner/status', authenticateToken, async (req: any, res) => {
+    try {
+        const globalConfig = await prisma.globalConfig.findUnique({
+            where: { tenantId: req.user.tenantId }
+        });
+        if (!globalConfig) return res.json({ enabled: true });
+        
+        try {
+            const conf = JSON.parse(globalConfig.config || '{}');
+            res.json({ enabled: conf.opportunityScannerEnabled !== false });
+        } catch {
+            res.json({ enabled: true });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get scanner status' });
+    }
+});
+
+app.post('/api/pncp/scanner/toggle', authenticateToken, async (req: any, res) => {
+    try {
+        const { enabled } = req.body;
+        const tenantId = req.user.tenantId;
+
+        const globalConfig = await prisma.globalConfig.upsert({
+            where: { tenantId },
+            update: {},
+            create: { tenantId, config: '{}' }
+        });
+
+        let conf = {};
+        try { conf = JSON.parse(globalConfig.config || '{}'); } catch {}
+        
+        (conf as any).opportunityScannerEnabled = enabled;
+
+        await prisma.globalConfig.update({
+            where: { tenantId },
+            data: { config: JSON.stringify(conf) }
+        });
+
+        res.json({ success: true, enabled });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to toggle scanner status' });
+    }
+});
 
 // ── Manual trigger for Opportunity Scanner ──
 app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res) => {
