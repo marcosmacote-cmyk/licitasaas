@@ -1624,6 +1624,7 @@ input:checked + .slider:before {
   min-height: 108px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   /* Border-top colorida injetada via style no componente */
   transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
@@ -1634,7 +1635,7 @@ input:checked + .slider:before {
   box-shadow: var(--shadow-md);
 }
 
-.dom-metric__body { display: flex; justify-content: space-between; align-items: flex-start; flex: 1; }
+.dom-metric__body { display: flex; justify-content: space-between; align-items: center; flex: 1; min-width: 0; }
 
 .dom-metric__title {
   font-size: var(--text-xs);
@@ -1643,16 +1644,22 @@ input:checked + .slider:before {
   margin-bottom: var(--space-2);
   text-transform: uppercase;
   letter-spacing: var(--tracking-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dom-metric__value {
-  font-size: var(--text-3xl);           /* foi: text-2xl */
-  font-weight: var(--font-extrabold);    /* foi: font-bold */
+  font-size: var(--text-3xl);
+  font-weight: var(--font-extrabold);
   color: var(--color-text-primary);
-  line-height: 1.05;
+  line-height: 1.15;
   letter-spacing: var(--tracking-tight);
   font-feature-settings: 'tnum';
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dom-metric__sub {
@@ -1660,11 +1667,14 @@ input:checked + .slider:before {
   color: var(--color-text-tertiary);
   margin-top: var(--space-2);
   line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dom-metric__icon {
-  padding: var(--space-3);               /* foi: space-2 — maior */
-  border-radius: var(--radius-lg);       /* foi: radius-md — mais suave */
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1761,16 +1771,17 @@ input:checked + .slider:before {
 
 /* ── Radar Card — Premium ── */
 .dom-radar {
-  padding: var(--space-6) var(--space-5); /* mais generoso verticalmente */
+  padding: var(--space-5) var(--space-4);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: var(--space-3);                    /* foi: space-2 — mais ar entre elementos */
+  gap: var(--space-2);
   transition: box-shadow var(--transition-fast), transform var(--transition-fast);
   height: 100%;
-  min-height: 148px;                      /* garante altura mínima confortavel */
+  min-height: 148px;
+  overflow: hidden;
 }
 
 .dom-radar.card-interactive:hover {
@@ -2609,10 +2620,10 @@ textarea.form-control {
 .show-mobile { display: none !important; }
 
 /* ── Grid Utility Classes ── */
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); align-items: stretch; }
-.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); align-items: stretch; }
-.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); align-items: stretch; }
-.grid-2-1 { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--space-5); }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); align-items: stretch; grid-auto-rows: 1fr; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); align-items: stretch; grid-auto-rows: 1fr; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); align-items: stretch; grid-auto-rows: 1fr; }
+.grid-2-1 { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--space-5); align-items: start; }
 
 /* ── Laptop / Small Desktop (≤ 1280px) ── */
 @media (max-width: 1280px) {

@@ -197,14 +197,14 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             </div>
 
             {/* ═══ PIPELINE ═══ */}
-            <div className="premium-entrance stagger-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)', marginBottom: 'var(--space-5)' }}>
+            <div className="premium-entrance stagger-3 grid-4" style={{ marginBottom: 'var(--space-5)' }}>
                 {pipelineSteps.map((step, i) => (
                     <PipelineStep key={i} label={step.label} count={step.count} icon={step.icon} color={step.color} action={step.action} onClick={() => onNavigate?.('bidding', { statuses: step.statuses })} />
                 ))}
             </div>
 
             {/* ═══ MAIN GRID ═══ */}
-            <div className="grid-2-1 premium-entrance stagger-4" style={{ alignItems: 'flex-start' }}>
+            <div className="grid-2-1 premium-entrance stagger-4">
                 {/* LEFT COLUMN */}
                 <div className="flex-col gap-5">
 
