@@ -146,7 +146,13 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                             {p.opportunityScannerEnabled ? 'Notificações Ativas' : 'Notificações Inativas'}
                                         </strong>
                                     </div>
-                                    Monitoramento a cada 4 horas com alertas via WhatsApp das pesquisas abaixo.
+                                    <div style={{ marginTop: '2px' }}>
+                                        {p.opportunityScannerEnabled ? (
+                                            <>Monitoramento a cada 4 horas com alertas via <strong>WhatsApp, Telegram e E-mail</strong> das pesquisas abaixo.</>
+                                        ) : (
+                                            <>Ative para receber alertas automáticos via WhatsApp, Telegram e E-mail.</>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div style={{ height: '32px', width: '1px', background: 'var(--color-border)', margin: '0 var(--space-1)' }} />

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { prisma } from '../../lib/prisma';
+import { Resend } from 'resend';
 
 export class NotificationService {
   /**
@@ -61,6 +62,37 @@ export class NotificationService {
       }
     } else {
       console.log(`[Notification][MOCK] Telegram message para ${chatId}: ${message.substring(0, 80)}...`);
+      return true; // Mock success
+    }
+  }
+
+  /**
+   * Envia uma mensagem via Email usando Resend SDK.
+   * Retorna true se enviou com sucesso, false caso contrário.
+   */
+  static async sendEmail(tenantId: string, toEmail: string, subject: string, htmlMessage: string): Promise<boolean> {
+    if (!toEmail) return false;
+
+    console.log(`[Notification] Sending Email to ${toEmail} for tenant ${tenantId}`);
+
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (resendApiKey) {
+      try {
+        const resend = new Resend(resendApiKey);
+        await resend.emails.send({
+          from: 'LicitaSaaS Alertas <alertas@licitasaas.com>',
+          to: toEmail,
+          subject: subject,
+          html: htmlMessage,
+        });
+        console.log(`[Notification] ✅ Email enviado com sucesso para ${toEmail}`);
+        return true;
+      } catch (error: any) {
+        console.error(`[Notification] ❌ Email falhou para ${toEmail}:`, error.message);
+        return false;
+      }
+    } else {
+      console.log(`[Notification][MOCK] Email message para ${toEmail}: subject="${subject}"`);
       return true; // Mock success
     }
   }

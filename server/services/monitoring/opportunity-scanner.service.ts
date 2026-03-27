@@ -281,6 +281,21 @@ export async function runOpportunityScan() {
 
                 message += `<i>Acesse o LicitaSaaS para ver todos os detalhes.</i>`;
 
+                // Build HTML message for Email
+                const htmlMessage = `
+                    <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2563eb;">Novas Oportunidades Encontradas</h2>
+                        <p>Olá,</p>
+                        <p>A inteligência do LicitaSaaS encontrou <strong>${newOpportunities.length} novo(s) edital(is)</strong> baseado nas suas pesquisas salvas do PNCP.</p>
+                        <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                            ${message.replace(/\n/g, '<br>')}
+                        </div>
+                        <p>Para ver a análise completa ou favoritar essas oportunidades, acesse o painel do <strong>LicitaSaaS</strong>.</p>
+                        <br>
+                        <p style="font-size: 12px; color: #9ca3af;">Você está recebendo este e-mail porque o monitoramento automático está ligado na sua conta do LicitaSaaS.</p>
+                    </div>
+                `;
+
                 // Enviar via canais configurados
                 if (config.telegramChatId) {
                     await NotificationService.sendTelegram(tenantId, config.telegramChatId, message);
@@ -290,7 +305,19 @@ export async function runOpportunityScan() {
                     await NotificationService.sendWhatsApp(tenantId, config.phoneNumber, plainMessage);
                 }
 
-                console.log(`[OpportunityScanner] 📤 Tenant ${tenantId}: ${newOpportunities.length} oportunidades notificadas`);
+                // Enviar via E-mail para todos os usuários ativos do Tenant
+                try {
+                    const activeUsers = await prisma.user.findMany({ where: { tenantId, isActive: true }, select: { email: true } });
+                    for (const user of activeUsers) {
+                        if (user.email) {
+                            await NotificationService.sendEmail(tenantId, user.email, 'LicitaSaaS: Novas Oportunidades do PNCP', htmlMessage);
+                        }
+                    }
+                } catch (error: any) {
+                    console.error(`[OpportunityScanner] Erro ao enviar e-mail para tenant ${tenantId}:`, error.message);
+                }
+
+                console.log(`[OpportunityScanner] 📤 Tenant ${tenantId}: ${newOpportunities.length} oportunidades notificadas (Telegram/WA/Email)`);
             }
         }
 
