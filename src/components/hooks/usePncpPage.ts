@@ -691,6 +691,26 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         dataInicio !== '', dataFim !== '', selectedSearchCompanyId !== ''
     ].filter(Boolean).length;
 
+    const handleTriggerScan = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/scan-opportunities`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message || 'Varredura de oportunidades iniciada');
+            } else { throw new Error("Erro na varredura"); }
+        } catch (e: any) {
+            console.error(e);
+            toast.error('Falha ao iniciar varredura de oportunidades.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return {
         // Search state
         savedSearches, results, loading, saving, showAdvancedFilters, setShowAdvancedFilters,
@@ -722,6 +742,6 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         toggleFavorito, exportFavoritesToPdf,
         handleSearch, handleSaveSearch, startSaveSearch, loadSavedSearch,
         deleteSavedSearch, clearSearch, editingSearch, setEditingSearch, updateSavedSearch,
-        handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess,
+        handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess, handleTriggerScan
     };
 }

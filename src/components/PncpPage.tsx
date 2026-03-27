@@ -130,10 +130,24 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
 
                     {/* Search chips */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)' as any, whiteSpace: 'nowrap' }}>
-                            <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                            Pesquisas Salvas:
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', width: '100%', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-2)' }}>
+                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)' as any, whiteSpace: 'nowrap' }}>
+                                <Bookmark size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                Pesquisas Salvas:
+                            </span>
+                            <button 
+                                onClick={p.handleTriggerScan}
+                                className="btn btn-outline"
+                                style={{
+                                    padding: '4px 12px', fontSize: '0.8125rem', gap: '4px',
+                                    borderRadius: 'var(--radius-lg)', color: 'var(--color-primary)', borderColor: 'var(--color-primary)'
+                                }}
+                                title="Fazer uma varredura manual de novas oportunidades para todas as suas pesquisas salvas. Você será notificado via WhatsApp/Telegram se houver novidades."
+                            >
+                                {p.loading ? <Loader2 size={14} className="spinner" /> : <Search size={14} />} 
+                                Forçar Varredura (Scanner)
+                            </button>
+                        </div>
                         {p.filteredSavedSearches.map(s => (
                             <div
                                 key={s.id}
