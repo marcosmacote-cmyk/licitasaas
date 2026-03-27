@@ -284,7 +284,6 @@ export async function runOpportunityScan() {
         let totalNewResults = 0;
 
         for (const [tenantId, { searches: tenantSearches, config }] of byTenant) {
-            const newOpportunities: Array<{ search: typeof searches[0]; result: PncpSearchResult }> = [];
 
             for (const search of tenantSearches) {
                 try {
@@ -310,15 +309,84 @@ export async function runOpportunityScan() {
                         await markAsNotified(tenantId, r.id, search.id);
                     }
 
-                    // Limitar a 5 novos resultados por pesquisa para não spammar visualmente
-                    for (const r of newResults.slice(0, 5)) {
-                        newOpportunities.push({ search, result: r });
-                    }
-
                     if (newResults.length > 0) {
-                        console.log(`[OpportunityScanner] ✅ "${search.name}": ${newResults.length} novos resultados (notificando ${Math.min(newResults.length, 5)})`);
+                        console.log(`[OpportunityScanner] ✅ "${search.name}": ${newResults.length} novos resultados`);
+                        totalNewResults += newResults.length;
+
+                        // ── Enviar notificação individual por pesquisa ──
+                        const companyName = (search as any).company?.name || '';
+                        const headerCompany = companyName ? ` (${companyName})` : '';
+                        const displayResults = newResults.slice(0, 8); // Máx 8 por notificação
+
+                        // Telegram / WhatsApp message
+                        let message = `🔔 <b>PNCP: ${search.name}</b>${headerCompany}\n\n`;
+                        message += `<b>${newResults.length} novo(s) edital(is)</b> encontrado(s)\n`;
+
+                        for (const r of displayResults) {
+                            message += `\n━━━━━━━━━━━━━━━\n`;
+                            message += `📌 <b>${r.titulo}</b>\n`;
+                            message += `🏛 ${r.orgao_nome}\n`;
+                            message += `📍 ${r.municipio !== '--' ? `${r.municipio}-` : ''}${r.uf}\n`;
+                            if (r.valor_estimado) message += `💰 ${formatBRL(r.valor_estimado)}\n`;
+                            if (r.data_encerramento_proposta) message += `📅 Prazo: ${formatDate(r.data_encerramento_proposta)}\n`;
+                            if (r.modalidade_nome) message += `📎 ${r.modalidade_nome}\n`;
+                            message += `🔗 ${r.link_sistema}\n`;
+                        }
+
+                        if (newResults.length > displayResults.length) {
+                            message += `\n━━━━━━━━━━━━━━━\n`;
+                            message += `... e mais <b>${newResults.length - displayResults.length}</b> edital(is).\n`;
+                        }
+
+                        message += `\n<i>LicitaSaaS — Scanner PNCP</i>`;
+
+                        // Send Telegram
+                        if (config?.telegramChatId) {
+                            await NotificationService.sendTelegram(tenantId, config.telegramChatId, message);
+                            await new Promise(r => setTimeout(r, 1000)); // Rate limit between messages
+                        }
+
+                        // Send WhatsApp
+                        if (config?.phoneNumber) {
+                            const plainMessage = message.replace(/<[^>]*>/g, '').replace(/━+/g, '───');
+                            await NotificationService.sendWhatsApp(tenantId, config.phoneNumber, plainMessage);
+                        }
+
+                        // Send Email
+                        const htmlMessage = `
+                            <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+                                <h2 style="color: #2563eb;">📋 ${search.name}${headerCompany}</h2>
+                                <p>${newResults.length} novo(s) edital(is) encontrado(s) para esta pesquisa.</p>
+                                ${displayResults.map(r => `
+                                    <div style="background-color: #f3f4f6; padding: 12px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #2563eb;">
+                                        <strong>${r.titulo}</strong><br>
+                                        <span style="color: #6b7280;">🏛 ${r.orgao_nome} — ${r.municipio !== '--' ? `${r.municipio}-` : ''}${r.uf}</span><br>
+                                        ${r.valor_estimado ? `<span>💰 ${formatBRL(r.valor_estimado)}</span><br>` : ''}
+                                        ${r.data_encerramento_proposta ? `<span>📅 Prazo: ${formatDate(r.data_encerramento_proposta)}</span><br>` : ''}
+                                        ${r.modalidade_nome ? `<span>📎 ${r.modalidade_nome}</span><br>` : ''}
+                                        <a href="${r.link_sistema}" style="color: #2563eb;">Ver no PNCP →</a>
+                                    </div>
+                                `).join('')}
+                                ${newResults.length > displayResults.length ? `<p style="color: #6b7280;">... e mais ${newResults.length - displayResults.length} edital(is). Acesse o LicitaSaaS para ver todos.</p>` : ''}
+                                <br>
+                                <p style="font-size: 12px; color: #9ca3af;">LicitaSaaS — Scanner de Oportunidades PNCP</p>
+                            </div>
+                        `;
+
+                        try {
+                            const activeUsers = await prisma.user.findMany({ where: { tenantId, isActive: true }, select: { email: true } });
+                            for (const user of activeUsers) {
+                                if (user.email) {
+                                    await NotificationService.sendEmail(tenantId, user.email, `PNCP: ${search.name} — ${newResults.length} novo(s)`, htmlMessage);
+                                }
+                            }
+                        } catch (error: any) {
+                            console.error(`[OpportunityScanner] Erro ao enviar e-mail para tenant ${tenantId}:`, error.message);
+                        }
+
+                        console.log(`[OpportunityScanner] 📤 "${search.name}" → ${newResults.length} oportunidades notificadas`);
                     } else {
-                        console.log(`[OpportunityScanner] ⏩ "${search.name}": 0 novos (todos já foram notificados anteriormente)`);
+                        console.log(`[OpportunityScanner] ⏩ "${search.name}": 0 novos (já notificados)`);
                     }
                 } catch (err: any) {
                     console.warn(`[OpportunityScanner] ❌ Erro na pesquisa "${search.name}": ${err.message}`);
@@ -327,85 +395,12 @@ export async function runOpportunityScan() {
                 // Rate limit between searches
                 await new Promise(r => setTimeout(r, 2000));
             }
-
-            // Consolidar e enviar notificações para este tenant
-            if (newOpportunities.length > 0) {
-                totalNewResults += newOpportunities.length;
-
-                // Agrupar por pesquisa
-                const grouped = new Map<string, typeof newOpportunities>();
-                for (const opp of newOpportunities) {
-                    const key = opp.search.name;
-                    if (!grouped.has(key)) grouped.set(key, []);
-                    grouped.get(key)!.push(opp);
-                }
-
-                // Montar mensagem consolidada
-                let message = `🔔 <b>NOVAS OPORTUNIDADES PNCP</b>\n\n`;
-                message += `<b>${newOpportunities.length} novo(s) edital(is) encontrado(s)!</b>\n\n`;
-
-                for (const [searchName, opps] of grouped) {
-                    message += `📋 <b>Pesquisa:</b> "${searchName}"\n`;
-                    for (const opp of opps.slice(0, 3)) { // Max 3 per group in notification
-                        const r = opp.result;
-                        message += `\n  • <b>${r.titulo}</b>\n`;
-                        message += `    📍 ${r.orgao_nome} (${r.uf})\n`;
-                        if (r.valor_estimado) message += `    💰 ${formatBRL(r.valor_estimado)}\n`;
-                        if (r.data_encerramento_proposta) message += `    📅 Prazo: ${formatDate(r.data_encerramento_proposta)}\n`;
-                        message += `    🔗 ${r.link_sistema}\n`;
-                    }
-                    if (opps.length > 3) {
-                        message += `\n  ... e mais ${opps.length - 3} resultado(s)\n`;
-                    }
-                    message += '\n';
-                }
-
-                message += `<i>Acesse o LicitaSaaS para ver todos os detalhes.</i>`;
-
-                // Build HTML message for Email
-                const htmlMessage = `
-                    <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #2563eb;">Novas Oportunidades Encontradas</h2>
-                        <p>Olá,</p>
-                        <p>A inteligência do LicitaSaaS encontrou <strong>${newOpportunities.length} novo(s) edital(is)</strong> baseado nas suas pesquisas salvas do PNCP.</p>
-                        <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                            ${message.replace(/\n/g, '<br>')}
-                        </div>
-                        <p>Para ver a análise completa ou favoritar essas oportunidades, acesse o painel do <strong>LicitaSaaS</strong>.</p>
-                        <br>
-                        <p style="font-size: 12px; color: #9ca3af;">Você está recebendo este e-mail porque o monitoramento automático está ligado na sua conta do LicitaSaaS.</p>
-                    </div>
-                `;
-
-                // Enviar via canais configurados
-                if (config?.telegramChatId) {
-                    await NotificationService.sendTelegram(tenantId, config.telegramChatId, message);
-                }
-                if (config?.phoneNumber) {
-                    const plainMessage = message.replace(/<[^>]*>/g, '');
-                    await NotificationService.sendWhatsApp(tenantId, config.phoneNumber, plainMessage);
-                }
-
-                // Enviar via E-mail para todos os usuários ativos do Tenant
-                try {
-                    const activeUsers = await prisma.user.findMany({ where: { tenantId, isActive: true }, select: { email: true } });
-                    for (const user of activeUsers) {
-                        if (user.email) {
-                            await NotificationService.sendEmail(tenantId, user.email, 'LicitaSaaS: Novas Oportunidades do PNCP', htmlMessage);
-                        }
-                    }
-                } catch (error: any) {
-                    console.error(`[OpportunityScanner] Erro ao enviar e-mail para tenant ${tenantId}:`, error.message);
-                }
-
-                console.log(`[OpportunityScanner] 📤 Tenant ${tenantId}: ${newOpportunities.length} oportunidades notificadas (Telegram/WA/Email)`);
-            }
         }
 
         if (totalNewResults > 0) {
             console.log(`[OpportunityScanner] ✅ Varredura concluída: ${totalNewResults} novas oportunidades encontradas e notificadas`);
         } else {
-            console.log(`[OpportunityScanner] ✅ Varredura concluída: nenhuma nova oportunidade (todos os editais já foram notificados anteriormente)`);
+            console.log(`[OpportunityScanner] ✅ Varredura concluída: nenhuma nova oportunidade (todos já notificados)`);
         }
 
     } catch (error: any) {
