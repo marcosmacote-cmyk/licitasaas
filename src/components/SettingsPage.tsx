@@ -1,143 +1,258 @@
 import { useState, useEffect } from 'react';
-import { Loader2, LineChart, Server, Clock } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-interface AgentLog {
-    id: string;
-    content: string;
-    detectedKeyword: string | null;
-    status: string;
-    captureSource: string;
-    createdAt: string;
-    biddingProcess?: {
-        processNumber?: string;
-        processYear?: string;
-        title?: string;
-        uasg?: string;
-    };
-}
+import { Settings, Bell, Shield, Moon, Sun, Monitor, Palette, User, Globe, Clock, Check, ChevronRight } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export function SettingsPage() {
-    const [loading, setLoading] = useState(true);
-    const [logs, setLogs] = useState<AgentLog[]>([]);
+    const [notifEnabled, setNotifEnabled] = useState(true);
+    const [soundEnabled, setSoundEnabled] = useState(true);
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [refreshInterval, setRefreshInterval] = useState(30);
+    const [savedMsg, setSavedMsg] = useState('');
 
+    // Load saved preferences
     useEffect(() => {
-        fetchAgentLogs();
+        try {
+            const prefs = JSON.parse(localStorage.getItem('licitasaas_prefs') || '{}');
+            if (prefs.notifEnabled !== undefined) setNotifEnabled(prefs.notifEnabled);
+            if (prefs.soundEnabled !== undefined) setSoundEnabled(prefs.soundEnabled);
+            if (prefs.autoRefresh !== undefined) setAutoRefresh(prefs.autoRefresh);
+            if (prefs.refreshInterval !== undefined) setRefreshInterval(prefs.refreshInterval);
+        } catch { /* ignore */ }
     }, []);
 
-    const fetchAgentLogs = async () => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/chat-monitor/logs?limit=50`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setLogs(data);
-            }
-        } catch (error) {
-            console.error('Failed to fetch agent logs:', error);
-        } finally {
-            setLoading(false);
-        }
+    const savePrefs = () => {
+        const prefs = { notifEnabled, soundEnabled, autoRefresh, refreshInterval };
+        localStorage.setItem('licitasaas_prefs', JSON.stringify(prefs));
+        setSavedMsg('Preferências salvas!');
+        setTimeout(() => setSavedMsg(''), 2000);
     };
 
-    if (loading) {
-        return (
-            <div className="page-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-                <Loader2 size={32} className="spinner" color="var(--color-primary)" />
-            </div>
-        );
-    }
+    // Get user info from localStorage
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     return (
         <div className="page-container">
+            {/* Page Header */}
             <div className="page-header" style={{ marginBottom: 'var(--space-8)' }}>
-                <h1 className="page-title">Configurações do Sistema</h1>
-                <p className="page-subtitle">Gerencie preferências e visualize a saúde do Agente Local.</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    <div style={{
+                        padding: 'var(--space-2)',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--color-bg-surface-hover)',
+                        color: 'var(--color-text-secondary)',
+                        display: 'flex'
+                    }}>
+                        <Settings size={24} />
+                    </div>
+                    <div>
+                        <h1 className="page-title">Configurações</h1>
+                        <p className="page-subtitle">Gerencie suas preferências e conta.</p>
+                    </div>
+                </div>
             </div>
 
-            <div style={{ maxWidth: '1000px', display: 'grid', gap: 'var(--space-6)' }}>
-                {/* Saúde do Agente (Fase 4) */}
-                <div className="card">
-                    <div style={{ 
-                        padding: 'var(--space-6)', 
-                        borderBottom: '1px solid var(--color-border)',
-                    }}
-                        className="flex-between"
-                    >
-                        <div className="flex-gap" style={{ gap: 'var(--space-3)' }}>
-                            <div className="indicator-card" style={{ padding: 'var(--space-3)', minWidth: 'auto', border: 'none', boxShadow: 'none', background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
-                                <LineChart size={24} />
-                            </div>
-                            <div>
-                                <h3 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                                    Saúde do Agente Local
-                                </h3>
-                                <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-base)', marginTop: '4px' }}>
-                                    Histórico de capturas recentes e mensagens monitoradas
-                                </p>
-                            </div>
-                        </div>
-                        <button onClick={fetchAgentLogs} className="btn btn-secondary btn-sm" style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                            <Loader2 size={16} /> Atualizar Log
-                        </button>
+            <div style={{ maxWidth: '800px', display: 'grid', gap: 'var(--space-6)' }}>
+
+                {/* ── Perfil ── */}
+                <SettingsSection icon={<User size={20} />} title="Conta" description="Informações do seu perfil no sistema.">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                        <SettingsField label="Nome" value={user.name || 'Administrador'} />
+                        <SettingsField label="Email" value={user.email || 'admin@licitasaas.com'} />
+                        <SettingsField label="Organização" value={user.tenantName || 'LicitaSaaS Brasil'} />
+                        <SettingsField label="Função" value={user.role === 'admin' ? 'Administrador' : 'Operador'} />
                     </div>
+                </SettingsSection>
 
-                    <div style={{ padding: '24px' }}>
-                        {logs.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-tertiary)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)' }}>
-                                <Server size={48} style={{ margin: '0 auto var(--space-4)', opacity: 0.5 }} />
-                                <p style={{ fontWeight: 'var(--font-medium)' }}>Nenhum log de captura encontrado ainda.</p>
-                                <p style={{ fontSize: 'var(--text-base)', marginTop: 'var(--space-2)' }}>As mensagens do ComprasNet aparecerão aqui assim que o Agente Local começar a trabalhar.</p>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                                {logs.map((log) => (
-                                    <div key={log.id} className="card" style={{
-                                        padding: 'var(--space-4)',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 'var(--space-3)'
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                                                <span style={{ 
-                                                    fontSize: 'var(--text-sm)', 
-                                                    fontWeight: 'var(--font-semibold)', 
-                                                    background: log.detectedKeyword ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)',
-                                                    color: log.detectedKeyword ? 'var(--color-success)' : 'var(--color-text-secondary)',
-                                                    padding: '4px var(--space-3)',
-                                                    borderRadius: 'var(--radius-xl)'
-                                                }}>
-                                                    {log.detectedKeyword ? `Alerta: ${log.detectedKeyword}` : 'Captura Comum'}
-                                                </span>
-                                                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Server size={14} /> Fonte: {log.captureSource}
-                                                </span>
-                                            </div>
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <Clock size={14} /> {new Date(log.createdAt).toLocaleString()}
-                                            </span>
-                                        </div>
-                                        
-                                        <div style={{ fontSize: 'var(--text-base)', background: 'var(--color-bg-base)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--color-border)' }}>
-                                            {log.content}
-                                        </div>
+                {/* ── Notificações ── */}
+                <SettingsSection icon={<Bell size={20} />} title="Notificações" description="Configure alertas do Monitoramento de Chat e sessões.">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                        <SettingsToggle
+                            label="Notificações do navegador"
+                            description="Receba alertas quando palavras-chave forem detectadas no chat."
+                            checked={notifEnabled}
+                            onChange={setNotifEnabled}
+                        />
+                        <SettingsToggle
+                            label="Alerta sonoro"
+                            description="Toque um som ao detectar nova mensagem relevante no monitoramento."
+                            checked={soundEnabled}
+                            onChange={setSoundEnabled}
+                        />
+                    </div>
+                </SettingsSection>
 
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                                                Ref: Processo {log.biddingProcess?.processNumber}{log.biddingProcess?.processYear ? '/' + log.biddingProcess.processYear : ''} - UASG {log.biddingProcess?.uasg || 'N/A'} - {log.biddingProcess?.title}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                {/* ── Atualização ── */}
+                <SettingsSection icon={<Clock size={20} />} title="Atualização de Dados" description="Controle a frequência de atualização automática.">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                        <SettingsToggle
+                            label="Atualização automática"
+                            description="Recarregar dados de licitações e monitoramento periodicamente."
+                            checked={autoRefresh}
+                            onChange={setAutoRefresh}
+                        />
+                        {autoRefresh && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', paddingLeft: 'var(--space-2)' }}>
+                                <label style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', minWidth: '160px' }}>
+                                    Intervalo (segundos):
+                                </label>
+                                <select
+                                    value={refreshInterval}
+                                    onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                                    className="form-select"
+                                    style={{ width: '120px' }}
+                                >
+                                    <option value={15}>15s</option>
+                                    <option value={30}>30s</option>
+                                    <option value={60}>60s</option>
+                                    <option value={120}>120s</option>
+                                </select>
                             </div>
                         )}
                     </div>
+                </SettingsSection>
+
+                {/* ── Sistema ── */}
+                <SettingsSection icon={<Globe size={20} />} title="Sistema" description="Informações técnicas do sistema.">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                        <SettingsField label="Versão" value="1.0.0 (Sprint 4)" />
+                        <SettingsField label="Servidor" value={API_BASE_URL.replace('https://', '').replace('http://', '')} />
+                        <SettingsField label="Plano" value="Enterprise" />
+                        <SettingsField label="Último Login" value={new Date().toLocaleDateString('pt-BR')} />
+                    </div>
+                </SettingsSection>
+
+                {/* ── Save Button ── */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 'var(--space-3)' }}>
+                    {savedMsg && (
+                        <span style={{ 
+                            color: 'var(--color-success)', 
+                            fontSize: 'var(--text-sm)', 
+                            fontWeight: 600,
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            animation: 'fadeIn 0.2s ease-out',
+                        }}>
+                            <Check size={14} /> {savedMsg}
+                        </span>
+                    )}
+                    <button className="btn btn-primary" onClick={savePrefs} style={{ padding: 'var(--space-3) var(--space-6)' }}>
+                        Salvar Preferências
+                    </button>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Helper Components ──
+
+function SettingsSection({ icon, title, description, children }: {
+    icon: React.ReactNode;
+    title: string;
+    description: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <div style={{
+            background: 'var(--color-bg-surface)',
+            borderRadius: 'var(--radius-xl)',
+            border: 'none',
+            boxShadow: '0 0 0 1px var(--color-border), 0 2px 12px rgba(0,0,0,0.04)',
+            overflow: 'hidden',
+        }}>
+            <div style={{
+                padding: 'var(--space-5) var(--space-6)',
+                borderBottom: '1px solid var(--color-border)',
+                display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+            }}>
+                <div style={{
+                    width: 36, height: 36,
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(37,99,235,0.08)',
+                    border: 'none',
+                    boxShadow: '0 0 0 1px rgba(37,99,235,0.12)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--color-primary)',
+                    flexShrink: 0,
+                }}>
+                    {icon}
+                </div>
+                <div>
+                    <div style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                        {title}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 1 }}>
+                        {description}
+                    </div>
+                </div>
+            </div>
+            <div style={{ padding: 'var(--space-5) var(--space-6)' }}>
+                {children}
+            </div>
+        </div>
+    );
+}
+
+function SettingsField({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                {label}
+            </div>
+            <div style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', fontWeight: 500 }}>
+                {value}
+            </div>
+        </div>
+    );
+}
+
+function SettingsToggle({ label, description, checked, onChange }: {
+    label: string;
+    description: string;
+    checked: boolean;
+    onChange: (v: boolean) => void;
+}) {
+    return (
+        <div
+            onClick={() => onChange(!checked)}
+            style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: 'var(--space-3) var(--space-4)',
+                borderRadius: 'var(--radius-md)',
+                background: checked ? 'rgba(37,99,235,0.04)' : 'transparent',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+            }}
+        >
+            <div>
+                <div style={{ fontSize: 'var(--text-md)', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                    {label}
+                </div>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                    {description}
+                </div>
+            </div>
+            <div
+                style={{
+                    width: 44, height: 24,
+                    borderRadius: 9999,
+                    background: checked ? 'var(--color-primary)' : 'var(--color-bg-surface-hover)',
+                    position: 'relative',
+                    transition: 'background 0.2s',
+                    flexShrink: 0,
+                    marginLeft: 'var(--space-4)',
+                    boxShadow: checked ? '0 0 8px rgba(37,99,235,0.3)' : '0 0 0 1px var(--color-border)',
+                }}
+            >
+                <div style={{
+                    width: 18, height: 18,
+                    borderRadius: '50%',
+                    background: 'white',
+                    position: 'absolute',
+                    top: 3,
+                    left: checked ? 23 : 3,
+                    transition: 'left 0.2s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                }} />
             </div>
         </div>
     );

@@ -3,6 +3,7 @@ import { Target, Trophy, DollarSign, FileStack, PieChart as PieIcon, TrendingUp,
 import { BarChart as RBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RPieChart, Pie, Legend } from 'recharts';
 import type { BiddingProcess } from '../../types';
 import { resolveStage } from '../../governance';
+import { normalizeModality } from '../../utils/normalizeModality';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -45,31 +46,19 @@ export function PerformanceDashboard({ biddings }: Props) {
     }, [filteredBiddings]);
 
     const chartData = useMemo(() => {
-        // Normalize modality names to canonical forms (Lei 14.133/2021)
-        // "Licitação Eletrônica" is NOT a modality — it's the session format (electronic vs presencial).
-        const normalizeModality = (raw: string): string => {
-            if (!raw) return 'Não informada';
-            const m = raw.toLowerCase().trim();
-            if (m.includes('pregão') || m.includes('pregao')) return 'Pregão';
-            if (m.includes('concorrência') || m.includes('concorrencia')) return 'Concorrência';
-            if (m.includes('diálogo') || m.includes('dialogo')) return 'Diálogo Competitivo';
-            if (m.includes('concurso')) return 'Concurso';
-            if (m.includes('leilão') || m.includes('leilao')) return 'Leilão';
-            if (m.includes('pré-qualificação') || m.includes('pre-qualificacao') || m.includes('pre qualificação')) return 'Procedimento Auxiliar';
-            if (m.includes('manifestação de interesse') || m.includes('manifestacao de interesse')) return 'Procedimento Auxiliar';
-            if (m.includes('credenciamento')) return 'Credenciamento';
-            if (m.includes('dispensa')) return 'Dispensa';
-            if (m.includes('inexigibilidade')) return 'Inexigibilidade';
-            // "Licitação Eletrônica" = only format, not a modality → classify as generic
-            if (m.includes('licitação eletrônica') || m.includes('licitacao eletronica') || m === 'licitação eletrônica') return 'Concorrência';
-            // Fallback: capitalize first letter
-            return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+        // Group modalities using shared normalizeModality, then simplify labels for chart
+        const shortenForChart = (normalized: string): string => {
+            if (normalized.includes('Pregão')) return 'Pregão';
+            if (normalized.includes('Concorrência')) return 'Concorrência';
+            if (normalized.includes('Diálogo')) return 'Diálogo Competitivo';
+            if (normalized.includes('Pré-Qualificação') || normalized.includes('Manifestação')) return 'Proc. Auxiliar';
+            return normalized;
         };
 
         const modalityMap: Record<string, number> = {};
         const statusMap: Record<string, number> = {};
         filteredBiddings.forEach(b => {
-            const normalizedModality = normalizeModality(b.modality);
+            const normalizedModality = shortenForChart(normalizeModality(b.modality));
             modalityMap[normalizedModality] = (modalityMap[normalizedModality] || 0) + 1;
             statusMap[b.status] = (statusMap[b.status] || 0) + 1;
         });
