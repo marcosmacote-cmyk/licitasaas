@@ -57,43 +57,85 @@ async function executePncpSearch(search: {
         }
     }
 
-    // Parse UFs from states (stored as JSON string)
+    // Parse extra filters from states (stored as JSON string)
     let ufs: string[] = [];
+    let modalidade = ''; let esfera = ''; let orgao = ''; let orgaosLista = ''; let excludeKeywords = ''; let dataInicio = ''; let dataFim = '';
+
     if (search.states) {
         try {
             const parsed = JSON.parse(search.states);
             if (Array.isArray(parsed)) ufs = parsed;
-            else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed.split(',');
+            else if (typeof parsed === 'object') {
+                if (parsed.uf) {
+                    if (parsed.uf.includes(',')) ufs = parsed.uf.split(',').map((u: string) => u.trim()).filter(Boolean);
+                    else ufs = [parsed.uf];
+                }
+                modalidade = parsed.modalidade || '';
+                esfera = parsed.esfera || '';
+                orgao = parsed.orgao || '';
+                orgaosLista = parsed.orgaosLista || '';
+                excludeKeywords = parsed.excludeKeywords || '';
+                dataInicio = parsed.dataInicio || '';
+                dataFim = parsed.dataFim || '';
+            } else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed.split(',');
         } catch {
             if (search.states.includes(',')) ufs = search.states.split(',').map(s => s.trim());
             else if (search.states.length === 2) ufs = [search.states];
         }
     }
 
-    // Build URL (simplified version — only search, no hydration needed for alerts)
-    const buildUrl = (qItems: string[], singleUf?: string) => {
+    // Process orgao and orgaosLista into single list
+    let extractedNames: string[] = [];
+    if (orgao && orgao.includes(',')) {
+        orgaosLista = orgaosLista ? `${orgaosLista},${orgao}` : orgao;
+        orgao = '';
+    }
+    if (orgaosLista) {
+        extractedNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
+        extractedNames = [...new Set(extractedNames)]; // Remove duplicates
+    }
+    const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
+
+    // Build URL
+    const buildUrl = (qItems: string[], singleUf?: string, singleOrgao?: string) => {
         let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=50&pagina=1`;
-        if (qItems.length > 0) url += `&q=${encodeURIComponent(qItems.join(' '))}`;
+        
+        let terms = [...qItems];
+        if (singleOrgao) terms.push(singleOrgao.includes(' ') && !singleOrgao.startsWith('"') ? `"${singleOrgao}"` : singleOrgao);
+
+        if (terms.length > 0) url += `&q=${encodeURIComponent(terms.join(' '))}`;
+
         if (status && status !== 'todas') url += `&status=${status}`;
         if (singleUf) url += `&ufs=${singleUf}`;
+        if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
+        if (dataInicio) url += `&data_inicio=${dataInicio}`;
+        if (dataFim) url += `&data_fim=${dataFim}`;
+        if (esfera && esfera !== 'todas') url += `&esferas=${esfera}`;
         return url;
     };
 
     const keywordsToIterate = kwList.length > 0 ? kwList : [null];
-    const ufsForIteration = ufs.length > 0 ? ufs : [null as string | null];
+    const ufsForIteration = ufs.length > 0 ? ufs : [null];
 
     const urlsToFetch: string[] = [];
     for (const kw of keywordsToIterate) {
         for (const singleUf of ufsForIteration) {
-            const params: string[] = [];
-            if (kw) params.push(kw);
-            urlsToFetch.push(buildUrl(params, singleUf || undefined));
+            for (const org of orgaosToIterate) {
+                const params: string[] = [];
+                if (kw) params.push(kw);
+                urlsToFetch.push(buildUrl(params, singleUf || undefined, org || undefined));
+            }
         }
     }
 
     // Limit combinations
     const urls = urlsToFetch.slice(0, 20);
     
+    let excludeList: string[] = [];
+    if (excludeKeywords) {
+        excludeList = excludeKeywords.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    }
+
     let rawItems: any[] = [];
     for (const url of urls) {
         try {
@@ -134,6 +176,13 @@ async function executePncpSearch(search: {
         };
     }).filter(item => {
         if (seenIds.has(item.id)) return false;
+
+        if (excludeList.length > 0) {
+            const txt = `${item.titulo} ${item.objeto}`.toLowerCase();
+            const containsExclude = excludeList.some(ex => txt.includes(ex));
+            if (containsExclude) return false;
+        }
+
         seenIds.add(item.id);
         return true;
     });
@@ -229,10 +278,14 @@ export async function runOpportunityScan() {
                         return true;
                     });
 
-                    // Limitar a 5 novos resultados por pesquisa para não spammar
-                    for (const r of newResults.slice(0, 5)) {
+                    // Registrar TODOS como notificados
+                    for (const r of newResults) {
                         const dedupKey = `${tenantId}:${r.id}`;
                         notifiedIds.add(dedupKey);
+                    }
+
+                    // Limitar a 5 novos resultados por pesquisa para não spammar visualmente
+                    for (const r of newResults.slice(0, 5)) {
                         newOpportunities.push({ search, result: r });
                     }
 
@@ -248,7 +301,7 @@ export async function runOpportunityScan() {
             }
 
             // Consolidar e enviar notificações para este tenant
-            if (newOpportunities.length > 0 && config) {
+            if (newOpportunities.length > 0) {
                 totalNewResults += newOpportunities.length;
 
                 // Agrupar por pesquisa
@@ -297,10 +350,10 @@ export async function runOpportunityScan() {
                 `;
 
                 // Enviar via canais configurados
-                if (config.telegramChatId) {
+                if (config?.telegramChatId) {
                     await NotificationService.sendTelegram(tenantId, config.telegramChatId, message);
                 }
-                if (config.phoneNumber) {
+                if (config?.phoneNumber) {
                     const plainMessage = message.replace(/<[^>]*>/g, '');
                     await NotificationService.sendWhatsApp(tenantId, config.phoneNumber, plainMessage);
                 }
