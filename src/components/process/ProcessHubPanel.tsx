@@ -290,26 +290,37 @@ export function ProcessHubPanel({
                     {/* Ações rápidas — lista compacta */}
                     <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-body)', border: '1px solid var(--color-border)', flex: 1 }}>
                         <SectionLabel>Abrir módulo</SectionLabel>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {quickActions.map((a, i) => (
-                                <button key={i} type="button" onClick={a.action}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: 7,
-                                        padding: '10px 10px', borderRadius: 'var(--radius-sm)',
-                                        border: 'none', background: 'transparent', cursor: 'pointer',
-                                        fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)',
-                                        fontWeight: 500, textAlign: 'left', width: '100%',
-                                        transition: 'background 0.12s', minHeight: '36px',
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                                >
-                                    <span style={{ color: a.color, display: 'flex', flexShrink: 0 }}>{a.icon}</span>
-                                    <span style={{ flex: 1 }}>{a.label}</span>
-                                    <ChevronRight size={11} color="var(--color-text-tertiary)" />
-                                </button>
-                            ))}
-                        </div>
+                        {quickActions.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {quickActions.map((a, i) => (
+                                    <button key={i} type="button" onClick={a.action}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 7,
+                                            padding: '10px 10px', borderRadius: 'var(--radius-sm)',
+                                            border: 'none', background: 'transparent', cursor: 'pointer',
+                                            fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)',
+                                            fontWeight: 500, textAlign: 'left', width: '100%',
+                                            transition: 'background 0.12s', minHeight: '36px',
+                                        }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-surface-hover)')}
+                                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                                    >
+                                        <span style={{ color: a.color, display: 'flex', flexShrink: 0 }}>{a.icon}</span>
+                                        <span style={{ flex: 1 }}>{a.label}</span>
+                                        <ChevronRight size={11} color="var(--color-text-tertiary)" />
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ padding: 'var(--space-3) 0', textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', lineHeight: 1.6 }}>
+                                    Módulos operacionais serão liberados conforme o processo avançar no funil.
+                                </p>
+                                <p style={{ margin: '6px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                                    Fase atual: <strong style={{ color: gov.themeColor }}>{stage}</strong>
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 

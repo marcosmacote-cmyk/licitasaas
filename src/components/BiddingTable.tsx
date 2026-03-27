@@ -14,10 +14,28 @@ interface Props {
 
 export function BiddingTable({ items, companies, onEditProcess, analyses, onViewAnalysis, onToggleMonitor }: Props) {
     const renderDate = (dateStr?: string) => {
-        if (!dateStr) return 'Sem data';
+        if (!dateStr) return '—';
         const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return 'Data Inválida';
+        if (isNaN(d.getTime())) return '—';
         return format(d, 'dd/MM/yy HH:mm');
+    };
+    // Normalize modality names to canonical forms (Lei 14.133/2021)
+    const normalizeModality = (raw?: string): string => {
+        if (!raw) return 'Não informada';
+        const m = raw.toLowerCase().trim();
+        if (m.includes('pregão') || m.includes('pregao')) return 'Pregão Eletrônico';
+        if (m.includes('concorrência') || m.includes('concorrencia')) return 'Concorrência Eletrônica';
+        if (m.includes('diálogo') || m.includes('dialogo')) return 'Diálogo Competitivo';
+        if (m.includes('concurso')) return 'Concurso';
+        if (m.includes('leilão') || m.includes('leilao')) return 'Leilão';
+        if (m.includes('pré-qualificação') || m.includes('pre-qualificacao') || m.includes('pre qualificação')) return 'Procedimento Auxiliar';
+        if (m.includes('manifestação de interesse') || m.includes('manifestacao de interesse')) return 'Procedimento Auxiliar';
+        if (m.includes('credenciamento')) return 'Credenciamento';
+        if (m.includes('dispensa')) return 'Dispensa';
+        if (m.includes('inexigibilidade')) return 'Inexigibilidade';
+        if (m.includes('licitação eletrônica') || m.includes('licitacao eletronica')) return 'Concorrência Eletrônica';
+        // Fallback: capitalize first letter
+        return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
     };
     const normalizePortalDisplay = (portal?: string): string => {
         if (!portal) return 'Não informado';
@@ -73,7 +91,7 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                         <td>
                                             <span className="badge badge-blue">{normalizePortalDisplay(item.portal)}</span>
                                         </td>
-                                        <td>{item.modality}</td>
+                                        <td>{normalizeModality(item.modality)}</td>
                                         <td>{item.status}</td>
                                         <td>
                                             {item.companyProfileId ? (

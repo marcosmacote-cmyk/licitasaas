@@ -367,7 +367,7 @@ export function LiveCountdown({ targetDate, compact = false, refreshInterval = 6
   
   // Guard: invalid date or absurd values (>10 years)
   if (isNaN(target.getTime()) || Math.abs(diffDays) > 3650) {
-    return <span className="badge badge-neutral">Data inválida</span>;
+    return null;
   }
 
   let label: string;
