@@ -38,6 +38,7 @@ import { generateCompanyInsights, recordMatchHistory } from "./services/ai/strat
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
 import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "./services/monitoring/alertTaxonomy";
 import { NotificationService } from "./services/monitoring/notification.service";
+import { startOpportunityScanner } from "./services/monitoring/opportunity-scanner.service";
 import { BatchPlatformMonitor } from "./services/monitoring/batch-platform-monitor.service";
 import { PCPMonitor } from "./services/monitoring/pcp-monitor.service";
 import { LicitanetMonitor } from "./services/monitoring/licitanet-monitor.service";
@@ -1470,6 +1471,20 @@ app.delete('/api/pncp/searches/list/:name', authenticateToken, async (req: any, 
     } catch (error) {
         console.error("Delete search list error:", error);
         res.status(500).json({ error: 'Failed to delete list' });
+    }
+});
+
+// ── Manual trigger for Opportunity Scanner ──
+app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res) => {
+    try {
+        const { runOpportunityScan } = await import('./services/monitoring/opportunity-scanner.service');
+        console.log(`[OpportunityScanner] Manual scan triggered by tenant ${req.user.tenantId}`);
+        // Run async — don't block the response
+        runOpportunityScan().catch(err => console.error('[OpportunityScanner] Manual scan error:', err));
+        res.json({ success: true, message: 'Varredura de oportunidades iniciada. Você receberá notificações se houver novos editais.' });
+    } catch (error) {
+        console.error("Manual scan trigger error:", error);
+        res.status(500).json({ error: 'Failed to trigger scan' });
     }
 });
 
@@ -8012,6 +8027,9 @@ app.listen(PORT, async () => {
         setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
     }, 75_000);
 });
+
+// ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
+startOpportunityScanner(4);
 
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);
