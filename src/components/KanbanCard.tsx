@@ -4,6 +4,7 @@ import { Calendar, DollarSign, ScanSearch, Building2, Trash2, MessageSquare, Bel
 import { format } from 'date-fns';
 import type { BiddingProcess, CompanyProfile, ObservationLog } from '../types';
 import { RiskIndicator } from './ui';
+import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
 
 interface CardFieldConfig {
     key: string;
@@ -108,7 +109,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                         <span className={`badge ${portalColor}`} title={item.portal} style={{ maxWidth: '100%' }}>{item.portal}</span>
                     )}
                     {isVisible('modality') && (
-                        <span className="badge badge-blue" title={item.modality} style={{ maxWidth: '100%' }}>{item.modality}</span>
+                        <span className="badge badge-blue" title={item.modality} style={{ maxWidth: '100%' }}>{normalizeModality(item.modality)}</span>
                     )}
                 </div>
                 <div className="flex-gap" style={{ flexShrink: 0, marginLeft: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -181,7 +182,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
 
             {isVisible('title') && (
                 <div className="kanban-card-title" title={item.title} style={{ fontSize: compactMode ? '0.8125rem' : undefined, marginBottom: compactMode ? '4px' : undefined }}>
-                    {item.title}
+                    {normalizeTitle(item.title)}
                 </div>
             )}
 

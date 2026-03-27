@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { ExternalLink, Edit2, ScanSearch, Building2, SignalHigh } from 'lucide-react';
 import type { BiddingProcess, AiAnalysis, CompanyProfile } from '../types';
 import { RiskIndicator } from './ui';
-import { normalizeModality } from '../utils/normalizeModality';
+import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
 
 interface Props {
     items: BiddingProcess[];
@@ -68,7 +68,7 @@ export function BiddingTable({ items, companies, onEditProcess, analyses, onView
                                 return (
                                     <tr key={item.id} className="table-row-hover" style={{ borderBottom: '1px solid var(--color-border)' }}>
                                         <td onDoubleClick={() => onEditProcess(item)}>
-                                            <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '320px' }} title={item.title}>{item.title}</div>
+                                            <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '320px' }} title={item.title}>{normalizeTitle(item.title)}</div>
                                             {item.summary && <div className="text-truncate" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px', maxWidth: '320px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={item.summary}>{item.summary}</div>}
                                         </td>
                                         <td>
