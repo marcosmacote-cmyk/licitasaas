@@ -331,10 +331,10 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                 </div>
 
                 {/* RIGHT COLUMN */}
-                <div className="flex-col gap-5">
+                <div className="flex-col gap-5" style={{ minWidth: 0 }}>
 
                     {/* CALENDÁRIO */}
-                    <div className="card glass-panel" style={{ padding: 'var(--card-padding)', overflow: 'hidden', minWidth: 0 }}>
+                    <div className="card glass-panel" style={{ padding: 'var(--space-4)', minWidth: 0 }}>
                         <div className="flex-between mb-4" style={{ gap: 'var(--space-2)', minWidth: 0 }}>
                             <h3 className="dash-section-title mb-0" style={{ flexShrink: 0 }}><CalendarIcon size={18} color="var(--color-primary)" /> Calendário</h3>
                             <div className="flex-center gap-2" style={{ flexShrink: 0 }}>
@@ -344,13 +344,13 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                             </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', textAlign: 'center', marginBottom: 'var(--space-1)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', textAlign: 'center', marginBottom: 'var(--space-1)' }}>
                             {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
-                                <div key={i} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', padding: 'var(--space-1)' }}>{d}</div>
+                                <div key={i} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', padding: '2px' }}>{d}</div>
                             ))}
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px' }}>
                             {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`e-${i}`} />)}
                             {Array.from({ length: daysInMonth }).map((_, i) => {
                                 const d = i + 1;
@@ -364,15 +364,15 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
                                 return (
                                     <button key={d} onClick={() => setSelectedDate(dateObj)} style={{
-                                        padding: '6px 2px', fontSize: 'var(--text-base)', fontWeight: 'var(--font-medium)',
+                                        padding: '4px 1px', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)',
                                         borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 150ms',
-                                        display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 36,
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 32,
                                         background: isSelected ? 'var(--color-primary)' : isToday ? 'var(--color-bg-surface-hover)' : 'transparent',
                                         color: isSelected ? 'white' : 'var(--color-text-primary)',
                                         border: isToday && !isSelected ? '1px solid var(--color-primary)' : '1px solid transparent',
                                     }}>
                                         {d}
-                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '2px', height: '4px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '1px', height: '4px' }}>
                                             {hasSessions && <span style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? 'white' : 'var(--color-danger)' }} />}
                                             {hasReminders && <span style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? 'white' : 'var(--color-warning)' }} />}
                                         </div>
