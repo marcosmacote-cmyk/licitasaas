@@ -26,13 +26,14 @@ export function normalizeModality(raw?: string | null): string {
  */
 export function normalizeTitle(raw?: string | null): string {
     if (!raw) return '';
-    // Verificar se o título está predominantemente em MAIÚSCULAS
+    // Verificar se o título contém segmentos significativos em MAIÚSCULAS
     const letters = raw.replace(/[^a-zA-ZÀ-ÿ]/g, '');
     if (letters.length === 0) return raw;
     const upperCount = (raw.match(/[A-ZÀ-ÖØ-Þ]/g) || []).length;
     const ratio = upperCount / letters.length;
-    // Se menos de 60% das letras são maiúsculas, já está ok
-    if (ratio < 0.6) return raw;
+    // Detecção: ratio >40% OU 3+ palavras consecutivas em ALL CAPS
+    const hasConsecutiveAllCaps = /\b[A-ZÀ-ÖØ-Þ]{2,}\s+[A-ZÀ-ÖØ-Þ]{2,}\s+[A-ZÀ-ÖØ-Þ]{2,}/.test(raw);
+    if (ratio < 0.4 && !hasConsecutiveAllCaps) return raw;
     // Converter para Title Case preservando siglas e números
     return raw
         .toLowerCase()
