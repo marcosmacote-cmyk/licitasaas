@@ -96,10 +96,11 @@ export function ProcessHubPanel({
     const hasCreds    = credentials.length > 0;
     const docsOk      = expiredDocs.length === 0 && companyDocs.length > 0;
 
+    const expiringDocs = companyDocs.filter(d => d.status === 'Vencendo');
     const aptidaoChecks = [
         { label: 'Habilitação jurídica',  ok: hasQual,     detail: hasQual     ? 'Cadastrada'           : 'Não informada', critical: !hasQual },
         { label: 'Qualificação técnica',  ok: hasTechQual, detail: hasTechQual ? 'Cadastrada'           : 'Não informada', critical: false },
-        { label: 'Documentos vigentes',   ok: docsOk,      detail: companyDocs.length > 0 ? `${validDocs.length}/${companyDocs.length} válidos` : 'Nenhum', critical: expiredDocs.length > 0 },
+        { label: 'Documentos vigentes',   ok: docsOk,      detail: companyDocs.length > 0 ? `${validDocs.length} ok${expiringDocs.length > 0 ? ` · ${expiringDocs.length} vencendo` : ''}${expiredDocs.length > 0 ? ` · ${expiredDocs.length} vencido${expiredDocs.length > 1 ? 's' : ''}` : ''}` : 'Nenhum', critical: expiredDocs.length > 0 },
         { label: 'Credenciais de portal', ok: hasCreds,    detail: hasCreds    ? `${credentials.length} cadastrada(s)` : 'Nenhuma', critical: false },
     ];
 
