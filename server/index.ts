@@ -1547,6 +1547,30 @@ app.post('/api/pncp/scanner/reset', authenticateToken, async (req: any, res) => 
     }
 });
 
+// ── Internal: Reset + Scan (for admin/worker use without JWT) ──
+app.post('/api/internal/scanner/reset-and-scan', async (req: any, res) => {
+    const secret = req.headers['x-worker-secret'] || req.body?.workerSecret;
+    const WORKER_SECRET = process.env.CHAT_WORKER_SECRET || '';
+    const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+    const isAuthorized = (WORKER_SECRET && secret === WORKER_SECRET) || (TELEGRAM_TOKEN && secret === TELEGRAM_TOKEN);
+    if (!isAuthorized) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    try {
+        const tenantId = req.body?.tenantId || '9f7a7155-be67-4470-8952-eb947fd97931';
+        const deleted = await prisma.opportunityScannerLog.deleteMany({ where: { tenantId } });
+        console.log(`[OpportunityScanner] 🔄 Internal reset: ${deleted.count} registros removidos para tenant ${tenantId}`);
+        
+        const { runOpportunityScan } = await import('./services/monitoring/opportunity-scanner.service');
+        runOpportunityScan().catch(err => console.error('[OpportunityScanner] Scan error:', err));
+        
+        res.json({ success: true, deleted: deleted.count, message: `Reset OK (${deleted.count} removed). Scan triggered.` });
+    } catch (error: any) {
+        console.error("Internal reset error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
