@@ -206,11 +206,52 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
         }
     };
 
+    // ===== FRONTEND NORMALIZATION HELPERS =====
+    // Lightweight client-side normalization to clean up filter display even for old data
+    const normalizeModalityFE = (raw: string | undefined | null): string => {
+        if (!raw || !raw.trim()) return '';
+        const s = raw.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+            .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '')
+            .replace(/\s*-?\s*srp$/i, '').replace(/\s*-?\s*sispp$/i, '').replace(/\s+/g, ' ').trim();
+        const rules: [string, string][] = [
+            ['pregao eletronico com inversao de fases', 'Pregão Eletrônico'],
+            ['pregao eletronico', 'Pregão Eletrônico'], ['pregao presencial', 'Pregão Presencial'],
+            ['pregao', 'Pregão Eletrônico'],
+            ['concorrencia eletronica internacional', 'Concorrência Eletrônica Internacional'],
+            ['concorrencia eletronica', 'Concorrência Eletrônica'], ['concorrencia', 'Concorrência Eletrônica'],
+            ['dispensa eletronica', 'Dispensa de Licitação'], ['dispensa de licitacao', 'Dispensa de Licitação'],
+            ['dispensa', 'Dispensa de Licitação'],
+            ['pre-qualificacao para concorrencia eletronica', 'Pré-Qualificação Eletrônica'],
+            ['pre-qualificacao eletronica', 'Pré-Qualificação Eletrônica'], ['pre-qualificacao', 'Pré-Qualificação Eletrônica'],
+            ['licitacao eletronica', 'Licitação Eletrônica'],
+            ['dialogo competitivo', 'Diálogo Competitivo'], ['inexigibilidade', 'Inexigibilidade'],
+            ['leilao', 'Leilão'], ['concurso', 'Concurso'], ['tomada de precos', 'Tomada de Preços'],
+            ['convite', 'Convite'], ['rdc', 'RDC'],
+        ];
+        for (const [p, c] of rules) { if (s === p) return c; }
+        for (const [p, c] of rules) { if (s.includes(p)) return c; }
+        return raw.trim();
+    };
+    const normalizePortalFE = (raw: string | undefined | null): string => {
+        if (!raw || !raw.trim()) return '';
+        const p = raw.trim().toLowerCase();
+        if (p.includes('m2a')) return 'M2A'; if (p.includes('bbmnet')) return 'BBMNET';
+        if (p.includes('bll')) return 'BLL'; if (p.includes('bnc')) return 'BNC';
+        if (p.includes('licita mais') || p.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
+        if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
+        if (p.includes('licitanet')) return 'Licitanet';
+        if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('cnetmobile')) return 'ComprasNet';
+        if (p.includes('pncp')) return 'PNCP';
+        // Strip embedded URLs
+        const cleaned = raw.trim().replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?\s*/gi, '').replace(/\s*:\s*https?:\/\/[^\s]+/gi, '').trim();
+        return cleaned && cleaned.length > 2 ? cleaned : raw.trim();
+    };
+
     // ===== DYNAMIC FILTER OPTIONS =====
     const filterOptions = useMemo(() => ({
         companies: Array.from(new Set(items.map(i => i.companyProfileId).filter(Boolean))) as string[],
-        modalities: Array.from(new Set(items.map(i => i.modality).filter(Boolean))) as string[],
-        portals: Array.from(new Set(items.map(i => i.portal).filter(Boolean))) as string[],
+        modalities: Array.from(new Set(items.map(i => normalizeModalityFE(i.modality)).filter(Boolean))).sort() as string[],
+        portals: Array.from(new Set(items.map(i => normalizePortalFE(i.portal)).filter(Boolean))).sort() as string[],
         statuses: COLUMNS as string[],
         risks: ['Baixo', 'Médio', 'Alto', 'Crítico'] as string[],
     }), [items]);
@@ -229,8 +270,8 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                 if (!match) return false;
             }
             if (filters.companies.length > 0 && (!item.companyProfileId || !filters.companies.includes(item.companyProfileId))) return false;
-            if (filters.modalities.length > 0 && !filters.modalities.includes(item.modality)) return false;
-            if (filters.portals.length > 0 && !filters.portals.includes(item.portal)) return false;
+            if (filters.modalities.length > 0 && !filters.modalities.includes(normalizeModalityFE(item.modality))) return false;
+            if (filters.portals.length > 0 && !filters.portals.includes(normalizePortalFE(item.portal))) return false;
             if (filters.statuses.length > 0 && !filters.statuses.includes(resolveStage(item.status))) return false;
             if (filters.risks.length > 0 && !filters.risks.includes(item.risk || '')) return false;
             return true;

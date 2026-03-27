@@ -3007,8 +3007,8 @@ Responda APENAS com JSON array:
                 v2Result.legal_risk_review.critical_points.map(cp =>
                     `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`
                 ).join('\n'),
-            modality: v2Result.process_identification.modalidade || '',
-            portal: v2Result.process_identification.fonte_oficial || 'PNCP',
+            modality: normalizeModality(v2Result.process_identification.modalidade),
+            portal: normalizePortal(v2Result.process_identification.fonte_oficial || 'PNCP', link_sistema),
             estimatedValue: 0,
             risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
                 : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
@@ -3108,7 +3108,7 @@ Responda APENAS com JSON array:
 });
 
 // ══════════════════════════════════════════
-// ── Portal Normalization & Monitoring Helpers ──
+// ── Portal & Modality Normalization + Monitoring Helpers ──
 // ══════════════════════════════════════════
 
 // Canonical list of monitorable platform domains (used in create, update, and backfill)
@@ -3131,6 +3131,81 @@ const PLATFORM_DOMAINS: Record<string, string[]> = {
 };
 
 /**
+ * Normaliza o campo "modalidade" para um valor canônico.
+ * Resolve variações de casing, acentuação, sufixos (SRP, Nº...), etc.
+ */
+function normalizeModality(raw: string | undefined | null): string {
+    if (!raw || !raw.trim()) return '';
+    // Normalize: lowercase, strip accents, trim, remove numbers/Nº suffixes
+    const stripped = raw.trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+        .toLowerCase()
+        .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '') // remove "Nº 90001/2024..."
+        .replace(/\s*-?\s*srp$/i, '')            // remove "- SRP"
+        .replace(/\s*-?\s*sispp$/i, '')          // remove "- SISPP"
+        .replace(/\s+/g, ' ')                     // normaliza espaços
+        .trim();
+
+    // Exact match table (normalized → canonical)
+    const MODALITY_RULES: [string, string][] = [
+        // Pregão
+        ['pregao eletronico', 'Pregão Eletrônico'],
+        ['pregao eletronico com inversao de fases', 'Pregão Eletrônico'],
+        ['pregao presencial', 'Pregão Presencial'],
+        ['pregao', 'Pregão Eletrônico'],
+        // Concorrência
+        ['concorrencia eletronica internacional', 'Concorrência Eletrônica Internacional'],
+        ['concorrencia eletronica', 'Concorrência Eletrônica'],
+        ['concorrencia', 'Concorrência Eletrônica'],
+        // Dispensa
+        ['dispensa eletronica', 'Dispensa de Licitação'],
+        ['dispensa de licitacao', 'Dispensa de Licitação'],
+        ['dispensa', 'Dispensa de Licitação'],
+        // Pré-Qualificação
+        ['pre-qualificacao para concorrencia eletronica', 'Pré-Qualificação Eletrônica'],
+        ['pre-qualificacao eletronica', 'Pré-Qualificação Eletrônica'],
+        ['pre qualificacao eletronica', 'Pré-Qualificação Eletrônica'],
+        ['pre-qualificacao', 'Pré-Qualificação Eletrônica'],
+        // Licitação genérica
+        ['licitacao eletronica', 'Licitação Eletrônica'],
+        // Outros
+        ['dialogo competitivo', 'Diálogo Competitivo'],
+        ['inexigibilidade', 'Inexigibilidade'],
+        ['leilao', 'Leilão'],
+        ['leilao eletronico', 'Leilão'],
+        ['concurso', 'Concurso'],
+        ['tomada de precos', 'Tomada de Preços'],
+        ['convite', 'Convite'],
+        ['rdc', 'RDC'],
+        ['regime diferenciado de contratacoes', 'RDC'],
+        ['manifestacao de interesse', 'Manifestação de Interesse'],
+        ['chamada publica', 'Chamada Pública'],
+    ];
+
+    // Try exact match first
+    for (const [pattern, canonical] of MODALITY_RULES) {
+        if (stripped === pattern) return canonical;
+    }
+    // Try partial/includes match (order matters: most specific first)
+    for (const [pattern, canonical] of MODALITY_RULES) {
+        if (stripped.includes(pattern)) return canonical;
+    }
+
+    // Fallback: Title Case the original (cleaned) text — don't preserve ALL CAPS
+    return raw.trim()
+        .replace(/\s*[Nn][°ºo]?\s*[\d/.]+.*/i, '')
+        .replace(/\s*-?\s*SRP$/i, '')
+        .split(' ')
+        .map(w => {
+            const lower = w.toLowerCase();
+            if (['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'para', 'em'].includes(lower)) return lower;
+            return lower.charAt(0).toUpperCase() + lower.slice(1);
+        })
+        .join(' ')
+        .trim();
+}
+
+/**
  * Normaliza o campo "portal" para um nome canônico.
  * Resolve as 18+ variações digitadas livremente pelos usuários.
  */
@@ -3148,7 +3223,9 @@ function normalizePortal(portal: string, link?: string | null): string {
         if (l.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
         if (l.includes('portaldecompraspublicas')) return 'Portal de Compras Públicas';
         if (l.includes('licitanet.com.br')) return 'Licitanet';
+        if (l.includes('bolsadelicitacoes') || l.includes('bfrr.com')) return 'Bolsa de Licitações';
         if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras')) return 'ComprasNet';
+        if (l.includes('pncp.gov.br')) return 'PNCP';
     }
 
     // Prioridade 2: Normalizar o texto do portal
@@ -3159,12 +3236,21 @@ function normalizePortal(portal: string, link?: string | null): string {
     if (p.includes('licita mais') || p.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
     if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
     if (p.includes('licitanet')) return 'Licitanet';
+    if (p.includes('bolsa de licita')) return 'Bolsa de Licitações';
     if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile')) return 'ComprasNet';
+    if (p.includes('pncp')) return 'PNCP';
 
-    // Prioridade 3: Se contém "pncp" sozinho, pode ser ComprasNet ou outro
-    if (p.includes('pncp') && !l) return portal; // Manter original se só tem PNCP
+    // Prioridade 3: Strip URL-like content and return cleaned name
+    if (portal) {
+        // Remove embedded URLs: "Nome (https://...)" or "Nome: https://..."
+        const cleaned = portal
+            .replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?\s*/gi, '')
+            .replace(/\s*:\s*https?:\/\/[^\s]+/gi, '')
+            .trim();
+        if (cleaned && cleaned.length > 2) return cleaned;
+    }
 
-    return portal || 'Não Informado'; // Preservar se não reconhecido
+    return portal || 'Não Informado';
 }
 
 /**
@@ -3208,8 +3294,9 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
             companyProfileId = null;
         }
 
-        // ── Step 0: Normalize portal name ──
+        // ── Step 0: Normalize portal & modality ──
         biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
+        if (biddingData.modality) biddingData.modality = normalizeModality(biddingData.modality);
 
         // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
         let enrichedLink = biddingData.link || '';
@@ -3427,6 +3514,56 @@ app.post('/api/admin/normalize-portals', authenticateToken, async (req: any, res
     }
 });
 
+// ── Normalize BOTH portals AND modalities for ALL existing processes ──
+app.post('/api/admin/normalize-all', authenticateToken, async (req: any, res) => {
+    try {
+        const allProcesses = await prisma.biddingProcess.findMany({
+            where: { tenantId: req.user.tenantId },
+            select: { id: true, portal: true, modality: true, link: true }
+        });
+
+        let portalUpdated = 0, modalityUpdated = 0;
+        const portalChanges: Array<{ id: string; from: string; to: string }> = [];
+        const modalityChanges: Array<{ id: string; from: string; to: string }> = [];
+
+        for (const proc of allProcesses) {
+            const updateData: Record<string, string> = {};
+
+            const normPortal = normalizePortal(proc.portal || '', proc.link);
+            if (normPortal !== proc.portal) {
+                updateData.portal = normPortal;
+                portalChanges.push({ id: proc.id.slice(0, 8), from: proc.portal || '(vazio)', to: normPortal });
+                portalUpdated++;
+            }
+
+            const normModality = normalizeModality(proc.modality);
+            if (normModality && normModality !== proc.modality) {
+                updateData.modality = normModality;
+                modalityChanges.push({ id: proc.id.slice(0, 8), from: proc.modality || '(vazio)', to: normModality });
+                modalityUpdated++;
+            }
+
+            if (Object.keys(updateData).length > 0) {
+                await prisma.biddingProcess.update({
+                    where: { id: proc.id },
+                    data: updateData
+                });
+            }
+        }
+
+        console.log(`[NormalizeAll] tenant=${req.user.tenantId} | portals: ${portalUpdated}, modalities: ${modalityUpdated} / ${allProcesses.length} total`);
+        res.json({
+            message: `Normalização concluída: ${portalUpdated} portais + ${modalityUpdated} modalidades atualizadas`,
+            total: allProcesses.length,
+            portalUpdated, modalityUpdated,
+            portalChanges, modalityChanges
+        });
+    } catch (error) {
+        console.error('[NormalizeAll] Error:', error);
+        res.status(500).json({ error: 'Failed to normalize data' });
+    }
+});
+
 app.get('/api/admin/monitoring-audit', authenticateToken, async (req: any, res) => {
     try {
         const tenantId = req.user.tenantId;
@@ -3525,9 +3662,12 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             ...biddingData
         } = req.body;
 
-        // ── Step 0: Normalize portal name ──
+        // ── Step 0: Normalize portal & modality ──
         if (biddingData.portal !== undefined) {
             biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
+        }
+        if (biddingData.modality !== undefined && biddingData.modality) {
+            biddingData.modality = normalizeModality(biddingData.modality);
         }
 
         // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
@@ -5881,7 +6021,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
         const legacyCompat = {
             process: {
                 title: result.process_identification.objeto_resumido || result.process_identification.numero_edital,
-                modality: result.process_identification.modalidade,
+                modality: normalizeModality(result.process_identification.modalidade),
                 object: result.process_identification.objeto_completo,
                 agency: result.process_identification.orgao,
                 estimatedValue: '',
