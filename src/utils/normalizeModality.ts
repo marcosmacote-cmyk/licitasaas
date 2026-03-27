@@ -26,15 +26,22 @@ export function normalizeModality(raw?: string | null): string {
  */
 export function normalizeTitle(raw?: string | null): string {
     if (!raw) return '';
-    // Se o título não está todo em maiúsculas, retornar como está
-    if (raw !== raw.toUpperCase()) return raw;
+    // Verificar se o título está predominantemente em MAIÚSCULAS
+    const letters = raw.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+    if (letters.length === 0) return raw;
+    const upperCount = (raw.match(/[A-ZÀ-ÖØ-Þ]/g) || []).length;
+    const ratio = upperCount / letters.length;
+    // Se menos de 60% das letras são maiúsculas, já está ok
+    if (ratio < 0.6) return raw;
     // Converter para Title Case preservando siglas e números
     return raw
         .toLowerCase()
         .replace(/(?:^|\s|[-/])\S/g, (match) => match.toUpperCase())
-        // Re-uppercase siglas comuns: CE, SP, RJ, UF, CNPJ, etc.
+        // Re-uppercase siglas de estados
         .replace(/\b(ce|sp|rj|mg|ba|pr|rs|sc|go|mt|ms|df|pa|am|pi|ma|se|al|pb|pe|rn|to|ro|rr|ap|ac|es)\b/gi, (s) => s.toUpperCase())
-        .replace(/\b(cnpj|cpf|cep|epp|me|ltda|sa|eireli|pncp)\b/gi, (s) => s.toUpperCase())
+        // Re-uppercase siglas corporativas/documentais
+        .replace(/\b(cnpj|cpf|cep|epp|me|ltda|sa|eireli|pncp|sesporte)\b/gi, (s) => s.toUpperCase())
         .replace(/\bnº\b/gi, 'nº')
-        .replace(/\bN°\b/gi, 'Nº');
+        .replace(/\bN°\b/gi, 'Nº')
+        .replace(/\bn°\b/gi, 'Nº');
 }
