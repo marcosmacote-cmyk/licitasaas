@@ -46,6 +46,7 @@ function App() {
   const lastLogIdRef = useRef<string | null>(null);
   const [alertCount, setAlertCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [pncpUnreadCount, setPncpUnreadCount] = useState(0);
   const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string } | null>(null);
   const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string; hubOriginId?: string } | null>(null);
 
@@ -182,7 +183,24 @@ function App() {
     const unreadInterval = setInterval(fetchUnreadCount, 30000);
     fetchUnreadCount();
 
-    return () => { clearInterval(interval); clearInterval(unreadInterval); };
+    // Poll PNCP scanner unread count
+    const fetchPncpUnread = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/opportunities/unread-count`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPncpUnreadCount(data.count || 0);
+        }
+      } catch { /* silent */ }
+    };
+    const pncpUnreadInterval = setInterval(fetchPncpUnread, 60000);
+    fetchPncpUnread();
+
+    return () => { clearInterval(interval); clearInterval(unreadInterval); clearInterval(pncpUnreadInterval); };
   }, [user]);
 
   const refreshData = async () => {
@@ -235,7 +253,7 @@ function App() {
     {
       label: 'Operação',
       items: [
-        { key: 'opportunities', label: 'Oportunidades', icon: <Signal size={18} /> },
+        { key: 'opportunities', label: 'Oportunidades', icon: <Signal size={18} />, badge: pncpUnreadCount || undefined, badgeType: 'blue' },
         { key: 'bidding', label: 'Licitações', icon: <Briefcase size={18} /> },
         { key: 'intelligence', label: 'Inteligência', icon: <ScanSearch size={18} /> },
         { key: 'companies', label: 'Empresas', icon: <Building2 size={18} /> },

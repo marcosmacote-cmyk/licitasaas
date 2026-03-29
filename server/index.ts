@@ -1539,6 +1539,88 @@ app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res
     }
 });
 
+// ── List scanner-found opportunities (for "Encontradas" tab) ──
+app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const searchId = req.query.searchId as string | undefined;
+        const page = parseInt(req.query.page as string) || 1;
+        const pageSize = 50;
+
+        const where: any = { tenantId };
+        if (searchId) where.searchId = searchId;
+
+        const [items, total] = await Promise.all([
+            prisma.opportunityScannerLog.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+                select: {
+                    id: true,
+                    pncpId: true,
+                    searchId: true,
+                    searchName: true,
+                    titulo: true,
+                    objeto: true,
+                    orgaoNome: true,
+                    uf: true,
+                    municipio: true,
+                    valorEstimado: true,
+                    dataEncerramentoProposta: true,
+                    modalidadeNome: true,
+                    linkSistema: true,
+                    isViewed: true,
+                    createdAt: true,
+                }
+            }),
+            prisma.opportunityScannerLog.count({ where })
+        ]);
+
+        res.json({ items, total, page, pageSize });
+    } catch (error) {
+        console.error("Scanner opportunities error:", error);
+        res.status(500).json({ error: 'Failed to list scanner opportunities' });
+    }
+});
+
+// ── Mark opportunities as viewed ──
+app.patch('/api/pncp/scanner/opportunities/mark-viewed', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { ids } = req.body; // Array of log IDs to mark as viewed, or "all"
+        
+        if (ids === 'all') {
+            await prisma.opportunityScannerLog.updateMany({
+                where: { tenantId, isViewed: false },
+                data: { isViewed: true }
+            });
+        } else if (Array.isArray(ids) && ids.length > 0) {
+            await prisma.opportunityScannerLog.updateMany({
+                where: { tenantId, id: { in: ids } },
+                data: { isViewed: true }
+            });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Mark viewed error:", error);
+        res.status(500).json({ error: 'Failed to mark as viewed' });
+    }
+});
+
+// ── Get unread count (for sidebar badge) ──
+app.get('/api/pncp/scanner/opportunities/unread-count', authenticateToken, async (req: any, res) => {
+    try {
+        const count = await prisma.opportunityScannerLog.count({
+            where: { tenantId: req.user.tenantId, isViewed: false }
+        });
+        res.json({ count });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get unread count' });
+    }
+});
+
 // ── Reset scanner dedup history (re-send notifications on next scan) ──
 app.post('/api/pncp/scanner/reset', authenticateToken, async (req: any, res) => {
     try {

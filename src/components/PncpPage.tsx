@@ -545,24 +545,40 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             }}>
                 <div style={{ display: 'flex', gap: 'var(--space-6)' }}>
                     <button
-                        onClick={() => p.setShowFavoritosTab(false)}
-                        className={`tab-btn${!p.showFavoritosTab ? ' active' : ''}`}
+                        onClick={() => p.setActiveTab('search')}
+                        className={`tab-btn${p.activeTab === 'search' ? ' active' : ''}`}
                     >
                         Resultados da Busca {p.results.length > 0 && `(${p.totalResults || p.results.length})`}
                     </button>
                     <button
-                        onClick={() => p.setShowFavoritosTab(true)}
-                        className={`tab-btn${p.showFavoritosTab ? ' active-warning' : ''}`}
+                        onClick={() => p.setActiveTab('found')}
+                        className={`tab-btn${p.activeTab === 'found' ? ' active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', position: 'relative' }}
+                    >
+                        🔔 Encontradas {p.scannerOpportunitiesTotal > 0 && `(${p.scannerOpportunitiesTotal})`}
+                        {p.unreadOpportunityCount > 0 && (
+                            <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                minWidth: '18px', height: '18px', padding: '0 5px',
+                                borderRadius: '9px', fontSize: '0.625rem', fontWeight: 700,
+                                background: 'var(--color-danger)', color: '#fff',
+                                marginLeft: '2px',
+                            }}>{p.unreadOpportunityCount}</span>
+                        )}
+                    </button>
+                    <button
+                        onClick={() => p.setActiveTab('favorites')}
+                        className={`tab-btn${p.activeTab === 'favorites' ? ' active-warning' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
                     >
-                        <Star size={16} fill={p.showFavoritosTab ? "currentColor" : "none"} color={p.showFavoritosTab ? "currentColor" : "currentColor"} />
+                        <Star size={16} fill={p.activeTab === 'favorites' ? "currentColor" : "none"} color={p.activeTab === 'favorites' ? "currentColor" : "currentColor"} />
                         Favoritos {p.favoritos.length > 0 && `(${p.favoritos.length})`}
                     </button>
                 </div>
             </div>
 
             {/* ═══ Favorites List Filter (only when on Favoritos tab) ═══ */}
-            {p.showFavoritosTab && p.favLists.length > 1 && (
+            {p.activeTab === 'favorites' && p.favLists.length > 1 && (
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                     marginBottom: 'var(--space-4)', marginTop: 'var(--space-3)',
@@ -648,17 +664,49 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             {/* Results Table Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 'var(--space-4)', marginTop: 'var(--space-8)' }}>
                 <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' as any, color: 'var(--color-text-primary)', margin: 0 }}>
-                    {p.showFavoritosTab
+                    {p.activeTab === 'favorites'
                         ? (p.activeFavListId
                             ? p.favLists.find(l => l.id === p.activeFavListId)?.name || 'Favoritos'
                             : 'Todas as Listas de Favoritos')
-                        : 'Resultados da Pesquisa'}
+                        : p.activeTab === 'found'
+                            ? 'Licitações Encontradas pelo Scanner'
+                            : 'Resultados da Pesquisa'}
                 </h3>
-                {p.showFavoritosTab && p.favoritos.length > 0 && (
-                    <button className="btn btn-primary" onClick={p.exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)' }}>
-                        <Download size={16} /> Exportar Relatório PDF
-                    </button>
-                )}
+                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+                    {p.activeTab === 'found' && (
+                        <>
+                            {/* Filter by saved search */}
+                            <select
+                                value={p.scannerFilterSearchId || ''}
+                                onChange={(e) => { p.setScannerFilterSearchId(e.target.value || null); p.setScannerOpportunitiesPage(1); }}
+                                style={{
+                                    padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)',
+                                    color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)',
+                                }}
+                            >
+                                <option value="">Todas as pesquisas</option>
+                                {p.savedSearches.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                            {p.unreadOpportunityCount > 0 && (
+                                <button
+                                    className="btn btn-ghost"
+                                    onClick={() => p.markOpportunitiesViewed('all')}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)', fontSize: 'var(--text-sm)' }}
+                                >
+                                    <CheckCircle2 size={14} /> Marcar tudo como lido
+                                </button>
+                            )}
+                        </>
+                    )}
+                    {p.activeTab === 'favorites' && p.favoritos.length > 0 && (
+                        <button className="btn btn-primary" onClick={p.exportFavoritesToPdf} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-2) var(--space-4)' }}>
+                            <Download size={16} /> Exportar Relatório PDF
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Results Table */}
@@ -675,42 +723,67 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         </tr>
                     </thead>
                     <tbody>
-                        {p.loading ? (
+                        {(p.loading || (p.activeTab === 'found' && p.scannerOpportunitiesLoading)) ? (
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '60px' }}>
                                     <Loader2 size={32} className="spinner" style={{ margin: '0 auto', color: 'var(--color-primary)' }} />
-                                    <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>Consultando PNCP...</div>
+                                    <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
+                                        {p.activeTab === 'found' ? 'Carregando oportunidades...' : 'Consultando PNCP...'}
+                                    </div>
                                 </td>
                             </tr>
                         ) : p.displayItems.length === 0 ? (
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
-                                    {p.showFavoritosTab ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} /> : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
-                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>{p.showFavoritosTab ? 'Nenhum edital nos favoritos' : 'Nenhum edital encontrado'}</div>
-                                    <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>{p.showFavoritosTab ? 'Clique na estrela para favoritar resultados.' : 'Tente ajustar as palavras-chave ou filtros.'}</div>
+                                    {p.activeTab === 'favorites' ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                                        : p.activeTab === 'found' ? <span style={{ fontSize: '40px', display: 'block', margin: '0 auto 12px', opacity: 0.3 }}>🔔</span>
+                                        : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
+                                    <div style={{ fontSize: '1rem', fontWeight: 500 }}>
+                                        {p.activeTab === 'favorites' ? 'Nenhum edital nos favoritos'
+                                            : p.activeTab === 'found' ? 'Nenhuma oportunidade encontrada pelo scanner'
+                                            : 'Nenhum edital encontrado'}
+                                    </div>
+                                    <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>
+                                        {p.activeTab === 'favorites' ? 'Clique na estrela para favoritar resultados.'
+                                            : p.activeTab === 'found' ? 'Ative o scanner e aguarde a próxima varredura automática.'
+                                            : 'Tente ajustar as palavras-chave ou filtros.'}
+                                    </div>
                                 </td>
                             </tr>
                         ) : (
                             p.displayItems.map((item) => {
                                 const isFavorito = p.favoritos.some(f => f.id === item.id);
                                 const isOnKanban = items.some(p => p.link && p.link === item.link_sistema);
+                                const isUnviewed = p.activeTab === 'found' && (item as any)._isViewed === false;
+                                const searchName = p.activeTab === 'found' ? (item as any)._searchName : null;
+                                const foundAt = p.activeTab === 'found' ? (item as any)._foundAt : null;
 
                                 return (
                                     <React.Fragment key={item.id}>
-                                    <tr style={{ transition: 'background 0.15s' }}
+                                    <tr style={{ 
+                                        transition: 'background 0.15s',
+                                        borderLeft: isUnviewed ? '3px solid var(--color-primary)' : 'none',
+                                        background: isUnviewed ? 'rgba(37, 99, 235, 0.03)' : 'transparent',
+                                    }}
                                         onMouseEnter={(e: any) => e.currentTarget.style.background = 'var(--color-bg-base)'}
-                                        onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
+                                        onMouseLeave={(e: any) => e.currentTarget.style.background = isUnviewed ? 'rgba(37, 99, 235, 0.03)' : 'transparent'}
                                     >
                                         <td style={{ paddingLeft: '24px', verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: '1.4' }}>{item.orgao_nome}</div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                                                 📍 {item.municipio} - {item.uf}
                                             </div>
+                                            {searchName && (
+                                                <div style={{ fontSize: '0.6875rem', color: 'var(--color-primary)', marginTop: '4px', opacity: 0.8 }}>
+                                                    🔍 {searchName}
+                                                    {foundAt && <> · {new Date(foundAt).toLocaleDateString('pt-BR')}</>}
+                                                </div>
+                                            )}
                                         </td>
                                         <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.8125rem', marginBottom: '4px', lineHeight: '1.3' }}>
                                                 {item.titulo}
-                                                {p.showFavoritosTab && isOnKanban && (
+                                                {(p.activeTab === 'favorites' || p.activeTab === 'found') && isOnKanban && (
                                                     <span style={{
                                                         display: 'inline-flex',
                                                         alignItems: 'center',
@@ -891,7 +964,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 </table>
 
                 {/* Pagination Controls */}
-                {!p.showFavoritosTab && p.displayItems.length > 0 && p.totalResults > 0 && (() => {
+                {p.activeTab === 'search' && p.displayItems.length > 0 && p.totalResults > 0 && (() => {
                     const totalPages = Math.ceil(p.totalResults / 10);
                     const renderPageNumbers = () => {
                         const pages = [];
@@ -960,6 +1033,33 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                 >
                                     Próxima
                                 </button>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* Pagination for Encontradas tab */}
+                {p.activeTab === 'found' && p.scannerOpportunitiesTotal > 50 && (() => {
+                    const totalPages = Math.ceil(p.scannerOpportunitiesTotal / 50);
+                    return (
+                        <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: 'var(--space-4) var(--space-6)', borderTop: '1px solid var(--color-border)',
+                            background: 'var(--color-bg-surface)'
+                        }}>
+                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
+                                Página {p.scannerOpportunitiesPage} de {totalPages} ({p.scannerOpportunitiesTotal} encontradas)
+                            </span>
+                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                                <button className="btn btn-outline" style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
+                                    onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage - 1)}
+                                    disabled={p.scannerOpportunitiesPage === 1}>Anterior</button>
+                                <span style={{ padding: '0 8px', fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)' }}>
+                                    {p.scannerOpportunitiesPage} / {totalPages}
+                                </span>
+                                <button className="btn btn-outline" style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
+                                    onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage + 1)}
+                                    disabled={p.scannerOpportunitiesPage >= totalPages}>Próxima</button>
                             </div>
                         </div>
                     );

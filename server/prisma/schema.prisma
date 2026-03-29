@@ -183,6 +183,20 @@ model OpportunityScannerLog {
   tenantId  String
   pncpId    String   // ID do edital no PNCP (numeroControlePNCP)
   searchId  String?  // ID da pesquisa salva que detectou
+  searchName String? // Nome da pesquisa (snapshot para exibição)
+
+  // ── Dados completos do edital (para aba "Encontradas") ──
+  titulo              String?
+  objeto              String?   @db.Text
+  orgaoNome           String?
+  uf                  String?
+  municipio           String?
+  valorEstimado       Float?
+  dataEncerramentoProposta String?
+  modalidadeNome      String?
+  linkSistema         String?
+
+  isViewed  Boolean  @default(false) // Marcar como "visto" (lido/não lido)
   createdAt DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)

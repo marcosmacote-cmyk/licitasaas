@@ -133,8 +133,16 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     // ─── Multi-list Favorites State ───
     const [favStore, setFavStore] = useState<FavStore>(loadFavStore);
     const [activeFavListId, setActiveFavListId] = useState<string | null>(null); // null = show all
-    const [showFavoritosTab, setShowFavoritosTab] = useState(false);
+    const [activeTab, setActiveTab] = useState<'search' | 'found' | 'favorites'>('search');
     const [confirmAction, setConfirmAction] = useState<{ type: string; message?: string; onConfirm: () => void } | null>(null);
+
+    // ─── Scanner Opportunities State ("Encontradas" tab) ───
+    const [scannerOpportunities, setScannerOpportunities] = useState<any[]>([]);
+    const [scannerOpportunitiesTotal, setScannerOpportunitiesTotal] = useState(0);
+    const [scannerOpportunitiesPage, setScannerOpportunitiesPage] = useState(1);
+    const [scannerOpportunitiesLoading, setScannerOpportunitiesLoading] = useState(false);
+    const [scannerFilterSearchId, setScannerFilterSearchId] = useState<string | null>(null);
+    const [unreadOpportunityCount, setUnreadOpportunityCount] = useState(0);
 
     // List Picker state (shared between fav and search)
     const [listPickerOpen, setListPickerOpen] = useState(false);
@@ -162,7 +170,24 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         });
     }, [favStore, activeFavListId]);
 
-    const displayItems = showFavoritosTab ? filteredFavoritos : results;
+    const displayItems = activeTab === 'favorites' ? filteredFavoritos 
+        : activeTab === 'found' ? scannerOpportunities.map((opp: any) => ({
+            id: opp.pncpId || opp.id,
+            titulo: opp.titulo || 'Sem título',
+            objeto: opp.objeto || '',
+            orgao_nome: opp.orgaoNome || '',
+            uf: opp.uf || '--',
+            municipio: opp.municipio || '--',
+            valor_estimado: opp.valorEstimado || 0,
+            data_encerramento_proposta: opp.dataEncerramentoProposta || '',
+            modalidade_nome: opp.modalidadeNome || '',
+            link_sistema: opp.linkSistema || '',
+            _scannerLogId: opp.id,
+            _isViewed: opp.isViewed,
+            _searchName: opp.searchName,
+            _foundAt: opp.createdAt,
+        } as PncpBiddingItem & { _scannerLogId: string; _isViewed: boolean; _searchName: string; _foundAt: string }))
+        : results;
 
     // Expired cleanup
     useEffect(() => {
@@ -314,7 +339,52 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     useEffect(() => { 
         fetchSavedSearches(); 
         fetchScannerStatus();
+        fetchUnreadCount();
     }, []);
+
+    // Fetch scanner opportunities when tab changes or page changes
+    useEffect(() => {
+        if (activeTab === 'found') {
+            fetchScannerOpportunities();
+        }
+    }, [activeTab, scannerOpportunitiesPage, scannerFilterSearchId]);
+
+    const fetchUnreadCount = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/opportunities/unread-count`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) { const data = await res.json(); setUnreadOpportunityCount(data.count || 0); }
+        } catch (e) { console.error("Failed to fetch unread count", e); }
+    };
+
+    const fetchScannerOpportunities = async () => {
+        setScannerOpportunitiesLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            let url = `${API_BASE_URL}/api/pncp/scanner/opportunities?page=${scannerOpportunitiesPage}`;
+            if (scannerFilterSearchId) url += `&searchId=${scannerFilterSearchId}`;
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                setScannerOpportunities(data.items || []);
+                setScannerOpportunitiesTotal(data.total || 0);
+            }
+        } catch (e) { console.error("Failed to fetch scanner opportunities", e); }
+        finally { setScannerOpportunitiesLoading(false); }
+    };
+
+    const markOpportunitiesViewed = async (ids: string[] | 'all') => {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_BASE_URL}/api/pncp/scanner/opportunities/mark-viewed`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            });
+            fetchScannerOpportunities();
+            fetchUnreadCount();
+        } catch (e) { console.error(e); }
+    };
 
     const fetchScannerStatus = async () => {
         try {
@@ -505,7 +575,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         setOrgaosLista(customState.orgaosLista); setExcludeKeywords(customState.excludeKeywords);
         setDataInicio(customState.dataInicio); setDataFim(customState.dataFim);
         setPage(1);
-        setShowFavoritosTab(false);
+        setActiveTab('search');
 
         handleSearch(undefined, {
             keywords: searchKeywords, status: searchStatus, uf: customState.uf,
@@ -550,7 +620,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');
         setOrgao(''); setOrgaosLista(''); setExcludeKeywords(''); setDataInicio(''); setDataFim('');
         setResults([]); setTotalResults(0); setPage(1);
-        setShowFavoritosTab(false);
+        setActiveTab('search');
     };
 
     const handleImportToFunnel = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
@@ -782,7 +852,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         pendingAiAnalysis, setPendingAiAnalysis,
         // Multi-list Favoritos
         favoritos, favLists, favStore, activeFavListId, setActiveFavListId,
-        showFavoritosTab, setShowFavoritosTab, confirmAction, setConfirmAction,
+        activeTab, setActiveTab, confirmAction, setConfirmAction,
         listPickerOpen, setListPickerOpen, listPickerItem, setListPickerItem,
         createFavList, renameFavList, deleteFavList, addToFavList, removeFromFavList, favListItemCount,
         // Multi-list Saved Searches
@@ -799,6 +869,10 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // Global scanner
         opportunityScannerEnabled, toggleOpportunityScanner,
         // Last scan info
-        lastScanAt, lastScanTotalNew, lastScanResults, nextScanAt, getSearchScanResult
+        lastScanAt, lastScanTotalNew, lastScanResults, nextScanAt, getSearchScanResult,
+        // Scanner Opportunities ("Encontradas" tab)
+        scannerOpportunities, scannerOpportunitiesTotal, scannerOpportunitiesPage, setScannerOpportunitiesPage,
+        scannerOpportunitiesLoading, scannerFilterSearchId, setScannerFilterSearchId,
+        unreadOpportunityCount, markOpportunitiesViewed, fetchScannerOpportunities
     };
 }

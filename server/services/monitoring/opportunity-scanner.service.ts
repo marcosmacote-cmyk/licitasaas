@@ -272,12 +272,26 @@ async function isAlreadyNotified(tenantId: string, pncpId: string): Promise<bool
 }
 
 /**
- * Marca um pncpId como notificado para um tenant (persistido no DB)
+ * Marca um pncpId como notificado para um tenant e salva dados completos do edital.
  */
-async function markAsNotified(tenantId: string, pncpId: string, searchId?: string): Promise<void> {
+async function markAsNotified(tenantId: string, result: PncpSearchResult, searchId?: string, searchName?: string): Promise<void> {
     try {
         await prisma.opportunityScannerLog.create({
-            data: { tenantId, pncpId, searchId }
+            data: {
+                tenantId,
+                pncpId: result.id,
+                searchId,
+                searchName: searchName || null,
+                titulo: result.titulo,
+                objeto: result.objeto,
+                orgaoNome: result.orgao_nome,
+                uf: result.uf,
+                municipio: result.municipio,
+                valorEstimado: result.valor_estimado || null,
+                dataEncerramentoProposta: result.data_encerramento_proposta || null,
+                modalidadeNome: result.modalidade_nome || null,
+                linkSistema: result.link_sistema || null,
+            }
         });
     } catch {
         // Unique constraint violation — already notified. Ok to ignore.
@@ -384,6 +398,7 @@ async function sendConsolidatedSummary(
     message += `━━━━━━━━━━━━━━━\n`;
     message += `<b>Total: ${totalNew} novo(s) edital(is)</b>\n`;
     message += `⏰ Próxima varredura: ~${nextTimeStr}\n`;
+    message += `\n📱 <b>Ver no LicitaSaaS:</b> Aba "Encontradas" na Busca PNCP`;
     message += `\n<i>LicitaSaaS — Scanner PNCP</i>`;
     
     // Enviar via Telegram
@@ -484,9 +499,9 @@ export async function runOpportunityScan() {
                         }
                     }
 
-                    // Registrar TODOS como notificados no DB (persistente)
+                    // Registrar TODOS como notificados no DB (persistente) — com dados completos
                     for (const r of newResults) {
-                        await markAsNotified(tenantId, r.id, search.id);
+                        await markAsNotified(tenantId, r, search.id, search.name);
                     }
 
                     // ── Registrar resultado desta pesquisa ──
