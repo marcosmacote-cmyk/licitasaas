@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock, Bell, MapPin } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
@@ -555,7 +555,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         className={`tab-btn${p.activeTab === 'found' ? ' active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', position: 'relative' }}
                     >
-                        🔔 Encontradas {p.scannerOpportunitiesTotal > 0 && `(${p.scannerOpportunitiesTotal})`}
+                        <Bell size={16} /> Encontradas {p.scannerOpportunitiesTotal > 0 && `(${p.scannerOpportunitiesTotal})`}
                         {p.unreadOpportunityCount > 0 && (
                             <span style={{
                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -736,7 +736,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
                                     {p.activeTab === 'favorites' ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                        : p.activeTab === 'found' ? <span style={{ fontSize: '40px', display: 'block', margin: '0 auto 12px', opacity: 0.3 }}>🔔</span>
+                                        : p.activeTab === 'found' ? <Bell size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                                         : <Search size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />}
                                     <div style={{ fontSize: '1rem', fontWeight: 500 }}>
                                         {p.activeTab === 'favorites' ? 'Nenhum edital nos favoritos'
@@ -771,11 +771,11 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                         <td style={{ paddingLeft: '24px', verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px' }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: '1.4' }}>{item.orgao_nome}</div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                                                📍 {item.municipio} - {item.uf}
+                                                <MapPin size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '2px' }} /> {item.municipio} - {item.uf}
                                             </div>
                                             {searchName && (
                                                 <div style={{ fontSize: '0.6875rem', color: 'var(--color-primary)', marginTop: '4px', opacity: 0.8 }}>
-                                                    🔍 {searchName}
+                                                    <Search size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '2px' }} /> {searchName}
                                                     {foundAt && <> · {new Date(foundAt).toLocaleDateString('pt-BR')}</>}
                                                 </div>
                                             )}
