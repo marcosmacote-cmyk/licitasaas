@@ -125,21 +125,17 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                     display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-2)',
                     background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)',
                     border: 'none', boxShadow: 'var(--shadow-sm), 0 0 0 1px var(--color-border)',
-                }}>
-                    {[
-                        { label: 'Captado', count: b.statusCounters.captado, color: 'var(--color-neutral)' },
-                        { label: 'Análise', count: b.statusCounters.analise, color: 'var(--color-primary)' },
-                        { label: 'Preparando', count: b.statusCounters.preparando, color: 'var(--color-urgency)' },
-                        { label: 'Participando', count: b.statusCounters.participando, color: 'var(--color-warning)' },
-                        { label: 'Vencido', count: b.statusCounters.vencido, color: 'var(--color-success)' },
-                        { label: 'Perdido', count: b.statusCounters.perdido, color: 'var(--color-danger)' },
-                    ].map(s => (
-                        <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-lg)', transition: 'all 150ms' }}
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none', // Firefox
+                    msOverflowStyle: 'none' // IE and Edge
+                }} className="hide-scrollbar">
+                    {b.dynamicCounters.map(s => (
+                        <div key={s.label} style={{ flex: '1 1 0', minWidth: '100px', maxWidth: '140px', textAlign: 'center', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-lg)', transition: 'all 150ms' }}
                              onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-base)'}
                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                         >
                             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.count > 0 ? s.color : 'var(--color-text-tertiary)', lineHeight: 1.2 }}>{s.count}</div>
-                            <div style={{ fontSize: '0.75rem', color: s.count > 0 ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px' }}>{s.label}</div>
+                            <div style={{ fontSize: '0.75rem', color: s.count > 0 ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.label}>{s.label}</div>
                         </div>
                     ))}
                 </div>

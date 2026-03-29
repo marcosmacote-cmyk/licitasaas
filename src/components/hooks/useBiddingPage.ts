@@ -7,7 +7,7 @@ import { aiService } from '../../services/ai';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../../types';
 import { COLUMNS } from '../../types';
-import { resolveStage, getDefaultSubstage, type KanbanStage } from '../../governance';
+import { resolveStage, getDefaultSubstage, getGovernance, type KanbanStage } from '../../governance';
 import { useToast } from '../ui';
 
 // ===== FILTER TYPES =====
@@ -495,14 +495,17 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     };
 
     // ===== PIPELINE COUNTERS =====
-    const statusCounters = useMemo(() => ({
-        captado: items.filter(i => resolveStage(i.status) === 'Captado').length,
-        analise: items.filter(i => resolveStage(i.status) === 'Em Análise').length,
-        preparando: items.filter(i => ['Preparando Documentação', 'Preparando Proposta'].includes(resolveStage(i.status))).length,
-        participando: items.filter(i => resolveStage(i.status) === 'Em Sessão').length,
-        vencido: items.filter(i => resolveStage(i.status) === 'Ganho').length,
-        perdido: items.filter(i => ['Perdido', 'Não Participar'].includes(resolveStage(i.status))).length,
-    }), [items]);
+    const dynamicCounters = useMemo(() => {
+        return visibleColumns.map(stageName => {
+            const count = items.filter(i => resolveStage(i.status) === stageName).length;
+            const gov = getGovernance(stageName as KanbanStage);
+            return {
+                label: stageName,
+                count,
+                color: gov.themeColor || 'var(--color-primary)'
+            };
+        });
+    }, [visibleColumns, items]);
 
     return {
         // View
@@ -538,7 +541,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
         // Refs
         fileInputRef,
         // Counters
-        statusCounters,
+        dynamicCounters,
         // Handlers
         refreshData, handleCreateNew, handleEdit, handleSaveProcess,
         handleStatusChange, handleToggleMonitor,
