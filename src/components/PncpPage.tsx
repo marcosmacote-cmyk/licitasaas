@@ -715,11 +715,11 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     <thead>
                         <tr>
                             <th style={{ paddingLeft: '24px', width: '22%' }}>Órgão / Localidade</th>
-                            <th style={{ width: '35%' }}>Objeto</th>
-                            <th>Modalidade</th>
-                            <th>Prazo Limite</th>
-                            <th>Valor Est.</th>
-                            <th style={{ paddingRight: '24px' }}>Ações</th>
+                            <th style={{ width: '38%' }}>Objeto</th>
+                            <th style={{ width: '12%' }}>Modalidade</th>
+                            <th style={{ width: '10%' }}>Prazo Limite</th>
+                            <th style={{ width: '8%', textAlign: 'right' }}>Valor Est.</th>
+                            <th style={{ paddingRight: '24px', width: '10%', textAlign: 'right' }}>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -836,7 +836,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
                                             )}
                                         </td>
-                                        <td style={{ fontWeight: 700, verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap' }}>
+                                        <td style={{ fontWeight: 700, verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                                             {item.valor_estimado ? (
                                                 <span style={{ color: 'var(--color-success)' }}>
                                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor_estimado)}
@@ -845,8 +845,8 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>N/D</span>
                                             )}
                                         </td>
-                                        <td style={{ paddingRight: '24px', verticalAlign: 'top', paddingTop: '14px' }}>
-                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                        <td style={{ paddingRight: '24px', verticalAlign: 'top', paddingTop: '14px', textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                                                 <button
                                                     className="btn btn-ghost"
                                                     onClick={() => p.toggleFavorito(item)}
