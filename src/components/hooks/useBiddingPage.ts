@@ -330,7 +330,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
             if (filters.risks.length > 0 && !filters.risks.includes(item.risk || '')) return false;
             return true;
         });
-    }, [items, filters, companies]);
+    }, [items, filters, companies, auditIssues]);
 
     const hasActiveFilters = !!filters.specialFilter || filters.searchText !== '' || filters.companies.length > 0 || filters.modalities.length > 0 || filters.portals.length > 0 || filters.statuses.length > 0 || filters.risks.length > 0;
     const activeFilterCount = [filters.companies.length > 0, filters.modalities.length > 0, filters.portals.length > 0, filters.statuses.length > 0, filters.risks.length > 0].filter(Boolean).length;
