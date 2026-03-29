@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit2, ShieldAlert, KeyRound, Loader2, CheckCircle2, Shield, UserX, UserCheck } from 'lucide-react';
+import { Users, Plus, Edit2, ShieldAlert, KeyRound, Loader2, CheckCircle2, Shield, UserX, UserCheck, X } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui';
 
@@ -266,74 +266,99 @@ export function TeamPage() {
 
             {/* Modal: Editar/Criar Usuário */}
             {isModalOpen && (
-                <div className="modal-overlay">
-                    <div className="modal-content animate-slide-up" style={{ maxWidth: 450 }}>
-                        <div className="modal-header">
-                            <h3 className="modal-title">{editingMember ? 'Editar Perfil' : 'Novo Membro na Equipe'}</h3>
-                            <button className="icon-btn" onClick={() => setIsModalOpen(false)}>✕</button>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease-out' }}>
+                    <div style={{
+                        background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', 
+                        width: '100%', maxWidth: 450, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden', display: 'flex', flexDirection: 'column'
+                    }} className="animate-slide-up">
+                        <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-bg-base)' }}>
+                            <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>{editingMember ? 'Editar Perfil' : 'Novo Membro na Equipe'}</h3>
+                            <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: 4, display: 'flex' }}><X size={18} /></button>
                         </div>
-                        <form onSubmit={handleSubmit}>
-                            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
                                 
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 'var(--text-sm)' }}>Nome Completo</label>
-                                    <input required type="text" className="select-input" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: João da Silva" />
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Nome Completo</label>
+                                    <input required type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: João da Silva" 
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    />
                                 </div>
                                 
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 'var(--text-sm)' }}>Endereço de E-mail {!editingMember && '*'}</label>
-                                    <input required={!editingMember} disabled={!!editingMember} type="email" className="select-input" value={email} onChange={e => setEmail(e.target.value)} placeholder="joao@licitasaas.com" />
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Endereço de E-mail {!editingMember && '*'}</label>
+                                    <input required={!editingMember} disabled={!!editingMember} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="joao@licitasaas.com" 
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: !!editingMember ? 'var(--color-bg-surface-hover)' : 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: !!editingMember ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s', opacity: !!editingMember ? 0.7 : 1 }}
+                                        onFocus={e => !editingMember && (e.target.style.boxShadow = '0 0 0 2px var(--color-primary)')}
+                                        onBlur={e => !editingMember && (e.target.style.boxShadow = '0 0 0 1px var(--color-border)')}
+                                    />
                                 </div>
 
                                 {!editingMember && (
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 'var(--text-sm)' }}>Senha Temporária *</label>
-                                        <input required minLength={6} type="password" className="select-input" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Senha Temporária *</label>
+                                        <input required minLength={6} type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" 
+                                            style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                            onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                            onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                        />
                                     </div>
                                 )}
 
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 'var(--text-sm)' }}>Nível de Acesso</label>
-                                    <select className="select-input" value={role} onChange={e => setRole(e.target.value)}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Nível de Acesso</label>
+                                    <select value={role} onChange={e => setRole(e.target.value)}
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', cursor: 'pointer' }}
+                                    >
                                         <option value="Analista">Analista (Recomendado)</option>
                                         <option value="ADMIN">Administrador (Acesso Total)</option>
                                     </select>
-                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '8px', lineHeight: 1.4 }}>
                                         Administradores podem ver faturas e gerenciar outros membros.
                                     </p>
                                 </div>
 
                             </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">{editingMember ? 'Salvar Alterações' : 'Convidar Membro'}</button>
+                            <div style={{ padding: 'var(--space-4) var(--space-6)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', background: 'var(--color-bg-surface-hover)' }}>
+                                <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" style={{ padding: 'var(--space-2) var(--space-6)' }}>{editingMember ? 'Salvar Alterações' : 'Convidar Membro'}</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* Modal: Redefinir Senha */}
             {isPasswordModalOpen && editingMember && (
-                <div className="modal-overlay">
-                    <div className="modal-content animate-slide-up" style={{ maxWidth: 400 }}>
-                        <div className="modal-header">
-                            <h3 className="modal-title">Redefinir Senha</h3>
-                            <button className="icon-btn" onClick={() => setIsPasswordModalOpen(false)}>✕</button>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease-out' }}>
+                    <div style={{
+                        background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', 
+                        width: '100%', maxWidth: 400, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden', display: 'flex', flexDirection: 'column'
+                    }} className="animate-slide-up">
+                        <div style={{ padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-bg-base)' }}>
+                            <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>Redefinir Senha</h3>
+                            <button onClick={() => setIsPasswordModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: 4, display: 'flex' }}><X size={18} /></button>
                         </div>
                         <form onSubmit={handlePasswordReset}>
-                            <div className="modal-body">
-                                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-                                    Defina uma nova senha de acesso para <strong>{editingMember.name}</strong>.
+                            <div style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column' }}>
+                                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
+                                    Defina uma nova senha de acesso provisória para <strong>{editingMember.name}</strong>.
                                 </p>
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: 4, fontWeight: 500, fontSize: 'var(--text-sm)' }}>Nova Senha</label>
-                                    <input required minLength={6} type="text" className="select-input" value={password} onChange={e => setPassword(e.target.value)} placeholder="Digite a nova senha" />
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Nova Senha</label>
+                                    <input required minLength={6} type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="Digite no mínimo 6 caracteres" 
+                                        style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: 'none', boxShadow: '0 0 0 1px var(--color-border)', background: 'var(--color-bg-base)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)', outline: 'none', transition: 'box-shadow 0.2s' }}
+                                        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--color-primary)'}
+                                        onBlur={e => e.target.style.boxShadow = '0 0 0 1px var(--color-border)'}
+                                    />
                                 </div>
                             </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={() => setIsPasswordModalOpen(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Confirmar Nova Senha</button>
+                            <div style={{ padding: 'var(--space-4) var(--space-6)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', background: 'var(--color-bg-surface-hover)' }}>
+                                <button type="button" className="btn btn-outline" onClick={() => setIsPasswordModalOpen(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" style={{ padding: 'var(--space-2) var(--space-5)' }}>Confirmar Nova Senha</button>
                             </div>
                         </form>
                     </div>
