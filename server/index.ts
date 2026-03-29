@@ -6838,6 +6838,7 @@ app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => 
             customKeywords: config.customKeywords || "[]",
             enabledCategories: config.enabledCategories || JSON.stringify(DEFAULT_ENABLED_CATEGORIES),
             categoryCustomKeywords: config.categoryCustomKeywords || "{}",
+            notificationEmail: config.notificationEmail || "",
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch chat monitor config' });
@@ -6846,7 +6847,7 @@ app.get('/api/chat-monitor/config', authenticateToken, async (req: any, res) => 
 
 app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, phoneNumber, telegramChatId, isActive, enabledCategories, customKeywords, categoryCustomKeywords } = req.body;
+        const { keywords, phoneNumber, telegramChatId, notificationEmail, isActive, enabledCategories, customKeywords, categoryCustomKeywords } = req.body;
 
         // Serializa arrays/objects para string JSON se necessário
         const enabledCatStr = enabledCategories
@@ -6869,6 +6870,7 @@ app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) =>
                 categoryCustomKeywords: catCustomKwStr,
                 phoneNumber,
                 telegramChatId,
+                notificationEmail,
                 isActive: isActive ?? true
             },
             update: {
@@ -6878,6 +6880,7 @@ app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) =>
                 ...(catCustomKwStr !== undefined && { categoryCustomKeywords: catCustomKwStr }),
                 ...(phoneNumber !== undefined && { phoneNumber }),
                 ...(telegramChatId !== undefined && { telegramChatId }),
+                ...(notificationEmail !== undefined && { notificationEmail }),
                 isActive: isActive ?? true
             }
         });

@@ -12,6 +12,7 @@ export function SettingsPage() {
     // ── Notification channels (from ChatMonitorConfig) ──
     const [phoneNumber, setPhoneNumber] = useState('');
     const [telegramChatId, setTelegramChatId] = useState('');
+    const [notificationEmail, setNotificationEmail] = useState('');
     const [loadingChannels, setLoadingChannels] = useState(true);
     const [savingChannels, setSavingChannels] = useState(false);
     const [channelSavedMsg, setChannelSavedMsg] = useState('');
@@ -48,6 +49,7 @@ export function SettingsPage() {
                     const data = await res.json();
                     setPhoneNumber(data.phoneNumber || '');
                     setTelegramChatId(data.telegramChatId || '');
+                    setNotificationEmail(data.notificationEmail || '');
                 }
             } catch { /* silent */ }
             finally { setLoadingChannels(false); }
@@ -82,7 +84,7 @@ export function SettingsPage() {
         try {
             const res = await fetch(`${API_BASE_URL}/api/chat-monitor/config`, {
                 method: 'POST', headers,
-                body: JSON.stringify({ phoneNumber, telegramChatId }),
+                body: JSON.stringify({ phoneNumber, telegramChatId, notificationEmail }),
             });
             if (res.ok) {
                 setChannelSavedMsg('Canais salvos!');
@@ -176,7 +178,7 @@ export function SettingsPage() {
                             }}>
                                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', lineHeight: 1.5 }}>
                                     Configure os canais para receber alertas do <strong>Monitoramento de Chat</strong> e do <strong>Scanner de Oportunidades PNCP</strong>.
-                                    O e-mail é enviado automaticamente para todos os usuários ativos da conta.
+                                    Os canais preenchidos receberão notificações automáticas de novas ocorrências.
                                 </div>
 
                                 {loadingChannels ? (
@@ -185,7 +187,7 @@ export function SettingsPage() {
                                     </div>
                                 ) : (
                                     <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
                                             {/* WhatsApp */}
                                             <div>
                                                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
@@ -227,21 +229,27 @@ export function SettingsPage() {
                                                     }}
                                                 />
                                             </div>
-                                        </div>
-
-                                        {/* E-mail indicator */}
-                                        <div style={{
-                                            display: 'flex', alignItems: 'center', gap: '8px',
-                                            padding: 'var(--space-2) var(--space-3)',
-                                            borderRadius: 'var(--radius-md)',
-                                            background: 'rgba(16,185,129,0.05)',
-                                            boxShadow: '0 0 0 1px rgba(16,185,129,0.12)',
-                                        }}>
-                                            <Mail size={14} color="#10b981" />
-                                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                                                E-mail: alertas enviados automaticamente para <strong>{user.email || 'todos os usuários ativos'}</strong>
-                                            </span>
-                                            <CheckCircle size={12} color="#10b981" style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                                            
+                                            {/* E-mail independent */}
+                                            <div>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                                                    <Mail size={14} color="#dc2626" /> E-mail de Alertas
+                                                </label>
+                                                <input
+                                                    type="email"
+                                                    value={notificationEmail}
+                                                    onChange={(e) => setNotificationEmail(e.target.value)}
+                                                    placeholder="alertas@empresa.com"
+                                                    style={{
+                                                        width: '100%', padding: 'var(--space-2) var(--space-3)',
+                                                        borderRadius: 'var(--radius-md)', border: 'none',
+                                                        boxShadow: '0 0 0 1px var(--color-border)',
+                                                        background: 'var(--color-bg-base)',
+                                                        fontSize: 'var(--text-md)', color: 'var(--color-text-primary)',
+                                                        outline: 'none',
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
 
                                         {/* Action buttons */}

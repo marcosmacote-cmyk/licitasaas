@@ -177,27 +177,19 @@ export class NotificationService {
       results.whatsapp = await this.sendWhatsApp(tenantId, config.phoneNumber, testMessage.replace(/<[^>]*>/g, ''));
     }
 
-    // Test email to all active users
-    try {
-      const activeUsers = await prisma.user.findMany({ where: { tenantId, isActive: true }, select: { email: true } });
-      if (activeUsers.length > 0) {
+    // Test email independent
+    if (config.notificationEmail) {
+      try {
         const htmlTestMessage = `
           <div style="font-family: Arial, sans-serif; color: #333; max-width: 500px; margin: 0 auto; padding: 24px;">
             <h2 style="color: #2563eb;">Teste de Notificação</h2>
             <p>Sua configuração de e-mail está funcionando corretamente.</p>
             <p style="font-size: 12px; color: #9ca3af; margin-top: 24px;">LicitaSaaS — Mensagem de teste automática.</p>
           </div>`;
-        let emailOk = true;
-        for (const user of activeUsers) {
-          if (user.email) {
-            const sent = await this.sendEmail(tenantId, user.email, 'LicitaSaaS: Teste de Notificação', htmlTestMessage);
-            if (!sent) emailOk = false;
-          }
-        }
-        results.email = emailOk;
+        results.email = await this.sendEmail(tenantId, config.notificationEmail, 'LicitaSaaS: Teste de Notificação', htmlTestMessage);
+      } catch {
+        results.email = false;
       }
-    } catch {
-      results.email = false;
     }
 
     return results;
@@ -290,11 +282,21 @@ export class NotificationService {
           }
         }
 
+        // Email
+        if (config.notificationEmail) {
+          const htmlMessage = message.replace(/\n/g, '<br/>');
+          const success = await this.sendEmail(log.tenantId, config.notificationEmail, `Alerta PNCP - ${platformName}: ${log.biddingProcess.title}`, htmlMessage);
+          if (success) {
+            sentChannels.push(`email:${config.notificationEmail}`);
+            anySuccess = true;
+          }
+        }
+
         // Atualiza status do log com rastreabilidade completa
         await prisma.chatMonitorLog.update({
           where: { id: log.id },
           data: { 
-            status: anySuccess ? 'SENT' : (sentChannels.length === 0 && !config.phoneNumber && !config.telegramChatId ? 'NO_CHANNEL' : 'FAILED'),
+            status: anySuccess ? 'SENT' : (sentChannels.length === 0 && !config.phoneNumber && !config.telegramChatId && !config.notificationEmail ? 'NO_CHANNEL' : 'FAILED'),
             sentTo: sentChannels.length > 0 ? sentChannels.join(', ') : null
           }
         });

@@ -356,6 +356,7 @@ model ChatMonitorConfig {
   categoryCustomKeywords String? @default("{}")
   phoneNumber       String?
   telegramChatId    String?
+  notificationEmail String?
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
