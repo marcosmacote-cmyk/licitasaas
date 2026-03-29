@@ -1633,6 +1633,168 @@ app.get('/api/pncp/scanner/opportunities/unread-count', authenticateToken, async
     }
 });
 
+// ═══ PNCP Favorites (persisted in DB — syncs across devices) ═══
+
+// ── Get all favorites (lists + items) ──
+app.get('/api/pncp/favorites', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const lists = await prisma.pncpFavoriteList.findMany({
+            where: { tenantId },
+            include: { items: true },
+            orderBy: { createdAt: 'asc' }
+        });
+        res.json({ lists });
+    } catch (error) {
+        console.error("Fetch favorites error:", error);
+        res.status(500).json({ error: 'Failed to fetch favorites' });
+    }
+});
+
+// ── Create a favorite list ──
+app.post('/api/pncp/favorites/lists', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { name } = req.body;
+        if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+        const list = await prisma.pncpFavoriteList.upsert({
+            where: { tenantId_name: { tenantId, name: name.trim() } },
+            update: {},
+            create: { tenantId, name: name.trim() }
+        });
+        res.json(list);
+    } catch (error) {
+        console.error("Create fav list error:", error);
+        res.status(500).json({ error: 'Failed to create list' });
+    }
+});
+
+// ── Rename a favorite list ──
+app.put('/api/pncp/favorites/lists/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { name } = req.body;
+        if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+        await prisma.pncpFavoriteList.updateMany({
+            where: { id: req.params.id, tenantId },
+            data: { name: name.trim() }
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Rename fav list error:", error);
+        res.status(500).json({ error: 'Failed to rename list' });
+    }
+});
+
+// ── Delete a favorite list (moves items to default list) ──
+app.delete('/api/pncp/favorites/lists/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const listId = req.params.id;
+        // Find or create default list
+        const defaultList = await prisma.pncpFavoriteList.upsert({
+            where: { tenantId_name: { tenantId, name: 'Favoritos Gerais' } },
+            update: {},
+            create: { tenantId, name: 'Favoritos Gerais' }
+        });
+        if (listId === defaultList.id) return res.status(400).json({ error: 'Cannot delete default list' });
+        // Move items to default list (skip duplicates)
+        const itemsToMove = await prisma.pncpFavoriteItem.findMany({ where: { listId, tenantId } });
+        for (const item of itemsToMove) {
+            try {
+                await prisma.pncpFavoriteItem.update({ where: { id: item.id }, data: { listId: defaultList.id } });
+            } catch { /* duplicate — delete instead */ await prisma.pncpFavoriteItem.delete({ where: { id: item.id } }).catch(() => {}); }
+        }
+        await prisma.pncpFavoriteList.deleteMany({ where: { id: listId, tenantId } });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Delete fav list error:", error);
+        res.status(500).json({ error: 'Failed to delete list' });
+    }
+});
+
+// ── Add item to a favorites list ──
+app.post('/api/pncp/favorites/items', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { listId, pncpId, data } = req.body;
+        if (!listId || !pncpId) return res.status(400).json({ error: 'listId and pncpId required' });
+        const item = await prisma.pncpFavoriteItem.upsert({
+            where: { tenantId_listId_pncpId: { tenantId, listId, pncpId } },
+            update: { data },
+            create: { tenantId, listId, pncpId, data }
+        });
+        res.json(item);
+    } catch (error) {
+        console.error("Add fav item error:", error);
+        res.status(500).json({ error: 'Failed to add favorite' });
+    }
+});
+
+// ── Remove item from favorites ──
+app.delete('/api/pncp/favorites/items/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        await prisma.pncpFavoriteItem.deleteMany({ where: { id: req.params.id, tenantId } });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Remove fav item error:", error);
+        res.status(500).json({ error: 'Failed to remove favorite' });
+    }
+});
+
+// ── Remove item by pncpId (from all lists) ──
+app.delete('/api/pncp/favorites/items/by-pncp/:pncpId', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const pncpId = decodeURIComponent(req.params.pncpId);
+        await prisma.pncpFavoriteItem.deleteMany({ where: { tenantId, pncpId } });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Remove fav by pncpId error:", error);
+        res.status(500).json({ error: 'Failed to remove favorite' });
+    }
+});
+
+// ── Bulk import favorites (migration from localStorage) ──
+app.post('/api/pncp/favorites/import', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { lists, items } = req.body; // { lists: [{name}], items: [{listName, pncpId, data}] }
+        let imported = 0;
+
+        // Ensure all lists exist
+        const listMap = new Map<string, string>(); // name → id
+        for (const l of (lists || [])) {
+            const list = await prisma.pncpFavoriteList.upsert({
+                where: { tenantId_name: { tenantId, name: l.name } },
+                update: {},
+                create: { tenantId, name: l.name }
+            });
+            listMap.set(l.name, list.id);
+        }
+
+        // Import items
+        for (const item of (items || [])) {
+            const listId = listMap.get(item.listName) || listMap.get('Favoritos Gerais');
+            if (!listId || !item.pncpId) continue;
+            try {
+                await prisma.pncpFavoriteItem.upsert({
+                    where: { tenantId_listId_pncpId: { tenantId, listId, pncpId: item.pncpId } },
+                    update: { data: item.data },
+                    create: { tenantId, listId, pncpId: item.pncpId, data: item.data }
+                });
+                imported++;
+            } catch { /* skip duplicates */ }
+        }
+
+        res.json({ success: true, imported, listsCreated: listMap.size });
+    } catch (error) {
+        console.error("Import favorites error:", error);
+        res.status(500).json({ error: 'Failed to import favorites' });
+    }
+});
+
 // ── Reset scanner dedup history (re-send notifications on next scan) ──
 app.post('/api/pncp/scanner/reset', authenticateToken, async (req: any, res) => {
     try {

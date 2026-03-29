@@ -39,7 +39,7 @@ export const STATUS_OPTIONS = [
     { value: 'todas', label: 'Todas' },
 ];
 
-// ─── Multi-list Favorites Data ───
+// ─── Multi-list Favorites Data (DB-backed) ───
 const DEFAULT_FAV_LIST = 'Favoritos Gerais';
 
 interface FavList {
@@ -50,44 +50,13 @@ interface FavList {
 
 interface FavItemWithList extends PncpBiddingItem {
     _listId: string; // Which list this item belongs to
+    _dbItemId?: string; // DB record id for deletion
 }
 
 interface FavStore {
     version: 2;
     lists: FavList[];
     items: FavItemWithList[];
-}
-
-function loadFavStore(): FavStore {
-    // Try V2 first
-    try {
-        const raw = localStorage.getItem('pncp_favoritos_v2');
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.version === 2) return parsed;
-        }
-    } catch { }
-
-    // Migrate V1 (flat array) → V2
-    const defaultList: FavList = { id: 'default', name: DEFAULT_FAV_LIST, createdAt: new Date().toISOString() };
-    try {
-        const oldRaw = localStorage.getItem('pncp_favoritos');
-        if (oldRaw) {
-            const oldItems: PncpBiddingItem[] = JSON.parse(oldRaw);
-            if (Array.isArray(oldItems) && oldItems.length > 0) {
-                const migratedItems = oldItems.map(item => ({ ...item, _listId: 'default' }));
-                return { version: 2, lists: [defaultList], items: migratedItems };
-            }
-        }
-    } catch { }
-
-    return { version: 2, lists: [defaultList], items: [] };
-}
-
-function saveFavStore(store: FavStore) {
-    localStorage.setItem('pncp_favoritos_v2', JSON.stringify(store));
-    // Keep V1 in sync for backward compatibility
-    localStorage.setItem('pncp_favoritos', JSON.stringify(store.items));
 }
 
 interface UsePncpPageParams {
@@ -130,11 +99,93 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
     const [analysisProgress, setAnalysisProgress] = useState<{ step: number; total: number; percent: number; message: string; detail?: string } | null>(null);
 
-    // ─── Multi-list Favorites State ───
-    const [favStore, setFavStore] = useState<FavStore>(loadFavStore);
+    // ─── Multi-list Favorites State (DB-backed) ───
+    const [favStore, setFavStore] = useState<FavStore>({ version: 2, lists: [], items: [] });
     const [activeFavListId, setActiveFavListId] = useState<string | null>(null); // null = show all
     const [activeTab, setActiveTab] = useState<'search' | 'found' | 'favorites'>('search');
     const [confirmAction, setConfirmAction] = useState<{ type: string; message?: string; onConfirm: () => void } | null>(null);
+
+    // Fetch favorites from DB
+    const fetchFavorites = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/favorites`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                const dbLists: FavList[] = (data.lists || []).map((l: any) => ({ id: l.id, name: l.name, createdAt: l.createdAt }));
+                const dbItems: FavItemWithList[] = [];
+                for (const list of (data.lists || [])) {
+                    for (const item of (list.items || [])) {
+                        const itemData = item.data || {};
+                        dbItems.push({ ...itemData, id: item.pncpId, _listId: list.id, _dbItemId: item.id });
+                    }
+                }
+                setFavStore({ version: 2, lists: dbLists, items: dbItems });
+            }
+        } catch (e) { console.error("Failed to fetch favorites", e); }
+    };
+
+    // Migrate localStorage to DB (one-time)
+    const migrateLocalStorageFavorites = async () => {
+        const raw = localStorage.getItem('pncp_favoritos_v2');
+        const oldRaw = localStorage.getItem('pncp_favoritos');
+        if (!raw && !oldRaw) return; // Nothing to migrate
+
+        let localStore: FavStore | null = null;
+        try {
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed.version === 2) localStore = parsed;
+            }
+            if (!localStore && oldRaw) {
+                const oldItems: PncpBiddingItem[] = JSON.parse(oldRaw);
+                if (Array.isArray(oldItems) && oldItems.length > 0) {
+                    localStore = {
+                        version: 2,
+                        lists: [{ id: 'default', name: DEFAULT_FAV_LIST, createdAt: new Date().toISOString() }],
+                        items: oldItems.map(item => ({ ...item, _listId: 'default' }))
+                    };
+                }
+            }
+        } catch { }
+
+        if (!localStore || localStore.items.length === 0) {
+            // Clean up empty localStorage
+            localStorage.removeItem('pncp_favoritos_v2');
+            localStorage.removeItem('pncp_favoritos');
+            return;
+        }
+
+        // Build import payload
+        const lists = localStore.lists.map(l => ({ name: l.name }));
+        const listIdToName = new Map(localStore.lists.map(l => [l.id, l.name]));
+        const items = localStore.items.map(item => {
+            const { _listId, ...rest } = item;
+            return {
+                listName: listIdToName.get(_listId) || DEFAULT_FAV_LIST,
+                pncpId: item.id,
+                data: rest,
+            };
+        });
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/favorites/import`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lists, items })
+            });
+            if (res.ok) {
+                const result = await res.json();
+                console.log(`[Favoritos] Migração: ${result.imported} itens importados para o banco.`);
+                // Clean up localStorage after successful migration
+                localStorage.removeItem('pncp_favoritos_v2');
+                localStorage.removeItem('pncp_favoritos');
+                // Refresh from DB
+                await fetchFavorites();
+            }
+        } catch (e) { console.error("Failed to migrate favorites to DB", e); }
+    };
 
     // ─── Scanner Opportunities State ("Encontradas" tab) ───
     const [scannerOpportunities, setScannerOpportunities] = useState<any[]>([]);
@@ -152,15 +203,18 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     // Active search list filter
     const [activeSearchListName, setActiveSearchListName] = useState<string | null>(null);
 
-    useEffect(() => { saveFavStore(favStore); }, [favStore]);
+    useEffect(() => {
+        fetchFavorites().then(() => migrateLocalStorageFavorites());
+    }, []);
 
     // Computed: all favoritos (flat) for backward compat
     const favoritos = favStore.items as PncpBiddingItem[];
 
     // Computed: filtered favorites by active list
-    // "default" (Favoritos Gerais) → show ALL from ALL lists
+    // null (Favoritos Gerais / default) → show ALL from ALL lists
     const filteredFavoritos = useMemo(() => {
-        const items = (!activeFavListId || activeFavListId === 'default')
+        const defaultListId = favStore.lists.find(l => l.name === DEFAULT_FAV_LIST)?.id;
+        const items = (!activeFavListId || activeFavListId === defaultListId)
             ? favStore.items
             : favStore.items.filter(f => f._listId === activeFavListId);
         return [...items].sort((a, b) => {
@@ -189,85 +243,106 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         } as PncpBiddingItem & { _scannerLogId: string; _isViewed: boolean; _searchName: string; _foundAt: string }))
         : results;
 
-    // Expired cleanup
-    useEffect(() => {
-        const checkExpired = () => {
-            const now = new Date();
-            setFavStore(prev => {
-                const filtered = prev.items.filter(f => {
-                    if (!f.data_encerramento_proposta && !f.data_abertura) return true;
-                    const sessao = new Date(f.data_encerramento_proposta || f.data_abertura || Date.now());
-                    return sessao.getTime() >= now.getTime();
-                });
-                if (filtered.length !== prev.items.length) return { ...prev, items: filtered };
-                return prev;
-            });
-        };
-        checkExpired();
-        const interval = setInterval(checkExpired, 60000);
-        return () => clearInterval(interval);
-    }, []);
-
-    // ─── Multi-list Favorites API ───
+    // ─── Multi-list Favorites API (DB-backed) ───
     const favLists = useMemo(() => {
-        const def = favStore.lists.filter(l => l.id === 'default');
-        const rest = favStore.lists.filter(l => l.id !== 'default').sort((a, b) => a.name.localeCompare(b.name));
-        return [...def, ...rest];
+        const defList = favStore.lists.find(l => l.name === DEFAULT_FAV_LIST);
+        const rest = favStore.lists.filter(l => l.name !== DEFAULT_FAV_LIST).sort((a, b) => a.name.localeCompare(b.name));
+        return defList ? [defList, ...rest] : rest;
     }, [favStore.lists]);
 
-    const createFavList = (name: string): FavList => {
-        const newList: FavList = { id: uuidv4(), name: name.trim(), createdAt: new Date().toISOString() };
-        setFavStore(prev => ({ ...prev, lists: [...prev.lists, newList] }));
-        return newList;
+    const defaultListId = useMemo(() => favStore.lists.find(l => l.name === DEFAULT_FAV_LIST)?.id || null, [favStore.lists]);
+
+    const createFavList = async (name: string): Promise<FavList> => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/pncp/favorites/lists`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim() })
+            });
+            if (res.ok) {
+                const newList = await res.json();
+                await fetchFavorites();
+                return { id: newList.id, name: newList.name, createdAt: newList.createdAt };
+            }
+        } catch (e) { console.error(e); }
+        // Fallback: return temp list
+        const temp: FavList = { id: uuidv4(), name: name.trim(), createdAt: new Date().toISOString() };
+        return temp;
     };
 
-    const renameFavList = (listId: string, newName: string) => {
+    const renameFavList = async (listId: string, newName: string) => {
         const trimmed = newName.trim();
         if (!trimmed) return;
-        setFavStore(prev => ({
-            ...prev,
-            lists: prev.lists.map(l => l.id === listId ? { ...l, name: trimmed } : l),
-        }));
-        toast.success(`Lista renomeada para "${trimmed}"`);
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_BASE_URL}/api/pncp/favorites/lists/${listId}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: trimmed })
+            });
+            await fetchFavorites();
+            toast.success(`Lista renomeada para "${trimmed}"`);
+        } catch (e) { console.error(e); toast.error('Erro ao renomear lista.'); }
     };
 
     const deleteFavList = (listId: string) => {
-        if (listId === 'default') { toast.warning('A lista padrão não pode ser excluída.'); return; }
+        if (listId === defaultListId) { toast.warning('A lista padrão não pode ser excluída.'); return; }
         const listName = favLists.find(l => l.id === listId)?.name || 'lista';
         const itemCount = favStore.items.filter(i => i._listId === listId).length;
         setConfirmAction({
             type: 'deleteFavList',
             message: `Excluir a lista "${listName}"?${itemCount > 0 ? `\n\nOs ${itemCount} item(ns) serão movidos para "Favoritos Gerais".` : ''}`,
-            onConfirm: () => {
-                setFavStore(prev => ({
-                    ...prev,
-                    lists: prev.lists.filter(l => l.id !== listId),
-                    items: prev.items.map(i => i._listId === listId ? { ...i, _listId: 'default' } : i),
-                }));
-                if (activeFavListId === listId) setActiveFavListId(null);
+            onConfirm: async () => {
                 setConfirmAction(null);
-                toast.success(`Lista "${listName}" excluída. Itens movidos para "Favoritos Gerais".`);
+                try {
+                    const token = localStorage.getItem('token');
+                    await fetch(`${API_BASE_URL}/api/pncp/favorites/lists/${listId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (activeFavListId === listId) setActiveFavListId(null);
+                    await fetchFavorites();
+                    toast.success(`Lista "${listName}" excluída. Itens movidos para "Favoritos Gerais".`);
+                } catch (e) { console.error(e); toast.error('Erro ao excluir lista.'); }
             }
         });
     };
 
-    const addToFavList = (item: PncpBiddingItem, listId: string) => {
-        setFavStore(prev => {
-            // Don't add if already in this list
-            if (prev.items.some(f => f.id === item.id && f._listId === listId)) {
-                return prev;
-            }
-            return { ...prev, items: [...prev.items, { ...item, _listId: listId }] };
-        });
+    const addToFavList = async (item: PncpBiddingItem, listId: string) => {
+        // Don't add if already in this list
+        if (favStore.items.some(f => f.id === item.id && f._listId === listId)) return;
+        try {
+            const token = localStorage.getItem('token');
+            const { _listId, _dbItemId, ...itemData } = item as FavItemWithList;
+            await fetch(`${API_BASE_URL}/api/pncp/favorites/items`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ listId, pncpId: item.id, data: itemData })
+            });
+            await fetchFavorites();
+        } catch (e) { console.error(e); toast.error('Erro ao adicionar favorito.'); }
     };
 
-    const removeFromFavList = (itemId: string, listId?: string) => {
-        setFavStore(prev => ({
-            ...prev,
-            items: listId
-                ? prev.items.filter(f => !(f.id === itemId && f._listId === listId))
-                : prev.items.filter(f => f.id !== itemId),
-        }));
+    const removeFromFavList = async (itemId: string, listId?: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            if (listId) {
+                // Find the specific DB item
+                const dbItem = favStore.items.find(f => f.id === itemId && f._listId === listId);
+                if (dbItem?._dbItemId) {
+                    await fetch(`${API_BASE_URL}/api/pncp/favorites/items/${dbItem._dbItemId}`, {
+                        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                }
+            } else {
+                // Remove from all lists
+                await fetch(`${API_BASE_URL}/api/pncp/favorites/items/by-pncp/${encodeURIComponent(itemId)}`, {
+                    method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+                });
+            }
+            await fetchFavorites();
+        } catch (e) { console.error(e); toast.error('Erro ao remover favorito.'); }
     };
 
     // ALWAYS open list picker — user must choose which list to save to
@@ -286,9 +361,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         }
     };
 
-    // Count items for fav list — "default" shows ALL
+    // Count items for fav list — default list shows ALL
     const favListItemCount = (listId: string) => 
-        listId === 'default' ? favStore.items.length : favStore.items.filter(f => f._listId === listId).length;
+        listId === defaultListId ? favStore.items.length : favStore.items.filter(f => f._listId === listId).length;
 
     const exportFavoritesToPdf = () => {
         const itemsToExport = filteredFavoritos;

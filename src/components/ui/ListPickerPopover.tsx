@@ -13,7 +13,7 @@ interface ListPickerProps {
     title: string;
     lists: ListOption[];
     onSelect: (listId: string) => void;
-    onCreateNew: (name: string) => string; // Returns new list ID
+    onCreateNew: (name: string) => string | Promise<string>; // Returns new list ID (sync or async)
     anchorRef?: React.RefObject<HTMLElement>;
 }
 
@@ -45,10 +45,10 @@ export function ListPickerPopover({ open, onClose, title, lists, onSelect, onCre
 
     if (!open) return null;
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         const trimmed = newName.trim();
         if (!trimmed) return;
-        const newId = onCreateNew(trimmed);
+        const newId = await onCreateNew(trimmed);
         onSelect(newId);
         onClose();
     };

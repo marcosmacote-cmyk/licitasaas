@@ -596,10 +596,10 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                     color: p.activeFavListId === list.id ? 'var(--color-warning)' : 'var(--color-text-secondary)',
                                     fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
                                     transition: 'var(--transition-fast)',
-                                    paddingRight: list.id !== 'default' ? '24px' : '12px',
+                                    paddingRight: list.name !== 'Favoritos Gerais' ? '24px' : '12px',
                                 }}
                             >{list.name} ({p.favListItemCount(list.id)})</button>
-                            {list.id !== 'default' && (
+                            {list.name !== 'Favoritos Gerais' && (
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setFavListMenu(favListMenu === list.id ? null : list.id); }}
                                     style={{
@@ -1125,8 +1125,8 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                     }
                     p.setListPickerItem(null);
                 }}
-                onCreateNew={(name) => {
-                    const newList = p.createFavList(name);
+                onCreateNew={async (name) => {
+                    const newList = await p.createFavList(name);
                     return newList.id;
                 }}
             />

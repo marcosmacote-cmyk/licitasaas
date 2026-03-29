@@ -24,6 +24,8 @@ model Tenant {
   chatMonitorConfig     ChatMonitorConfig?
   chatMonitorLogs       ChatMonitorLog[]
   opportunityScannerLogs OpportunityScannerLog[]
+  pncpFavoriteLists     PncpFavoriteList[]
+  pncpFavoriteItems     PncpFavoriteItem[]
 }
 
 model User {
@@ -203,6 +205,35 @@ model OpportunityScannerLog {
 
   @@unique([tenantId, pncpId])
   @@index([tenantId, createdAt])
+}
+
+// ── Favoritos PNCP (persistidos no banco — sincroniza entre dispositivos) ──
+model PncpFavoriteList {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+
+  items  PncpFavoriteItem[]
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model PncpFavoriteItem {
+  id        String   @id @default(uuid())
+  tenantId  String
+  listId    String
+  pncpId    String   // ID único do edital no PNCP
+  data      Json     // Dados completos do item (titulo, orgao, objeto, etc.)
+  createdAt DateTime @default(now())
+
+  list   PncpFavoriteList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, listId, pncpId])
+  @@index([tenantId])
 }
 
 model PriceProposal {
