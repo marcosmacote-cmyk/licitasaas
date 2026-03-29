@@ -96,11 +96,11 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
     const statusCounts = items.reduce((acc, curr) => { acc[curr.status] = (acc[curr.status] || 0) + 1; return acc; }, {} as Record<string, number>);
     const funnelData = [
         { name: 'Captado', count: statusCounts['Captado'] || 0, fill: 'var(--color-neutral)' },
-        { name: 'Em Análise', count: statusCounts['Em Análise'] || 0, fill: 'var(--color-primary)' },
+        { name: 'Análise', count: statusCounts['Em Análise'] || 0, fill: 'var(--color-primary)' },
         { name: 'Aprovado', count: statusCounts['Aprovado para Participação'] || 0, fill: 'var(--color-ai)' },
         { name: 'Doc.',      count: statusCounts['Preparando Documentação'] || 0, fill: 'var(--color-urgency)' },
         { name: 'Proposta',  count: statusCounts['Preparando Proposta'] || 0, fill: 'var(--color-primary)' },
-        { name: 'Em Sessão', count: statusCounts['Em Sessão'] || 0, fill: 'var(--color-danger)' },
+        { name: 'Sessão', count: statusCounts['Em Sessão'] || 0, fill: 'var(--color-danger)' },
         { name: 'Pós-Sessão',count: statusCounts['Pós-Sessão'] || 0, fill: 'var(--color-warning)' },
         { name: 'Recurso',   count: statusCounts['Recurso'] || 0, fill: 'var(--color-danger)' },
         { name: 'Ganho',     count: statusCounts['Ganho'] || 0, fill: 'var(--color-success)' },
@@ -285,7 +285,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                             <ResponsiveContainer>
                                 <BarChart data={funnelData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-                                    <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                    <XAxis dataKey="name" interval={0} tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
                                     <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
                                     <Tooltip contentStyle={{ backgroundColor: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }} itemStyle={{ color: 'var(--color-text-primary)' }} />
                                     <Bar dataKey="count" fill="var(--color-primary)" radius={[4, 4, 0, 0]} cursor="pointer" onClick={() => onNavigate?.('bidding')} />
