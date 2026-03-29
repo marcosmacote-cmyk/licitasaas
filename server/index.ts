@@ -4120,7 +4120,7 @@ app.get('/api/admin/monitoring-audit', authenticateToken, async (req: any, res) 
                 readyCount,
                 missingCredsCount,
                 invalidLinkCount,
-                issuesCount: issues.length
+                issuesCount: new Set(issues.map(i => i.id)).size
             },
             issues
         });
