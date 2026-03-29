@@ -41,7 +41,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
     React.useEffect(() => {
         const fetchAudit = async () => {
             try {
-                const res = await fetch('/api/admin/monitoring-audit', {
+                const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/admin/monitoring-audit`, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
                 if (res.ok) {

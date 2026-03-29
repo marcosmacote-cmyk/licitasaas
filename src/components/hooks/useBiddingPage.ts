@@ -73,10 +73,11 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
 
     useEffect(() => {
         if (filters.specialFilter === 'monitoring_error') {
-            fetch('/api/admin/monitoring-audit', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+            fetch(`${API_BASE_URL}/api/admin/monitoring-audit`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
                 .then(r => r.json())
                 .then(d => {
-                    if (d.issues) setAuditIssues(d.issues.map((iss: any) => iss.id));
+                    if (d.stats && d.stats.issues) setAuditIssues(d.stats.issues.map((iss: any) => iss.id));
+                    else if (d.issues) setAuditIssues(d.issues.map((iss: any) => iss.id));
                 }).catch(console.error);
         }
     }, [filters.specialFilter]);
