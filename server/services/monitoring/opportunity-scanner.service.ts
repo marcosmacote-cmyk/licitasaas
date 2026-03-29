@@ -9,11 +9,21 @@ import { NotificationService } from '../monitoring/notification.service';
  * 
  * Arquitetura:
  *   PncpSavedSearch (DB)  →  PNCP API  →  Dedup (OpportunityScannerLog DB)  →  NotificationService
+ * 
+ * Melhorias implementadas:
+ *   1. Retry com backoff exponencial (3 tentativas)
+ *   2. Paginação completa (até 250 resultados por pesquisa)
+ *   3. Limpeza automática de registros >30 dias
+ *   4. Sumário consolidado ao final da varredura
+ *   5. Rastreamento de resultados por pesquisa (para badges no frontend)
  */
 
 // Rate limit: máximo de buscas a cada ciclo para não sobrecarregar PNCP
 const MAX_SEARCHES_PER_CYCLE = 20;
 const PNCP_REQUEST_DELAY_MS = 1500; // 1.5s entre requisições à API do PNCP
+const MAX_RETRIES = 3;
+const MAX_PAGES_PER_SEARCH = 5; // Máximo 5 páginas = 250 resultados
+const DEDUP_EXPIRY_DAYS = 30; // Limpar registros com mais de 30 dias
 
 const agent = new https.Agent({ rejectUnauthorized: false });
 
@@ -30,8 +40,49 @@ interface PncpSearchResult {
     link_sistema: string;
 }
 
+/** Resultado do scan por pesquisa — usado para sumário e badges */
+interface SearchScanResult {
+    searchId: string;
+    searchName: string;
+    companyName: string;
+    totalFound: number;
+    newCount: number;
+    status: 'ok' | 'error';
+    errorMessage?: string;
+}
+
 /**
- * Executa uma busca PNCP com os mesmos filtros da pesquisa salva
+ * Faz uma requisição HTTP com retry e backoff exponencial.
+ * @param url URL a ser buscada
+ * @param retries Número de tentativas restantes (default: 3)
+ * @returns dados da resposta ou null se todas falharem
+ */
+async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<any | null> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const res = await axios.get(url, {
+                headers: { 'Accept': 'application/json' },
+                httpsAgent: agent,
+                timeout: 15000
+            } as any);
+            return res.data;
+        } catch (err: any) {
+            const isLast = attempt === retries;
+            if (isLast) {
+                console.warn(`[OpportunityScanner] ❌ Falha após ${retries} tentativas: ${err.message}`);
+                return null;
+            }
+            const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+            console.warn(`[OpportunityScanner] ⚠️ Tentativa ${attempt}/${retries} falhou (${err.message}). Retentando em ${backoffMs / 1000}s...`);
+            await new Promise(r => setTimeout(r, backoffMs));
+        }
+    }
+    return null;
+}
+
+/**
+ * Executa uma busca PNCP com os mesmos filtros da pesquisa salva.
+ * Agora com paginação completa (até MAX_PAGES_PER_SEARCH páginas) e retry.
  */
 async function executePncpSearch(search: {
     keywords: string | null;
@@ -93,9 +144,9 @@ async function executePncpSearch(search: {
     }
     const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
 
-    // Build URL
-    const buildUrl = (qItems: string[], singleUf?: string, singleOrgao?: string) => {
-        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=50&pagina=1`;
+    // Build URL (now accepts page parameter)
+    const buildUrl = (qItems: string[], singleUf?: string, singleOrgao?: string, pagina = 1) => {
+        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=50&pagina=${pagina}`;
         
         let terms = [...qItems];
         if (singleOrgao) terms.push(singleOrgao.includes(' ') && !singleOrgao.startsWith('"') ? `"${singleOrgao}"` : singleOrgao);
@@ -114,19 +165,20 @@ async function executePncpSearch(search: {
     const keywordsToIterate = kwList.length > 0 ? kwList : [null];
     const ufsForIteration = ufs.length > 0 ? ufs : [null];
 
-    const urlsToFetch: string[] = [];
+    // Build base URL combinations (page 1)
+    const baseUrlCombinations: { params: string[]; uf?: string; org?: string }[] = [];
     for (const kw of keywordsToIterate) {
         for (const singleUf of ufsForIteration) {
             for (const org of orgaosToIterate) {
                 const params: string[] = [];
                 if (kw) params.push(kw);
-                urlsToFetch.push(buildUrl(params, singleUf || undefined, org || undefined));
+                baseUrlCombinations.push({ params, uf: singleUf || undefined, org: org || undefined });
             }
         }
     }
 
     // Limit combinations
-    const urls = urlsToFetch.slice(0, 20);
+    const combinations = baseUrlCombinations.slice(0, 20);
     
     let excludeList: string[] = [];
     if (excludeKeywords) {
@@ -134,20 +186,26 @@ async function executePncpSearch(search: {
     }
 
     let rawItems: any[] = [];
-    for (const url of urls) {
-        try {
-            const res = await axios.get(url, {
-                headers: { 'Accept': 'application/json' },
-                httpsAgent: agent,
-                timeout: 15000
-            } as any);
-            const data = res.data as any;
+    
+    for (const combo of combinations) {
+        // ── Paginação: buscar múltiplas páginas por combinação ──
+        for (let page = 1; page <= MAX_PAGES_PER_SEARCH; page++) {
+            const url = buildUrl(combo.params, combo.uf, combo.org, page);
+            
+            const data = await fetchWithRetry(url);
+            if (!data) break; // Falhou após retries, pular combinação
+            
             const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
             rawItems = rawItems.concat(items);
-        } catch (err: any) {
-            console.warn(`[OpportunityScanner] Request failed: ${err.message}`);
+            
+            // Se retornou menos que 50, não há mais páginas
+            if (items.length < 50) break;
+            
+            // Rate limit entre páginas
+            await new Promise(r => setTimeout(r, PNCP_REQUEST_DELAY_MS));
         }
-        // Rate limit
+        
+        // Rate limit entre combinações
         await new Promise(r => setTimeout(r, PNCP_REQUEST_DELAY_MS));
     }
 
@@ -227,10 +285,127 @@ async function markAsNotified(tenantId: string, pncpId: string, searchId?: strin
 }
 
 /**
+ * Limpeza automática: remove registros de dedup com mais de DEDUP_EXPIRY_DAYS dias.
+ * Isso permite que editais antigos sejam "re-descobertos" caso voltem a aceitar propostas.
+ */
+async function cleanupOldDedupRecords(): Promise<number> {
+    try {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - DEDUP_EXPIRY_DAYS);
+        
+        const result = await prisma.opportunityScannerLog.deleteMany({
+            where: { createdAt: { lt: cutoffDate } }
+        });
+        
+        if (result.count > 0) {
+            console.log(`[OpportunityScanner] 🧹 Limpeza automática: ${result.count} registros com >${DEDUP_EXPIRY_DAYS} dias removidos`);
+        }
+        return result.count;
+    } catch (error: any) {
+        console.error(`[OpportunityScanner] ⚠️ Erro na limpeza automática:`, error.message);
+        return 0;
+    }
+}
+
+/**
+ * Salva os resultados da última varredura no GlobalConfig do tenant
+ * para que o frontend possa exibir informações sobre último scan.
+ */
+async function saveScanResults(tenantId: string, results: SearchScanResult[], totalNew: number): Promise<void> {
+    try {
+        const existing = await prisma.globalConfig.findUnique({ where: { tenantId } });
+        const config = existing ? JSON.parse(existing.config || '{}') : {};
+        
+        config.lastScanAt = new Date().toISOString();
+        config.lastScanTotalNew = totalNew;
+        config.lastScanResults = results.map(r => ({
+            searchId: r.searchId,
+            searchName: r.searchName,
+            companyName: r.companyName,
+            totalFound: r.totalFound,
+            newCount: r.newCount,
+            status: r.status,
+            errorMessage: r.errorMessage,
+        }));
+        
+        // Calcular próxima varredura (4 horas após a última)
+        const nextScan = new Date();
+        nextScan.setHours(nextScan.getHours() + 4);
+        config.nextScanAt = nextScan.toISOString();
+        
+        if (existing) {
+            await prisma.globalConfig.update({
+                where: { tenantId },
+                data: { config: JSON.stringify(config) }
+            });
+        } else {
+            await prisma.globalConfig.create({
+                data: { tenantId, config: JSON.stringify(config) }
+            });
+        }
+    } catch (error: any) {
+        console.error(`[OpportunityScanner] Erro ao salvar resultados do scan:`, error.message);
+    }
+}
+
+/**
+ * Envia mensagem de sumário consolidado ao final da varredura
+ */
+async function sendConsolidatedSummary(
+    tenantId: string, 
+    config: any, 
+    scanResults: SearchScanResult[], 
+    totalNew: number
+): Promise<void> {
+    // Só envia sumário se houve pelo menos 1 pesquisa processada
+    if (scanResults.length === 0) return;
+    
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' });
+    const nextScan = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+    const nextTimeStr = nextScan.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' });
+    
+    let message = `📊 <b>Varredura PNCP Concluída</b> (${timeStr})\n`;
+    message += `━━━━━━━━━━━━━━━\n`;
+    
+    for (const r of scanResults) {
+        const icon = r.status === 'error' ? '❌' : (r.newCount > 0 ? '✅' : '⏩');
+        const companyTag = r.companyName ? ` <i>(${r.companyName})</i>` : '';
+        
+        if (r.status === 'error') {
+            message += `${icon} ${r.searchName}${companyTag}: erro\n`;
+        } else if (r.newCount > 0) {
+            message += `${icon} ${r.searchName}${companyTag}: <b>${r.newCount} novo(s)</b>\n`;
+        } else {
+            message += `${icon} ${r.searchName}${companyTag}: 0 novos\n`;
+        }
+    }
+    
+    message += `━━━━━━━━━━━━━━━\n`;
+    message += `<b>Total: ${totalNew} novo(s) edital(is)</b>\n`;
+    message += `⏰ Próxima varredura: ~${nextTimeStr}\n`;
+    message += `\n<i>LicitaSaaS — Scanner PNCP</i>`;
+    
+    // Enviar via Telegram
+    if (config?.telegramChatId) {
+        await NotificationService.sendTelegram(tenantId, config.telegramChatId, message);
+    }
+    
+    // Enviar via WhatsApp
+    if (config?.phoneNumber) {
+        const plainMessage = message.replace(/<[^>]*>/g, '').replace(/━+/g, '───');
+        await NotificationService.sendWhatsApp(tenantId, config.phoneNumber, plainMessage);
+    }
+}
+
+/**
  * Ciclo principal: executa todas as pesquisas salvas com autoMonitor ativo
  */
 export async function runOpportunityScan() {
     try {
+        // ── Melhoria 5: Limpeza automática de registros antigos ──
+        await cleanupOldDedupRecords();
+        
         // Buscar todas as pesquisas salvas de todos os tenants ativos
         const searches = await prisma.pncpSavedSearch.findMany({
             include: {
@@ -284,8 +459,13 @@ export async function runOpportunityScan() {
         let totalNewResults = 0;
 
         for (const [tenantId, { searches: tenantSearches, config }] of byTenant) {
+            
+            // ── Rastrear resultados por pesquisa para sumário e badges ──
+            const scanResults: SearchScanResult[] = [];
 
             for (const search of tenantSearches) {
+                const companyName = (search as any).company?.name || (search as any).company?.razaoSocial || '';
+                
                 try {
                     const results = await executePncpSearch({
                         keywords: search.keywords,
@@ -309,12 +489,21 @@ export async function runOpportunityScan() {
                         await markAsNotified(tenantId, r.id, search.id);
                     }
 
+                    // ── Registrar resultado desta pesquisa ──
+                    scanResults.push({
+                        searchId: search.id,
+                        searchName: search.name,
+                        companyName,
+                        totalFound: results.length,
+                        newCount: newResults.length,
+                        status: 'ok',
+                    });
+
                     if (newResults.length > 0) {
                         console.log(`[OpportunityScanner] ✅ "${search.name}": ${newResults.length} novos resultados`);
                         totalNewResults += newResults.length;
 
                         // ── Enviar notificação individual por pesquisa ──
-                        const companyName = (search as any).company?.name || '';
                         const headerCompany = companyName ? ` (${companyName})` : '';
                         const displayResults = newResults.slice(0, 8); // Máx 8 por notificação
 
@@ -390,11 +579,26 @@ export async function runOpportunityScan() {
                     }
                 } catch (err: any) {
                     console.warn(`[OpportunityScanner] ❌ Erro na pesquisa "${search.name}": ${err.message}`);
+                    scanResults.push({
+                        searchId: search.id,
+                        searchName: search.name,
+                        companyName,
+                        totalFound: 0,
+                        newCount: 0,
+                        status: 'error',
+                        errorMessage: err.message,
+                    });
                 }
 
                 // Rate limit between searches
                 await new Promise(r => setTimeout(r, 2000));
             }
+
+            // ── Melhoria 2: Sumário consolidado ──
+            await sendConsolidatedSummary(tenantId, config, scanResults, totalNewResults);
+            
+            // ── Melhoria 4: Salvar resultados para frontend (badges + último scan) ──
+            await saveScanResults(tenantId, scanResults, totalNewResults);
         }
 
         if (totalNewResults > 0) {

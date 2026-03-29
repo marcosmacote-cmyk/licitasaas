@@ -306,6 +306,10 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     };
 
     const [opportunityScannerEnabled, setOpportunityScannerEnabled] = useState(true);
+    const [lastScanAt, setLastScanAt] = useState<string | null>(null);
+    const [lastScanTotalNew, setLastScanTotalNew] = useState(0);
+    const [lastScanResults, setLastScanResults] = useState<{ searchId: string; searchName: string; companyName: string; totalFound: number; newCount: number; status: string; errorMessage?: string }[]>([]);
+    const [nextScanAt, setNextScanAt] = useState<string | null>(null);
 
     useEffect(() => { 
         fetchSavedSearches(); 
@@ -316,7 +320,14 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/status`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) { const data = await res.json(); setOpportunityScannerEnabled(data.enabled !== false); }
+            if (res.ok) {
+                const data = await res.json();
+                setOpportunityScannerEnabled(data.enabled !== false);
+                setLastScanAt(data.lastScanAt || null);
+                setLastScanTotalNew(data.lastScanTotalNew || 0);
+                setLastScanResults(data.lastScanResults || []);
+                setNextScanAt(data.nextScanAt || null);
+            }
         } catch (e) { console.error("Failed to fetch scanner status", e); }
     };
 
@@ -737,6 +748,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             if (res.ok) {
                 const data = await res.json();
                 toast.success(data.message || 'Varredura de oportunidades iniciada');
+                // Atualizar status após 30s (tempo suficiente para scan completar)
+                setTimeout(fetchScannerStatus, 30000);
             } else { throw new Error("Erro na varredura"); }
         } catch (e: any) {
             console.error(e);
@@ -744,6 +757,11 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         } finally {
             setLoading(false);
         }
+    };
+
+    // Helper: buscar resultado da última varredura para uma pesquisa específica
+    const getSearchScanResult = (searchId: string) => {
+        return lastScanResults.find(r => r.searchId === searchId) || null;
     };
 
     return {
@@ -779,6 +797,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         deleteSavedSearch, clearSearch, editingSearch, setEditingSearch, updateSavedSearch,
         handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess, handleTriggerScan,
         // Global scanner
-        opportunityScannerEnabled, toggleOpportunityScanner
+        opportunityScannerEnabled, toggleOpportunityScanner,
+        // Last scan info
+        lastScanAt, lastScanTotalNew, lastScanResults, nextScanAt, getSearchScanResult
     };
 }

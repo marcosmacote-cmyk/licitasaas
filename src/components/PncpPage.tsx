@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil } from 'lucide-react';
+import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
@@ -183,6 +183,28 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                     {p.loading ? <Loader2 size={16} className="spinner" /> : <Search size={16} />} 
                                 </button>
                             </div>
+
+                            {/* ── Last Scan Info ── */}
+                            {p.lastScanAt && (
+                                <div style={{ 
+                                    fontSize: '0.7rem', color: 'var(--color-text-tertiary)', 
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                    paddingLeft: '4px',
+                                }}>
+                                    <Clock size={10} />
+                                    Última: {new Date(p.lastScanAt).toLocaleDateString('pt-BR')} às {new Date(p.lastScanAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    {p.lastScanTotalNew > 0 && (
+                                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                                            — {p.lastScanTotalNew} novo(s)
+                                        </span>
+                                    )}
+                                    {p.nextScanAt && (
+                                        <span style={{ marginLeft: '4px' }}>
+                                            | Próxima: ~{new Date(p.nextScanAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
                         {p.filteredSavedSearches.length === 0 && (
                             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-tertiary)', padding: 'var(--space-2) 0', fontStyle: 'italic' }}>
@@ -221,6 +243,41 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                         </span>
                                     )}
                                     {s.companyProfileId && <Building2 size={12} color="var(--color-primary)" />}
+                                    {/* ── Badge do resultado da última varredura ── */}
+                                    {(() => {
+                                        const scanResult = p.getSearchScanResult(s.id);
+                                        if (!scanResult) return null;
+                                        if (scanResult.status === 'error') {
+                                            return (
+                                                <span title={`Erro: ${scanResult.errorMessage || 'falha na busca'}`} style={{
+                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                    minWidth: '18px', height: '18px', padding: '0 5px',
+                                                    borderRadius: '9px', fontSize: '0.625rem', fontWeight: 700,
+                                                    background: 'var(--color-danger-bg, rgba(239,68,68,0.1))', 
+                                                    color: 'var(--color-danger)',
+                                                }}>!</span>
+                                            );
+                                        }
+                                        if (scanResult.newCount > 0) {
+                                            return (
+                                                <span title={`${scanResult.newCount} novo(s) na última varredura (${scanResult.totalFound} total)`} style={{
+                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                    minWidth: '18px', height: '18px', padding: '0 5px',
+                                                    borderRadius: '9px', fontSize: '0.625rem', fontWeight: 700,
+                                                    background: 'var(--color-success-bg, rgba(16,185,129,0.1))', 
+                                                    color: 'var(--color-success)',
+                                                }}>{scanResult.newCount}</span>
+                                            );
+                                        }
+                                        return (
+                                            <span title={`0 novos na última varredura (${scanResult.totalFound} total)`} style={{
+                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                width: '6px', height: '6px',
+                                                borderRadius: '50%',
+                                                background: 'var(--color-text-tertiary)',
+                                                opacity: 0.4,
+                                            }} />);
+                                    })()}
                                 </div>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setSearchChipMenu(searchChipMenu === s.id ? null : s.id); }}

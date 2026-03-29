@@ -1483,7 +1483,13 @@ app.get('/api/pncp/scanner/status', authenticateToken, async (req: any, res) => 
         
         try {
             const conf = JSON.parse(globalConfig.config || '{}');
-            res.json({ enabled: conf.opportunityScannerEnabled !== false });
+            res.json({ 
+                enabled: conf.opportunityScannerEnabled !== false,
+                lastScanAt: conf.lastScanAt || null,
+                lastScanTotalNew: conf.lastScanTotalNew || 0,
+                lastScanResults: conf.lastScanResults || [],
+                nextScanAt: conf.nextScanAt || null,
+            });
         } catch {
             res.json({ enabled: true });
         }
