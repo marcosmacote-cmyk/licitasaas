@@ -268,6 +268,10 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
             {/* Active Filter Chips */}
             {b.hasActiveFilters && (
                 <div className="flex-center flex-wrap gap-1 mb-3">
+                    {b.filters.specialFilter === 'monitoring_error' && <FilterChip label="❌ Falha no Monitoramento" color="var(--color-danger)" onRemove={() => b.setFilters({ ...b.filters, specialFilter: undefined })} />}
+                    {b.filters.specialFilter === 'stalled_processes' && <FilterChip label="⚠️ Processos Parados" color="var(--color-warning)" onRemove={() => b.setFilters({ ...b.filters, specialFilter: undefined })} />}
+                    {b.filters.specialFilter === 'today_sessions' && <FilterChip label="⏰ Sessões de Hoje" color="var(--color-urgency)" onRemove={() => b.setFilters({ ...b.filters, specialFilter: undefined })} />}
+                    {b.filters.specialFilter === 'needs_ai_analysis' && <FilterChip label="🤖 Análise de IA Pendente" color="var(--color-ai)" onRemove={() => b.setFilters({ ...b.filters, specialFilter: undefined })} />}
                     {b.filters.searchText && <FilterChip label={`"${b.filters.searchText}"`} onRemove={() => b.setFilters({ ...b.filters, searchText: '' })} />}
                     {b.filters.companies.map(compId => { const name = companies.find(c => c.id === compId)?.razaoSocial || compId; return <FilterChip key={compId} label={name} color="var(--color-primary)" onRemove={() => b.setFilters({ ...b.filters, companies: b.filters.companies.filter(x => x !== compId) })} />; })}
                     {b.filters.modalities.map(m => <FilterChip key={m} label={m} color="var(--color-ai)" onRemove={() => b.setFilters({ ...b.filters, modalities: b.filters.modalities.filter(x => x !== m) })} />)}

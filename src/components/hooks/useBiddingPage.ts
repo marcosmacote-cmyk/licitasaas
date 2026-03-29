@@ -7,7 +7,7 @@ import { aiService } from '../../services/ai';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../../types';
 import { COLUMNS } from '../../types';
-import { resolveStage, getDefaultSubstage, getGovernance, type KanbanStage } from '../../governance';
+import { resolveStage, getDefaultSubstage, getGovernance, type KanbanStage, type SystemModule } from '../../governance';
 import { useToast } from '../ui';
 
 // ===== FILTER TYPES =====
@@ -18,6 +18,7 @@ export interface SmartFilters {
     portals: string[];
     statuses: string[];
     risks: string[];
+    specialFilter?: string;
 }
 
 export const EMPTY_FILTERS: SmartFilters = {
@@ -54,8 +55,11 @@ interface UseBiddingPageOptions {
     items: BiddingProcess[];
     setItems: React.Dispatch<React.SetStateAction<BiddingProcess[]>>;
     companies: CompanyProfile[];
-    initialFilter?: { statuses?: string[]; highlight?: string } | null;
+    initialFilter?: { statuses?: string[]; highlight?: string; specialFilter?: string } | null;
     onFilterConsumed?: () => void;
+    autoOpenProcessId?: string;
+    onAutoOpenConsumed?: () => void;
+    onNavigateToModule?: (module: SystemModule, processId: string) => void;
 }
 
 export function useBiddingPage({ items, setItems, companies, initialFilter, onFilterConsumed }: UseBiddingPageOptions) {
@@ -63,6 +67,19 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
         return (localStorage.getItem('biddingViewMode') as 'kanban' | 'table') || 'kanban';
     });
+
+    const [auditIssues, setAuditIssues] = useState<string[]>([]);
+    const [filters, setFilters] = useState<SmartFilters>(EMPTY_FILTERS);
+
+    useEffect(() => {
+        if (filters.specialFilter === 'monitoring_error') {
+            fetch('/api/admin/monitoring-audit', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.issues) setAuditIssues(d.issues.map((iss: any) => iss.id));
+                }).catch(console.error);
+        }
+    }, [filters.specialFilter]);
 
     const refreshData = async () => {
         try {
@@ -83,7 +100,6 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     }, [items]);
 
     // ===== FILTERS + CARD CONFIG =====
-    const [filters, setFilters] = useState<SmartFilters>(EMPTY_FILTERS);
     const [cardFields, setCardFields] = useState<CardFieldConfig[]>(() => {
         const saved = localStorage.getItem('biddingCardFields');
         return saved ? JSON.parse(saved) : INITIAL_CARD_FIELDS;
@@ -93,9 +109,20 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
 
     // Apply initial filter from dashboard deep links
     useEffect(() => {
-        if (initialFilter?.statuses && initialFilter.statuses.length > 0) {
-            setFilters(prev => ({ ...prev, statuses: initialFilter.statuses! }));
-            setShowFilterPanel(true);
+        if (initialFilter) {
+            const newFilters: SmartFilters = {
+                searchText: '',
+                companies: [],
+                modalities: [],
+                portals: [],
+                statuses: initialFilter.statuses || [],
+                risks: [],
+                specialFilter: initialFilter.specialFilter
+            };
+            setFilters(newFilters);
+            if ((initialFilter.statuses && initialFilter.statuses.length > 0) || initialFilter.specialFilter) {
+                setShowFilterPanel(true);
+            }
             onFilterConsumed?.();
         }
     }, [initialFilter]);
@@ -207,30 +234,24 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     };
 
     // ===== FRONTEND NORMALIZATION HELPERS =====
-    // Lei 14.133/2021: 5 modalidades + Contratação Direta + Procedimento Auxiliar
     const normalizeModalityFE = (raw: string | undefined | null): string => {
         if (!raw || !raw.trim()) return '';
         const s = raw.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
             .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '')
             .replace(/\s*-?\s*srp$/i, '').replace(/\s*-?\s*sispp$/i, '').replace(/\s+/g, ' ').trim();
-        // 5 Modalidades Licitatórias (Art. 28)
         if (s.includes('pregao')) return 'Pregão';
         if (s.includes('concorrencia')) return 'Concorrência';
         if (s.includes('dialogo competitivo')) return 'Diálogo Competitivo';
         if (s.includes('concurso')) return 'Concurso';
         if (s.includes('leilao')) return 'Leilão';
-        // Contratação Direta
         if (s.includes('dispensa')) return 'Dispensa';
         if (s.includes('inexigibilidade')) return 'Inexigibilidade';
-        // Procedimentos Auxiliares
         if (s.includes('pre-qualificacao') || s.includes('pre qualificacao') || s.includes('credenciamento') || s.includes('manifestacao de interesse')) return 'Procedimento Auxiliar';
-        // Genéricos
         if (s.includes('licitacao')) return 'Pregão';
         if (s.includes('tomada de precos') || s.includes('convite') || s === 'rdc' || s.includes('regime diferenciado')) return 'Concorrência';
         if (s.includes('chamada publica')) return 'Chamada Pública';
         return raw.trim();
     };
-    // Portal = Plataforma de compras. PNCP/ComprasNet/Compras.gov.br = mesma plataforma
     const normalizePortalFE = (raw: string | undefined | null): string => {
         if (!raw || !raw.trim()) return '';
         const p = raw.trim().toLowerCase();
@@ -240,10 +261,8 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
         if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
         if (p.includes('licitanet')) return 'Licitanet';
         if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('cnetmobile') || p.includes('pncp') || p.includes('gov.br/compras')) return 'Compras.gov.br';
-        // Raw URL → Portal Municipal
         const urlMatch = raw.trim().match(/https?:\/\/(?:www\.)?([^/\s]+)/i);
         if (urlMatch) return 'Portal Municipal';
-        // Strip embedded URLs
         const cleaned = raw.trim().replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?\s*/gi, '').replace(/\s*:\s*https?:\/\/[^\s]+/gi, '').trim();
         return cleaned && cleaned.length > 2 ? cleaned : raw.trim();
     };
@@ -260,6 +279,26 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     // ===== SMART FILTERING =====
     const filteredItems = useMemo(() => {
         return items.filter(item => {
+            // == SPECIAL FILTERS ==
+            if (filters.specialFilter) {
+                if (filters.specialFilter === 'stalled_processes') {
+                    const daysSince = Math.ceil((new Date().getTime() - new Date(item.sessionDate || new Date().toISOString()).getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysSince <= 7) return false;
+                }
+                if (filters.specialFilter === 'today_sessions') {
+                    const sessStr = new Date(item.sessionDate).toISOString().split('T')[0];
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    if (sessStr !== todayStr) return false;
+                }
+                if (filters.specialFilter === 'monitoring_error') {
+                    if (!auditIssues.includes(item.id)) return false;
+                }
+                if (filters.specialFilter === 'needs_ai_analysis') {
+                    if (item.aiAnalysis || item.status !== 'Em Análise') return false;
+                }
+            }
+
+            // == REGULAR FILTERS ==
             if (filters.searchText) {
                 const text = filters.searchText.toLowerCase();
                 const companyName = companies.find(c => c.id === item.companyProfileId)?.razaoSocial || '';
@@ -279,7 +318,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
         });
     }, [items, filters, companies]);
 
-    const hasActiveFilters = filters.searchText !== '' || filters.companies.length > 0 || filters.modalities.length > 0 || filters.portals.length > 0 || filters.statuses.length > 0 || filters.risks.length > 0;
+    const hasActiveFilters = !!filters.specialFilter || filters.searchText !== '' || filters.companies.length > 0 || filters.modalities.length > 0 || filters.portals.length > 0 || filters.statuses.length > 0 || filters.risks.length > 0;
     const activeFilterCount = [filters.companies.length > 0, filters.modalities.length > 0, filters.portals.length > 0, filters.statuses.length > 0, filters.risks.length > 0].filter(Boolean).length;
 
     // ===== MODAL STATE =====

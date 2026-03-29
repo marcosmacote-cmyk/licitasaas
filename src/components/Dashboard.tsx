@@ -22,7 +22,7 @@ import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
 interface Props {
     items: BiddingProcess[];
     companies?: CompanyProfile[];
-    onNavigate?: (tab: string, filter?: { statuses?: string[]; highlight?: string }) => void;
+    onNavigate?: (tab: string, filter?: { statuses?: string[]; highlight?: string; specialFilter?: string }) => void;
 }
 
 export function Dashboard({ items, companies = [], onNavigate }: Props) {
@@ -59,7 +59,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
     // ── Critical Alerts (derived) ──
     const criticalAlerts = useMemo(() => {
-        const alerts: { type: 'danger' | 'warning' | 'urgency'; icon: React.ReactNode; message: string; action: string; count?: number; dest?: string }[] = [];
+        const alerts: { type: 'danger' | 'warning' | 'urgency'; icon: React.ReactNode; message: string; action: string; count?: number; dest?: string; specialFilter?: string }[] = [];
         const vencidoDocs = m.expiringDocs.filter((d: any) => d.status === 'vencido');
         const alertaDocs = m.expiringDocs.filter((d: any) => d.status === 'critico' || d.status === 'alerta');
 
@@ -70,24 +70,25 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                 message: `${auditStats.missingCredsCount + auditStats.invalidLinkCount} processo(s) com falha no monitoramento de chat (credencial ausente ou link).`, 
                 action: 'Verificar →', 
                 count: auditStats.missingCredsCount + auditStats.invalidLinkCount, 
-                dest: 'bidding' 
+                dest: 'bidding',
+                specialFilter: 'monitoring_error'
             });
         }
 
         if (vencidoDocs.length > 0) {
-            alerts.push({ type: 'danger', icon: <FileWarning size={16} />, message: `${vencidoDocs.length} documento${vencidoDocs.length > 1 ? 's' : ''} vencido${vencidoDocs.length > 1 ? 's' : ''} — impeditivo para participação`, action: 'Renovar agora →', count: vencidoDocs.length, dest: 'companies' });
+            alerts.push({ type: 'danger', icon: <FileWarning size={16} />, message: `${vencidoDocs.length} documento${vencidoDocs.length > 1 ? 's' : ''} vencido${vencidoDocs.length > 1 ? 's' : ''} — impeditivo para participação`, action: 'Renovar agora →', count: vencidoDocs.length, dest: 'companies', specialFilter: 'expiring_docs' });
         }
         if (m.todaySessions.length > 0) {
-            alerts.push({ type: 'urgency', icon: <Timer size={16} />, message: `${m.todaySessions.length} sessão${m.todaySessions.length > 1 ? 'ões' : ''} de licitação HOJE`, action: 'Ver sessões →', count: m.todaySessions.length, dest: 'bidding' });
+            alerts.push({ type: 'urgency', icon: <Timer size={16} />, message: `${m.todaySessions.length} sessão${m.todaySessions.length > 1 ? 'ões' : ''} de licitação HOJE`, action: 'Ver sessões →', count: m.todaySessions.length, dest: 'bidding', specialFilter: 'today_sessions' });
         }
         if (alertaDocs.length > 0) {
-            alerts.push({ type: 'warning', icon: <Clock size={16} />, message: `${alertaDocs.length} documento${alertaDocs.length > 1 ? 's' : ''} vencendo nos próximos 30 dias`, action: 'Verificar →', count: alertaDocs.length, dest: 'companies' });
+            alerts.push({ type: 'warning', icon: <Clock size={16} />, message: `${alertaDocs.length} documento${alertaDocs.length > 1 ? 's' : ''} vencendo nos próximos 30 dias`, action: 'Verificar →', count: alertaDocs.length, dest: 'companies', specialFilter: 'expiring_docs' });
         }
         if (m.stalledProcesses.length > 0) {
-            alerts.push({ type: 'warning', icon: <AlertTriangle size={16} />, message: `${m.stalledProcesses.length} processo${m.stalledProcesses.length > 1 ? 's' : ''} parado${m.stalledProcesses.length > 1 ? 's' : ''} há mais de 7 dias`, action: 'Mover no funil →', count: m.stalledProcesses.length, dest: 'bidding' });
+            alerts.push({ type: 'warning', icon: <AlertTriangle size={16} />, message: `${m.stalledProcesses.length} processo${m.stalledProcesses.length > 1 ? 's' : ''} parado${m.stalledProcesses.length > 1 ? 's' : ''} há mais de 7 dias`, action: 'Mover no funil →', count: m.stalledProcesses.length, dest: 'bidding', specialFilter: 'stalled_processes' });
         }
         if (m.needsAiAnalysis.length > 0) {
-            alerts.push({ type: 'warning', icon: <ScanSearch size={16} />, message: `${m.needsAiAnalysis.length} edital${m.needsAiAnalysis.length > 1 ? 'is' : ''} em análise sem parecer da IA`, action: 'Analisar com IA →', count: m.needsAiAnalysis.length, dest: 'intelligence' });
+            alerts.push({ type: 'warning', icon: <ScanSearch size={16} />, message: `${m.needsAiAnalysis.length} edital${m.needsAiAnalysis.length > 1 ? 'is' : ''} em análise sem parecer da IA`, action: 'Analisar com IA →', count: m.needsAiAnalysis.length, dest: 'bidding', specialFilter: 'needs_ai_analysis' });
         }
         return alerts;
     }, [m.expiringDocs, m.todaySessions, m.stalledProcesses, m.needsAiAnalysis, auditStats]);
@@ -178,7 +179,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             {criticalAlerts.length > 0 && (
                 <div className="animate-fade-in-down" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-5)' }}>
                     {(showAllAlerts ? criticalAlerts : criticalAlerts.slice(0, 3)).map((alert, i) => (
-                        <AlertCard key={i} type={alert.type} icon={alert.icon} message={alert.message} action={alert.action} onClick={alert.dest ? () => onNavigate?.(alert.dest!) : undefined} />
+                        <AlertCard key={i} type={alert.type} icon={alert.icon} message={alert.message} action={alert.action} onClick={alert.dest ? () => onNavigate?.(alert.dest!, alert.specialFilter ? { specialFilter: alert.specialFilter } : undefined) : undefined} />
                     ))}
                     {criticalAlerts.length > 3 && (
                         <button onClick={() => setShowAllAlerts(!showAllAlerts)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 'var(--space-1)', padding: 'var(--space-1) 0' }}>

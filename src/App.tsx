@@ -49,7 +49,7 @@ function App() {
   const [alertCount, setAlertCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [pncpUnreadCount, setPncpUnreadCount] = useState(0);
-  const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string } | null>(null);
+  const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string; specialFilter?: string } | null>(null);
   const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string; hubOriginId?: string } | null>(null);
 
   useEffect(() => {
@@ -449,7 +449,7 @@ function App() {
             }}
           />}
           {activeTab === 'intelligence' && <InteligenciaPage biddings={items} companies={companies} onRefresh={refreshData} initialProcessId={moduleContext?.processId} hubOriginId={moduleContext?.hubOriginId} onContextConsumed={() => setModuleContext(null)} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
-          {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} />}
+          {activeTab === 'companies' && <DocumentsPage companies={companies} setCompanies={setCompanies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)} />}
           {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} initialContext={moduleContext} onContextConsumed={() => setModuleContext(null)} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
           {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} biddings={items} hubOriginId={moduleContext?.hubOriginId} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} onNavigateToHub={(processId) => { setModuleContext({ hubOriginId: processId, processId }); setActiveTab('bidding'); }} />}
           {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}

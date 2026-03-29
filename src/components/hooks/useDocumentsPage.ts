@@ -14,9 +14,11 @@ export const DOCUMENT_GROUPS = [
 interface UseDocumentsPageParams {
     companies: CompanyProfile[];
     setCompanies: React.Dispatch<React.SetStateAction<CompanyProfile[]>>;
+    initialFilter?: { statuses?: string[]; highlight?: string; specialFilter?: string } | null;
+    onFilterConsumed?: () => void;
 }
 
-export function useDocumentsPage({ companies, setCompanies }: UseDocumentsPageParams) {
+export function useDocumentsPage({ companies, setCompanies, initialFilter, onFilterConsumed }: UseDocumentsPageParams) {
     const toast = useToast();
     const [confirmAction, setConfirmAction] = useState<{ type: 'company' | 'document' | 'credential'; id: string; label: string } | null>(null);
     const [documents, setDocuments] = useState<CompanyDocument[]>([]);
@@ -37,6 +39,16 @@ export function useDocumentsPage({ companies, setCompanies }: UseDocumentsPagePa
             }
         }
     }, [companies, selectedCompanyId]);
+
+    const [isGlobalExpiringView, setIsGlobalExpiringView] = useState(false);
+
+    useEffect(() => {
+        if (initialFilter?.specialFilter === 'expiring_docs') {
+            setIsGlobalExpiringView(true);
+            setSelectedCompanyId('');
+            onFilterConsumed?.();
+        }
+    }, [initialFilter]);
 
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -80,12 +92,18 @@ export function useDocumentsPage({ companies, setCompanies }: UseDocumentsPagePa
     const activeCompany = companies.find(c => c.id === selectedCompanyId);
 
     const filteredDocs = documents
-        .filter((d: CompanyDocument) =>
-            d.companyProfileId === selectedCompanyId &&
-            (d.docType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        .filter((d: CompanyDocument) => {
+            if (isGlobalExpiringView) {
+                // Show only documents that need attention
+                if (d.status === 'Válido') return false;
+            } else {
+                if (d.companyProfileId !== selectedCompanyId) return false;
+            }
+            if (!searchTerm) return true;
+            return (d.docType.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (d.docGroup || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (d.issuerLink || '').toLowerCase().includes(searchTerm.toLowerCase()))
-        )
+                (d.issuerLink || '').toLowerCase().includes(searchTerm.toLowerCase()));
+        })
         .sort((a, b) => {
             let valA: any = a[sortField] || '';
             let valB: any = b[sortField] || '';
@@ -318,6 +336,7 @@ export function useDocumentsPage({ companies, setCompanies }: UseDocumentsPagePa
     return {
         // State
         confirmAction, setConfirmAction, documents, selectedCompanyId, setSelectedCompanyId,
+        isGlobalExpiringView, setIsGlobalExpiringView,
         searchTerm, setSearchTerm,
         // Modal state
         isCompanyModalOpen, setIsCompanyModalOpen, editingCompany,

@@ -42,10 +42,12 @@ export const MOCK_COMPANIES: CompanyProfile[] = [
 interface Props {
     companies: CompanyProfile[];
     setCompanies: React.Dispatch<React.SetStateAction<CompanyProfile[]>>;
+    initialFilter?: { statuses?: string[]; highlight?: string; specialFilter?: string } | null;
+    onFilterConsumed?: () => void;
 }
 
-export function DocumentsPage({ companies, setCompanies }: Props) {
-    const d = useDocumentsPage({ companies, setCompanies });
+export function DocumentsPage({ companies, setCompanies, initialFilter, onFilterConsumed }: Props) {
+    const d = useDocumentsPage({ companies, setCompanies, initialFilter, onFilterConsumed });
 
     return (
         <>
@@ -61,15 +63,40 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    {d.isGlobalExpiringView && (
+                        <div
+                            onClick={() => {}}
+                            style={{
+                                padding: 'var(--space-4)',
+                                backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                                border: '1px solid var(--color-danger)',
+                                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)',
+                                borderRadius: 'var(--radius-xl)',
+                                cursor: 'default'
+                            }}
+                        >
+                            <div className="flex-gap" style={{ color: 'var(--color-danger)', fontWeight: 'var(--font-bold)', marginBottom: '4px' }}>
+                                <ShieldAlert size={16} /> Visão Consolidada (Alerta)
+                            </div>
+                            <div style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)' }}>Todos os Documentos Expirando</div>
+                            <button
+                                onClick={() => { d.setIsGlobalExpiringView(false); d.setSelectedCompanyId(companies[0]?.id || ''); }}
+                                className="btn-link mt-2" style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)', padding: 0 }}
+                            >
+                                Sair desta visão →
+                            </button>
+                        </div>
+                    )}
+
                     {companies.map((company: CompanyProfile) => (
                         <div
                             key={company.id}
-                            onClick={() => d.setSelectedCompanyId(company.id)}
+                            onClick={() => { d.setSelectedCompanyId(company.id); d.setIsGlobalExpiringView(false); }}
                             style={{
                                 padding: 'var(--space-4)',
-                                backgroundColor: d.selectedCompanyId === company.id ? 'rgba(37, 99, 235, 0.03)' : 'var(--color-bg-surface)',
+                                backgroundColor: (!d.isGlobalExpiringView && d.selectedCompanyId === company.id) ? 'rgba(37, 99, 235, 0.03)' : 'var(--color-bg-surface)',
                                 border: 'none',
-                                boxShadow: d.selectedCompanyId === company.id ? '0 0 0 1px var(--color-primary), 0 4px 12px rgba(37, 99, 235, 0.06)' : '0 0 0 1px var(--color-border)',
+                                boxShadow: (!d.isGlobalExpiringView && d.selectedCompanyId === company.id) ? '0 0 0 1px var(--color-primary), 0 4px 12px rgba(37, 99, 235, 0.06)' : '0 0 0 1px var(--color-border)',
                                 borderRadius: 'var(--radius-xl)',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -109,9 +136,21 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
 
             {/* Main Content: Documents Table */}
             <div style={{ flex: 1, backgroundColor: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column' }}>
-                {d.activeCompany ? (
-                    <>
-                        <div style={{ padding: 'var(--space-6)', borderBottom: '1px solid var(--color-border)' }}>
+                {d.isGlobalExpiringView ? (
+                    <div style={{ padding: 'var(--space-6)', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-danger-bg)' }}>
+                            <div className="flex-between" style={{ marginBottom: '0' }}>
+                                <div>
+                                    <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-danger-hover)' }}>
+                                        Documentos Expirando em Toda a Rede
+                                    </h2>
+                                    <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-md)' }}>
+                                        Mostrando apenas documentos vencidos ou críticos.
+                                    </p>
+                                </div>
+                            </div>
+                    </div>
+                ) : d.activeCompany ? (
+                    <div style={{ padding: 'var(--space-6)', borderBottom: '1px solid var(--color-border)' }}>
                             <div className="flex-between" style={{ marginBottom: 'var(--space-6)' }}>
                                 <div>
                                     <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
@@ -182,8 +221,10 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                     </button>
                                 </div>
                             )}
-                        </div>
+                    </div>
+                ) : null}
 
+                {(d.isGlobalExpiringView || d.activeCompany) ? (
                         <div style={{ overflowX: 'auto', flex: 1 }}>
                             {d.activeTab === 'documents' && (
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -207,7 +248,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                         {d.filteredDocs.length === 0 ? (
                                             <tr>
                                                 <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                                                    Nenhum documento encontrado para esta empresa.
+                                                    Nenhum documento encontrado.
                                                 </td>
                                             </tr>
                                         ) : (
@@ -218,6 +259,11 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                                         <div style={{ fontSize: '0.7rem', display: 'inline-block', padding: '2px 6px', borderRadius: '4px', backgroundColor: 'var(--color-bg-base)', border: '1px solid var(--color-border)', marginTop: '4px', color: 'var(--color-text-secondary)' }}>
                                                             {doc.docGroup}
                                                         </div>
+                                                        {d.isGlobalExpiringView && (
+                                                            <div style={{ fontSize: '0.7rem', display: 'block', color: 'var(--color-primary)', marginTop: '4px', fontWeight: 'bold' }}>
+                                                                {companies.find(c => c.id === doc.companyProfileId)?.razaoSocial}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td className="docs-td">
                                                         <StatusBadge status={doc.status} />
@@ -267,7 +313,7 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 </table>
                             )}
 
-                            {d.activeTab === 'credentials' && (
+                            {d.activeTab === 'credentials' && !d.isGlobalExpiringView && d.activeCompany && (
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                     <thead>
                                         <tr style={{ backgroundColor: 'var(--color-bg-surface-hover)', borderBottom: '1px solid var(--color-border)' }}>
@@ -334,7 +380,6 @@ export function DocumentsPage({ companies, setCompanies }: Props) {
                                 </table>
                             )}
                         </div>
-                    </>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-tertiary)' }}>
                         Selecione uma empresa na barra lateral.
