@@ -14,7 +14,8 @@ import {
   RadioTower,
   BarChart3,
   LogOut,
-  Scale
+  Scale,
+  Users
 } from 'lucide-react';
 // Static imports — core pages that load on startup
 import { BiddingPage } from './components/BiddingPage';
@@ -33,8 +34,9 @@ const ChatMonitorPage = lazy(() => import('./components/ChatMonitorPage').then(m
 const InteligenciaPage = lazy(() => import('./components/InteligenciaPage').then(m => ({ default: m.InteligenciaPage })));
 const ProducaoPage = lazy(() => import('./components/ProducaoPage').then(m => ({ default: m.ProducaoPage })));
 const ResultadosPage = lazy(() => import('./components/ResultadosPage').then(m => ({ default: m.ResultadosPage })));
+const TeamPage = lazy(() => import('./components/team/TeamPage').then(m => ({ default: m.TeamPage })));
 
-type AppTab = 'dashboard' | 'opportunities' | 'bidding' | 'intelligence' | 'companies' | 'production' | 'monitoring' | 'results' | 'settings';
+type AppTab = 'dashboard' | 'opportunities' | 'bidding' | 'intelligence' | 'companies' | 'production' | 'monitoring' | 'results' | 'settings' | 'team';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -248,6 +250,7 @@ function App() {
       label: 'Visão Geral',
       items: [
         { key: 'dashboard', label: 'Painel', icon: <LayoutDashboard size={18} /> },
+        ...((user?.role === 'ADMIN' || user?.role === 'admin') ? [{ key: 'team' as AppTab, label: 'Equipe', icon: <Users size={18} /> }] : []),
       ],
     },
     {
@@ -450,6 +453,7 @@ function App() {
           {activeTab === 'production' && <ProducaoPage biddings={items} companies={companies} onRefresh={refreshData} initialContext={moduleContext} onContextConsumed={() => setModuleContext(null)} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} />}
           {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} biddings={items} hubOriginId={moduleContext?.hubOriginId} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} onNavigateToHub={(processId) => { setModuleContext({ hubOriginId: processId, processId }); setActiveTab('bidding'); }} />}
           {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}
+          {activeTab === 'team' && <TeamPage />}
           {activeTab === 'settings' && <SettingsPage />}
           </Suspense>
         </main>
