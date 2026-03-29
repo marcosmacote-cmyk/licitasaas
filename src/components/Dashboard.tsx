@@ -229,7 +229,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                 </div>
                             )}
                             {m.todaySessions.map((item, i) => (
-                                <MissionCard key={`s-${i}`} type="session" time={new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} rawDate={item.sessionDate} title={item.title} subtitle={item.modality} onClick={() => onNavigate?.('bidding')} />
+                                <MissionCard key={`s-${i}`} type="session" time={new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} rawDate={item.sessionDate} title={item.title} subtitle={item.modality} onClick={() => onNavigate?.('bidding', { specialFilter: 'today_sessions' })} />
                             ))}
                             {m.todayReminders.map((item, i) => (
                                 <MissionCard key={`r-${i}`} type="reminder" time={new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} title={item.title} subtitle={'Lembrete'} onClick={() => onNavigate?.('bidding')} />
@@ -269,9 +269,9 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
                     {/* RADAR DO SISTEMA */}
                     <div className="stagger-children grid-3">
-                        <RadarCard icon={<RadioTower size={18} />} title="Captação PNCP" value={m.pncpCount.toString()} desc="no funil via PNCP" color="var(--color-primary)" bg="var(--color-primary-light)" action="Buscar novas" onClick={() => onNavigate?.('opportunities')} />
-                        <RadarCard icon={<ScanSearch size={18} />} title="LicitIA" value={m.aiCount.toString()} desc={m.needsAiAnalysis.length > 0 ? `${m.needsAiAnalysis.length} sem análise` : 'editais analisados'} color={m.needsAiAnalysis.length > 0 ? 'var(--color-warning)' : 'var(--color-ai)'} bg={m.needsAiAnalysis.length > 0 ? 'var(--color-warning-bg)' : 'var(--color-ai-bg)'} action={m.needsAiAnalysis.length > 0 ? 'Analisar' : 'Ver relatórios'} onClick={() => onNavigate?.('intelligence')} />
-                        <RadarCard icon={<FileCheck size={18} />} title="Documentos" value={m.expiringDocs.length > 0 ? `${m.expiringDocs.length} alerta${m.expiringDocs.length > 1 ? 's' : ''}` : 'OK'} desc={m.expiringDocs.length > 0 ? 'requerem atenção' : 'tudo em dia'} color={m.expiringDocs.length > 0 ? 'var(--color-danger)' : 'var(--color-success)'} bg={m.expiringDocs.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'} action={m.expiringDocs.length > 0 ? 'Renovar' : 'Gerenciar'} onClick={() => onNavigate?.('companies')} />
+                        <RadarCard icon={<RadioTower size={18} />} title="Captação PNCP" value={m.pncpCount.toString()} desc="no funil via PNCP" color="var(--color-primary)" bg="var(--color-primary-light)" action="Buscar novas" onClick={() => onNavigate?.('bidding')} />
+                        <RadarCard icon={<ScanSearch size={18} />} title="LicitIA" value={m.aiCount.toString()} desc={m.needsAiAnalysis.length > 0 ? `${m.needsAiAnalysis.length} sem análise` : 'editais analisados'} color={m.needsAiAnalysis.length > 0 ? 'var(--color-warning)' : 'var(--color-ai)'} bg={m.needsAiAnalysis.length > 0 ? 'var(--color-warning-bg)' : 'var(--color-ai-bg)'} action={m.needsAiAnalysis.length > 0 ? 'Analisar' : 'Ver relatórios'} onClick={() => onNavigate?.('bidding', m.needsAiAnalysis.length > 0 ? { specialFilter: 'needs_ai_analysis' } : undefined)} />
+                        <RadarCard icon={<FileCheck size={18} />} title="Documentos" value={m.expiringDocs.length > 0 ? `${m.expiringDocs.length} alerta${m.expiringDocs.length > 1 ? 's' : ''}` : 'OK'} desc={m.expiringDocs.length > 0 ? 'requerem atenção' : 'tudo em dia'} color={m.expiringDocs.length > 0 ? 'var(--color-danger)' : 'var(--color-success)'} bg={m.expiringDocs.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'} action={m.expiringDocs.length > 0 ? 'Renovar' : 'Gerenciar'} onClick={() => onNavigate?.('companies', m.expiringDocs.length > 0 ? { specialFilter: 'expiring_docs' } : undefined)} />
                     </div>
 
                     {/* FUNIL */}
@@ -414,7 +414,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                     <h3 className="dash-section-title" style={{ marginBottom: '2px' }}><AlertTriangle size={18} color="var(--color-warning)" /> Processos Parados ({m.stalledProcesses.length})</h3>
                                     <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Sem movimentação no funil há mais de 7 dias</p>
                                 </div>
-                                <button onClick={() => onNavigate?.('bidding')} className="btn-link" style={{ color: 'var(--color-warning)', fontSize: 'var(--text-xs)' }}>
+                                <button onClick={() => onNavigate?.('bidding', { specialFilter: 'stalled_processes' })} className="btn-link" style={{ color: 'var(--color-warning)', fontSize: 'var(--text-xs)' }}>
                                     Mover no funil <ArrowRight size={12} />
                                 </button>
                             </div>
@@ -422,7 +422,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                 {m.stalledProcesses.slice(0, 4).map((item, i) => {
                                     const daysSince = Math.ceil((new Date().getTime() - new Date(item.sessionDate || new Date().toISOString()).getTime()) / (1000 * 60 * 60 * 24));
                                     return (
-                                        <div key={i} onClick={() => onNavigate?.('bidding')} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)', cursor: 'pointer', transition: 'var(--transition-fast)' }}>
+                                        <div key={i} onClick={() => onNavigate?.('bidding', { specialFilter: 'stalled_processes' })} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)', cursor: 'pointer', transition: 'var(--transition-fast)' }}>
                                             <div className="flex-1">
                                                 <div style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{normalizeTitle(item.title)}</div>
                                                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning)' }}>{item.status} · parado há {daysSince} dias</div>
