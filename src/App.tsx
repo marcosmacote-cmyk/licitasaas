@@ -49,7 +49,7 @@ function App() {
   const [alertCount, setAlertCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [pncpUnreadCount, setPncpUnreadCount] = useState(0);
-  const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string; specialFilter?: string } | null>(null);
+  const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string; specialFilter?: string; targetProcessId?: string } | null>(null);
   const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string; hubOriginId?: string } | null>(null);
 
   useEffect(() => {
@@ -427,7 +427,17 @@ function App() {
 
           {/* ── Page Content ── */}
           <Suspense fallback={<div className="flex-center" style={{ padding: 'var(--space-20)', justifyContent: 'center' }}><Loader2 size={32} className="spinner" color="var(--color-primary)" /></div>}>
-          {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { setNavFilter(filter || null); setActiveTab(tab as AppTab); }} />}
+          {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { 
+                if (filter?.targetProcessId) {
+                    setModuleContext({ processId: filter.targetProcessId });
+                    const clean = { ...filter } as any;
+                    delete clean.targetProcessId;
+                    setNavFilter(Object.keys(clean).length > 0 ? clean : null);
+                } else {
+                    setNavFilter(filter || null); 
+                }
+                setActiveTab(tab as AppTab); 
+            }} />}
           {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)}
              autoOpenProcessId={moduleContext?.processId} onAutoOpenConsumed={() => setModuleContext(null)}

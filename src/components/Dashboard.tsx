@@ -22,7 +22,7 @@ import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
 interface Props {
     items: BiddingProcess[];
     companies?: CompanyProfile[];
-    onNavigate?: (tab: string, filter?: { statuses?: string[]; highlight?: string; specialFilter?: string }) => void;
+    onNavigate?: (tab: string, filter?: { statuses?: string[]; highlight?: string; specialFilter?: string; targetProcessId?: string }) => void;
 }
 
 export function Dashboard({ items, companies = [], onNavigate }: Props) {
@@ -229,10 +229,10 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                 </div>
                             )}
                             {m.todaySessions.map((item, i) => (
-                                <MissionCard key={`s-${i}`} type="session" time={new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} rawDate={item.sessionDate} title={item.title} subtitle={item.modality} onClick={() => onNavigate?.('bidding', { specialFilter: 'today_sessions' })} />
+                                <MissionCard key={`s-${i}`} type="session" time={new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} rawDate={item.sessionDate} title={item.title} subtitle={item.modality} onClick={() => onNavigate?.('bidding', { targetProcessId: item.id })} />
                             ))}
                             {m.todayReminders.map((item, i) => (
-                                <MissionCard key={`r-${i}`} type="reminder" time={new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} title={item.title} subtitle={'Lembrete'} onClick={() => onNavigate?.('bidding')} />
+                                <MissionCard key={`r-${i}`} type="reminder" time={new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} title={item.title} subtitle={'Lembrete'} onClick={() => onNavigate?.('bidding', { targetProcessId: item.id })} />
                             ))}
                         </div>
                     </div>
@@ -250,7 +250,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                 {m.upcomingSessions.slice(0, 5).map((item, i) => {
                                     const d = new Date(item.sessionDate);
                                     return (
-                                        <div key={i} onClick={() => onNavigate?.('bidding')} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-surface-hover)', cursor: 'pointer', transition: 'var(--transition-fast)' }}>
+                                        <div key={i} onClick={() => onNavigate?.('bidding', { targetProcessId: item.id })} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-surface-hover)', cursor: 'pointer', transition: 'var(--transition-fast)' }}>
                                             <div style={{ minWidth: 48, textAlign: 'center', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary)', background: 'var(--color-primary-light)', padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', lineHeight: 1.3 }}>
                                                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>{d.getDate()}</div>
                                                 <div>{d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</div>
@@ -289,7 +289,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                     <XAxis dataKey="name" interval={0} tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
                                     <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
                                     <Tooltip contentStyle={{ backgroundColor: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }} itemStyle={{ color: 'var(--color-text-primary)' }} />
-                                    <Bar dataKey="count" fill="var(--color-primary)" radius={[4, 4, 0, 0]} cursor="pointer" onClick={() => onNavigate?.('bidding')} />
+                                    <Bar dataKey="count" fill="var(--color-primary)" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data) => { if (data.name) onNavigate?.('bidding', { statuses: [data.name] }) }} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -398,10 +398,10 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                 </div>
                             )}
                             {selectedEvents.sessions.map((item, i) => (
-                                <AgendaItem key={`s-${i}`} type="session" title={item.title} time={new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} onClick={() => onNavigate?.('bidding')} />
+                                <AgendaItem key={`s-${i}`} type="session" title={item.title} time={new Date(item.sessionDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} onClick={() => onNavigate?.('bidding', { targetProcessId: item.id })} />
                             ))}
                             {selectedEvents.reminders.map((item, i) => (
-                                <AgendaItem key={`r-${i}`} type="reminder" title={item.title} time={new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} onClick={() => onNavigate?.('bidding')} />
+                                <AgendaItem key={`r-${i}`} type="reminder" title={item.title} time={new Date(item.reminderDate!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} onClick={() => onNavigate?.('bidding', { targetProcessId: item.id })} />
                             ))}
                         </div>
                     </div>
@@ -422,7 +422,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                                 {m.stalledProcesses.slice(0, 4).map((item, i) => {
                                     const daysSince = Math.ceil((new Date().getTime() - new Date(item.sessionDate || new Date().toISOString()).getTime()) / (1000 * 60 * 60 * 24));
                                     return (
-                                        <div key={i} onClick={() => onNavigate?.('bidding', { specialFilter: 'stalled_processes' })} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)', cursor: 'pointer', transition: 'var(--transition-fast)' }}>
+                                        <div key={i} onClick={() => onNavigate?.('bidding', { targetProcessId: item.id })} style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)', cursor: 'pointer', transition: 'var(--transition-fast)' }}>
                                             <div className="flex-1">
                                                 <div style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{normalizeTitle(item.title)}</div>
                                                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning)' }}>{item.status} · parado há {daysSince} dias</div>
