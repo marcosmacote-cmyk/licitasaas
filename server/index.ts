@@ -1540,6 +1540,7 @@ app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res
 });
 
 // ── List scanner-found opportunities (for "Encontradas" tab) ──
+// Sorted by closest deadline first (dataEncerramentoProposta ASC, nulls last)
 app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, res) => {
     try {
         const tenantId = req.user.tenantId;
@@ -1550,12 +1551,10 @@ app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, r
         const where: any = { tenantId };
         if (searchId) where.searchId = searchId;
 
-        const [items, total] = await Promise.all([
+        // Fetch all matching items (dataEncerramentoProposta is a string, so we sort in-memory)
+        const [allItems, total] = await Promise.all([
             prisma.opportunityScannerLog.findMany({
                 where,
-                orderBy: { createdAt: 'desc' },
-                skip: (page - 1) * pageSize,
-                take: pageSize,
                 select: {
                     id: true,
                     pncpId: true,
@@ -1576,6 +1575,19 @@ app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, r
             }),
             prisma.opportunityScannerLog.count({ where })
         ]);
+
+        // Sort: closest deadline first, nulls at the end
+        allItems.sort((a: any, b: any) => {
+            const dateA = a.dataEncerramentoProposta ? new Date(a.dataEncerramentoProposta).getTime() : Infinity;
+            const dateB = b.dataEncerramentoProposta ? new Date(b.dataEncerramentoProposta).getTime() : Infinity;
+            if (isNaN(dateA) && isNaN(dateB)) return 0;
+            if (isNaN(dateA)) return 1;
+            if (isNaN(dateB)) return -1;
+            return dateA - dateB;
+        });
+
+        // Paginate after sorting
+        const items = allItems.slice((page - 1) * pageSize, page * pageSize);
 
         res.json({ items, total, page, pageSize });
     } catch (error) {
