@@ -195,7 +195,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                 <MetricCard title="Volume no Funil" value={fmt(m.totalValue)} icon={<DollarSign size={18} />} color="var(--color-primary)" bg="var(--color-primary-light)" subtitle={`${m.activeItems.length} processos ativos`} onClick={() => onNavigate?.('bidding', { statuses: ['Captado', 'Em Análise', 'Aprovado para Participação', 'Preparando Documentação', 'Preparando Proposta', 'Em Sessão'] })} />
                 <MetricCard title="Volume Ganho (YTD)" value={fmt(m.wonValue)} icon={<BadgeCheck size={18} />} color="var(--color-success)" bg="var(--color-success-bg)" subtitle={`${m.wonItems.length} licitações vencidas`} onClick={() => onNavigate?.('bidding', { statuses: ['Ganho'] })} />
                 <MetricCard title="Taxa de Sucesso" value={`${m.winRate}%`} icon={<Crosshair size={18} />} color={m.winRate >= 50 ? 'var(--color-success)' : m.winRate >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} bg={m.winRate >= 50 ? 'var(--color-success-bg)' : m.winRate >= 30 ? 'var(--color-warning-bg)' : 'var(--color-danger-bg)'} subtitle={`${m.wonItems.length} de ${m.totalFinished} finalizados`} onClick={() => onNavigate?.('bidding', { statuses: ['Ganho', 'Perdido', 'Não Participar'] })} />
-                <MetricCard title="Próximas Sessões" value={(m.todaySessions.length + m.upcomingSessions.length).toString()} icon={<CalendarIcon size={18} />} color={m.todaySessions.length > 0 ? 'var(--color-danger)' : 'var(--color-primary)'} bg={m.todaySessions.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)'} subtitle={m.todaySessions.length > 0 ? `${m.todaySessions.length} SESSÃO(ES) HOJE` : 'nos próximos 7 dias'} onClick={() => onNavigate?.('bidding')} />
+                <MetricCard title="Próximas Sessões" value={(m.todaySessions.length + m.upcomingSessions.length).toString()} icon={<CalendarIcon size={18} />} color={m.todaySessions.length > 0 ? 'var(--color-danger)' : 'var(--color-primary)'} bg={m.todaySessions.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-primary-light)'} subtitle={m.todaySessions.length > 0 ? `${m.todaySessions.length} SESSÃO(ES) HOJE` : 'nos próximos 7 dias'} onClick={() => onNavigate?.('bidding', { specialFilter: 'upcoming_sessions' })} />
             </div>
 
             {/* ═══ PIPELINE ═══ */}
@@ -242,7 +242,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                         <div className="card glass-panel" style={{ padding: 'var(--card-padding)' }}>
                             <div className="flex-between mb-3">
                                 <h3 className="dash-section-title"><CalendarIcon size={18} color="var(--color-primary)" /> Próximas Sessões</h3>
-                                <button onClick={() => onNavigate?.('bidding')} className="btn-link" style={{ fontSize: 'var(--text-xs)' }}>
+                                <button onClick={() => onNavigate?.('bidding', { specialFilter: 'upcoming_sessions' })} className="btn-link" style={{ fontSize: 'var(--text-xs)' }}>
                                     Ver todas <ExternalLink size={12} />
                                 </button>
                             </div>
@@ -269,7 +269,7 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
 
                     {/* RADAR DO SISTEMA */}
                     <div className="stagger-children grid-3">
-                        <RadarCard icon={<RadioTower size={18} />} title="Captação PNCP" value={m.pncpCount.toString()} desc="no funil via PNCP" color="var(--color-primary)" bg="var(--color-primary-light)" action="Buscar novas" onClick={() => onNavigate?.('bidding')} />
+                        <RadarCard icon={<RadioTower size={18} />} title="Captação PNCP" value={m.pncpCount.toString()} desc="no funil via PNCP" color="var(--color-primary)" bg="var(--color-primary-light)" action="Buscar novas" onClick={() => onNavigate?.('opportunities')} />
                         <RadarCard icon={<ScanSearch size={18} />} title="LicitIA" value={m.aiCount.toString()} desc={m.needsAiAnalysis.length > 0 ? `${m.needsAiAnalysis.length} sem análise` : 'editais analisados'} color={m.needsAiAnalysis.length > 0 ? 'var(--color-warning)' : 'var(--color-ai)'} bg={m.needsAiAnalysis.length > 0 ? 'var(--color-warning-bg)' : 'var(--color-ai-bg)'} action={m.needsAiAnalysis.length > 0 ? 'Analisar' : 'Ver relatórios'} onClick={() => onNavigate?.('bidding', m.needsAiAnalysis.length > 0 ? { specialFilter: 'needs_ai_analysis' } : undefined)} />
                         <RadarCard icon={<FileCheck size={18} />} title="Documentos" value={m.expiringDocs.length > 0 ? `${m.expiringDocs.length} alerta${m.expiringDocs.length > 1 ? 's' : ''}` : 'OK'} desc={m.expiringDocs.length > 0 ? 'requerem atenção' : 'tudo em dia'} color={m.expiringDocs.length > 0 ? 'var(--color-danger)' : 'var(--color-success)'} bg={m.expiringDocs.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'} action={m.expiringDocs.length > 0 ? 'Renovar' : 'Gerenciar'} onClick={() => onNavigate?.('companies', m.expiringDocs.length > 0 ? { specialFilter: 'expiring_docs' } : undefined)} />
                     </div>

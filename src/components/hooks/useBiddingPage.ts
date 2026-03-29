@@ -296,6 +296,19 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                 if (filters.specialFilter === 'needs_ai_analysis') {
                     if (item.aiAnalysis || item.status !== 'Em Análise') return false;
                 }
+                if (filters.specialFilter === 'upcoming_sessions') {
+                    if (!item.sessionDate) return false;
+                    const sessDate = new Date(item.sessionDate).getTime();
+                    const now = new Date().getTime();
+                    const diffDays = (sessDate - now) / (1000 * 60 * 60 * 24);
+                    if (diffDays < 0 || diffDays > 15) return false;
+                }
+                if (filters.specialFilter === 'today_reminders') {
+                    if (!item.reminderDate) return false;
+                    const remStr = new Date(item.reminderDate).toISOString().split('T')[0];
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    if (remStr !== todayStr) return false;
+                }
             }
 
             // == REGULAR FILTERS ==
