@@ -1647,7 +1647,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
         const MAX_PDF_PARTS = 15; // Multi-part editals can have 10-15 parts in large RARs
-        const MAX_TOTAL_PDF_SIZE_KB = 50000; // 50MB budget — large editals with TR + annexes
+        const MAX_TOTAL_PDF_SIZE_KB = 19000; // 19MB budget — Gemini inlineData REST limit is ~20MB
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
@@ -1815,8 +1815,15 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                 const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
 
                 if (isPdf) {
-                    // Budget check: skip if adding this PDF would exceed total size limit
+                    const MAX_SINGLE_FILE_KB = 14000;
                     const bufferSizeKB = buffer.length / 1024;
+                    
+                    if (bufferSizeKB > MAX_SINGLE_FILE_KB) {
+                        console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(bufferSizeKB)}KB), não suportado inline. Ignorando "${fileName}".`);
+                        continue;
+                    }
+
+                    // Budget check: skip if adding this PDF would exceed total size limit
                     if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
                         console.warn(`[PNCP-AI] \u26a0\ufe0f Or\u00e7amento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
                         discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
@@ -1862,9 +1869,16 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
                             const entrySizeKB = pdfBuffer.length / 1024;
+                            const MAX_SINGLE_FILE_KB = 14000;
+                            
+                            if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(entrySizeKB)}KB), ignorando ZIP entry "${entryName}".`);
+                                continue;
+                            }
+
                             if (pdfBuffer.length > 0) {
                                 if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                    console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                    console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
                                     discardedFiles.push(`${entryName} (ZIP, ${Math.round(entrySizeKB)}KB)`);
                                     continue;
                                 }
@@ -1917,6 +1931,13 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             if (rarFile.extraction && rarFile.extraction.length > 0) {
                                 const pdfBuffer = Buffer.from(rarFile.extraction);
                                 const entrySizeKB = pdfBuffer.length / 1024;
+                                const MAX_SINGLE_FILE_KB = 14000;
+                                
+                                if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                    console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(entrySizeKB)}KB), ignorando RAR entry "${rarFile.fileHeader.name}".`);
+                                    continue;
+                                }
+
                                 if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
                                     console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
                                     discardedFiles.push(`${rarFile.fileHeader.name} (RAR, ${Math.round(entrySizeKB)}KB)`);
