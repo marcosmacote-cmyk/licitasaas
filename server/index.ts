@@ -282,8 +282,108 @@ app.get('/api/debug-uploads', (req, res) => {
     }
 });
 
-// Tenants (Seed support or manual creation)
-app.post('/api/tenants', async (req, res) => {
+// ═══════════════════════════════════════════════════════════════
+// GESTÃO DE TENANTS & ONBOARDING (Admin-only)
+// ═══════════════════════════════════════════════════════════════
+
+// List all tenants with user count (super-admin)
+app.get('/api/admin/tenants', authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+        const tenants = await prisma.tenant.findMany({
+            include: {
+                _count: { select: { users: true, companies: true, biddingProcesses: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(tenants.map(t => ({
+            id: t.id,
+            razaoSocial: t.razaoSocial,
+            rootCnpj: t.rootCnpj,
+            createdAt: t.createdAt,
+            stats: {
+                users: t._count.users,
+                companies: t._count.companies,
+                biddings: t._count.biddingProcesses,
+            }
+        })));
+    } catch (error: any) {
+        console.error('[Admin] Erro ao listar tenants:', error?.message);
+        res.status(500).json({ error: 'Erro ao listar organizações' });
+    }
+});
+
+// Onboard new client — creates Tenant + Admin User in one step
+app.post('/api/admin/onboard', authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+        const { razaoSocial, rootCnpj, adminName, adminEmail, adminPassword } = req.body;
+
+        // ── Validações ──
+        if (!razaoSocial || !rootCnpj || !adminName || !adminEmail || !adminPassword) {
+            return res.status(400).json({
+                error: 'Campos obrigatórios: razaoSocial, rootCnpj, adminName, adminEmail, adminPassword'
+            });
+        }
+        if (adminPassword.length < 6) {
+            return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
+        }
+
+        // ── Verificar duplicatas ──
+        const existingTenant = await prisma.tenant.findUnique({ where: { rootCnpj } });
+        if (existingTenant) {
+            return res.status(409).json({ error: `Já existe uma organização com CNPJ ${rootCnpj}` });
+        }
+        const existingUser = await prisma.user.findUnique({ where: { email: adminEmail } });
+        if (existingUser) {
+            return res.status(409).json({ error: `O e-mail ${adminEmail} já está em uso` });
+        }
+
+        // ── Criar Tenant + Admin em transação ──
+        const result = await prisma.$transaction(async (tx) => {
+            const tenant = await tx.tenant.create({
+                data: { razaoSocial, rootCnpj }
+            });
+
+            const passwordHash = await bcrypt.hash(adminPassword, 10);
+            const admin = await tx.user.create({
+                data: {
+                    tenantId: tenant.id,
+                    name: adminName,
+                    email: adminEmail,
+                    passwordHash,
+                    role: 'ADMIN',
+                    isActive: true,
+                }
+            });
+
+            return { tenant, admin };
+        });
+
+        console.log(`[Onboard] ✅ Novo cliente: "${razaoSocial}" (${rootCnpj}) → Admin: ${adminEmail}`);
+
+        res.status(201).json({
+            message: `Cliente "${razaoSocial}" provisionado com sucesso!`,
+            tenant: {
+                id: result.tenant.id,
+                razaoSocial: result.tenant.razaoSocial,
+                rootCnpj: result.tenant.rootCnpj,
+            },
+            admin: {
+                id: result.admin.id,
+                name: result.admin.name,
+                email: result.admin.email,
+                role: result.admin.role,
+            },
+            loginUrl: `${process.env.FRONTEND_URL || 'https://licitasaas-production.up.railway.app'}`,
+            instructions: 'Envie o e-mail e senha ao cliente. Ele pode alterar a senha após o primeiro login.',
+        });
+    } catch (error: any) {
+        console.error('[Onboard] Erro ao provisionar cliente:', error?.message);
+        res.status(500).json({ error: 'Erro ao provisionar novo cliente' });
+    }
+});
+
+// Legacy: Create tenant (now protected)
+app.post('/api/tenants', authenticateToken, requireAdmin, async (req: any, res) => {
     try {
         const tenant = await prisma.tenant.create({ data: req.body });
         res.json(tenant);
