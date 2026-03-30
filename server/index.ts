@@ -64,7 +64,7 @@ import { encryptCredential, decryptCredential, isEncrypted, isEncryptionConfigur
 import { requestLogger } from './lib/requestLogger';
 import { logger } from './lib/logger';
 import { getUsageSummary, getSystemUsageSummary } from './lib/aiUsageTracker';
-import { authenticateToken, requireAdmin } from './middlewares/auth';
+import { authenticateToken, requireAdmin, requireSuperAdmin } from './middlewares/auth';
 import authRoutes from './routes/auth';
 import teamRoutes from './routes/team';
 import companiesRoutes from './routes/companies';
@@ -224,7 +224,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ── Admin: Backup Manual do Banco ──
-app.post('/api/admin/backup', authenticateToken, requireAdmin, async (req: any, res) => {
+app.post('/api/admin/backup', authenticateToken, requireSuperAdmin, async (req: any, res) => {
     try {
         const { runBackup } = await import('./scripts/backup-database');
         res.json({ message: 'Backup iniciado. Aguarde...' });
@@ -287,7 +287,7 @@ app.get('/api/debug-uploads', (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 
 // List all tenants with user count (super-admin)
-app.get('/api/admin/tenants', authenticateToken, requireAdmin, async (req: any, res) => {
+app.get('/api/admin/tenants', authenticateToken, requireSuperAdmin, async (req: any, res) => {
     try {
         const tenants = await prisma.tenant.findMany({
             include: {
@@ -313,7 +313,7 @@ app.get('/api/admin/tenants', authenticateToken, requireAdmin, async (req: any, 
 });
 
 // Onboard new client — creates Tenant + Admin User in one step
-app.post('/api/admin/onboard', authenticateToken, requireAdmin, async (req: any, res) => {
+app.post('/api/admin/onboard', authenticateToken, requireSuperAdmin, async (req: any, res) => {
     try {
         const { razaoSocial, rootCnpj, adminName, adminEmail, adminPassword } = req.body;
 
@@ -383,7 +383,7 @@ app.post('/api/admin/onboard', authenticateToken, requireAdmin, async (req: any,
 });
 
 // Legacy: Create tenant (now protected)
-app.post('/api/tenants', authenticateToken, requireAdmin, async (req: any, res) => {
+app.post('/api/tenants', authenticateToken, requireSuperAdmin, async (req: any, res) => {
     try {
         const tenant = await prisma.tenant.create({ data: req.body });
         res.json(tenant);

@@ -134,7 +134,7 @@ export function AdminPage() {
     };
 
     // Access control
-    if (currentUser.role !== 'admin' && currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'SUPER_ADMIN') {
         return (
             <div className="flex-center" style={{ height: '70vh', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <ShieldAlert size={48} color="var(--color-danger)" />

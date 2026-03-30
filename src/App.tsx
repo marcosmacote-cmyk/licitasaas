@@ -252,8 +252,8 @@ function App() {
       label: 'Visão Geral',
       items: [
         { key: 'dashboard', label: 'Painel', icon: <LayoutDashboard size={18} /> },
-        ...((user?.role === 'ADMIN' || user?.role === 'admin') ? [{ key: 'team' as AppTab, label: 'Equipe', icon: <Users size={18} /> }] : []),
-        ...((user?.role === 'ADMIN' || user?.role === 'admin') ? [{ key: 'admin' as AppTab, label: 'Administração', icon: <ShieldCheck size={18} /> }] : []),
+        ...((user?.role === 'ADMIN' || user?.role === 'admin' || user?.role === 'SUPER_ADMIN') ? [{ key: 'team' as AppTab, label: 'Equipe', icon: <Users size={18} /> }] : []),
+        ...((user?.role === 'SUPER_ADMIN') ? [{ key: 'admin' as AppTab, label: 'Administração', icon: <ShieldCheck size={18} /> }] : []),
       ],
     },
     {

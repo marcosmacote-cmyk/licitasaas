@@ -22,10 +22,19 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
     });
 };
 
-// Middleware para restringir rotas a Administradores
+// Middleware para restringir rotas a Administradores da Organização (Tenant)
 export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== 'admin' && req.user?.role !== 'ADMIN') {
+    // SUPER_ADMIN (Master) também tem permissões de ADMIN
+    if (req.user?.role !== 'admin' && req.user?.role !== 'ADMIN' && req.user?.role !== 'SUPER_ADMIN') {
         return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem realizar esta ação.' });
+    }
+    next();
+};
+
+// Middleware para restringir rotas a Super Administradores (Donos do SaaS)
+export const requireSuperAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ error: 'Acesso negado. Apenas super administradores podem acessar esta área global.' });
     }
     next();
 };
