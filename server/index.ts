@@ -7265,35 +7265,7 @@ async function runAutoSetup() {
             });
         }
 
-        // 🛠️ MÓDULO DE RESTAURAÇÃO (CORREÇÃO DE DADOS MIGRADOS INDEVIDAMENTE)
-        // Como o antigo script roubou os dados para o tenant padrão, precisamos devolvê-los
-        // para o seu usuário (Marcos ou conta primária criada no painel).
-        const realUser = await prisma.user.findFirst({
-            where: { email: { not: 'admin@licitasaas.com' } }
-        });
-
-        const targetTenantId = realUser ? realUser.tenantId : tenant.id;
-
-        const results = {
-            companies: await prisma.companyProfile.updateMany({
-                where: { tenantId: tenant.id },
-                data: { tenantId: targetTenantId }
-            }),
-            biddings: await prisma.biddingProcess.updateMany({
-                where: { tenantId: tenant.id },
-                data: { tenantId: targetTenantId }
-            }),
-            documents: await prisma.document.updateMany({
-                where: { tenantId: tenant.id },
-                data: { tenantId: targetTenantId }
-            })
-        };
-
-        if (results.companies.count > 0 || results.biddings.count > 0 || results.documents.count > 0) {
-            console.log(`✅ RESTAURAÇÃO: ${results.companies.count} empresas, ${results.biddings.count} licitações devolvidas ao seu painel principal!`);
-        }
-
-        console.log('🚀 Sistema pronto e sincronizado.');
+        // Removing bad "Modulo de Restauracao" that was moving data to other users
     } catch (error) {
         console.error('❌ Erro no runAutoSetup:', error);
     }
