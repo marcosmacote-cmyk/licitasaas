@@ -1647,7 +1647,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
         const MAX_PDF_PARTS = 15; // Multi-part editals can have 10-15 parts in large RARs
-        const MAX_TOTAL_PDF_SIZE_KB = 40000; // 40MB budget — Files API handles >14MB files separately via Google servers
+        const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
@@ -1827,7 +1827,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                 const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
 
                 if (isPdf) {
-                    const MAX_INLINE_FILE_KB = 14000; // 14MB — safe limit for inlineData (base64 expands ~33%)
+                    const MAX_INLINE_FILE_KB = 8000; // 8MB per file — keeps base64 under ~11MB per part
                     const bufferSizeKB = buffer.length / 1024;
                     
                     if (bufferSizeKB > MAX_INLINE_FILE_KB) {
@@ -1923,7 +1923,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
                             const entrySizeKB = pdfBuffer.length / 1024;
-                            const MAX_SINGLE_FILE_KB = 14000;
+                            const MAX_SINGLE_FILE_KB = 8000;
                             
                             if (entrySizeKB > MAX_SINGLE_FILE_KB) {
                                 console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
@@ -2005,7 +2005,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             if (rarFile.extraction && rarFile.extraction.length > 0) {
                                 const pdfBuffer = Buffer.from(rarFile.extraction);
                                 const entrySizeKB = pdfBuffer.length / 1024;
-                                const MAX_SINGLE_FILE_KB = 14000;
+                                const MAX_SINGLE_FILE_KB = 8000;
                                 
                                 if (entrySizeKB > MAX_SINGLE_FILE_KB) {
                                     console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
