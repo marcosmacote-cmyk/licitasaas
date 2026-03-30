@@ -15,7 +15,8 @@ import {
   BarChart3,
   LogOut,
   Scale,
-  Users
+  Users,
+  ShieldCheck
 } from 'lucide-react';
 // Static imports — core pages that load on startup
 import { BiddingPage } from './components/BiddingPage';
@@ -35,8 +36,9 @@ const InteligenciaPage = lazy(() => import('./components/InteligenciaPage').then
 const ProducaoPage = lazy(() => import('./components/ProducaoPage').then(m => ({ default: m.ProducaoPage })));
 const ResultadosPage = lazy(() => import('./components/ResultadosPage').then(m => ({ default: m.ResultadosPage })));
 const TeamPage = lazy(() => import('./components/team/TeamPage').then(m => ({ default: m.TeamPage })));
+const AdminPage = lazy(() => import('./components/admin/AdminPage').then(m => ({ default: m.AdminPage })));
 
-type AppTab = 'dashboard' | 'opportunities' | 'bidding' | 'intelligence' | 'companies' | 'production' | 'monitoring' | 'results' | 'settings' | 'team';
+type AppTab = 'dashboard' | 'opportunities' | 'bidding' | 'intelligence' | 'companies' | 'production' | 'monitoring' | 'results' | 'settings' | 'team' | 'admin';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -251,6 +253,7 @@ function App() {
       items: [
         { key: 'dashboard', label: 'Painel', icon: <LayoutDashboard size={18} /> },
         ...((user?.role === 'ADMIN' || user?.role === 'admin') ? [{ key: 'team' as AppTab, label: 'Equipe', icon: <Users size={18} /> }] : []),
+        ...((user?.role === 'ADMIN' || user?.role === 'admin') ? [{ key: 'admin' as AppTab, label: 'Administração', icon: <ShieldCheck size={18} /> }] : []),
       ],
     },
     {
@@ -273,7 +276,7 @@ function App() {
   ];
 
   // Get current page title for header
-  const currentPageLabel = activeTab === 'settings' ? 'Configurações' : (navGroups.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Painel');
+  const currentPageLabel = activeTab === 'settings' ? 'Configurações' : activeTab === 'admin' ? 'Administração' : (navGroups.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Painel');
 
   return (
     <ToastProvider>
@@ -464,6 +467,7 @@ function App() {
           {activeTab === 'monitoring' && <ChatMonitorPage companies={companies} biddings={items} hubOriginId={moduleContext?.hubOriginId} onReturnToHub={() => { setModuleContext(null); setActiveTab('bidding'); }} onNavigateToHub={(processId) => { setModuleContext({ hubOriginId: processId, processId }); setActiveTab('bidding'); }} />}
           {activeTab === 'results' && <ResultadosPage biddings={items} companies={companies} />}
           {activeTab === 'team' && <TeamPage />}
+          {activeTab === 'admin' && <AdminPage />}
           {activeTab === 'settings' && <SettingsPage />}
           </Suspense>
         </main>
