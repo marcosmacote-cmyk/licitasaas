@@ -477,6 +477,7 @@ export async function runOpportunityScan() {
             
             // ── Rastrear resultados por pesquisa para sumário e badges ──
             const scanResults: SearchScanResult[] = [];
+            let tenantTotalNew = 0;
 
             for (const search of tenantSearches) {
                 const companyName = (search as any).company?.name || (search as any).company?.razaoSocial || '';
@@ -517,6 +518,7 @@ export async function runOpportunityScan() {
                     if (newResults.length > 0) {
                         console.log(`[OpportunityScanner] ✅ "${search.name}": ${newResults.length} novos resultados`);
                         totalNewResults += newResults.length;
+                        tenantTotalNew += newResults.length;
 
                         // ── Enviar notificação individual por pesquisa ──
                         const headerCompany = companyName ? ` (${companyName})` : '';
@@ -610,14 +612,14 @@ export async function runOpportunityScan() {
             }
 
             // ── Melhoria 2: Sumário consolidado ──
-            await sendConsolidatedSummary(tenantId, config, scanResults, totalNewResults);
+            await sendConsolidatedSummary(tenantId, config, scanResults, tenantTotalNew);
             
             // ── Melhoria 4: Salvar resultados para frontend (badges + último scan) ──
-            await saveScanResults(tenantId, scanResults, totalNewResults);
+            await saveScanResults(tenantId, scanResults, tenantTotalNew);
         }
 
         if (totalNewResults > 0) {
-            console.log(`[OpportunityScanner] ✅ Varredura concluída: ${totalNewResults} novas oportunidades encontradas e notificadas`);
+            console.log(`[OpportunityScanner] ✅ Varredura concluída: ${totalNewResults} novas oportunidades encontradas e notificadas globalmente`);
         } else {
             console.log(`[OpportunityScanner] ✅ Varredura concluída: nenhuma nova oportunidade (todos já notificados)`);
         }
