@@ -18,6 +18,9 @@ const ALLOWED_ORIGINS = [
 ].filter(Boolean) as string[];
 
 // ── Rate Limiters ──
+// Note: We set `trust proxy: 1` in applySecurityMiddleware(),
+// so Express resolves req.ip from X-Forwarded-For automatically.
+// The default keyGenerator uses req.ip with proper IPv6 normalization.
 
 /** Global: 200 requests per minute per IP */
 export const globalLimiter = rateLimit({
@@ -26,12 +29,6 @@ export const globalLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Muitas requisições. Tente novamente em instantes.' },
-    keyGenerator: (req: Request) => {
-        // Use X-Forwarded-For behind proxy (Railway/Docker)
-        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-            || req.ip
-            || 'unknown';
-    },
 });
 
 /** Auth routes: 10 attempts per 15 minutes per IP */
@@ -41,11 +38,6 @@ export const authLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
-    keyGenerator: (req: Request) => {
-        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-            || req.ip
-            || 'unknown';
-    },
 });
 
 /** AI-heavy routes: 20 requests per minute per IP */
@@ -55,11 +47,6 @@ export const aiLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Limite de requisições de IA atingido. Tente novamente em instantes.' },
-    keyGenerator: (req: Request) => {
-        return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-            || req.ip
-            || 'unknown';
-    },
 });
 
 // ── Request Logger Middleware ──
