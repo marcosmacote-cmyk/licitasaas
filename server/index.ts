@@ -1647,7 +1647,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
         const MAX_PDF_PARTS = 15; // Multi-part editals can have 10-15 parts in large RARs
-        const MAX_TOTAL_PDF_SIZE_KB = 19000; // 19MB budget — Gemini inlineData REST limit is ~20MB
+        const MAX_TOTAL_PDF_SIZE_KB = 40000; // 40MB budget — Files API handles >14MB files separately via Google servers
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
         const downloadedFiles: string[] = [];
@@ -1786,6 +1786,18 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
         sendProgress(2, 'Baixando documentos...', `${filteredArquivos.length} arquivos relevantes de ${arquivos.length} total`);
 
+        // Sort by priority: Edital > TR > Orçamento > Cronograma > rest
+        filteredArquivos.sort((a: any, b: any) => {
+            const nameA = a.titulo || a.nomeArquivo || a.nome || '';
+            const nameB = b.titulo || b.nomeArquivo || b.nome || '';
+            // Edital tipo always first
+            const aIsEdital = (a.tipoDocumentoId === 1 || a.tipoDocumentoDescricao === 'Edital');
+            const bIsEdital = (b.tipoDocumentoId === 1 || b.tipoDocumentoDescricao === 'Edital');
+            if (aIsEdital && !bIsEdital) return -1;
+            if (!aIsEdital && bIsEdital) return 1;
+            return archivePriorityScore(nameA) - archivePriorityScore(nameB);
+        });
+
         let dlIndex = 0;
         for (const arq of filteredArquivos) {
             if (pdfParts.length >= MAX_PDF_PARTS) break;
@@ -1844,14 +1856,33 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                         }
                         totalPdfSizeAccum += 1; // Files API handles storage; minimal budget impact
                     } else {
-                        // Budget check: skip if adding this PDF would exceed total size limit
+                        // Budget check: if inline budget exceeded, use Files API as fallback
                         if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                            console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
-                            discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
-                            continue;
+                            console.log(`[PNCP-AI] ⚡ Orçamento inline de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Enviando "${fileName}" via Files API...`);
+                            try {
+                                const apiKey = process.env.GEMINI_API_KEY;
+                                if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                const filesAi = new GoogleGenAI({ apiKey });
+                                const tempPath = path.join(uploadDir, `temp_overflow_${Date.now()}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                fs.writeFileSync(tempPath, buffer);
+                                const uploadedFile = await filesAi.files.upload({
+                                    file: tempPath,
+                                    config: { mimeType: 'application/pdf', displayName: fileName }
+                                });
+                                try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                if (uploadedFile && uploadedFile.uri) {
+                                    pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                    console.log(`[PNCP-AI] ✅ Overflow via Files API: ${uploadedFile.name}`);
+                                }
+                            } catch (e: any) {
+                                console.warn(`[PNCP-AI] ⚠️ Files API overflow falhou para ${fileName}:`, e.message);
+                                discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
+                            }
+                            totalPdfSizeAccum += 1;
+                        } else {
+                            totalPdfSizeAccum += bufferSizeKB;
+                            pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
                         }
-                        totalPdfSizeAccum += bufferSizeKB;
-                        pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
                     }
                     
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
