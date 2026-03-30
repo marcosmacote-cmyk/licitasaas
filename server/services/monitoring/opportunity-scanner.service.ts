@@ -416,24 +416,31 @@ async function sendConsolidatedSummary(
 /**
  * Ciclo principal: executa todas as pesquisas salvas com autoMonitor ativo
  */
-export async function runOpportunityScan() {
+export async function runOpportunityScan(targetTenantId?: string) {
     try {
         // ── Melhoria 5: Limpeza automática de registros antigos ──
         await cleanupOldDedupRecords();
         
-        // Buscar todas as pesquisas salvas de todos os tenants ativos
+        // Buscar pesquisas salvas (opcionalmente filtradas por tenant se manual)
+        const whereClause: any = {};
+        if (targetTenantId) {
+            whereClause.tenantId = targetTenantId;
+        }
+
         const searches = await prisma.pncpSavedSearch.findMany({
+            where: whereClause,
             include: {
                 tenant: {
                     include: { chatMonitorConfig: true }
                 },
                 company: true
-            },
-            take: MAX_SEARCHES_PER_CYCLE
+            }
+            // Removed take: MAX_SEARCHES_PER_CYCLE. The job now processes all searches
+            // throttled by PNCP_REQUEST_DELAY_MS, preventing starvation of later searches.
         });
 
         if (searches.length === 0) {
-            console.log(`[OpportunityScanner] ⚠️ Nenhuma pesquisa salva encontrada. Configure pesquisas no PNCP.`);
+            console.log(`[OpportunityScanner] ⚠️ Nenhuma pesquisa salva encontrada.`);
             return;
         }
 

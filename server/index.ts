@@ -1015,7 +1015,7 @@ app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res
         const { runOpportunityScan } = await import('./services/monitoring/opportunity-scanner.service');
         console.log(`[OpportunityScanner] Manual scan triggered by tenant ${req.user.tenantId}`);
         // Run async — don't block the response
-        runOpportunityScan().catch(err => console.error('[OpportunityScanner] Manual scan error:', err));
+        runOpportunityScan(req.user.tenantId).catch(err => console.error('[OpportunityScanner] Manual scan error:', err));
         res.json({ success: true, message: 'Varredura de oportunidades iniciada. Você receberá notificações se houver novos editais.' });
     } catch (error) {
         console.error("Manual scan trigger error:", error);
@@ -1035,8 +1035,8 @@ app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, r
         const where: any = { tenantId };
         if (searchId) where.searchId = searchId;
 
-        // Fetch all matching items (dataEncerramentoProposta is a string, so we sort in-memory)
-        const [allItems, total] = await Promise.all([
+        // Fetch ordered items directly from DB (avoids memory leak)
+        const [items, total] = await Promise.all([
             prisma.opportunityScannerLog.findMany({
                 where,
                 select: {
@@ -1055,23 +1055,16 @@ app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, r
                     linkSistema: true,
                     isViewed: true,
                     createdAt: true,
-                }
+                },
+                orderBy: [
+                    { dataEncerramentoProposta: { sort: 'asc', nulls: 'last' } },
+                    { createdAt: 'desc' }
+                ],
+                skip: (page - 1) * pageSize,
+                take: pageSize,
             }),
             prisma.opportunityScannerLog.count({ where })
         ]);
-
-        // Sort: closest deadline first, nulls at the end
-        allItems.sort((a: any, b: any) => {
-            const dateA = a.dataEncerramentoProposta ? new Date(a.dataEncerramentoProposta).getTime() : Infinity;
-            const dateB = b.dataEncerramentoProposta ? new Date(b.dataEncerramentoProposta).getTime() : Infinity;
-            if (isNaN(dateA) && isNaN(dateB)) return 0;
-            if (isNaN(dateA)) return 1;
-            if (isNaN(dateB)) return -1;
-            return dateA - dateB;
-        });
-
-        // Paginate after sorting
-        const items = allItems.slice((page - 1) * pageSize, page * pageSize);
 
         res.json({ items, total, page, pageSize });
     } catch (error) {
