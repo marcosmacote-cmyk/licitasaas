@@ -53,7 +53,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, createPartFromUri } from '@google/genai';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -1815,22 +1815,34 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                 const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
 
                 if (isPdf) {
-                    const MAX_SINGLE_FILE_KB = 14000;
+                    const MAX_INLINE_FILE_KB = 14000; // 14MB — safe limit for inlineData (base64 expands ~33%)
                     const bufferSizeKB = buffer.length / 1024;
                     
-                    if (bufferSizeKB > MAX_SINGLE_FILE_KB) {
-                        console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(bufferSizeKB)}KB), usando fallback pdf-parse para texto inline.`);
+                    if (bufferSizeKB > MAX_INLINE_FILE_KB) {
+                        // Large PDF: use Gemini Files API (supports up to 50MB, works with scanned PDFs)
+                        console.log(`[PNCP-AI] ⚡ Arquivo grande (${Math.round(bufferSizeKB)}KB > ${MAX_INLINE_FILE_KB}KB). Usando Gemini Files API para upload...`);
                         try {
-                            const pdfParse = require('pdf-parse');
-                            const data = await pdfParse(buffer);
-                            if (data && data.text) {
-                                pdfParts.push({ text: `CONTEÚDO TEXTUAL DO ARQUIVO GIGANTE (${fileName}):\n\n${data.text}` });
-                                console.log(`[PNCP-AI] ✅ Texto extraído com sucesso (${data.text.length} caracteres) do arquivo ${fileName}`);
+                            const apiKey = process.env.GEMINI_API_KEY;
+                            if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                            const filesAi = new GoogleGenAI({ apiKey });
+                            const tempFilePath = path.join(uploadDir, `temp_upload_${Date.now()}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                            fs.writeFileSync(tempFilePath, buffer);
+                            const uploadedFile = await filesAi.files.upload({
+                                file: tempFilePath,
+                                config: { mimeType: 'application/pdf', displayName: fileName }
+                            });
+                            // Clean up temp file
+                            try { fs.unlinkSync(tempFilePath); } catch (_e) {}
+                            if (uploadedFile && uploadedFile.uri) {
+                                pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                console.log(`[PNCP-AI] ✅ Upload via Files API concluído: ${uploadedFile.name} (URI: ${uploadedFile.uri})`);
+                            } else {
+                                console.warn(`[PNCP-AI] ⚠️ Files API não retornou URI para ${fileName}`);
                             }
                         } catch (e: any) {
-                            console.warn(`[PNCP-AI] ⚠️ Falha ao extrair texto do arquivo ${fileName}:`, e.message);
+                            console.warn(`[PNCP-AI] ⚠️ Falha no upload via Files API para ${fileName}:`, e.message);
                         }
-                        totalPdfSizeAccum += 1; // Minimal impact on budget since it's just raw text
+                        totalPdfSizeAccum += 1; // Files API handles storage; minimal budget impact
                     } else {
                         // Budget check: skip if adding this PDF would exceed total size limit
                         if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
@@ -1883,15 +1895,24 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             const MAX_SINGLE_FILE_KB = 14000;
                             
                             if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                console.warn(`[PNCP-AI] ⚠️ ZIP Entry excede 14MB (${Math.round(entrySizeKB)}KB), usando fallback pdf-parse para texto inline.`);
+                                console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
                                 try {
-                                    const pdfParse = require('pdf-parse');
-                                    const data = await pdfParse(pdfBuffer);
-                                    if (data && data.text) {
-                                        pdfParts.push({ text: `CONTEÚDO TEXTUAL DO ARQUIVO GIGANTE (ZIP/${entryName}):\n\n${data.text}` });
+                                    const apiKey = process.env.GEMINI_API_KEY;
+                                    if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                    const filesAi = new GoogleGenAI({ apiKey });
+                                    const tempPath = path.join(uploadDir, `temp_zip_${Date.now()}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                    fs.writeFileSync(tempPath, pdfBuffer);
+                                    const uploadedFile = await filesAi.files.upload({
+                                        file: tempPath,
+                                        config: { mimeType: 'application/pdf', displayName: entryName }
+                                    });
+                                    try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                    if (uploadedFile && uploadedFile.uri) {
+                                        pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                        console.log(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
                                     }
                                 } catch (e: any) {
-                                    console.warn(`[PNCP-AI] ⚠️ Falha ao extrair texto do ZIP entry ${entryName}:`, e.message);
+                                    console.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
                                 }
                                 totalPdfSizeAccum += 1;
                             } else {
@@ -1956,15 +1977,24 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                 const MAX_SINGLE_FILE_KB = 14000;
                                 
                                 if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                    console.warn(`[PNCP-AI] ⚠️ RAR Entry excede 14MB (${Math.round(entrySizeKB)}KB), usando fallback pdf-parse para texto inline.`);
+                                    console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
                                     try {
-                                        const pdfParse = require('pdf-parse');
-                                        const data = await pdfParse(pdfBuffer);
-                                        if (data && data.text) {
-                                            pdfParts.push({ text: `CONTEÚDO TEXTUAL DO ARQUIVO GIGANTE (RAR/${rarFile.fileHeader.name}):\n\n${data.text}` });
+                                        const apiKey = process.env.GEMINI_API_KEY;
+                                        if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                        const filesAi = new GoogleGenAI({ apiKey });
+                                        const tempPath = path.join(uploadDir, `temp_rar_${Date.now()}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                        fs.writeFileSync(tempPath, pdfBuffer);
+                                        const uploadedFile = await filesAi.files.upload({
+                                            file: tempPath,
+                                            config: { mimeType: 'application/pdf', displayName: rarFile.fileHeader.name }
+                                        });
+                                        try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                        if (uploadedFile && uploadedFile.uri) {
+                                            pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                            console.log(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
                                         }
                                     } catch (e: any) {
-                                        console.warn(`[PNCP-AI] ⚠️ Falha ao extrair texto do RAR entry ${rarFile.fileHeader.name}:`, e.message);
+                                        console.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
                                     }
                                     totalPdfSizeAccum += 1;
                                 } else {
@@ -2060,12 +2090,21 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         // ── Stage 1: Factual Extraction (with PDFs) ──
         // Log diagnostic info about PDFs being sent
         const pdfSizes = pdfParts.map((p: any, i: number) => {
-            const sizeKB = Math.round(Buffer.from(p.inlineData.data, 'base64').length / 1024);
-            return `Doc${i + 1}: ${sizeKB}KB`;
+            if (p.inlineData?.data) {
+                const sizeKB = Math.round(Buffer.from(p.inlineData.data, 'base64').length / 1024);
+                return `Doc${i + 1}: ${sizeKB}KB`;
+            } else if (p.fileData?.fileUri) {
+                return `Doc${i + 1}: FilesAPI`;
+            } else {
+                return `Doc${i + 1}: text`;
+            }
         });
-        const totalPdfSizeKB = pdfParts.reduce((sum: number, p: any) => sum + Buffer.from(p.inlineData.data, 'base64').length, 0) / 1024;
-        sendProgress(4, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${pdfParts.length} PDFs (${Math.round(totalPdfSizeKB)}KB)`);
-        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} PDFs, ${Math.round(totalPdfSizeKB)}KB total — ${pdfSizes.join(', ')})...`);
+        const totalPdfSizeKB = pdfParts.reduce((sum: number, p: any) => {
+            if (p.inlineData?.data) return sum + Buffer.from(p.inlineData.data, 'base64').length;
+            return sum;
+        }, 0) / 1024;
+        sendProgress(4, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${pdfParts.length} PDFs (${Math.round(totalPdfSizeKB)}KB inline)`);
+        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} partes, ${Math.round(totalPdfSizeKB)}KB inline — ${pdfSizes.join(', ')})...`);
         let extractionJson: any;
         const t1Start = Date.now();
 
