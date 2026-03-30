@@ -1658,7 +1658,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
 
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 5; // Limit to 5 most important documents to keep Gemini response fast
+        const MAX_PDF_PARTS = 3; // Send only top 3 most important docs to Stage 1 (Edital + TR + 1 annex)
         const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
@@ -1812,7 +1812,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
 
         let dlIndex = 0;
         for (const arq of filteredArquivos) {
-            if (pdfParts.length >= MAX_PDF_PARTS) break;
+            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
 
 
             const fileUrl = arq.url || arq.uri || '';
@@ -1842,6 +1842,8 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                     const MAX_INLINE_FILE_KB = 8000; // 8MB per file — keeps base64 under ~11MB per part
                     const bufferSizeKB = buffer.length / 1024;
                     
+                    // Only add to pdfParts if we haven't reached the limit for Stage 1
+                    if (!pdfPartsFull) {
                     if (bufferSizeKB > MAX_INLINE_FILE_KB) {
                         // Large PDF: use Gemini Files API (supports up to 50MB, works with scanned PDFs)
                         console.log(`[PNCP-AI] ⚡ Arquivo grande (${Math.round(bufferSizeKB)}KB > ${MAX_INLINE_FILE_KB}KB). Usando Gemini Files API para upload...`);
@@ -1895,6 +1897,9 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             totalPdfSizeAccum += bufferSizeKB;
                             pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
                         }
+                    }
+                    } else {
+                        console.log(`[PNCP-AI] 📁 Salvando "${fileName}" (${Math.round(bufferSizeKB)}KB) apenas no storage (limite de ${MAX_PDF_PARTS} docs para IA atingido)`);
                     }
                     
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
