@@ -37,6 +37,10 @@ RUN mkdir -p uploads
 
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV PROCESS_ROLE=api
 EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD wget -qO- http://localhost:3001/health || exit 1
 
 CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]

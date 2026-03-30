@@ -208,15 +208,16 @@ export async function repairDeclaration(
  */
 export function createGeminiRepairFn(
     models: any,
-    callFn: (model: any, options: any, maxRetries?: number) => Promise<any>,
+    callFn: (model: any, options: any, maxRetries?: number, trackingOptions?: any) => Promise<any>,
     modelName = 'gemini-2.5-flash',
+    trackingOptions?: any
 ): AiCallFn {
     return async (prompt: string): Promise<string> => {
         const result = await callFn(models, {
             model: modelName,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { temperature: 0.1, maxOutputTokens: 4096 },
-        });
+        }, 3, trackingOptions);
         return (result.text || '').trim();
     };
 }

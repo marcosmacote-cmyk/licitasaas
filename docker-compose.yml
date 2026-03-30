@@ -32,15 +32,47 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      PROCESS_ROLE: api
       DATABASE_URL: postgresql://licitasaas:${POSTGRES_PASSWORD:-licitasaaspassword}@db:5432/licitasaas?schema=public
       JWT_SECRET: ${JWT_SECRET:-troque-por-uma-chave-segura-em-producao}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+      FRONTEND_URL: ${FRONTEND_URL:-}
       STORAGE_TYPE: LOCAL
     volumes:
       - uploads_data:/app/server/uploads
     depends_on:
       db:
         condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: licitasaas-worker
+    restart: always
+    environment:
+      NODE_ENV: production
+      PROCESS_ROLE: worker
+      DATABASE_URL: postgresql://licitasaas:${POSTGRES_PASSWORD:-licitasaaspassword}@db:5432/licitasaas?schema=public
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-}
+      WORKER_HEALTH_PORT: 3002
+      # Notifications (shared with API)
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      WHATSAPP_API_URL: ${WHATSAPP_API_URL:-}
+      WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres_data:

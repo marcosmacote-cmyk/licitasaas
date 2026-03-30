@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Settings, Bell, User, Globe, Clock, Check, Phone, Send, Mail, Loader2, CheckCircle, XCircle, Radar, Info } from 'lucide-react';
+import { Settings, Bell, User, Globe, Clock, Check, Phone, Send, Mail, Loader2, CheckCircle, XCircle, Radar, Info, Cpu } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { AiUsageDashboard } from './settings/AiUsageDashboard';
 
 export function SettingsPage() {
     const [notifEnabled, setNotifEnabled] = useState(true);
@@ -404,6 +405,11 @@ export function SettingsPage() {
                             )}
                         </div>
                     </div>
+                </SettingsSection>
+
+                {/* ── Consumo de IA ── */}
+                <SettingsSection icon={<Cpu size={20} />} title="Consumo de Inteligência Artificial" description="Monitore tokens, custos e quotas de uso da IA do sistema.">
+                    <AiUsageDashboard />
                 </SettingsSection>
 
                 {/* ── Atualização ── */}

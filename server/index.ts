@@ -45,7 +45,6 @@ import { LicitanetMonitor } from "./services/monitoring/licitanet-monitor.servic
 import { LicitaMaisBrasilMonitor } from "./services/monitoring/licitamaisbrasil-monitor.service";
 import { IngestService } from "./services/monitoring/ingest.service";
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import https from 'https';
@@ -60,6 +59,11 @@ import jwt from 'jsonwebtoken';
 
 import { storageService } from './storage';
 import { createExtractorFromData } from 'node-unrar-js';
+import { applySecurityMiddleware, authLimiter, aiLimiter, globalErrorHandler } from './lib/security';
+import { encryptCredential, decryptCredential, isEncrypted, isEncryptionConfigured } from './lib/crypto';
+import { requestLogger } from './lib/requestLogger';
+import { logger } from './lib/logger';
+import { getUsageSummary, getSystemUsageSummary } from './lib/aiUsageTracker';
 
 // Resolve server root (handles both ts-node and compiled dist/)
 const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') : __dirname;
@@ -72,21 +76,53 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
-app.use(cors());
+// PROCESS_ROLE: 'api' = HTTP only (no pollers), 'worker' = pollers only, 'all' = both (legacy default)
+const PROCESS_ROLE = (process.env.PROCESS_ROLE || 'all').toLowerCase();
+
+// ── Security Middleware (Helmet, CORS, Rate Limiting, Logging) ──
+applySecurityMiddleware(app);
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// ── Observability: Request logging with correlation IDs ──
+app.use(requestLogger);
+
+// ── Health Check (for Docker/Railway/load balancers) ──
+app.get('/health', async (_req, res) => {
+    const mem = process.memoryUsage();
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({
+            status: 'healthy',
+            role: PROCESS_ROLE,
+            uptime: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString(),
+            memory: {
+                heapUsedMB: Math.round(mem.heapUsed / 1048576),
+                heapTotalMB: Math.round(mem.heapTotal / 1048576),
+                rssMB: Math.round(mem.rss / 1048576),
+            },
+            node: process.version,
+            hasGeminiKey: !!process.env.GEMINI_API_KEY,
+        });
+    } catch (err: any) {
+        res.status(503).json({
+            status: 'unhealthy',
+            reason: 'database_unreachable',
+            error: err.message,
+        });
+    }
+});
+
 // Auth
-app.post('/api/auth/login', async (req, res) => {
-    console.log("==> LOGIN HIT! Body:", req.body);
+app.post('/api/auth/login', authLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
-        console.log("Looking up user for email:", email);
         const user = await prisma.user.findUnique({
             where: { email },
             include: { tenant: true }
         });
-        console.log("Found user:", user?.id || 'No user found');
 
         if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
             return res.status(401).json({ error: 'Email ou senha inválidos' });
@@ -117,7 +153,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Generate long-lived worker token (for ComprasNet/BBMNET watchers)
 // Auth: requires CHAT_WORKER_SECRET or valid admin credentials
-app.post('/api/auth/worker-token', async (req, res) => {
+app.post('/api/auth/worker-token', authLimiter, async (req, res) => {
     try {
         const { email, password, workerSecret, tenantId: requestedTenantId, label } = req.body;
         const WORKER_SECRET = process.env.CHAT_WORKER_SECRET || '';
@@ -299,8 +335,8 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'LicitaSaaS API is running' });
 });
 
-// Debug endpoint to check DB contents
-app.get('/api/debug-db', async (req, res) => {
+// Debug endpoint — safe counts only (no credential exposure)
+app.get('/api/debug-db', authenticateToken, async (req: any, res) => {
     try {
         const counts = {
             tenants: await prisma.tenant.count(),
@@ -310,13 +346,7 @@ app.get('/api/debug-db', async (req, res) => {
             biddings: await prisma.biddingProcess.count(),
             credentials: await prisma.companyCredential.count()
         };
-        const users = await prisma.user.findMany({
-            select: { id: true, email: true, tenantId: true }
-        });
-        const tenants = await prisma.tenant.findMany();
-        const companies = await prisma.companyProfile.findMany();
-        const credentials = await prisma.companyCredential.findMany();
-        res.json({ counts, users, tenants, companies, credentials });
+        res.json({ counts });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }
@@ -537,6 +567,23 @@ app.get('/api/companies', authenticateToken, async (req: any, res) => {
             }
         });
         console.log(`[API] Found ${companies.length} companies.`);
+        
+        // Decrypt credentials before sending to client
+        if (isEncryptionConfigured()) {
+            for (const company of companies) {
+                if ((company as any).credentials) {
+                    for (const cred of (company as any).credentials) {
+                        try {
+                            if (cred.login && isEncrypted(cred.login)) cred.login = decryptCredential(cred.login);
+                            if (cred.password && isEncrypted(cred.password)) cred.password = decryptCredential(cred.password);
+                        } catch (e) {
+                            console.warn(`[Crypto] Failed to decrypt credential ${cred.id}:`, e);
+                        }
+                    }
+                }
+            }
+        }
+        
         res.json(companies);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch companies' });
@@ -690,7 +737,7 @@ app.post('/api/technical-certificates', authenticateToken, upload.single('file')
                 temperature: 0.1,
                 responseMimeType: 'application/json'
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'process_document', metadata: { docType: 'technical_certificate' } });
 
         const extracted = robustJsonParse(result.text);
 
@@ -804,7 +851,7 @@ app.post('/api/technical-certificates/compare', authenticateToken, async (req: a
                 temperature: 0.1,
                 responseMimeType: 'application/json'
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'bidding_matching', metadata: { type: 'certificate_comparison' } });
 
         const analysis = robustJsonParse(result.text);
         res.json(analysis);
@@ -847,6 +894,19 @@ app.put('/api/companies/:id', authenticateToken, async (req: any, res) => {
             data: safeData,
             include: { credentials: true, documents: { select: { id: true, tenantId: true, companyProfileId: true, docType: true, fileUrl: true, uploadDate: true, expirationDate: true, status: true, autoRenew: true, docGroup: true, issuerLink: true, fileName: true, alertDays: true } } }
         });
+        
+        // Decrypt credentials before sending to client
+        if (isEncryptionConfigured() && (updatedCompany as any).credentials) {
+            for (const cred of (updatedCompany as any).credentials) {
+                try {
+                    if (cred.login && isEncrypted(cred.login)) cred.login = decryptCredential(cred.login);
+                    if (cred.password && isEncrypted(cred.password)) cred.password = decryptCredential(cred.password);
+                } catch (e) {
+                    console.warn(`[Crypto] Failed to decrypt credential ${cred.id}:`, e);
+                }
+            }
+        }
+        
         res.json(updatedCompany);
     } catch (error: any) {
         console.error("Update company error:", error);
@@ -888,7 +948,7 @@ app.delete('/api/companies/:id', authenticateToken, async (req: any, res) => {
 // Credentials
 app.post('/api/credentials', authenticateToken, async (req: any, res) => {
     try {
-        const { companyProfileId } = req.body;
+        const { companyProfileId, login, password, ...rest } = req.body;
         // Verify if companyProfileId belongs to the tenant
         const company = await prisma.companyProfile.findUnique({
             where: { id: companyProfileId }
@@ -898,10 +958,15 @@ app.post('/api/credentials', authenticateToken, async (req: any, res) => {
             return res.status(403).json({ error: 'Unauthorized: Company does not belong to your tenant' });
         }
 
+        // Encrypt sensitive fields at rest
+        const encLogin = isEncryptionConfigured() ? encryptCredential(login) : login;
+        const encPassword = isEncryptionConfigured() ? encryptCredential(password) : password;
+
         const credential = await prisma.companyCredential.create({
-            data: { ...req.body }
+            data: { ...rest, companyProfileId, login: encLogin, password: encPassword }
         });
-        res.json(credential);
+        // Return decrypted values to the client
+        res.json({ ...credential, login, password });
     } catch (error) {
         console.error("Create credential error:", error);
         res.status(500).json({ error: 'Failed to create credential' });
@@ -920,10 +985,24 @@ app.put('/api/credentials/:id', authenticateToken, async (req: any, res) => {
             return res.status(403).json({ error: 'Unauthorized to update this credential' });
         }
 
+        // Encrypt sensitive fields if provided
+        const updateData = { ...req.body };
+        if (updateData.login && isEncryptionConfigured()) {
+            updateData.login = encryptCredential(updateData.login);
+        }
+        if (updateData.password && isEncryptionConfigured()) {
+            updateData.password = encryptCredential(updateData.password);
+        }
+
         const updated = await prisma.companyCredential.update({
             where: { id },
-            data: req.body
+            data: updateData
         });
+        // Return decrypted values
+        if (isEncryptionConfigured()) {
+            if (isEncrypted(updated.login)) updated.login = decryptCredential(updated.login);
+            if (isEncrypted(updated.password)) updated.password = decryptCredential(updated.password);
+        }
         res.json(updated);
     } catch (error) {
         console.error("Update credential error:", error);
@@ -1424,7 +1503,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
                 maxOutputTokens: 4096,
                 systemInstruction: DECLARATION_SYSTEM_PROMPT
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'generate_declaration', metadata: { docType: 'declaration' } });
 
         // ── Step 8: Parser + Sanitize (modular) ──
         const rawResponse = (result.text || '').trim();
@@ -1460,7 +1539,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
             console.log(`[Declaration v5] Step 10: ${issues.filter(i => i.severity === 'critical').length} critical issues. Repair via IA...`);
             attempts = 2;
 
-            const aiCallFn = createGeminiRepairFn(genAI.models, callGeminiWithRetry);
+            const aiCallFn = createGeminiRepairFn(genAI.models, callGeminiWithRetry, 'gemini-2.5-flash', { tenantId: req.user.tenantId, operation: 'repair_declaration', metadata: { docType: 'declaration' } });
             const repair = await repairDeclaration(
                 finalText, finalTitle, issues, facts,
                 validateDeclaration, aiCallFn,
@@ -2218,7 +2297,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
 // ─── AI Services Imports estão no topo do arquivo ───
 
 // PNCP AI Analysis — analyzes a PNCP edital directly by fetching its PDF files
-app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
+app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
     // ── SSE Setup ──
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -2683,7 +2762,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req: any, res) => {
                     maxOutputTokens: 65536,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText) throw new Error('Etapa 1 retornou vazio');
             const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');
@@ -2901,7 +2980,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         maxOutputTokens: 65536,
                         responseMimeType: 'application/json'
                     }
-                });
+                }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
                 const reText = reExtractionResponse.text;
                 if (reText) {
                     const reParseResult = robustJsonParseDetailed(reText, 'PNCP-V2-ReExtraction');
@@ -3027,7 +3106,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                                     maxOutputTokens: 16384,
                                     responseMimeType: 'application/json'
                                 }
-                            }, 1);
+                            }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'normalization', category: cat.key } });
 
                             const text = resp.text;
                             if (!text) throw new Error(`${cat.prefix} retornou vazio`);
@@ -3130,7 +3209,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             maxOutputTokens: 16384,
                             responseMimeType: 'application/json'
                         }
-                    }, 2);
+                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'risk-review' } });
                     const riskText = riskResponse.text;
                     if (!riskText) throw new Error('Etapa 3 retornou vazio');
                     const parseR = robustJsonParseDetailed(riskText, 'PNCP-V2-RiskReview');
@@ -3233,7 +3312,7 @@ Responda APENAS com JSON array:
                             ]
                         }],
                         config: { temperature: 0.05, maxOutputTokens: 16384 }
-                    });
+                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'item_extraction' } });
 
                     const responseText = itemResult.text?.trim() || '';
                     let jsonStr = responseText;
@@ -4130,6 +4209,27 @@ app.get('/api/admin/monitoring-audit', authenticateToken, async (req: any, res) 
     }
 });
 
+// ── AI Usage Dashboard (per-tenant token consumption) ──
+app.get('/api/admin/ai-usage', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const periodDays = parseInt(req.query.period as string) || 30;
+
+        const { getDailyBreakdown, getQuotaStatus } = await import('./lib/aiUsageTracker');
+
+        const [summary, daily, quota] = await Promise.all([
+            getUsageSummary(prisma, tenantId, periodDays),
+            getDailyBreakdown(prisma, tenantId, periodDays),
+            getQuotaStatus(prisma, tenantId),
+        ]);
+
+        res.json({ ok: true, ...summary, daily, quota });
+    } catch (e: any) {
+        console.error('[AiUsage]', e);
+        res.status(500).json({ error: 'Falha ao buscar consumo de IA.' });
+    }
+});
+
 app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
     try {
         const { id } = req.params;
@@ -4830,7 +4930,7 @@ Responda APENAS com um JSON array, sem markdown:
                 model: 'gemini-2.5-flash',
                 contents: prompt,
                 config: { temperature: 0.05, maxOutputTokens: 8192 },
-            });
+            }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'analysis' } });
 
             const responseText = result.text?.trim() || '';
             let jsonStr = responseText;
@@ -5018,7 +5118,7 @@ Responda APENAS com um JSON array válido:
                 maxOutputTokens: 65536,
                 responseMimeType: 'application/json'
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'pdf_extraction' } });
 
         const responseText = result.text?.trim() || '';
         console.log(`[AI Populate] Response length: ${responseText.length} chars (first 300): ${responseText.substring(0, 300)}`);
@@ -5165,7 +5265,7 @@ IMPORTANTE:
                 maxOutputTokens: 65536,
                 responseMimeType: 'application/json'
             },
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'proposal_composition' });
 
         const responseText = result.text?.trim() || '';
         const duration = Date.now() - t0;
@@ -5357,7 +5457,7 @@ REGRAS:
                         model: 'gemini-2.5-flash',
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 2048 },
-                    });
+                    }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'object' } });
                     return { blockId: 'objectBlock', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
                 })());
             }
@@ -5396,7 +5496,7 @@ REGRAS CRÍTICAS:
                         model: 'gemini-2.5-flash',
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 1024 },
-                    });
+                    }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'execution' } });
                     const content = result.text?.trim() || '';
                     return { blockId: 'executionBlock', content, durationMs: Date.now() - tStart };
                 })());
@@ -5436,7 +5536,7 @@ REGRAS CRÍTICAS:
                         model: 'gemini-2.5-flash',
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 2048 },
-                    });
+                    }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'commercial_extras' } });
                     const content = result.text?.trim() || '';
                     return { blockId: 'commercialExtras', content, durationMs: Date.now() - tStart };
                 })());
@@ -5570,7 +5670,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
                 temperature: 0.05,
                 maxOutputTokens: 8192,
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'dossier_match' });
 
         const responseText = result.text?.trim() || '';
         console.log(`[Dossier AI Match] Raw response (first 500 chars): ${responseText.substring(0, 500)}`);
@@ -5635,7 +5735,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
 // AI Services imports movidos para cima
 
 // AI Analysis Endpoint
-app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
+app.post('/api/analyze-edital', authenticateToken, aiLimiter, async (req: any, res) => {
     try {
         const { fileNames } = req.body;
         if (!fileNames || !Array.isArray(fileNames) || fileNames.length === 0) {
@@ -5721,7 +5821,7 @@ app.post('/api/analyze-edital', authenticateToken, async (req: any, res) => {
                     maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 3, { tenantId: req.user.tenantId, operation: 'oracle_analysis' });
         } catch (geminiError: any) {
             console.warn(`[AI] Gemini falhou: ${geminiError.message}. Realizando Fallback automático para OpenAI (gpt-4o-mini)...`);
             try {
@@ -6026,7 +6126,7 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
     };
 }
 
-app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
+app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any, res) => {
     const analysisStartTime = Date.now();
     const result = createEmptyAnalysisSchema();
     result.analysis_meta.analysis_id = `analysis_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -6113,7 +6213,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
                     maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
 
             const extractionText = extractionResponse.text;
             if (!extractionText) throw new Error('Etapa 1 retornou vazio');
@@ -6236,7 +6336,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
                                 maxOutputTokens: 16384,
                                 responseMimeType: 'application/json'
                             }
-                        }, 1);
+                        }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: `normalization-${cat.key}` } });
                         const text = resp.text;
                         if (!text) throw new Error(`${cat.prefix} vazio`);
                         const data = robustJsonParse(text, `Norm-${cat.prefix}`);
@@ -6327,7 +6427,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req: any, res) => {
                     maxOutputTokens: 16384,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_risk_review' } });
 
             const riskText = riskResponse.text;
             if (!riskText) throw new Error('Etapa 3 retornou vazio');
@@ -6687,7 +6787,7 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
                 temperature: 0.2,
                 maxOutputTokens: 8192
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'petition' });
 
         res.json({ text: result.text });
     } catch (error: any) {
@@ -6697,7 +6797,7 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
 });
 
 // AI Chat Endpoint
-app.post('/api/analyze-edital/chat', authenticateToken, async (req: any, res) => {
+app.post('/api/analyze-edital/chat', authenticateToken, aiLimiter, async (req: any, res) => {
     try {
         const traceLog = (msg: string) => {
             const timestamp = new Date().toISOString();
@@ -6905,7 +7005,7 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
                 temperature: 0.35,
                 maxOutputTokens: 32768
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'ai_chat' });
 
         res.json({ text: chatResult.text });
     } catch (error: any) {
@@ -7705,8 +7805,8 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
                 companyProfileId: p.companyProfileId,
                 companyName: p.company?.razaoSocial || null,
                 portalCredentials: bestCred ? {
-                    login: bestCred.login,
-                    password: bestCred.password,
+                    login: isEncryptionConfigured() && isEncrypted(bestCred.login) ? decryptCredential(bestCred.login) : bestCred.login,
+                    password: isEncryptionConfigured() && isEncrypted(bestCred.password) ? decryptCredential(bestCred.password) : bestCred.password,
                     url: bestCred.url,
                     platform: bestCred.platform,
                 } : null,
@@ -7957,7 +8057,7 @@ async function fetchPdfPartsForProcess(biddingProcessId: string | null, fileName
 // ══════════════════════════════════════════════════════════════════
 
 // POST /api/ai/feedback — Submit structured feedback
-app.post('/api/ai/feedback', async (req: any, res: any) => {
+app.post('/api/ai/feedback', authenticateToken, async (req: any, res: any) => {
     try {
         const feedback = submitFeedback(req.body as AIExecutionFeedback);
         res.json({ success: true, feedbackId: feedback.feedbackId });
@@ -7967,7 +8067,7 @@ app.post('/api/ai/feedback', async (req: any, res: any) => {
 });
 
 // GET /api/ai/feedback/:moduleName — Get feedback by module
-app.get('/api/ai/feedback/:moduleName', async (req: any, res: any) => {
+app.get('/api/ai/feedback/:moduleName', authenticateToken, async (req: any, res: any) => {
     try {
         const items = getFeedbackByModule(req.params.moduleName);
         const stats = getFeedbackStats(req.params.moduleName);
@@ -7978,7 +8078,7 @@ app.get('/api/ai/feedback/:moduleName', async (req: any, res: any) => {
 });
 
 // GET /api/ai/metrics — System operational report
-app.get('/api/ai/metrics', async (_req: any, res: any) => {
+app.get('/api/ai/metrics', authenticateToken, async (_req: any, res: any) => {
     try {
         const report = generateSystemReport(30);
         res.json(report);
@@ -7988,7 +8088,7 @@ app.get('/api/ai/metrics', async (_req: any, res: any) => {
 });
 
 // GET /api/ai/versions — Version catalog
-app.get('/api/ai/versions', async (_req: any, res: any) => {
+app.get('/api/ai/versions', authenticateToken, async (_req: any, res: any) => {
     try {
         const versions = getAllVersions();
         const promotions = getPromotionHistory();
@@ -7999,7 +8099,7 @@ app.get('/api/ai/versions', async (_req: any, res: any) => {
 });
 
 // GET /api/ai/insights — Improvement insights
-app.get('/api/ai/insights', async (_req: any, res: any) => {
+app.get('/api/ai/insights', authenticateToken, async (_req: any, res: any) => {
     try {
         const report = generateImprovementInsights(30);
         res.json(report);
@@ -8009,7 +8109,7 @@ app.get('/api/ai/insights', async (_req: any, res: any) => {
 });
 
 // POST /api/ai/golden-cases/convert — Convert feedback to golden cases
-app.post('/api/ai/golden-cases/convert', async (_req: any, res: any) => {
+app.post('/api/ai/golden-cases/convert', authenticateToken, async (_req: any, res: any) => {
     try {
         const converted = convertFeedbackToGoldenCases();
         res.json({ success: true, converted: converted.length, cases: converted });
@@ -8023,7 +8123,7 @@ app.post('/api/ai/golden-cases/convert', async (_req: any, res: any) => {
 // ══════════════════════════════════════════════════════════════════
 
 // POST /api/company/profile — Create or update company profile
-app.post('/api/company/profile', async (req: any, res: any) => {
+app.post('/api/company/profile', authenticateToken, async (req: any, res: any) => {
     try {
         const profile = createOrUpdateProfile(req.body as CompanyLicitationProfile);
         res.json({ success: true, companyId: profile.companyId });
@@ -8033,7 +8133,7 @@ app.post('/api/company/profile', async (req: any, res: any) => {
 });
 
 // GET /api/company/profiles — List all company profiles
-app.get('/api/company/profiles', async (_req: any, res: any) => {
+app.get('/api/company/profiles', authenticateToken, async (_req: any, res: any) => {
     try {
         res.json(getAllProfiles());
     } catch (err: any) {
@@ -8042,7 +8142,7 @@ app.get('/api/company/profiles', async (_req: any, res: any) => {
 });
 
 // GET /api/company/:companyId — Get company profile
-app.get('/api/company/:companyId', async (req: any, res: any) => {
+app.get('/api/company/:companyId', authenticateToken, async (req: any, res: any) => {
     try {
         const profile = getProfile(req.params.companyId);
         if (!profile) return res.status(404).json({ error: 'Company not found' });
@@ -8053,7 +8153,7 @@ app.get('/api/company/:companyId', async (req: any, res: any) => {
 });
 
 // POST /api/strategy/analyze — Full strategic analysis: match + score + action plan
-app.post('/api/strategy/analyze', async (req: any, res: any) => {
+app.post('/api/strategy/analyze', authenticateToken, aiLimiter, async (req: any, res: any) => {
     try {
         const { companyId, biddingProcessId } = req.body;
         if (!companyId || !biddingProcessId) {
@@ -8090,7 +8190,7 @@ app.post('/api/strategy/analyze', async (req: any, res: any) => {
 });
 
 // GET /api/company/:companyId/insights — Company learning insights
-app.get('/api/company/:companyId/insights', async (req: any, res: any) => {
+app.get('/api/company/:companyId/insights', authenticateToken, async (req: any, res: any) => {
     try {
         const report = generateCompanyInsights(req.params.companyId);
         res.json(report);
@@ -8098,6 +8198,9 @@ app.get('/api/company/:companyId/insights', async (req: any, res: any) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ── Global Error Handler (must be LAST middleware before listen) ──
+app.use(globalErrorHandler as any);
 
 app.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
@@ -8110,6 +8213,11 @@ app.listen(PORT, async () => {
     
     // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
     // pncpMonitor.startPolling(5);
+
+    // ── Background Workers (only run when PROCESS_ROLE is 'all' or 'worker') ──
+    if (PROCESS_ROLE === 'api') {
+        console.log('[Server] PROCESS_ROLE=api — background pollers disabled (running in separate worker process)');
+    } else {
 
     // ── One-time backfill: fetch ComprasNet links for existing processes ──
     (async () => {
@@ -8500,10 +8608,16 @@ app.listen(PORT, async () => {
         pollLMBProcesses();
         setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
     }, 75_000);
+
+    } // end of PROCESS_ROLE !== 'api' block
 });
 
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
-startOpportunityScanner(4);
+if (PROCESS_ROLE !== 'api') {
+    startOpportunityScanner(4);
+} else {
+    console.log('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
+}
 
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);
