@@ -488,16 +488,18 @@ export class ProposalLetterBuilder {
         return this.overrides.get(blockType) || defaultContent;
     }
 
-    /**
-     * Filtra texto da IA removendo parágrafos que contêm cláusulas proibidas.
-     * Apenas PROPOSAL_CORE e PROPOSAL_OPTIONAL passam — cláusulas contratuais,
-     * habilitatórias e de julgamento são descartadas.
-     */
     private filterProhibited(text: string): string {
         const paragraphs = text.split(/\n\n+/);
         const allowed = paragraphs.filter(p => {
             const trimmed = p.trim();
             if (!trimmed) return false;
+            
+            // Falso positivos ocorrem com frequência quando o edital apenas cita "prazo de execução sob pena de penalidades"
+            // Se o parágrafo for curto (ex. prazos de execução simples), permitimos passar.
+            if (trimmed.length < 100 && !/garantia\s+de\s+(proposta|execu[çc][ãa]o)/i.test(trimmed)) {
+                return true;
+            }
+
             // Verifica se algum padrão proibido está presente
             for (const pattern of PROHIBITED_PATTERNS) {
                 if (pattern.test(trimmed)) {

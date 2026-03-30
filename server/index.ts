@@ -7454,7 +7454,7 @@ app.post('/api/strategy/analyze', authenticateToken, aiLimiter, async (req: any,
         const actionPlan = generateActionPlan(matchResult, assessment, schemaV2);
 
         // Record for learning
-        recordMatchHistory(companyId, biddingProcessId, {
+        await recordMatchHistory(companyId, biddingProcessId, {
             doc: matchResult.documentaryFit.score,
             tech: matchResult.technicalFit.score,
             ef: matchResult.economicFinancialFit.score,
@@ -7471,7 +7471,7 @@ app.post('/api/strategy/analyze', authenticateToken, aiLimiter, async (req: any,
 // GET /api/company/:companyId/insights — Company learning insights
 app.get('/api/company/:companyId/insights', authenticateToken, async (req: any, res: any) => {
     try {
-        const report = generateCompanyInsights(req.params.companyId);
+        const report = await generateCompanyInsights(req.params.companyId);
         res.json(report);
     } catch (err: any) {
         res.status(500).json({ error: err.message });

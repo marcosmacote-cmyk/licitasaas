@@ -40,27 +40,60 @@ export interface CompanyLearningReport {
 }
 
 // ── Storage ──
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
 
-const matchHistoryStore: Map<string, Array<{
-    processId: string;
-    scores: { doc: number; tech: number; ef: number; prop: number; overall: number };
-    recommendation: string;
-    timestamp: string;
-}>> = new Map();
+export async function recordMatchHistory(companyId: string, processId: string, scores: { doc: number; tech: number; ef: number; prop: number; overall: number }, recommendation: string): Promise<void> {
+    try {
+        const company = await prisma.companyProfile.findUnique({ where: { id: companyId } });
+        if (!company || !company.tenantId) return;
 
-export function recordMatchHistory(companyId: string, processId: string, scores: { doc: number; tech: number; ef: number; prop: number; overall: number }, recommendation: string): void {
-    if (!matchHistoryStore.has(companyId)) matchHistoryStore.set(companyId, []);
-    matchHistoryStore.get(companyId)!.push({
-        processId,
-        scores,
-        recommendation,
-        timestamp: new Date().toISOString()
-    });
+        const tenantId = company.tenantId;
+        const configRecord = await prisma.globalConfig.findUnique({ where: { tenantId } });
+        const config = configRecord ? JSON.parse(configRecord.config || '{}') : {};
+        
+        if (!config.aiHistoryStore) config.aiHistoryStore = {};
+        if (!config.aiHistoryStore[companyId]) config.aiHistoryStore[companyId] = [];
+        
+        config.aiHistoryStore[companyId].push({
+            processId,
+            scores,
+            recommendation,
+            timestamp: new Date().toISOString()
+        });
+
+        // Limita a 50 historicos por empresa para não explodir o payload
+        if (config.aiHistoryStore[companyId].length > 50) {
+            config.aiHistoryStore[companyId].shift();
+        }
+
+        await prisma.globalConfig.upsert({
+            where: { tenantId },
+            update: { config: JSON.stringify(config) },
+            create: { tenantId, config: JSON.stringify(config) }
+        });
+    } catch (e) {
+        console.error('[LearningInsights] Failed to save history', e);
+    }
 }
 
-export function generateCompanyInsights(companyId: string): CompanyLearningReport {
+export async function generateCompanyInsights(companyId: string): Promise<CompanyLearningReport> {
     const profile = getProfile(companyId);
-    const history = matchHistoryStore.get(companyId) || [];
+    let history: Array<{ processId: string; scores: any; recommendation: string }> = [];
+    
+    try {
+        const company = await prisma.companyProfile.findUnique({ where: { id: companyId } });
+        if (company && company.tenantId) {
+            const configRecord = await prisma.globalConfig.findUnique({ where: { tenantId: company.tenantId } });
+            if (configRecord && configRecord.config) {
+                const config = JSON.parse(configRecord.config);
+                history = config.aiHistoryStore?.[companyId] || [];
+            }
+        }
+    } catch (e) {
+        console.error('[LearningInsights] Failed to load history', e);
+    }
+
     const insights: CompanyInsight[] = [];
 
     // 1. Profile-based insights
