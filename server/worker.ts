@@ -377,6 +377,40 @@ async function pollLMBProcesses() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ── Daily Backup Scheduler ──
+// ══════════════════════════════════════════════════════════════════
+
+const BACKUP_HOUR_UTC = 6; // 6 AM UTC = 3 AM BRT
+let lastBackupDate: string | null = null;
+
+function scheduleBackup() {
+    console.log(`[Backup] 🗄️ Daily backup scheduled (runs at ${BACKUP_HOUR_UTC}:00 UTC / ${BACKUP_HOUR_UTC - 3}:00 BRT)`);
+
+    // Check every 30 minutes if it's time to backup
+    setInterval(async () => {
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+        // Only run once per day, at the target hour
+        if (now.getUTCHours() === BACKUP_HOUR_UTC && lastBackupDate !== todayStr) {
+            lastBackupDate = todayStr;
+            console.log(`[Backup] ⏰ Starting scheduled daily backup for ${todayStr}...`);
+            try {
+                const { runBackup } = await import('./scripts/backup-database');
+                const result = await runBackup();
+                if (result.success) {
+                    console.log(`[Backup] ✅ Daily backup completed: ${result.fileName} (${result.sizeKB}KB)`);
+                } else {
+                    console.error(`[Backup] ❌ Daily backup failed: ${result.error}`);
+                }
+            } catch (err: any) {
+                console.error(`[Backup] ❌ Backup exception: ${err.message}`);
+            }
+        }
+    }, 30 * 60 * 1000); // Check every 30 min
+}
+
+// ══════════════════════════════════════════════════════════════════
 // ── Main: Start all workers ──
 // ══════════════════════════════════════════════════════════════════
 
@@ -433,6 +467,9 @@ async function main() {
 
     // Start Opportunity Scanner (PNCP search auto-scan)
     startOpportunityScanner(4);
+
+    // ── Daily Automated Backup (3:00 AM UTC) ──
+    scheduleBackup();
 
     console.log('[Worker] 🚀 All monitors scheduled. Worker is running.');
 }

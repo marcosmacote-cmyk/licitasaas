@@ -223,6 +223,25 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'LicitaSaaS API is running' });
 });
 
+// ── Admin: Backup Manual do Banco ──
+app.post('/api/admin/backup', authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+        const { runBackup } = await import('./scripts/backup-database');
+        res.json({ message: 'Backup iniciado. Aguarde...' });
+        // Run async (don't block response)
+        runBackup().then(result => {
+            if (result.success) {
+                console.log(`[Backup] ✅ Manual backup completed: ${result.fileName} (${result.sizeKB}KB)`);
+            } else {
+                console.error(`[Backup] ❌ Manual backup failed: ${result.error}`);
+            }
+        });
+    } catch (error: any) {
+        console.error('[Backup] Failed to start backup:', error);
+        res.status(500).json({ error: 'Failed to start backup' });
+    }
+});
+
 // Debug endpoint — safe counts only (no credential exposure)
 app.get('/api/debug-db', authenticateToken, async (req: any, res) => {
     try {

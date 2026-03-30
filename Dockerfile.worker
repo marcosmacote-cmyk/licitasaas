@@ -22,7 +22,7 @@ RUN npx tsc
 # Final Stage (lean)
 FROM node:20-alpine
 WORKDIR /app/server
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl postgresql16-client
 
 COPY --from=builder /app/backend/package.json ./
 COPY --from=builder /app/backend/node_modules ./node_modules
@@ -34,4 +34,4 @@ ENV PROCESS_ROLE=worker
 ENV WORKER_HEALTH_PORT=3002
 EXPOSE 3002
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/worker.js"]

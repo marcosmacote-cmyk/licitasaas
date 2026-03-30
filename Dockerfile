@@ -25,7 +25,7 @@ RUN npm run build
 # Final Stage
 FROM node:20-alpine
 WORKDIR /app/server
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl postgresql16-client
 
 COPY --from=builder /app/backend/package.json ./
 COPY --from=builder /app/backend/node_modules ./node_modules

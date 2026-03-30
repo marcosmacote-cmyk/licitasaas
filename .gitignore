@@ -36,3 +36,6 @@ local-watcher/*.png
 local-watcher/icon-debug*
 local-watcher/step1*
 local-watcher/test-pub*
+
+# Backup temp files
+server/.tmp-backups/
