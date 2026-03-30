@@ -1819,17 +1819,29 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                     const bufferSizeKB = buffer.length / 1024;
                     
                     if (bufferSizeKB > MAX_SINGLE_FILE_KB) {
-                        console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(bufferSizeKB)}KB), não suportado inline. Ignorando "${fileName}".`);
-                        continue;
+                        console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(bufferSizeKB)}KB), usando fallback pdf-parse para texto inline.`);
+                        try {
+                            const pdfParse = require('pdf-parse');
+                            const data = await pdfParse(buffer);
+                            if (data && data.text) {
+                                pdfParts.push({ text: `CONTEÚDO TEXTUAL DO ARQUIVO GIGANTE (${fileName}):\n\n${data.text}` });
+                                console.log(`[PNCP-AI] ✅ Texto extraído com sucesso (${data.text.length} caracteres) do arquivo ${fileName}`);
+                            }
+                        } catch (e: any) {
+                            console.warn(`[PNCP-AI] ⚠️ Falha ao extrair texto do arquivo ${fileName}:`, e.message);
+                        }
+                        totalPdfSizeAccum += 1; // Minimal impact on budget since it's just raw text
+                    } else {
+                        // Budget check: skip if adding this PDF would exceed total size limit
+                        if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                            console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
+                            discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
+                            continue;
+                        }
+                        totalPdfSizeAccum += bufferSizeKB;
+                        pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
                     }
-
-                    // Budget check: skip if adding this PDF would exceed total size limit
-                    if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                        console.warn(`[PNCP-AI] \u26a0\ufe0f Or\u00e7amento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
-                        discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
-                        continue;
-                    }
-                    totalPdfSizeAccum += bufferSizeKB;
+                    
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
                     fs.writeFileSync(path.join(uploadDir, safeFileName), buffer);
 
@@ -1845,9 +1857,8 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                         console.error(`[PNCP-AI] Erro upload PDF Storage:`, e);
                     }
 
-                    pdfParts.push({
-                        inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
-                    });
+                    // Note: pdfParts is pushed either as text or inlineData above
+
                     downloadedFiles.push(storageFileName);
                     console.log(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${storageFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
                 } else if (isZip) {
@@ -1872,17 +1883,32 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             const MAX_SINGLE_FILE_KB = 14000;
                             
                             if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(entrySizeKB)}KB), ignorando ZIP entry "${entryName}".`);
-                                continue;
+                                console.warn(`[PNCP-AI] ⚠️ ZIP Entry excede 14MB (${Math.round(entrySizeKB)}KB), usando fallback pdf-parse para texto inline.`);
+                                try {
+                                    const pdfParse = require('pdf-parse');
+                                    const data = await pdfParse(pdfBuffer);
+                                    if (data && data.text) {
+                                        pdfParts.push({ text: `CONTEÚDO TEXTUAL DO ARQUIVO GIGANTE (ZIP/${entryName}):\n\n${data.text}` });
+                                    }
+                                } catch (e: any) {
+                                    console.warn(`[PNCP-AI] ⚠️ Falha ao extrair texto do ZIP entry ${entryName}:`, e.message);
+                                }
+                                totalPdfSizeAccum += 1;
+                            } else {
+                                if (pdfBuffer.length > 0) {
+                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                        console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                        discardedFiles.push(`${entryName} (ZIP, ${Math.round(entrySizeKB)}KB)`);
+                                        continue;
+                                    }
+                                    totalPdfSizeAccum += entrySizeKB;
+                                    pdfParts.push({
+                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                    });
+                                }
                             }
 
                             if (pdfBuffer.length > 0) {
-                                if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                    console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
-                                    discardedFiles.push(`${entryName} (ZIP, ${Math.round(entrySizeKB)}KB)`);
-                                    continue;
-                                }
-                                totalPdfSizeAccum += entrySizeKB;
                                 const safeName = `pncp_${req.user.tenantId}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
 
@@ -1897,10 +1923,6 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                 } catch (e) {
                                     console.error(`[PNCP-AI] Erro upload ZIP-PDF Storage:`, e);
                                 }
-
-                                pdfParts.push({
-                                    inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                });
                                 downloadedFiles.push(storageFileName);
                                 console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${storageFileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
@@ -1934,16 +1956,28 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                 const MAX_SINGLE_FILE_KB = 14000;
                                 
                                 if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                    console.warn(`[PNCP-AI] ⚠️ Arquivo excede 14MB (${Math.round(entrySizeKB)}KB), ignorando RAR entry "${rarFile.fileHeader.name}".`);
-                                    continue;
+                                    console.warn(`[PNCP-AI] ⚠️ RAR Entry excede 14MB (${Math.round(entrySizeKB)}KB), usando fallback pdf-parse para texto inline.`);
+                                    try {
+                                        const pdfParse = require('pdf-parse');
+                                        const data = await pdfParse(pdfBuffer);
+                                        if (data && data.text) {
+                                            pdfParts.push({ text: `CONTEÚDO TEXTUAL DO ARQUIVO GIGANTE (RAR/${rarFile.fileHeader.name}):\n\n${data.text}` });
+                                        }
+                                    } catch (e: any) {
+                                        console.warn(`[PNCP-AI] ⚠️ Falha ao extrair texto do RAR entry ${rarFile.fileHeader.name}:`, e.message);
+                                    }
+                                    totalPdfSizeAccum += 1;
+                                } else {
+                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                        console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
+                                        discardedFiles.push(`${rarFile.fileHeader.name} (RAR, ${Math.round(entrySizeKB)}KB)`);
+                                        continue;
+                                    }
+                                    totalPdfSizeAccum += entrySizeKB;
+                                    pdfParts.push({
+                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                    });
                                 }
-
-                                if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                    console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
-                                    discardedFiles.push(`${rarFile.fileHeader.name} (RAR, ${Math.round(entrySizeKB)}KB)`);
-                                    continue;
-                                }
-                                totalPdfSizeAccum += entrySizeKB;
 
                                 const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
@@ -1959,10 +1993,6 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                 } catch (e) {
                                     console.error(`[PNCP-AI] Erro upload RAR-PDF Storage:`, e);
                                 }
-
-                                pdfParts.push({
-                                    inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                });
                                 downloadedFiles.push(storageFileName);
                                 console.log(`[PNCP-AI] ✅ Extracted from RAR: ${rarFile.fileHeader.name} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
