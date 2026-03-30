@@ -40,6 +40,9 @@ router.post('/', authenticateToken, requireAdmin, async (req: any, res) => {
             return res.status(400).json({ error: 'Este e-mail já está em uso.' });
         }
 
+        // Prevenir criação de SUPER_ADMIN por admins comuns
+        const safeRole = (role === 'SUPER_ADMIN') ? 'ADMIN' : (role || 'Analista');
+
         const passwordHash = await bcrypt.hash(password, 10);
 
         const newUser = await prisma.user.create({
@@ -48,7 +51,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: any, res) => {
                 name,
                 email,
                 passwordHash,
-                role: role || 'Analista',
+                role: safeRole,
                 isActive: isActive ?? true,
                 opportunityScannerEnabled: opportunityScannerEnabled ?? true
             },
@@ -79,10 +82,13 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: any, res) => {
             return res.status(400).json({ error: 'Você não pode desativar sua própria conta ativa.' });
         }
 
+        // Prevenir escalonamento de privilégios na edição
+        const safeRoleUpdate = (role === 'SUPER_ADMIN' && req.user.role !== 'SUPER_ADMIN') ? 'ADMIN' : role;
+
         const updateData: any = { 
             ...(name && { name }), 
-            ...(role && { role }), 
-            ...(isActive !== undefined && { isActive }), 
+            ...(safeRoleUpdate && { role: safeRoleUpdate }), 
+            ...(isActive !== undefined && { isActive }),  
             ...(opportunityScannerEnabled !== undefined && { opportunityScannerEnabled })
         };
         

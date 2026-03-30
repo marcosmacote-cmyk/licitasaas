@@ -19,6 +19,9 @@ router.post('/login', authLimiter, async (req, res) => {
         if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
             return res.status(401).json({ error: 'Email ou senha inválidos' });
         }
+        if (!user.isActive) {
+            return res.status(403).json({ error: 'Acesso bloqueado. Esta conta foi desativada pelo administrador.' });
+        }
 
         const token = jwt.sign(
             { userId: user.id, tenantId: user.tenantId, role: user.role },
@@ -61,7 +64,7 @@ router.post('/worker-token', authLimiter, async (req, res) => {
             }
             // Find an ADMIN user for the given tenant
             const adminUser = await prisma.user.findFirst({
-                where: { tenantId: requestedTenantId, role: 'ADMIN' }
+                where: { tenantId: requestedTenantId, role: 'ADMIN', isActive: true }
             });
             if (!adminUser) {
                 return res.status(404).json({ error: 'Nenhum admin encontrado para o tenant informado' });
@@ -75,6 +78,9 @@ router.post('/worker-token', authLimiter, async (req, res) => {
             const user = await prisma.user.findUnique({ where: { email } });
             if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
                 return res.status(401).json({ error: 'Email ou senha inválidos' });
+            }
+            if (!user.isActive) {
+                return res.status(403).json({ error: 'Conta desativada' });
             }
             if (user.role !== 'ADMIN') {
                 return res.status(403).json({ error: 'Apenas ADMIN pode gerar worker tokens' });
