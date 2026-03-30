@@ -1601,6 +1601,18 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         } catch (_) { /* connection closed */ }
     };
 
+    // SSE keepalive: send a comment every 15s to prevent Railway/Nginx/browser from killing the connection
+    const sseKeepAlive = setInterval(() => {
+        try {
+            res.write(`: keepalive ${new Date().toISOString()}\n\n`);
+        } catch (_) {
+            clearInterval(sseKeepAlive);
+        }
+    }, 15000);
+    // Clean up on connection close
+    res.on('close', () => clearInterval(sseKeepAlive));
+    res.on('finish', () => clearInterval(sseKeepAlive));
+
     try {
         const { orgao_cnpj, ano, numero_sequencial, link_sistema } = req.body;
         if (!orgao_cnpj || !ano || !numero_sequencial) {
@@ -1646,7 +1658,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
 
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 15; // Multi-part editals can have 10-15 parts in large RARs
+        const MAX_PDF_PARTS = 5; // Limit to 5 most important documents to keep Gemini response fast
         const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
