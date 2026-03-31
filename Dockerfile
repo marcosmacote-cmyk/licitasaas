@@ -37,7 +37,7 @@ RUN mkdir -p uploads
 
 ENV NODE_ENV=production
 ENV PORT=3001
-ENV PROCESS_ROLE=api
+ENV PROCESS_ROLE=all
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
