@@ -7505,6 +7505,55 @@ app.post('/api/chat-monitor/internal/reprocess-notifications', authenticateWorke
     }
 });
 
+// ── Test Fetch BLL ──
+app.get('/api/chat-monitor/internal/test-bll-fetch', authenticateWorker, async (req: any, res) => {
+    try {
+        const { processId, tenantId, param1 } = req.query;
+
+        const { BatchPlatformMonitor, BATCH_PLATFORMS } = await import('./services/monitoring/batch-platform-monitor.service');
+        const { IngestService } = await import('./services/monitoring/ingest.service');
+
+        const platform = BATCH_PLATFORMS.find(p => p.id === 'bll');
+        if (!platform) return res.status(500).json({ error: 'Platform not found' });
+
+        const messages = await BatchPlatformMonitor.fetchAllMessages(param1 as string, platform);
+        
+        let result = null;
+        let dedupErrors = null;
+        if (messages.length > 0) {
+            try {
+                result = await IngestService.ingestMessages(prisma, {
+                    processId: processId as string,
+                    tenantId: tenantId as string,
+                    messages: messages.map((m: any) => ({
+                        messageId: m.messageId,
+                        content: m.content,
+                        authorType: m.authorType,
+                        timestamp: m.timestamp || null,
+                        itemRef: m.itemRef || null,
+                        eventCategory: m.eventCategory || null,
+                        captureSource: m.captureSource || platform.captureSource,
+                    })),
+                    captureSource: platform.captureSource,
+                });
+            } catch (error: any) {
+                dedupErrors = error.message;
+            }
+        }
+
+        res.json({
+            param1,
+            fetchedMsgCount: messages.length,
+            samples: messages.slice(0, 2),
+            ingestResult: result,
+            ingestError: dedupErrors,
+        });
+
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ── Persist M2A certame_id link (worker write-back for stable matching) ──
 // Called by M2A Watcher after a successful fuzzy-match to persist the canonical
 // certame URL in the process link field. Subsequent runs use Strategy 1 (exact match).
