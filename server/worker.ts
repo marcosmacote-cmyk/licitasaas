@@ -160,17 +160,22 @@ async function pollBatchProcesses() {
                 const param1 = BatchPlatformMonitor.extractParam1(proc.link);
                 if (!param1) continue;
 
-                const messages = await BatchPlatformMonitor.fetchMessages(param1, platform);
+                // CORRIGIDO: fetchAllMessages captura processo + TODOS os lotes
+                const messages = await BatchPlatformMonitor.fetchAllMessages(param1, platform);
                 if (messages.length === 0) continue;
 
                 const result = await IngestService.ingestMessages(prisma, {
                     processId: proc.id,
                     tenantId: proc.tenantId,
+                    // CORRIGIDO: propagar itemRef, eventCategory e captureSource individuais
                     messages: messages.map((m: any) => ({
                         messageId: m.messageId,
                         content: m.content,
                         authorType: m.authorType,
                         timestamp: m.timestamp || null,
+                        itemRef: m.itemRef || null,
+                        eventCategory: m.eventCategory || null,
+                        captureSource: m.captureSource || platform.captureSource,
                     })),
                     captureSource: platform.captureSource,
                 });
@@ -231,6 +236,9 @@ async function pollPCPProcesses() {
                         content: m.content,
                         authorType: m.authorType,
                         timestamp: m.timestamp || null,
+                        itemRef: m.itemRef || null,
+                        eventCategory: m.eventCategory || null,
+                        captureSource: m.captureSource || 'pcp-api',
                     })),
                     captureSource: 'pcp-api',
                 });
@@ -291,6 +299,9 @@ async function pollLicitanetProcesses() {
                         content: m.content,
                         authorType: m.authorType,
                         timestamp: m.timestamp || null,
+                        itemRef: m.itemRef || null,
+                        eventCategory: m.eventCategory || null,
+                        captureSource: m.captureSource || 'licitanet-api',
                     })),
                     captureSource: 'licitanet-api',
                 });
@@ -351,6 +362,9 @@ async function pollLMBProcesses() {
                         content: m.content,
                         authorType: m.authorType,
                         timestamp: m.timestamp || null,
+                        itemRef: m.itemRef || null,
+                        eventCategory: m.eventCategory || null,
+                        captureSource: m.captureSource || 'licitamaisbrasil-api',
                     })),
                     captureSource: 'licitamaisbrasil-api',
                 });
