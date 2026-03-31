@@ -154,7 +154,9 @@ export class IngestService {
         if (alerts > 0) {
             try {
                 await NotificationService.processPendingNotifications();
-            } catch { /* silent — notification failure should not break ingest */ }
+            } catch (notifErr: any) {
+                console.error(`[IngestService] ⚠️ Notification processing failed (${alerts} alerts):`, notifErr.message || notifErr);
+            }
         }
 
         return { success: true, created, alerts, total: messages.length };
