@@ -7394,6 +7394,117 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
     }
 });
 
+// ── Diagnostic: check notification pipeline health ──
+app.get('/api/chat-monitor/internal/notification-diag', authenticateWorker, async (req: any, res) => {
+    try {
+        const { NotificationService } = await import('./services/monitoring/notification.service');
+
+        // 1. Check env vars
+        const envCheck = {
+            TELEGRAM_BOT_TOKEN: !!process.env.TELEGRAM_BOT_TOKEN,
+            TELEGRAM_BOT_TOKEN_length: (process.env.TELEGRAM_BOT_TOKEN || '').length,
+            WHATSAPP_API_URL: !!process.env.WHATSAPP_API_URL,
+            WHATSAPP_API_TOKEN: !!process.env.WHATSAPP_API_TOKEN,
+            RESEND_API_KEY: !!process.env.RESEND_API_KEY,
+            PROCESS_ROLE: process.env.PROCESS_ROLE || 'not-set',
+        };
+
+        // 2. Count log statuses
+        const statusCounts = await prisma.chatMonitorLog.groupBy({
+            by: ['status'],
+            _count: true,
+        });
+
+        // 3. Check tenant configs
+        const configs = await prisma.chatMonitorConfig.findMany({
+            select: {
+                tenantId: true,
+                isActive: true,
+                telegramChatId: true,
+                phoneNumber: true,
+                notificationEmail: true,
+            },
+        });
+
+        // 4. Recent logs with BLL/BNC
+        const recentBatchLogs = await prisma.chatMonitorLog.findMany({
+            where: {
+                captureSource: { in: ['bll-api', 'bnc-api'] },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            select: {
+                id: true,
+                status: true,
+                sentTo: true,
+                captureSource: true,
+                detectedKeyword: true,
+                createdAt: true,
+                content: true,
+            },
+        });
+
+        // 5. Pending notifications count
+        const pendingCount = await prisma.chatMonitorLog.count({
+            where: { status: 'PENDING_NOTIFICATION' },
+        });
+
+        res.json({
+            envCheck,
+            statusCounts: statusCounts.map((s: any) => ({ status: s.status, count: s._count })),
+            tenantConfigs: configs.map((c: any) => ({
+                tenantId: c.tenantId.substring(0, 8),
+                isActive: c.isActive,
+                hasTelegram: !!c.telegramChatId,
+                telegramChatId: c.telegramChatId || 'NOT SET',
+                hasWhatsApp: !!c.phoneNumber,
+                hasEmail: !!c.notificationEmail,
+            })),
+            pendingNotifications: pendingCount,
+            recentBatchLogs: recentBatchLogs.map((l: any) => ({
+                id: l.id.substring(0, 8),
+                status: l.status,
+                sentTo: l.sentTo,
+                source: l.captureSource,
+                keyword: l.detectedKeyword,
+                createdAt: l.createdAt,
+                content: (l.content || '').substring(0, 80),
+            })),
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── Reprocess: retry PENDING/FAILED notifications ──
+app.post('/api/chat-monitor/internal/reprocess-notifications', authenticateWorker, async (req: any, res) => {
+    try {
+        const { NotificationService } = await import('./services/monitoring/notification.service');
+
+        // Reset FAILED back to PENDING_NOTIFICATION so they get reprocessed
+        const resetResult = await prisma.chatMonitorLog.updateMany({
+            where: { status: { in: ['FAILED', 'NO_CHANNEL'] } },
+            data: { status: 'PENDING_NOTIFICATION' },
+        });
+
+        // Now process all pending
+        await NotificationService.processPendingNotifications();
+
+        const remaining = await prisma.chatMonitorLog.count({
+            where: { status: 'PENDING_NOTIFICATION' },
+        });
+
+        res.json({
+            success: true,
+            resetCount: resetResult.count,
+            remainingPending: remaining,
+            message: `Reset ${resetResult.count} failed notifications and reprocessed. ${remaining} still pending.`,
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ── Persist M2A certame_id link (worker write-back for stable matching) ──
 // Called by M2A Watcher after a successful fuzzy-match to persist the canonical
 // certame URL in the process link field. Subsequent runs use Strategy 1 (exact match).
