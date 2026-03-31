@@ -1,14 +1,20 @@
 """
-M2A Compras Chat Watcher v4.0 — Certame Discovery + Multi-Empresa
+M2A Compras Chat Watcher v4.1 — Certame Discovery + Multi-Empresa
 
 Arquitetura:
 1. Busca processos M2A monitorados no LicitaSaaS (com credenciais por empresa)
 2. Para cada empresa → autentica via SessionPool (login lazy)
 3. Descobre certames inscritos via scraping de "Minhas Contratações"
-4. Match inteligente entre processos LicitaSaaS ↔ certames M2A (por título)
+4. Match inteligente entre processos LicitaSaaS ↔ certames M2A (por título/summary)
 5. Captura mensagens via Chat AJAX + WebSocket (se disponível)
 6. Envia mensagens capturadas ao LicitaSaaS via /internal/ingest
 7. Mantém heartbeat e renova sessões automaticamente
+
+v4.1 changelog:
+    - Log rotation (RotatingFileHandler, 5MB max, 3 backups)
+    - Persistent seen_hashes (sobrevive restart no Railway)
+    - Version bump heartbeat (v4.1)
+    - Graceful shutdown com persist de estado
 
 USO:
     python main.py                    # Modo produção
@@ -19,7 +25,9 @@ USO:
 
 import asyncio
 import argparse
+import json
 import logging
+import logging.handlers
 import signal
 import os
 import sys
@@ -27,6 +35,7 @@ import time
 import re
 from difflib import SequenceMatcher
 from typing import Dict, List, Set, Optional, Tuple
+from pathlib import Path
 
 from config.settings import (
     CHAT_WORKER_SECRET,
@@ -35,6 +44,7 @@ from config.settings import (
     HEARTBEAT_INTERVAL_SEC,
     SESSION_REFRESH_SEC,
     CHAT_POLL_INTERVAL_SEC,
+    SESSION_DATA_DIR,
     jittered_interval,
 )
 from monitor.session_manager import M2ASessionManager
@@ -42,17 +52,49 @@ from monitor.session_pool import M2ASessionPool
 from monitor.chat_extractor import M2AChatExtractor, M2AChatMessage
 from monitor.api_client import WorkerAPIClient
 
-# ── Logging Setup ──
+# ── Logging with rotation ──
+LOG_FORMAT = '%(asctime)s  %(name)-22s  %(levelname)-7s  %(message)s'
+LOG_DATE_FMT = '%H:%M:%S'
+
+# Rotating file handler: max 5MB, keep 3 backups
+file_handler = logging.handlers.RotatingFileHandler(
+    'watcher.log', encoding='utf-8', maxBytes=5_000_000, backupCount=3
+)
+file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FMT))
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s  %(name)-22s  %(levelname)-7s  %(message)s',
-    datefmt='%H:%M:%S',
+    format=LOG_FORMAT,
+    datefmt=LOG_DATE_FMT,
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('watcher.log', encoding='utf-8'),
+        file_handler,
     ]
 )
 logger = logging.getLogger('m2a')
+
+# ── Seen hashes persistence ──
+_SEEN_HASHES_FILE = SESSION_DATA_DIR / 'seen_hashes.json'
+
+
+def _load_seen_hashes() -> Dict[str, List[str]]:
+    """Load previously seen message hashes from disk."""
+    if not _SEEN_HASHES_FILE.exists():
+        return {}
+    try:
+        data = json.loads(_SEEN_HASHES_FILE.read_text())
+        return {k: list(v) for k, v in data.items()}
+    except Exception:
+        return {}
+
+
+def _save_seen_hashes(seen: Dict[str, Set[str]]):
+    """Persist seen message hashes to disk."""
+    try:
+        serializable = {k: list(v) for k, v in seen.items()}
+        _SEEN_HASHES_FILE.write_text(json.dumps(serializable))
+    except Exception as e:
+        logger.warning(f'Erro ao salvar seen hashes: {e}')
 
 
 # ── Text Similarity / Matching ──
@@ -202,7 +244,7 @@ def _compute_match_score(text_a: str, text_b: str) -> float:
 
 
 class M2AWatcher:
-    """Worker centralizado para monitoramento do M2A Compras v4.0 (Certame Discovery)."""
+    """Worker centralizado para monitoramento do M2A Compras v4.1 (Certame Discovery + Persistence)."""
 
     def __init__(self, dry_run: bool = False, use_websocket: bool = True):
         self.session_pool = M2ASessionPool()
@@ -236,6 +278,14 @@ class M2AWatcher:
         self._ws_messages_captured = 0
         self._consecutive_failures = 0
 
+        # Restore persisted seen hashes
+        saved = _load_seen_hashes()
+        if saved:
+            for pid, hashes in saved.items():
+                self._seen_hashes[pid] = set(hashes)
+            total = sum(len(v) for v in saved.values())
+            logger.info(f'✅ Restaurados {total} hashes de mensagens vistas de {len(saved)} processo(s)')
+
     async def _init_ws_pool(self):
         """Inicializa o pool de WebSocket (lazy)."""
         if self._ws_pool is not None:
@@ -264,7 +314,7 @@ class M2AWatcher:
         """Inicia o watcher."""
         self._running = True
         logger.info('=' * 60)
-        logger.info('  M2A Compras Chat Watcher v4.0 (Certame Discovery)')
+        logger.info('  M2A Compras Chat Watcher v4.1')
         logger.info(f'  API URL: {LICITASAAS_API_URL}')
         logger.info(f'  M2A URL: {M2A_BASE_URL}')
         logger.info(f'  WebSocket: {"Habilitado" if self.use_websocket else "Desabilitado"}')
@@ -539,7 +589,10 @@ class M2AWatcher:
 
                     self._consecutive_failures = 0
 
-                # 5. Resumo do ciclo
+                # 5. Persist seen hashes after each full cycle
+                _save_seen_hashes(self._seen_hashes)
+
+                # 6. Resumo do ciclo
                 elapsed = time.time() - cycle_start
                 pool = self.session_pool
                 logger.info(
@@ -723,6 +776,9 @@ class M2AWatcher:
     async def shutdown(self):
         logger.info('Encerrando M2A watcher...')
         self._running = False
+
+        # Persist seen hashes on shutdown
+        _save_seen_hashes(self._seen_hashes)
         
         # Parar WebSocket pool
         if self._ws_pool:

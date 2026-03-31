@@ -80,7 +80,7 @@ class WorkerAPIClient:
         try:
             payload = {
                 'activeSessions': active_sessions,
-                'machineName': 'M2A Watcher v2.0 (Hybrid)',
+                'machineName': 'M2A Watcher v4.1 (Railway)',
                 'tenantIds': tenant_ids or [],
             }
             if extra_info:
