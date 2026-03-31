@@ -123,7 +123,7 @@ exports.MODULE_CONTRACTS = {
         moduleName: 'declaration',
         description: 'Gerador formal de declarações licitatórias com alta precisão e baixa criatividade',
         contextStrategy: 'compact',
-        maxTokenEstimate: 2000,
+        maxTokenEstimate: 2500,
         requiredSections: [
             'process_identification',
             'participation_conditions',
@@ -132,14 +132,17 @@ exports.MODULE_CONTRACTS = {
         optionalSections: [
             'requirements.habilitacao_juridica',
             'requirements.documentos_complementares',
-            'timeline'
+            'requirements.qualificacao_tecnica_profissional',
+            'requirements.qualificacao_tecnica_operacional',
+            'requirements.qualificacao_economico_financeira',
+            'requirements.regularidade_fiscal_trabalhista',
+            'timeline',
+            'evidence_registry'
         ],
         forbiddenSections: [
             'legal_risk_review',
             'technical_analysis',
-            'economic_financial_analysis',
             'contractual_analysis',
-            'evidence_registry',
             'analysis_meta'
         ]
     },

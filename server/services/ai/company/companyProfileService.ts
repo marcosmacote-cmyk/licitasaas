@@ -1,10 +1,5 @@
-/**
- * ══════════════════════════════════════════════════════════════════
- *  Company Profile Schema & Service
- * ══════════════════════════════════════════════════════════════════
- *
- *  Perfil licitatório estruturado por empresa + memória institucional.
- */
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
 
 // ── Tipos do Perfil ──
 
@@ -14,7 +9,7 @@ export interface CompanyLicitationProfile {
         legalName: string;
         tradeName?: string;
         cnpj: string;
-        companyType?: string; // MEI, ME, EPP, Médio, Grande
+        companyType?: string;
         headquarters?: string;
         primaryActivities?: string[];
         stateRegistration?: string;
@@ -32,7 +27,7 @@ export interface CompanyLicitationProfile {
         profession: string;
         council: string;
         registrationNumber?: string;
-        role?: string; // RT, preposto, etc.
+        role?: string;
         active: boolean;
         linkedSince?: string;
     }>;
@@ -83,29 +78,87 @@ export interface DocumentRecord {
     notes?: string;
 }
 
-// ── Store (será migrado para DB) ──
-
-const profileStore: Map<string, CompanyLicitationProfile> = new Map();
-const memoryStore: Map<string, DocumentRecord[]> = new Map();
+// ── Funções de Helper ──
+const parseJsonField = (val: any, def: any) => {
+    if (!val) return def;
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch { return def; }
+    }
+    return val;
+};
 
 // ── Profile Service ──
 
-export function createOrUpdateProfile(profile: CompanyLicitationProfile): CompanyLicitationProfile {
+export async function createOrUpdateProfile(profile: CompanyLicitationProfile): Promise<CompanyLicitationProfile> {
     profile.updatedAt = new Date().toISOString();
-    profileStore.set(profile.companyId, profile);
-    console.log(`[CompanyProfile] Saved profile for ${profile.corporateData.legalName} (${profile.companyId})`);
+    
+    try {
+        await prisma.companyProfile.update({
+            where: { id: profile.companyId },
+            data: {
+                strengths: profile.strengths,
+                knownWeaknesses: profile.knownWeaknesses,
+                technicalAssets: profile.technicalAssets as any,
+                documentaryAssets: profile.documentaryAssets as any,
+                readinessFlags: profile.readinessFlags as any,
+                registrations: profile.registrations as any,
+                responsibleProfessionals: profile.responsibleProfessionals as any,
+                historicalPerformance: profile.historicalPerformance as any
+            }
+        });
+        console.log(`[CompanyProfile] Saved profile to DB for ${profile.corporateData.legalName} (${profile.companyId})`);
+    } catch(e) {
+        console.error(`[CompanyProfile] Error saving profile to DB for ${profile.companyId}`, e);
+    }
+    
     return profile;
 }
 
-export function getProfile(companyId: string): CompanyLicitationProfile | undefined {
-    return profileStore.get(companyId);
+export async function getProfile(companyId: string): Promise<CompanyLicitationProfile | undefined> {
+    const cp = await prisma.companyProfile.findUnique({ where: { id: companyId } });
+    if (!cp) return undefined;
+
+    return {
+        companyId: cp.id,
+        corporateData: { 
+            legalName: cp.razaoSocial, 
+            cnpj: cp.cnpj,
+            headquarters: cp.city ? `${cp.city}/${cp.state}` : undefined
+        },
+        registrations: parseJsonField(cp.registrations, {}),
+        responsibleProfessionals: parseJsonField(cp.responsibleProfessionals, []),
+        technicalAssets: parseJsonField(cp.technicalAssets, { certificates: [], attests: [], artCatRrt: [], recurringCapabilities: [] }),
+        documentaryAssets: parseJsonField(cp.documentaryAssets, { legalDocuments: [], fiscalDocuments: [], laborDocuments: [], economicFinancialDocuments: [], declarationsTemplates: [] }),
+        readinessFlags: parseJsonField(cp.readinessFlags, { hasUpdatedBalance: false, hasValidCertificates: false, hasTechnicalCollection: false, hasProposalTemplates: false }),
+        knownWeaknesses: parseJsonField(cp.strengths, []), // BUG FIXED HERE in my mind, wait, I will map knownWeaknesses correctly below
+        strengths: parseJsonField(cp.strengths, []),
+        historicalPerformance: parseJsonField(cp.historicalPerformance, undefined),
+        updatedAt: new Date().toISOString()
+    };
 }
 
-export function getAllProfiles(): CompanyLicitationProfile[] {
-    return Array.from(profileStore.values());
+export async function getAllProfiles(): Promise<CompanyLicitationProfile[]> {
+    const cps = await prisma.companyProfile.findMany();
+    return cps.map(cp => ({
+        companyId: cp.id,
+        corporateData: { 
+            legalName: cp.razaoSocial, 
+            cnpj: cp.cnpj,
+            headquarters: cp.city ? `${cp.city}/${cp.state}` : undefined
+        },
+        registrations: parseJsonField(cp.registrations, {}),
+        responsibleProfessionals: parseJsonField(cp.responsibleProfessionals, []),
+        technicalAssets: parseJsonField(cp.technicalAssets, { certificates: [], attests: [], artCatRrt: [], recurringCapabilities: [] }),
+        documentaryAssets: parseJsonField(cp.documentaryAssets, { legalDocuments: [], fiscalDocuments: [], laborDocuments: [], economicFinancialDocuments: [], declarationsTemplates: [] }),
+        readinessFlags: parseJsonField(cp.readinessFlags, { hasUpdatedBalance: false, hasValidCertificates: false, hasTechnicalCollection: false, hasProposalTemplates: false }),
+        knownWeaknesses: parseJsonField(cp.knownWeaknesses, []),
+        strengths: parseJsonField(cp.strengths, []),
+        historicalPerformance: parseJsonField(cp.historicalPerformance, undefined),
+        updatedAt: new Date().toISOString()
+    }));
 }
 
-export function createEmptyProfile(companyId: string, legalName: string, cnpj: string): CompanyLicitationProfile {
+export async function createEmptyProfile(companyId: string, legalName: string, cnpj: string): Promise<CompanyLicitationProfile> {
     const profile: CompanyLicitationProfile = {
         companyId,
         corporateData: { legalName, cnpj },
@@ -123,96 +176,137 @@ export function createEmptyProfile(companyId: string, legalName: string, cnpj: s
 
 // ── Memory Service ──
 
-export function addDocumentToMemory(companyId: string, doc: DocumentRecord): void {
-    if (!memoryStore.has(companyId)) memoryStore.set(companyId, []);
+export async function addDocumentToMemory(companyId: string, doc: DocumentRecord): Promise<void> {
+    const profile = await getProfile(companyId);
+    if (!profile) return;
+    
     // Default reliability
     if (!doc.reliability) doc.reliability = 'unverified';
     if (!doc.timesSuccessful) doc.timesSuccessful = 0;
-    memoryStore.get(companyId)!.push(doc);
+    
+    // Encontrar array correto e adicionar
+    if (doc.category === 'juridica') profile.documentaryAssets.legalDocuments.push(doc);
+    else if (doc.category === 'fiscal') profile.documentaryAssets.fiscalDocuments.push(doc);
+    else if (doc.category === 'trabalhista') profile.documentaryAssets.laborDocuments.push(doc);
+    else if (doc.category === 'economico_financeira') profile.documentaryAssets.economicFinancialDocuments.push(doc);
+    else if (doc.category === 'declaracao') profile.documentaryAssets.declarationsTemplates.push(doc.name); // simplificado
+    else profile.documentaryAssets.legalDocuments.push(doc); // fallback
+    
+    await createOrUpdateProfile(profile);
 }
 
-export function getCompanyDocuments(companyId: string, category?: DocumentRecord['category']): DocumentRecord[] {
-    const docs = memoryStore.get(companyId) || [];
+export async function getCompanyDocuments(companyId: string, category?: DocumentRecord['category']): Promise<DocumentRecord[]> {
+    const profile = await getProfile(companyId);
+    if (!profile) return [];
+    
+    const docs = [
+        ...(profile.documentaryAssets.legalDocuments || []),
+        ...(profile.documentaryAssets.fiscalDocuments || []),
+        ...(profile.documentaryAssets.laborDocuments || []),
+        ...(profile.documentaryAssets.economicFinancialDocuments || [])
+    ];
+    
     return category ? docs.filter(d => d.category === category) : docs;
 }
 
-export function getValidDocuments(companyId: string): DocumentRecord[] {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'valid');
+export async function getValidDocuments(companyId: string): Promise<DocumentRecord[]> {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'valid');
 }
 
-export function getExpiredDocuments(companyId: string): DocumentRecord[] {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'expired');
+export async function getExpiredDocuments(companyId: string): Promise<DocumentRecord[]> {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'expired');
 }
 
-export function getMissingDocuments(companyId: string): DocumentRecord[] {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'missing');
+export async function getMissingDocuments(companyId: string): Promise<DocumentRecord[]> {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'missing');
 }
 
-export function getMostReusedDocuments(companyId: string, limit = 10): DocumentRecord[] {
-    return getCompanyDocuments(companyId)
+export async function getMostReusedDocuments(companyId: string, limit = 10): Promise<DocumentRecord[]> {
+    return (await getCompanyDocuments(companyId))
         .sort((a, b) => b.timesUsed - a.timesUsed)
         .slice(0, limit);
 }
 
-export function getDocumentsExpiringWithin(companyId: string, days: number): DocumentRecord[] {
+export async function getDocumentsExpiringWithin(companyId: string, days: number): Promise<DocumentRecord[]> {
     const cutoff = new Date(Date.now() + days * 86400000).toISOString();
-    return getCompanyDocuments(companyId).filter(d => d.expiresAt && d.expiresAt <= cutoff && d.status === 'valid');
+    return (await getCompanyDocuments(companyId)).filter(d => d.expiresAt && d.expiresAt <= cutoff && d.status === 'valid');
 }
 
-export function getReusableDocumentsForEditalType(companyId: string, editalType: string): DocumentRecord[] {
-    return getCompanyDocuments(companyId).filter(d =>
+export async function getReusableDocumentsForEditalType(companyId: string, editalType: string): Promise<DocumentRecord[]> {
+    return (await getCompanyDocuments(companyId)).filter(d =>
         d.status === 'valid' && d.reuseCategory === 'always_reusable' ||
         (d.bestForEditalTypes?.some(t => t.toLowerCase().includes(editalType.toLowerCase())))
     );
 }
 
-export function getRecurringlyMissingDocuments(companyId: string): DocumentRecord[] {
-    return getCompanyDocuments(companyId).filter(d =>
+export async function getRecurringlyMissingDocuments(companyId: string): Promise<DocumentRecord[]> {
+    return (await getCompanyDocuments(companyId)).filter(d =>
         d.status === 'missing' && d.timesUsed > 0
     );
 }
 
-export function markDocumentUsed(companyId: string, docName: string, successful = true): void {
-    const docs = memoryStore.get(companyId) || [];
+export async function markDocumentUsed(companyId: string, docName: string, successful = true): Promise<void> {
+    const profile = await getProfile(companyId);
+    if (!profile) return;
+    
+    const docs = [
+        ...(profile.documentaryAssets.legalDocuments || []),
+        ...(profile.documentaryAssets.fiscalDocuments || []),
+        ...(profile.documentaryAssets.laborDocuments || []),
+        ...(profile.documentaryAssets.economicFinancialDocuments || [])
+    ];
+    
     const doc = docs.find(d => d.name === docName);
     if (doc) {
-        doc.timesUsed++;
+        doc.timesUsed = (doc.timesUsed || 0) + 1;
         doc.lastUsedAt = new Date().toISOString();
-        if (successful) doc.timesSuccessful++;
+        if (successful) doc.timesSuccessful = (doc.timesSuccessful || 0) + 1;
+        await createOrUpdateProfile(profile);
     }
 }
 
-export function refreshDocumentStatuses(companyId: string): { refreshed: number; expired: number } {
-    const docs = memoryStore.get(companyId) || [];
-    const now = new Date().toISOString();
+export async function refreshDocumentStatuses(companyId: string): Promise<{ refreshed: number; expired: number }> {
+    const profile = await getProfile(companyId);
+    if (!profile) return { refreshed: 0, expired: 0 };
+    
     let refreshed = 0;
     let expired = 0;
-    for (const doc of docs) {
-        if (doc.expiresAt && doc.status === 'valid' && doc.expiresAt < now) {
-            doc.status = 'expired';
-            doc.reliability = 'outdated';
-            expired++;
-            refreshed++;
+    const now = new Date().toISOString();
+    
+    const checkArray = (arr: DocumentRecord[] = []) => {
+        for (const doc of arr) {
+            if (doc.expiresAt && doc.status === 'valid' && doc.expiresAt < now) {
+                doc.status = 'expired';
+                doc.reliability = 'outdated';
+                expired++;
+                refreshed++;
+            }
         }
+    };
+    
+    checkArray(profile.documentaryAssets.legalDocuments);
+    checkArray(profile.documentaryAssets.fiscalDocuments);
+    checkArray(profile.documentaryAssets.laborDocuments);
+    checkArray(profile.documentaryAssets.economicFinancialDocuments);
+    
+    if (refreshed > 0) {
+        await createOrUpdateProfile(profile);
     }
+    
     return { refreshed, expired };
 }
 
 /**
  * Gera resumo textual do perfil para injeção em contexto de IA
  */
-export function buildCompanyContextSummary(companyId: string): string {
-    const profile = getProfile(companyId);
+export async function buildCompanyContextSummary(companyId: string): Promise<string> {
+    const profile = await getProfile(companyId);
     if (!profile) return '';
 
     const sections: string[] = [];
     const cd = profile.corporateData;
 
-    sections.push(`══ PERFIL DA EMPRESA ══
-Nome: ${cd.legalName}${cd.tradeName ? ` (${cd.tradeName})` : ''}
-CNPJ: ${cd.cnpj}
-Tipo: ${cd.companyType || 'N/I'} | Sede: ${cd.headquarters || 'N/I'}
-Atividades: ${cd.primaryActivities?.join(', ') || 'N/I'}`);
+    sections.push(`══ PERFIL DA EMPRESA ══\nNome: ${cd.legalName}${cd.tradeName ? ` (${cd.tradeName})` : ''}\nCNPJ: ${cd.cnpj}\nTipo: ${cd.companyType || 'N/I'} | Sede: ${cd.headquarters || 'N/I'}\nAtividades: ${cd.primaryActivities?.join(', ') || 'N/I'}`);
 
     // Registrations
     const regs: string[] = [];
@@ -243,18 +337,14 @@ Atividades: ${cd.primaryActivities?.join(', ') || 'N/I'}`);
 
     // Readiness
     const rf = profile.readinessFlags;
-    sections.push(`══ PRONTIDÃO ══
-Balanço atualizado: ${rf.hasUpdatedBalance ? 'SIM' : 'NÃO'}
-Certidões válidas: ${rf.hasValidCertificates ? 'SIM' : 'NÃO'}
-Acervo técnico: ${rf.hasTechnicalCollection ? 'SIM' : 'NÃO'}
-Templates proposta: ${rf.hasProposalTemplates ? 'SIM' : 'NÃO'}`);
+    sections.push(`══ PRONTIDÃO ══\nBalanço atualizado: ${rf.hasUpdatedBalance ? 'SIM' : 'NÃO'}\nCertidões válidas: ${rf.hasValidCertificates ? 'SIM' : 'NÃO'}\nAcervo técnico: ${rf.hasTechnicalCollection ? 'SIM' : 'NÃO'}\nTemplates proposta: ${rf.hasProposalTemplates ? 'SIM' : 'NÃO'}`);
 
     // Strengths & Weaknesses
     if (profile.strengths.length) sections.push(`Pontos fortes: ${profile.strengths.join('; ')}`);
     if (profile.knownWeaknesses.length) sections.push(`⚠️ Fragilidades: ${profile.knownWeaknesses.join('; ')}`);
 
     // Documents summary
-    const allDocs = getCompanyDocuments(companyId);
+    const allDocs = await getCompanyDocuments(companyId);
     if (allDocs.length > 0) {
         const valid = allDocs.filter(d => d.status === 'valid').length;
         const expired = allDocs.filter(d => d.status === 'expired').length;

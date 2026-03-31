@@ -9,43 +9,44 @@ datasource db {
 }
 
 model Tenant {
-  id                    String                 @id @default(uuid())
-  rootCnpj              String                 @unique
-  razaoSocial           String
-  createdAt             DateTime               @default(now())
-  biddingProcesses      BiddingProcess[]
-  companies             CompanyProfile[]
-  documents             Document[]
-  users                 User[]
-  globalConfig          GlobalConfig?
-  pncpSearches          PncpSavedSearch[]
-  proposals             PriceProposal[]
-  technicalCertificates TechnicalCertificate[]
-  chatMonitorConfig     ChatMonitorConfig?
-  chatMonitorLogs       ChatMonitorLog[]
+  id                     String                  @id @default(uuid())
+  rootCnpj               String                  @unique
+  razaoSocial            String
+  createdAt              DateTime                @default(now())
+  biddingProcesses       BiddingProcess[]
+  companies              CompanyProfile[]
+  documents              Document[]
+  users                  User[]
+  globalConfig           GlobalConfig?
+  pncpSearches           PncpSavedSearch[]
+  proposals              PriceProposal[]
+  technicalCertificates  TechnicalCertificate[]
+  chatMonitorConfig      ChatMonitorConfig?
+  chatMonitorLogs        ChatMonitorLog[]
   opportunityScannerLogs OpportunityScannerLog[]
-  pncpFavoriteLists     PncpFavoriteList[]
-  pncpFavoriteItems     PncpFavoriteItem[]
+  pncpFavoriteLists      PncpFavoriteList[]
+  pncpFavoriteItems      PncpFavoriteItem[]
+  insightHistories       CompanyInsightHistory[]
 }
 
 model User {
-  id           String  @id @default(uuid())
-  tenantId     String
-  name         String
-  email        String  @unique
-  passwordHash String
-  role         String  @default("Analista")
-  isActive     Boolean @default(true)
+  id                        String  @id @default(uuid())
+  tenantId                  String
+  name                      String
+  email                     String  @unique
+  passwordHash              String
+  role                      String  @default("Analista")
+  isActive                  Boolean @default(true)
   opportunityScannerEnabled Boolean @default(true)
 
-  tenant       Tenant  @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 }
 
 model CompanyProfile {
-  id                          String                 @id @default(uuid())
+  id                          String  @id @default(uuid())
   tenantId                    String
-  isHeadquarters              Boolean                @default(false)
-  cnpj                        String                 @unique
+  isHeadquarters              Boolean @default(false)
+  cnpj                        String  @unique
   razaoSocial                 String
   qualification               String? // New field for company and representative qualification
   technicalQualification      String? // Technical responsible (CREA/CAU) qualification
@@ -58,17 +59,47 @@ model CompanyProfile {
   state                       String? // UF (sigla)
   defaultProposalHeader       String? // Base64 image
   defaultProposalFooter       String? // Base64 image
-  defaultProposalHeaderHeight Int?                   @default(80)
-  defaultProposalFooterHeight Int?                   @default(60)
+  defaultProposalHeaderHeight Int?    @default(80)
+  defaultProposalFooterHeight Int?    @default(60)
   defaultLetterContent        String? // Default letter template content
   defaultSignatureConfig      String? // JSON: { sigLegal, sigTech, sigCompany, bankData, signatureMode, validityDays }
-  biddingProcesses            BiddingProcess[]
-  credentials                 CompanyCredential[]
-  pncpSearches                PncpSavedSearch[]
-  proposals                   PriceProposal[]
-  tenant                      Tenant                 @relation(fields: [tenantId], references: [id])
-  documents                   Document[]
-  technicalCertificates       TechnicalCertificate[]
+
+  // ── AI Learning & Company Profile ──
+  strengths                Json? // Arra de strings (pontos fortes)
+  knownWeaknesses          Json? // Array de strings (fragilidades)
+  technicalAssets          Json? // JSON com certificados, atestados, artCatRrt
+  documentaryAssets        Json? // Backup dos ultimos documentos parseados
+  readinessFlags           Json? // Flags de prontidao
+  registrations            Json? // Conselhos de classe etc
+  responsibleProfessionals Json? // RTs e profissionais
+  historicalPerformance    Json? // Opcional, summary de participações
+  biddingProcesses         BiddingProcess[]
+  credentials              CompanyCredential[]
+  pncpSearches             PncpSavedSearch[]
+  proposals                PriceProposal[]
+  tenant                   Tenant                  @relation(fields: [tenantId], references: [id])
+  documents                Document[]
+  technicalCertificates    TechnicalCertificate[]
+  insightHistories         CompanyInsightHistory[]
+}
+
+model CompanyInsightHistory {
+  id              String   @id @default(uuid())
+  tenantId        String
+  companyId       String
+  insightId       String   @unique
+  category        String
+  description     String
+  frequency       Int      @default(1)
+  evidence        Json
+  suggestedAction String?
+  createdAt       DateTime @default(now())
+
+  company CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([tenantId])
 }
 
 model BiddingProcess {
@@ -80,7 +111,7 @@ model BiddingProcess {
   portal           String
   modality         String
   status           String           @default("Captado")
-  substage         String?          // Subfase operacional interna
+  substage         String? // Subfase operacional interna
   risk             String?
   estimatedValue   Float            @default(0.0)
   sessionDate      DateTime
@@ -117,11 +148,11 @@ model AiAnalysis {
   qualificationRequirements String?
   chatHistory               String?        @default("[]")
   sourceFileNames           String?        @default("[]")
-  schemaV2                  Json?          // AnalysisSchemaV1 structured output from V2 pipeline
-  promptVersion             String?        // Version of prompts used (e.g. "v2.0.0")
-  modelUsed                 String?        // AI model used (e.g. "gemini-2.5-flash")
-  pipelineDurationS         Float?         // Total pipeline duration in seconds
-  overallConfidence         String?        // baixa | media | alta
+  schemaV2                  Json? // AnalysisSchemaV1 structured output from V2 pipeline
+  promptVersion             String? // Version of prompts used (e.g. "v2.0.0")
+  modelUsed                 String? // AI model used (e.g. "gemini-2.5-flash")
+  pipelineDurationS         Float? // Total pipeline duration in seconds
+  overallConfidence         String? // baixa | media | alta
   analyzedAt                DateTime       @default(now())
   biddingProcess            BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
 }
@@ -181,22 +212,22 @@ model PncpSavedSearch {
 }
 
 model OpportunityScannerLog {
-  id        String   @id @default(uuid())
-  tenantId  String
-  pncpId    String   // ID do edital no PNCP (numeroControlePNCP)
-  searchId  String?  // ID da pesquisa salva que detectou
+  id         String  @id @default(uuid())
+  tenantId   String
+  pncpId     String // ID do edital no PNCP (numeroControlePNCP)
+  searchId   String? // ID da pesquisa salva que detectou
   searchName String? // Nome da pesquisa (snapshot para exibição)
 
   // ── Dados completos do edital (para aba "Encontradas") ──
-  titulo              String?
-  objeto              String?   @db.Text
-  orgaoNome           String?
-  uf                  String?
-  municipio           String?
-  valorEstimado       Float?
+  titulo                   String?
+  objeto                   String? @db.Text
+  orgaoNome                String?
+  uf                       String?
+  municipio                String?
+  valorEstimado            Float?
   dataEncerramentoProposta String?
-  modalidadeNome      String?
-  linkSistema         String?
+  modalidadeNome           String?
+  linkSistema              String?
 
   isViewed  Boolean  @default(false) // Marcar como "visto" (lido/não lido)
   createdAt DateTime @default(now())
@@ -215,7 +246,7 @@ model PncpFavoriteList {
   createdAt DateTime @default(now())
 
   items  PncpFavoriteItem[]
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -225,8 +256,8 @@ model PncpFavoriteItem {
   id        String   @id @default(uuid())
   tenantId  String
   listId    String
-  pncpId    String   // ID único do edital no PNCP
-  data      Json     // Dados completos do item (titulo, orgao, objeto, etc.)
+  pncpId    String // ID único do edital no PNCP
+  data      Json // Dados completos do item (titulo, orgao, objeto, etc.)
   createdAt DateTime @default(now())
 
   list   PncpFavoriteList @relation(fields: [listId], references: [id], onDelete: Cascade)
@@ -261,10 +292,10 @@ model PriceProposal {
   updatedAt         DateTime @updatedAt
 
   // ── Cenário Proposta Ajustada ──
-  adjustedBdi            Float?
-  adjustedDiscount       Float?
-  adjustedTotalValue     Float?
-  adjustedLetterContent  String?
+  adjustedBdi           Float?
+  adjustedDiscount      Float?
+  adjustedTotalValue    Float?
+  adjustedLetterContent String?
 
   items          ProposalItem[]
   biddingProcess BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
@@ -292,10 +323,10 @@ model ProposalItem {
   sortOrder          Int     @default(0)
 
   // ── Cenário Proposta Ajustada ──
-  adjustedUnitCost      Float?  // null = herda unitCost
-  adjustedUnitPrice     Float?
-  adjustedTotalPrice    Float?
-  adjustedItemDiscount  Float?  @default(0)
+  adjustedUnitCost     Float? // null = herda unitCost
+  adjustedUnitPrice    Float?
+  adjustedTotalPrice   Float?
+  adjustedItemDiscount Float? @default(0)
 
   proposal PriceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 }
@@ -348,19 +379,19 @@ model CertificateExperience {
 }
 
 model ChatMonitorConfig {
-  id                String   @id @default(uuid())
-  tenantId          String   @unique
-  keywords          String?  @default("suspensa,reaberta,vencedora")
-  customKeywords    String?  @default("[]")
-  enabledCategories String?  @default("[\"convocacao\",\"vencedor\",\"encerramento\",\"prazo_docs\",\"suspensao\",\"reabertura\",\"impugnacao\",\"inabilitacao\",\"negociacao\"]")
-  categoryCustomKeywords String? @default("{}")
-  phoneNumber       String?
-  telegramChatId    String?
-  notificationEmail String?
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                     String   @id @default(uuid())
+  tenantId               String   @unique
+  keywords               String?  @default("suspensa,reaberta,vencedora")
+  customKeywords         String?  @default("[]")
+  enabledCategories      String?  @default("[\"convocacao\",\"vencedor\",\"encerramento\",\"prazo_docs\",\"suspensao\",\"reabertura\",\"impugnacao\",\"inabilitacao\",\"negociacao\"]")
+  categoryCustomKeywords String?  @default("{}")
+  phoneNumber            String?
+  telegramChatId         String?
+  notificationEmail      String?
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model ChatMonitorLog {
@@ -378,7 +409,7 @@ model ChatMonitorLog {
   eventCategory    String? // Código de categoria ("8"=convocação, "9"=comunicado, etc.)
   itemRef          String? // Item da disputa ("2", "3", etc.)
   captureSource    String?        @default("pncp-status") // "comprasnet-xhr" ou "pncp-status"
-  messageTimestamp  String? // Data/hora original da mensagem na plataforma (ex: "24/03/2026 16:48:34")
+  messageTimestamp String? // Data/hora original da mensagem na plataforma (ex: "24/03/2026 16:48:34")
   isRead           Boolean        @default(false)
   isImportant      Boolean        @default(false)
   isArchived       Boolean        @default(false)
@@ -389,21 +420,20 @@ model ChatMonitorLog {
 
 // ── Rastreamento de Consumo de IA por Tenant ──
 model AiUsageLog {
-  id          String   @id @default(uuid())
-  tenantId    String
-  userId      String?  // Null for system-initiated calls (scanner, monitoring)
-  operation   String   // e.g. "analysis", "chat", "proposal_letter", "declaration", "oracle", "dossier"
-  model       String   // e.g. "gemini-2.5-flash", "gemini-2.5-pro"
-  inputTokens  Int     @default(0)
-  outputTokens Int     @default(0)
-  totalTokens  Int     @default(0)
-  durationMs   Int     @default(0)
-  success      Boolean @default(true)
+  id           String   @id @default(uuid())
+  tenantId     String
+  userId       String? // Null for system-initiated calls (scanner, monitoring)
+  operation    String // e.g. "analysis", "chat", "proposal_letter", "declaration", "oracle", "dossier"
+  model        String // e.g. "gemini-2.5-flash", "gemini-2.5-pro"
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  totalTokens  Int      @default(0)
+  durationMs   Int      @default(0)
+  success      Boolean  @default(true)
   errorMessage String?
-  metadata     Json?   // Additional context (e.g. biddingProcessId, prompt version)
+  metadata     Json? // Additional context (e.g. biddingProcessId, prompt version)
   createdAt    DateTime @default(now())
 
   @@index([tenantId, createdAt])
   @@index([operation])
 }
-

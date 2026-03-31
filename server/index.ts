@@ -7641,7 +7641,7 @@ app.post('/api/ai/golden-cases/convert', authenticateToken, async (_req: any, re
 // POST /api/company/profile — Create or update company profile
 app.post('/api/company/profile', authenticateToken, async (req: any, res: any) => {
     try {
-        const profile = createOrUpdateProfile(req.body as CompanyLicitationProfile);
+        const profile = await createOrUpdateProfile(req.body as CompanyLicitationProfile);
         res.json({ success: true, companyId: profile.companyId });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -7651,7 +7651,7 @@ app.post('/api/company/profile', authenticateToken, async (req: any, res: any) =
 // GET /api/company/profiles — List all company profiles
 app.get('/api/company/profiles', authenticateToken, async (_req: any, res: any) => {
     try {
-        res.json(getAllProfiles());
+        res.json(await getAllProfiles());
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -7660,7 +7660,7 @@ app.get('/api/company/profiles', authenticateToken, async (_req: any, res: any) 
 // GET /api/company/:companyId — Get company profile
 app.get('/api/company/:companyId', authenticateToken, async (req: any, res: any) => {
     try {
-        const profile = getProfile(req.params.companyId);
+        const profile = await getProfile(req.params.companyId);
         if (!profile) return res.status(404).json({ error: 'Company not found' });
         res.json(profile);
     } catch (err: any) {
@@ -7686,7 +7686,7 @@ app.post('/api/strategy/analyze', authenticateToken, aiLimiter, async (req: any,
         }
 
         const schemaV2 = bidding.aiAnalysis.schemaV2;
-        const matchResult = matchCompanyToEdital(companyId, schemaV2, biddingProcessId);
+        const matchResult = await matchCompanyToEdital(companyId, schemaV2, biddingProcessId);
         const assessment = calculateParticipationScore(matchResult, schemaV2);
         const actionPlan = generateActionPlan(matchResult, assessment, schemaV2);
 

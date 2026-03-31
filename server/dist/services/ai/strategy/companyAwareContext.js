@@ -29,22 +29,22 @@ const COMPANY_TOKEN_BUDGET = {
 /**
  * Monta contexto híbrido: edital + empresa (recorte cirúrgico por módulo)
  */
-function buildHybridContext(schemaV2, moduleName, companyId, processId) {
+async function buildHybridContext(schemaV2, moduleName, companyId, processId) {
     let context = (0, moduleContextContracts_1.buildModuleContext)(schemaV2, moduleName);
     if (!companyId)
         return { context };
-    const profile = (0, companyProfileService_1.getProfile)(companyId);
+    const profile = await (0, companyProfileService_1.getProfile)(companyId);
     if (!profile)
         return { context };
-    const companySummary = (0, companyProfileService_1.buildCompanyContextSummary)(companyId);
-    const matchResult = processId ? (0, participationEngine_1.matchCompanyToEdital)(companyId, schemaV2, processId) : undefined;
-    const companyBlock = buildModuleCompanyBlock(moduleName, profile, companySummary, matchResult);
+    const companySummary = await (0, companyProfileService_1.buildCompanyContextSummary)(companyId);
+    const matchResult = processId ? await (0, participationEngine_1.matchCompanyToEdital)(companyId, schemaV2, processId) : undefined;
+    const companyBlock = await buildModuleCompanyBlock(moduleName, profile, companySummary, matchResult);
     if (companyBlock) {
         context += '\n\n' + truncateToTokenBudget(companyBlock, COMPANY_TOKEN_BUDGET[moduleName]);
     }
     return { context, matchResult };
 }
-function buildModuleCompanyBlock(moduleName, profile, companySummary, matchResult) {
+async function buildModuleCompanyBlock(moduleName, profile, companySummary, matchResult) {
     const s = [];
     switch (moduleName) {
         case 'chat':
@@ -135,7 +135,7 @@ function buildModuleCompanyBlock(moduleName, profile, companySummary, matchResul
             }
             else {
                 // Sem match: resumo documental básico
-                const docs = (0, companyProfileService_1.getCompanyDocuments)(profile.companyId);
+                const docs = await (0, companyProfileService_1.getCompanyDocuments)(profile.companyId);
                 if (docs.length > 0) {
                     const valid = docs.filter((d) => d.status === 'valid').length;
                     const expired = docs.filter((d) => d.status === 'expired').length;

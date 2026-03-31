@@ -32,9 +32,9 @@ const DECISION_THRESHOLDS = {
     naoParticipar: { below: 40 }
 };
 // ── Matching Engine ──
-function matchCompanyToEdital(companyId, schemaV2, processId) {
-    const profile = (0, companyProfileService_1.getProfile)(companyId);
-    const docs = (0, companyProfileService_1.getCompanyDocuments)(companyId);
+async function matchCompanyToEdital(companyId, schemaV2, processId) {
+    const profile = await (0, companyProfileService_1.getProfile)(companyId);
+    const docs = await (0, companyProfileService_1.getCompanyDocuments)(companyId);
     const documentaryFit = matchDocuments(profile, docs, schemaV2);
     const technicalFit = matchTechnical(profile, schemaV2);
     const economicFinancialFit = matchEconomicFinancial(profile, docs, schemaV2);

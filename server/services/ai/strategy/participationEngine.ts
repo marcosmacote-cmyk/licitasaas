@@ -115,9 +115,9 @@ const DECISION_THRESHOLDS = {
 
 // ── Matching Engine ──
 
-export function matchCompanyToEdital(companyId: string, schemaV2: any, processId: string): CompanyEditalMatchResult {
-    const profile = getProfile(companyId);
-    const docs = getCompanyDocuments(companyId);
+export async function matchCompanyToEdital(companyId: string, schemaV2: any, processId: string): Promise<CompanyEditalMatchResult> {
+    const profile = await getProfile(companyId);
+    const docs = await getCompanyDocuments(companyId);
 
     const documentaryFit = matchDocuments(profile, docs, schemaV2);
     const technicalFit = matchTechnical(profile, schemaV2);

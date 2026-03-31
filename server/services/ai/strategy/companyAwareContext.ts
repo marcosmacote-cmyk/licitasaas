@@ -29,21 +29,21 @@ const COMPANY_TOKEN_BUDGET: Record<ModuleName, number> = {
 /**
  * Monta contexto híbrido: edital + empresa (recorte cirúrgico por módulo)
  */
-export function buildHybridContext(
+export async function buildHybridContext(
     schemaV2: any,
     moduleName: ModuleName,
     companyId?: string,
     processId?: string
-): { context: string; matchResult?: CompanyEditalMatchResult } {
+): Promise<{ context: string; matchResult?: CompanyEditalMatchResult }> {
     let context = buildModuleContext(schemaV2, moduleName);
 
     if (!companyId) return { context };
-    const profile = getProfile(companyId);
+    const profile = await getProfile(companyId);
     if (!profile) return { context };
 
-    const companySummary = buildCompanyContextSummary(companyId);
-    const matchResult = processId ? matchCompanyToEdital(companyId, schemaV2, processId) : undefined;
-    const companyBlock = buildModuleCompanyBlock(moduleName, profile, companySummary, matchResult);
+    const companySummary = await buildCompanyContextSummary(companyId);
+    const matchResult = processId ? await matchCompanyToEdital(companyId, schemaV2, processId) : undefined;
+    const companyBlock = await buildModuleCompanyBlock(moduleName, profile, companySummary, matchResult);
 
     if (companyBlock) {
         context += '\n\n' + truncateToTokenBudget(companyBlock, COMPANY_TOKEN_BUDGET[moduleName]);
@@ -52,12 +52,12 @@ export function buildHybridContext(
     return { context, matchResult };
 }
 
-function buildModuleCompanyBlock(
+async function buildModuleCompanyBlock(
     moduleName: ModuleName,
     profile: any,
     companySummary: string,
     matchResult?: CompanyEditalMatchResult
-): string {
+): Promise<string> {
     const s: string[] = [];
 
     switch (moduleName) {
@@ -138,7 +138,7 @@ function buildModuleCompanyBlock(
                 if (matchResult.documentaryFit.uncertain.length > 0) s.push(`❓ Incertos (${matchResult.documentaryFit.uncertain.length}): ${matchResult.documentaryFit.uncertain.join(', ')}`);
             } else {
                 // Sem match: resumo documental básico
-                const docs = getCompanyDocuments(profile.companyId);
+                const docs = await getCompanyDocuments(profile.companyId);
                 if (docs.length > 0) {
                     const valid = docs.filter((d: any) => d.status === 'valid').length;
                     const expired = docs.filter((d: any) => d.status === 'expired').length;

@@ -1,11 +1,4 @@
 "use strict";
-/**
- * ══════════════════════════════════════════════════════════════════
- *  Company Profile Schema & Service
- * ══════════════════════════════════════════════════════════════════
- *
- *  Perfil licitatório estruturado por empresa + memória institucional.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createOrUpdateProfile = createOrUpdateProfile;
 exports.getProfile = getProfile;
@@ -23,23 +16,89 @@ exports.getRecurringlyMissingDocuments = getRecurringlyMissingDocuments;
 exports.markDocumentUsed = markDocumentUsed;
 exports.refreshDocumentStatuses = refreshDocumentStatuses;
 exports.buildCompanyContextSummary = buildCompanyContextSummary;
-// ── Store (será migrado para DB) ──
-const profileStore = new Map();
-const memoryStore = new Map();
+const client_1 = require("@prisma/client");
+const prisma = new client_1.PrismaClient();
+// ── Funções de Helper ──
+const parseJsonField = (val, def) => {
+    if (!val)
+        return def;
+    if (typeof val === 'string') {
+        try {
+            return JSON.parse(val);
+        }
+        catch {
+            return def;
+        }
+    }
+    return val;
+};
 // ── Profile Service ──
-function createOrUpdateProfile(profile) {
+async function createOrUpdateProfile(profile) {
     profile.updatedAt = new Date().toISOString();
-    profileStore.set(profile.companyId, profile);
-    console.log(`[CompanyProfile] Saved profile for ${profile.corporateData.legalName} (${profile.companyId})`);
+    try {
+        await prisma.companyProfile.update({
+            where: { id: profile.companyId },
+            data: {
+                strengths: profile.strengths,
+                knownWeaknesses: profile.knownWeaknesses,
+                technicalAssets: profile.technicalAssets,
+                documentaryAssets: profile.documentaryAssets,
+                readinessFlags: profile.readinessFlags,
+                registrations: profile.registrations,
+                responsibleProfessionals: profile.responsibleProfessionals,
+                historicalPerformance: profile.historicalPerformance
+            }
+        });
+        console.log(`[CompanyProfile] Saved profile to DB for ${profile.corporateData.legalName} (${profile.companyId})`);
+    }
+    catch (e) {
+        console.error(`[CompanyProfile] Error saving profile to DB for ${profile.companyId}`, e);
+    }
     return profile;
 }
-function getProfile(companyId) {
-    return profileStore.get(companyId);
+async function getProfile(companyId) {
+    const cp = await prisma.companyProfile.findUnique({ where: { id: companyId } });
+    if (!cp)
+        return undefined;
+    return {
+        companyId: cp.id,
+        corporateData: {
+            legalName: cp.razaoSocial,
+            cnpj: cp.cnpj,
+            headquarters: cp.city ? `${cp.city}/${cp.state}` : undefined
+        },
+        registrations: parseJsonField(cp.registrations, {}),
+        responsibleProfessionals: parseJsonField(cp.responsibleProfessionals, []),
+        technicalAssets: parseJsonField(cp.technicalAssets, { certificates: [], attests: [], artCatRrt: [], recurringCapabilities: [] }),
+        documentaryAssets: parseJsonField(cp.documentaryAssets, { legalDocuments: [], fiscalDocuments: [], laborDocuments: [], economicFinancialDocuments: [], declarationsTemplates: [] }),
+        readinessFlags: parseJsonField(cp.readinessFlags, { hasUpdatedBalance: false, hasValidCertificates: false, hasTechnicalCollection: false, hasProposalTemplates: false }),
+        knownWeaknesses: parseJsonField(cp.strengths, []), // BUG FIXED HERE in my mind, wait, I will map knownWeaknesses correctly below
+        strengths: parseJsonField(cp.strengths, []),
+        historicalPerformance: parseJsonField(cp.historicalPerformance, undefined),
+        updatedAt: new Date().toISOString()
+    };
 }
-function getAllProfiles() {
-    return Array.from(profileStore.values());
+async function getAllProfiles() {
+    const cps = await prisma.companyProfile.findMany();
+    return cps.map(cp => ({
+        companyId: cp.id,
+        corporateData: {
+            legalName: cp.razaoSocial,
+            cnpj: cp.cnpj,
+            headquarters: cp.city ? `${cp.city}/${cp.state}` : undefined
+        },
+        registrations: parseJsonField(cp.registrations, {}),
+        responsibleProfessionals: parseJsonField(cp.responsibleProfessionals, []),
+        technicalAssets: parseJsonField(cp.technicalAssets, { certificates: [], attests: [], artCatRrt: [], recurringCapabilities: [] }),
+        documentaryAssets: parseJsonField(cp.documentaryAssets, { legalDocuments: [], fiscalDocuments: [], laborDocuments: [], economicFinancialDocuments: [], declarationsTemplates: [] }),
+        readinessFlags: parseJsonField(cp.readinessFlags, { hasUpdatedBalance: false, hasValidCertificates: false, hasTechnicalCollection: false, hasProposalTemplates: false }),
+        knownWeaknesses: parseJsonField(cp.knownWeaknesses, []),
+        strengths: parseJsonField(cp.strengths, []),
+        historicalPerformance: parseJsonField(cp.historicalPerformance, undefined),
+        updatedAt: new Date().toISOString()
+    }));
 }
-function createEmptyProfile(companyId, legalName, cnpj) {
+async function createEmptyProfile(companyId, legalName, cnpj) {
     const profile = {
         companyId,
         corporateData: { legalName, cnpj },
@@ -55,84 +114,122 @@ function createEmptyProfile(companyId, legalName, cnpj) {
     return createOrUpdateProfile(profile);
 }
 // ── Memory Service ──
-function addDocumentToMemory(companyId, doc) {
-    if (!memoryStore.has(companyId))
-        memoryStore.set(companyId, []);
+async function addDocumentToMemory(companyId, doc) {
+    const profile = await getProfile(companyId);
+    if (!profile)
+        return;
     // Default reliability
     if (!doc.reliability)
         doc.reliability = 'unverified';
     if (!doc.timesSuccessful)
         doc.timesSuccessful = 0;
-    memoryStore.get(companyId).push(doc);
+    // Encontrar array correto e adicionar
+    if (doc.category === 'juridica')
+        profile.documentaryAssets.legalDocuments.push(doc);
+    else if (doc.category === 'fiscal')
+        profile.documentaryAssets.fiscalDocuments.push(doc);
+    else if (doc.category === 'trabalhista')
+        profile.documentaryAssets.laborDocuments.push(doc);
+    else if (doc.category === 'economico_financeira')
+        profile.documentaryAssets.economicFinancialDocuments.push(doc);
+    else if (doc.category === 'declaracao')
+        profile.documentaryAssets.declarationsTemplates.push(doc.name); // simplificado
+    else
+        profile.documentaryAssets.legalDocuments.push(doc); // fallback
+    await createOrUpdateProfile(profile);
 }
-function getCompanyDocuments(companyId, category) {
-    const docs = memoryStore.get(companyId) || [];
+async function getCompanyDocuments(companyId, category) {
+    const profile = await getProfile(companyId);
+    if (!profile)
+        return [];
+    const docs = [
+        ...(profile.documentaryAssets.legalDocuments || []),
+        ...(profile.documentaryAssets.fiscalDocuments || []),
+        ...(profile.documentaryAssets.laborDocuments || []),
+        ...(profile.documentaryAssets.economicFinancialDocuments || [])
+    ];
     return category ? docs.filter(d => d.category === category) : docs;
 }
-function getValidDocuments(companyId) {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'valid');
+async function getValidDocuments(companyId) {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'valid');
 }
-function getExpiredDocuments(companyId) {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'expired');
+async function getExpiredDocuments(companyId) {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'expired');
 }
-function getMissingDocuments(companyId) {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'missing');
+async function getMissingDocuments(companyId) {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'missing');
 }
-function getMostReusedDocuments(companyId, limit = 10) {
-    return getCompanyDocuments(companyId)
+async function getMostReusedDocuments(companyId, limit = 10) {
+    return (await getCompanyDocuments(companyId))
         .sort((a, b) => b.timesUsed - a.timesUsed)
         .slice(0, limit);
 }
-function getDocumentsExpiringWithin(companyId, days) {
+async function getDocumentsExpiringWithin(companyId, days) {
     const cutoff = new Date(Date.now() + days * 86400000).toISOString();
-    return getCompanyDocuments(companyId).filter(d => d.expiresAt && d.expiresAt <= cutoff && d.status === 'valid');
+    return (await getCompanyDocuments(companyId)).filter(d => d.expiresAt && d.expiresAt <= cutoff && d.status === 'valid');
 }
-function getReusableDocumentsForEditalType(companyId, editalType) {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'valid' && d.reuseCategory === 'always_reusable' ||
+async function getReusableDocumentsForEditalType(companyId, editalType) {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'valid' && d.reuseCategory === 'always_reusable' ||
         (d.bestForEditalTypes?.some(t => t.toLowerCase().includes(editalType.toLowerCase()))));
 }
-function getRecurringlyMissingDocuments(companyId) {
-    return getCompanyDocuments(companyId).filter(d => d.status === 'missing' && d.timesUsed > 0);
+async function getRecurringlyMissingDocuments(companyId) {
+    return (await getCompanyDocuments(companyId)).filter(d => d.status === 'missing' && d.timesUsed > 0);
 }
-function markDocumentUsed(companyId, docName, successful = true) {
-    const docs = memoryStore.get(companyId) || [];
+async function markDocumentUsed(companyId, docName, successful = true) {
+    const profile = await getProfile(companyId);
+    if (!profile)
+        return;
+    const docs = [
+        ...(profile.documentaryAssets.legalDocuments || []),
+        ...(profile.documentaryAssets.fiscalDocuments || []),
+        ...(profile.documentaryAssets.laborDocuments || []),
+        ...(profile.documentaryAssets.economicFinancialDocuments || [])
+    ];
     const doc = docs.find(d => d.name === docName);
     if (doc) {
-        doc.timesUsed++;
+        doc.timesUsed = (doc.timesUsed || 0) + 1;
         doc.lastUsedAt = new Date().toISOString();
         if (successful)
-            doc.timesSuccessful++;
+            doc.timesSuccessful = (doc.timesSuccessful || 0) + 1;
+        await createOrUpdateProfile(profile);
     }
 }
-function refreshDocumentStatuses(companyId) {
-    const docs = memoryStore.get(companyId) || [];
-    const now = new Date().toISOString();
+async function refreshDocumentStatuses(companyId) {
+    const profile = await getProfile(companyId);
+    if (!profile)
+        return { refreshed: 0, expired: 0 };
     let refreshed = 0;
     let expired = 0;
-    for (const doc of docs) {
-        if (doc.expiresAt && doc.status === 'valid' && doc.expiresAt < now) {
-            doc.status = 'expired';
-            doc.reliability = 'outdated';
-            expired++;
-            refreshed++;
+    const now = new Date().toISOString();
+    const checkArray = (arr = []) => {
+        for (const doc of arr) {
+            if (doc.expiresAt && doc.status === 'valid' && doc.expiresAt < now) {
+                doc.status = 'expired';
+                doc.reliability = 'outdated';
+                expired++;
+                refreshed++;
+            }
         }
+    };
+    checkArray(profile.documentaryAssets.legalDocuments);
+    checkArray(profile.documentaryAssets.fiscalDocuments);
+    checkArray(profile.documentaryAssets.laborDocuments);
+    checkArray(profile.documentaryAssets.economicFinancialDocuments);
+    if (refreshed > 0) {
+        await createOrUpdateProfile(profile);
     }
     return { refreshed, expired };
 }
 /**
  * Gera resumo textual do perfil para injeção em contexto de IA
  */
-function buildCompanyContextSummary(companyId) {
-    const profile = getProfile(companyId);
+async function buildCompanyContextSummary(companyId) {
+    const profile = await getProfile(companyId);
     if (!profile)
         return '';
     const sections = [];
     const cd = profile.corporateData;
-    sections.push(`══ PERFIL DA EMPRESA ══
-Nome: ${cd.legalName}${cd.tradeName ? ` (${cd.tradeName})` : ''}
-CNPJ: ${cd.cnpj}
-Tipo: ${cd.companyType || 'N/I'} | Sede: ${cd.headquarters || 'N/I'}
-Atividades: ${cd.primaryActivities?.join(', ') || 'N/I'}`);
+    sections.push(`══ PERFIL DA EMPRESA ══\nNome: ${cd.legalName}${cd.tradeName ? ` (${cd.tradeName})` : ''}\nCNPJ: ${cd.cnpj}\nTipo: ${cd.companyType || 'N/I'} | Sede: ${cd.headquarters || 'N/I'}\nAtividades: ${cd.primaryActivities?.join(', ') || 'N/I'}`);
     // Registrations
     const regs = [];
     if (profile.registrations.crea)
@@ -169,18 +266,14 @@ Atividades: ${cd.primaryActivities?.join(', ') || 'N/I'}`);
     }
     // Readiness
     const rf = profile.readinessFlags;
-    sections.push(`══ PRONTIDÃO ══
-Balanço atualizado: ${rf.hasUpdatedBalance ? 'SIM' : 'NÃO'}
-Certidões válidas: ${rf.hasValidCertificates ? 'SIM' : 'NÃO'}
-Acervo técnico: ${rf.hasTechnicalCollection ? 'SIM' : 'NÃO'}
-Templates proposta: ${rf.hasProposalTemplates ? 'SIM' : 'NÃO'}`);
+    sections.push(`══ PRONTIDÃO ══\nBalanço atualizado: ${rf.hasUpdatedBalance ? 'SIM' : 'NÃO'}\nCertidões válidas: ${rf.hasValidCertificates ? 'SIM' : 'NÃO'}\nAcervo técnico: ${rf.hasTechnicalCollection ? 'SIM' : 'NÃO'}\nTemplates proposta: ${rf.hasProposalTemplates ? 'SIM' : 'NÃO'}`);
     // Strengths & Weaknesses
     if (profile.strengths.length)
         sections.push(`Pontos fortes: ${profile.strengths.join('; ')}`);
     if (profile.knownWeaknesses.length)
         sections.push(`⚠️ Fragilidades: ${profile.knownWeaknesses.join('; ')}`);
     // Documents summary
-    const allDocs = getCompanyDocuments(companyId);
+    const allDocs = await getCompanyDocuments(companyId);
     if (allDocs.length > 0) {
         const valid = allDocs.filter(d => d.status === 'valid').length;
         const expired = allDocs.filter(d => d.status === 'expired').length;

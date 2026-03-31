@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Tag, Mail, Phone, Save, Info, MapPin, Landmark } from 'lucide-react';
+import { Building2, Tag, Mail, Phone, Save, Info, MapPin, Landmark, BrainCircuit } from 'lucide-react';
 import type { CompanyProfile } from '../types';
 import { Modal, FormField, Input, Textarea, Button } from './ui';
 
@@ -29,6 +29,10 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
         validityDays: 60,
     });
 
+    // Campos de IA
+    const [strengthsText, setStrengthsText] = useState('');
+    const [weaknessesText, setWeaknessesText] = useState('');
+
     useEffect(() => {
         if (initialData) {
             setFormData(initialData);
@@ -44,15 +48,25 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                     });
                 }
             } catch { /* ignore */ }
+            if (initialData.strengths) {
+                setStrengthsText(initialData.strengths.join(', '));
+            }
+            if (initialData.knownWeaknesses) {
+                setWeaknessesText(initialData.knownWeaknesses.join(', '));
+            }
         }
     }, [initialData]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state } = formData;
+        
+        const strengths = strengthsText.split(',').map(s => s.trim()).filter(Boolean);
+        const knownWeaknesses = weaknessesText.split(',').map(s => s.trim()).filter(Boolean);
+        
         // Salvar config de assinatura como JSON
         const defaultSignatureConfig = JSON.stringify(sigConfig);
-        onSave({ razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state, defaultSignatureConfig });
+        onSave({ razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactCpf, contactEmail, contactPhone, address, city, state, defaultSignatureConfig, strengths, knownWeaknesses });
     };
 
     const footer = (
@@ -160,6 +174,46 @@ export function CompanyFormModal({ initialData, onClose, onSave }: Props) {
                             onChange={(e) => setFormData({ ...formData, technicalQualification: e.target.value })}
                         />
                     </FormField>
+
+                    {/* Inteligência Artificial & Tática */}
+                    <div className="col-span-full">
+                        <div className="p-6" style={{ background: 'linear-gradient(to right, rgba(139, 92, 246, 0.03), rgba(168, 85, 247, 0.01))', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: 'var(--radius-xl)' }}>
+                            <div className="flex-gap" style={{ gap: 'var(--space-2)', color: 'var(--color-primary)', marginBottom: 'var(--space-4)' }}>
+                                <BrainCircuit size={16} />
+                                <span className="form-label mb-0" style={{ color: 'var(--color-primary)' }}>Inteligência Estratégica & IA do LicitaSaaS</span>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)', fontWeight: 400, marginLeft: 4 }}>(Diretrizes para o Cérebro da Empresa)</span>
+                            </div>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                <FormField 
+                                    label="Diferenciais & Pontos Fortes" 
+                                    hint="Separe por vírgulas. Ex: Frota própria, Acervo robusto em hospitais, Marca exclusiva"
+                                    fullWidth
+                                >
+                                    <Textarea
+                                        placeholder="Lista de diferenciais competitivos..."
+                                        minHeight="80px"
+                                        value={strengthsText}
+                                        onChange={(e) => setStrengthsText(e.target.value)}
+                                        style={{ borderColor: 'rgba(139, 92, 246, 0.15)' }}
+                                    />
+                                </FormField>
+                                <FormField 
+                                    label="Fragilidades Conhecidas & Restrições" 
+                                    hint="Separe por vírgulas. Ex: Falta de balanço, Restrição para frete no Norte"
+                                    fullWidth
+                                >
+                                    <Textarea
+                                        placeholder="Lista de gargalos ou restrições de participação..."
+                                        minHeight="80px"
+                                        value={weaknessesText}
+                                        onChange={(e) => setWeaknessesText(e.target.value)}
+                                        style={{ borderColor: 'rgba(139, 92, 246, 0.15)' }}
+                                    />
+                                </FormField>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Canais de Contato */}
                     <div className="col-span-full">

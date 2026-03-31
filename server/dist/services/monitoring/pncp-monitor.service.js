@@ -67,9 +67,14 @@ class PncpMonitorService {
         this.alertsDetected = 0;
         try {
             console.log('[PncpMonitor] Polling started...');
-            // Get all monitored processes
             const monitoredProcesses = await prisma_1.prisma.biddingProcess.findMany({
-                where: { isMonitored: true }
+                where: {
+                    isMonitored: true,
+                    OR: [
+                        { pncpLink: { not: null } },
+                        { link: { contains: 'pncp.gov.br' } }
+                    ]
+                }
             });
             this.processedCount = monitoredProcesses.length;
             console.log(`[PncpMonitor] Found ${monitoredProcesses.length} monitored processes.`);
@@ -140,16 +145,12 @@ class PncpMonitorService {
                         this.consecutiveFailures.set(process.id, failures);
                         // Only log on first occurrence, then silently skip
                         if (failures === 1) {
-                            console.warn(`[PncpMonitor] ⚠️ "${shortTitle}" — 404 no endpoint de mensagens. Será ignorado.`);
+                            console.warn(`[PncpMonitor] ⚠️ "${shortTitle}" — 404 no endpoint de mensagens PNCP. Será ignorado no polling PNCP.`);
                         }
-                        // After 3 consecutive 404s, auto-disable monitoring to stop wasting requests
-                        if (failures >= 3) {
-                            console.warn(`[PncpMonitor] 🔕 Auto-desativando monitoramento para "${shortTitle}" (3 falhas 404 consecutivas).`);
-                            await prisma_1.prisma.biddingProcess.update({
-                                where: { id: process.id },
-                                data: { isMonitored: false }
-                            }).catch(() => { });
-                            this.consecutiveFailures.delete(process.id);
+                        // After 3 consecutive 404s, just skip silently (do NOT disable isMonitored — 
+                        // it would also disable ComprasNet Chat monitoring which shares this flag)
+                        if (failures >= 3 && failures % 10 === 0) {
+                            console.log(`[PncpMonitor] ⏭️ "${shortTitle}" — ${failures} falhas 404 consecutivas no PNCP. Ignorando silenciosamente.`);
                         }
                         return;
                     }
@@ -189,6 +190,18 @@ class PncpMonitorService {
                     this.alertsDetected++;
                 }
                 // Capture ALL messages (not just keyword matches)
+                // Extract original timestamp from PNCP API
+                const rawDate = msg.dataRecebimento || msg.dataEnvio || msg.dataPublicacao || null;
+                let formattedTimestamp = null;
+                if (rawDate) {
+                    try {
+                        const d = new Date(rawDate);
+                        formattedTimestamp = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    }
+                    catch {
+                        formattedTimestamp = String(rawDate);
+                    }
+                }
                 await prisma_1.prisma.chatMonitorLog.create({
                     data: {
                         tenantId: process.tenantId,
@@ -197,6 +210,7 @@ class PncpMonitorService {
                         content: msg.conteudo || '',
                         authorType: msg.nomeUsuario || msg.tipo || 'Sistema',
                         detectedKeyword: detectedKeyword,
+                        messageTimestamp: formattedTimestamp,
                         status: detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED'
                     }
                 });

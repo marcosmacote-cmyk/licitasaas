@@ -45,6 +45,8 @@ const rag_service_1 = require("./services/ai/rag.service");
 const riskRulesEngine_1 = require("./services/ai/riskRulesEngine");
 const analysisQualityEvaluator_1 = require("./services/ai/analysisQualityEvaluator");
 const moduleContextContracts_1 = require("./services/ai/modules/moduleContextContracts");
+const declarationPromptV2_1 = require("./services/ai/modules/prompts/declarationPromptV2");
+const declaration_1 = require("./services/ai/declaration");
 const feedbackService_1 = require("./services/ai/governance/feedbackService");
 const operationalMetrics_1 = require("./services/ai/governance/operationalMetrics");
 const versionGovernance_1 = require("./services/ai/governance/versionGovernance");
@@ -53,8 +55,14 @@ const companyProfileService_1 = require("./services/ai/company/companyProfileSer
 const participationEngine_1 = require("./services/ai/strategy/participationEngine");
 const companyLearningInsights_1 = require("./services/ai/strategy/companyLearningInsights");
 const pncp_monitor_service_1 = require("./services/monitoring/pncp-monitor.service");
+const alertTaxonomy_1 = require("./services/monitoring/alertTaxonomy");
+const opportunity_scanner_service_1 = require("./services/monitoring/opportunity-scanner.service");
+const batch_platform_monitor_service_1 = require("./services/monitoring/batch-platform-monitor.service");
+const pcp_monitor_service_1 = require("./services/monitoring/pcp-monitor.service");
+const licitanet_monitor_service_1 = require("./services/monitoring/licitanet-monitor.service");
+const licitamaisbrasil_monitor_service_1 = require("./services/monitoring/licitamaisbrasil-monitor.service");
+const ingest_service_1 = require("./services/monitoring/ingest.service");
 const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const axios_1 = __importDefault(require("axios"));
 const https_1 = __importDefault(require("https"));
@@ -64,9 +72,17 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const genai_1 = require("@google/genai");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const storage_1 = require("./storage");
 const node_unrar_js_1 = require("node-unrar-js");
+const security_1 = require("./lib/security");
+const crypto_1 = require("./lib/crypto");
+const requestLogger_1 = require("./lib/requestLogger");
+const aiUsageTracker_1 = require("./lib/aiUsageTracker");
+const auth_1 = require("./middlewares/auth");
+const auth_2 = __importDefault(require("./routes/auth"));
+const team_1 = __importDefault(require("./routes/team"));
+const companies_1 = __importDefault(require("./routes/companies"));
+const documents_1 = __importDefault(require("./routes/documents"));
 // Resolve server root (handles both ts-node and compiled dist/)
 const SERVER_ROOT = __dirname.endsWith('dist') ? path_1.default.resolve(__dirname, '..') : __dirname;
 // Load .env only if it exists (don't override Railway/Docker env vars)
@@ -75,54 +91,43 @@ const app = (0, express_1.default)();
 const prisma = new client_1.PrismaClient();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
-app.use((0, cors_1.default)());
+// PROCESS_ROLE: 'api' = HTTP only (no pollers), 'worker' = pollers only, 'all' = both (legacy default)
+const PROCESS_ROLE = (process.env.PROCESS_ROLE || 'all').toLowerCase();
+// ── Security Middleware (Helmet, CORS, Rate Limiting, Logging) ──
+(0, security_1.applySecurityMiddleware)(app);
 app.use(express_1.default.json({ limit: '50mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
-// Auth
-app.post('/api/auth/login', async (req, res) => {
-    console.log("==> LOGIN HIT! Body:", req.body);
+// ── Observability: Request logging with correlation IDs ──
+app.use(requestLogger_1.requestLogger);
+// ── Health Check (for Docker/Railway/load balancers) ──
+app.get('/health', async (_req, res) => {
+    const mem = process.memoryUsage();
     try {
-        const { email, password } = req.body;
-        console.log("Looking up user for email:", email);
-        const user = await prisma.user.findUnique({
-            where: { email },
-            include: { tenant: true }
-        });
-        console.log("Found user:", user?.id || 'No user found');
-        if (!user || !(await bcryptjs_1.default.compare(password, user.passwordHash))) {
-            return res.status(401).json({ error: 'Email ou senha inválidos' });
-        }
-        const token = jsonwebtoken_1.default.sign({ userId: user.id, tenantId: user.tenantId, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+        await prisma.$queryRaw `SELECT 1`;
         res.json({
-            token,
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                tenantId: user.tenantId,
-                tenantName: user.tenant.razaoSocial
-            }
+            status: 'healthy',
+            role: PROCESS_ROLE,
+            uptime: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString(),
+            memory: {
+                heapUsedMB: Math.round(mem.heapUsed / 1048576),
+                heapTotalMB: Math.round(mem.heapTotal / 1048576),
+                rssMB: Math.round(mem.rss / 1048576),
+            },
+            node: process.version,
+            hasGeminiKey: !!process.env.GEMINI_API_KEY,
         });
     }
-    catch (error) {
-        console.error("Login error:", error);
-        res.status(500).json({ error: 'Erro interno ao realizar login' });
+    catch (err) {
+        res.status(503).json({
+            status: 'unhealthy',
+            reason: 'database_unreachable',
+            error: err.message,
+        });
     }
 });
-// Middleware de Autenticação
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token)
-        return res.status(401).json({ error: 'Token não fornecido' });
-    jsonwebtoken_1.default.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err)
-            return res.status(403).json({ error: 'Token inválido ou expirado' });
-        req.user = decoded;
-        next();
-    });
-};
+// Auth
+app.use('/api/auth', auth_2.default);
 /**
  * Helper to fetch file buffer from multiple sources:
  * 1. Storage Service (Supabase/Local)
@@ -212,8 +217,28 @@ const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage()
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'LicitaSaaS API is running' });
 });
-// Debug endpoint to check DB contents
-app.get('/api/debug-db', async (req, res) => {
+// ── Admin: Backup Manual do Banco ──
+app.post('/api/admin/backup', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const { runBackup } = await Promise.resolve().then(() => __importStar(require('./scripts/backup-database')));
+        res.json({ message: 'Backup iniciado. Aguarde...' });
+        // Run async (don't block response)
+        runBackup().then(result => {
+            if (result.success) {
+                console.log(`[Backup] ✅ Manual backup completed: ${result.fileName} (${result.sizeKB}KB)`);
+            }
+            else {
+                console.error(`[Backup] ❌ Manual backup failed: ${result.error}`);
+            }
+        });
+    }
+    catch (error) {
+        console.error('[Backup] Failed to start backup:', error);
+        res.status(500).json({ error: 'Failed to start backup' });
+    }
+});
+// Debug endpoint — safe counts only (no credential exposure)
+app.get('/api/debug-db', auth_1.authenticateToken, async (req, res) => {
     try {
         const counts = {
             tenants: await prisma.tenant.count(),
@@ -223,13 +248,7 @@ app.get('/api/debug-db', async (req, res) => {
             biddings: await prisma.biddingProcess.count(),
             credentials: await prisma.companyCredential.count()
         };
-        const users = await prisma.user.findMany({
-            select: { id: true, email: true, tenantId: true }
-        });
-        const tenants = await prisma.tenant.findMany();
-        const companies = await prisma.companyProfile.findMany();
-        const credentials = await prisma.companyCredential.findMany();
-        res.json({ counts, users, tenants, companies, credentials });
+        res.json({ counts });
     }
     catch (e) {
         res.status(500).json({ error: e.message });
@@ -258,8 +277,100 @@ app.get('/api/debug-uploads', (req, res) => {
         res.status(400).json({ error: e.message });
     }
 });
-// Tenants (Seed support or manual creation)
-app.post('/api/tenants', async (req, res) => {
+// ═══════════════════════════════════════════════════════════════
+// GESTÃO DE TENANTS & ONBOARDING (Admin-only)
+// ═══════════════════════════════════════════════════════════════
+// List all tenants with user count (super-admin)
+app.get('/api/admin/tenants', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const tenants = await prisma.tenant.findMany({
+            include: {
+                _count: { select: { users: true, companies: true, biddingProcesses: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(tenants.map(t => ({
+            id: t.id,
+            razaoSocial: t.razaoSocial,
+            rootCnpj: t.rootCnpj,
+            createdAt: t.createdAt,
+            stats: {
+                users: t._count.users,
+                companies: t._count.companies,
+                biddings: t._count.biddingProcesses,
+            }
+        })));
+    }
+    catch (error) {
+        console.error('[Admin] Erro ao listar tenants:', error?.message);
+        res.status(500).json({ error: 'Erro ao listar organizações' });
+    }
+});
+// Onboard new client — creates Tenant + Admin User in one step
+app.post('/api/admin/onboard', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const { razaoSocial, rootCnpj, adminName, adminEmail, adminPassword } = req.body;
+        // ── Validações ──
+        if (!razaoSocial || !rootCnpj || !adminName || !adminEmail || !adminPassword) {
+            return res.status(400).json({
+                error: 'Campos obrigatórios: razaoSocial, rootCnpj, adminName, adminEmail, adminPassword'
+            });
+        }
+        if (adminPassword.length < 6) {
+            return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
+        }
+        // ── Verificar duplicatas ──
+        const existingTenant = await prisma.tenant.findUnique({ where: { rootCnpj } });
+        if (existingTenant) {
+            return res.status(409).json({ error: `Já existe uma organização com CNPJ ${rootCnpj}` });
+        }
+        const existingUser = await prisma.user.findUnique({ where: { email: adminEmail } });
+        if (existingUser) {
+            return res.status(409).json({ error: `O e-mail ${adminEmail} já está em uso` });
+        }
+        // ── Criar Tenant + Admin em transação ──
+        const result = await prisma.$transaction(async (tx) => {
+            const tenant = await tx.tenant.create({
+                data: { razaoSocial, rootCnpj }
+            });
+            const passwordHash = await bcryptjs_1.default.hash(adminPassword, 10);
+            const admin = await tx.user.create({
+                data: {
+                    tenantId: tenant.id,
+                    name: adminName,
+                    email: adminEmail,
+                    passwordHash,
+                    role: 'ADMIN',
+                    isActive: true,
+                }
+            });
+            return { tenant, admin };
+        });
+        console.log(`[Onboard] ✅ Novo cliente: "${razaoSocial}" (${rootCnpj}) → Admin: ${adminEmail}`);
+        res.status(201).json({
+            message: `Cliente "${razaoSocial}" provisionado com sucesso!`,
+            tenant: {
+                id: result.tenant.id,
+                razaoSocial: result.tenant.razaoSocial,
+                rootCnpj: result.tenant.rootCnpj,
+            },
+            admin: {
+                id: result.admin.id,
+                name: result.admin.name,
+                email: result.admin.email,
+                role: result.admin.role,
+            },
+            loginUrl: `${process.env.FRONTEND_URL || 'https://licitasaas-production.up.railway.app'}`,
+            instructions: 'Envie o e-mail e senha ao cliente. Ele pode alterar a senha após o primeiro login.',
+        });
+    }
+    catch (error) {
+        console.error('[Onboard] Erro ao provisionar cliente:', error?.message);
+        res.status(500).json({ error: 'Erro ao provisionar novo cliente' });
+    }
+});
+// Legacy: Create tenant (now protected)
+app.post('/api/tenants', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
     try {
         const tenant = await prisma.tenant.create({ data: req.body });
         res.json(tenant);
@@ -268,555 +379,348 @@ app.post('/api/tenants', async (req, res) => {
         res.status(500).json({ error: 'Failed to create tenant' });
     }
 });
-// Companies
-// PUT Company Proposal Template — save default header/footer
-app.put('/api/companies/:id/proposal-template', authenticateToken, async (req, res) => {
+// ═══════════════════════════════════════════════════════════════
+// GESTÃO DE COTAS DE IA (Admin-only)
+// ═══════════════════════════════════════════════════════════════
+// Get all tenants with AI usage summary (for admin quota management)
+app.get('/api/admin/ai-quotas', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
     try {
-        const { id } = req.params;
-        const { headerImage, footerImage, headerHeight, footerHeight, defaultLetterContent, defaultSignatureConfig, contactName, contactCpf, } = req.body;
-        const updateData = {
-            defaultProposalHeader: headerImage,
-            defaultProposalFooter: footerImage,
-            defaultProposalHeaderHeight: headerHeight,
-            defaultProposalFooterHeight: footerHeight,
-            defaultLetterContent: defaultLetterContent,
-        };
-        // Campos opcionais
-        if (contactName !== undefined)
-            updateData.contactName = contactName;
-        if (contactCpf !== undefined)
-            updateData.contactCpf = contactCpf;
-        if (defaultSignatureConfig !== undefined)
-            updateData.defaultSignatureConfig = defaultSignatureConfig;
-        await prisma.companyProfile.update({
-            where: { id, tenantId: req.user.tenantId },
-            data: updateData
+        const { getTenantQuotaLimits } = await Promise.resolve().then(() => __importStar(require('./lib/aiUsageTracker')));
+        const tenants = await prisma.tenant.findMany({
+            select: { id: true, razaoSocial: true, rootCnpj: true },
+            orderBy: { razaoSocial: 'asc' },
         });
-        res.json({ message: 'Template padrão salvo com sucesso!' });
-    }
-    catch (error) {
-        console.error('[API] Save company template error:', error);
-        res.status(500).json({ error: 'Erro ao salvar template: ' + error.message });
-    }
-});
-app.get('/api/companies', authenticateToken, async (req, res) => {
-    try {
-        console.log(`[API] Fetching companies for tenant: ${req.user.tenantId}`);
-        const companies = await prisma.companyProfile.findMany({
-            where: { tenantId: req.user.tenantId },
-            include: {
-                documents: {
-                    select: {
-                        id: true,
-                        tenantId: true,
-                        companyProfileId: true,
-                        docType: true,
-                        fileUrl: true,
-                        uploadDate: true,
-                        expirationDate: true,
-                        status: true,
-                        autoRenew: true,
-                        docGroup: true,
-                        issuerLink: true,
-                        fileName: true,
-                        alertDays: true
-                        // Exclude fileContent here to avoid OOM
-                    }
-                },
-                credentials: true
-            }
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        // Aggregate usage per tenant in one query
+        const usageByTenant = await prisma.aiUsageLog.groupBy({
+            by: ['tenantId'],
+            where: { createdAt: { gte: startOfMonth } },
+            _sum: { totalTokens: true, inputTokens: true, outputTokens: true },
+            _count: { id: true },
         });
-        console.log(`[API] Found ${companies.length} companies.`);
-        res.json(companies);
-    }
-    catch (error) {
-        res.status(500).json({ error: 'Failed to fetch companies' });
-    }
-});
-// Documents
-app.post('/api/documents', authenticateToken, upload.single('file'), async (req, res) => {
-    try {
-        const { companyProfileId, docType, expirationDate, status, docGroup, issuerLink } = req.body;
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
-        const tenantId = req.user.tenantId;
-        const { url: fileUrl } = await storage_1.storageService.uploadFile(req.file, tenantId);
-        const doc = await prisma.document.create({
-            data: {
-                tenantId,
-                companyProfileId,
-                docType,
-                docGroup: docGroup || 'Outros',
-                issuerLink,
-                fileName: req.file.originalname,
-                fileUrl,
-                expirationDate: new Date(expirationDate),
-                status,
-                fileContent: req.file.buffer, // Save to DB for persistence on ephemeral storage
-                alertDays: req.body.alertDays ? parseInt(req.body.alertDays) : 15
-            }
-        });
-        res.json(doc);
-    }
-    catch (error) {
-        console.error("Upload error:", error);
-        res.status(500).json({ error: 'Failed to upload document', details: error instanceof Error ? error.message : String(error) });
-    }
-});
-app.put('/api/documents/:id', authenticateToken, upload.single('file'), async (req, res) => {
-    try {
-        const { id } = req.params;
-        const tenantId = req.user.tenantId;
-        const { docType, expirationDate, status, docGroup, issuerLink } = req.body;
-        const doc = await prisma.document.findUnique({
-            where: { id }
-        });
-        if (!doc || doc.tenantId !== tenantId) {
-            return res.status(404).json({ error: 'Document not found or unauthorized' });
-        }
-        let fileData = {};
-        if (req.file) {
-            // Delete old file safely if it exists and is local (optional but good practice)
-            try {
-                await storage_1.storageService.deleteFile(doc.fileUrl);
-            }
-            catch (e) {
-                console.warn("Could not delete old file:", doc.fileUrl);
-            }
-            const { url: fileUrl } = await storage_1.storageService.uploadFile(req.file, tenantId);
-            fileData = {
-                fileUrl,
-                fileName: req.file.originalname,
-                fileContent: req.file.buffer // Update DB persistence
+        const usageMap = new Map(usageByTenant.map((u) => [u.tenantId, u]));
+        const result = await Promise.all(tenants.map(async (t) => {
+            const usage = usageMap.get(t.id);
+            const { hardLimit, softLimit } = await getTenantQuotaLimits(prisma, t.id);
+            const currentTokens = usage?._sum?.totalTokens || 0;
+            const percentUsed = hardLimit > 0 ? Math.round((currentTokens / hardLimit) * 100) : 0;
+            return {
+                id: t.id,
+                razaoSocial: t.razaoSocial,
+                rootCnpj: t.rootCnpj,
+                currentTokens,
+                totalCalls: usage?._count?.id || 0,
+                hardLimit,
+                softLimit,
+                percentUsed,
+                status: currentTokens >= hardLimit ? 'critical' : currentTokens >= softLimit ? 'warning' : 'ok',
             };
-        }
-        const updatedDoc = await prisma.document.update({
-            where: { id },
-            data: {
-                docType,
-                docGroup,
-                issuerLink,
-                expirationDate: expirationDate ? new Date(expirationDate) : undefined,
-                status,
-                alertDays: req.body.alertDays ? parseInt(req.body.alertDays) : undefined,
-                ...fileData
-            }
-        });
-        res.json(updatedDoc);
-    }
-    catch (error) {
-        console.error("Update doc error:", error);
-        res.status(500).json({ error: 'Failed to update document' });
-    }
-});
-app.delete('/api/documents/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const doc = await prisma.document.findUnique({
-            where: { id }
-        });
-        if (doc && doc.tenantId === req.user.tenantId) {
-            await storage_1.storageService.deleteFile(doc.fileUrl);
-            await prisma.document.delete({ where: { id } });
-            res.json({ success: true });
-        }
-        else {
-            res.status(404).json({ error: 'Document not found or unauthorized' });
-        }
-    }
-    catch (error) {
-        console.error("Delete doc error:", error);
-        res.status(500).json({ error: 'Failed to delete document' });
-    }
-});
-// Technical Certificates (Oráculo de Atestados)
-app.get('/api/technical-certificates', authenticateToken, async (req, res) => {
-    try {
-        const certificates = await prisma.technicalCertificate.findMany({
-            where: { tenantId: req.user.tenantId },
-            include: { experiences: true, company: true },
-            orderBy: { createdAt: 'desc' }
-        });
-        res.json(certificates);
-    }
-    catch (error) {
-        res.status(500).json({ error: 'Failed to fetch certificates' });
-    }
-});
-app.post('/api/technical-certificates', authenticateToken, upload.single('file'), async (req, res) => {
-    try {
-        const { companyProfileId, title, type, category } = req.body;
-        if (!req.file)
-            return res.status(400).json({ error: 'File is required' });
-        const { url: fileUrl } = await storage_1.storageService.uploadFile(req.file, req.user.tenantId);
-        // AI Extraction
-        const apiKey = process.env.GEMINI_API_KEY;
-        const ai = new genai_1.GoogleGenAI({ apiKey: apiKey });
-        console.log(`[AI Oracle] Analyzing certificate: ${req.file.originalname}`);
-        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-            model: 'gemini-2.0-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } },
-                        { text: "Extraia os dados técnicos deste documento seguindo o formato JSON especificado." }
-                    ]
-                }
-            ],
-            config: {
-                systemInstruction: prompt_service_1.EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
-                temperature: 0.1,
-                responseMimeType: 'application/json'
-            }
-        });
-        const extracted = (0, parser_service_1.robustJsonParse)(result.text);
-        const certificate = await prisma.technicalCertificate.create({
-            data: {
-                tenantId: req.user.tenantId,
-                companyProfileId: companyProfileId || null,
-                title: title || extracted.title || req.file.originalname,
-                type: type || extracted.type || 'Atestado',
-                category: category || extracted.category || null,
-                fileUrl,
-                fileName: req.file.originalname,
-                issuer: extracted.issuer || null,
-                issueDate: extracted.issueDate ? new Date(extracted.issueDate) : null,
-                object: extracted.object || null,
-                executingCompany: extracted.executingCompany || null,
-                technicalResponsible: extracted.technicalResponsible || null,
-                extractedData: extracted,
-                experiences: {
-                    create: (extracted.experiences || []).map((exp) => ({
-                        description: exp.description,
-                        quantity: exp.quantity ? parseFloat(String(exp.quantity).replace(',', '.')) : null,
-                        unit: exp.unit,
-                        category: exp.category
-                    }))
-                }
-            },
-            include: { experiences: true }
-        });
-        res.json(certificate);
-    }
-    catch (error) {
-        console.error("Certificate upload error:", error);
-        res.status(500).json({ error: 'Failed to process certificate', details: error.message });
-    }
-});
-app.delete('/api/technical-certificates/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const cert = await prisma.technicalCertificate.findUnique({ where: { id } });
-        if (cert && cert.tenantId === req.user.tenantId) {
-            await storage_1.storageService.deleteFile(cert.fileUrl);
-            await prisma.technicalCertificate.delete({ where: { id } });
-            res.json({ success: true });
-        }
-        else {
-            res.status(404).json({ error: 'Certificate not found' });
-        }
-    }
-    catch (error) {
-        res.status(500).json({ error: 'Failed to delete certificate' });
-    }
-});
-app.post('/api/technical-certificates/compare', authenticateToken, async (req, res) => {
-    try {
-        const { biddingProcessId, technicalCertificateIds } = req.body; // Accepts array
-        const tenantId = req.user.tenantId;
-        const bidding = await prisma.biddingProcess.findUnique({
-            where: { id: biddingProcessId, tenantId },
-            include: { aiAnalysis: true }
-        });
-        const certificates = await prisma.technicalCertificate.findMany({
-            where: { id: { in: technicalCertificateIds }, tenantId },
-            include: { experiences: true }
-        });
-        if (!bidding || certificates.length === 0) {
-            return res.status(404).json({ error: 'Processo ou atestados não encontrados.' });
-        }
-        // Prefer V2 structured context for oracle (technical focus)
-        let requirements;
-        if (bidding.aiAnalysis?.schemaV2) {
-            requirements = (0, moduleContextContracts_1.buildModuleContext)(bidding.aiAnalysis.schemaV2, 'oracle');
-            console.log(`[AI Oracle] Using buildModuleContext('oracle') for comparison`);
-        }
-        else {
-            requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";
-        }
-        // Aggregate all experiences from all selected certificates
-        const aggregatedCertData = certificates.map(cert => ({
-            atestado_titulo: cert.title,
-            objeto: cert.object,
-            experiencias: cert.experiences.map(e => ({
-                description: e.description,
-                quantity: e.quantity,
-                unit: e.unit,
-                category: e.category
-            }))
         }));
-        // AI Comparison
-        const apiKey = process.env.GEMINI_API_KEY;
-        const ai = new genai_1.GoogleGenAI({ apiKey: apiKey });
-        console.log(`[AI Oracle] Comparing ${certificates.length} certs with bidding ${bidding.title}`);
-        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-            model: 'gemini-2.0-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { text: `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(aggregatedCertData, null, 2)}` }
-                    ]
-                }
-            ],
-            config: {
-                systemInstruction: prompt_service_1.COMPARE_CERTIFICATE_SYSTEM_PROMPT,
-                temperature: 0.1,
-                responseMimeType: 'application/json'
-            }
-        });
-        const analysis = (0, parser_service_1.robustJsonParse)(result.text);
-        res.json(analysis);
+        res.json(result);
     }
     catch (error) {
-        console.error("Comparison error:", error);
-        res.status(500).json({ error: 'Failed to analyze compatibility', details: error.message });
+        console.error('[Admin] Erro ao listar cotas de IA:', error?.message);
+        res.status(500).json({ error: 'Erro ao listar cotas de IA' });
     }
 });
-app.put('/api/companies/:id', authenticateToken, async (req, res) => {
+// Update AI quota for a specific tenant
+app.put('/api/admin/ai-quotas/:tenantId', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
     try {
-        const { id } = req.params;
-        const tenantId = req.user.tenantId;
-        const company = await prisma.companyProfile.findUnique({ where: { id } });
-        if (!company || company.tenantId !== tenantId) {
-            return res.status(404).json({ error: 'Company not found or unauthorized' });
+        const { tenantId } = req.params;
+        const { hardLimit, softLimit } = req.body;
+        const { invalidateTenantQuotaCache } = await Promise.resolve().then(() => __importStar(require('./lib/aiUsageTracker')));
+        if (!hardLimit || hardLimit < 0) {
+            return res.status(400).json({ error: 'hardLimit é obrigatório e deve ser positivo.' });
         }
-        // Only allow updating editable fields — strip out id, tenantId, relations
-        const { razaoSocial, cnpj, isHeadquarters, qualification, technicalQualification, contactName, contactEmail, contactPhone, contactCpf, address, city, state, defaultSignatureConfig } = req.body;
-        const safeData = {};
-        if (razaoSocial !== undefined)
-            safeData.razaoSocial = razaoSocial;
-        if (cnpj !== undefined)
-            safeData.cnpj = cnpj;
-        if (isHeadquarters !== undefined)
-            safeData.isHeadquarters = isHeadquarters;
-        if (qualification !== undefined)
-            safeData.qualification = qualification;
-        if (technicalQualification !== undefined)
-            safeData.technicalQualification = technicalQualification;
-        if (contactName !== undefined)
-            safeData.contactName = contactName;
-        if (contactEmail !== undefined)
-            safeData.contactEmail = contactEmail;
-        if (contactPhone !== undefined)
-            safeData.contactPhone = contactPhone;
-        if (contactCpf !== undefined)
-            safeData.contactCpf = contactCpf;
-        if (address !== undefined)
-            safeData.address = address;
-        if (city !== undefined)
-            safeData.city = city;
-        if (state !== undefined)
-            safeData.state = state;
-        if (defaultSignatureConfig !== undefined)
-            safeData.defaultSignatureConfig = defaultSignatureConfig;
-        const updatedCompany = await prisma.companyProfile.update({
-            where: { id },
-            data: safeData,
-            include: { credentials: true, documents: { select: { id: true, tenantId: true, companyProfileId: true, docType: true, fileUrl: true, uploadDate: true, expirationDate: true, status: true, autoRenew: true, docGroup: true, issuerLink: true, fileName: true, alertDays: true } } }
+        // Read or create GlobalConfig
+        const gc = await prisma.globalConfig.upsert({
+            where: { tenantId },
+            create: { tenantId, config: JSON.stringify({ aiQuota: { hardLimit, softLimit: softLimit || Math.round(hardLimit * 0.75) } }) },
+            update: {},
         });
-        res.json(updatedCompany);
-    }
-    catch (error) {
-        console.error("Update company error:", error);
-        res.status(500).json({ error: 'Failed to update company', details: error.message });
-    }
-});
-app.post('/api/companies', authenticateToken, async (req, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const company = await prisma.companyProfile.create({
-            data: { ...req.body, tenantId }
-        });
-        res.json(company);
-    }
-    catch (error) {
-        console.error("Create company error:", error);
-        res.status(500).json({ error: 'Failed to create company' });
-    }
-});
-app.delete('/api/companies/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const company = await prisma.companyProfile.findUnique({ where: { id } });
-        if (company && company.tenantId === req.user.tenantId) {
-            await prisma.companyProfile.delete({ where: { id } });
-            res.json({ success: true });
+        // Merge aiQuota into existing config
+        let conf = {};
+        try {
+            conf = JSON.parse(gc.config || '{}');
         }
-        else {
-            res.status(404).json({ error: 'Company not found or unauthorized' });
+        catch { }
+        conf.aiQuota = {
+            hardLimit,
+            softLimit: softLimit || Math.round(hardLimit * 0.75),
+        };
+        await prisma.globalConfig.update({
+            where: { tenantId },
+            data: { config: JSON.stringify(conf) },
+        });
+        // Invalidate caches
+        invalidateTenantQuotaCache(tenantId);
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { razaoSocial: true } });
+        console.log(`[Admin] Cotas de IA atualizadas para "${tenant?.razaoSocial || tenantId}": hard=${hardLimit}, soft=${conf.aiQuota.softLimit}`);
+        res.json({ ok: true, aiQuota: conf.aiQuota });
+    }
+    catch (error) {
+        console.error('[Admin] Erro ao atualizar cota de IA:', error?.message);
+        res.status(500).json({ error: 'Erro ao atualizar cota de IA' });
+    }
+});
+// Reset quota cache for a tenant (instant unblock without changing limits)
+app.post('/api/admin/ai-quotas/:tenantId/reset', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const { tenantId } = req.params;
+        const { invalidateTenantQuotaCache } = await Promise.resolve().then(() => __importStar(require('./lib/aiUsageTracker')));
+        invalidateTenantQuotaCache(tenantId);
+        console.log(`[Admin] Cache de cota de IA resetado para tenant ${tenantId}`);
+        res.json({ ok: true, message: 'Cache limpo. Limites serão reavaliados na próxima chamada de IA.' });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Erro ao resetar cache' });
+    }
+});
+// Get detailed AI usage for a specific tenant (admin drill-down)
+app.get('/api/admin/ai-usage/:tenantId', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const { tenantId } = req.params;
+        const periodDays = parseInt(req.query.period) || 30;
+        const { getDailyBreakdown, getQuotaStatus } = await Promise.resolve().then(() => __importStar(require('./lib/aiUsageTracker')));
+        const [summary, daily, quota] = await Promise.all([
+            (0, aiUsageTracker_1.getUsageSummary)(prisma, tenantId, periodDays),
+            getDailyBreakdown(prisma, tenantId, periodDays),
+            getQuotaStatus(prisma, tenantId),
+        ]);
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { razaoSocial: true, rootCnpj: true } });
+        res.json({ ok: true, tenant, ...summary, daily, quota });
+    }
+    catch (e) {
+        console.error('[Admin] AI usage drill-down error:', e?.message);
+        res.status(500).json({ error: 'Falha ao buscar consumo de IA do tenant.' });
+    }
+});
+// Team & Users Management
+app.use('/api/team', team_1.default);
+// Companies, Credentials & Config  (router has /*, /credentials/*, /config/* paths)
+app.use('/api', companies_1.default);
+// Documents & Technical Certificates (router has /*, /technical-certificates/* paths)
+app.use('/api', documents_1.default);
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO DECLARAÇÕES IA v5 — Gerador Juridicamente Confiável
+// Fluxo-alvo: 12 etapas com validação + repair IA + re-validação
+// Tipos: AuthoritativeFacts, DeclarationFamily → importados de services/ai/declaration
+// ═══════════════════════════════════════════════════════════════
+// ── Step 4: Classificação por Família ──
+function classifyFamily(declarationType) {
+    const lower = declarationType.toLowerCase();
+    // TECHNICAL_PERSONAL — pessoal técnico, equipe, RT
+    if (lower.includes('técnic') || lower.includes('equipe') ||
+        lower.includes('pessoal') || lower.includes('engenhei') ||
+        lower.includes('crea') || lower.includes('cau') ||
+        lower.includes('responsável técnico') || lower.includes('indicação'))
+        return 'TECHNICAL_PERSONAL';
+    // CORPORATE_STATUS — enquadramento, ME/EPP, regularidade fiscal, econômica
+    if (lower.includes('me/epp') || lower.includes('microempresa') ||
+        lower.includes('pequeno porte') || lower.includes('enquadramento') ||
+        lower.includes('econômic') || lower.includes('financei') ||
+        lower.includes('patrimônio') || lower.includes('balanço') ||
+        lower.includes('fiscal') || lower.includes('tribut') ||
+        lower.includes('fgts') || lower.includes('inss') ||
+        lower.includes('fazenda') || lower.includes('débito') ||
+        lower.includes('falência') || lower.includes('recuperação judicial'))
+        return 'CORPORATE_STATUS';
+    // OPERATIONAL_COMMITMENT — compromissos operacionais
+    if (lower.includes('visita') || lower.includes('disponibilidade') ||
+        lower.includes('equipamento') || lower.includes('prazo') ||
+        lower.includes('elaboração independente') || lower.includes('conhecimento') ||
+        lower.includes('atestado') || lower.includes('vistoria'))
+        return 'OPERATIONAL_COMMITMENT';
+    // SIMPLE_COMPLIANCE — conformidade legal simples
+    if (lower.includes('menor') || lower.includes('trabalho infantil') ||
+        lower.includes('art. 7') || lower.includes('xxxiii') ||
+        lower.includes('fato impeditivo') || lower.includes('idoneidade') ||
+        lower.includes('nepotismo') || lower.includes('impedimento') ||
+        lower.includes('vedação') || lower.includes('proibição') ||
+        lower.includes('inexistência'))
+        return 'SIMPLE_COMPLIANCE';
+    return 'CUSTOM_GENERIC';
+}
+// ── Step 5: Contexto Específico do Edital ──
+function extractFamilyContext(family, schema) {
+    if (!schema)
+        return '';
+    const sections = [];
+    const qi = schema?.qualification_requirements || schema?.requirements;
+    const oo = schema?.operational_outputs;
+    const pi = schema?.process_identification;
+    const pc = schema?.participation_conditions;
+    switch (family) {
+        case 'SIMPLE_COMPLIANCE':
+            if (pc)
+                sections.push(`CONDIÇÕES DE PARTICIPAÇÃO:\n${JSON.stringify(pc, null, 1)}`);
+            if (pi?.objeto)
+                sections.push(`OBJETO: ${pi.objeto_completo || pi.objeto_resumido || pi.objeto}`);
+            break;
+        case 'OPERATIONAL_COMMITMENT':
+            if (pi?.objeto)
+                sections.push(`OBJETO: ${pi.objeto_completo || pi.objeto_resumido || pi.objeto}`);
+            if (pc?.exige_visita_tecnica)
+                sections.push(`VISITA TÉCNICA: ${pc.visita_tecnica_detalhes || 'Exigida'}`);
+            if (pc?.exige_garantia_proposta)
+                sections.push(`GARANTIA PROPOSTA: ${pc.garantia_proposta_detalhes || 'Exigida'}`);
+            if (pc?.exige_garantia_contratual)
+                sections.push(`GARANTIA CONTRATUAL: ${pc.garantia_contratual_detalhes || 'Exigida'}`);
+            if (oo?.declaration_routes?.length > 0) {
+                sections.push('DECLARAÇÕES PREVISTAS:\n' + oo.declaration_routes.map((d) => `  • ${typeof d === 'string' ? d : d.name || d.title || JSON.stringify(d)}`).join('\n'));
+            }
+            break;
+        case 'TECHNICAL_PERSONAL':
+            if (qi?.qualificacao_tecnica_profissional)
+                sections.push(`QUALIFICAÇÃO TÉCNICA PROFISSIONAL:\n${JSON.stringify(qi.qualificacao_tecnica_profissional, null, 1)}`);
+            if (qi?.qualificacao_tecnica_operacional)
+                sections.push(`QUALIFICAÇÃO TÉCNICA OPERACIONAL:\n${JSON.stringify(qi.qualificacao_tecnica_operacional, null, 1)}`);
+            if (qi?.qualificacao_tecnica)
+                sections.push(`QUALIFICAÇÃO TÉCNICA:\n${JSON.stringify(qi.qualificacao_tecnica, null, 1)}`);
+            if (oo?.technical_requirements)
+                sections.push(`REQUISITOS TÉCNICOS:\n${JSON.stringify(oo.technical_requirements, null, 1)}`);
+            break;
+        case 'CORPORATE_STATUS':
+            if (qi?.habilitacao_juridica)
+                sections.push(`HABILITAÇÃO JURÍDICA:\n${JSON.stringify(qi.habilitacao_juridica, null, 1)}`);
+            if (qi?.regularidade_fiscal_trabalhista)
+                sections.push(`REGULARIDADE FISCAL:\n${JSON.stringify(qi.regularidade_fiscal_trabalhista, null, 1)}`);
+            if (qi?.regularidade_fiscal)
+                sections.push(`REGULARIDADE FISCAL:\n${JSON.stringify(qi.regularidade_fiscal, null, 1)}`);
+            if (qi?.qualificacao_economico_financeira)
+                sections.push(`QUALIFICAÇÃO ECONÔMICO-FINANCEIRA:\n${JSON.stringify(qi.qualificacao_economico_financeira, null, 1)}`);
+            if (qi?.qualificacao_economica)
+                sections.push(`QUALIFICAÇÃO ECONÔMICA:\n${JSON.stringify(qi.qualificacao_economica, null, 1)}`);
+            if (pc?.tratamento_me_epp)
+                sections.push(`TRATAMENTO ME/EPP: ${pc.tratamento_me_epp}`);
+            break;
+        default: // CUSTOM_GENERIC
+            if (oo?.declaration_routes?.length > 0) {
+                sections.push('DECLARAÇÕES PREVISTAS NO EDITAL:\n' + oo.declaration_routes.map((d) => `  • ${typeof d === 'string' ? d : d.name || d.title || JSON.stringify(d)}`).join('\n'));
+            }
+    }
+    return sections.length > 0 ? sections.join('\n\n') : '';
+}
+// ── Step 6: Prompt Builder ──
+function buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style = 'objetiva', editalClause) {
+    // Buscar mapa semântico que corresponde ao tipo da declaração
+    const declLower = facts.declarationType.toLowerCase();
+    const semanticMatch = declaration_1.DECLARATION_SEMANTIC_MAP.find(m => m.keywords.some(kw => declLower.includes(kw.toLowerCase())));
+    return `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas (Lei 14.133/2021).
+Sua tarefa é redigir a declaração abaixo com RIGOR JURÍDICO MÁXIMO e ABSOLUTA FIDELIDADE FACTUAL.
+
+TIPO: "${facts.declarationType}"
+FAMÍLIA: ${family}
+
+${issuerBlock}
+
+╔══════════════════════════════════════════════════════════════╗
+║  FATOS AUTORITATIVOS — IMUTÁVEIS (PREVALÊNCIA ABSOLUTA)     ║
+╠══════════════════════════════════════════════════════════════╣
+║  Empresa: ${facts.empresaRazaoSocial}
+║  CNPJ: ${facts.empresaCnpj}
+║  QUALIFICAÇÃO COMPLETA (transcrever LITERALMENTE como abertura da declaração):
+║  ${facts.qualificacaoCompleta || `${facts.empresaRazaoSocial}, inscrita no CNPJ sob o nº ${facts.empresaCnpj}${facts.empresaEndereco ? `, com sede ${facts.empresaEndereco}` : ''}${facts.representanteNome ? `, neste ato representada por seu ${facts.representanteCargo || 'Representante Legal'} ${facts.representanteNome}${facts.representanteCpf ? `, CPF ${facts.representanteCpf}` : ''}` : ''}`}
+║  Órgão: ${facts.orgaoLicitante}
+║  Modalidade: ${facts.modalidade}
+║  Edital nº: ${facts.editalNumero || 'Não identificado'}
+║  Processo nº: ${facts.processoNumero || 'Não identificado'}
+║  Objeto: ${facts.objeto || 'Conforme edital'}
+║  Título: ${facts.biddingTitle}
+╚══════════════════════════════════════════════════════════════╝
+
+REGRA ABSOLUTA: Os dados acima são a ÚNICA fonte válida para identificação. QUALQUER dado divergente no resumo abaixo DEVE SER IGNORADO.
+${facts.hasDivergence ? `\n⚠️ CONTAMINAÇÃO DETECTADA: O resumo contém referências a "${facts.orgaoFromSchema}" de OUTRO certame. USE EXCLUSIVAMENTE "${facts.orgaoLicitante}".` : ''}
+${familyContext ? `\nCONTEXTO ESPECÍFICO (${family}):\n${familyContext}\n` : ''}
+RESUMO AUXILIAR (APENAS para conteúdo jurídico — NÃO para identificação):
+${editalContext}
+
+INSTRUÇÕES RÍGIDAS:
+
+1. FIDELIDADE: Se o edital impuser texto específico para "${facts.declarationType}", transcreva-o integralmente.
+
+2. EXTENSÃO (${(() => { const c = declaration_1.FAMILY_LENGTH_CONSTRAINTS[family]; return `${c.minParagraphs} a ${c.maxParagraphs} parágrafos — ${c.styleHint}`; })()}):
+   Estrutura recomendada:
+   a) QUALIFICAÇÃO COMPLETA (REGRA INVIOLÁVEL): Transcreva LITERALMENTE o texto da QUALIFICAÇÃO COMPLETA dos Fatos Autoritativos acima como parágrafo de abertura. NÃO resuma. NÃO omita campos. Inclua TODOS os dados pessoais do representante (nacionalidade, estado civil, profissão, nascimento, CPF, RG, endereço comercial).
+   b) REFERÊNCIA: "${facts.orgaoLicitante}", Edital nº "${facts.editalNumero}", Processo nº "${facts.processoNumero}"
+   c) DECLARAÇÃO PRINCIPAL: fundamento legal pertinente
+   d) CIÊNCIA DAS SANÇÕES + FECHO FORMAL
+   Para ${family === 'SIMPLE_COMPLIANCE' ? 'esta família, os blocos a) e b) PODEM ser fundidos em 1 parágrafo. NÃO desdobre artificialmente.' : 'famílias complexas, use parágrafos separados.'}${family === 'SIMPLE_COMPLIANCE' ? '\n   REGRA ANTI-PROLIXIDADE: NÃO descreva o objeto, NÃO recontar histórico, NÃO multiplique compromissos além do necessário.' : ''}
+
+3. NOMES: Transcreva EXATAMENTE como nos FATOS AUTORITATIVOS. NUNCA abrevie, NUNCA invente dados.
+
+4. SEM PLACEHOLDERS: NÃO use [NOME], [CNPJ] etc. Use os dados reais fornecidos acima. Colchetes APENAS para dados opcionais ausentes.
+${facts.representanteNome ? '' : '\n   EXCEÇÃO: O nome do representante não foi fornecido. Use colchetes: [Nome do Representante Legal]'}
+
+5. EQUIPE TÉCNICA: ${family === 'TECHNICAL_PERSONAL' ? 'Cite NOMINALMENTE os dados do RT fornecidos acima.' : 'N/A para este tipo.'}
+
+${customPrompt ? `6. INSTRUÇÃO DO USUÁRIO: ${customPrompt}\n` : ''}
+${(() => {
+        const styleDirectives = {
+            objetiva: '7. ESTILO: OBJETIVA — Vá direto ao ponto. Sem contextualização do objeto. Sem histórico do processo. Mínimo de parágrafos possível dentro do range da família.',
+            formal: '7. ESTILO: FORMAL — Linguagem jurídica completa com todos os blocos. Use extensão moderada.',
+            robusta: '7. ESTILO: ROBUSTA — Texto detalhado com referências extensas, compromissos explícitos e fundamentação legal ampla.',
+        };
+        return styleDirectives[style] || styleDirectives.objetiva;
+    })()}
+
+${editalClause ? `8. CLÁUSULA DO EDITAL (PRIORIDADE MÁXIMA):
+   Nome exato da exigência: "${editalClause}"
+   USE este nome LITERALMENTE como título ("title") se for um nome de declaração válido.
+   O núcleo declaratório DEVE aderir ao teor exato desta cláusula.\n` : ''}
+${semanticMatch ? `9. ORIENTAÇÃO DE TÍTULO: ${semanticMatch.titleGuidance}
+
+10. COBERTURA SEMÂNTICA EXIGIDA (o núcleo declaratório DEVE cobrir TODOS estes conceitos):
+    ${semanticMatch.coreConceptsMustCover}\n` : ''}
+11. ANTI-GENERICISMO: EVITE frases ornamentais como: ${declaration_1.ANTI_GENERIC_PHRASES.slice(0, 3).map(p => `"${p}"`).join(', ')}. Prefira linguagem seca e assertiva.
+
+12. FORMATO JSON PURO:
+   { "title": "DECLARAÇÃO DE ...", "text": "A empresa ..." }
+   - SEM blocos markdown. SEM negritos. SEM ${'```'}.
+   - O "text" começa com qualificação: "${isTechnical ? 'Eu, [Nome], [profissão], inscrito no CREA/CAU..., DECLARO...' : `A empresa ${facts.empresaRazaoSocial}, inscrita no CNPJ sob nº ${facts.empresaCnpj}...DECLARA...`}"
+   - NÃO inclua Local, Data, Assinatura — o sistema adiciona.
+
+13. CITAÇÃO EXPLÍCITA: Use "${facts.orgaoLicitante}" e "${facts.editalNumero || facts.processoNumero}". NUNCA use genéricos.`;
+}
+// ── Step 8-12: Agora modularizados em services/ai/declaration/ ──
+// ── Helpers (qualification parsing — será movido para declarationFacts.ts) ──
+function extractFromQualification(qualification, field) {
+    if (!qualification)
+        return '';
+    switch (field) {
+        case 'address': {
+            const match = qualification.match(/sediada\s+(?:na|no|em)\s+(.+?)(?:,\s*neste\s+ato|,\s*inscrita|$)/i);
+            return match?.[1]?.trim() || '';
+        }
+        case 'name': {
+            const match = qualification.match(/representada\s+por\s+(?:seu\s+)?(?:Sócio\s+Administrador|representante\s+legal\s+)?(?:,\s*)?(?:a\s+Sra\.\s+|o\s+Sr\.\s+)?([^,.(0-9]{3,60})(?=\s*,\s*|,\s*brasileir|,\s*solteir|$)/i);
+            return match?.[1]?.trim() || '';
+        }
+        case 'cpf': {
+            const match = qualification.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+            return match?.[0] || '';
+        }
+        case 'cargo': {
+            const match = qualification.match(/(Sócio[\s-]?Administrador|Representante\s+Legal|Diretor|Gerente|Procurador|Sócio|Administrador)/i);
+            return match?.[1]?.trim() || 'Representante Legal';
         }
     }
-    catch (error) {
-        console.error("Delete company error:", error);
-        res.status(500).json({ error: 'Failed to delete company' });
-    }
-});
-// Credentials
-app.post('/api/credentials', authenticateToken, async (req, res) => {
+}
+// ═══════════════════════════════════════════════
+// ROTA PRINCIPAL — 12 STEPS
+// ═══════════════════════════════════════════════
+app.post('/api/generate-declaration', auth_1.authenticateToken, async (req, res) => {
     try {
-        const { companyProfileId } = req.body;
-        // Verify if companyProfileId belongs to the tenant
-        const company = await prisma.companyProfile.findUnique({
-            where: { id: companyProfileId }
-        });
-        if (!company || company.tenantId !== req.user.tenantId) {
-            return res.status(403).json({ error: 'Unauthorized: Company does not belong to your tenant' });
-        }
-        const credential = await prisma.companyCredential.create({
-            data: { ...req.body }
-        });
-        res.json(credential);
-    }
-    catch (error) {
-        console.error("Create credential error:", error);
-        res.status(500).json({ error: 'Failed to create credential' });
-    }
-});
-app.put('/api/credentials/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const credential = await prisma.companyCredential.findUnique({
-            where: { id },
-            include: { company: true }
-        });
-        if (!credential || credential.company.tenantId !== req.user.tenantId) {
-            return res.status(403).json({ error: 'Unauthorized to update this credential' });
-        }
-        const updated = await prisma.companyCredential.update({
-            where: { id },
-            data: req.body
-        });
-        res.json(updated);
-    }
-    catch (error) {
-        console.error("Update credential error:", error);
-        res.status(500).json({ error: 'Failed to update credential' });
-    }
-});
-app.delete('/api/credentials/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const credential = await prisma.companyCredential.findUnique({
-            where: { id },
-            include: { company: true }
-        });
-        if (!credential || credential.company.tenantId !== req.user.tenantId) {
-            return res.status(403).json({ error: 'Unauthorized to delete this credential' });
-        }
-        await prisma.companyCredential.delete({ where: { id } });
-        res.json({ success: true });
-    }
-    catch (error) {
-        console.error("Delete credential error:", error);
-        res.status(500).json({ error: 'Failed to delete credential' });
-    }
-});
-// App Config / Settings
-app.get('/api/config/alerts', authenticateToken, async (req, res) => {
-    try {
-        const config = await prisma.globalConfig.findUnique({
-            where: { tenantId: req.user.tenantId }
-        });
-        const parsed = config ? JSON.parse(config.config) : { defaultAlertDays: 15 };
-        res.json(parsed);
-    }
-    catch (error) {
-        res.status(500).json({ error: 'Failed to fetch config' });
-    }
-});
-app.post('/api/config/alerts', authenticateToken, async (req, res) => {
-    try {
-        const { defaultAlertDays, groupAlertDays, applyToExisting } = req.body;
-        const configStr = JSON.stringify({ defaultAlertDays, groupAlertDays });
-        const config = await prisma.globalConfig.upsert({
-            where: { tenantId: req.user.tenantId },
-            create: { tenantId: req.user.tenantId, config: configStr },
-            update: { config: configStr }
-        });
-        if (applyToExisting) {
-            console.log(`[Config Alerts] Updating documents for tenant ${req.user.tenantId}`);
-            if (groupAlertDays && Object.keys(groupAlertDays).length > 0) {
-                for (const [group, days] of Object.entries(groupAlertDays)) {
-                    await prisma.document.updateMany({
-                        where: { tenantId: req.user.tenantId, docGroup: group },
-                        data: { alertDays: Number(days) }
-                    });
-                }
-            }
-            const groupsToExclude = groupAlertDays ? Object.keys(groupAlertDays) : [];
-            const excludeWhere = { tenantId: req.user.tenantId };
-            if (groupsToExclude.length > 0) {
-                excludeWhere.docGroup = { notIn: groupsToExclude };
-            }
-            await prisma.document.updateMany({
-                where: excludeWhere,
-                data: { alertDays: Number(defaultAlertDays) }
-            });
-            console.log(`[Config Alerts] Recalculating statuses...`);
-            const allDocs = await prisma.document.findMany({
-                where: { tenantId: req.user.tenantId },
-                select: { id: true, expirationDate: true, alertDays: true, status: true }
-            });
-            const toValido = [];
-            const toVencendo = [];
-            const toVencido = [];
-            for (const doc of allDocs) {
-                let status = 'Válido';
-                if (doc.expirationDate) {
-                    const diffTime = new Date(doc.expirationDate).getTime() - new Date().getTime();
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    if (diffDays < 0)
-                        status = 'Vencido';
-                    else if (diffDays <= (doc.alertDays || Number(defaultAlertDays)))
-                        status = 'Vencendo';
-                }
-                if (doc.status !== status) {
-                    if (status === 'Válido')
-                        toValido.push(doc.id);
-                    else if (status === 'Vencendo')
-                        toVencendo.push(doc.id);
-                    else if (status === 'Vencido')
-                        toVencido.push(doc.id);
-                }
-            }
-            if (toValido.length > 0) {
-                await prisma.document.updateMany({ where: { id: { in: toValido } }, data: { status: 'Válido' } });
-            }
-            if (toVencendo.length > 0) {
-                await prisma.document.updateMany({ where: { id: { in: toVencendo } }, data: { status: 'Vencendo' } });
-            }
-            if (toVencido.length > 0) {
-                await prisma.document.updateMany({ where: { id: { in: toVencido } }, data: { status: 'Vencido' } });
-            }
-            console.log(`[Config Alerts] Finished bulk update. (Válido: ${toValido.length}, Vencendo: ${toVencendo.length}, Vencido: ${toVencido.length})`);
-        }
-        res.json({ success: true, config: JSON.parse(config.config) });
-    }
-    catch (error) {
-        console.error("Config save error:", error);
-        res.status(500).json({ error: error.message || 'Failed to update config' });
-    }
-});
-app.post('/api/generate-declaration', authenticateToken, async (req, res) => {
-    try {
-        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt } = req.body;
-        console.log(`[Declaration] Generating "${declarationType}" (${issuerType || 'company'}) for Company: ${companyId}`);
+        // ── Step 1: Receber request ──
+        const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle } = req.body;
+        const style = (['objetiva', 'formal', 'robusta'].includes(requestedStyle) ? requestedStyle : 'objetiva');
+        console.log(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} BID:${biddingProcessId}`);
         if (!biddingProcessId || !companyId || !declarationType) {
             return res.status(400).json({ error: 'Missing required parameters' });
         }
+        // ── Step 2: Buscar dados ──
         const bidding = await prisma.biddingProcess.findUnique({
             where: { id: biddingProcessId, tenantId: req.user.tenantId },
             include: { aiAnalysis: true }
@@ -827,6 +731,61 @@ app.post('/api/generate-declaration', authenticateToken, async (req, res) => {
         if (!bidding || !company) {
             return res.status(404).json({ error: 'Bidding or Company not found' });
         }
+        // ── Step 3: Montar authoritativeFacts ──
+        const schema = bidding.aiAnalysis?.schemaV2;
+        const pi = schema?.process_identification || {};
+        const orgaoFromSchema = pi.orgao || '';
+        const editalFromSchema = pi.numero_edital || '';
+        const processFromSchema = pi.numero_processo || '';
+        const objetoFromSchema = pi.objeto_completo || pi.objeto_resumido || pi.objeto || '';
+        const biddingTitle = (bidding.title || '').trim();
+        const biddingMod = (bidding.modality || '').trim();
+        // Cross-check órgão
+        let orgaoFromTitle = '';
+        const titleParts = biddingTitle.split(/\s+-\s+/);
+        if (titleParts.length >= 2) {
+            orgaoFromTitle = titleParts.slice(1).join(' - ').trim();
+        }
+        const schemaMatchesTitle = orgaoFromSchema && biddingTitle.toLowerCase().includes(orgaoFromSchema.toLowerCase().substring(0, 15));
+        const orgaoName = schemaMatchesTitle ? orgaoFromSchema : (orgaoFromTitle || orgaoFromSchema || 'Não identificado');
+        const editalNum = editalFromSchema || '';
+        const processNum = processFromSchema || '';
+        const hasDivergence = !!(orgaoFromSchema && !schemaMatchesTitle);
+        // Extrair dados estruturados da empresa
+        const qual = company.qualification || '';
+        const representanteName = extractFromQualification(qual, 'name') || company.contactName || '';
+        const representanteCpf = extractFromQualification(qual, 'cpf') || company.contactCpf || '';
+        const representanteCargo = extractFromQualification(qual, 'cargo');
+        const companyAddress = company.address || extractFromQualification(qual, 'address') || '';
+        // ── Step 4: Classificar família (precisa ser ANTES do facts) ──
+        const family = classifyFamily(declarationType);
+        console.log(`[Declaration v5] Step 4: Family → ${family}`);
+        const facts = {
+            orgaoLicitante: orgaoName,
+            modalidade: biddingMod,
+            editalNumero: editalNum,
+            processoNumero: processNum,
+            objeto: objetoFromSchema,
+            biddingTitle,
+            declarationType,
+            declarationFamily: family,
+            issuerType: (issuerType || 'company'),
+            empresaRazaoSocial: company.razaoSocial,
+            empresaCnpj: company.cnpj,
+            empresaEndereco: companyAddress,
+            qualificacaoCompleta: qual.trim() || undefined,
+            representanteNome: representanteName,
+            representanteCpf: representanteCpf,
+            representanteCargo: representanteCargo,
+            orgaoFromSchema,
+            editalFromSchema,
+            processFromSchema,
+            hasDivergence,
+        };
+        console.log(`[Declaration v5] Step 3: Facts → org="${orgaoName}" div=${hasDivergence} rep="${representanteName}"`);
+        // ── Step 5: Contexto específico ──
+        const familyContext = extractFamilyContext(family, schema);
+        // ── Issuer Block ──
         const isTechnical = issuerType === 'technical';
         let issuerBlock = '';
         if (isTechnical) {
@@ -840,7 +799,7 @@ DADOS DA EMPRESA VINCULADA:
 ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}
 
-INSTRUÇÃO ESPECIAL (RT): A declaração DEVE ser redigida na PRIMEIRA PESSOA do profissional técnico. Ele é o declarante principal.
+INSTRUÇÃO ESPECIAL (RT): A declaração DEVE ser redigida na PRIMEIRA PESSOA do profissional técnico.
 Exemplo: "Eu, [Nome], [Nacionalidade], [Estado Civil], [Engenheiro Civil], inscrito no CREA sob nº [Nº], CPF nº [CPF], Responsável Técnico pela empresa [Razão Social], DECLARO..."`;
         }
         else {
@@ -851,72 +810,101 @@ ${company.razaoSocial} | CNPJ: ${company.cnpj}
 ${company.qualification || ''}
 
 DADOS DO RESPONSÁVEL TÉCNICO VINCULADO:
-${company.technicalQualification || 'Nenhum profissional técnico cadastrado no sistema.'}`;
+${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`;
         }
-        const prompt = `Você é um Advogado Sênior especializado em Direito Administrativo e Contratações Públicas, com enfoque na Lei nº 14.133/2021.
-Sua tarefa é redigir uma declaração com RIGOR JURÍDICO MÁXIMO e absoluta fidelidade aos requisitos do edital.
-
-TIPO ORIGINAL: "${declarationType}"
-
-${issuerBlock}
-
-LICITAÇÃO:
-Objeto: ${bidding.title}
-Modalidade/Nº: ${bidding.modality || ''}
-
-RESUMO ESTRUTURADO DO EDITAL (Base compulsória):
-${bidding.aiAnalysis?.schemaV2 ? (0, moduleContextContracts_1.buildModuleContext)(bidding.aiAnalysis.schemaV2, 'declaration') : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500)}
-
-INSTRUÇÕES DE EXCELÊNCIA JURÍDICA:
-1. FIDELIDADE AO EDITAL: Analise o resumo acima em busca de modelos ou exigências específicas para esta declaração (Tipo: ${declarationType}). Se o edital impuser um texto específico, transcreva-o integralmente, adaptando apenas o estritamente necessário para conferir validade perante a Lei 14.133/2021.
-2. PRECISÃO TÉCNICA: Utilize terminologia jurídica moderna da nova Lei de Licitações. Evite termos arcaicos, mas mantenha a sobriedade e a autoridade de um documento oficial.
-3. TÍTULO: Gere um título técnico e resumido. NUNCA inclua citações de artigos de lei, incisos ou parágrafos no TÍTULO (Ex: NÃO use "Art. 63" ou "Lei 14.133" no título). O título deve ser puramente descriptivo (Ex: "DECLARAÇÃO DE INDEFERIMENTO" ou "DECLARAÇÃO DE TRABALHO INFANTIL").
-4. NOMES COMPLETOS: No corpo do texto, NUNCA abrevie nomes de pessoas ou da empresa. Transcreva exatamente como fornecido na qualificação.
-
-5. DECLARAÇÃO DE EQUIPE TÉCNICA: Se o tipo for referente à "Indicação de Pessoal Técnico" ou "Equipe Técnica", a declaração DEVE citar nominalmente os dados do "RESPONSÁVEL TÉCNICO VINCULADO" fornecidos acima. NÃO utilize placeholders (Ex: [NOME]) se os dados estiverem disponíveis no contexto. Utilize espaços extras apenas para membros ADICIONAIS além do RT principal.
-
-${customPrompt ? `INSTRUÇÃO ESPECÍFICA DO USUÁRIO (PRIMEIRA PRIORIDADE): ${customPrompt}` : ''}
-
-6. REGRAS CRÍTICAS DE SAÍDA (FORMATO JSON):
-- Sua resposta DEVE conter APENAS o objeto JSON puro.
-- NUNCA use blocos de código markdown (como \`\`\`json ou \`\`\`).
-- FORMATO OBRIGATÓRIO: { "title": "...", "text": "..." }
-- O campo "text" deve começar DIRETAMENTE com a qualificação unificada: "${isTechnical ? '[Nome], [nacionalidade], [CREA/CAU], etc, DECLARA...' : 'A empresa [Razão Social], CNPJ [CNPJ], DECLARA...'}"
-- PROIBIÇÃO ABSOLUTA: NÃO inclua Local, Data, Nome do Signatário ou Cargo ao final do "text". O corpo deve terminar no ponto final da última frase da declaração. QUALQUER menção a "Lugar, Data" ou "Nome da Empresa" no final será considerada um erro grave.
-- EQUIPE TÉCNICA: Se for sobre pessoal técnico, APÓS citar o RT principal, adicione OBRIGATORIAMENTE um parágrafo: "[INDICAR AQUI OUTROS MEMBROS DA EQUIPE SE HOUVER: Nome, CPF e Qualificação]".
-- Texto LIMPO, sem negritos (**), sem aspas extras, sem quebras de linha desnecessárias dentro do JSON.`;
+        // ── Step 6: Montar prompt v3 ──
+        const editalContext = bidding.aiAnalysis?.schemaV2
+            ? (0, moduleContextContracts_1.buildModuleContext)(bidding.aiAnalysis.schemaV2, 'declaration')
+            : (bidding.aiAnalysis?.fullSummary || bidding.summary || '').substring(0, 3500);
+        // Extrair cláusula exata do edital (declaration_routes)
+        const oo = schema?.operational_outputs;
+        let editalClause;
+        if (oo?.declaration_routes?.length > 0) {
+            const matchEntry = oo.declaration_routes.find((d) => {
+                const name = typeof d === 'string' ? d : (d.name || d.title || '');
+                return name.toLowerCase().includes(declarationType.toLowerCase().substring(0, 15))
+                    || declarationType.toLowerCase().includes(name.toLowerCase().substring(0, 15));
+            });
+            if (matchEntry) {
+                editalClause = typeof matchEntry === 'string' ? matchEntry : (matchEntry.name || matchEntry.title || undefined);
+            }
+        }
+        const prompt = buildDeclarationPrompt(facts, family, familyContext, editalContext, issuerBlock, customPrompt, isTechnical, style, editalClause);
         if (!genAI) {
             return res.status(500).json({ error: 'GEMINI_API_KEY não configurada no servidor.' });
         }
+        // ── Step 7: Chamar IA ──
+        console.log(`[Declaration v5] Step 7: Calling Gemini (attempt 1)...`);
         const result = await (0, gemini_service_1.callGeminiWithRetry)(genAI.models, {
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: { temperature: 0.7, maxOutputTokens: 4096 }
-        });
-        let rawResponse = (result.text || '').trim();
-        // Extract JSON if it has markdown or extra text
-        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            return res.json({ text: rawResponse.replace(/\*\*/g, ''), title: declarationType.substring(0, 50) });
+            config: {
+                temperature: 0.3,
+                maxOutputTokens: 4096,
+                systemInstruction: declarationPromptV2_1.DECLARATION_SYSTEM_PROMPT
+            }
+        }, 3, { tenantId: req.user.tenantId, operation: 'generate_declaration', metadata: { docType: 'declaration' } });
+        // ── Step 8: Parser + Sanitize (modular) ──
+        const rawResponse = (result.text || '').trim();
+        const parsed = (0, declaration_1.parseAndSanitize)(rawResponse);
+        if (!parsed || !parsed.text) {
+            return res.status(500).json({ error: 'Falha ao interpretar resposta da IA. Tente novamente.' });
         }
-        try {
-            const parsed = JSON.parse(jsonMatch[0]);
-            res.json({
-                text: parsed.text.replace(/\*\*/g, '').trim(),
-                title: parsed.title.replace(/\*\*/g, '').trim()
+        let finalText = parsed.text;
+        let finalTitle = parsed.title || declarationType.substring(0, 50);
+        // ── Step 8.5: Title validation & auto-fix (v8) ──
+        const titleResult = (0, declaration_1.validateAndFixTitle)(finalTitle, declarationType);
+        if (titleResult.fixed) {
+            console.log(`[Declaration v8] Title fixed: "${finalTitle}" → "${titleResult.title}"`);
+            finalTitle = titleResult.title;
+        }
+        // ── Step 9: Validação pós-geração ──
+        console.log(`[Declaration v8] Step 9: Validating...`);
+        let issues = (0, declaration_1.validateDeclaration)(finalText, facts);
+        // Adicionar issue de título se houver
+        if (titleResult.issue)
+            issues.push(titleResult.issue);
+        let corrections = [];
+        if (titleResult.correction)
+            corrections.push(titleResult.correction);
+        let attempts = 1;
+        // ── Step 10: Repair automático via IA (se critical) ──
+        if ((0, declaration_1.hasCriticalIssues)(issues)) {
+            console.log(`[Declaration v5] Step 10: ${issues.filter(i => i.severity === 'critical').length} critical issues. Repair via IA...`);
+            attempts = 2;
+            const aiCallFn = (0, declaration_1.createGeminiRepairFn)(genAI.models, gemini_service_1.callGeminiWithRetry, 'gemini-2.5-flash', { tenantId: req.user.tenantId, operation: 'repair_declaration', metadata: { docType: 'declaration' } });
+            const repair = await (0, declaration_1.repairDeclaration)(finalText, finalTitle, issues, facts, declaration_1.validateDeclaration, aiCallFn);
+            if (repair.improved) {
+                finalText = repair.text;
+                finalTitle = repair.title;
+                issues = repair.issuesAfterRepair;
+                corrections = repair.corrections;
+            }
+        }
+        // ── Step 11/12: Quality Report + Resposta ──
+        const qualityReport = (0, declaration_1.calculateQualityReport)(issues, corrections, family, attempts);
+        console.log(`[Declaration v5] ${(0, declaration_1.summarizeReport)(qualityReport)}`);
+        if (qualityReport.grade === 'D' && qualityReport.contaminationDetected) {
+            return res.json({
+                text: finalText,
+                title: finalTitle,
+                quality: qualityReport,
+                warning: 'Qualidade insuficiente. A declaração contém erros factuais que não puderam ser corrigidos automaticamente. Revise manualmente.',
             });
         }
-        catch (e) {
-            res.json({ text: rawResponse.replace(/\*\*/g, ''), title: declarationType.substring(0, 50) });
-        }
+        res.json({
+            text: finalText,
+            title: finalTitle,
+            quality: qualityReport,
+        });
     }
     catch (error) {
-        console.error("Declaration generation error:", error);
+        console.error("[Declaration v5] Fatal error:", error);
         res.status(500).json({ error: 'Failed to generate declaration', details: error?.message || 'Erro desconhecido' });
     }
 });
 // PNCP Proxy and Saved Searches
-app.get('/api/pncp/searches', authenticateToken, async (req, res) => {
+app.get('/api/pncp/searches', auth_1.authenticateToken, async (req, res) => {
     try {
         const searches = await prisma.pncpSavedSearch.findMany({
             where: { tenantId: req.user.tenantId },
@@ -930,7 +918,7 @@ app.get('/api/pncp/searches', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch saved searches' });
     }
 });
-app.post('/api/pncp/searches', authenticateToken, async (req, res) => {
+app.post('/api/pncp/searches', auth_1.authenticateToken, async (req, res) => {
     try {
         const tenantId = req.user.tenantId;
         const search = await prisma.pncpSavedSearch.create({
@@ -943,7 +931,7 @@ app.post('/api/pncp/searches', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to create saved search' });
     }
 });
-app.delete('/api/pncp/searches/:id', authenticateToken, async (req, res) => {
+app.delete('/api/pncp/searches/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const id = req.params.id;
         const tenantId = req.user.tenantId;
@@ -958,7 +946,7 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req, res) => {
     }
 });
 // ── Update a single saved search ──
-app.put('/api/pncp/searches/:id', authenticateToken, async (req, res) => {
+app.put('/api/pncp/searches/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const id = req.params.id;
         const tenantId = req.user.tenantId;
@@ -988,7 +976,7 @@ app.put('/api/pncp/searches/:id', authenticateToken, async (req, res) => {
     }
 });
 // ── Rename a saved search list (bulk update listName) ──
-app.put('/api/pncp/searches/list/rename', authenticateToken, async (req, res) => {
+app.put('/api/pncp/searches/list/rename', auth_1.authenticateToken, async (req, res) => {
     try {
         const tenantId = req.user.tenantId;
         const { oldName, newName } = req.body;
@@ -1006,7 +994,7 @@ app.put('/api/pncp/searches/list/rename', authenticateToken, async (req, res) =>
     }
 });
 // ── Delete a saved search list (migrate items to default) ──
-app.delete('/api/pncp/searches/list/:name', authenticateToken, async (req, res) => {
+app.delete('/api/pncp/searches/list/:name', auth_1.authenticateToken, async (req, res) => {
     try {
         const tenantId = req.user.tenantId;
         const listName = decodeURIComponent(req.params.name);
@@ -1024,7 +1012,359 @@ app.delete('/api/pncp/searches/list/:name', authenticateToken, async (req, res) 
         res.status(500).json({ error: 'Failed to delete list' });
     }
 });
-app.post('/api/pncp/search', authenticateToken, async (req, res) => {
+// ── Opportunity Scanner Global Toggle ──
+app.get('/api/pncp/scanner/status', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const globalConfig = await prisma.globalConfig.findUnique({
+            where: { tenantId: req.user.tenantId }
+        });
+        if (!globalConfig)
+            return res.json({ enabled: true });
+        try {
+            const conf = JSON.parse(globalConfig.config || '{}');
+            res.json({
+                enabled: conf.opportunityScannerEnabled !== false,
+                lastScanAt: conf.lastScanAt || null,
+                lastScanTotalNew: conf.lastScanTotalNew || 0,
+                lastScanResults: conf.lastScanResults || [],
+                nextScanAt: conf.nextScanAt || null,
+            });
+        }
+        catch {
+            res.json({ enabled: true });
+        }
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to get scanner status' });
+    }
+});
+app.post('/api/pncp/scanner/toggle', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { enabled } = req.body;
+        const tenantId = req.user.tenantId;
+        const globalConfig = await prisma.globalConfig.upsert({
+            where: { tenantId },
+            update: {},
+            create: { tenantId, config: '{}' }
+        });
+        let conf = {};
+        try {
+            conf = JSON.parse(globalConfig.config || '{}');
+        }
+        catch { }
+        conf.opportunityScannerEnabled = enabled;
+        await prisma.globalConfig.update({
+            where: { tenantId },
+            data: { config: JSON.stringify(conf) }
+        });
+        res.json({ success: true, enabled });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to toggle scanner status' });
+    }
+});
+// ── Manual trigger for Opportunity Scanner ──
+app.post('/api/pncp/scan-opportunities', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { runOpportunityScan } = await Promise.resolve().then(() => __importStar(require('./services/monitoring/opportunity-scanner.service')));
+        console.log(`[OpportunityScanner] Manual scan triggered by tenant ${req.user.tenantId}`);
+        // Run async — don't block the response
+        runOpportunityScan(req.user.tenantId).catch(err => console.error('[OpportunityScanner] Manual scan error:', err));
+        res.json({ success: true, message: 'Varredura de oportunidades iniciada. Você receberá notificações se houver novos editais.' });
+    }
+    catch (error) {
+        console.error("Manual scan trigger error:", error);
+        res.status(500).json({ error: 'Failed to trigger scan' });
+    }
+});
+// ── List scanner-found opportunities (for "Encontradas" tab) ──
+// Sorted by closest deadline first (dataEncerramentoProposta ASC, nulls last)
+app.get('/api/pncp/scanner/opportunities', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const searchId = req.query.searchId;
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = 50;
+        const where = { tenantId };
+        if (searchId)
+            where.searchId = searchId;
+        // Fetch ordered items directly from DB (avoids memory leak)
+        const [items, total] = await Promise.all([
+            prisma.opportunityScannerLog.findMany({
+                where,
+                select: {
+                    id: true,
+                    pncpId: true,
+                    searchId: true,
+                    searchName: true,
+                    titulo: true,
+                    objeto: true,
+                    orgaoNome: true,
+                    uf: true,
+                    municipio: true,
+                    valorEstimado: true,
+                    dataEncerramentoProposta: true,
+                    modalidadeNome: true,
+                    linkSistema: true,
+                    isViewed: true,
+                    createdAt: true,
+                },
+                orderBy: [
+                    { dataEncerramentoProposta: { sort: 'asc', nulls: 'last' } },
+                    { createdAt: 'desc' }
+                ],
+                skip: (page - 1) * pageSize,
+                take: pageSize,
+            }),
+            prisma.opportunityScannerLog.count({ where })
+        ]);
+        res.json({ items, total, page, pageSize });
+    }
+    catch (error) {
+        console.error("Scanner opportunities error:", error);
+        res.status(500).json({ error: 'Failed to list scanner opportunities' });
+    }
+});
+// ── Mark opportunities as viewed ──
+app.patch('/api/pncp/scanner/opportunities/mark-viewed', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { ids } = req.body; // Array of log IDs to mark as viewed, or "all"
+        if (ids === 'all') {
+            await prisma.opportunityScannerLog.updateMany({
+                where: { tenantId, isViewed: false },
+                data: { isViewed: true }
+            });
+        }
+        else if (Array.isArray(ids) && ids.length > 0) {
+            await prisma.opportunityScannerLog.updateMany({
+                where: { tenantId, id: { in: ids } },
+                data: { isViewed: true }
+            });
+        }
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Mark viewed error:", error);
+        res.status(500).json({ error: 'Failed to mark as viewed' });
+    }
+});
+// ── Get unread count (for sidebar badge) ──
+app.get('/api/pncp/scanner/opportunities/unread-count', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const count = await prisma.opportunityScannerLog.count({
+            where: { tenantId: req.user.tenantId, isViewed: false }
+        });
+        res.json({ count });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to get unread count' });
+    }
+});
+// ═══ PNCP Favorites (persisted in DB — syncs across devices) ═══
+// ── Get all favorites (lists + items) ──
+app.get('/api/pncp/favorites', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const lists = await prisma.pncpFavoriteList.findMany({
+            where: { tenantId },
+            include: { items: true },
+            orderBy: { createdAt: 'asc' }
+        });
+        res.json({ lists });
+    }
+    catch (error) {
+        console.error("Fetch favorites error:", error);
+        res.status(500).json({ error: 'Failed to fetch favorites' });
+    }
+});
+// ── Create a favorite list ──
+app.post('/api/pncp/favorites/lists', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { name } = req.body;
+        if (!name?.trim())
+            return res.status(400).json({ error: 'Name required' });
+        const list = await prisma.pncpFavoriteList.upsert({
+            where: { tenantId_name: { tenantId, name: name.trim() } },
+            update: {},
+            create: { tenantId, name: name.trim() }
+        });
+        res.json(list);
+    }
+    catch (error) {
+        console.error("Create fav list error:", error);
+        res.status(500).json({ error: 'Failed to create list' });
+    }
+});
+// ── Rename a favorite list ──
+app.put('/api/pncp/favorites/lists/:id', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { name } = req.body;
+        if (!name?.trim())
+            return res.status(400).json({ error: 'Name required' });
+        await prisma.pncpFavoriteList.updateMany({
+            where: { id: req.params.id, tenantId },
+            data: { name: name.trim() }
+        });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Rename fav list error:", error);
+        res.status(500).json({ error: 'Failed to rename list' });
+    }
+});
+// ── Delete a favorite list (moves items to default list) ──
+app.delete('/api/pncp/favorites/lists/:id', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const listId = req.params.id;
+        // Find or create default list
+        const defaultList = await prisma.pncpFavoriteList.upsert({
+            where: { tenantId_name: { tenantId, name: 'Favoritos Gerais' } },
+            update: {},
+            create: { tenantId, name: 'Favoritos Gerais' }
+        });
+        if (listId === defaultList.id)
+            return res.status(400).json({ error: 'Cannot delete default list' });
+        // Move items to default list (skip duplicates)
+        const itemsToMove = await prisma.pncpFavoriteItem.findMany({ where: { listId, tenantId } });
+        for (const item of itemsToMove) {
+            try {
+                await prisma.pncpFavoriteItem.update({ where: { id: item.id }, data: { listId: defaultList.id } });
+            }
+            catch { /* duplicate — delete instead */
+                await prisma.pncpFavoriteItem.delete({ where: { id: item.id } }).catch(() => { });
+            }
+        }
+        await prisma.pncpFavoriteList.deleteMany({ where: { id: listId, tenantId } });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Delete fav list error:", error);
+        res.status(500).json({ error: 'Failed to delete list' });
+    }
+});
+// ── Add item to a favorites list ──
+app.post('/api/pncp/favorites/items', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { listId, pncpId, data } = req.body;
+        if (!listId || !pncpId)
+            return res.status(400).json({ error: 'listId and pncpId required' });
+        const item = await prisma.pncpFavoriteItem.upsert({
+            where: { tenantId_listId_pncpId: { tenantId, listId, pncpId } },
+            update: { data },
+            create: { tenantId, listId, pncpId, data }
+        });
+        res.json(item);
+    }
+    catch (error) {
+        console.error("Add fav item error:", error);
+        res.status(500).json({ error: 'Failed to add favorite' });
+    }
+});
+// ── Remove item from favorites ──
+app.delete('/api/pncp/favorites/items/:id', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        await prisma.pncpFavoriteItem.deleteMany({ where: { id: req.params.id, tenantId } });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Remove fav item error:", error);
+        res.status(500).json({ error: 'Failed to remove favorite' });
+    }
+});
+// ── Remove item by pncpId (from all lists) ──
+app.delete('/api/pncp/favorites/items/by-pncp/:pncpId', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const pncpId = decodeURIComponent(req.params.pncpId);
+        await prisma.pncpFavoriteItem.deleteMany({ where: { tenantId, pncpId } });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Remove fav by pncpId error:", error);
+        res.status(500).json({ error: 'Failed to remove favorite' });
+    }
+});
+// ── Bulk import favorites (migration from localStorage) ──
+app.post('/api/pncp/favorites/import', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const { lists, items } = req.body; // { lists: [{name}], items: [{listName, pncpId, data}] }
+        let imported = 0;
+        // Ensure all lists exist
+        const listMap = new Map(); // name → id
+        for (const l of (lists || [])) {
+            const list = await prisma.pncpFavoriteList.upsert({
+                where: { tenantId_name: { tenantId, name: l.name } },
+                update: {},
+                create: { tenantId, name: l.name }
+            });
+            listMap.set(l.name, list.id);
+        }
+        // Import items
+        for (const item of (items || [])) {
+            const listId = listMap.get(item.listName) || listMap.get('Favoritos Gerais');
+            if (!listId || !item.pncpId)
+                continue;
+            try {
+                await prisma.pncpFavoriteItem.upsert({
+                    where: { tenantId_listId_pncpId: { tenantId, listId, pncpId: item.pncpId } },
+                    update: { data: item.data },
+                    create: { tenantId, listId, pncpId: item.pncpId, data: item.data }
+                });
+                imported++;
+            }
+            catch { /* skip duplicates */ }
+        }
+        res.json({ success: true, imported, listsCreated: listMap.size });
+    }
+    catch (error) {
+        console.error("Import favorites error:", error);
+        res.status(500).json({ error: 'Failed to import favorites' });
+    }
+});
+// ── Reset scanner dedup history (re-send notifications on next scan) ──
+app.post('/api/pncp/scanner/reset', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const deleted = await prisma.opportunityScannerLog.deleteMany({
+            where: { tenantId: req.user.tenantId }
+        });
+        console.log(`[OpportunityScanner] 🔄 Histórico de dedup resetado para tenant ${req.user.tenantId} (${deleted.count} registros removidos)`);
+        res.json({ success: true, deleted: deleted.count, message: `Histórico limpo. ${deleted.count} registros removidos. Próxima varredura reenviará notificações.` });
+    }
+    catch (error) {
+        console.error("Scanner reset error:", error);
+        res.status(500).json({ error: 'Failed to reset scanner history' });
+    }
+});
+// ── Internal: Reset + Scan (for admin/worker use without JWT) ──
+app.post('/api/internal/scanner/reset-and-scan', async (req, res) => {
+    const secret = req.headers['x-worker-secret'] || req.body?.workerSecret;
+    const WORKER_SECRET = process.env.CHAT_WORKER_SECRET || '';
+    const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+    const isAuthorized = (WORKER_SECRET && secret === WORKER_SECRET) || (TELEGRAM_TOKEN && secret === TELEGRAM_TOKEN);
+    if (!isAuthorized) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    try {
+        const tenantId = req.body?.tenantId || '9f7a7155-be67-4470-8952-eb947fd97931';
+        const deleted = await prisma.opportunityScannerLog.deleteMany({ where: { tenantId } });
+        console.log(`[OpportunityScanner] 🔄 Internal reset: ${deleted.count} registros removidos para tenant ${tenantId}`);
+        const { runOpportunityScan } = await Promise.resolve().then(() => __importStar(require('./services/monitoring/opportunity-scanner.service')));
+        runOpportunityScan().catch(err => console.error('[OpportunityScanner] Scan error:', err));
+        res.json({ success: true, deleted: deleted.count, message: `Reset OK (${deleted.count} removed). Scan triggered.` });
+    }
+    catch (error) {
+        console.error("Internal reset error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+app.post('/api/pncp/search', auth_1.authenticateToken, async (req, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
         const pageSize = 10;
@@ -1168,6 +1508,7 @@ app.post('/api/pncp/search', authenticateToken, async (req, res) => {
                 link_sistema: (cnpj && ano && nSeq)
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
                     : (item.linkSistemaOrigem || item.link || ''),
+                link_comprasnet: item.linkSistemaOrigem || '',
                 status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
             };
         }).filter(item => {
@@ -1266,15 +1607,60 @@ app.post('/api/pncp/search', authenticateToken, async (req, res) => {
 });
 // ─── AI Services Imports estão no topo do arquivo ───
 // PNCP AI Analysis — analyzes a PNCP edital directly by fetching its PDF files
-app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
+app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
+    // ── SSE Setup ──
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+    });
+    res.flushHeaders();
+    const TOTAL_STEPS = 8;
+    const sendProgress = (step, message, detail) => {
+        try {
+            res.write(`data: ${JSON.stringify({
+                type: 'progress', step, total: TOTAL_STEPS, message, detail,
+                percent: Math.round((step / TOTAL_STEPS) * 100)
+            })}\n\n`);
+        }
+        catch (_) { /* connection closed */ }
+    };
+    const sendError = (error, details) => {
+        try {
+            res.write(`data: ${JSON.stringify({ type: 'error', error, details })}\n\n`);
+            res.end();
+        }
+        catch (_) { /* connection closed */ }
+    };
+    const sendResult = (payload) => {
+        try {
+            res.write(`data: ${JSON.stringify({ type: 'result', payload })}\n\n`);
+            res.end();
+        }
+        catch (_) { /* connection closed */ }
+    };
+    // SSE keepalive: send a comment every 15s to prevent Railway/Nginx/browser from killing the connection
+    const sseKeepAlive = setInterval(() => {
+        try {
+            res.write(`: keepalive ${new Date().toISOString()}\n\n`);
+        }
+        catch (_) {
+            clearInterval(sseKeepAlive);
+        }
+    }, 15000);
+    // Clean up on connection close
+    res.on('close', () => clearInterval(sseKeepAlive));
+    res.on('finish', () => clearInterval(sseKeepAlive));
     try {
         const { orgao_cnpj, ano, numero_sequencial, link_sistema } = req.body;
         if (!orgao_cnpj || !ano || !numero_sequencial) {
-            return res.status(400).json({ error: 'orgao_cnpj, ano e numero_sequencial são obrigatórios' });
+            return sendError('orgao_cnpj, ano e numero_sequencial são obrigatórios');
         }
         const agent = new https_1.default.Agent({ rejectUnauthorized: false });
         const JSZip = require('jszip');
         // 1. Fetch edital attachments from PNCP API (correct endpoint: /api/pncp/v1/)
+        sendProgress(1, 'Buscando documentos no PNCP...', 'Consultando lista de anexos do edital');
         const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}/arquivos`;
         console.log(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
         let arquivos = [];
@@ -1315,8 +1701,8 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         });
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 3; // Reduced from 5 — edital + TR + 1 extra is enough
-        const MAX_TOTAL_PDF_SIZE_KB = 15000; // Reduced from 30MB — 15MB budget
+        const MAX_PDF_PARTS = 3; // Send only top 3 most important docs to Stage 1 (Edital + TR + 1 annex)
+        const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts = [];
         const downloadedFiles = [];
@@ -1331,17 +1717,58 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             // Publicações / Atas / Avisos
             'aviso_publicac', 'aviso publicac', 'aviso_licitac',
             'aviso_de_licit', 'aviso de licit', 'aviso_licit',
+            'aviso_de_publicac', 'aviso de publicac',
             'quadro_de_aviso', 'quadro de aviso',
             'd.o.u', 'diario_oficial', 'diario oficial',
             'retificac', 'errata', 'ata_sessao', 'ata_da_sessao',
             'comprovante', 'recibo_garantia', 'modelo_recibo_garantia',
             'minuta_contrato', 'minuta contrato', 'minuta_de_contrato',
-            // Projetos de engenharia / plantas / memoriais (não contribuem para habilitação)
+            // Projetos de engenharia / plantas / memoriais / peças gráficas
             'projeto_arq', 'projeto arq', 'planta_', 'planta ',
             'memorial_descritivo', 'memorial descritivo',
             'croqui', 'layout_', 'layout ',
             'detalhamento_', 'det_arq', 'det arq',
+            'pecas_graficas', 'pecas graficas', 'peas_grficas', 'peas_graficas',
+            'desenho_tecnico', 'desenho tecnico', 'peca_grafica',
         ];
+        // ── Smart-Sort: priorizar PDFs dentro de RAR/ZIP por relevância ──
+        const ARCHIVE_EXCLUDE_PATTERNS = [
+            'relatorio_fot', 'relatorio fot', 'relatório fot',
+            'licenca_ambiental', 'licença ambiental', 'licenca ambiental',
+            'art_de_projeto', 'art de projeto', 'anotacao_responsabilidade',
+            'marco_zero', 'marco zero',
+        ];
+        const archivePriorityScore = (name) => {
+            const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            // Máxima prioridade: edital principal
+            if ((n.includes('edital') || n.includes('edital_bll') || n.includes('edital bll')) && !n.includes('modelo'))
+                return 0;
+            if (n.includes('termo_referencia') || n.includes('termo de referencia') || n.includes('tr_'))
+                return 1;
+            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orcamentaria'))
+                return 2;
+            if (n.includes('cronograma'))
+                return 3;
+            if (n.includes('bdi') || n.includes('encargos'))
+                return 4;
+            if (n.includes('composic'))
+                return 5;
+            if (n.includes('memoria') || n.includes('calculo'))
+                return 6;
+            // Prioridade média: documentos complementares
+            if (n.includes('memorial'))
+                return 50;
+            if (n.includes('projeto') || n.includes('pavimentac'))
+                return 60;
+            // Baixa prioridade: fotos, licenças, ARTs
+            if (n.includes('relatorio_fot') || n.includes('relatorio fot') || n.includes('foto') || n.includes('marco_zero') || n.includes('marco zero'))
+                return 90;
+            if (n.includes('licenca') || n.includes('licença'))
+                return 91;
+            if (n.includes('art_') || n.includes('art ') || n.includes('anotacao'))
+                return 92;
+            return 40; // Default
+        };
         // Keywords that indicate edital/TR content (should NOT be excluded even if "Outros Documentos")
         const ESSENTIAL_KEYWORDS = [
             'edital', 'termo_referencia', 'termo de referencia', 'tr_',
@@ -1422,14 +1849,30 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         }, {});
         console.log(`[PNCP-AI] 📋 Catálogo completo: ${pncpAttachments.length} arquivos — ${JSON.stringify(purposeCounts)}`);
         console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
+        sendProgress(2, 'Baixando documentos...', `${filteredArquivos.length} arquivos relevantes de ${arquivos.length} total`);
+        // Sort by priority: Edital > TR > Orçamento > Cronograma > rest
+        filteredArquivos.sort((a, b) => {
+            const nameA = a.titulo || a.nomeArquivo || a.nome || '';
+            const nameB = b.titulo || b.nomeArquivo || b.nome || '';
+            // Edital tipo always first
+            const aIsEdital = (a.tipoDocumentoId === 1 || a.tipoDocumentoDescricao === 'Edital');
+            const bIsEdital = (b.tipoDocumentoId === 1 || b.tipoDocumentoDescricao === 'Edital');
+            if (aIsEdital && !bIsEdital)
+                return -1;
+            if (!aIsEdital && bIsEdital)
+                return 1;
+            return archivePriorityScore(nameA) - archivePriorityScore(nameB);
+        });
+        let dlIndex = 0;
         for (const arq of filteredArquivos) {
-            if (pdfParts.length >= MAX_PDF_PARTS)
-                break;
+            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
             const fileUrl = arq.url || arq.uri || '';
             const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
             if (!fileUrl || !arq.statusAtivo)
                 continue;
             try {
+                dlIndex++;
+                sendProgress(2, `Baixando documento ${dlIndex}/${filteredArquivos.length}...`, `"${fileName}"`);
                 console.log(`[PNCP-AI] Downloading: "${fileName}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId}) from ${fileUrl}`);
                 const fileRes = await axios_1.default.get(fileUrl, {
                     httpsAgent: agent,
@@ -1445,14 +1888,81 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                 const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B; // PK
                 const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
                 if (isPdf) {
-                    // Budget check: skip if adding this PDF would exceed total size limit
+                    const MAX_INLINE_FILE_KB = 8000; // 8MB per file — keeps base64 under ~11MB per part
                     const bufferSizeKB = buffer.length / 1024;
-                    if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                        console.warn(`[PNCP-AI] \u26a0\ufe0f Or\u00e7amento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido (${Math.round(totalPdfSizeAccum)}KB acumulado). Ignorando "${fileName}" (${Math.round(bufferSizeKB)}KB)`);
-                        discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
-                        continue;
+                    // Only add to pdfParts if we haven't reached the limit for Stage 1
+                    if (!pdfPartsFull) {
+                        if (bufferSizeKB > MAX_INLINE_FILE_KB) {
+                            // Large PDF: use Gemini Files API (supports up to 50MB, works with scanned PDFs)
+                            console.log(`[PNCP-AI] ⚡ Arquivo grande (${Math.round(bufferSizeKB)}KB > ${MAX_INLINE_FILE_KB}KB). Usando Gemini Files API para upload...`);
+                            try {
+                                const apiKey = process.env.GEMINI_API_KEY;
+                                if (!apiKey)
+                                    throw new Error('GEMINI_API_KEY não configurada');
+                                const filesAi = new genai_1.GoogleGenAI({ apiKey });
+                                const tempFilePath = path_1.default.join(uploadDir, `temp_upload_${Date.now()}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                fs_1.default.writeFileSync(tempFilePath, buffer);
+                                const uploadedFile = await filesAi.files.upload({
+                                    file: tempFilePath,
+                                    config: { mimeType: 'application/pdf', displayName: fileName }
+                                });
+                                // Clean up temp file
+                                try {
+                                    fs_1.default.unlinkSync(tempFilePath);
+                                }
+                                catch (_e) { }
+                                if (uploadedFile && uploadedFile.uri) {
+                                    pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                    console.log(`[PNCP-AI] ✅ Upload via Files API concluído: ${uploadedFile.name} (URI: ${uploadedFile.uri})`);
+                                }
+                                else {
+                                    console.warn(`[PNCP-AI] ⚠️ Files API não retornou URI para ${fileName}`);
+                                }
+                            }
+                            catch (e) {
+                                console.warn(`[PNCP-AI] ⚠️ Falha no upload via Files API para ${fileName}:`, e.message);
+                            }
+                            totalPdfSizeAccum += 1; // Files API handles storage; minimal budget impact
+                        }
+                        else {
+                            // Budget check: if inline budget exceeded, use Files API as fallback
+                            if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                console.log(`[PNCP-AI] ⚡ Orçamento inline de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Enviando "${fileName}" via Files API...`);
+                                try {
+                                    const apiKey = process.env.GEMINI_API_KEY;
+                                    if (!apiKey)
+                                        throw new Error('GEMINI_API_KEY não configurada');
+                                    const filesAi = new genai_1.GoogleGenAI({ apiKey });
+                                    const tempPath = path_1.default.join(uploadDir, `temp_overflow_${Date.now()}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                    fs_1.default.writeFileSync(tempPath, buffer);
+                                    const uploadedFile = await filesAi.files.upload({
+                                        file: tempPath,
+                                        config: { mimeType: 'application/pdf', displayName: fileName }
+                                    });
+                                    try {
+                                        fs_1.default.unlinkSync(tempPath);
+                                    }
+                                    catch (_e) { }
+                                    if (uploadedFile && uploadedFile.uri) {
+                                        pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                        console.log(`[PNCP-AI] ✅ Overflow via Files API: ${uploadedFile.name}`);
+                                    }
+                                }
+                                catch (e) {
+                                    console.warn(`[PNCP-AI] ⚠️ Files API overflow falhou para ${fileName}:`, e.message);
+                                    discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
+                                }
+                                totalPdfSizeAccum += 1;
+                            }
+                            else {
+                                totalPdfSizeAccum += bufferSizeKB;
+                                pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
+                            }
+                        }
                     }
-                    totalPdfSizeAccum += bufferSizeKB;
+                    else {
+                        console.log(`[PNCP-AI] 📁 Salvando "${fileName}" (${Math.round(bufferSizeKB)}KB) apenas no storage (limite de ${MAX_PDF_PARTS} docs para IA atingido)`);
+                    }
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
                     fs_1.default.writeFileSync(path_1.default.join(uploadDir, safeFileName), buffer);
                     let storageFileName = safeFileName;
@@ -1467,9 +1977,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                     catch (e) {
                         console.error(`[PNCP-AI] Erro upload PDF Storage:`, e);
                     }
-                    pdfParts.push({
-                        inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
-                    });
+                    // Note: pdfParts is pushed either as text or inlineData above
                     downloadedFiles.push(storageFileName);
                     console.log(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${storageFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
                 }
@@ -1477,12 +1985,66 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                     console.log(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
                         const zip = await JSZip.loadAsync(buffer);
-                        const zipEntries = Object.keys(zip.files).filter((name) => name.toLowerCase().endsWith('.pdf') && !zip.files[name].dir);
-                        console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s): ${zipEntries.join(', ')}`);
+                        let zipEntries = Object.keys(zip.files).filter((name) => {
+                            if (!name.toLowerCase().endsWith('.pdf') || zip.files[name].dir)
+                                return false;
+                            const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
+                            if (excluded) {
+                                console.log(`[PNCP-AI] 🚫 ZIP: Excluído "${name}" (padrão filtrado)`);
+                                discardedFiles.push(`${name} (ZIP, filtrado)`);
+                            }
+                            return !excluded;
+                        });
+                        // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
+                        zipEntries.sort((a, b) => archivePriorityScore(a) - archivePriorityScore(b));
+                        console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s) (sorted): ${zipEntries.join(', ')}`);
                         for (const entryName of zipEntries) {
                             if (pdfParts.length >= MAX_PDF_PARTS)
                                 break;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
+                            const entrySizeKB = pdfBuffer.length / 1024;
+                            const MAX_SINGLE_FILE_KB = 8000;
+                            if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                try {
+                                    const apiKey = process.env.GEMINI_API_KEY;
+                                    if (!apiKey)
+                                        throw new Error('GEMINI_API_KEY não configurada');
+                                    const filesAi = new genai_1.GoogleGenAI({ apiKey });
+                                    const tempPath = path_1.default.join(uploadDir, `temp_zip_${Date.now()}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                    fs_1.default.writeFileSync(tempPath, pdfBuffer);
+                                    const uploadedFile = await filesAi.files.upload({
+                                        file: tempPath,
+                                        config: { mimeType: 'application/pdf', displayName: entryName }
+                                    });
+                                    try {
+                                        fs_1.default.unlinkSync(tempPath);
+                                    }
+                                    catch (_e) { }
+                                    if (uploadedFile && uploadedFile.uri) {
+                                        pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                        console.log(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
+                                    }
+                                }
+                                catch (e) {
+                                    console.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
+                                }
+                                totalPdfSizeAccum += 1;
+                            }
+                            else {
+                                if (pdfBuffer.length > 0) {
+                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                        console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                        discardedFiles.push(`${entryName} (ZIP, ${Math.round(entrySizeKB)}KB)`);
+                                        continue;
+                                    }
+                                    totalPdfSizeAccum += entrySizeKB;
+                                    pdfParts.push({
+                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                    });
+                                }
+                            }
                             if (pdfBuffer.length > 0) {
                                 const safeName = `pncp_${req.user.tenantId}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs_1.default.writeFileSync(path_1.default.join(uploadDir, safeName), pdfBuffer);
@@ -1498,9 +2060,6 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                                 catch (e) {
                                     console.error(`[PNCP-AI] Erro upload ZIP-PDF Storage:`, e);
                                 }
-                                pdfParts.push({
-                                    inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                });
                                 downloadedFiles.push(storageFileName);
                                 console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${storageFileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
@@ -1516,15 +2075,67 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                         const extractor = await (0, node_unrar_js_1.createExtractorFromData)({ data: new Uint8Array(buffer).buffer });
                         const extracted = extractor.extract({});
                         const files = [...extracted.files];
-                        const pdfFiles = files.filter(f => f.fileHeader.name.toLowerCase().endsWith('.pdf') &&
-                            !f.fileHeader.flags.directory &&
-                            f.extraction);
-                        console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+                        const pdfFiles = files.filter(f => {
+                            if (!f.fileHeader.name.toLowerCase().endsWith('.pdf'))
+                                return false;
+                            if (f.fileHeader.flags.directory || !f.extraction)
+                                return false;
+                            const n = f.fileHeader.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
+                            if (excluded) {
+                                console.log(`[PNCP-AI] 🚫 RAR: Excluído "${f.fileHeader.name}" (padrão filtrado)`);
+                                discardedFiles.push(`${f.fileHeader.name} (RAR, filtrado)`);
+                            }
+                            return !excluded;
+                        });
+                        // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
+                        pdfFiles.sort((a, b) => archivePriorityScore(a.fileHeader.name) - archivePriorityScore(b.fileHeader.name));
+                        console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s) (sorted): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
                         for (const rarFile of pdfFiles) {
                             if (pdfParts.length >= MAX_PDF_PARTS)
                                 break;
                             if (rarFile.extraction && rarFile.extraction.length > 0) {
                                 const pdfBuffer = Buffer.from(rarFile.extraction);
+                                const entrySizeKB = pdfBuffer.length / 1024;
+                                const MAX_SINGLE_FILE_KB = 8000;
+                                if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                    console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                    try {
+                                        const apiKey = process.env.GEMINI_API_KEY;
+                                        if (!apiKey)
+                                            throw new Error('GEMINI_API_KEY não configurada');
+                                        const filesAi = new genai_1.GoogleGenAI({ apiKey });
+                                        const tempPath = path_1.default.join(uploadDir, `temp_rar_${Date.now()}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                        fs_1.default.writeFileSync(tempPath, pdfBuffer);
+                                        const uploadedFile = await filesAi.files.upload({
+                                            file: tempPath,
+                                            config: { mimeType: 'application/pdf', displayName: rarFile.fileHeader.name }
+                                        });
+                                        try {
+                                            fs_1.default.unlinkSync(tempPath);
+                                        }
+                                        catch (_e) { }
+                                        if (uploadedFile && uploadedFile.uri) {
+                                            pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                            console.log(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
+                                        }
+                                    }
+                                    catch (e) {
+                                        console.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
+                                    }
+                                    totalPdfSizeAccum += 1;
+                                }
+                                else {
+                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                        console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
+                                        discardedFiles.push(`${rarFile.fileHeader.name} (RAR, ${Math.round(entrySizeKB)}KB)`);
+                                        continue;
+                                    }
+                                    totalPdfSizeAccum += entrySizeKB;
+                                    pdfParts.push({
+                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                    });
+                                }
                                 const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs_1.default.writeFileSync(path_1.default.join(uploadDir, safeName), pdfBuffer);
                                 let storageFileName = safeName;
@@ -1539,9 +2150,6 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                                 catch (e) {
                                     console.error(`[PNCP-AI] Erro upload RAR-PDF Storage:`, e);
                                 }
-                                pdfParts.push({
-                                    inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                });
                                 downloadedFiles.push(storageFileName);
                                 console.log(`[PNCP-AI] ✅ Extracted from RAR: ${rarFile.fileHeader.name} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
@@ -1560,10 +2168,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             }
         }
         if (pdfParts.length === 0) {
-            return res.status(400).json({
-                error: 'Nenhum arquivo PDF encontrado para este edital no PNCP.',
-                details: `Encontramos ${arquivos.length} arquivo(s) mas nenhum era PDF ou ZIP com PDFs.`
-            });
+            return sendError('Nenhum arquivo PDF encontrado para este edital no PNCP.', `Encontramos ${arquivos.length} arquivo(s) mas nenhum era PDF ou ZIP com PDFs.`);
         }
         // ═══════════════════════════════════════════════════════════════════════
         // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
@@ -1578,9 +2183,10 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             riskReview: 'gemini-2.5-flash-lite', // Etapa 3: text-only risk analysis (fast, cheap)
         };
         console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
+        sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
-            return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
+            return sendError('GEMINI_API_KEY não configurada');
         }
         const ai = new genai_1.GoogleGenAI({ apiKey });
         const analysisStartTime = Date.now();
@@ -1602,11 +2208,24 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         // ── Stage 1: Factual Extraction (with PDFs) ──
         // Log diagnostic info about PDFs being sent
         const pdfSizes = pdfParts.map((p, i) => {
-            const sizeKB = Math.round(Buffer.from(p.inlineData.data, 'base64').length / 1024);
-            return `Doc${i + 1}: ${sizeKB}KB`;
+            if (p.inlineData?.data) {
+                const sizeKB = Math.round(Buffer.from(p.inlineData.data, 'base64').length / 1024);
+                return `Doc${i + 1}: ${sizeKB}KB`;
+            }
+            else if (p.fileData?.fileUri) {
+                return `Doc${i + 1}: FilesAPI`;
+            }
+            else {
+                return `Doc${i + 1}: text`;
+            }
         });
-        const totalPdfSizeKB = pdfParts.reduce((sum, p) => sum + Buffer.from(p.inlineData.data, 'base64').length, 0) / 1024;
-        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} PDFs, ${Math.round(totalPdfSizeKB)}KB total — ${pdfSizes.join(', ')})...`);
+        const totalPdfSizeKB = pdfParts.reduce((sum, p) => {
+            if (p.inlineData?.data)
+                return sum + Buffer.from(p.inlineData.data, 'base64').length;
+            return sum;
+        }, 0) / 1024;
+        sendProgress(4, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${pdfParts.length} PDFs (${Math.round(totalPdfSizeKB)}KB inline)`);
+        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} partes, ${Math.round(totalPdfSizeKB)}KB inline — ${pdfSizes.join(', ')})...`);
         let extractionJson;
         const t1Start = Date.now();
         try {
@@ -1625,7 +2244,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
                     maxOutputTokens: 65536,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText)
                 throw new Error('Etapa 1 retornou vazio');
@@ -1762,23 +2381,9 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
             console.error(`[PNCP-V2] ❌ FALHA FACTUAL DURA: ${extractedReqs} exigências (mín: ${MIN_REQUIREMENTS}), ${extractedEvidence} evidências (mín: ${MIN_EVIDENCE}), sem identificação do processo`);
             v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
             const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
-            return res.status(422).json({
-                error: 'Extração factual insuficiente',
-                details: `A IA não conseguiu extrair dados suficientes dos ${pdfParts.length} documento(s). ` +
-                    `Foram encontradas apenas ${extractedReqs} exigência(s) e ${extractedEvidence} evidência(s). ` +
-                    `Isso pode indicar que os documentos estão escaneados com baixa qualidade, protegidos, ou em formato não-textual.`,
-                diagnostics: {
-                    pdfs_sent: pdfParts.length,
-                    pdf_sizes: pdfSizes,
-                    requirements_found: extractedReqs,
-                    evidence_found: extractedEvidence,
-                    has_process_id: hasProcessId,
-                    parse_repaired: pipelineHealth.parseRepairs > 0,
-                    time_seconds: parseFloat(totalDuration),
-                    downloaded_files: downloadedFiles
-                },
-                _extraction_insufficient: true
-            });
+            return sendError('Extração factual insuficiente', `A IA não conseguiu extrair dados suficientes dos ${pdfParts.length} documento(s). ` +
+                `Foram encontradas apenas ${extractedReqs} exigência(s) e ${extractedEvidence} evidência(s). ` +
+                `Isso pode indicar que os documentos estão escaneados com baixa qualidade, protegidos, ou em formato não-textual.`);
         }
         // Soft warning: Low quality extraction (still continues)
         if (extractedReqs < MIN_REQUIREMENTS || extractedEvidence < MIN_EVIDENCE) {
@@ -1811,6 +2416,7 @@ app.post('/api/pncp/analyze', authenticateToken, async (req, res) => {
         });
         if (missingCategories.length > 0) {
             console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')}`);
+            sendProgress(5, 'Completando categorias faltantes...', `${missingCategories.length} categorias precisam re-extração`);
             console.log(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
             const missingCatLabels = {
                 'qualificacao_tecnica_operacional': 'Qualificação Técnica Operacional (atestados da empresa, parcelas relevantes, visita técnica)',
@@ -1848,7 +2454,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         maxOutputTokens: 65536,
                         responseMimeType: 'application/json'
                     }
-                });
+                }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
                 const reText = reExtractionResponse.text;
                 if (reText) {
                     const reParseResult = (0, parser_service_1.robustJsonParseDetailed)(reText, 'PNCP-V2-ReExtraction');
@@ -1887,6 +2493,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
             }
         }
         // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
+        sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
         console.log(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
         let normalizationJson = {};
         const extractionJsonCompact = JSON.stringify(extractionJson); // Compact — saves ~20-30% tokens
@@ -1965,7 +2572,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                                     maxOutputTokens: 16384,
                                     responseMimeType: 'application/json'
                                 }
-                            }, 1);
+                            }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'normalization', category: cat.key } });
                             const text = resp.text;
                             if (!text)
                                 throw new Error(`${cat.prefix} retornou vazio`);
@@ -2069,7 +2676,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             maxOutputTokens: 16384,
                             responseMimeType: 'application/json'
                         }
-                    }, 2);
+                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'risk-review' } });
                     const riskText = riskResponse.text;
                     if (!riskText)
                         throw new Error('Etapa 3 retornou vazio');
@@ -2161,7 +2768,7 @@ Responda APENAS com JSON array:
                                 ]
                             }],
                         config: { temperature: 0.05, maxOutputTokens: 16384 }
-                    });
+                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'item_extraction' } });
                     const responseText = itemResult.text?.trim() || '';
                     let jsonStr = responseText;
                     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
@@ -2397,6 +3004,7 @@ Responda APENAS com JSON array:
         v2Result.analysis_meta.stage_times = stageTimes;
         const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
         const totalReqs = Object.values(v2Result.requirements).reduce((sum, arr) => sum + arr.length, 0);
+        sendProgress(7, 'Validando completude da análise...', `${totalReqs} exigências, ${v2Result.evidence_registry.length} evidências`);
         console.log(`[PNCP-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
             `Modelos: ${uniqueModels.join('+')} | ` +
             `${totalReqs} exigências | ${v2Result.legal_risk_review.critical_points.length} riscos | ` +
@@ -2422,8 +3030,8 @@ Responda APENAS com JSON array:
                 (v2Result.participation_conditions.exige_garantia_contratual ? `Garantia Contratual: ${v2Result.participation_conditions.garantia_contratual_detalhes}\n` : '') +
                 `\n--- RISCOS CRÍTICOS (${v2Result.legal_risk_review.critical_points.length}) ---\n` +
                 v2Result.legal_risk_review.critical_points.map(cp => `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`).join('\n'),
-            modality: v2Result.process_identification.modalidade || '',
-            portal: v2Result.process_identification.fonte_oficial || 'PNCP',
+            modality: normalizeModality(v2Result.process_identification.modalidade),
+            portal: normalizePortal(v2Result.process_identification.fonte_oficial || 'PNCP', link_sistema),
             estimatedValue: 0,
             risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
                 : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
@@ -2505,15 +3113,202 @@ Responda APENAS com JSON array:
             _requirement_count: totalReqs
         };
         console.log(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
-        res.json(finalPayload);
+        sendProgress(8, 'Análise concluída!', `Score: ${combinedScore}% • ${totalReqs} exigências • ${v2Result.legal_risk_review.critical_points.length} riscos`);
+        sendResult(finalPayload);
     }
     catch (error) {
         console.error('[PNCP-V2] Error:', error?.message || error);
-        res.status(500).json({ error: `Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}` });
+        sendError(`Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}`);
     }
 });
+// ══════════════════════════════════════════
+// ── Portal & Modality Normalization + Monitoring Helpers ──
+// ══════════════════════════════════════════
+// Canonical list of monitorable platform domains (used in create, update, and backfill)
+// NOTE: Only include domains that have an active monitor/worker/cron.
+// Removed 'compras.fortaleza.ce.gov.br' — no monitor exists, was causing false-positive isMonitored=true.
+const MONITORABLE_DOMAINS = [
+    'cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org',
+    'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia',
+    'precodereferencia',
+];
+// Map platform canonical names → domains they use (for credential matching)
+const PLATFORM_DOMAINS = {
+    'Compras.gov.br': ['cnetmobile', 'comprasnet', 'compras.gov.br', 'gov.br/compras', 'pncp.gov.br'],
+    'M2A': ['m2atecnologia', 'precodereferencia'],
+    'BLL': ['bllcompras', 'bll.org'],
+    'BBMNET': ['bbmnet'],
+    'BNC': ['bnccompras'],
+    'Licita Mais Brasil': ['licitamaisbrasil'],
+    'Portal de Compras Públicas': ['portaldecompraspublicas'],
+    'Licitanet': ['licitanet.com.br'],
+};
+/**
+ * Normaliza o campo "modalidade" para um valor canônico conforme Lei 14.133/2021.
+ *
+ * MODALIDADES LICITATÓRIAS (Art. 28):
+ *   - Pregão (eletrônico ou presencial — mesma modalidade)
+ *   - Concorrência (eletrônica, internacional — mesma modalidade)
+ *   - Diálogo Competitivo
+ *   - Concurso
+ *   - Leilão
+ *
+ * CONTRATAÇÃO DIRETA (Art. 72-75):
+ *   - Dispensa de Licitação
+ *   - Inexigibilidade
+ *
+ * PROCEDIMENTOS AUXILIARES (Art. 78):
+ *   - Pré-Qualificação, Credenciamento, etc.
+ */
+function normalizeModality(raw) {
+    if (!raw || !raw.trim())
+        return '';
+    // Strip accents, lowercase, remove Nº/numbers/SRP suffixes
+    const s = raw.trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '')
+        .replace(/\s*-?\s*srp$/i, '')
+        .replace(/\s*-?\s*sispp$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    // ── 5 Modalidades Licitatórias (Lei 14.133, Art. 28) ──
+    if (s.includes('pregao'))
+        return 'Pregão';
+    if (s.includes('concorrencia'))
+        return 'Concorrência';
+    if (s.includes('dialogo competitivo'))
+        return 'Diálogo Competitivo';
+    if (s.includes('concurso'))
+        return 'Concurso';
+    if (s.includes('leilao'))
+        return 'Leilão';
+    // ── Contratação Direta (Art. 72-75) ──
+    if (s.includes('dispensa'))
+        return 'Dispensa';
+    if (s.includes('inexigibilidade'))
+        return 'Inexigibilidade';
+    // ── Procedimentos Auxiliares (Art. 78) ──
+    if (s.includes('pre-qualificacao') || s.includes('pre qualificacao'))
+        return 'Procedimento Auxiliar';
+    if (s.includes('credenciamento'))
+        return 'Procedimento Auxiliar';
+    if (s.includes('manifestacao de interesse'))
+        return 'Procedimento Auxiliar';
+    // ── Termos genéricos → inferir ──
+    if (s.includes('licitacao eletronica') || s.includes('licitacao'))
+        return 'Pregão';
+    if (s.includes('chamada publica'))
+        return 'Chamada Pública';
+    if (s.includes('tomada de precos'))
+        return 'Concorrência';
+    if (s.includes('convite'))
+        return 'Concorrência';
+    if (s === 'rdc' || s.includes('regime diferenciado'))
+        return 'Concorrência';
+    // Fallback: Title Case limpo
+    return raw.trim()
+        .replace(/\s*[Nn][°ºo]?\s*[\d/.]+.*/i, '')
+        .replace(/\s*-?\s*SRP$/i, '')
+        .split(' ')
+        .map(w => {
+        const lower = w.toLowerCase();
+        if (['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'para', 'em'].includes(lower))
+            return lower;
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+        .join(' ').trim();
+}
+/**
+ * Normaliza o campo "portal" para o nome canônico da PLATAFORMA.
+ * PNCP é repositório, NÃO plataforma. ComprasNet/Compras.gov.br/PNCP → "Compras.gov.br"
+ */
+function normalizePortal(portal, link) {
+    if (!portal && !link)
+        return 'Não Informado';
+    const p = (portal || '').toLowerCase().trim();
+    const l = (link || '').toLowerCase();
+    // Prioridade 1: Inferir pelo link (mais confiável)
+    if (l) {
+        if (l.includes('m2atecnologia') || l.includes('precodereferencia'))
+            return 'M2A';
+        if (l.includes('bbmnet') || l.includes('novabbmnet'))
+            return 'BBMNET';
+        if (l.includes('bllcompras') || l.includes('bll.org'))
+            return 'BLL';
+        if (l.includes('bnccompras'))
+            return 'BNC';
+        if (l.includes('licitamaisbrasil'))
+            return 'Licita Mais Brasil';
+        if (l.includes('portaldecompraspublicas'))
+            return 'Portal de Compras Públicas';
+        if (l.includes('licitanet.com.br'))
+            return 'Licitanet';
+        if (l.includes('bolsadelicitacoes') || l.includes('bfrr.com'))
+            return 'Bolsa de Licitações';
+        if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras') || l.includes('pncp.gov.br'))
+            return 'Compras.gov.br';
+    }
+    // Prioridade 2: Normalizar texto do portal
+    if (p.includes('m2a') || p.includes('m2atecnologia'))
+        return 'M2A';
+    if (p.includes('bbmnet'))
+        return 'BBMNET';
+    if (p.includes('bll'))
+        return 'BLL';
+    if (p.includes('bnc'))
+        return 'BNC';
+    if (p.includes('licita mais') || p.includes('licitamaisbrasil'))
+        return 'Licita Mais Brasil';
+    if (p.includes('portal de compras') || p.includes('portaldecompras'))
+        return 'Portal de Compras Públicas';
+    if (p.includes('licitanet'))
+        return 'Licitanet';
+    if (p.includes('bolsa de licita'))
+        return 'Bolsa de Licitações';
+    if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile') || p.includes('pncp'))
+        return 'Compras.gov.br';
+    // Prioridade 3: URL crua → tentar extrair plataforma
+    if (portal) {
+        // Remove embedded URLs: "Nome (https://...)" or "Nome: https://..."
+        const cleaned = portal
+            .replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?\s*/gi, '')
+            .replace(/\s*:\s*https?:\/\/[^\s]+/gi, '')
+            .trim();
+        if (cleaned && cleaned.length > 2)
+            return cleaned;
+        // Se é URL pura, extrair domínio
+        const urlMatch = portal.match(/https?:\/\/(?:www\.)?([^/\s]+)/i);
+        if (urlMatch) {
+            const domain = urlMatch[1];
+            // Portais municipais conhecidos
+            if (domain.includes('comprasquixelo') || domain.includes('licitacesmilagres') || domain.includes('licitamoraisjoice'))
+                return 'Portal Municipal';
+            return domain;
+        }
+    }
+    return portal || 'Não Informado';
+}
+/**
+ * Detecta se um link contém domínio de plataforma monitorável.
+ */
+function hasMonitorableDomain(link) {
+    const l = link.toLowerCase();
+    return MONITORABLE_DOMAINS.some(d => l.includes(d));
+}
+/**
+ * Detecta a plataforma canônica a partir de um link.
+ */
+function detectPlatformFromLink(link) {
+    const l = link.toLowerCase();
+    for (const [platform, domains] of Object.entries(PLATFORM_DOMAINS)) {
+        if (domains.some(d => l.includes(d)))
+            return platform;
+    }
+    return null;
+}
 // Bidding Processes
-app.get('/api/biddings', authenticateToken, async (req, res) => {
+app.get('/api/biddings', auth_1.authenticateToken, async (req, res) => {
     try {
         const biddings = await prisma.biddingProcess.findMany({
             where: { tenantId: req.user.tenantId },
@@ -2525,12 +3320,58 @@ app.get('/api/biddings', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch biddings' });
     }
 });
-app.post('/api/biddings', authenticateToken, async (req, res) => {
+app.post('/api/biddings', auth_1.authenticateToken, async (req, res) => {
     try {
         let { companyProfileId, ...biddingData } = req.body;
         const tenantId = req.user.tenantId;
         if (companyProfileId === '') {
             companyProfileId = null;
+        }
+        // ── Step 0: Normalize portal & modality ──
+        biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
+        if (biddingData.modality)
+            biddingData.modality = normalizeModality(biddingData.modality);
+        // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
+        let enrichedLink = biddingData.link || '';
+        const hasPlatformLink = hasMonitorableDomain(enrichedLink);
+        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
+            try {
+                const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                if (pncpMatch) {
+                    const [, cnpj, ano, seq] = pncpMatch;
+                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                    if (apiRes.ok) {
+                        const apiData = await apiRes.json();
+                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                            // Prevent duplicates
+                            const existingParts = enrichedLink.split(',').map((s) => s.trim());
+                            if (!existingParts.some((part) => part === platformUrl)) {
+                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                biddingData.link = enrichedLink;
+                            }
+                            // Re-normalize portal with the enriched link
+                            biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
+                            console.log(`[AutoEnrich] Fetched platform link for new process from PNCP API: ${platformUrl.substring(0, 60)}`);
+                        }
+                    }
+                }
+            }
+            catch (e) {
+                console.warn('[AutoEnrich] Failed to fetch platform link:', e);
+            }
+        }
+        // ── Step 2: Auto-enable monitoring for all supported platforms ──
+        if (hasMonitorableDomain(enrichedLink)) {
+            biddingData.isMonitored = true;
+            console.log(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
+        }
+        // ── Step 3: Auto-backfill pncpLink from link ──
+        if (!biddingData.pncpLink) {
+            const allLinks = (biddingData.link || '').split(',').map((s) => s.trim());
+            const pncpUrl = allLinks.find((s) => s.includes('pncp.gov.br/app/editais'));
+            if (pncpUrl)
+                biddingData.pncpLink = pncpUrl;
         }
         const bidding = await prisma.biddingProcess.create({
             data: { ...biddingData, tenantId, companyProfileId }
@@ -2542,12 +3383,371 @@ app.post('/api/biddings', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to create bidding', details: error instanceof Error ? error.message : String(error) });
     }
 });
-app.put('/api/biddings/:id', authenticateToken, async (req, res) => {
+// ── Universal backfill: fetch platform links from PNCP API for ALL platforms ──
+app.post('/api/backfill-platform-links', auth_1.authenticateToken, async (req, res) => {
+    const testMode = req.query.test === '1';
+    try {
+        // Fetch all processes with PNCP link but missing platform link
+        const allProcesses = await prisma.biddingProcess.findMany({
+            where: { link: { contains: 'pncp.gov.br' } },
+            select: { id: true, link: true, portal: true, isMonitored: true, pncpLink: true }
+        });
+        const processes = allProcesses.filter(p => {
+            const link = (p.link || '').toLowerCase();
+            // Keep processes that don't have ANY monitorable domain yet
+            return !hasMonitorableDomain(link);
+        });
+        if (processes.length === 0) {
+            return res.json({ message: 'All PNCP processes already have platform links', updated: 0, total: allProcesses.length });
+        }
+        // Test mode: debug one process and return
+        if (testMode) {
+            const proc = processes[0];
+            const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+            if (!match)
+                return res.json({ debug: 'no match in link', link: proc.link });
+            const [, cnpj, ano, seq] = match;
+            const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+            try {
+                const apiRes = await fetch(apiUrl);
+                const text = await apiRes.text();
+                let parsed = null;
+                try {
+                    parsed = JSON.parse(text);
+                }
+                catch { }
+                return res.json({
+                    processId: proc.id, link: proc.link, portal: proc.portal, apiUrl, httpStatus: apiRes.status,
+                    linkSistemaOrigem: parsed?.linkSistemaOrigem || null,
+                    detectedPlatform: parsed?.linkSistemaOrigem ? detectPlatformFromLink(parsed.linkSistemaOrigem) : null,
+                    responseSnippet: text.substring(0, 500),
+                });
+            }
+            catch (e) {
+                return res.json({ processId: proc.id, apiUrl, error: String(e) });
+            }
+        }
+        // Full mode: respond immediately, process in background
+        res.json({ message: `Universal backfill started for ${processes.length} processes (${allProcesses.length} total PNCP). Check server logs.`, total: processes.length });
+        (async () => {
+            // Step 1: Clean up duplicate links in all PNCP processes
+            for (const proc of allProcesses) {
+                const parts = (proc.link || '').split(',').map((s) => s.trim()).filter(Boolean);
+                const unique = [...new Set(parts)];
+                if (unique.length < parts.length) {
+                    await prisma.biddingProcess.update({
+                        where: { id: proc.id },
+                        data: { link: unique.join(', ') }
+                    });
+                    console.log(`[Backfill] 🧹 ${proc.id.slice(0, 8)}: cleaned ${parts.length - unique.length} duplicate links`);
+                }
+            }
+            // Step 2: Normalize portals for ALL processes (not just ones missing links)
+            let portalNormalized = 0;
+            for (const proc of allProcesses) {
+                const normalized = normalizePortal(proc.portal || '', proc.link);
+                if (normalized !== proc.portal) {
+                    await prisma.biddingProcess.update({
+                        where: { id: proc.id },
+                        data: { portal: normalized }
+                    });
+                    portalNormalized++;
+                    console.log(`[Backfill] 🏷️ ${proc.id.slice(0, 8)}: portal "${proc.portal}" → "${normalized}"`);
+                }
+            }
+            // Step 3: Add platform links where missing (ALL platforms, not just ComprasNet)
+            let updated = 0;
+            let noLinkAvailable = 0;
+            for (const proc of processes) {
+                const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                if (!match)
+                    continue;
+                const [, cnpj, ano, seq] = match;
+                try {
+                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                    if (!apiRes.ok) {
+                        console.log(`[Backfill] ${proc.id.slice(0, 8)}: API ${apiRes.status}`);
+                        continue;
+                    }
+                    const data = await apiRes.json();
+                    const lso = (data.linkSistemaOrigem || '').trim();
+                    if (lso && hasMonitorableDomain(lso)) {
+                        // Prevent duplicate links
+                        const existingLinks = (proc.link || '').split(',').map((s) => s.trim());
+                        if (!existingLinks.includes(lso)) {
+                            const newLink = [...existingLinks, lso].join(', ');
+                            const detectedPlatform = detectPlatformFromLink(lso);
+                            const updateData = { link: newLink, isMonitored: true };
+                            if (detectedPlatform)
+                                updateData.portal = detectedPlatform;
+                            // Auto-backfill pncpLink if missing
+                            if (!proc.pncpLink) {
+                                const pncpUrl = existingLinks.find((s) => s.includes('pncp.gov.br/app/editais'));
+                                if (pncpUrl)
+                                    updateData.pncpLink = pncpUrl;
+                            }
+                            await prisma.biddingProcess.update({
+                                where: { id: proc.id },
+                                data: updateData
+                            });
+                            updated++;
+                            console.log(`[Backfill] ✅ ${proc.id.slice(0, 8)}: ${detectedPlatform || 'platform'} link added (${lso.substring(0, 60)})`);
+                        }
+                    }
+                    else if (lso) {
+                        console.log(`[Backfill] ⏭ ${proc.id.slice(0, 8)}: non-monitorable link (${lso.substring(0, 60)})`);
+                    }
+                    else {
+                        noLinkAvailable++;
+                        console.log(`[Backfill] ⏭ ${proc.id.slice(0, 8)}: linkSistemaOrigem empty`);
+                    }
+                    await new Promise(r => setTimeout(r, 300));
+                }
+                catch (e) {
+                    console.log(`[Backfill] ❌ ${proc.id.slice(0, 8)}: ${e}`);
+                }
+            }
+            console.log(`[Backfill] ✅ Complete: ${updated} enriched, ${portalNormalized} portals normalized, ${noLinkAvailable} empty, ${processes.length} total`);
+        })();
+    }
+    catch (error) {
+        console.error('[Backfill] Error:', error);
+        res.status(500).json({ error: 'Backfill failed', details: error instanceof Error ? error.message : String(error) });
+    }
+});
+// Keep backward-compatible alias
+app.post('/api/backfill-comprasnet-links', auth_1.authenticateToken, async (req, res) => {
+    // Redirect to universal backfill
+    res.redirect(307, `/api/backfill-platform-links${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`);
+});
+// ── Normalize portals for ALL existing processes ──
+app.post('/api/admin/normalize-portals', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const allProcesses = await prisma.biddingProcess.findMany({
+            where: { tenantId: req.user.tenantId },
+            select: { id: true, portal: true, link: true }
+        });
+        let updated = 0;
+        const changes = [];
+        for (const proc of allProcesses) {
+            const normalized = normalizePortal(proc.portal || '', proc.link);
+            if (normalized !== proc.portal) {
+                await prisma.biddingProcess.update({
+                    where: { id: proc.id },
+                    data: { portal: normalized }
+                });
+                changes.push({ id: proc.id.slice(0, 8), from: proc.portal || '(vazio)', to: normalized });
+                updated++;
+            }
+        }
+        console.log(`[NormalizePortals] ${updated}/${allProcesses.length} portals normalized for tenant ${req.user.tenantId}`);
+        res.json({ message: `${updated} portals normalized`, total: allProcesses.length, updated, changes });
+    }
+    catch (error) {
+        console.error('[NormalizePortals] Error:', error);
+        res.status(500).json({ error: 'Failed to normalize portals' });
+    }
+});
+// ── Normalize BOTH portals AND modalities for ALL existing processes ──
+app.post('/api/admin/normalize-all', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const allProcesses = await prisma.biddingProcess.findMany({
+            where: { tenantId: req.user.tenantId },
+            select: { id: true, portal: true, modality: true, link: true }
+        });
+        let portalUpdated = 0, modalityUpdated = 0;
+        const portalChanges = [];
+        const modalityChanges = [];
+        for (const proc of allProcesses) {
+            const updateData = {};
+            const normPortal = normalizePortal(proc.portal || '', proc.link);
+            if (normPortal !== proc.portal) {
+                updateData.portal = normPortal;
+                portalChanges.push({ id: proc.id.slice(0, 8), from: proc.portal || '(vazio)', to: normPortal });
+                portalUpdated++;
+            }
+            const normModality = normalizeModality(proc.modality);
+            if (normModality && normModality !== proc.modality) {
+                updateData.modality = normModality;
+                modalityChanges.push({ id: proc.id.slice(0, 8), from: proc.modality || '(vazio)', to: normModality });
+                modalityUpdated++;
+            }
+            if (Object.keys(updateData).length > 0) {
+                await prisma.biddingProcess.update({
+                    where: { id: proc.id },
+                    data: updateData
+                });
+            }
+        }
+        console.log(`[NormalizeAll] tenant=${req.user.tenantId} | portals: ${portalUpdated}, modalities: ${modalityUpdated} / ${allProcesses.length} total`);
+        res.json({
+            message: `Normalização concluída: ${portalUpdated} portais + ${modalityUpdated} modalidades atualizadas`,
+            total: allProcesses.length,
+            portalUpdated, modalityUpdated,
+            portalChanges, modalityChanges
+        });
+    }
+    catch (error) {
+        console.error('[NormalizeAll] Error:', error);
+        res.status(500).json({ error: 'Failed to normalize data' });
+    }
+});
+app.get('/api/admin/monitoring-audit', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const biddings = await prisma.biddingProcess.findMany({
+            where: { tenantId, isMonitored: true },
+            select: {
+                id: true,
+                portal: true,
+                link: true,
+                title: true,
+                companyProfileId: true,
+                company: { select: { credentials: true } }
+            }
+        });
+        let totalMonitored = biddings.length;
+        let readyCount = 0;
+        let missingCredsCount = 0;
+        let invalidLinkCount = 0;
+        const issues = [];
+        for (const b of biddings) {
+            const portal = (b.portal || '').toLowerCase();
+            const link = (b.link || '').toLowerCase();
+            const credentials = b.company?.credentials || [];
+            // Verificação de Link
+            if (!hasMonitorableDomain(link)) {
+                invalidLinkCount++;
+                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Link inválido ou não suportado', link: b.link });
+                // We still check credentials below even if link is bad
+            }
+            if (!b.companyProfileId || credentials.length === 0) {
+                missingCredsCount++;
+                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Sem credenciais para a empresa vinculada', companyId: b.companyProfileId });
+                continue;
+            }
+            const isComprasNet = portal.includes('comprasnet') || link.includes('comprasnet');
+            const isBLL = portal === 'bll' || link.includes('bll');
+            const isBNC = portal.includes('bnc') || link.includes('bnc');
+            const isM2A = portal.includes('m2a') || link.includes('m2a') || link.includes('precodereferencia');
+            const isBBMNet = portal.includes('bbmnet') || link.includes('bbmnet');
+            let hasMatch = false;
+            for (const cred of credentials) {
+                const cp = (cred.platform || '').toLowerCase();
+                const cu = (cred.url || '').toLowerCase();
+                if (isComprasNet && (cp.includes('comprasnet') || cu.includes('comprasnet')))
+                    hasMatch = true;
+                if (isBLL && (cp.includes('bll') || cu.includes('bll')))
+                    hasMatch = true;
+                if (isBNC && (cp.includes('bnc') || cu.includes('bnc')))
+                    hasMatch = true;
+                if (isM2A && (cp.includes('m2a') || cu.includes('m2a')))
+                    hasMatch = true;
+                if (isBBMNet && (cp.includes('bbmnet') || cu.includes('bbmnet')))
+                    hasMatch = true;
+            }
+            if (!hasMatch) {
+                missingCredsCount++;
+                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Sem credenciais para este portal', companyId: b.companyProfileId });
+            }
+            else {
+                readyCount++;
+            }
+        }
+        res.json({
+            ok: true,
+            stats: {
+                totalMonitored,
+                readyCount,
+                missingCredsCount,
+                invalidLinkCount,
+                issuesCount: new Set(issues.map(i => i.id)).size
+            },
+            issues
+        });
+    }
+    catch (e) {
+        console.error('[MonitoringAudit]', e);
+        res.status(500).json({ error: 'Falha na auditoria.' });
+    }
+});
+// ── AI Usage Dashboard (per-tenant token consumption) ──
+app.get('/api/admin/ai-usage', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const periodDays = parseInt(req.query.period) || 30;
+        const { getDailyBreakdown, getQuotaStatus } = await Promise.resolve().then(() => __importStar(require('./lib/aiUsageTracker')));
+        const [summary, daily, quota] = await Promise.all([
+            (0, aiUsageTracker_1.getUsageSummary)(prisma, tenantId, periodDays),
+            getDailyBreakdown(prisma, tenantId, periodDays),
+            getQuotaStatus(prisma, tenantId),
+        ]);
+        res.json({ ok: true, ...summary, daily, quota });
+    }
+    catch (e) {
+        console.error('[AiUsage]', e);
+        res.status(500).json({ error: 'Falha ao buscar consumo de IA.' });
+    }
+});
+app.put('/api/biddings/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenantId;
         // Remove relation fields and id to avoid Prisma update errors
         const { aiAnalysis, company, tenant, id: _id, tenantId: _tId, companyProfileId, ...biddingData } = req.body;
+        // ── Step 0: Normalize portal & modality ──
+        if (biddingData.portal !== undefined) {
+            biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
+        }
+        if (biddingData.modality !== undefined && biddingData.modality) {
+            biddingData.modality = normalizeModality(biddingData.modality);
+        }
+        // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
+        let enrichedLink = biddingData.link || '';
+        const hasPlatformLink = hasMonitorableDomain(enrichedLink);
+        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
+            try {
+                const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                if (pncpMatch) {
+                    const [, cnpj, ano, seq] = pncpMatch;
+                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
+                    if (apiRes.ok) {
+                        const apiData = await apiRes.json();
+                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                            const existingParts = enrichedLink.split(',').map((s) => s.trim());
+                            if (!existingParts.some((part) => part === platformUrl)) {
+                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                biddingData.link = enrichedLink;
+                            }
+                            // Re-normalize portal with enriched link
+                            if (biddingData.portal !== undefined) {
+                                biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
+                            }
+                            console.log(`[AutoEnrich] Fetched platform link for process "${id}" from PNCP API: ${platformUrl.substring(0, 60)}`);
+                        }
+                    }
+                }
+            }
+            catch (e) {
+                console.warn('[AutoEnrich] Failed to fetch platform link:', e);
+            }
+        }
+        // ── Step 2: Auto-enable monitoring for all supported platforms ──
+        if (hasMonitorableDomain(enrichedLink) && biddingData.isMonitored === undefined) {
+            const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
+            if (current && !current.isMonitored) {
+                biddingData.isMonitored = true;
+                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
+            }
+        }
+        // ── Step 3: Auto-backfill pncpLink from link ──
+        if (!biddingData.pncpLink) {
+            const allLinks = (biddingData.link || '').split(',').map((s) => s.trim());
+            const pncpUrl = allLinks.find((s) => s.includes('pncp.gov.br/app/editais'));
+            if (pncpUrl)
+                biddingData.pncpLink = pncpUrl;
+        }
         const bidding = await prisma.biddingProcess.update({
             where: {
                 id,
@@ -2565,7 +3765,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to update bidding', details: error instanceof Error ? error.message : String(error) });
     }
 });
-app.delete('/api/biddings/:id', authenticateToken, async (req, res) => {
+app.delete('/api/biddings/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const bidding = await prisma.biddingProcess.findUnique({ where: { id } });
@@ -2583,7 +3783,7 @@ app.delete('/api/biddings/:id', authenticateToken, async (req, res) => {
     }
 });
 // Ai Analysis
-app.post('/api/analysis', authenticateToken, async (req, res) => {
+app.post('/api/analysis', auth_1.authenticateToken, async (req, res) => {
     try {
         const payload = { ...req.body };
         // Verify if biddingProcess belongs to the tenant
@@ -2665,7 +3865,7 @@ app.post('/api/analysis', authenticateToken, async (req, res) => {
     }
 });
 // GET structured analysis for a process (frontend consumption)
-app.get('/api/analysis/:processId', authenticateToken, async (req, res) => {
+app.get('/api/analysis/:processId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { processId } = req.params;
         const tenantId = req.user.tenantId;
@@ -2704,7 +3904,7 @@ app.get('/api/analysis/:processId', authenticateToken, async (req, res) => {
     }
 });
 // Basic Documents Fetch (Scoped)
-app.get('/api/documents', authenticateToken, async (req, res) => {
+app.get('/api/documents', auth_1.authenticateToken, async (req, res) => {
     try {
         const documents = await prisma.document.findMany({
             where: { tenantId: req.user.tenantId },
@@ -2732,7 +3932,7 @@ app.get('/api/documents', authenticateToken, async (req, res) => {
     }
 });
 // File Upload endpoint (Protected)
-app.post('/api/upload', authenticateToken, upload.single('file'), async (req, res) => {
+app.post('/api/upload', auth_1.authenticateToken, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
@@ -2767,7 +3967,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
 // Price Proposal CRUD + AI Populate
 // ═══════════════════════════════════════════════════════════════════════
 // GET proposals for a bidding process
-app.get('/api/proposals/:biddingId', authenticateToken, async (req, res) => {
+app.get('/api/proposals/:biddingId', auth_1.authenticateToken, async (req, res) => {
     try {
         const proposals = await prisma.priceProposal.findMany({
             where: { biddingProcessId: req.params.biddingId, tenantId: req.user.tenantId },
@@ -2782,7 +3982,7 @@ app.get('/api/proposals/:biddingId', authenticateToken, async (req, res) => {
     }
 });
 // GET single proposal with items
-app.get('/api/proposals/detail/:id', authenticateToken, async (req, res) => {
+app.get('/api/proposals/detail/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const proposal = await prisma.priceProposal.findFirst({
             where: { id: req.params.id, tenantId: req.user.tenantId },
@@ -2798,7 +3998,7 @@ app.get('/api/proposals/detail/:id', authenticateToken, async (req, res) => {
     }
 });
 // POST create proposal
-app.post('/api/proposals', authenticateToken, async (req, res) => {
+app.post('/api/proposals', auth_1.authenticateToken, async (req, res) => {
     try {
         const { biddingProcessId, companyProfileId, bdiPercentage, taxPercentage, socialCharges, validityDays, notes } = req.body;
         // Fetch company for default images and letter
@@ -2835,9 +4035,9 @@ app.post('/api/proposals', authenticateToken, async (req, res) => {
     }
 });
 // PUT update proposal
-app.put('/api/proposals/:id', authenticateToken, async (req, res) => {
+app.put('/api/proposals/:id', auth_1.authenticateToken, async (req, res) => {
     try {
-        const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity } = req.body;
+        const { bdiPercentage, taxPercentage, socialCharges, validityDays, notes, status, letterContent, companyLogo, headerImage, footerImage, headerImageHeight, footerImageHeight, signatureMode, signatureCity, adjustedBdi, adjustedDiscount, adjustedTotalValue, adjustedLetterContent } = req.body;
         const existing = await prisma.priceProposal.findFirst({
             where: { id: req.params.id, tenantId: req.user.tenantId },
         });
@@ -2860,6 +4060,11 @@ app.put('/api/proposals/:id', authenticateToken, async (req, res) => {
                 footerImageHeight: footerImageHeight ?? existing.footerImageHeight,
                 signatureMode: signatureMode ?? existing.signatureMode,
                 signatureCity: signatureCity !== undefined ? signatureCity : existing.signatureCity,
+                // Cenário Proposta Ajustada
+                adjustedBdi: adjustedBdi !== undefined ? adjustedBdi : existing.adjustedBdi,
+                adjustedDiscount: adjustedDiscount !== undefined ? adjustedDiscount : existing.adjustedDiscount,
+                adjustedTotalValue: adjustedTotalValue !== undefined ? adjustedTotalValue : existing.adjustedTotalValue,
+                adjustedLetterContent: adjustedLetterContent !== undefined ? adjustedLetterContent : existing.adjustedLetterContent,
             },
             include: { items: { orderBy: { sortOrder: 'asc' } }, company: true },
         });
@@ -2875,7 +4080,7 @@ app.put('/api/proposals/:id', authenticateToken, async (req, res) => {
     }
 });
 // DELETE proposal
-app.delete('/api/proposals/:id', authenticateToken, async (req, res) => {
+app.delete('/api/proposals/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const existing = await prisma.priceProposal.findFirst({
             where: { id: req.params.id, tenantId: req.user.tenantId },
@@ -2891,7 +4096,7 @@ app.delete('/api/proposals/:id', authenticateToken, async (req, res) => {
     }
 });
 // POST add/replace items in bulk (used by AI populate and manual add)
-app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
+app.post('/api/proposals/:id/items', auth_1.authenticateToken, async (req, res) => {
     try {
         const { items, replaceAll, roundingMode: reqRoundingMode } = req.body;
         const proposalId = req.params.id;
@@ -2916,8 +4121,10 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
             const bdi = existing.bdiPercentage || 0;
             const linearDisc = existing.taxPercentage || 0;
             const itemDisc = item.discountPercentage ?? 0;
-            const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
-            const rawUnitPrice = (item.unitCost || 0) * (1 + bdi / 100) * (1 - applicableDiscount / 100);
+            // Descontos cumulativos: linear + individual (compostos)
+            const linearFactor = 1 - linearDisc / 100;
+            const itemFactor = 1 - itemDisc / 100;
+            const rawUnitPrice = (item.unitCost || 0) * (1 + bdi / 100) * linearFactor * itemFactor;
             const unitPrice = roundFn(rawUnitPrice);
             const multiplier = item.multiplier ?? 1;
             const rawTotalPrice = (item.quantity || 0) * multiplier * unitPrice;
@@ -2939,15 +4146,23 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
                     brand: item.brand || null,
                     model: item.model || null,
                     sortOrder: item.sortOrder ?? i,
+                    // Cenário Ajustada
+                    adjustedUnitCost: item.adjustedUnitCost ?? null,
+                    adjustedUnitPrice: item.adjustedUnitPrice ?? null,
+                    adjustedTotalPrice: item.adjustedTotalPrice ?? null,
+                    adjustedItemDiscount: item.adjustedItemDiscount ?? 0,
+                    // Composição de Preços
+                    costComposition: item.costComposition || null,
                 },
             });
             created.push(dbItem);
         }
-        // Recalculate total
+        // Recalculate totals
         const allItems = await prisma.proposalItem.findMany({ where: { proposalId } });
         const totalValue = allItems.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
-        await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue } });
-        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}`);
+        const adjustedTotalValue = allItems.reduce((sum, it) => sum + (it.adjustedTotalPrice || 0), 0);
+        await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue, ...(adjustedTotalValue > 0 ? { adjustedTotalValue } : {}) } });
+        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}${adjustedTotalValue > 0 ? `, adjusted: R$ ${adjustedTotalValue.toFixed(2)}` : ''}`);
         res.json({ items: created, totalValue });
     }
     catch (error) {
@@ -2956,7 +4171,7 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req, res) => {
     }
 });
 // PUT update single item
-app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req, res) => {
+app.put('/api/proposals/:id/items/:itemId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { itemNumber, description, unit, quantity, multiplier, multiplierLabel, unitCost, referencePrice, brand, model, discountPercentage } = req.body;
         const proposalId = req.params.id;
@@ -2969,11 +4184,13 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req, res) 
         const bdi = proposal.bdiPercentage || 0;
         const linearDisc = proposal.taxPercentage || 0;
         const itemDisc = discountPercentage ?? 0;
-        const applicableDiscount = itemDisc > 0 ? itemDisc : linearDisc;
+        // Descontos cumulativos: linear + individual (compostos)
+        const linearFactor = 1 - linearDisc / 100;
+        const itemFactor = 1 - itemDisc / 100;
         const finalUnitCost = unitCost !== undefined ? unitCost : 0;
         const finalQuantity = quantity !== undefined ? quantity : 0;
         const finalMultiplier = multiplier !== undefined ? multiplier : 1;
-        const unitPrice = finalUnitCost * (1 + bdi / 100) * (1 - applicableDiscount / 100);
+        const unitPrice = finalUnitCost * (1 + bdi / 100) * linearFactor * itemFactor;
         const totalPrice = finalQuantity * finalMultiplier * unitPrice;
         const updated = await prisma.proposalItem.update({
             where: { id: itemId },
@@ -3005,7 +4222,7 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req, res) 
     }
 });
 // DELETE single item
-app.delete('/api/proposals/:id/items/:itemId', authenticateToken, async (req, res) => {
+app.delete('/api/proposals/:id/items/:itemId', auth_1.authenticateToken, async (req, res) => {
     try {
         const proposalId = req.params.id;
         const proposal = await prisma.priceProposal.findFirst({
@@ -3026,7 +4243,7 @@ app.delete('/api/proposals/:id/items/:itemId', authenticateToken, async (req, re
     }
 });
 // POST AI Populate — extract items from AI analysis
-app.post('/api/proposals/ai-populate', authenticateToken, async (req, res) => {
+app.post('/api/proposals/ai-populate', auth_1.authenticateToken, async (req, res) => {
     try {
         const { biddingProcessId } = req.body;
         // Get bidding with AI analysis
@@ -3042,6 +4259,21 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req, res) => {
         if (!apiKey)
             return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
         const ai = new genai_1.GoogleGenAI({ apiKey });
+        // ── Helper: natural sort items by itemNumber (1, 2, 1.1, 1.2, 2.1, etc.) ──
+        const naturalSortItems = (items) => {
+            return items.sort((a, b) => {
+                const partsA = String(a.itemNumber || '').split('.').map(Number);
+                const partsB = String(b.itemNumber || '').split('.').map(Number);
+                const maxLen = Math.max(partsA.length, partsB.length);
+                for (let i = 0; i < maxLen; i++) {
+                    const va = partsA[i] ?? 0;
+                    const vb = partsB[i] ?? 0;
+                    if (va !== vb)
+                        return va - vb;
+                }
+                return 0;
+            });
+        };
         const biddingItems = bidding.aiAnalysis.biddingItems || '';
         const pricingInfo = bidding.aiAnalysis.pricingConsiderations || '';
         const schemaV2 = bidding.aiAnalysis.schemaV2;
@@ -3084,13 +4316,22 @@ REGRAS:
 6. Se a quantidade não estiver clara, use 1
 7. MUITO IMPORTANTE: Procure ativamente por períodos ou múltiplos que devam ser multiplicados. Por exemplo, se a licitação é para o ano todo e os pagamentos são mensais (12 meses), a quantidade é X e o MULTIPLICADOR é 12. Retorne 'multiplier': 12 e 'multiplierLabel': 'Meses'. Caso contrário, retorne 1.
 
+ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
+8. O campo itemNumber DEVE seguir padrão hierárquico organizado:
+   - SEM lotes: "1", "2", "3" (numeração sequencial)
+   - COM lotes, múltiplos itens: "1.1", "1.2", "2.1", "2.2" (Lote.Item)
+   - COM subgrupos: "1.1.1", "1.1.2" (Grupo.Subgrupo.Item)
+9. Se o edital usa "Lote 1 - Item 1", converta para "1.1"
+10. Retorne os itens SEMPRE na ordem natural crescente: 1, 2, 3... ou 1.1, 1.2, 2.1...
+11. NUNCA misture formatos no mesmo array
+
 Responda APENAS com um JSON array, sem markdown:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
             const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: prompt,
                 config: { temperature: 0.05, maxOutputTokens: 8192 },
-            });
+            }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'analysis' } });
             const responseText = result.text?.trim() || '';
             let jsonStr = responseText;
             const jsonMatch = responseText.match(/\[[\s\S]*\]/);
@@ -3104,7 +4345,7 @@ Responda APENAS com um JSON array, sem markdown:
                 return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) });
             }
             console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
-            return res.json({ items, totalItems: items.length, source: 'legacy_biddingItems' });
+            return res.json({ items: naturalSortItems(items), totalItems: items.length, source: 'legacy_biddingItems' });
         }
         // ── Strategy 2: Download planilhas from PNCP catalog (new analyses) ──
         const pncpSource = schemaV2?.pncp_source;
@@ -3243,6 +4484,16 @@ REGRAS:
 6. Para valores monetários, use ponto como separador decimal (ex: 1234.56)
 7. Multiplier = 1 para itens de obra (não há recorrência mensal)
 
+ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
+8. O campo itemNumber DEVE seguir padrão hierárquico organizado:
+   - SEM lotes: "1", "2", "3" (numeração sequencial)
+   - COM lotes, múltiplos itens: "1.1", "1.2", "2.1", "2.2" (Lote.Item)
+   - COM subgrupos: "1.1.1", "1.1.2" (Grupo.Subgrupo.Item)
+9. Se a planilha usa numeração como "1.1", "1.2", "2.1", PRESERVE tal numeração
+10. Se a planilha usa "Lote 1 - Item 1" ou "Grupo A / Item 1", converta para "1.1", "1.2"
+11. Retorne os itens SEMPRE na ordem natural crescente
+12. NUNCA misture formatos no mesmo array
+
 ${pricingInfo ? `INFORMAÇÕES ADICIONAIS DE PREÇO:\n${pricingInfo}\n` : ''}
 
 Responda APENAS com um JSON array válido:
@@ -3262,7 +4513,7 @@ Responda APENAS com um JSON array válido:
                 maxOutputTokens: 65536,
                 responseMimeType: 'application/json'
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'pdf_extraction' } });
         const responseText = result.text?.trim() || '';
         console.log(`[AI Populate] Response length: ${responseText.length} chars (first 300): ${responseText.substring(0, 300)}`);
         let items;
@@ -3287,7 +4538,7 @@ Responda APENAS com um JSON array válido:
         }
         console.log(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
         res.json({
-            items,
+            items: naturalSortItems(items),
             totalItems: items.length,
             source: 'pncp_planilha',
             planilhas: downloadedNames
@@ -3298,9 +4549,222 @@ Responda APENAS com um JSON array válido:
         res.status(500).json({ error: 'AI populate failed: ' + (error.message || 'Unknown') });
     }
 });
+// ═══════════════════════════════════════════════════════════════════════
+// AI Cost Composition — Specialist in unit price composition
+// Generates detailed cost breakdowns for exequibilidade proof
+// ═══════════════════════════════════════════════════════════════════════
+app.post('/api/proposals/ai-composition', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { biddingProcessId, items } = req.body;
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'items array is required (with id, description, unit, quantity, unitPrice)' });
+        }
+        // Get bidding context
+        const bidding = await prisma.biddingProcess.findFirst({
+            where: { id: biddingProcessId, tenantId: req.user.tenantId },
+            include: { aiAnalysis: true },
+        });
+        if (!bidding)
+            return res.status(404).json({ error: 'Bidding process not found' });
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey)
+            return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+        const ai = new genai_1.GoogleGenAI({ apiKey });
+        const schemaV2 = bidding.aiAnalysis?.schemaV2;
+        const pricingInfo = bidding.aiAnalysis?.pricingConsiderations || '';
+        const processId = schemaV2?.process_identification || {};
+        const modalidade = bidding.modality || processId?.modalidade || '';
+        const objeto = processId?.objeto_completo || processId?.objeto || bidding.summary || '';
+        const t0 = Date.now();
+        console.log(`[AI Composition] Generating compositions for ${items.length} item(s), bidding: ${biddingProcessId}`);
+        // Build items context
+        const itemsContext = items.map((it, idx) => `Item ${it.itemNumber || idx + 1}: "${it.description}" | Unid: ${it.unit} | Qtd: ${it.quantity} | Preço Unit.: R$ ${(it.unitPrice || 0).toFixed(2)}`).join('\n');
+        const prompt = `Você é um engenheiro de custos especialista em composição de preços unitários para licitações públicas brasileiras (Lei 14.133/2021, Acórdãos do TCU sobre BDI).
+
+═══ SEU PAPEL ═══
+Gerar composições de preços unitários REALISTAS e DETALHADAS para cada item abaixo, comprovando a viabilidade (exequibilidade) do preço ofertado.
+
+═══ CONTEXTO DA LICITAÇÃO ═══
+Objeto: ${objeto.substring(0, 1500)}
+Modalidade: ${modalidade}
+${pricingInfo ? `Informações de preço do edital:\n${pricingInfo.substring(0, 1500)}` : ''}
+
+═══ ITENS PARA COMPOR ═══
+${itemsContext}
+
+═══ REGRAS CRÍTICAS ═══
+1. Para CADA item, gere uma composição detalhada com elementos de custo REAIS e COERENTES
+2. O TOTAL da composição deve ser PRÓXIMO ao preço unitário informado (tolerância de ±5%)
+3. Use os seguintes grupos de custo (campo "group"):
+   - MATERIAL: matéria-prima, insumos, peças
+   - MAO_DE_OBRA: salários, encargos, benefícios
+     REGRA OBRIGATÓRIA para MAO_DE_OBRA: a "description" DEVE ser o NOME DO PROFISSIONAL/CARGO que executa o trabalho, NUNCA o nome do processo.
+     Exemplos CORRETOS: "Costureiro (Incl. Encargos)", "Auxiliar de Corte (Incl. Encargos)", "Cortador (Incl. Encargos)", "Operador de Máquina (Incl. Encargos)", "Eletricista (Incl. Encargos)", "Pedreiro (Incl. Encargos)", "Servente (Incl. Encargos)"
+     Exemplos ERRADOS (NÃO USAR): "Corte de tecido", "Costura e acabamento", "Revisão e embalagem", "Manutenção elétrica"
+     SEMPRE adicione "(Incl. Encargos)" ao final da description de MAO_DE_OBRA.
+   - EQUIPAMENTO: máquinas, ferramentas (depreciação/aluguel)
+   - FRETE: frete, transporte, logística
+   - TERCEIROS: serviços subcontratados
+   - ADMIN_CENTRAL: administração central (% sobre custo direto, tipicamente 3-6%)
+   - CUSTOS_FINANCEIROS: custo financeiro (% sobre custo direto, tipicamente 0.5-2%)
+   - SEGUROS: seguros e garantias (% sobre custo direto, tipicamente 0.3-1%)
+   - RISCOS: riscos e imprevistos (tipicamente 0.5-1.5%)
+   - DESPESAS_OPERACIONAIS: despesas operacionais gerais
+   - TRIBUTOS: impostos (PIS 0.65%, COFINS 3%, ISSQN/ICMS conforme tipo)
+   - LUCRO: margem de lucro (tipicamente 5-10%)
+
+4. Cada linha da composição deve ter:
+   - group: um dos grupos acima
+   - description: descrição específica do insumo/custo
+   - unit: unidade de medida (UN, KG, M, M², HORA, DIA, MÊS, VB, %, etc.)
+   - quantity: quantidade ou coeficiente
+   - unitValue: valor unitário do insumo
+   
+5. Os custos indiretos (ADMIN_CENTRAL, CUSTOS_FINANCEIROS, SEGUROS, RISCOS) geralmente são percentuais sobre o custo direto total
+6. TRIBUTOS são calculados sobre o preço de venda
+7. LUCRO é percentual sobre o custo direto
+
+═══ FORMATO DE RESPOSTA ═══
+Retorne APENAS um JSON array, onde cada elemento corresponde a um item:
+[
+  {
+    "itemId": "id_do_item",
+    "templateUsed": "AI_GENERATED",
+    "lines": [
+      { "group": "MATERIAL", "description": "Tecido algodão 100%", "unit": "M", "quantity": 2.5, "unitValue": 8.50 },
+      { "group": "MAO_DE_OBRA", "description": "Costureiro (Incl. Encargos)", "unit": "HORA", "quantity": 1.5, "unitValue": 12.00 },
+      { "group": "TRIBUTOS", "description": "PIS (0,65%)", "unit": "VB", "quantity": 1, "unitValue": 0.35 },
+      { "group": "LUCRO", "description": "Margem de lucro", "unit": "VB", "quantity": 1, "unitValue": 4.20 }
+    ]
+  }
+]
+
+IMPORTANTE:
+- Seja REALISTA nos valores — use preços de mercado brasileiro
+- Inclua TODOS os elementos relevantes, sem omissões
+- A soma de (quantity × unitValue) de TODAS as linhas DEVE SER IGUAL ao preço unitário do item
+- Use o LUCRO como variável de equilíbrio: ajuste a margem de lucro para que o total BATA EXATAMENTE com o preço unitário
+- Exemplo: se custos diretos + indiretos + tributos = R$ 35,00 e preço unitário = R$ 41,98, o lucro deve ser EXATAMENTE R$ 6,98
+- NÃO retorne texto, markdown ou explicações — APENAS o JSON`;
+        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.2,
+                maxOutputTokens: 65536,
+                responseMimeType: 'application/json'
+            },
+        }, 3, { tenantId: req.user.tenantId, operation: 'proposal_composition' });
+        const responseText = result.text?.trim() || '';
+        const duration = Date.now() - t0;
+        console.log(`[AI Composition] Response: ${responseText.length} chars in ${duration}ms`);
+        let compositions;
+        try {
+            const parsed = JSON.parse(responseText);
+            compositions = Array.isArray(parsed) ? parsed : (parsed.compositions || parsed.data || [parsed]);
+        }
+        catch {
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                try {
+                    compositions = JSON.parse(jsonMatch[0]);
+                }
+                catch {
+                    return res.status(500).json({ error: 'AI returned invalid JSON', raw: responseText.substring(0, 300) });
+                }
+            }
+            else {
+                return res.status(500).json({ error: 'AI returned no extractable data' });
+            }
+        }
+        // Add IDs to lines, calculate totalValue, and FINE-TUNE to match unit price exactly
+        for (let idx = 0; idx < compositions.length && idx < items.length; idx++) {
+            const comp = compositions[idx];
+            const targetPrice = items[idx].unitPrice || 0;
+            if (!comp.lines)
+                comp.lines = [];
+            // Step 1: Add IDs and calculate line totals
+            for (const line of comp.lines) {
+                line.id = `cl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                line.totalValue = Math.round((line.quantity || 0) * (line.unitValue || 0) * 100) / 100;
+                line.source = line.source || 'IA';
+            }
+            // Step 2: Calculate current grand total
+            const currentTotal = comp.lines.reduce((s, l) => s + (l.totalValue || 0), 0);
+            const diff = Math.round((targetPrice - currentTotal) * 100) / 100;
+            // Step 3: If there's a difference, adjust LUCRO line to compensate
+            if (Math.abs(diff) >= 0.01 && targetPrice > 0) {
+                // Find existing LUCRO line
+                let lucroLine = comp.lines.find((l) => l.group === 'LUCRO');
+                if (lucroLine) {
+                    // Adjust the LUCRO line value
+                    lucroLine.unitValue = Math.round((lucroLine.unitValue + diff / (lucroLine.quantity || 1)) * 100) / 100;
+                    lucroLine.totalValue = Math.round((lucroLine.quantity || 1) * lucroLine.unitValue * 100) / 100;
+                    // If LUCRO became negative, distribute via DESPESAS_OPERACIONAIS instead
+                    if (lucroLine.unitValue < 0) {
+                        // Revert LUCRO
+                        lucroLine.unitValue = Math.round((lucroLine.unitValue - diff / (lucroLine.quantity || 1)) * 100) / 100;
+                        lucroLine.totalValue = Math.round((lucroLine.quantity || 1) * lucroLine.unitValue * 100) / 100;
+                        // Add/adjust DESPESAS_OPERACIONAIS
+                        let despLine = comp.lines.find((l) => l.group === 'DESPESAS_OPERACIONAIS');
+                        if (despLine) {
+                            despLine.unitValue = Math.round((despLine.unitValue + diff / (despLine.quantity || 1)) * 100) / 100;
+                            despLine.totalValue = Math.round((despLine.quantity || 1) * despLine.unitValue * 100) / 100;
+                        }
+                        else {
+                            comp.lines.push({
+                                id: `cl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                                group: 'DESPESAS_OPERACIONAIS',
+                                description: 'Ajuste operacional',
+                                unit: 'VB',
+                                quantity: 1,
+                                unitValue: diff,
+                                totalValue: diff,
+                                source: 'Ajuste',
+                            });
+                        }
+                    }
+                }
+                else {
+                    // Create LUCRO line with the difference
+                    comp.lines.push({
+                        id: `cl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                        group: 'LUCRO',
+                        description: 'Margem de lucro',
+                        unit: 'VB',
+                        quantity: 1,
+                        unitValue: diff,
+                        totalValue: diff,
+                        source: 'IA',
+                    });
+                }
+                // Final verification — recalculate and micro-adjust if needed (rounding quirks)
+                const finalTotal = comp.lines.reduce((s, l) => s + (l.totalValue || 0), 0);
+                const microDiff = Math.round((targetPrice - finalTotal) * 100) / 100;
+                if (Math.abs(microDiff) >= 0.01) {
+                    const adjustLine = comp.lines.find((l) => l.group === 'LUCRO') || comp.lines[comp.lines.length - 1];
+                    adjustLine.unitValue = Math.round((adjustLine.unitValue + microDiff / (adjustLine.quantity || 1)) * 100) / 100;
+                    adjustLine.totalValue = Math.round((adjustLine.quantity || 1) * adjustLine.unitValue * 100) / 100;
+                }
+                const adjustedTotal = comp.lines.reduce((s, l) => s + (l.totalValue || 0), 0);
+                console.log(`[AI Composition] Item ${idx + 1}: ajustado ${currentTotal.toFixed(2)} → ${adjustedTotal.toFixed(2)} (alvo: ${targetPrice.toFixed(2)}, diff original: ${diff.toFixed(2)})`);
+            }
+        }
+        console.log(`[AI Composition] ✅ Generated ${compositions.length} compositions with ${compositions.reduce((s, c) => s + (c.lines?.length || 0), 0)} total lines in ${duration}ms`);
+        res.json({
+            compositions,
+            totalItems: compositions.length,
+            durationMs: duration,
+        });
+    }
+    catch (error) {
+        console.error('[AI Composition] Error:', error.message);
+        res.status(500).json({ error: 'AI composition failed: ' + (error.message || 'Unknown') });
+    }
+});
 // POST AI Letter — DEPRECATED, replaced by /api/proposals/ai-letter-blocks (Fase 2)
 // Kept as stub returning 410 Gone for any remaining clients
-app.post('/api/proposals/ai-letter', authenticateToken, async (req, res) => {
+app.post('/api/proposals/ai-letter', auth_1.authenticateToken, async (req, res) => {
     console.warn('[AI Letter] DEPRECATED endpoint called. Use /api/proposals/ai-letter-blocks instead.');
     res.status(410).json({
         error: 'Este endpoint foi descontinuado. Use /api/proposals/ai-letter-blocks para geração controlada por blocos.',
@@ -3312,7 +4776,7 @@ app.post('/api/proposals/ai-letter', authenticateToken, async (req, res) => {
 // Generates ONLY variable text blocks within a predefined structure.
 // The AI does NOT decide layout, structure, or mandatory sections.
 // ═══════════════════════════════════════════════════════════════════════
-app.post('/api/proposals/ai-letter-blocks', authenticateToken, async (req, res) => {
+app.post('/api/proposals/ai-letter-blocks', auth_1.authenticateToken, async (req, res) => {
     try {
         const { biddingProcessId, requestedBlocks } = req.body;
         if (!biddingProcessId) {
@@ -3371,7 +4835,7 @@ REGRAS:
                         model: 'gemini-2.5-flash',
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 2048 },
-                    });
+                    }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'object' } });
                     return { blockId: 'objectBlock', content: result.text?.trim() || '', durationMs: Date.now() - tStart };
                 })());
             }
@@ -3408,7 +4872,7 @@ REGRAS CRÍTICAS:
                         model: 'gemini-2.5-flash',
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 1024 },
-                    });
+                    }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'execution' } });
                     const content = result.text?.trim() || '';
                     return { blockId: 'executionBlock', content, durationMs: Date.now() - tStart };
                 })());
@@ -3446,7 +4910,7 @@ REGRAS CRÍTICAS:
                         model: 'gemini-2.5-flash',
                         contents: prompt,
                         config: { temperature: 0.1, maxOutputTokens: 2048 },
-                    });
+                    }, 3, { tenantId: req.user.tenantId, operation: 'proposal_letter', metadata: { block: 'commercial_extras' } });
                     const content = result.text?.trim() || '';
                     return { blockId: 'commercialExtras', content, durationMs: Date.now() - tStart };
                 })());
@@ -3484,7 +4948,7 @@ REGRAS CRÍTICAS:
     }
 });
 // ═══════════════════════════════════════════════════════════════════════
-app.post('/api/dossier/ai-match', authenticateToken, async (req, res) => {
+app.post('/api/dossier/ai-match', auth_1.authenticateToken, async (req, res) => {
     try {
         const { requirements, documents } = req.body;
         if (!requirements || !Array.isArray(requirements) || requirements.length === 0) {
@@ -3562,7 +5026,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
                 temperature: 0.05,
                 maxOutputTokens: 8192,
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'dossier_match' });
         const responseText = result.text?.trim() || '';
         console.log(`[Dossier AI Match] Raw response (first 500 chars): ${responseText.substring(0, 500)}`);
         // Parse JSON from response (handle markdown code blocks)
@@ -3615,7 +5079,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
 });
 // AI Services imports movidos para cima
 // AI Analysis Endpoint
-app.post('/api/analyze-edital', authenticateToken, async (req, res) => {
+app.post('/api/analyze-edital', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
     try {
         const { fileNames } = req.body;
         if (!fileNames || !Array.isArray(fileNames) || fileNames.length === 0) {
@@ -3690,7 +5154,7 @@ app.post('/api/analyze-edital', authenticateToken, async (req, res) => {
                     maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 3, { tenantId: req.user.tenantId, operation: 'oracle_analysis' });
         }
         catch (geminiError) {
             console.warn(`[AI] Gemini falhou: ${geminiError.message}. Realizando Fallback automático para OpenAI (gpt-4o-mini)...`);
@@ -3940,7 +5404,7 @@ function validateAnalysisCompleteness(schema) {
         confidence_score
     };
 }
-app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
+app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
     const analysisStartTime = Date.now();
     const result = (0, analysis_schema_v1_1.createEmptyAnalysisSchema)();
     result.analysis_meta.analysis_id = `analysis_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -4014,7 +5478,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
                     maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText)
                 throw new Error('Etapa 1 retornou vazio');
@@ -4134,7 +5598,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
                                 maxOutputTokens: 16384,
                                 responseMimeType: 'application/json'
                             }
-                        }, 1);
+                        }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: `normalization-${cat.key}` } });
                         const text = resp.text;
                         if (!text)
                             throw new Error(`${cat.prefix} vazio`);
@@ -4227,7 +5691,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
                     maxOutputTokens: 16384,
                     responseMimeType: 'application/json'
                 }
-            });
+            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_risk_review' } });
             const riskText = riskResponse.text;
             if (!riskText)
                 throw new Error('Etapa 3 retornou vazio');
@@ -4395,7 +5859,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
         const legacyCompat = {
             process: {
                 title: result.process_identification.objeto_resumido || result.process_identification.numero_edital,
-                modality: result.process_identification.modalidade,
+                modality: normalizeModality(result.process_identification.modalidade),
                 object: result.process_identification.objeto_completo,
                 agency: result.process_identification.orgao,
                 estimatedValue: '',
@@ -4450,7 +5914,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, async (req, res) => {
     }
 });
 // Petition Generation Endpoint
-app.post('/api/petitions/generate', authenticateToken, async (req, res) => {
+app.post('/api/petitions/generate', auth_1.authenticateToken, async (req, res) => {
     try {
         const { biddingProcessId, companyId, templateType, userContext, attachments } = req.body;
         const tenantId = req.user.tenantId;
@@ -4555,7 +6019,7 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
                 temperature: 0.2,
                 maxOutputTokens: 8192
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'petition' });
         res.json({ text: result.text });
     }
     catch (error) {
@@ -4564,7 +6028,7 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
     }
 });
 // AI Chat Endpoint
-app.post('/api/analyze-edital/chat', authenticateToken, async (req, res) => {
+app.post('/api/analyze-edital/chat', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
     try {
         const traceLog = (msg) => {
             const timestamp = new Date().toISOString();
@@ -4763,7 +6227,7 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
                 temperature: 0.35,
                 maxOutputTokens: 32768
             }
-        });
+        }, 3, { tenantId: req.user.tenantId, operation: 'ai_chat' });
         res.json({ text: chatResult.text });
     }
     catch (error) {
@@ -4774,43 +6238,102 @@ OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissio
 // ═══════════════════════════════════════════════════════════════════════
 // Chat Monitor Configuration
 // ═══════════════════════════════════════════════════════════════════════
-app.get('/api/chat-monitor/config', authenticateToken, async (req, res) => {
+// GET: Taxonomy (static — returns available categories for the UI)
+app.get('/api/chat-monitor/taxonomy', auth_1.authenticateToken, async (req, res) => {
+    try {
+        res.json({
+            categories: alertTaxonomy_1.ALERT_TAXONOMY.map((c) => ({
+                id: c.id,
+                label: c.label,
+                emoji: c.emoji,
+                severity: c.severity,
+                description: c.description,
+                enabledByDefault: c.enabledByDefault,
+            })),
+            bySeverity: {
+                critical: (0, alertTaxonomy_1.getCategoriesBySeverity)().critical.map((c) => c.id),
+                warning: (0, alertTaxonomy_1.getCategoriesBySeverity)().warning.map((c) => c.id),
+                info: (0, alertTaxonomy_1.getCategoriesBySeverity)().info.map((c) => c.id),
+            },
+            defaultEnabled: alertTaxonomy_1.DEFAULT_ENABLED_CATEGORIES,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch taxonomy' });
+    }
+});
+app.get('/api/chat-monitor/config', auth_1.authenticateToken, async (req, res) => {
     try {
         const config = await prisma.chatMonitorConfig.findUnique({
             where: { tenantId: req.user.tenantId }
         });
-        res.json(config || { keywords: "suspensa,reaberta,vencedora", isActive: true });
+        if (!config) {
+            return res.json({
+                keywords: "suspensa,reaberta,vencedora",
+                customKeywords: "[]",
+                enabledCategories: JSON.stringify(alertTaxonomy_1.DEFAULT_ENABLED_CATEGORIES),
+                categoryCustomKeywords: "{}",
+                isActive: true
+            });
+        }
+        // Garante que configs antigos (sem os novos campos) retornem defaults
+        res.json({
+            ...config,
+            customKeywords: config.customKeywords || "[]",
+            enabledCategories: config.enabledCategories || JSON.stringify(alertTaxonomy_1.DEFAULT_ENABLED_CATEGORIES),
+            categoryCustomKeywords: config.categoryCustomKeywords || "{}",
+            notificationEmail: config.notificationEmail || "",
+        });
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to fetch chat monitor config' });
     }
 });
-app.post('/api/chat-monitor/config', authenticateToken, async (req, res) => {
+app.post('/api/chat-monitor/config', auth_1.authenticateToken, async (req, res) => {
     try {
-        const { keywords, phoneNumber, telegramChatId, isActive } = req.body;
+        const { keywords, phoneNumber, telegramChatId, notificationEmail, isActive, enabledCategories, customKeywords, categoryCustomKeywords } = req.body;
+        // Serializa arrays/objects para string JSON se necessário
+        const enabledCatStr = enabledCategories
+            ? (typeof enabledCategories === 'string' ? enabledCategories : JSON.stringify(enabledCategories))
+            : undefined;
+        const customKwStr = customKeywords
+            ? (typeof customKeywords === 'string' ? customKeywords : JSON.stringify(customKeywords))
+            : undefined;
+        const catCustomKwStr = categoryCustomKeywords
+            ? (typeof categoryCustomKeywords === 'string' ? categoryCustomKeywords : JSON.stringify(categoryCustomKeywords))
+            : undefined;
         const config = await prisma.chatMonitorConfig.upsert({
             where: { tenantId: req.user.tenantId },
             create: {
                 tenantId: req.user.tenantId,
                 keywords,
+                customKeywords: customKwStr,
+                enabledCategories: enabledCatStr,
+                categoryCustomKeywords: catCustomKwStr,
                 phoneNumber,
                 telegramChatId,
+                notificationEmail,
                 isActive: isActive ?? true
             },
             update: {
-                keywords,
-                phoneNumber,
-                telegramChatId,
+                ...(keywords !== undefined && { keywords }),
+                ...(customKwStr !== undefined && { customKeywords: customKwStr }),
+                ...(enabledCatStr !== undefined && { enabledCategories: enabledCatStr }),
+                ...(catCustomKwStr !== undefined && { categoryCustomKeywords: catCustomKwStr }),
+                ...(phoneNumber !== undefined && { phoneNumber }),
+                ...(telegramChatId !== undefined && { telegramChatId }),
+                ...(notificationEmail !== undefined && { notificationEmail }),
                 isActive: isActive ?? true
             }
         });
         res.json(config);
     }
     catch (error) {
-        res.status(500).json({ error: 'Failed to save chat monitor config' });
+        console.error('[ChatMonitor Config POST] Error saving config:', error?.message || error);
+        res.status(500).json({ error: 'Failed to save chat monitor config', detail: error?.message });
     }
 });
-app.get('/api/chat-monitor/logs', authenticateToken, async (req, res) => {
+app.get('/api/chat-monitor/logs', auth_1.authenticateToken, async (req, res) => {
     try {
         const { keyword, search, status, page = '1', limit = '20' } = req.query;
         const pageNum = Math.max(1, parseInt(page) || 1);
@@ -4852,15 +6375,15 @@ app.get('/api/chat-monitor/logs', authenticateToken, async (req, res) => {
     }
 });
 // Test Notification Endpoint
-app.post('/api/chat-monitor/test', authenticateToken, async (req, res) => {
+app.post('/api/chat-monitor/test', auth_1.authenticateToken, async (req, res) => {
     try {
         const { NotificationService } = await Promise.resolve().then(() => __importStar(require('./services/monitoring/notification.service')));
         const result = await NotificationService.sendTestNotification(req.user.tenantId);
         res.json({
             success: true,
             results: result,
-            message: result.telegram === null && result.whatsapp === null
-                ? 'Nenhum canal configurado. Insira um Telegram Chat ID ou WhatsApp.'
+            message: result.telegram === null && result.whatsapp === null && result.email === null
+                ? 'Nenhum canal configurado. Insira um Telegram Chat ID ou WhatsApp nas Configurações.'
                 : 'Teste de notificação enviado! Verifique seus canais.'
         });
     }
@@ -4870,7 +6393,7 @@ app.post('/api/chat-monitor/test', authenticateToken, async (req, res) => {
     }
 });
 // Monitor Health Status Endpoint
-app.get('/api/chat-monitor/health', authenticateToken, async (req, res) => {
+app.get('/api/chat-monitor/health', auth_1.authenticateToken, async (req, res) => {
     try {
         const health = pncp_monitor_service_1.pncpMonitor.getHealthStatus();
         const monitoredCount = await prisma.biddingProcess.count({
@@ -4893,7 +6416,7 @@ app.get('/api/chat-monitor/health', authenticateToken, async (req, res) => {
 // ── Chat Monitor Module v2 Endpoints ──
 // ══════════════════════════════════════════
 // Update pncpLink for a process (manual fix when link was overwritten)
-app.patch('/api/chat-monitor/pncp-link/:processId', authenticateToken, async (req, res) => {
+app.patch('/api/chat-monitor/pncp-link/:processId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { processId } = req.params;
         const { pncpLink } = req.body;
@@ -4911,7 +6434,7 @@ app.patch('/api/chat-monitor/pncp-link/:processId', authenticateToken, async (re
     }
 });
 // Get grouped processes with message counts (V3 — includes monitored processes without logs)
-app.get('/api/chat-monitor/processes', authenticateToken, async (req, res) => {
+app.get('/api/chat-monitor/processes', auth_1.authenticateToken, async (req, res) => {
     try {
         const { companyId, platform } = req.query;
         const tenantId = req.user.tenantId;
@@ -4954,6 +6477,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req, res) => {
         }
         // Step 3: Safely get unread counts
         let unreadMap = new Map();
+        let unreadQueryOk = false;
         try {
             const unreadCounts = await prisma.chatMonitorLog.groupBy({
                 by: ['biddingProcessId'],
@@ -4961,19 +6485,61 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req, res) => {
                 _count: { id: true },
             });
             unreadMap = new Map(unreadCounts.map((u) => [u.biddingProcessId, u._count.id]));
+            unreadQueryOk = true;
         }
         catch {
-            // isRead column may not exist yet
+            // isRead column may not exist yet — fall back to total
         }
-        // Step 4: Get important (keyword detected) processes
+        // Step 4: Get important processes (keyword detected OR manually pinned)
         let importantSet = new Set();
         try {
             const kwLogs = await prisma.chatMonitorLog.findMany({
-                where: { tenantId, detectedKeyword: { not: null } },
+                where: { tenantId, OR: [{ detectedKeyword: { not: null } }, { isImportant: true }] },
                 select: { biddingProcessId: true },
                 distinct: ['biddingProcessId'],
             });
             importantSet = new Set(kwLogs.map((k) => k.biddingProcessId));
+        }
+        catch { /* silent */ }
+        // Step 4b: Get archived processes (ALL logs for process are archived)
+        let archivedSet = new Set();
+        try {
+            const archivedLogs = await prisma.chatMonitorLog.findMany({
+                where: { tenantId, isArchived: true },
+                select: { biddingProcessId: true },
+                distinct: ['biddingProcessId'],
+            });
+            archivedSet = new Set(archivedLogs.map((k) => k.biddingProcessId));
+        }
+        catch { /* silent */ }
+        // Step 4c: Detect closure events (encerramento_processo category)
+        let closureMap = new Map();
+        try {
+            const closureLogs = await prisma.chatMonitorLog.findMany({
+                where: {
+                    tenantId,
+                    detectedKeyword: { not: null },
+                    // Match closure-related keywords
+                    OR: [
+                        { content: { contains: 'homologad', mode: 'insensitive' } },
+                        { content: { contains: 'cancelad', mode: 'insensitive' } },
+                        { content: { contains: 'anulad', mode: 'insensitive' } },
+                        { content: { contains: 'revogad', mode: 'insensitive' } },
+                        { content: { contains: 'desert', mode: 'insensitive' } },
+                        { content: { contains: 'fracassad', mode: 'insensitive' } },
+                        { content: { contains: 'processo encerrado', mode: 'insensitive' } },
+                        { content: { contains: 'licitação encerrada', mode: 'insensitive' } },
+                    ],
+                    isArchived: false,
+                },
+                select: { biddingProcessId: true, detectedKeyword: true },
+                orderBy: { createdAt: 'desc' },
+            });
+            for (const log of closureLogs) {
+                if (!closureMap.has(log.biddingProcessId)) {
+                    closureMap.set(log.biddingProcessId, log.detectedKeyword || 'Encerrado');
+                }
+            }
         }
         catch { /* silent */ }
         // Step 5: Build result
@@ -4988,11 +6554,14 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req, res) => {
                 uasg: p.uasg,
                 companyProfileId: p.companyProfileId,
                 isMonitored: p.isMonitored,
+                link: p.link || null,
                 hasPncpLink: !!(p.link?.includes('editais')),
                 totalMessages: total,
-                unreadCount: unreadMap.has(p.id) ? unreadMap.get(p.id) : total,
+                // If query succeeded: use actual count (0 if not in map). If failed: fall back to total.
+                unreadCount: unreadQueryOk ? (unreadMap.get(p.id) || 0) : total,
                 isImportant: importantSet.has(p.id),
-                isArchived: false,
+                isArchived: archivedSet.has(p.id),
+                closureDetected: closureMap.get(p.id) || null,
                 lastMessage: lastMsg ? {
                     content: lastMsg.content,
                     createdAt: lastMsg.createdAt,
@@ -5013,12 +6582,25 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req, res) => {
             const pf = platform.toLowerCase();
             filtered = result.filter((p) => {
                 const portal = (p.portal || '').toLowerCase();
+                const link = (p.link || '').toLowerCase();
                 if (pf === 'comprasnet')
-                    return portal.includes('compras') || portal.includes('cnet');
+                    return (link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('compras') || portal.includes('cnet')) && !link.includes('bllcompras') && !link.includes('bnccompras') && !link.includes('bbmnet') && !link.includes('portaldecompraspublicas') && !link.includes('licitanet.com.br') && !link.includes('licitamaisbrasil') && !link.includes('m2atecnologia') && !portal.includes('m2a');
+                if (pf === 'bbmnet')
+                    return link.includes('bbmnet') || link.includes('sala.bbmnet') || portal.includes('bbmnet');
+                if (pf === 'm2a')
+                    return link.includes('m2atecnologia') || portal.includes('m2a');
                 if (pf === 'pncp')
-                    return portal.includes('pncp');
+                    return portal.includes('pncp') || link.includes('pncp.gov.br');
+                if (pf === 'pcp')
+                    return link.includes('portaldecompraspublicas') || portal.includes('portal de compras');
+                if (pf === 'licitanet')
+                    return link.includes('licitanet.com.br') || portal.includes('licitanet');
+                if (pf === 'licitamaisbrasil')
+                    return link.includes('licitamaisbrasil.com.br') || portal.includes('licita mais brasil') || portal.includes('licitamaisbrasil');
                 if (pf === 'bll')
-                    return portal.includes('bll');
+                    return link.includes('bllcompras') || link.includes('bll.org') || portal.includes('bll');
+                if (pf === 'bnc')
+                    return link.includes('bnccompras');
                 return true;
             });
         }
@@ -5029,8 +6611,66 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch chat monitor processes', details: String(error) });
     }
 });
+// ── Process Closure Action ──
+// Handles closure events: move bidding to Perdido/Arquivado and archive from monitor
+app.post('/api/chat-monitor/process-close/:processId', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { processId } = req.params;
+        const { action } = req.body; // 'lost' | 'archived' | 'dismiss'
+        const tenantId = req.user.tenantId;
+        if (!['lost', 'archived', 'dismiss', 'stop-monitoring'].includes(action)) {
+            return res.status(400).json({ error: 'Invalid action. Use: lost, archived, dismiss, stop-monitoring' });
+        }
+        // Map action to bidding status
+        const statusMap = {
+            lost: 'Perdido',
+            archived: 'Arquivado',
+        };
+        // 1. Update bidding process status (if not dismiss/stop-monitoring)
+        if (action === 'stop-monitoring') {
+            // Only disable monitoring, don't change status or archive logs
+            await prisma.biddingProcess.update({
+                where: { id: processId, tenantId },
+                data: { isMonitored: false },
+            });
+            console.log(`[ChatMonitor] Process ${processId} monitoring stopped (status unchanged)`);
+            return res.json({
+                success: true,
+                action,
+                message: 'Monitoramento removido — o status do processo não foi alterado.',
+            });
+        }
+        if (action !== 'dismiss') {
+            await prisma.biddingProcess.update({
+                where: { id: processId, tenantId },
+                data: {
+                    status: statusMap[action],
+                    isMonitored: false,
+                },
+            });
+        }
+        // 2. Archive all monitor logs for this process
+        await prisma.chatMonitorLog.updateMany({
+            where: { biddingProcessId: processId, tenantId },
+            data: { isArchived: true },
+        });
+        console.log(`[ChatMonitor] Process ${processId} closed with action: ${action}`);
+        res.json({
+            success: true,
+            action,
+            newStatus: statusMap[action] || null,
+            message: action === 'dismiss'
+                ? 'Processo mantido no monitoramento (logs arquivados)'
+                : `Processo movido para "${statusMap[action]}" e arquivado do monitoramento`,
+        });
+    }
+    catch (error) {
+        console.error('[ChatMonitor] Error closing process:', error?.message || error);
+        res.status(500).json({ error: 'Failed to close process', detail: error?.message });
+    }
+});
 // Get messages for a specific process (paginated, ordered chronologically)
-app.get('/api/chat-monitor/messages/:processId', authenticateToken, async (req, res) => {
+app.get('/api/chat-monitor/messages/:processId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { processId } = req.params;
         const { page = '1', limit = '100' } = req.query;
@@ -5040,7 +6680,7 @@ app.get('/api/chat-monitor/messages/:processId', authenticateToken, async (req, 
         const [messages, total] = await Promise.all([
             prisma.chatMonitorLog.findMany({
                 where: { biddingProcessId: processId, tenantId: req.user.tenantId },
-                orderBy: { createdAt: 'asc' },
+                orderBy: { createdAt: 'desc' },
                 skip,
                 take: limitNum,
             }),
@@ -5068,7 +6708,7 @@ app.get('/api/chat-monitor/messages/:processId', authenticateToken, async (req, 
     }
 });
 // Get unread count (for sidebar badge)
-app.get('/api/chat-monitor/unread-count', authenticateToken, async (req, res) => {
+app.get('/api/chat-monitor/unread-count', auth_1.authenticateToken, async (req, res) => {
     try {
         const count = await prisma.chatMonitorLog.count({
             where: { tenantId: req.user.tenantId, isRead: false, isArchived: false }
@@ -5081,7 +6721,7 @@ app.get('/api/chat-monitor/unread-count', authenticateToken, async (req, res) =>
     }
 });
 // Toggle read/important/archive on a log
-app.put('/api/chat-monitor/log/:logId', authenticateToken, async (req, res) => {
+app.put('/api/chat-monitor/log/:logId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { logId } = req.params;
         const { isRead, isImportant, isArchived } = req.body;
@@ -5103,7 +6743,7 @@ app.put('/api/chat-monitor/log/:logId', authenticateToken, async (req, res) => {
     }
 });
 // Batch mark-read all messages for a process
-app.put('/api/chat-monitor/read-all/:processId', authenticateToken, async (req, res) => {
+app.put('/api/chat-monitor/read-all/:processId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { processId } = req.params;
         const result = await prisma.chatMonitorLog.updateMany({
@@ -5117,7 +6757,7 @@ app.put('/api/chat-monitor/read-all/:processId', authenticateToken, async (req, 
     }
 });
 // Batch toggle important/archive for all messages of a process
-app.put('/api/chat-monitor/process-action/:processId', authenticateToken, async (req, res) => {
+app.put('/api/chat-monitor/process-action/:processId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { processId } = req.params;
         const { isImportant, isArchived } = req.body;
@@ -5142,17 +6782,38 @@ app.put('/api/chat-monitor/process-action/:processId', authenticateToken, async 
 // In-memory store for Agent Heartbeats (Phase 1)
 const agentHeartbeats = new Map();
 // 1. Get sessions the agent should monitor
-app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req, res) => {
+app.get('/api/chat-monitor/agents/sessions', auth_1.authenticateToken, async (req, res) => {
     try {
         const tenantId = req.user.tenantId;
         const processes = await prisma.biddingProcess.findMany({
             where: {
                 tenantId,
                 isMonitored: true,
-                uasg: { not: null },
-                modalityCode: { not: null },
-                processNumber: { not: null },
-                processYear: { not: null },
+                OR: [
+                    // ComprasNet processes (need uasg + modalityCode)
+                    {
+                        uasg: { not: null },
+                        modalityCode: { not: null },
+                        processNumber: { not: null },
+                        processYear: { not: null },
+                    },
+                    // BBMNET processes (have bbmnet link)
+                    {
+                        link: { contains: 'bbmnet', mode: 'insensitive' },
+                    },
+                    // BLL processes
+                    {
+                        link: { contains: 'bllcompras', mode: 'insensitive' },
+                    },
+                    // BNC processes
+                    {
+                        link: { contains: 'bnccompras', mode: 'insensitive' },
+                    },
+                    // M2A Compras processes
+                    {
+                        link: { contains: 'm2atecnologia', mode: 'insensitive' },
+                    },
+                ],
             },
             select: {
                 id: true,
@@ -5161,7 +6822,8 @@ app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req, res)
                 modalityCode: true,
                 processNumber: true,
                 processYear: true,
-                portal: true
+                portal: true,
+                link: true
             }
         });
         res.json(processes);
@@ -5172,7 +6834,7 @@ app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req, res)
     }
 });
 // 2. Agent Heartbeat (Ping from Local Watcher)
-app.post('/api/chat-monitor/agents/heartbeat', authenticateToken, async (req, res) => {
+app.post('/api/chat-monitor/agents/heartbeat', auth_1.authenticateToken, async (req, res) => {
     try {
         const tenantId = req.user.tenantId;
         const { machineName, activeSessions, agentVersion, status } = req.body;
@@ -5190,7 +6852,7 @@ app.post('/api/chat-monitor/agents/heartbeat', authenticateToken, async (req, re
     }
 });
 // 3. Agent Status (Ping from React UI)
-app.get('/api/chat-monitor/agents/status', authenticateToken, async (req, res) => {
+app.get('/api/chat-monitor/agents/status', auth_1.authenticateToken, async (req, res) => {
     try {
         const tenantId = req.user.tenantId;
         const status = agentHeartbeats.get(tenantId);
@@ -5207,8 +6869,210 @@ app.get('/api/chat-monitor/agents/status', authenticateToken, async (req, res) =
 });
 // Receives messages from local ComprasNet Watcher
 // ══════════════════════════════════════════
-// Receives messages from local ComprasNet Watcher
-app.post('/api/chat-monitor/ingest', authenticateToken, async (req, res) => {
+// ── Internal Worker Endpoints (multi-tenant, API key auth) ──
+// Used by the centralized chat worker running on the server.
+// Authenticated via CHAT_WORKER_SECRET instead of user JWT.
+const CHAT_WORKER_SECRET = process.env.CHAT_WORKER_SECRET || '';
+function authenticateWorker(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.replace('Bearer ', '');
+    if (!CHAT_WORKER_SECRET || token !== CHAT_WORKER_SECRET) {
+        return res.status(403).json({ error: 'Invalid worker secret' });
+    }
+    next();
+}
+// Internal Worker Heartbeat (updates agentHeartbeats per-tenant)
+app.post('/api/chat-monitor/internal/heartbeat', authenticateWorker, async (req, res) => {
+    try {
+        const { activeSessions, tenantIds, machineName } = req.body;
+        const tenants = tenantIds || [];
+        for (const tid of tenants) {
+            agentHeartbeats.set(tid, {
+                machineName: machineName || 'Server Worker v4.0',
+                activeSessions: activeSessions || 0,
+                agentVersion: '4.0.0',
+                status: 'online',
+                lastHeartbeatAt: new Date(),
+            });
+        }
+        res.json({ success: true, timestamp: new Date() });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to register worker heartbeat' });
+    }
+});
+// Get ALL monitored processes across ALL tenants (for centralized worker)
+// v3.0: Inclui credenciais do portal vinculado para autenticação dinâmica
+app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (req, res) => {
+    try {
+        const processes = await prisma.biddingProcess.findMany({
+            where: {
+                isMonitored: true,
+            },
+            select: {
+                id: true,
+                tenantId: true,
+                title: true,
+                summary: true,
+                uasg: true,
+                modalityCode: true,
+                processNumber: true,
+                processYear: true,
+                portal: true,
+                link: true,
+                companyProfileId: true,
+                company: {
+                    select: {
+                        razaoSocial: true,
+                        credentials: {
+                            select: {
+                                platform: true,
+                                url: true,
+                                login: true,
+                                password: true,
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        // Match best credential per process based on portal/link (v2 — with PLATFORM_DOMAINS fallback)
+        const enriched = processes.map((p) => {
+            const creds = p.company?.credentials || [];
+            const link = (p.link || '').toLowerCase();
+            const rawPortal = (p.portal || '');
+            const normalizedPortal = normalizePortal(rawPortal, p.link || '');
+            // Smart matching: score each credential
+            let bestCred = null;
+            let bestScore = 0;
+            // Get expected domains for this process's normalized portal
+            const expectedDomains = PLATFORM_DOMAINS[normalizedPortal] || [];
+            for (const c of creds) {
+                const cp = (c.platform || '').toLowerCase();
+                const cu = (c.url || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+                let score = 0;
+                // Layer 1: Exact URL match (strongest signal)
+                if (cu && link && (link.includes(cu) || cu.includes(link.split('/')[2] || '')))
+                    score += 10;
+                // Layer 2: Domain-level match (link domain vs credential URL domain)
+                const linkDomain = link.split('/')[2] || '';
+                const credDomain = cu.split('/')[0] || '';
+                if (linkDomain && credDomain && (linkDomain.includes(credDomain) || credDomain.includes(linkDomain)))
+                    score += 8;
+                // Layer 3: Platform name match (normalized portal vs credential platform)
+                const normalizedCredPlatform = normalizePortal(c.platform || '', c.url || '');
+                if (normalizedCredPlatform === normalizedPortal)
+                    score += 7;
+                if (cp && link && link.includes(cp.replace(/\s+/g, '')))
+                    score += 5;
+                // Layer 4: PLATFORM_DOMAINS fallback — match credential URL against expected domains
+                if (expectedDomains.length > 0 && cu) {
+                    if (expectedDomains.some(d => cu.includes(d)))
+                        score += 6;
+                }
+                // Also check if credential platform maps to any of expected domains
+                const credPlatformDomains = PLATFORM_DOMAINS[normalizedCredPlatform] || [];
+                if (expectedDomains.length > 0 && credPlatformDomains.some(d => expectedDomains.includes(d)))
+                    score += 5;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestCred = c;
+                }
+            }
+            return {
+                id: p.id,
+                tenantId: p.tenantId,
+                title: p.title,
+                summary: p.summary || null,
+                uasg: p.uasg,
+                modalityCode: p.modalityCode,
+                processNumber: p.processNumber,
+                processYear: p.processYear,
+                portal: normalizedPortal, // Send normalized portal to workers
+                link: p.link,
+                companyProfileId: p.companyProfileId,
+                companyName: p.company?.razaoSocial || null,
+                portalCredentials: bestCred ? {
+                    login: (0, crypto_1.isEncryptionConfigured)() && (0, crypto_1.isEncrypted)(bestCred.login) ? (0, crypto_1.decryptCredential)(bestCred.login) : bestCred.login,
+                    password: (0, crypto_1.isEncryptionConfigured)() && (0, crypto_1.isEncrypted)(bestCred.password) ? (0, crypto_1.decryptCredential)(bestCred.password) : bestCred.password,
+                    url: bestCred.url,
+                    platform: bestCred.platform,
+                } : null,
+            };
+        });
+        console.log(`[Worker] Returning ${enriched.length} monitored processes across all tenants (${enriched.filter((p) => p.portalCredentials).length} with credentials)`);
+        res.json(enriched);
+    }
+    catch (error) {
+        console.error('[Worker /all-sessions] Error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch all sessions' });
+    }
+});
+// Ingest messages from centralized worker (with explicit tenantId)
+app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req, res) => {
+    try {
+        const { processId, tenantId, messages } = req.body;
+        if (!processId || !tenantId || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ error: 'processId, tenantId, and messages[] required' });
+        }
+        // Verify process belongs to tenant
+        const processRecord = await prisma.biddingProcess.findFirst({
+            where: { id: processId, tenantId }
+        });
+        if (!processRecord) {
+            return res.status(404).json({ error: 'Process not found for given tenant' });
+        }
+        const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
+            processId, tenantId, messages, captureSource: 'server-worker'
+        });
+        console.log(`[Worker Ingest] ${result.created} msgs saved for ${processId.substring(0, 8)} (tenant ${tenantId.substring(0, 8)}, ${result.alerts} alerts)`);
+        res.json(result);
+    }
+    catch (error) {
+        console.error('[Worker Ingest] Error:', error.message);
+        res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
+    }
+});
+// ── Persist M2A certame_id link (worker write-back for stable matching) ──
+// Called by M2A Watcher after a successful fuzzy-match to persist the canonical
+// certame URL in the process link field. Subsequent runs use Strategy 1 (exact match).
+app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWorker, async (req, res) => {
+    try {
+        const { processId } = req.params;
+        const { certameId, certameUrl } = req.body;
+        if (!certameId && !certameUrl) {
+            return res.status(400).json({ error: 'certameId or certameUrl required' });
+        }
+        // Verify process exists
+        const process = await prisma.biddingProcess.findUnique({
+            where: { id: processId },
+            select: { id: true, link: true, tenantId: true },
+        });
+        if (!process) {
+            return res.status(404).json({ error: 'Process not found' });
+        }
+        // Build canonical M2A certame URL if only certameId was provided
+        const canonicalUrl = certameUrl ||
+            `http://precodereferencia.m2atecnologia.com.br/fornecedores/contratacao/contratacao_fornecedor/pregao_eletronico/lei_14133/detalhes/certame/${certameId}/`;
+        // Only update if link doesn't already contain this certame ID (idempotent)
+        const currentLink = process.link || '';
+        if (certameId && currentLink.includes(`certame/${certameId}`)) {
+            return res.json({ success: true, updated: false, reason: 'link already contains certame_id' });
+        }
+        await prisma.biddingProcess.update({
+            where: { id: processId },
+            data: { link: canonicalUrl },
+        });
+        console.log(`[Worker M2A] Link updated for ${processId.substring(0, 8)} → certame/${certameId}`);
+        res.json({ success: true, updated: true, newLink: canonicalUrl });
+    }
+    catch (error) {
+        console.error('[Worker M2A] Error updating link:', error.message);
+        res.status(500).json({ error: 'Failed to update process link', details: error.message });
+    }
+});
+// Receives messages from local ComprasNet / BBMNet Watcher
+app.post('/api/chat-monitor/ingest', auth_1.authenticateToken, async (req, res) => {
     try {
         const { processId, messages } = req.body;
         const tenantId = req.user.tenantId;
@@ -5216,122 +7080,21 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'processId and messages[] required' });
         }
         // Verify process belongs to tenant
-        const process = await prisma.biddingProcess.findFirst({
+        const processRecord = await prisma.biddingProcess.findFirst({
             where: { id: processId, tenantId }
         });
-        if (!process) {
+        if (!processRecord) {
             return res.status(404).json({ error: 'Process not found or not yours' });
         }
-        // Get existing messageIds to deduplicate
-        const existingLogs = await prisma.chatMonitorLog.findMany({
-            where: { biddingProcessId: processId },
-            select: { messageId: true }
+        const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
+            processId, tenantId, messages, captureSource: 'local-watcher'
         });
-        const existing = new Set(existingLogs.map(l => l.messageId));
-        // Get keywords config
-        const config = await prisma.chatMonitorConfig.findUnique({
-            where: { tenantId }
-        });
-        const keywords = config?.keywords?.split(',').map(k => k.trim().toLowerCase()) || [];
-        const { DedupService } = require('./services/monitoring/dedup.service');
-        let created = 0;
-        let alerts = 0;
-        for (const msg of messages) {
-            const messageId = msg.messageId || null;
-            const content = msg.content || '';
-            const authorType = msg.authorType || 'desconhecido';
-            const fingerprintHash = DedupService.generateFingerprint(processId, messageId, content, authorType);
-            // Double deduplication: skip if messageId OR fingerprintHash exist
-            if ((messageId && existing.has(messageId)))
-                continue;
-            const isDuplicate = await prisma.chatMonitorLog.findUnique({
-                where: { fingerprintHash }
-            });
-            if (isDuplicate)
-                continue;
-            const detectedKeyword = keywords.find(k => content.toLowerCase().includes(k)) || null;
-            if (detectedKeyword)
-                alerts++;
-            // Simple taxonomy logic
-            let eventCategory = msg.eventCategory;
-            let status = detectedKeyword ? 'PENDING_NOTIFICATION' : 'CAPTURED';
-            // Enhance taxonomy based on standard patterns if eventCategory is null
-            if (!eventCategory) {
-                const lowerContent = content.toLowerCase();
-                if (lowerContent.includes('encerrado o prazo') || lowerContent.includes('tempo aleatório')) {
-                    eventCategory = '13'; // encerramento_prazo
-                    status = 'PENDING_NOTIFICATION'; // Auto-alert for closing times
-                    alerts++;
-                }
-                else if (lowerContent.includes('suspenso') || lowerContent.includes('suspensão')) {
-                    eventCategory = '12'; // suspensao
-                }
-                else if (lowerContent.includes('bom dia') || lowerContent.includes('boa tarde')) {
-                    eventCategory = '10'; // saudacao  
-                }
-            }
-            await prisma.chatMonitorLog.create({
-                data: {
-                    tenantId,
-                    biddingProcessId: processId,
-                    messageId,
-                    fingerprintHash,
-                    content,
-                    authorType,
-                    authorCnpj: msg.authorCnpj || null,
-                    eventCategory: eventCategory || null,
-                    itemRef: msg.itemRef || null,
-                    detectedKeyword,
-                    captureSource: msg.captureSource || 'local-watcher',
-                    status,
-                }
-            });
-            if (messageId) {
-                existing.add(messageId);
-            }
-            created++;
-        }
-        // Trigger notifications if there were keyword matches
-        if (alerts > 0) {
-            try {
-                const { NotificationService } = require('./services/monitoring/notification.service');
-                await NotificationService.processPendingNotifications();
-            }
-            catch { /* silent */ }
-        }
-        console.log(`[Ingest] ${created} msgs saved for process ${processId.substring(0, 8)}... (${alerts} alerts)`);
-        res.json({ success: true, created, alerts, total: messages.length });
+        console.log(`[Ingest] ${result.created} msgs saved for process ${processId.substring(0, 8)}... (${result.alerts} alerts)`);
+        res.json(result);
     }
     catch (error) {
         console.error('[Ingest] Error:', error.message);
         res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
-    }
-});
-// GET: /api/chat-monitor/logs - Histórico de atividade do Agente Local (Fase 4)
-app.get('/api/chat-monitor/logs', authenticateToken, async (req, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const limit = parseInt(req.query.limit) || 50;
-        const logs = await prisma.chatMonitorLog.findMany({
-            where: { tenantId },
-            include: {
-                biddingProcess: {
-                    select: {
-                        processNumber: true,
-                        processYear: true,
-                        title: true,
-                        uasg: true
-                    }
-                }
-            },
-            orderBy: { createdAt: 'desc' },
-            take: limit
-        });
-        res.json(logs);
-    }
-    catch (error) {
-        console.error('[Chat Monitor Logs] Error:', error.message);
-        res.status(500).json({ error: 'Failed to fetch monitor logs' });
     }
 });
 // ── Serve Frontend in Production ──
@@ -5400,31 +7163,7 @@ async function runAutoSetup() {
                 data: { tenantId: tenant.id }
             });
         }
-        // 🛠️ MÓDULO DE RESTAURAÇÃO (CORREÇÃO DE DADOS MIGRADOS INDEVIDAMENTE)
-        // Como o antigo script roubou os dados para o tenant padrão, precisamos devolvê-los
-        // para o seu usuário (Marcos ou conta primária criada no painel).
-        const realUser = await prisma.user.findFirst({
-            where: { email: { not: 'admin@licitasaas.com' } }
-        });
-        const targetTenantId = realUser ? realUser.tenantId : tenant.id;
-        const results = {
-            companies: await prisma.companyProfile.updateMany({
-                where: { tenantId: tenant.id },
-                data: { tenantId: targetTenantId }
-            }),
-            biddings: await prisma.biddingProcess.updateMany({
-                where: { tenantId: tenant.id },
-                data: { tenantId: targetTenantId }
-            }),
-            documents: await prisma.document.updateMany({
-                where: { tenantId: tenant.id },
-                data: { tenantId: targetTenantId }
-            })
-        };
-        if (results.companies.count > 0 || results.biddings.count > 0 || results.documents.count > 0) {
-            console.log(`✅ RESTAURAÇÃO: ${results.companies.count} empresas, ${results.biddings.count} licitações devolvidas ao seu painel principal!`);
-        }
-        console.log('🚀 Sistema pronto e sincronizado.');
+        // Removing bad "Modulo de Restauracao" that was moving data to other users
     }
     catch (error) {
         console.error('❌ Erro no runAutoSetup:', error);
@@ -5458,7 +7197,7 @@ async function fetchPdfPartsForProcess(biddingProcessId, fileNamesRaw, tenantId)
 //  Sprint 7 — Governance API Endpoints
 // ══════════════════════════════════════════════════════════════════
 // POST /api/ai/feedback — Submit structured feedback
-app.post('/api/ai/feedback', async (req, res) => {
+app.post('/api/ai/feedback', auth_1.authenticateToken, async (req, res) => {
     try {
         const feedback = (0, feedbackService_1.submitFeedback)(req.body);
         res.json({ success: true, feedbackId: feedback.feedbackId });
@@ -5468,7 +7207,7 @@ app.post('/api/ai/feedback', async (req, res) => {
     }
 });
 // GET /api/ai/feedback/:moduleName — Get feedback by module
-app.get('/api/ai/feedback/:moduleName', async (req, res) => {
+app.get('/api/ai/feedback/:moduleName', auth_1.authenticateToken, async (req, res) => {
     try {
         const items = (0, feedbackService_1.getFeedbackByModule)(req.params.moduleName);
         const stats = (0, feedbackService_1.getFeedbackStats)(req.params.moduleName);
@@ -5479,7 +7218,7 @@ app.get('/api/ai/feedback/:moduleName', async (req, res) => {
     }
 });
 // GET /api/ai/metrics — System operational report
-app.get('/api/ai/metrics', async (_req, res) => {
+app.get('/api/ai/metrics', auth_1.authenticateToken, async (_req, res) => {
     try {
         const report = (0, operationalMetrics_1.generateSystemReport)(30);
         res.json(report);
@@ -5489,7 +7228,7 @@ app.get('/api/ai/metrics', async (_req, res) => {
     }
 });
 // GET /api/ai/versions — Version catalog
-app.get('/api/ai/versions', async (_req, res) => {
+app.get('/api/ai/versions', auth_1.authenticateToken, async (_req, res) => {
     try {
         const versions = (0, versionGovernance_1.getAllVersions)();
         const promotions = (0, versionGovernance_1.getPromotionHistory)();
@@ -5500,7 +7239,7 @@ app.get('/api/ai/versions', async (_req, res) => {
     }
 });
 // GET /api/ai/insights — Improvement insights
-app.get('/api/ai/insights', async (_req, res) => {
+app.get('/api/ai/insights', auth_1.authenticateToken, async (_req, res) => {
     try {
         const report = (0, improvementInsights_1.generateImprovementInsights)(30);
         res.json(report);
@@ -5510,7 +7249,7 @@ app.get('/api/ai/insights', async (_req, res) => {
     }
 });
 // POST /api/ai/golden-cases/convert — Convert feedback to golden cases
-app.post('/api/ai/golden-cases/convert', async (_req, res) => {
+app.post('/api/ai/golden-cases/convert', auth_1.authenticateToken, async (_req, res) => {
     try {
         const converted = (0, improvementInsights_1.convertFeedbackToGoldenCases)();
         res.json({ success: true, converted: converted.length, cases: converted });
@@ -5523,9 +7262,9 @@ app.post('/api/ai/golden-cases/convert', async (_req, res) => {
 //  Sprint 8 — Strategic Company API Endpoints
 // ══════════════════════════════════════════════════════════════════
 // POST /api/company/profile — Create or update company profile
-app.post('/api/company/profile', async (req, res) => {
+app.post('/api/company/profile', auth_1.authenticateToken, async (req, res) => {
     try {
-        const profile = (0, companyProfileService_1.createOrUpdateProfile)(req.body);
+        const profile = await (0, companyProfileService_1.createOrUpdateProfile)(req.body);
         res.json({ success: true, companyId: profile.companyId });
     }
     catch (err) {
@@ -5533,18 +7272,18 @@ app.post('/api/company/profile', async (req, res) => {
     }
 });
 // GET /api/company/profiles — List all company profiles
-app.get('/api/company/profiles', async (_req, res) => {
+app.get('/api/company/profiles', auth_1.authenticateToken, async (_req, res) => {
     try {
-        res.json((0, companyProfileService_1.getAllProfiles)());
+        res.json(await (0, companyProfileService_1.getAllProfiles)());
     }
     catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 // GET /api/company/:companyId — Get company profile
-app.get('/api/company/:companyId', async (req, res) => {
+app.get('/api/company/:companyId', auth_1.authenticateToken, async (req, res) => {
     try {
-        const profile = (0, companyProfileService_1.getProfile)(req.params.companyId);
+        const profile = await (0, companyProfileService_1.getProfile)(req.params.companyId);
         if (!profile)
             return res.status(404).json({ error: 'Company not found' });
         res.json(profile);
@@ -5554,7 +7293,7 @@ app.get('/api/company/:companyId', async (req, res) => {
     }
 });
 // POST /api/strategy/analyze — Full strategic analysis: match + score + action plan
-app.post('/api/strategy/analyze', async (req, res) => {
+app.post('/api/strategy/analyze', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
     try {
         const { companyId, biddingProcessId } = req.body;
         if (!companyId || !biddingProcessId) {
@@ -5568,11 +7307,11 @@ app.post('/api/strategy/analyze', async (req, res) => {
             return res.status(404).json({ error: 'Bidding process or schemaV2 not found' });
         }
         const schemaV2 = bidding.aiAnalysis.schemaV2;
-        const matchResult = (0, participationEngine_1.matchCompanyToEdital)(companyId, schemaV2, biddingProcessId);
+        const matchResult = await (0, participationEngine_1.matchCompanyToEdital)(companyId, schemaV2, biddingProcessId);
         const assessment = (0, participationEngine_1.calculateParticipationScore)(matchResult, schemaV2);
         const actionPlan = (0, participationEngine_1.generateActionPlan)(matchResult, assessment, schemaV2);
         // Record for learning
-        (0, companyLearningInsights_1.recordMatchHistory)(companyId, biddingProcessId, {
+        await (0, companyLearningInsights_1.recordMatchHistory)(companyId, biddingProcessId, {
             doc: matchResult.documentaryFit.score,
             tech: matchResult.technicalFit.score,
             ef: matchResult.economicFinancialFit.score,
@@ -5586,15 +7325,17 @@ app.post('/api/strategy/analyze', async (req, res) => {
     }
 });
 // GET /api/company/:companyId/insights — Company learning insights
-app.get('/api/company/:companyId/insights', async (req, res) => {
+app.get('/api/company/:companyId/insights', auth_1.authenticateToken, async (req, res) => {
     try {
-        const report = (0, companyLearningInsights_1.generateCompanyInsights)(req.params.companyId);
+        const report = await (0, companyLearningInsights_1.generateCompanyInsights)(req.params.companyId);
         res.json(report);
     }
     catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+// ── Global Error Handler (must be LAST middleware before listen) ──
+app.use(security_1.globalErrorHandler);
 app.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
     console.log(`Upload directory: ${uploadDir}`);
@@ -5602,8 +7343,377 @@ app.listen(PORT, async () => {
     // Initialize version catalog
     (0, versionGovernance_1.registerInitialVersions)();
     console.log(`[Governance] Version catalog initialized with ${(0, versionGovernance_1.getAllVersions)().length} components`);
-    // Start Chat Monitor Polling
-    pncp_monitor_service_1.pncpMonitor.startPolling(5); // Run every 5 minutes
+    // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
+    // pncpMonitor.startPolling(5);
+    // ── Background Workers (only run when PROCESS_ROLE is 'all' or 'worker') ──
+    if (PROCESS_ROLE === 'api') {
+        console.log('[Server] PROCESS_ROLE=api — background pollers disabled (running in separate worker process)');
+    }
+    else {
+        // ── One-time backfill: fetch ComprasNet links for existing processes ──
+        (async () => {
+            try {
+                const processes = await prisma.biddingProcess.findMany({
+                    where: {
+                        link: { contains: 'pncp.gov.br/app/editais' },
+                        NOT: { link: { contains: 'cnetmobile' } }
+                    },
+                    select: { id: true, link: true, isMonitored: true }
+                });
+                if (processes.length === 0) {
+                    console.log('[Backfill] All processes already have ComprasNet links or no PNCP links found.');
+                    return;
+                }
+                console.log(`[Backfill] Found ${processes.length} processes with PNCP links missing ComprasNet. Fetching...`);
+                let updated = 0;
+                for (const proc of processes) {
+                    try {
+                        // Extract CNPJ/ANO/SEQ from PNCP link
+                        const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+                        if (!match)
+                            continue;
+                        const [, cnpj, ano, seq] = match;
+                        const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+                        const res = await fetch(apiUrl);
+                        if (!res.ok)
+                            continue;
+                        const data = await res.json();
+                        const comprasNetLink = data.linkSistemaOrigem;
+                        if (comprasNetLink && (comprasNetLink.includes('cnetmobile') || comprasNetLink.includes('comprasnet'))) {
+                            const newLink = `${proc.link}, ${comprasNetLink}`;
+                            await prisma.biddingProcess.update({
+                                where: { id: proc.id },
+                                data: {
+                                    link: newLink,
+                                    isMonitored: true // Auto-enable since we now have ComprasNet data
+                                }
+                            });
+                            updated++;
+                            console.log(`[Backfill] ✅ Updated process ${proc.id.slice(0, 8)} with ComprasNet link`);
+                        }
+                        // Rate limit: 500ms between API calls to avoid hammering PNCP
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                    catch (e) {
+                        // Skip individual failures silently
+                    }
+                }
+                console.log(`[Backfill] Done. Updated ${updated}/${processes.length} processes with ComprasNet links.`);
+            }
+            catch (e) {
+                console.error('[Backfill] Error:', e);
+            }
+        })();
+        // ══════════════════════════════════════════════════════════════
+        // ── Batch Platforms (BLL + BNC): Polling via API REST ──
+        // ══════════════════════════════════════════════════════════════
+        const BATCH_POLL_INTERVAL_MS = 60000; // 60 segundos
+        async function pollBatchProcesses() {
+            try {
+                // 1. Buscar processos monitorados de TODAS as plataformas Batch
+                const batchProcesses = await prisma.biddingProcess.findMany({
+                    where: {
+                        isMonitored: true,
+                        OR: [
+                            { link: { contains: 'bllcompras' } },
+                            { link: { contains: 'bnccompras' } },
+                        ],
+                    },
+                    select: {
+                        id: true,
+                        tenantId: true,
+                        title: true,
+                        link: true,
+                    },
+                });
+                if (batchProcesses.length === 0)
+                    return;
+                let totalNew = 0;
+                let totalAlerts = 0;
+                for (const proc of batchProcesses) {
+                    try {
+                        if (!proc.link)
+                            continue;
+                        // 2. Detectar qual plataforma (BLL ou BNC)
+                        const platform = batch_platform_monitor_service_1.BatchPlatformMonitor.detectPlatform(proc.link);
+                        if (!platform)
+                            continue;
+                        // 3. Extrair param1 da URL
+                        const param1 = batch_platform_monitor_service_1.BatchPlatformMonitor.extractParam1(proc.link);
+                        if (!param1)
+                            continue;
+                        // 4. Buscar mensagens via API REST e HTML (processo + lotes)
+                        const messages = await batch_platform_monitor_service_1.BatchPlatformMonitor.fetchAllMessages(param1, platform);
+                        if (messages.length === 0)
+                            continue;
+                        // 5. Ingerir via IngestService (dedup + keyword + notificação)
+                        const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
+                            processId: proc.id,
+                            tenantId: proc.tenantId,
+                            messages: messages.map((m) => ({
+                                messageId: m.messageId,
+                                content: m.content,
+                                authorType: m.authorType,
+                                timestamp: m.timestamp || null,
+                                itemRef: m.itemRef || null,
+                            })),
+                            captureSource: platform.captureSource,
+                        });
+                        if (result.created > 0) {
+                            console.log(`[${platform.label} Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                            totalNew += result.created;
+                            totalAlerts += result.alerts;
+                        }
+                        // Gentil com a API: 1s entre processos
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                    catch (err) {
+                        console.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    }
+                }
+                if (totalNew > 0) {
+                    console.log(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
+                }
+            }
+            catch (error) {
+                console.error('[Batch Poll] Erro no ciclo:', error.message);
+            }
+        }
+        // Iniciar polling com delay de 30s para não sobrecarregar startup
+        setTimeout(() => {
+            console.log(`[Batch Poll] 🚀 Monitor BLL+BNC iniciado (intervalo: ${BATCH_POLL_INTERVAL_MS / 1000}s)`);
+            pollBatchProcesses();
+            setInterval(pollBatchProcesses, BATCH_POLL_INTERVAL_MS);
+        }, 30000);
+        // ══════════════════════════════════════════════════════════════
+        // ── Portal de Compras Públicas (PCP): Polling via HTML SSR ──
+        // ══════════════════════════════════════════════════════════════
+        const PCP_POLL_INTERVAL_MS = 90000; // 90 segundos (mais gentil — HTML é pesado)
+        async function pollPCPProcesses() {
+            try {
+                // 1. Buscar processos monitorados do Portal de Compras Públicas
+                const pcpProcesses = await prisma.biddingProcess.findMany({
+                    where: {
+                        isMonitored: true,
+                        link: { contains: 'portaldecompraspublicas' },
+                    },
+                    select: {
+                        id: true,
+                        tenantId: true,
+                        title: true,
+                        link: true,
+                    },
+                });
+                if (pcpProcesses.length === 0)
+                    return;
+                let totalNew = 0;
+                let totalAlerts = 0;
+                for (const proc of pcpProcesses) {
+                    try {
+                        if (!proc.link)
+                            continue;
+                        // 2. Extrair a URL do PCP
+                        const pcpUrl = pcp_monitor_service_1.PCPMonitor.extractPCPUrl(proc.link);
+                        if (!pcpUrl)
+                            continue;
+                        // 3. Buscar mensagens via scraping do HTML SSR
+                        const messages = await pcp_monitor_service_1.PCPMonitor.fetchMessages(pcpUrl);
+                        if (messages.length === 0)
+                            continue;
+                        // 4. Ingerir via IngestService
+                        const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
+                            processId: proc.id,
+                            tenantId: proc.tenantId,
+                            messages: messages.map((m) => ({
+                                messageId: m.messageId,
+                                content: m.content,
+                                authorType: m.authorType,
+                                timestamp: m.timestamp || null,
+                            })),
+                            captureSource: 'pcp-api',
+                        });
+                        if (result.created > 0) {
+                            console.log(`[PCP Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                            totalNew += result.created;
+                            totalAlerts += result.alerts;
+                        }
+                        // Gentil com o servidor: 2s entre processos (HTML é mais pesado)
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+                    catch (err) {
+                        console.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    }
+                }
+                if (totalNew > 0) {
+                    console.log(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
+                }
+            }
+            catch (error) {
+                console.error('[PCP Poll] Erro no ciclo:', error.message);
+            }
+        }
+        // Iniciar polling PCP com delay de 45s (após BLL+BNC)
+        setTimeout(() => {
+            console.log(`[PCP Poll] 🚀 Monitor Portal de Compras Públicas iniciado (intervalo: ${PCP_POLL_INTERVAL_MS / 1000}s)`);
+            pollPCPProcesses();
+            setInterval(pollPCPProcesses, PCP_POLL_INTERVAL_MS);
+        }, 45000);
+        // ══════════════════════════════════════════════════════════════
+        // ── Licitanet: Polling via API REST JSON pública ──
+        // ══════════════════════════════════════════════════════════════
+        const LICITANET_POLL_INTERVAL_MS = 90000; // 90 segundos
+        async function pollLicitanetProcesses() {
+            try {
+                // 1. Buscar processos monitorados da Licitanet
+                const licitanetProcesses = await prisma.biddingProcess.findMany({
+                    where: {
+                        isMonitored: true,
+                        link: { contains: 'licitanet.com.br' },
+                    },
+                    select: {
+                        id: true,
+                        tenantId: true,
+                        title: true,
+                        link: true,
+                    },
+                });
+                if (licitanetProcesses.length === 0)
+                    return;
+                let totalNew = 0;
+                let totalAlerts = 0;
+                for (const proc of licitanetProcesses) {
+                    try {
+                        if (!proc.link)
+                            continue;
+                        // 2. Extrair a URL da Licitanet
+                        const licitanetUrl = licitanet_monitor_service_1.LicitanetMonitor.extractLicitanetUrl(proc.link);
+                        if (!licitanetUrl)
+                            continue;
+                        // 3. Buscar mensagens via API REST JSON
+                        const messages = await licitanet_monitor_service_1.LicitanetMonitor.fetchMessages(licitanetUrl);
+                        if (messages.length === 0)
+                            continue;
+                        // 4. Ingerir via IngestService
+                        const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
+                            processId: proc.id,
+                            tenantId: proc.tenantId,
+                            messages: messages.map((m) => ({
+                                messageId: m.messageId,
+                                content: m.content,
+                                authorType: m.authorType,
+                                timestamp: m.timestamp || null,
+                                itemRef: m.itemRef || null,
+                            })),
+                            captureSource: 'licitanet-api',
+                        });
+                        if (result.created > 0) {
+                            console.log(`[Licitanet Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                            totalNew += result.created;
+                            totalAlerts += result.alerts;
+                        }
+                        // Gentil com o servidor: 1s entre processos (API JSON é leve)
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                    catch (err) {
+                        console.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    }
+                }
+                if (totalNew > 0) {
+                    console.log(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
+                }
+            }
+            catch (error) {
+                console.error('[Licitanet Poll] Erro no ciclo:', error.message);
+            }
+        }
+        // Iniciar polling Licitanet com delay de 60s (após PCP)
+        setTimeout(() => {
+            console.log(`[Licitanet Poll] 🚀 Monitor Licitanet iniciado (intervalo: ${LICITANET_POLL_INTERVAL_MS / 1000}s)`);
+            pollLicitanetProcesses();
+            setInterval(pollLicitanetProcesses, LICITANET_POLL_INTERVAL_MS);
+        }, 60000);
+        // ══════════════════════════════════════════════════════════════
+        // ── Licita Mais Brasil: Polling via API REST JSON autenticada ──
+        // ══════════════════════════════════════════════════════════════
+        const LMB_POLL_INTERVAL_MS = 90000; // 90 segundos
+        async function pollLMBProcesses() {
+            try {
+                // 1. Buscar processos monitorados da Licita Mais Brasil
+                const lmbProcesses = await prisma.biddingProcess.findMany({
+                    where: {
+                        isMonitored: true,
+                        link: { contains: 'licitamaisbrasil.com.br' },
+                    },
+                    select: {
+                        id: true,
+                        tenantId: true,
+                        title: true,
+                        link: true,
+                    },
+                });
+                if (lmbProcesses.length === 0)
+                    return;
+                let totalNew = 0;
+                let totalAlerts = 0;
+                for (const proc of lmbProcesses) {
+                    try {
+                        if (!proc.link)
+                            continue;
+                        // 2. Extrair a URL da Licita Mais Brasil
+                        const lmbUrl = licitamaisbrasil_monitor_service_1.LicitaMaisBrasilMonitor.extractLMBUrl(proc.link);
+                        if (!lmbUrl)
+                            continue;
+                        // 3. Buscar mensagens via API REST autenticada
+                        const messages = await licitamaisbrasil_monitor_service_1.LicitaMaisBrasilMonitor.fetchMessages(lmbUrl);
+                        if (messages.length === 0)
+                            continue;
+                        // 4. Ingerir via IngestService
+                        const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
+                            processId: proc.id,
+                            tenantId: proc.tenantId,
+                            messages: messages.map((m) => ({
+                                messageId: m.messageId,
+                                content: m.content,
+                                authorType: m.authorType,
+                                timestamp: m.timestamp || null,
+                                itemRef: m.itemRef || null,
+                            })),
+                            captureSource: 'licitamaisbrasil-api',
+                        });
+                        if (result.created > 0) {
+                            console.log(`[LMB Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                            totalNew += result.created;
+                            totalAlerts += result.alerts;
+                        }
+                        // Gentil com o servidor: 1.5s entre processos (API autenticada)
+                        await new Promise(r => setTimeout(r, 1500));
+                    }
+                    catch (err) {
+                        console.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    }
+                }
+                if (totalNew > 0) {
+                    console.log(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
+                }
+            }
+            catch (error) {
+                console.error('[LMB Poll] Erro no ciclo:', error.message);
+            }
+        }
+        // Iniciar polling LMB com delay de 75s (após Licitanet)
+        setTimeout(() => {
+            console.log(`[LMB Poll] 🚀 Monitor Licita Mais Brasil iniciado (intervalo: ${LMB_POLL_INTERVAL_MS / 1000}s)`);
+            pollLMBProcesses();
+            setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
+        }, 75000);
+    } // end of PROCESS_ROLE !== 'api' block
 });
+// ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
+if (PROCESS_ROLE !== 'api') {
+    (0, opportunity_scanner_service_1.startOpportunityScanner)(4);
+}
+else {
+    console.log('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
+}
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);

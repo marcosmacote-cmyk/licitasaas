@@ -78,7 +78,7 @@ export async function recordMatchHistory(companyId: string, processId: string, s
 }
 
 export async function generateCompanyInsights(companyId: string): Promise<CompanyLearningReport> {
-    const profile = getProfile(companyId);
+    const profile = await getProfile(companyId);
     let history: Array<{ processId: string; scores: any; recommendation: string }> = [];
     
     try {
