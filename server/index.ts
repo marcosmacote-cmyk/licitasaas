@@ -7837,8 +7837,8 @@ app.listen(PORT, async () => {
                     const param1 = BatchPlatformMonitor.extractParam1(proc.link);
                     if (!param1) continue;
 
-                    // 4. Buscar mensagens via API REST
-                    const messages = await BatchPlatformMonitor.fetchMessages(param1, platform);
+                    // 4. Buscar mensagens via API REST e HTML (processo + lotes)
+                    const messages = await BatchPlatformMonitor.fetchAllMessages(param1, platform);
                     if (messages.length === 0) continue;
 
                     // 5. Ingerir via IngestService (dedup + keyword + notificação)
@@ -7850,6 +7850,7 @@ app.listen(PORT, async () => {
                             content: m.content,
                             authorType: m.authorType,
                             timestamp: m.timestamp || null,
+                            itemRef: m.itemRef || null,
                         })),
                         captureSource: platform.captureSource,
                     });
@@ -8012,6 +8013,7 @@ app.listen(PORT, async () => {
                             content: m.content,
                             authorType: m.authorType,
                             timestamp: m.timestamp || null,
+                            itemRef: m.itemRef || null,
                         })),
                         captureSource: 'licitanet-api',
                     });
@@ -8093,6 +8095,7 @@ app.listen(PORT, async () => {
                             content: m.content,
                             authorType: m.authorType,
                             timestamp: m.timestamp || null,
+                            itemRef: m.itemRef || null,
                         })),
                         captureSource: 'licitamaisbrasil-api',
                     });

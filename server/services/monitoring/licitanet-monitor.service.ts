@@ -56,6 +56,7 @@ export interface LicitanetMessage {
     authorType: 'pregoeiro' | 'sistema';
     timestamp: string;
     captureSource: typeof LICITANET_PLATFORM.captureSource;
+    itemRef: string | null;
 }
 
 interface LicitanetApiMessage {
@@ -112,35 +113,20 @@ export class LicitanetMonitor {
 
     /**
      * Extrai o sessionId de uma URL da Licitanet.
-     * 
-     * Formatos suportados:
-     *   - https://licitanet.com.br/sessao/175551
-     *   - https://licitanet.com.br/dispute-room/175551/...
-     *   - https://www.licitanet.com.br/sessao/175551
      */
     static extractSessionId(url: string): string | null {
         if (!url) return null;
-        // Formato: /sessao/{id} ou /dispute-room/{id}
         const match = url.match(/(?:sessao|dispute-room)\/(\d+)/);
         return match ? match[1] : null;
     }
 
     /**
-     * Busca mensagens de uma sessão via API REST JSON pública.
-     * 
-     * Faz GET em: https://licitanet.com.br/dispute-room/{sessionId}/messages
-     * com tab=general e per_page=50 para capturar todas as mensagens recentes.
+     * Helper to fetch a specific tab ('general' or 'lots')
      */
-    static async fetchMessages(sessionUrl: string): Promise<LicitanetMessage[]> {
-        const sessionId = this.extractSessionId(sessionUrl);
-        if (!sessionId) {
-            console.warn(`[Licitanet Monitor] Não foi possível extrair sessionId de: ${sessionUrl.substring(0, 60)}...`);
-            return [];
-        }
+    private static async fetchTab(sessionId: string, tab: 'general' | 'lots', sessionUrl: string): Promise<LicitanetApiMessage[]> {
+        const apiUrl = `https://${LICITANET_PLATFORM.domain}/dispute-room/${sessionId}/messages?page=1&per_page=${this.MAX_PER_PAGE}&tab=${tab}&sort=newest`;
 
         try {
-            const apiUrl = `https://${LICITANET_PLATFORM.domain}/dispute-room/${sessionId}/messages?page=1&per_page=${this.MAX_PER_PAGE}&tab=general&sort=newest`;
-
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
 
@@ -157,32 +143,51 @@ export class LicitanetMonitor {
             clearTimeout(timeoutId);
 
             if (!res.ok) {
-                console.warn(`[Licitanet Monitor] HTTP ${res.status} para sessão ${sessionId}`);
+                console.warn(`[Licitanet Monitor] HTTP ${res.status} para sessão ${sessionId} (tab=${tab})`);
                 return [];
             }
 
             const data: LicitanetApiResponse = await res.json();
-
-            if (!data?.data || data.data.length === 0) {
-                return [];
-            }
-
-            return this.parseMessages(data.data);
+            return data?.data || [];
         } catch (error: any) {
-            if (error.name === 'AbortError') {
-                console.warn(`[Licitanet Monitor] Timeout (${this.TIMEOUT_MS}ms) para sessão na URL ${sessionUrl.substring(0, 60)}...`);
+             if (error.name === 'AbortError') {
+                console.warn(`[Licitanet Monitor] Timeout (${this.TIMEOUT_MS}ms) tab=${tab} para sessão ${sessionId}`);
             } else {
-                console.error(`[Licitanet Monitor] Erro ao buscar mensagens:`, error.message);
+                console.error(`[Licitanet Monitor] Erro ao buscar tab=${tab}:`, error.message);
             }
             return [];
         }
     }
 
     /**
-     * Parse das mensagens da API JSON para o formato padronizado.
+     * Busca mensagens de uma sessão via API REST JSON pública.
      * 
-     * Diferente do BLL/BNC/PCP, a Licitanet já retorna JSON estruturado
-     * com autor, conteúdo e timestamp. Não precisa de cheerio/scraping.
+     * Busca tanto tab=general quanto tab=lots para não perder mensagens de negociação.
+     */
+    static async fetchMessages(sessionUrl: string): Promise<LicitanetMessage[]> {
+        const sessionId = this.extractSessionId(sessionUrl);
+        if (!sessionId) {
+            console.warn(`[Licitanet Monitor] Não foi possível extrair sessionId de: ${sessionUrl.substring(0, 60)}...`);
+            return [];
+        }
+
+        const [generalMessages, lotMessages] = await Promise.all([
+            this.fetchTab(sessionId, 'general', sessionUrl),
+            this.fetchTab(sessionId, 'lots', sessionUrl)
+        ]);
+
+        const allApiMessages = [...generalMessages, ...lotMessages];
+        
+        // Remove duplicates if any (though usually general != lots)
+        const uniqueMessages = Array.from(new Map(allApiMessages.map(item => [item.id, item])).values());
+
+        if (uniqueMessages.length === 0) return [];
+
+        return this.parseMessages(uniqueMessages);
+    }
+
+    /**
+     * Parse das mensagens da API JSON para o formato padronizado.
      */
     private static parseMessages(apiMessages: LicitanetApiMessage[]): LicitanetMessage[] {
         return apiMessages.map(msg => {
@@ -192,7 +197,6 @@ export class LicitanetMonitor {
                 authorLower.includes('sistema') ? 'sistema' : 'pregoeiro';
 
             // Gerar messageId único via hash MD5
-            // Usa o ID numérico da API como parte do hash para garantir unicidade
             const messageId = crypto
                 .createHash('md5')
                 .update(`licitanet|${msg.id}|${msg.createdAt}|${msg.message}`)
@@ -205,6 +209,7 @@ export class LicitanetMonitor {
                 authorType,
                 timestamp: msg.createdAt,
                 captureSource: LICITANET_PLATFORM.captureSource,
+                itemRef: msg.batchCaption || null,
             };
         }).filter(m => m.content && m.content.length > 0);
     }

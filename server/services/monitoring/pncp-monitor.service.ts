@@ -67,9 +67,14 @@ export class PncpMonitorService {
     try {
       console.log('[PncpMonitor] Polling started...');
       
-      // Get all monitored processes
       const monitoredProcesses = await prisma.biddingProcess.findMany({
-        where: { isMonitored: true }
+        where: { 
+          isMonitored: true,
+          OR: [
+            { pncpLink: { not: null } },
+            { link: { contains: 'pncp.gov.br' } }
+          ]
+        }
       });
 
       this.processedCount = monitoredProcesses.length;
