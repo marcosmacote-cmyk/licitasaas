@@ -738,7 +738,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         <p>Nenhuma mensagem capturada para este processo.</p>
                       </div>
                     ) : (
-                      [...c.selectedMessages].reverse().map(msg => {
+                      c.selectedMessages.map(msg => {
                         const colors = authorColor(msg.authorType);
                         const hasKeyword = !!msg.detectedKeyword;
 
