@@ -753,7 +753,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                         ) : (
                             p.displayItems.map((item) => {
                                 const isFavorito = p.favoritos.some(f => f.id === item.id);
-                                const isOnKanban = items.some(p => p.link && p.link === item.link_sistema);
+                                const isOnKanban = items.some(proc => proc.link && item.link_sistema && proc.link.includes(item.link_sistema));
                                 const isUnviewed = p.activeTab === 'found' && (item as any)._isViewed === false;
                                 const searchName = p.activeTab === 'found' ? (item as any)._searchName : null;
                                 const foundAt = p.activeTab === 'found' ? (item as any)._foundAt : null;

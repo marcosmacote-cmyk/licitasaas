@@ -700,7 +700,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
 
     const handleImportToFunnel = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
         if (items) {
-            const existingProcess = items.find(p => p.link && p.link === item.link_sistema);
+            const existingProcess = items.find(p => p.link && item.link_sistema && p.link.includes(item.link_sistema));
             if (existingProcess) {
                 const isCaptado = existingProcess.status === 'Captado';
                 const locationStr = isCaptado ? 'na coluna "Captada"' : `na coluna "${existingProcess.status}"`;
