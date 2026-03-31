@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Save, Loader2, Bookmark, ExternalLink, Plus, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock, Bell, MapPin } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -18,6 +18,13 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
     const [favListMenu, setFavListMenu] = useState<string | null>(null);
     const [searchListMenu, setSearchListMenu] = useState<string | null>(null);
     const [searchChipMenu, setSearchChipMenu] = useState<string | null>(null);
+
+    // Refresh data on mount to guarantee we have the latest items (e.g. after deletions in Kanban)
+    useEffect(() => {
+        if (onRefresh) {
+            onRefresh();
+        }
+    }, []);
 
     return (
         <>

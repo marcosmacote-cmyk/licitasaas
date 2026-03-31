@@ -70,15 +70,20 @@ export function useAiChat({ analysis, process, onUpdate }: UseAiChatParams) {
             setMessages(updatedMessages);
 
             try {
-                const { biddingProcessId: _bId, ...analysisData } = analysis as any;
-                await axios.post(`${API_BASE_URL}/api/analysis`, {
-                    biddingProcessId: process?.id,
-                    ...analysisData,
-                    sourceFileNames: analysis.sourceFileNames,
-                    chatHistory: JSON.stringify(updatedMessages)
-                }, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
+                // Mutate the local analysis object so the parent has the updated history when exporting
+                analysis.chatHistory = JSON.stringify(updatedMessages);
+
+                if (process?.id && process.id !== 'pncp-temp') {
+                    const { biddingProcessId: _bId, ...analysisData } = analysis as any;
+                    await axios.post(`${API_BASE_URL}/api/analysis`, {
+                        biddingProcessId: process.id,
+                        ...analysisData,
+                        sourceFileNames: analysis.sourceFileNames,
+                        chatHistory: analysis.chatHistory
+                    }, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    });
+                }
                 onUpdate();
             } catch (err) {
                 console.error("Failed to persist chat history:", err);
