@@ -392,6 +392,116 @@ app.post('/api/tenants', authenticateToken, requireSuperAdmin, async (req: any, 
     }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// GESTÃO DE COTAS DE IA (Admin-only)
+// ═══════════════════════════════════════════════════════════════
+
+// Get all tenants with AI usage summary (for admin quota management)
+app.get('/api/admin/ai-quotas', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const { getTenantQuotaLimits } = await import('./lib/aiUsageTracker');
+
+        const tenants = await prisma.tenant.findMany({
+            select: { id: true, razaoSocial: true, rootCnpj: true },
+            orderBy: { razaoSocial: 'asc' },
+        });
+
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        // Aggregate usage per tenant in one query
+        const usageByTenant = await prisma.aiUsageLog.groupBy({
+            by: ['tenantId'],
+            where: { createdAt: { gte: startOfMonth } },
+            _sum: { totalTokens: true, inputTokens: true, outputTokens: true },
+            _count: { id: true },
+        });
+        const usageMap = new Map(usageByTenant.map((u: any) => [u.tenantId, u]));
+
+        const result = await Promise.all(tenants.map(async (t: any) => {
+            const usage = usageMap.get(t.id);
+            const { hardLimit, softLimit } = await getTenantQuotaLimits(prisma, t.id);
+            const currentTokens = usage?._sum?.totalTokens || 0;
+            const percentUsed = hardLimit > 0 ? Math.round((currentTokens / hardLimit) * 100) : 0;
+
+            return {
+                id: t.id,
+                razaoSocial: t.razaoSocial,
+                rootCnpj: t.rootCnpj,
+                currentTokens,
+                totalCalls: usage?._count?.id || 0,
+                hardLimit,
+                softLimit,
+                percentUsed,
+                status: currentTokens >= hardLimit ? 'critical' : currentTokens >= softLimit ? 'warning' : 'ok',
+            };
+        }));
+
+        res.json(result);
+    } catch (error: any) {
+        console.error('[Admin] Erro ao listar cotas de IA:', error?.message);
+        res.status(500).json({ error: 'Erro ao listar cotas de IA' });
+    }
+});
+
+// Update AI quota for a specific tenant
+app.put('/api/admin/ai-quotas/:tenantId', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const { tenantId } = req.params;
+        const { hardLimit, softLimit } = req.body;
+        const { invalidateTenantQuotaCache } = await import('./lib/aiUsageTracker');
+
+        if (!hardLimit || hardLimit < 0) {
+            return res.status(400).json({ error: 'hardLimit é obrigatório e deve ser positivo.' });
+        }
+
+        // Read or create GlobalConfig
+        const gc = await prisma.globalConfig.upsert({
+            where: { tenantId },
+            create: { tenantId, config: JSON.stringify({ aiQuota: { hardLimit, softLimit: softLimit || Math.round(hardLimit * 0.75) } }) },
+            update: {},
+        });
+
+        // Merge aiQuota into existing config
+        let conf: any = {};
+        try { conf = JSON.parse(gc.config || '{}'); } catch {}
+        conf.aiQuota = {
+            hardLimit,
+            softLimit: softLimit || Math.round(hardLimit * 0.75),
+        };
+
+        await prisma.globalConfig.update({
+            where: { tenantId },
+            data: { config: JSON.stringify(conf) },
+        });
+
+        // Invalidate caches
+        invalidateTenantQuotaCache(tenantId);
+
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { razaoSocial: true } });
+        console.log(`[Admin] Cotas de IA atualizadas para "${tenant?.razaoSocial || tenantId}": hard=${hardLimit}, soft=${conf.aiQuota.softLimit}`);
+
+        res.json({ ok: true, aiQuota: conf.aiQuota });
+    } catch (error: any) {
+        console.error('[Admin] Erro ao atualizar cota de IA:', error?.message);
+        res.status(500).json({ error: 'Erro ao atualizar cota de IA' });
+    }
+});
+
+// Reset quota cache for a tenant (instant unblock without changing limits)
+app.post('/api/admin/ai-quotas/:tenantId/reset', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const { tenantId } = req.params;
+        const { invalidateTenantQuotaCache } = await import('./lib/aiUsageTracker');
+        invalidateTenantQuotaCache(tenantId);
+        console.log(`[Admin] Cache de cota de IA resetado para tenant ${tenantId}`);
+        res.json({ ok: true, message: 'Cache limpo. Limites serão reavaliados na próxima chamada de IA.' });
+    } catch (error: any) {
+        res.status(500).json({ error: 'Erro ao resetar cache' });
+    }
+});
+
 // Team & Users Management
 app.use('/api/team', teamRoutes);
 
@@ -3087,10 +3197,12 @@ Responda APENAS com JSON array:
 // ══════════════════════════════════════════
 
 // Canonical list of monitorable platform domains (used in create, update, and backfill)
+// NOTE: Only include domains that have an active monitor/worker/cron.
+// Removed 'compras.fortaleza.ce.gov.br' — no monitor exists, was causing false-positive isMonitored=true.
 const MONITORABLE_DOMAINS = [
     'cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org',
     'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia',
-    'precodereferencia', 'compras.fortaleza.ce.gov.br',
+    'precodereferencia',
 ];
 
 // Map platform canonical names → domains they use (for credential matching)

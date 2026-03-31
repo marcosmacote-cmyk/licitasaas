@@ -156,14 +156,69 @@ export interface UsageSummary {
     }>;
 }
 
-const quotaCache = new Map<string, { totalTokens: number, expiresAt: number }>();
+// Per-call usage cache: tenantId → { totalTokens, expiresAt }
+const quotaCache = new Map<string, { totalTokens: number; expiresAt: number }>();
+
+// Per-tenant quota overrides cache: tenantId → { hardLimit, softLimit, expiresAt }
+const tenantLimitsCache = new Map<string, { hardLimit: number; softLimit: number; expiresAt: number }>();
+
+/**
+ * Get quota limits for a tenant.
+ * Priority: tenant-specific (GlobalConfig) → env variable → code default.
+ */
+export async function getTenantQuotaLimits(prisma: PrismaAny, tenantId: string): Promise<{ hardLimit: number; softLimit: number }> {
+    const defaultHard = parseInt(process.env.AI_MONTHLY_HARD_LIMIT || '20000000', 10);
+    const defaultSoft = parseInt(process.env.AI_MONTHLY_SOFT_LIMIT || '15000000', 10);
+
+    if (tenantId === 'system' || tenantId === 'admin') {
+        return { hardLimit: defaultHard, softLimit: defaultSoft };
+    }
+
+    // Check cache
+    const now = Date.now();
+    const cached = tenantLimitsCache.get(tenantId);
+    if (cached && cached.expiresAt > now) {
+        return { hardLimit: cached.hardLimit, softLimit: cached.softLimit };
+    }
+
+    // Read from GlobalConfig
+    try {
+        const gc = await prisma.globalConfig.findUnique({ where: { tenantId } });
+        if (gc) {
+            const conf = JSON.parse(gc.config || '{}');
+            if (conf.aiQuota) {
+                const hardLimit = conf.aiQuota.hardLimit || defaultHard;
+                const softLimit = conf.aiQuota.softLimit || defaultSoft;
+                tenantLimitsCache.set(tenantId, { hardLimit, softLimit, expiresAt: now + 10 * 60 * 1000 });
+                return { hardLimit, softLimit };
+            }
+        }
+    } catch {
+        // Fallback gracefully
+    }
+
+    // Default
+    tenantLimitsCache.set(tenantId, { hardLimit: defaultHard, softLimit: defaultSoft, expiresAt: now + 10 * 60 * 1000 });
+    return { hardLimit: defaultHard, softLimit: defaultSoft };
+}
+
+/**
+ * Invalidate the cached quota limits for a tenant (call after admin update).
+ */
+export function invalidateTenantQuotaCache(tenantId: string): void {
+    tenantLimitsCache.delete(tenantId);
+    quotaCache.delete(tenantId);
+    // Also clear alert dedup so new limits get fresh alerts
+    const monthKey = new Date().toISOString().slice(0, 7);
+    alertSentCache.delete(`${tenantId}:${monthKey}:soft`);
+    alertSentCache.delete(`${tenantId}:${monthKey}:hard`);
+}
 
 async function checkTenantQuota(prisma: PrismaAny, tenantId: string): Promise<void> {
     // System bypass
     if (tenantId === 'system' || tenantId === 'admin') return;
 
-    const hardLimit = parseInt(process.env.AI_MONTHLY_HARD_LIMIT || '2000000', 10); // Default 2M tokens
-    const softLimit = parseInt(process.env.AI_MONTHLY_SOFT_LIMIT || '1500000', 10); // Default 1.5M tokens
+    const { hardLimit, softLimit } = await getTenantQuotaLimits(prisma, tenantId);
 
     const now = Date.now();
     const cached = quotaCache.get(tenantId);
@@ -521,8 +576,7 @@ export async function getQuotaStatus(
     estimatedCostBRL: number;
     daysRemainingInMonth: number;
 }> {
-    const hardLimit = parseInt(process.env.AI_MONTHLY_HARD_LIMIT || '2000000', 10);
-    const softLimit = parseInt(process.env.AI_MONTHLY_SOFT_LIMIT || '1500000', 10);
+    const { hardLimit, softLimit } = await getTenantQuotaLimits(prisma, tenantId);
 
     const startOfMonth = new Date();
     startOfMonth.setDate(1);

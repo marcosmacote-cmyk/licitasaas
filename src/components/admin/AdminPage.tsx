@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Building2, Plus, Users, Briefcase, Loader2, CheckCircle2, Copy, ExternalLink, X, ShieldAlert, Shield, AlertCircle } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui';
+import { AiQuotaManager } from './AiQuotaManager';
 
 interface TenantInfo {
     id: string;
@@ -280,6 +281,11 @@ export function AdminPage() {
                             </table>
                         </div>
                     )}
+
+                    {/* ═══ AI Quota Management ═══ */}
+                    <div style={{ marginTop: 'var(--space-6)', borderRadius: 'var(--radius-xl)', background: 'var(--color-bg-surface)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                        <AiQuotaManager />
+                    </div>
                 </main>
             </div>
 
