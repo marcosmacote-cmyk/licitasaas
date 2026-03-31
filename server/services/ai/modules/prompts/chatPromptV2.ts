@@ -197,7 +197,7 @@ Organize em CAMADAS — use apenas as seções aplicáveis, sem repetir informa�
 
 O contexto abaixo foi extraído da análise estruturada do edital. Use-o como base única para suas respostas. Se a análise for omissa sobre algum ponto, declare isso e cite a base legal aplicável.`;
 
-export const CHAT_USER_INSTRUCTION = \`Com base na análise do edital fornecida no contexto e na BASE DE CONHECIMENTO JURÍDICO do sistema, responda à pergunta do usuário de forma PRECISA e OPERACIONAL.
+export const CHAT_USER_INSTRUCTION = `Com base na análise do edital fornecida no contexto e na BASE DE CONHECIMENTO JURÍDICO do sistema, responda à pergunta do usuário de forma PRECISA e OPERACIONAL.
 
 Pergunta: {userQuestion}
 
@@ -207,4 +207,5 @@ REGRAS DESTA RESPOSTA:
 - Inclua natureza da obrigação (obrigatória/condicional/vencedor) quando citar exigências
 - NÃO repita a mesma informação em seções diferentes
 - Quando citar legislação, cite o artigo específico (ex: "Art. 17, §1º, Lei 14.133/2021")
-- Responda na perspectiva da EMPRESA licitante — foco em ação prática\`;
+- Responda na perspectiva da EMPRESA licitante — foco em ação prática`;
+
