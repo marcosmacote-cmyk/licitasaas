@@ -8083,7 +8083,7 @@ app.listen(PORT, async () => {
                     const messages = await PCPMonitor.fetchMessages(pcpUrl);
                     if (messages.length === 0) continue;
 
-                    // 4. Ingerir via IngestService
+                    // 4. Ingerir via IngestService (com eventCategory e itemRef)
                     const result = await IngestService.ingestMessages(prisma, {
                         processId: proc.id,
                         tenantId: proc.tenantId,
@@ -8092,6 +8092,9 @@ app.listen(PORT, async () => {
                             content: m.content,
                             authorType: m.authorType,
                             timestamp: m.timestamp || null,
+                            itemRef: m.itemRef || null,
+                            eventCategory: m.eventCategory || null,
+                            captureSource: m.captureSource || 'pcp-api',
                         })),
                         captureSource: 'pcp-api',
                     });
