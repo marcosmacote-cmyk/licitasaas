@@ -502,6 +502,28 @@ app.post('/api/admin/ai-quotas/:tenantId/reset', authenticateToken, requireSuper
     }
 });
 
+// Get detailed AI usage for a specific tenant (admin drill-down)
+app.get('/api/admin/ai-usage/:tenantId', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const { tenantId } = req.params;
+        const periodDays = parseInt(req.query.period as string) || 30;
+        const { getDailyBreakdown, getQuotaStatus } = await import('./lib/aiUsageTracker');
+
+        const [summary, daily, quota] = await Promise.all([
+            getUsageSummary(prisma, tenantId, periodDays),
+            getDailyBreakdown(prisma, tenantId, periodDays),
+            getQuotaStatus(prisma, tenantId),
+        ]);
+
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { razaoSocial: true, rootCnpj: true } });
+
+        res.json({ ok: true, tenant, ...summary, daily, quota });
+    } catch (e: any) {
+        console.error('[Admin] AI usage drill-down error:', e?.message);
+        res.status(500).json({ error: 'Falha ao buscar consumo de IA do tenant.' });
+    }
+});
+
 // Team & Users Management
 app.use('/api/team', teamRoutes);
 
