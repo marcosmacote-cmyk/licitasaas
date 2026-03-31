@@ -112,7 +112,25 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     setLoadingMessages(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat-monitor/messages/${processId}`, { headers });
-      if (res.ok) { const data = await res.json(); setSelectedMessages((data.messages || []).reverse()); }
+      if (res.ok) { 
+        const data = await res.json(); 
+        const arr = data.messages || [];
+        arr.sort((a: any, b: any) => {
+          const parseTime = (str?: string) => {
+            if (!str) return 0;
+            // Catch DD/MM/YYYY HH:mm:ss
+            const parts = str.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+            if (parts) return new Date(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]), Number(parts[4]), Number(parts[5]), parts[6] ? Number(parts[6]) : 0).getTime();
+            // Fallback ISO
+            const isoTime = new Date(str).getTime();
+            return isNaN(isoTime) ? 0 : isoTime;
+          };
+          const timeA = parseTime(a.messageTimestamp) || new Date(a.createdAt).getTime();
+          const timeB = parseTime(b.messageTimestamp) || new Date(b.createdAt).getTime();
+          return timeA - timeB; // Ascending: oldest first
+        });
+        setSelectedMessages(arr); 
+      }
     } catch (err) { console.error('Failed to fetch messages:', err); }
     finally { setLoadingMessages(false); }
   }, []);
