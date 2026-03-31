@@ -112,7 +112,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     setLoadingMessages(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat-monitor/messages/${processId}`, { headers });
-      if (res.ok) { const data = await res.json(); setSelectedMessages(data.messages || []); }
+      if (res.ok) { const data = await res.json(); setSelectedMessages((data.messages || []).reverse()); }
     } catch (err) { console.error('Failed to fetch messages:', err); }
     finally { setLoadingMessages(false); }
   }, []);
