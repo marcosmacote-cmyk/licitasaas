@@ -6954,6 +6954,57 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
     }
 });
 
+// ── Global Message Search ──
+app.get('/api/chat-monitor/search', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const q = (req.query.q as string || '').trim();
+        const limit = Number(req.query.limit) || 100;
+
+        if (!q) return res.json({ results: [] });
+
+        const messages = await prisma.chatMonitorLog.findMany({
+            where: {
+                tenantId,
+                content: { contains: q, mode: 'insensitive' }
+            },
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            include: {
+                biddingProcess: {
+                    select: {
+                        id: true,
+                        title: true,
+                        portal: true,
+                        company: { select: { razaoSocial: true } }
+                    }
+                }
+            }
+        });
+
+        // Format similarly to standard messages for UI consistency, adding process info
+        const formatted = messages.map((m: any) => ({
+            id: m.id,
+            content: m.content,
+            authorType: m.authorType,
+            eventCategory: m.eventCategory,
+            isImportant: m.isImportant,
+            isArchived: m.isArchived,
+            createdAt: m.createdAt,
+            messageTimestamp: m.messageTimestamp,
+            biddingProcessId: m.biddingProcessId,
+            biddingProcessTitle: m.biddingProcess?.title,
+            biddingProcessPortal: m.biddingProcess?.portal,
+            biddingProcessCompany: m.biddingProcess?.company?.razaoSocial
+        }));
+
+        res.json({ results: formatted });
+    } catch (error) {
+        console.error('[ChatMonitor] Error searching global messages:', error);
+        res.status(500).json({ error: 'Failed to search messages' });
+    }
+});
+
 // ── Process Closure Action ──
 // Handles closure events: move bidding to Perdido/Arquivado and archive from monitor
 app.post('/api/chat-monitor/process-close/:processId', authenticateToken, async (req: any, res) => {

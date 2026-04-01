@@ -435,6 +435,9 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
             </div>
           )}
 
+          <button className="btn btn-ghost" onClick={() => c.setShowGlobalSearch(true)} title="Busca Global" style={{ padding: '6px', color: c.showGlobalSearch ? 'var(--color-primary)' : undefined }}>
+            <Search size={16} />
+          </button>
           <button className="btn btn-ghost" onClick={() => c.fetchProcesses(true)} title="Atualizar" style={{ padding: '6px' }}>
             <RefreshCw size={16} />
           </button>
@@ -447,6 +450,67 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
       {/* ── Config Panel (collapsible) ── */}
       {c.showConfig && (
         <ConfigPanel c={c} />
+      )}
+
+      {/* ── Global Search Modal ── */}
+      {c.showGlobalSearch && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)' }}>
+          <div style={{ background: 'var(--color-bg-base)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-xl)', overflow: 'hidden' }}>
+            <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <Search size={20} color="var(--color-text-secondary)" />
+              <form onSubmit={c.handleGlobalSearch} style={{ flex: 1, display: 'flex', gap: 'var(--space-2)' }}>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Buscar palavra (ex: asfalto, brita, atestado) em TODAS as mensagens captadas..."
+                  value={c.globalSearchQuery}
+                  onChange={(e) => c.setGlobalSearchQuery(e.target.value)}
+                  style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}
+                />
+                <button type="submit" disabled={c.isGlobalSearching || !c.globalSearchQuery.trim()} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  {c.isGlobalSearching ? <Loader2 size={16} className="spinner" /> : 'Buscar'}
+                </button>
+              </form>
+              <button onClick={() => c.setShowGlobalSearch(false)} className="btn btn-ghost" style={{ padding: '4px' }}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)', background: 'var(--color-bg-surface-hover)' }}>
+              {c.globalSearchResults.length === 0 && !c.isGlobalSearching && (
+                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-text-tertiary)' }}>
+                  <Search size={32} style={{ marginBottom: 'var(--space-2)', opacity: 0.3 }} />
+                  <p>As mensagens que contenham o termo pesquisado aparecerão aqui.</p>
+                </div>
+              )}
+              {c.globalSearchResults.map((msg, idx) => (
+                <div key={idx} style={{ background: 'var(--color-bg-base)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)', boxShadow: 'var(--shadow-sm)', borderLeft: msg.isImportant ? '3px solid var(--color-warning)' : '3px solid transparent' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{(msg as any).biddingProcessTitle || 'Processo'}</span>
+                      <span style={{ background: 'var(--color-bg-surface-hover)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: '0.625rem' }}>{(msg as any).biddingProcessPortal}</span>
+                      {(msg as any).biddingProcessCompany && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--color-primary-bg)', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: '0.625rem' }}>
+                          <Building2 size={10} /> {(msg as any).biddingProcessCompany}
+                        </span>
+                      )}
+                    </div>
+                    <span>{new Date(msg.createdAt).toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                    {msg.content}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'var(--space-2)' }}>
+                     <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Autor: {msg.authorType || 'desconhecido'}</span>
+                     <button onClick={() => { c.setShowGlobalSearch(false); c.handleSelectProcess(msg.biddingProcessId); }} className="btn btn-ghost" style={{ fontSize: 'var(--text-sm)' }}>
+                       Abrir Processo <ExternalLink size={14} style={{ marginLeft: '4px' }} />
+                     </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Split Panel ── */}

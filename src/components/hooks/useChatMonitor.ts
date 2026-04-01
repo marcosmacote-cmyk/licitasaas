@@ -20,6 +20,9 @@ export interface ChatMessage {
   createdAt: string;
   status: string;
   biddingProcessId: string;
+  biddingProcessTitle?: string;
+  biddingProcessPortal?: string;
+  biddingProcessCompany?: string;
 }
 
 export interface ProcessSummary {
@@ -78,6 +81,12 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingNotif, setTestingNotif] = useState(false);
   const [health, setHealth] = useState<any>(null);
+
+  // ── State: Global Search ──
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [globalSearchResults, setGlobalSearchResults] = useState<ChatMessage[]>([]);
+  const [isGlobalSearching, setIsGlobalSearching] = useState(false);
 
   // ── State: ComprasNet Watcher ──
   const [watcherStatus, setWatcherStatus] = useState<any>(null);
@@ -354,6 +363,20 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     finally { setSavingConfig(false); }
   };
 
+  const handleGlobalSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!globalSearchQuery.trim()) return;
+    setIsGlobalSearching(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat-monitor/search?q=${encodeURIComponent(globalSearchQuery.trim())}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setGlobalSearchResults(data.results || []);
+      }
+    } catch { toast.error('Falha na busca.'); }
+    finally { setIsGlobalSearching(false); }
+  };
+
   // ══════════════════════════════════════
   // ── Filters ──
   // ══════════════════════════════════════
@@ -414,5 +437,9 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     markProcessRead, toggleProcessImportant, toggleProcessArchive,
     handleClosureAction, removeMonitoring,
     handleTestNotification, handleSaveConfig,
+    // Global Search
+    showGlobalSearch, setShowGlobalSearch,
+    globalSearchQuery, setGlobalSearchQuery,
+    globalSearchResults, isGlobalSearching, handleGlobalSearch,
   };
 }
