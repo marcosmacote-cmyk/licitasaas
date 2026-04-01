@@ -204,7 +204,9 @@ export class NotificationService {
       const pendingLogs = await prisma.chatMonitorLog.findMany({
         where: { status: 'PENDING_NOTIFICATION' },
         include: { 
-          biddingProcess: true,
+          biddingProcess: {
+            include: { company: true }
+          },
           tenant: {
             include: {
               chatMonitorConfig: true
@@ -254,11 +256,16 @@ export class NotificationService {
           platformName = 'M2A';
         }
 
+        const companyName = (log.biddingProcess as any).company?.razaoSocial;
+        const processLink = log.biddingProcess.link;
+
         const message = `🚨 <b>ALERTA DE CHAT - ${platformName}</b>\n\n` +
                         `<b>Processo:</b> ${log.biddingProcess.title}\n` +
+                        (companyName ? `<b>Empresa:</b> ${companyName}\n` : '') +
                         timestampLine +
                         `<b>Palavra-chave:</b> ${log.detectedKeyword}\n` +
                         `<b>Mensagem:</b> ${log.content}\n\n` +
+                        (processLink ? `🔗 <a href="${processLink}">Acessar Plataforma</a>\n\n` : '') +
                         `<i>Verifique agora no LicitaSaaS!</i>`;
 
         const sentChannels: string[] = [];

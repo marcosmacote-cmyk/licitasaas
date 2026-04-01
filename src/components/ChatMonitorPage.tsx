@@ -566,7 +566,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                       )}
                     </div>
 
-                    {/* Message count + unread badge + link warning + remove monitoring */}
+                    {/* Message count + unread badge + link + remove monitoring */}
                     <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {(() => {
@@ -593,24 +593,47 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                           );
                         })()}
                       </div>
-                      <button
-                        title="Remover monitoramento"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm(`Deseja remover o monitoramento do processo "${proc.title.substring(0, 50)}..."?\n\nO status do processo NÃO será alterado.`)) {
-                            c.removeMonitoring(proc.id);
-                          }
-                        }}
-                        style={{
-                          padding: '3px', borderRadius: 'var(--radius-sm)', border: 'none',
-                          background: 'transparent', cursor: 'pointer', display: 'flex',
-                          alignItems: 'center', opacity: 0.4, transition: 'var(--transition-fast)',
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(220, 38, 38, 0.08)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.4'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                      >
-                        <EyeOff size={13} color="var(--color-danger, #dc2626)" />
-                      </button>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        {(proc as any).link && (
+                          <a
+                            href={(proc as any).link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Acessar plataforma"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '3px',
+                              padding: '2px 8px', borderRadius: 'var(--radius-sm)',
+                              background: 'rgba(37, 99, 235, 0.06)', color: 'var(--color-primary)',
+                              fontSize: '0.625rem', fontWeight: 600, textDecoration: 'none',
+                              border: 'none', boxShadow: '0 0 0 1px rgba(37, 99, 235, 0.15)',
+                              transition: 'var(--transition-fast)',
+                            }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(37, 99, 235, 0.12)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(37, 99, 235, 0.06)'; }}
+                          >
+                            <ExternalLink size={10} /> Acessar
+                          </a>
+                        )}
+                        <button
+                          title="Remover monitoramento"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Deseja remover o monitoramento do processo "${proc.title.substring(0, 50)}..."?\n\nO status do processo NÃO será alterado.`)) {
+                              c.removeMonitoring(proc.id);
+                            }
+                          }}
+                          style={{
+                            padding: '3px', borderRadius: 'var(--radius-sm)', border: 'none',
+                            background: 'transparent', cursor: 'pointer', display: 'flex',
+                            alignItems: 'center', opacity: 0.4, transition: 'var(--transition-fast)',
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(220, 38, 38, 0.08)'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.4'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                        >
+                          <EyeOff size={13} color="var(--color-danger, #dc2626)" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -646,6 +669,23 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         style={{ padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: 'none', boxShadow: '0 0 0 1px var(--color-primary)', background: 'var(--color-primary-light)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-sm)', color: 'var(--color-primary)', fontWeight: 600 }}>
                         <ExternalLink size={13} /> HUB
                       </button>
+                    )}
+                    {(c.selectedProc as any).link && (
+                      <a
+                        href={(c.selectedProc as any).link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Acessar plataforma de licitação"
+                        style={{
+                          padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: 'none',
+                          boxShadow: '0 0 0 1px var(--color-success)', background: 'var(--color-success-bg)',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+                          fontSize: 'var(--text-sm)', color: 'var(--color-success)', fontWeight: 600,
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <ExternalLink size={13} /> Acessar Plataforma
+                      </a>
                     )}
                     <button title={c.selectedProc.isImportant ? 'Remover destaque' : 'Marcar como importante'}
                       onClick={(e) => { e.stopPropagation(); c.toggleProcessImportant(c.selectedProc!.id, c.selectedProc!.isImportant); }}
