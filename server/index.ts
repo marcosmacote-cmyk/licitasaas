@@ -6786,7 +6786,8 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             where: processWhere,
             select: {
                 id: true, title: true, portal: true, modality: true,
-                uasg: true, companyProfileId: true, isMonitored: true, link: true,
+                uasg: true, companyProfileId: true, isMonitored: true, link: true, pncpLink: true,
+                company: { select: { razaoSocial: true } },
                 _count: { select: { chatMonitorLogs: true } },
             }
         });
@@ -6883,6 +6884,14 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
         const result = processes.map((p: any) => {
             const total = p._count.chatMonitorLogs || 0;
             const lastMsg = lastMsgMap.get(p.id);
+            // Determine best platform link (prefer non-PNCP)
+            const rawLink = p.link || null;
+            const pncpLink = p.pncpLink || null;
+            const isPncpUrl = (url: string) => /pncp\.gov\.br/i.test(url || '');
+            // platformLink = the actual platform URL (ComprasNet, BLL, etc.), not PNCP
+            const platformLink = (rawLink && !isPncpUrl(rawLink)) ? rawLink
+                                : (pncpLink && !isPncpUrl(pncpLink)) ? pncpLink
+                                : null;
             return {
                 id: p.id,
                 title: p.title,
@@ -6890,9 +6899,12 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
                 modality: p.modality,
                 uasg: p.uasg,
                 companyProfileId: p.companyProfileId,
+                companyName: p.company?.razaoSocial || null,
                 isMonitored: p.isMonitored,
-                link: p.link || null,
-                hasPncpLink: !!(p.link?.includes('editais')),
+                link: rawLink,
+                pncpLink: pncpLink,
+                platformLink: platformLink,
+                hasPncpLink: !!(rawLink?.includes('editais')),
                 totalMessages: total,
                 // If query succeeded: use actual count (0 if not in map). If failed: fall back to total.
                 unreadCount: unreadQueryOk ? (unreadMap.get(p.id) || 0) : total,

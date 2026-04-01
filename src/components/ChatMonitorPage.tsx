@@ -542,12 +542,15 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                     </div>
 
                     {/* Company */}
-                    {company && (
-                      <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Building2 size={10} />
-                        {company.name}
-                      </div>
-                    )}
+                    {(() => {
+                      const compName = (proc as any).companyName || company?.name;
+                      return compName ? (
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Building2 size={10} />
+                          {compName}
+                        </div>
+                      ) : null;
+                    })()}
 
                     {/* Preview + Time */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px' }}>
@@ -594,9 +597,9 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         })()}
                       </div>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        {(proc as any).link && (
+                        {(proc as any).platformLink && (
                           <a
-                            href={(proc as any).link}
+                            href={(proc as any).platformLink}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
@@ -670,9 +673,9 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         <ExternalLink size={13} /> HUB
                       </button>
                     )}
-                    {(c.selectedProc as any).link && (
+                    {(c.selectedProc as any).platformLink && (
                       <a
-                        href={(c.selectedProc as any).link}
+                        href={(c.selectedProc as any).platformLink}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Acessar plataforma de licitação"

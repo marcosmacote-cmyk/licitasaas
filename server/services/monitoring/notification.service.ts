@@ -257,7 +257,13 @@ export class NotificationService {
         }
 
         const companyName = (log.biddingProcess as any).company?.razaoSocial;
-        const processLink = log.biddingProcess.link;
+        const rawLink = log.biddingProcess.link || '';
+        const pncpLink = (log.biddingProcess as any).pncpLink || '';
+        const isPncpUrl = (url: string) => /pncp\.gov\.br/i.test(url || '');
+        // Prefer the actual platform link (ComprasNet, BLL, etc.), not PNCP
+        const processLink = (rawLink && !isPncpUrl(rawLink)) ? rawLink
+                          : (pncpLink && !isPncpUrl(pncpLink)) ? pncpLink
+                          : null;
 
         const message = `🚨 <b>ALERTA DE CHAT - ${platformName}</b>\n\n` +
                         `<b>Processo:</b> ${log.biddingProcess.title}\n` +
