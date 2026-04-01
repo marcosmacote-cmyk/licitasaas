@@ -31,8 +31,8 @@ export class NotificationService {
         return false;
       }
     } else {
-      console.log(`[Notification][MOCK] WhatsApp message para ${phone}: ${message.substring(0, 80)}...`);
-      return true; // Mock success
+      console.log(`[Notification][MOCK] ⚠️ WhatsApp NÃO enviado (WHATSAPP_API_URL/TOKEN não configurados) para ${phone}`);
+      return false;
     }
   }
 
@@ -92,8 +92,8 @@ export class NotificationService {
         return false;
       }
     } else {
-      console.log(`[Notification][MOCK] Telegram message para ${chatId}: ${message.substring(0, 80)}...`);
-      return true; // Mock success
+      console.log(`[Notification][MOCK] ⚠️ Telegram NÃO enviado (TELEGRAM_BOT_TOKEN não configurado) para ${chatId}`);
+      return false;
     }
   }
 
@@ -144,8 +144,8 @@ export class NotificationService {
         return false;
       }
     } else {
-      console.log(`[Notification][MOCK] Email message para ${toEmail}: subject="${subject}"`);
-      return true; // Mock success
+      console.log(`[Notification][MOCK] ⚠️ Email NÃO enviado (RESEND_API_KEY não configurado) para ${toEmail}`);
+      return false;
     }
   }
 
