@@ -127,11 +127,11 @@ def match_process_to_certame(
        da licitação, que é muito mais similar ao título do certame M2A)
     3. Fallback: match por título (threshold baixo)
     
-    O problema original: o título no LicitaSaaS é o NÚMERO do pregão
-    (ex: "Pregão Eletrônico nº PE001-2026-SME - Prefeitura Municipal de X"),
-    enquanto o certame M2A tem o OBJETO (ex: "CONTRATAÇÃO DE EMPRESA PARA
-    PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE ESCOLAR"). São textos completamente
-    diferentes! O campo 'summary' resolve isso.
+    Proteções contra falso-positivo (v4.2):
+    - Thresholds elevados (0.50 summary / 0.45 title)
+    - Cross-validation: se o título do processo contém um número/ano diferente
+      do certame, o score é penalizado em -0.20
+    - Ano contraditório (ex: processo de 2026 → certame de 2024) = penalidade
     
     Retorna o certame com melhor score ou None.
     """
@@ -149,9 +149,11 @@ def match_process_to_certame(
                 return c
 
     # ── Estratégia 2: Match por summary (objeto da licitação) ──
-    # O summary contém a descrição do objeto, muito mais parecido com o título M2A
-    SUMMARY_THRESHOLD = 0.35
-    TITLE_THRESHOLD = 0.30  # Mais baixo para fallback
+    SUMMARY_THRESHOLD = 0.50  # v4.2: elevado de 0.35 para reduzir falsos-positivos
+    TITLE_THRESHOLD = 0.45    # v4.2: elevado de 0.30 para reduzir falsos-positivos
+
+    # Extrair número e ano do processo para cross-validation
+    process_numbers = _extract_process_identifiers(title)
 
     best_score = 0.0
     best_match = None
@@ -179,7 +181,13 @@ def match_process_to_certame(
             score = title_score
             source = 'title'
 
-        all_scores.append((score, source, c.get('certame_id', '?'), ctitle[:60]))
+        # ── Cross-validation: penalizar se números/anos contradizem ──
+        certame_numbers = _extract_process_identifiers(ctitle)
+        penalty = _compute_contradiction_penalty(process_numbers, certame_numbers)
+        if penalty > 0:
+            score = max(0, score - penalty)
+
+        all_scores.append((score, source, c.get('certame_id', '?'), ctitle[:60], penalty))
 
         if score > best_score:
             best_score = score
@@ -192,8 +200,9 @@ def match_process_to_certame(
         top3 = all_scores[:3]
         src_label = f'summary="{summary[:40]}"' if summary else f'title="{title[:40]}"'
         logger.info(f'  📊 Match candidates ({src_label}):')
-        for rank, (sc, src, cid, ct) in enumerate(top3, 1):
-            logger.info(f'     #{rank} score={sc:.3f} via={src} certame={cid} "{ct}"')
+        for rank, (sc, src, cid, ct, pen) in enumerate(top3, 1):
+            pen_str = f' (penalty={pen:.2f})' if pen > 0 else ''
+            logger.info(f'     #{rank} score={sc:.3f} via={src} certame={cid} "{ct}"{pen_str}')
 
     # Determinar threshold baseado na fonte
     threshold = SUMMARY_THRESHOLD if match_source == 'summary' else TITLE_THRESHOLD
@@ -205,7 +214,51 @@ def match_process_to_certame(
         )
         return best_match
 
+    if best_match and best_score > 0.20:
+        logger.info(
+            f'  ⚠️ Melhor candidato ABAIXO do threshold ({best_score:.2f} < {threshold:.2f}): '
+            f'certame #{best_match["certame_id"]} — NÃO será usado'
+        )
+
     return None
+
+
+def _extract_process_identifiers(text: str) -> dict:
+    """
+    Extrai números de processo e anos de um texto para cross-validation.
+    Ex: 'Concorrência 01.018/2026-CE' → {'numbers': ['01.018'], 'years': ['2026']}
+    Ex: 'Nº 090.2024-SMO' → {'numbers': ['090'], 'years': ['2024']}
+    """
+    result = {'numbers': [], 'years': []}
+    
+    # Extrair anos (4 dígitos entre 2020-2029)
+    years = re.findall(r'\b(202[0-9])\b', text)
+    result['years'] = list(set(years))
+    
+    # Extrair números de processo (padrões comuns)
+    # Ex: 01.018, 090, PE001, nº 123
+    nums = re.findall(r'(?:n[ºo°]?\s*)?([\d]{2,}(?:[./][\d]+)*)', text, re.IGNORECASE)
+    result['numbers'] = [n for n in nums if len(n) >= 2 and n not in result['years']]
+    
+    return result
+
+
+def _compute_contradiction_penalty(proc_ids: dict, cert_ids: dict) -> float:
+    """
+    Calcula penalidade se o processo e o certame têm anos ou números CONTRADITÓRIOS.
+    
+    Regra: Se ambos têm anos e os anos são DIFERENTES → penalidade alta (0.25).
+    Se ambos têm números curtos identificáveis e são DIFERENTES → penalidade média (0.15).
+    """
+    penalty = 0.0
+    
+    # Penalidade por ano contraditório
+    proc_years = set(proc_ids.get('years', []))
+    cert_years = set(cert_ids.get('years', []))
+    if proc_years and cert_years and not proc_years.intersection(cert_years):
+        penalty += 0.25  # Anos totalmente diferentes = forte indicador de mismatch
+    
+    return penalty
 
 
 def _compute_match_score(text_a: str, text_b: str) -> float:
@@ -227,7 +280,8 @@ def _compute_match_score(text_a: str, text_b: str) -> float:
         'nos', 'nas', 'a', 'o', 'as', 'os', 'um', 'uma', 'uns',
         'contratacao', 'empresa', 'servicos', 'prestacao', 'municipal',
         'prefeitura', 'registro', 'precos', 'futura', 'eventual',
-        'visando', 'mediante',
+        'visando', 'mediante', 'numero', 'pregao', 'eletronico',
+        'eletronica', 'concorrencia', 'licitacao', 'edital',
     }
 
     a_important = a_words - stopwords

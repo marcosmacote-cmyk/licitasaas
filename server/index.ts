@@ -7598,6 +7598,22 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
     }
 });
 
+// ── Purge chat monitor logs for a specific process (admin cleanup) ──
+// Used to clean up data from incorrect certame matches or test data.
+app.delete('/api/chat-monitor/internal/sessions/:processId/logs', authenticateWorker, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const result = await prisma.chatMonitorLog.deleteMany({
+            where: { biddingProcessId: processId },
+        });
+        console.log(`[Admin] Purged ${result.count} chat logs for process ${processId.substring(0, 8)}`);
+        res.json({ success: true, deletedCount: result.count });
+    } catch (error: any) {
+        console.error('[Admin] Error purging logs:', error.message);
+        res.status(500).json({ error: 'Failed to purge logs', details: error.message });
+    }
+});
+
 // Receives messages from local ComprasNet / BBMNet Watcher
 app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) => {
     try {
