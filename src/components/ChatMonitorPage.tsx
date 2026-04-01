@@ -597,27 +597,36 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         })()}
                       </div>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        {(proc as any).platformLink && (
-                          <a
-                            href={(proc as any).platformLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Acessar plataforma"
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '3px',
-                              padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                              background: 'rgba(37, 99, 235, 0.06)', color: 'var(--color-primary)',
-                              fontSize: '0.625rem', fontWeight: 600, textDecoration: 'none',
-                              border: 'none', boxShadow: '0 0 0 1px rgba(37, 99, 235, 0.15)',
-                              transition: 'var(--transition-fast)',
-                            }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(37, 99, 235, 0.12)'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(37, 99, 235, 0.06)'; }}
-                          >
-                            <ExternalLink size={10} /> Acessar
-                          </a>
-                        )}
+                        {(() => {
+                          const pLink = (proc as any).platformLink;
+                          const fallbackLink = (proc as any).link;
+                          const href = pLink || fallbackLink;
+                          if (!href) return null;
+                          const isPlatform = !!pLink;
+                          return (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title={isPlatform ? 'Acessar plataforma' : 'Acessar via PNCP'}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                padding: '2px 8px', borderRadius: 'var(--radius-sm)',
+                                background: isPlatform ? 'rgba(37, 99, 235, 0.06)' : 'rgba(100, 116, 139, 0.06)',
+                                color: isPlatform ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                fontSize: '0.625rem', fontWeight: 600, textDecoration: 'none',
+                                border: 'none',
+                                boxShadow: `0 0 0 1px ${isPlatform ? 'rgba(37, 99, 235, 0.15)' : 'rgba(100, 116, 139, 0.15)'}`,
+                                transition: 'var(--transition-fast)',
+                              }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = isPlatform ? 'rgba(37, 99, 235, 0.12)' : 'rgba(100, 116, 139, 0.12)'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = isPlatform ? 'rgba(37, 99, 235, 0.06)' : 'rgba(100, 116, 139, 0.06)'; }}
+                            >
+                              <ExternalLink size={10} /> {isPlatform ? 'Acessar' : 'PNCP'}
+                            </a>
+                          );
+                        })()}
                         <button
                           title="Remover monitoramento"
                           onClick={(e) => {
@@ -673,23 +682,32 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         <ExternalLink size={13} /> HUB
                       </button>
                     )}
-                    {(c.selectedProc as any).platformLink && (
-                      <a
-                        href={(c.selectedProc as any).platformLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Acessar plataforma de licitação"
-                        style={{
-                          padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: 'none',
-                          boxShadow: '0 0 0 1px var(--color-success)', background: 'var(--color-success-bg)',
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-                          fontSize: 'var(--text-sm)', color: 'var(--color-success)', fontWeight: 600,
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <ExternalLink size={13} /> Acessar Plataforma
-                      </a>
-                    )}
+                    {(() => {
+                      const pLink = (c.selectedProc as any).platformLink;
+                      const fallbackLink = (c.selectedProc as any).link;
+                      const href = pLink || fallbackLink;
+                      if (!href) return null;
+                      const isPlatform = !!pLink;
+                      return (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={isPlatform ? 'Acessar plataforma de licitação' : 'Acessar via PNCP'}
+                          style={{
+                            padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: 'none',
+                            boxShadow: `0 0 0 1px ${isPlatform ? 'var(--color-success)' : 'var(--color-border)'}`,
+                            background: isPlatform ? 'var(--color-success-bg)' : 'var(--color-bg-surface-hover)',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+                            fontSize: 'var(--text-sm)',
+                            color: isPlatform ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                            fontWeight: 600, textDecoration: 'none',
+                          }}
+                        >
+                          <ExternalLink size={13} /> {isPlatform ? 'Acessar Plataforma' : 'Acessar PNCP'}
+                        </a>
+                      );
+                    })()}
                     <button title={c.selectedProc.isImportant ? 'Remover destaque' : 'Marcar como importante'}
                       onClick={(e) => { e.stopPropagation(); c.toggleProcessImportant(c.selectedProc!.id, c.selectedProc!.isImportant); }}
                       style={{ padding: '4px', borderRadius: 'var(--radius-sm)', border: 'none', background: c.selectedProc.isImportant ? 'var(--color-warning-bg)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
