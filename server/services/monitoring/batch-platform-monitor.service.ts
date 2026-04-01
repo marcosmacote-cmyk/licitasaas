@@ -158,15 +158,18 @@ export class BatchPlatformMonitor {
     // ══════════════════════════════════════════════════════════════
 
     /**
-     * Descobre os hashes param2 de cada lote de um processo.
+     * Descobre os lotes de um processo via AJAX (como o browser faz).
      * 
-     * Faz GET na página pública do processo e extrai os links de
-     * "Mensagens" de cada lote no HTML do tab "Lotes".
+     * Fluxo real da BLL/BNC:
+     * 1. GET ProcessView → botão "Lotes" com onclick="GetBatchesInfo('[innerParam]')"
+     * 2. POST /Process/ProcessBatches?param1=[innerParam]&token= → HTML modal com tabela #batchListRows
+     * 3. Cada <tr> tem onclick="GetBatchItemsInfo('[batchParam1]', this, '[batchParam2]')"
+     * 4. GetBatchMessageView?param1=[batchParam1]&param2=[batchParam2] → mensagens do lote
      * 
-     * Alternativamente, tenta números sequenciais 1..N se o HTML
-     * não contiver os hashes.
+     * IMPORTANTE: o param1 da URL do processo NÃO é o mesmo usado nas chamadas de lote.
+     *             Cada lote tem seus próprios batchParam1 e batchParam2 (hashes [gkz]).
      */
-    static async fetchLotParams(param1: string, platform: BatchPlatform): Promise<{ lotNumber: number; param2: string }[]> {
+    static async fetchLotParams(param1: string, platform: BatchPlatform): Promise<{ lotNumber: number; param2: string; batchParam1: string }[]> {
         const url = `https://${platform.domain}/Process/ProcessView?param1=${encodeURIComponent(param1)}`;
 
         try {
@@ -191,81 +194,88 @@ export class BatchPlatformMonitor {
             const html = await res.text();
             const $ = cheerio.load(html);
 
-            const lots: { lotNumber: number; param2: string }[] = [];
+            // ── Step 1: Extract inner process hash from "Lotes" button ──
+            const batchBtn = $('button[onclick*="GetBatchesInfo"]');
+            if (!batchBtn.length) {
+                // No "Lotes" button = single-lot process, skip lot discovery
+                return [];
+            }
 
-            // Strategy 1: Find lot tabs/links with param2 in onclick/href
-            // BLL renders lot numbers in a sidebar: <a onclick="LoadBatch('[hash]')">1</a>
-            // or via hidden inputs / batch list items
-            $('a[onclick*="LoadBatch"], a[onclick*="loadBatch"], a[onclick*="GetBatch"]').each((_: number, el: any) => {
-                const onclick = $(el).attr('onclick') || '';
-                const paramMatch = onclick.match(/['"]([^'"]+)['"]/);
-                const text = $(el).text().trim();
-                const num = parseInt(text);
-                if (paramMatch && paramMatch[1] && !isNaN(num)) {
-                    lots.push({ lotNumber: num, param2: paramMatch[1] });
-                }
+            const batchOnclick = batchBtn.attr('onclick') || '';
+            const innerMatch = batchOnclick.match(/GetBatchesInfo\s*\(\s*'([^']+)'\s*\)/);
+            if (!innerMatch) {
+                console.warn(`[${platform.label}] GetBatchesInfo button found but could not extract param`);
+                return [];
+            }
+
+            const innerParam = innerMatch[1];
+
+            // ── Step 2: POST to ProcessBatches AJAX endpoint ──
+            const batchUrl = `https://${platform.domain}/Process/ProcessBatches?param1=${encodeURIComponent(innerParam)}&token=`;
+
+            const controller2 = new AbortController();
+            const timeoutId2 = setTimeout(() => controller2.abort(), this.TIMEOUT_MS);
+
+            const batchRes = await fetch(batchUrl, {
+                method: 'POST',
+                signal: controller2.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
             });
 
-            // Strategy 2: Find lot tabs in sidebar (BLL uses "Lote nº X" with data attribute)
-            if (lots.length === 0) {
-                $('[data-batchid], [data-batch-id], [data-param2]').each((_: number, el: any) => {
-                    const param2 = $(el).attr('data-batchid') || $(el).attr('data-batch-id') || $(el).attr('data-param2') || '';
+            clearTimeout(timeoutId2);
+
+            if (!batchRes.ok) {
+                console.warn(`[${platform.label}] HTTP ${batchRes.status} para ProcessBatches`);
+                return [];
+            }
+
+            const batchData = await batchRes.json();
+            const modalHtml = batchData?.modal || batchData?.html || '';
+
+            if (!modalHtml) {
+                return [];
+            }
+
+            const $modal = cheerio.load(modalHtml);
+            const lots: { lotNumber: number; param2: string; batchParam1: string }[] = [];
+
+            // ── Step 3: Parse lot rows from #batchListRows table ──
+            // Each <tr> has onclick="GetBatchItemsInfo('[batchParam1]', this, '[batchParam2]')"
+            $modal('#batchListRows tr[onclick*="GetBatchItemsInfo"]').each((_: number, el: any) => {
+                const onclick = $modal(el).attr('onclick') || '';
+                // Pattern: GetBatchItemsInfo('hash1', this, 'hash2')
+                const m = onclick.match(/GetBatchItemsInfo\s*\(\s*'([^']+)'\s*,\s*this\s*,\s*'([^']+)'\s*\)/);
+                if (!m) return;
+
+                const batchParam1 = m[1];
+                const batchParam2 = m[2];
+
+                // Extract lot number from the first <td> text content
+                const firstTd = $modal(el).find('td').first().text().trim();
+                const lotNum = parseInt(firstTd);
+                const lotNumber = !isNaN(lotNum) ? lotNum : lots.length + 1;
+
+                lots.push({ lotNumber, param2: batchParam2, batchParam1 });
+            });
+
+            if (lots.length > 0) {
+                console.log(`[${platform.label}] 🔍 Descobertos ${lots.length} lote(s) via ProcessBatches AJAX`);
+            } else {
+                // Fallback: Try to find lot info directly in ProcessView HTML
+                // (some older versions may render lots inline)
+                $('a[onclick*="LoadBatch"], a[onclick*="loadBatch"]').each((_: number, el: any) => {
+                    const onclick = $(el).attr('onclick') || '';
+                    const paramMatch = onclick.match(/['"]([^'"]+)['"]/);
                     const text = $(el).text().trim();
                     const num = parseInt(text);
-                    if (param2 && !isNaN(num)) {
-                        lots.push({ lotNumber: num, param2 });
+                    if (paramMatch && paramMatch[1] && !isNaN(num)) {
+                        lots.push({ lotNumber: num, param2: paramMatch[1], batchParam1: param1 });
                     }
                 });
-            }
-
-            // Strategy 3: Find the lot list/table and extract batch IDs from links
-            if (lots.length === 0) {
-                // Look for "Lote n°" pattern in the page with associated param values
-                $('table a[href*="param2"], table a[onclick*="param2"]').each((_: number, el: any) => {
-                    const href = $(el).attr('href') || $(el).attr('onclick') || '';
-                    const p2Match = href.match(/param2=([^&'"]+)/);
-                    const text = $(el).closest('tr').text().trim();
-                    const numMatch = text.match(/(\d+)/);
-                    if (p2Match && numMatch) {
-                        lots.push({ lotNumber: parseInt(numMatch[1]), param2: p2Match[1] });
-                    }
-                });
-            }
-
-            // Strategy 4: Count lots via lot number elements & use sequential approach
-            if (lots.length === 0) {
-                // In BLL, the left sidebar shows lot numbers in tabs
-                // We count them and will try sequential fetching
-                let lotCount = 0;
-                $('td, div, span, a').each((_: number, el: any) => {
-                    const text = $(el).text().trim();
-                    if (/^Lote\s*n[°º]?\s*$/i.test(text)) {
-                        // Count the sibling/child elements with numbers
-                        const siblings = $(el).parent().find('a, span, td');
-                        siblings.each((_: number, s: any) => {
-                            const n = parseInt($(s).text().trim());
-                            if (!isNaN(n) && n > lotCount) lotCount = n;
-                        });
-                    }
-                });
-
-                // If we found lot numbers but no param2 hashes, use sequential
-                if (lotCount === 0) {
-                    // Default: assume at least 1 lot exists
-                    lotCount = 1;
-                    // Check if there are numbered tab links
-                    const tabLinks = $('td a').filter((_: number, el: any) => {
-                        const t = $(el).text().trim();
-                        return /^\d+$/.test(t);
-                    });
-                    if (tabLinks.length > 0) {
-                        lotCount = tabLinks.length;
-                    }
-                }
-
-                for (let i = 1; i <= lotCount; i++) {
-                    lots.push({ lotNumber: i, param2: String(i) });
-                }
             }
 
             return lots;
@@ -341,8 +351,8 @@ export class BatchPlatformMonitor {
      * 
      * Fluxo:
      * 1. Busca mensagens do processo (GetProcessMessageView)
-     * 2. Descobre lotes do processo (ProcessView HTML)
-     * 3. Para cada lote: busca mensagens (GetBatchMessageView)
+     * 2. Descobre lotes via AJAX (ProcessBatches)
+     * 3. Para cada lote: busca mensagens (GetBatchMessageView) com batchParam1+param2
      * 4. Retorna tudo unificado
      */
     static async fetchAllMessages(param1: string, platform: BatchPlatform): Promise<BatchMessage[]> {
@@ -352,13 +362,14 @@ export class BatchPlatformMonitor {
         const processMessages = await this.fetchProcessMessages(param1, platform);
         allMessages.push(...processMessages);
 
-        // 2. Discover lots
+        // 2. Discover lots (now returns batchParam1 per lot)
         const lots = await this.fetchLotParams(param1, platform);
 
         if (lots.length > 0) {
             // 3. Fetch lot-level messages for each lot
+            // IMPORTANT: use lot.batchParam1 (NOT the process param1) for GetBatchMessageView
             for (const lot of lots) {
-                const batchMessages = await this.fetchBatchMessages(param1, lot.param2, lot.lotNumber, platform);
+                const batchMessages = await this.fetchBatchMessages(lot.batchParam1, lot.param2, lot.lotNumber, platform);
                 allMessages.push(...batchMessages);
 
                 // Gentil com o servidor: 500ms entre lotes
@@ -367,11 +378,9 @@ export class BatchPlatformMonitor {
                 }
             }
 
-            if (lots.length > 0) {
-                const totalBatch = allMessages.filter(m => m.itemRef).length;
-                if (totalBatch > 0) {
-                    console.log(`[${platform.label}] 📋 ${lots.length} lote(s) verificados, ${totalBatch} msg(s) de lote encontradas`);
-                }
+            const totalBatch = allMessages.filter(m => m.itemRef).length;
+            if (totalBatch > 0) {
+                console.log(`[${platform.label}] 📋 ${lots.length} lote(s) verificados, ${totalBatch} msg(s) de lote encontradas`);
             }
         }
 
