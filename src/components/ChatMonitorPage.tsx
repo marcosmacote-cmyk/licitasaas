@@ -476,34 +476,43 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
               </button>
             </div>
             
-            <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)', background: 'var(--color-bg-surface-hover)' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)', background: 'var(--color-bg-base)' }}>
               {c.globalSearchResults.length === 0 && !c.isGlobalSearching && (
-                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-text-tertiary)' }}>
-                  <Search size={32} style={{ marginBottom: 'var(--space-2)', opacity: 0.3 }} />
-                  <p>As mensagens que contenham o termo pesquisado aparecerão aqui.</p>
+                <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-tertiary)' }}>
+                  <Search size={40} style={{ marginBottom: 'var(--space-4)', opacity: 0.2 }} />
+                  <p style={{ fontSize: 'var(--text-lg)', fontWeight: 500 }}>Nenhuma mensagem encontrada</p>
+                  <p style={{ fontSize: 'var(--text-sm)', marginTop: 'var(--space-2)' }}>As mensagens que contenham o termo pesquisado aparecerão aqui.</p>
                 </div>
               )}
               {c.globalSearchResults.map((msg, idx) => (
-                <div key={idx} style={{ background: 'var(--color-bg-base)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)', boxShadow: 'var(--shadow-sm)', borderLeft: msg.isImportant ? '3px solid var(--color-warning)' : '3px solid transparent' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{(msg as any).biddingProcessTitle || 'Processo'}</span>
-                      <span style={{ background: 'var(--color-bg-surface-hover)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: '0.625rem' }}>{(msg as any).biddingProcessPortal}</span>
-                      {(msg as any).biddingProcessCompany && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--color-primary-bg)', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: '0.625rem' }}>
-                          <Building2 size={10} /> {(msg as any).biddingProcessCompany}
-                        </span>
-                      )}
+                <div key={idx} style={{ background: 'var(--color-bg-surface-hover)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', marginBottom: 'var(--space-4)', boxShadow: 'var(--shadow-sm)', borderLeft: msg.isImportant ? '4px solid var(--color-warning)' : '1px solid var(--color-border)', position: 'relative' }}>
+                  
+                  {/* Header do Card */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingRight: '120px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--color-primary)', fontSize: 'var(--text-sm)', lineHeight: 1.3 }}>{(msg as any).biddingProcessTitle || 'Processo'}</span>
+                      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: '0.625rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{(msg as any).biddingProcessPortal}</span>
+                        {(msg as any).biddingProcessCompany && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(37,99,235,0.08)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: '0.625rem', fontWeight: 600 }}>
+                            <Building2 size={10} /> {(msg as any).biddingProcessCompany}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span>{new Date(msg.createdAt).toLocaleString('pt-BR')}</span>
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', position: 'absolute', top: '16px', right: '16px', background: 'var(--color-bg-base)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontWeight: 500 }}>{new Date(msg.createdAt).toLocaleString('pt-BR')}</span>
                   </div>
-                  <div style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                  
+                  {/* Body do Card (Mensagem) */}
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, background: 'var(--color-bg-base)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                     {msg.content}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'var(--space-2)' }}>
-                     <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Autor: {msg.authorType || 'desconhecido'}</span>
-                     <button onClick={() => { c.setShowGlobalSearch(false); c.handleSelectProcess(msg.biddingProcessId); }} className="btn btn-ghost" style={{ fontSize: 'var(--text-sm)' }}>
-                       Abrir Processo <ExternalLink size={14} style={{ marginLeft: '4px' }} />
+                  
+                  {/* Footer do Card */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-3)' }}>
+                     <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', textTransform: 'capitalize', fontWeight: 500 }}>Enviado por: {msg.authorType || 'Desconhecido'}</span>
+                     <button onClick={() => { c.setShowGlobalSearch(false); c.handleSelectProcess(msg.biddingProcessId); }} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: 'var(--radius-full)' }}>
+                       Abrir Processo <ExternalLink size={12} style={{ marginLeft: '4px' }} />
                      </button>
                   </div>
                 </div>
