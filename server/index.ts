@@ -7272,6 +7272,7 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
                 processYear: true,
                 portal: true,
                 link: true,
+                sessionDate: true,
                 companyProfileId: true,
                 company: {
                     select: {
@@ -7346,6 +7347,7 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
                 processYear: p.processYear,
                 portal: normalizedPortal, // Send normalized portal to workers
                 link: p.link,
+                sessionDate: p.sessionDate || null,
                 companyProfileId: p.companyProfileId,
                 companyName: p.company?.razaoSocial || null,
                 portalCredentials: bestCred ? {
