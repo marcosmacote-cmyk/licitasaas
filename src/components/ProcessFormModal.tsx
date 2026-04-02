@@ -150,9 +150,12 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}>Preencher com IA</div>
-                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Faça upload do edital em PDF e a IA extrairá os dados automaticamente</div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                                        {form.isCheckingAi ? 'Enviando e analisando o edital... isso pode levar alguns segundos' : 'Faça upload do edital em PDF e a IA extrairá os dados e gerará o relatório completo'}
+                                    </div>
                                 </div>
-                                <button type="button" onClick={form.handleAiExtract} disabled={form.isCheckingAi} style={{
+                                <input type="file" accept="application/pdf" ref={form.aiQuickUploadRef} style={{ display: 'none' }} onChange={form.handleQuickAiFileChange} multiple />
+                                <button type="button" onClick={form.handleQuickAiUpload} disabled={form.isCheckingAi} style={{
                                     display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
                                     padding: 'var(--space-2) var(--space-5)', borderRadius: 'var(--radius-md)',
                                     border: 'none', background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
@@ -161,7 +164,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     opacity: form.isCheckingAi ? 0.7 : 1,
                                 }}>
                                     {form.isCheckingAi ? <Loader2 size={14} className="spinner" /> : <UploadCloud size={14} />}
-                                    {form.isCheckingAi ? 'Extraindo...' : 'Enviar PDF'}
+                                    {form.isCheckingAi ? 'Analisando...' : 'Enviar PDF'}
                                 </button>
                             </div>
                         )}

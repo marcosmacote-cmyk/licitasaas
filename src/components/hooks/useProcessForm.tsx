@@ -126,6 +126,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
     // File upload
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const aiQuickUploadRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [viewingPdf, setViewingPdf] = useState<string | null>(null);
 
@@ -312,6 +313,113 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
         }
     };
 
+    // Unified upload + analyze for new processes ("Preencher com IA" banner)
+    const handleQuickAiUpload = () => {
+        aiQuickUploadRef.current?.click();
+    };
+
+    const handleQuickAiFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        try {
+            setIsCheckingAi(true);
+            // Step 1: Upload files
+            const uploadedUrls: string[] = [];
+            for (const file of files) {
+                const bodyData = new FormData();
+                bodyData.append('file', file);
+                const uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: bodyData
+                });
+                if (uploadResponse.ok) {
+                    const uploadData = await uploadResponse.json();
+                    uploadedUrls.push(uploadData.fileUrl);
+                }
+            }
+            if (uploadedUrls.length === 0) {
+                toast.error('Falha no upload do PDF.');
+                return;
+            }
+            // Store uploaded files in the link field
+            setFormData(prev => ({
+                ...prev,
+                link: prev.link ? `${prev.link}, ${uploadedUrls.join(', ')}` : uploadedUrls.join(', ')
+            }));
+
+            // Step 2: Run AI analysis on uploaded files
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_BASE_URL}/api/analyze-edital/v2`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fileNames: uploadedUrls })
+            });
+            if (!res.ok) {
+                const errorLog = await res.json();
+                throw new Error(errorLog.error || 'Falha na análise');
+            }
+            const aiData = await res.json();
+
+            // Step 3: Fill form fields
+            if (aiData.process) {
+                let formattedSessionDate = formData.sessionDate;
+                if (aiData.process.sessionDate) {
+                    const d = new Date(aiData.process.sessionDate);
+                    if (!isNaN(d.getTime())) {
+                        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                        formattedSessionDate = d.toISOString().slice(0, 16);
+                    }
+                }
+                setFormData(prev => ({
+                    ...prev,
+                    title: aiData.process.title || prev.title,
+                    summary: aiData.process.summary || prev.summary,
+                    modality: aiData.process.modality || prev.modality,
+                    portal: aiData.process.portal || prev.portal,
+                    estimatedValue: aiData.process.estimatedValue || prev.estimatedValue,
+                    sessionDate: formattedSessionDate,
+                    risk: aiData.process.risk || prev.risk
+                }));
+            }
+
+            // Step 4: Store full analysis
+            if (aiData.analysis) {
+                const analysisObj: AiAnalysis = {
+                    id: uuidv4(),
+                    biddingProcessId: '',
+                    requiredDocuments: JSON.stringify(aiData.analysis.requiredDocuments || []),
+                    biddingItems: aiData.analysis.biddingItems || '',
+                    pricingConsiderations: aiData.analysis.pricingConsiderations || '',
+                    irregularitiesFlags: JSON.stringify(aiData.analysis.irregularitiesFlags || []),
+                    fullSummary: aiData.analysis.fullSummary || '',
+                    deadlines: JSON.stringify(aiData.analysis.deadlines || []),
+                    penalties: aiData.analysis.penalties || '',
+                    qualificationRequirements: aiData.analysis.qualificationRequirements || '',
+                    sourceFileNames: JSON.stringify(uploadedUrls),
+                    schemaV2: aiData.schemaV2 || null,
+                    promptVersion: aiData._prompt_version || null,
+                    modelUsed: aiData._model_used || null,
+                    pipelineDurationS: aiData._pipeline_duration_s || null,
+                    overallConfidence: aiData._overall_confidence || null,
+                    analyzedAt: new Date().toISOString()
+                };
+                setAiAnalysisData(analysisObj);
+                toast.success('Edital analisado com sucesso! Campos preenchidos automaticamente. Confira o Relatório Analítico.');
+            } else {
+                toast.success('Campos preenchidos via IA!');
+            }
+        } catch (e: any) {
+            toast.error(`Erro na análise IA: ${e.message}`);
+        } finally {
+            setIsCheckingAi(false);
+            if (aiQuickUploadRef.current) aiQuickUploadRef.current.value = '';
+        }
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -337,10 +445,11 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
         showAiModal, setShowAiModal, aiAnalysisData,
         showPassword, setShowPassword, copiedField,
         viewingPdf, setViewingPdf,
-        fileInputRef, nextStep,
+        fileInputRef, aiQuickUploadRef, nextStep,
         // Handlers
         handleChange, handleAddObservation,
         handleFileUploadClick, handleFileChange,
-        handleAiExtract, handleSubmit, handleCopy,
+        handleAiExtract, handleQuickAiUpload, handleQuickAiFileChange,
+        handleSubmit, handleCopy,
     };
 }
