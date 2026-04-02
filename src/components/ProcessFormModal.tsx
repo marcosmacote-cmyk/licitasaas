@@ -169,6 +169,48 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                             </div>
                         )}
 
+                        {/* ── AI Progress Bar (PNCP-style) ── */}
+                        {form.aiProgress && (
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%)',
+                                border: '1px solid rgba(99,102,241,0.15)',
+                                borderRadius: 'var(--radius-lg)',
+                                padding: '12px 16px',
+                                marginBottom: 'var(--space-6)',
+                                display: 'flex', alignItems: 'center', gap: '12px',
+                                animation: 'fadeIn 0.3s ease',
+                            }}>
+                                <Loader2 size={18} className="spinner" style={{ color: 'var(--color-ai)', flexShrink: 0 }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                                        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                            {form.aiProgress.message}
+                                        </span>
+                                        <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
+                                            Etapa {form.aiProgress.step}/{form.aiProgress.total}
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        width: '100%', height: '6px',
+                                        background: 'rgba(99,102,241,0.12)',
+                                        borderRadius: '3px', overflow: 'hidden',
+                                    }}>
+                                        <div style={{
+                                            width: `${form.aiProgress.percent}%`,
+                                            height: '100%',
+                                            background: 'linear-gradient(90deg, var(--color-primary), var(--color-ai))',
+                                            borderRadius: '3px',
+                                            transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        }} />
+                                    </div>
+                                    {form.aiProgress.detail && (
+                                        <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '3px', display: 'block' }}>
+                                            {form.aiProgress.detail}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                             {/* Título */}

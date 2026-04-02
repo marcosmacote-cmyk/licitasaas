@@ -313,6 +313,9 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
         }
     };
 
+    // ── Progress state for AI analysis ──
+    const [aiProgress, setAiProgress] = useState<{ step: number; total: number; percent: number; message: string; detail?: string } | null>(null);
+
     // Unified upload + analyze for new processes ("Preencher com IA" banner)
     const handleQuickAiUpload = () => {
         aiQuickUploadRef.current?.click();
@@ -323,6 +326,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
         if (files.length === 0) return;
         try {
             setIsCheckingAi(true);
+            setAiProgress({ step: 1, total: 5, percent: 10, message: 'Enviando edital ao servidor...', detail: `${files.length} arquivo(s)` });
+
             // Step 1: Upload files
             const uploadedUrls: string[] = [];
             for (const file of files) {
@@ -348,6 +353,24 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 link: prev.link ? `${prev.link}, ${uploadedUrls.join(', ')}` : uploadedUrls.join(', ')
             }));
 
+            setAiProgress({ step: 2, total: 5, percent: 25, message: 'IA extraindo dados do edital...', detail: 'Etapa 1/3 — Extração Factual' });
+
+            // Simulated progress updates while API processes
+            const progressTimer = setInterval(() => {
+                setAiProgress(prev => {
+                    if (!prev || prev.percent >= 90) return prev;
+                    const nextPercent = Math.min(prev.percent + 8, 90);
+                    const stages = [
+                        { at: 40, step: 3, msg: 'IA normalizando categorias...', detail: 'Etapa 2/3 — Normalização' },
+                        { at: 60, step: 4, msg: 'IA avaliando riscos jurídicos...', detail: 'Etapa 3/3 — Revisão de Risco' },
+                        { at: 80, step: 5, msg: 'Validando e preenchendo campos...', detail: 'Finalizando análise' },
+                    ];
+                    const stage = stages.filter(s => nextPercent >= s.at).pop();
+                    if (stage) return { step: stage.step, total: 5, percent: nextPercent, message: stage.msg, detail: stage.detail };
+                    return { ...prev, percent: nextPercent };
+                });
+            }, 3000);
+
             // Step 2: Run AI analysis on uploaded files
             const token = localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/api/analyze-edital/v2`, {
@@ -358,33 +381,92 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 },
                 body: JSON.stringify({ fileNames: uploadedUrls })
             });
+
+            clearInterval(progressTimer);
+
             if (!res.ok) {
                 const errorLog = await res.json();
                 throw new Error(errorLog.error || 'Falha na análise');
             }
             const aiData = await res.json();
 
-            // Step 3: Fill form fields
-            if (aiData.process) {
-                let formattedSessionDate = formData.sessionDate;
-                if (aiData.process.sessionDate) {
-                    const d = new Date(aiData.process.sessionDate);
-                    if (!isNaN(d.getTime())) {
-                        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                        formattedSessionDate = d.toISOString().slice(0, 16);
-                    }
-                }
-                setFormData(prev => ({
-                    ...prev,
-                    title: aiData.process.title || prev.title,
-                    summary: aiData.process.summary || prev.summary,
-                    modality: aiData.process.modality || prev.modality,
-                    portal: aiData.process.portal || prev.portal,
-                    estimatedValue: aiData.process.estimatedValue || prev.estimatedValue,
-                    sessionDate: formattedSessionDate,
-                    risk: aiData.process.risk || prev.risk
-                }));
+            setAiProgress({ step: 5, total: 5, percent: 100, message: 'Campos preenchidos com sucesso!', detail: 'Análise concluída' });
+
+            // Step 3: Fill form fields — extract from schemaV2 when legacy fields are empty
+            const schema = aiData.schemaV2;
+            const proc = aiData.process || {};
+
+            // Extract summary from schemaV2 or legacy
+            const summary = proc.summary || proc.object || schema?.process_identification?.objeto_completo || schema?.process_identification?.objeto_resumido || '';
+
+            // Extract title
+            const title = proc.title || schema?.process_identification?.objeto_resumido || schema?.process_identification?.numero_edital || '';
+
+            // Extract modality
+            const modality = proc.modality || schema?.process_identification?.modalidade || '';
+
+            // Extract portal — not in legacy, try to detect from links or schema
+            let portal = proc.portal || '';
+            if (!portal && schema?.process_identification?.links_uteis) {
+                const links = Array.isArray(schema.process_identification.links_uteis) 
+                    ? schema.process_identification.links_uteis.join(' ') 
+                    : String(schema.process_identification.links_uteis || '');
+                if (/compras\.gov|comprasnet|cnetmobile|pncp/i.test(links)) portal = 'Compras.gov.br';
+                else if (/bnc/i.test(links)) portal = 'BNC';
+                else if (/bll/i.test(links)) portal = 'BLL';
+                else if (/m2a/i.test(links)) portal = 'M2A';
+                else if (/bbmnet/i.test(links)) portal = 'BBMNET';
+                else if (/licitanet/i.test(links)) portal = 'Licitanet';
+                else if (/portaldecompras|portal de compras/i.test(links)) portal = 'Portal de Compras Públicas';
             }
+            // If still no portal, try from orgao name or uploaded file
+            if (!portal && schema?.process_identification?.orgao) {
+                const orgao = schema.process_identification.orgao.toLowerCase();
+                if (orgao.includes('federal') || orgao.includes('ministério')) portal = 'Compras.gov.br';
+            }
+
+            // Extract estimatedValue
+            let estimatedValue = proc.estimatedValue ? parseFloat(String(proc.estimatedValue).replace(/[^\d.,]/g, '').replace(',', '.')) : 0;
+            if (!estimatedValue && schema?.economic_financial_analysis?.valor_estimado_global) {
+                const valStr = String(schema.economic_financial_analysis.valor_estimado_global).replace(/[^\d.,]/g, '').replace(',', '.');
+                estimatedValue = parseFloat(valStr) || 0;
+            }
+            if (!estimatedValue && schema?.proposal_analysis?.valor_estimado) {
+                const valStr = String(schema.proposal_analysis.valor_estimado).replace(/[^\d.,]/g, '').replace(',', '.');
+                estimatedValue = parseFloat(valStr) || 0;
+            }
+
+            // Extract sessionDate
+            let formattedSessionDate = formData.sessionDate;
+            const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
+            if (rawDate) {
+                const d = new Date(rawDate);
+                if (!isNaN(d.getTime())) {
+                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                    formattedSessionDate = d.toISOString().slice(0, 16);
+                }
+            }
+
+            // Auto-calculate risk from critical points
+            let risk = proc.risk || 'Baixo';
+            if (schema?.legal_risk_review?.critical_points) {
+                const criticals = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'critical' || cp.severity === 'alto');
+                const highs = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'high' || cp.severity === 'medio');
+                if (criticals.length >= 2) risk = 'Crítico';
+                else if (criticals.length >= 1) risk = 'Alto';
+                else if (highs.length >= 2) risk = 'Médio';
+            }
+
+            setFormData(prev => ({
+                ...prev,
+                title: title || prev.title,
+                summary: summary || prev.summary,
+                modality: modality || prev.modality,
+                portal: portal || prev.portal,
+                estimatedValue: estimatedValue || prev.estimatedValue,
+                sessionDate: formattedSessionDate,
+                risk: risk as any
+            }));
 
             // Step 4: Store full analysis
             if (aiData.analysis) {
@@ -408,7 +490,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                     analyzedAt: new Date().toISOString()
                 };
                 setAiAnalysisData(analysisObj);
-                toast.success('Edital analisado com sucesso! Campos preenchidos automaticamente. Confira o Relatório Analítico.');
+                toast.success('Edital analisado com sucesso! Campos preenchidos automaticamente.');
             } else {
                 toast.success('Campos preenchidos via IA!');
             }
@@ -416,6 +498,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             toast.error(`Erro na análise IA: ${e.message}`);
         } finally {
             setIsCheckingAi(false);
+            setTimeout(() => setAiProgress(null), 2000);
             if (aiQuickUploadRef.current) aiQuickUploadRef.current.value = '';
         }
     };
@@ -445,7 +528,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
         showAiModal, setShowAiModal, aiAnalysisData,
         showPassword, setShowPassword, copiedField,
         viewingPdf, setViewingPdf,
-        fileInputRef, aiQuickUploadRef, nextStep,
+        fileInputRef, aiQuickUploadRef, nextStep, aiProgress,
         // Handlers
         handleChange, handleAddObservation,
         handleFileUploadClick, handleFileChange,
