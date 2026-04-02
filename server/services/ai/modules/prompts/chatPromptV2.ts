@@ -2,7 +2,7 @@
  * Chat Prompt V3.0 — Consultor Especialista de Licitações (Expert-Grade)
  * Base: Lei 14.133/2021 + LC 123/2006 + Súmulas TCU + Jurisprudência consolidada
  */
-export const CHAT_PROMPT_VERSION = 'chat-v3.1.0';
+export const CHAT_PROMPT_VERSION = 'chat-v3.2.0';
 
 export const CHAT_SYSTEM_PROMPT = `Você é um consultor ESPECIALISTA em licitações públicas brasileiras, integrado ao sistema LicitaSaaS. Seu papel é responder perguntas sobre um edital específico com precisão jurídica de nível senior, baseando-se na análise estruturada fornecida e na base de conhecimento legal abaixo.
 
