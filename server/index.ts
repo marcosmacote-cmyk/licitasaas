@@ -5644,9 +5644,8 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
 
     // ── 6. Análise Econômico-Financeira ──
     check(
-        (schema.economic_financial_analysis?.indices_exigidos?.length || 0) > 0 ||
-        !!schema.economic_financial_analysis?.capital_social_minimo ||
-        !!schema.economic_financial_analysis?.patrimonio_liquido_minimo,
+        (schema.requirements?.qualificacao_economico_financeira?.length || 0) > 0 ||
+        (schema.economic_financial_analysis?.indices_exigidos?.length || 0) > 0,
         'Nenhuma exigência econômico-financeira identificada'
     );
 
@@ -5664,11 +5663,8 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
         `Poucas evidências registradas (apenas ${evCount}), rastreabilidade comprometida`
     );
 
-    // ── 9. Outputs Operacionais ──
-    check(
-        (schema.operational_outputs?.documents_to_prepare?.length || 0) > 0,
-        'Lista de documentos a preparar não gerada'
-    );
+    // ── 9. Outputs Operacionais (Desativado na V2 Otimizada) ──
+    // O pipeline unificou isso nas exigências para ganhar performance.
 
     // ── 10. Revisão de Risco ──
     check(
