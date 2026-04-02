@@ -7187,6 +7187,118 @@ app.put('/api/chat-monitor/process-action/:processId', authenticateToken, async 
 // In-memory store for Agent Heartbeats (Phase 1)
 const agentHeartbeats = new Map<string, any>(); 
 
+// ══════════════════════════════════════════════════════════════
+// ── System Health Watchdog: Self-monitoring for silent deaths ──
+// ══════════════════════════════════════════════════════════════
+const ADMIN_TELEGRAM_CHAT_ID = process.env.ADMIN_TELEGRAM_CHAT_ID || '';
+const pollerLastSuccess = new Map<string, Date>();
+// Track which alerts are currently active (avoid repeated spam)
+const watchdogActiveAlerts = new Set<string>();
+
+async function sendAdminAlert(message: string) {
+    if (!ADMIN_TELEGRAM_CHAT_ID) {
+        console.warn('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — alert suppressed');
+        return;
+    }
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+        console.warn('[Watchdog] ⚠️ TELEGRAM_BOT_TOKEN not set — alert suppressed');
+        return;
+    }
+    try {
+        await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            chat_id: ADMIN_TELEGRAM_CHAT_ID,
+            text: message,
+            parse_mode: 'HTML',
+        }, { timeout: 10000 });
+        console.log(`[Watchdog] ✅ Admin alert sent to ${ADMIN_TELEGRAM_CHAT_ID}`);
+    } catch (err: any) {
+        console.error(`[Watchdog] ❌ Failed to send admin alert:`, err.message);
+    }
+}
+
+async function runWatchdogCheck() {
+    const now = new Date();
+    const alerts: string[] = [];
+
+    // ── 1. Check Railway pollers (BLL, BNC, PCP, Licitanet, LMB) ──
+    const pollerThresholds: Record<string, number> = {
+        'BLL+BNC':    10 * 60_000,  // 10 min (polls every 60s)
+        'PCP':        15 * 60_000,  // 15 min (polls every 90s)
+        'Licitanet':  15 * 60_000,  // 15 min (polls every 90s)
+        'LMB':        15 * 60_000,  // 15 min (polls every 90s)
+    };
+
+    for (const [name, thresholdMs] of Object.entries(pollerThresholds)) {
+        const lastSuccess = pollerLastSuccess.get(name);
+        if (!lastSuccess) continue; // Not started yet — skip (will fire after startup delay)
+        const elapsedMs = now.getTime() - lastSuccess.getTime();
+        if (elapsedMs > thresholdMs) {
+            const mins = Math.floor(elapsedMs / 60_000);
+            if (!watchdogActiveAlerts.has(name)) {
+                alerts.push(`⚠️ <b>${name}</b> não completa um ciclo há <b>${mins} minutos</b>`);
+                watchdogActiveAlerts.add(name);
+            }
+        } else {
+            // Recovered — clear active alert
+            if (watchdogActiveAlerts.has(name)) {
+                watchdogActiveAlerts.delete(name);
+                // Send recovery notification
+                sendAdminAlert(`✅ <b>${name}</b> voltou a funcionar normalmente.`);
+            }
+        }
+    }
+
+    // ── 2. Check Worker heartbeats (ComprasNet, BBMNET) ──
+    const workerThresholdMs = 30 * 60_000; // 30 min — workers do heartbeat less frequently
+    let anyWorkerHeartbeat = false;
+    for (const [_tid, hb] of agentHeartbeats.entries()) {
+        if (hb.lastHeartbeatAt) {
+            anyWorkerHeartbeat = true;
+            const elapsedMs = now.getTime() - new Date(hb.lastHeartbeatAt).getTime();
+            if (elapsedMs > workerThresholdMs) {
+                const mins = Math.floor(elapsedMs / 60_000);
+                const label = `Worker-${hb.machineName || 'unknown'}`;
+                if (!watchdogActiveAlerts.has(label)) {
+                    alerts.push(`⚠️ <b>${label}</b> não fez heartbeat há <b>${mins} minutos</b>`);
+                    watchdogActiveAlerts.add(label);
+                }
+            } else {
+                const label = `Worker-${hb.machineName || 'unknown'}`;
+                if (watchdogActiveAlerts.has(label)) {
+                    watchdogActiveAlerts.delete(label);
+                    sendAdminAlert(`✅ <b>${label}</b> voltou a fazer heartbeat.`);
+                }
+            }
+        }
+    }
+
+    // ── 3. Check for stale notification queue ──
+    try {
+        const pendingCount = await prisma.chatMonitorLog.count({
+            where: { status: 'PENDING_NOTIFICATION' },
+        });
+        if (pendingCount > 20) {
+            const label = 'NotificationQueue';
+            if (!watchdogActiveAlerts.has(label)) {
+                alerts.push(`⚠️ <b>Fila de notificações</b> com <b>${pendingCount}</b> mensagens pendentes (possível travamento)`);
+                watchdogActiveAlerts.add(label);
+            }
+        } else {
+            watchdogActiveAlerts.delete('NotificationQueue');
+        }
+    } catch { /* DB query failed — don't alert on watchdog errors */ }
+
+    // ── Send consolidated alert ──
+    if (alerts.length > 0) {
+        const msg = `🔴 <b>ALERTA DO SISTEMA — LicitaSaaS</b>\n\n` +
+                    alerts.join('\n') + '\n\n' +
+                    `<i>${now.toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })}</i>`;
+        await sendAdminAlert(msg);
+    }
+}
+
+
 // 1. Get sessions the agent should monitor
 app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any, res) => {
     try {
@@ -7971,6 +8083,16 @@ app.listen(PORT, async () => {
     // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
     // pncpMonitor.startPolling(5);
 
+    // ── System Health Watchdog: check every 5 minutes ──
+    if (ADMIN_TELEGRAM_CHAT_ID) {
+        setTimeout(() => {
+            console.log('[Watchdog] 🐕 System health watchdog started (interval: 5 min)');
+            setInterval(runWatchdogCheck, 5 * 60_000);
+        }, 3 * 60_000); // Start 3 min after boot (give pollers time to initialize)
+    } else {
+        console.log('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — watchdog disabled');
+    }
+
     // ── Background Workers (only run when PROCESS_ROLE is 'all' or 'worker') ──
     if (PROCESS_ROLE === 'api') {
         console.log('[Server] PROCESS_ROLE=api — background pollers disabled (running in separate worker process)');
@@ -8112,6 +8234,7 @@ app.listen(PORT, async () => {
             if (totalNew > 0) {
                 console.log(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
             }
+            pollerLastSuccess.set('BLL+BNC', new Date());
         } catch (error: any) {
             console.error('[Batch Poll] Erro no ciclo:', error.message);
         }
@@ -8196,6 +8319,7 @@ app.listen(PORT, async () => {
             if (totalNew > 0) {
                 console.log(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
             }
+            pollerLastSuccess.set('PCP', new Date());
         } catch (error: any) {
             console.error('[PCP Poll] Erro no ciclo:', error.message);
         }
@@ -8280,6 +8404,7 @@ app.listen(PORT, async () => {
             if (totalNew > 0) {
                 console.log(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
             }
+            pollerLastSuccess.set('Licitanet', new Date());
         } catch (error: any) {
             console.error('[Licitanet Poll] Erro no ciclo:', error.message);
         }
@@ -8364,6 +8489,7 @@ app.listen(PORT, async () => {
             if (totalNew > 0) {
                 console.log(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
             }
+            pollerLastSuccess.set('LMB', new Date());
         } catch (error: any) {
             console.error('[LMB Poll] Erro no ciclo:', error.message);
         }
