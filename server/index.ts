@@ -6203,14 +6203,81 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
 
         // ── 8. Compatibilidade V1 ──
         // Gera campos legacy para consumo pelos módulos que ainda usam o formato antigo
+
+        // ── Helper: Parse date in PT-BR or ISO format ──
+        const parsePtBrDate = (dateStr: string): string => {
+            if (!dateStr) return '';
+            // Already ISO
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+            // PT-BR: "27/05/2025 09:00" or "27/05/2025"
+            const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2})?/);
+            if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4] || '00:00'}:00`;
+            return dateStr;
+        };
+
+        // ── Helper: Calculate estimated value from itens or schema ──
+        const calcEstimatedValue = (): number => {
+            const itens = result.proposal_analysis?.itens_licitados || [];
+            if (Array.isArray(itens) && itens.length > 0) {
+                const total = itens.reduce((sum: number, it: any) => {
+                    const price = parseFloat(String(it.referencePrice || 0)) || 0;
+                    const qty = parseFloat(String(it.quantity || 1)) || 1;
+                    const mult = parseFloat(String(it.multiplier || 1)) || 1;
+                    return sum + (price * qty * mult);
+                }, 0);
+                if (total > 0) return Math.round(total * 100) / 100;
+            }
+            // Fallback: try capital_social_minimo or patrimonio_liquido_minimo as proxy
+            const csm = result.economic_financial_analysis?.capital_social_minimo;
+            if (csm) {
+                const v = parseFloat(String(csm).replace(/[^\d.,]/g, '').replace(',', '.'));
+                if (v > 0) return v * 10; // Capital mínimo ≈ 10% do valor
+            }
+            return 0;
+        };
+
+        // ── Helper: Detect portal from schema ──
+        const detectPortal = (): string => {
+            const orgao = (result.process_identification?.orgao || '').toLowerCase();
+            const fonte = (result.process_identification?.fonte_oficial || '').toLowerCase();
+            const edital = (result.process_identification?.numero_edital || '').toLowerCase();
+            const allText = `${orgao} ${fonte} ${edital}`;
+            if (/compras\.gov|comprasnet|cnetmobile|pncp|uasg/i.test(allText)) return 'Compras.gov.br';
+            if (/bnc\b|bolsa\s*nacional/i.test(allText)) return 'BNC';
+            if (/bll\b|bolsadedigital/i.test(allText)) return 'BLL';
+            if (/licitanet/i.test(allText)) return 'Licitanet';
+            if (/bbmnet/i.test(allText)) return 'BBMNET';
+            if (/portaldecompras|portal\s*de\s*compras|portaldecompraspublicas/i.test(allText)) return 'Portal de Compras Públicas';
+            // Detect by orgao type
+            if (/federal|ministério|minist[eé]rio|uni[aã]o|autarquia federal|ibama|inss|inpe|icmbio/i.test(orgao)) return 'Compras.gov.br';
+            if (/prefeitura|munic[ií]p|câmara municipal|c[aâ]mara\s*municipal/i.test(orgao)) return 'Outro Portal';
+            return '';
+        };
+
+        // ── Helper: Auto-calculate risk from critical points ──
+        const autoRisk = (): string => {
+            const cps = result.legal_risk_review?.critical_points || [];
+            const criticals = cps.filter(cp => cp.severity === 'critica' || cp.severity === 'alta');
+            const medias = cps.filter(cp => cp.severity === 'media');
+            if (criticals.length >= 2) return 'Crítico';
+            if (criticals.length >= 1) return 'Alto';
+            if (medias.length >= 2) return 'Médio';
+            return 'Baixo';
+        };
+
+        const estimatedValueCalc = calcEstimatedValue();
+
         const legacyCompat = {
             process: {
                 title: result.process_identification.objeto_resumido || result.process_identification.numero_edital,
+                summary: result.process_identification.objeto_completo || result.process_identification.objeto_resumido,
                 modality: normalizeModality(result.process_identification.modalidade),
                 object: result.process_identification.objeto_completo,
                 agency: result.process_identification.orgao,
-                estimatedValue: '',
-                sessionDate: result.timeline.data_sessao,
+                portal: detectPortal(),
+                estimatedValue: estimatedValueCalc,
+                sessionDate: parsePtBrDate(result.timeline.data_sessao),
+                risk: autoRisk(),
             },
             analysis: {
                 fullSummary: `ANÁLISE V2 — ${result.process_identification.objeto_resumido}\n\n` +

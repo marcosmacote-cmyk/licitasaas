@@ -425,36 +425,46 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 if (orgao.includes('federal') || orgao.includes('ministério')) portal = 'Compras.gov.br';
             }
 
-            // Extract estimatedValue
+            // Extract estimatedValue — from legacy or itens_licitados sum
             let estimatedValue = proc.estimatedValue ? parseFloat(String(proc.estimatedValue).replace(/[^\d.,]/g, '').replace(',', '.')) : 0;
-            if (!estimatedValue && schema?.economic_financial_analysis?.valor_estimado_global) {
-                const valStr = String(schema.economic_financial_analysis.valor_estimado_global).replace(/[^\d.,]/g, '').replace(',', '.');
-                estimatedValue = parseFloat(valStr) || 0;
-            }
-            if (!estimatedValue && schema?.proposal_analysis?.valor_estimado) {
-                const valStr = String(schema.proposal_analysis.valor_estimado).replace(/[^\d.,]/g, '').replace(',', '.');
-                estimatedValue = parseFloat(valStr) || 0;
+            if (!estimatedValue && schema?.proposal_analysis?.itens_licitados) {
+                const itens = schema.proposal_analysis.itens_licitados;
+                if (Array.isArray(itens) && itens.length > 0) {
+                    estimatedValue = itens.reduce((sum: number, it: any) => {
+                        const price = parseFloat(String(it.referencePrice || 0)) || 0;
+                        const qty = parseFloat(String(it.quantity || 1)) || 1;
+                        const mult = parseFloat(String(it.multiplier || 1)) || 1;
+                        return sum + (price * qty * mult);
+                    }, 0);
+                    estimatedValue = Math.round(estimatedValue * 100) / 100;
+                }
             }
 
-            // Extract sessionDate
+            // Extract sessionDate — handle PT-BR format (dd/MM/yyyy HH:mm)
             let formattedSessionDate = formData.sessionDate;
             const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
             if (rawDate) {
-                const d = new Date(rawDate);
+                let dateStr = rawDate;
+                // Convert PT-BR "27/05/2025 09:00" to ISO
+                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2})?/);
+                if (ptBrMatch) {
+                    dateStr = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4] || '00:00'}:00`;
+                }
+                const d = new Date(dateStr);
                 if (!isNaN(d.getTime())) {
                     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
                     formattedSessionDate = d.toISOString().slice(0, 16);
                 }
             }
 
-            // Auto-calculate risk from critical points
+            // Auto-calculate risk from critical points (severity is in PT: critica, alta, media, baixa)
             let risk = proc.risk || 'Baixo';
             if (schema?.legal_risk_review?.critical_points) {
-                const criticals = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'critical' || cp.severity === 'alto');
-                const highs = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'high' || cp.severity === 'medio');
+                const criticals = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'critica' || cp.severity === 'alta');
+                const medias = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'media');
                 if (criticals.length >= 2) risk = 'Crítico';
                 else if (criticals.length >= 1) risk = 'Alto';
-                else if (highs.length >= 2) risk = 'Médio';
+                else if (medias.length >= 2) risk = 'Médio';
             }
 
             setFormData(prev => ({
