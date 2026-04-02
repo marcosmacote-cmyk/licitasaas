@@ -716,40 +716,172 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     };
 
     const doImport = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
+        // ═══════════════════════════════════════════════════════════
+        // 1. SMART PORTAL DETECTION — resolve o portal real de operação
+        // ═══════════════════════════════════════════════════════════
         let bestPortalName = "PNCP";
+        const link = (item.link_sistema || '').toLowerCase();
+
+        // Check registered credentials first
         if (companies.length > 0) {
             const allCreds = companies.flatMap(c => c.credentials || []);
-            const link = (item.link_sistema || '').toLowerCase();
             const match = allCreds.find(c => {
                 const cu = (c.url || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
                 return cu && link.includes(cu.split('/')[0]);
             });
-            if (match) { bestPortalName = match.platform; }
-            else if (link.includes('comprasnet') || link.includes('gov.br/compras')) { bestPortalName = "ComprasNet"; }
-            else if (link.includes('bll.org')) { bestPortalName = "BLL"; }
-            else if (link.includes('bnccompras') || link.includes('bnc.org.br')) { bestPortalName = "BNC"; }
-            else if (link.includes('licitacoes-e')) { bestPortalName = "Licitações-e (BB)"; }
-            else if (link.includes('portaldecompraspublicas')) { bestPortalName = "Portal de Compras Públicas"; }
-            else if (link.includes('bec.sp')) { bestPortalName = "BEC/SP"; }
+            if (match) bestPortalName = match.platform;
         }
 
+        // Fallback: infer from link patterns (more comprehensive)
+        if (bestPortalName === 'PNCP') {
+            if (link.includes('comprasnet') || link.includes('cnetmobile') || link.includes('gov.br/compras')) bestPortalName = "ComprasNet";
+            else if (link.includes('bllcompras') || link.includes('bll.org')) bestPortalName = "BLL";
+            else if (link.includes('bnccompras') || link.includes('bnc.org.br')) bestPortalName = "BNC";
+            else if (link.includes('licitacoes-e')) bestPortalName = "Licitações-e (BB)";
+            else if (link.includes('portaldecompraspublicas')) bestPortalName = "Portal de Compras Públicas";
+            else if (link.includes('bec.sp')) bestPortalName = "BEC/SP";
+            else if (link.includes('m2atecnologia') || link.includes('m2a.')) bestPortalName = "M2A Tecnologia";
+            else if (link.includes('bbmnet')) bestPortalName = "BBMNet";
+            else if (link.includes('compras.gov.br') || link.includes('pncp.gov.br')) bestPortalName = "Compras.gov.br";
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 2. AI-INFORMED RISK TAG — calcula risco baseado na análise IA
+        // ═══════════════════════════════════════════════════════════
+        let riskTag: string = aiData?.process?.risk || 'Médio';
+        if (aiData?.analysis?.schemaV2) {
+            const v2 = aiData.analysis.schemaV2 as any;
+            const flags = v2?.risks_and_flags || [];
+            if (Array.isArray(flags) && flags.length > 0) {
+                const hasCritica = flags.some((f: any) => f.severity === 'critica');
+                const hasAlta = flags.some((f: any) => f.severity === 'alta');
+                const hasMedia = flags.some((f: any) => f.severity === 'media');
+                if (hasCritica) riskTag = 'Crítico';
+                else if (hasAlta) riskTag = 'Alto';
+                else if (hasMedia && flags.length >= 3) riskTag = 'Alto';
+                else if (hasMedia) riskTag = 'Médio';
+                else riskTag = 'Baixo';
+            }
+        } else if (aiData?.analysis?.irregularitiesFlags) {
+            try {
+                const flags = typeof aiData.analysis.irregularitiesFlags === 'string'
+                    ? JSON.parse(aiData.analysis.irregularitiesFlags)
+                    : aiData.analysis.irregularitiesFlags;
+                if (Array.isArray(flags) && flags.length >= 3) riskTag = 'Alto';
+                else if (Array.isArray(flags) && flags.length > 0) riskTag = 'Médio';
+            } catch { /* keep default */ }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 3. SMART TITLE — constrói título enriquecido
+        // ═══════════════════════════════════════════════════════════
+        let title = aiData?.process?.title || item.titulo;
+        // Se o título não inclui referência ao órgão e é curto, enriqueça
+        if (title && !title.includes(item.orgao_nome) && !title.includes('Município') && title.length < 80) {
+            const orgParts = item.orgao_nome.split(' ');
+            const orgShort = orgParts.length > 4 ? orgParts.slice(0, 4).join(' ') : item.orgao_nome;
+            if (!title.toLowerCase().includes(orgShort.toLowerCase().slice(0, 15))) {
+                title = `${title} - ${orgShort}`;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 4. LINK COMPOSITION — combina todos os links relevantes
+        // ═══════════════════════════════════════════════════════════
+        const links: string[] = [];
+        if (item.link_sistema) links.push(item.link_sistema);
+        if (item.link_comprasnet && !links.includes(item.link_comprasnet)) links.push(item.link_comprasnet);
+
+        // ═══════════════════════════════════════════════════════════
+        // 5. SESSION DATE — prioriza data de encerramento (sessão real)
+        // ═══════════════════════════════════════════════════════════
+        let sessionDateISO: string;
+        if (item.data_encerramento_proposta) {
+            sessionDateISO = new Date(item.data_encerramento_proposta).toISOString();
+        } else if (item.data_abertura) {
+            sessionDateISO = new Date(item.data_abertura).toISOString();
+        } else {
+            sessionDateISO = new Date().toISOString();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 6. SMART REMINDER — auto-configura lembrete 2 dias antes da sessão
+        // ═══════════════════════════════════════════════════════════
+        let reminderDate: string | undefined;
+        let reminderStatus: 'pending' | undefined;
+        let reminderType: 'once' | undefined;
+        const sessionMs = new Date(sessionDateISO).getTime();
+        const now = Date.now();
+        const twoDaysBefore = sessionMs - (2 * 24 * 60 * 60 * 1000);
+        if (twoDaysBefore > now) {
+            // Set reminder at 08:00 two days before the session
+            const reminderDt = new Date(twoDaysBefore);
+            reminderDt.setHours(8, 0, 0, 0);
+            reminderDate = reminderDt.toISOString();
+            reminderStatus = 'pending';
+            reminderType = 'once';
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 7. RICH OBSERVATION — nota de importação com dados completos
+        // ═══════════════════════════════════════════════════════════
+        const obsParts = [`Importado do PNCP`];
+        if (item.orgao_nome) obsParts.push(`Órgão: ${item.orgao_nome.toUpperCase()}`);
+        if (item.municipio && item.uf) obsParts.push(`${item.municipio}-${item.uf}`);
+        if (item.data_encerramento_proposta) {
+            obsParts.push(`Prazo Limite: ${new Date(item.data_encerramento_proposta).toLocaleString('pt-BR')}`);
+        }
+        const observationText = obsParts.join(' | ');
+
+        // ═══════════════════════════════════════════════════════════
+        // 8. SUMMARY — prefere AI summary (mais rico) ou objeto do PNCP
+        // ═══════════════════════════════════════════════════════════
+        let summary = aiData?.process?.summary || item.objeto;
+        // Se AI tem schemaV2 com objeto_completo, usar este que é mais detalhado
+        if (aiData?.analysis?.schemaV2?.process_identification?.objeto_completo) {
+            const obj = aiData.analysis.schemaV2.process_identification.objeto_completo;
+            if (obj.length > (summary?.length || 0)) summary = obj;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 9. MODALITY — normaliza para o padrão do dropdown
+        // ═══════════════════════════════════════════════════════════
+        let modality = aiData?.process?.modality || item.modalidade_nome || "Não Informado (PNCP)";
+        // Normalize common PNCP modality strings to clean labels
+        const modalMap: Record<string, string> = {
+            'pregão - eletrônico': 'Pregão Eletrônico',
+            'pregão eletrônico': 'Pregão Eletrônico',
+            'concorrência - eletrônica': 'Concorrência',
+            'concorrência eletrônica': 'Concorrência',
+            'concorrência': 'Concorrência',
+            'dispensa': 'Dispensa',
+            'dispensa de licitação': 'Dispensa',
+            'inexigibilidade': 'Inexigibilidade',
+            'diálogo competitivo': 'Diálogo Competitivo',
+            'leilão - eletrônico': 'Leilão',
+        };
+        const normalizedMod = modalMap[modality.toLowerCase().trim()];
+        if (normalizedMod) modality = normalizedMod;
+
+        // ═══════════════════════════════════════════════════════════
+        // BUILD & SET PROCESS
+        // ═══════════════════════════════════════════════════════════
         const processData: Partial<BiddingProcess> = {
-            title: aiData?.process?.title || item.titulo,
-            summary: aiData?.process?.summary || item.objeto,
+            title,
+            summary,
             portal: aiData?.process?.portal || bestPortalName,
-            modality: aiData?.process?.modality || item.modalidade_nome || "Não Informado (PNCP)",
+            modality,
             status: "Captado",
             estimatedValue: aiData?.process?.estimatedValue || item.valor_estimado || 0,
-            sessionDate: item.data_encerramento_proposta
-                ? new Date(item.data_encerramento_proposta).toISOString()
-                : (item.data_abertura ? new Date(item.data_abertura).toISOString() : new Date().toISOString()),
-            link: [item.link_sistema, item.link_comprasnet].filter(Boolean).join(', '),
+            sessionDate: sessionDateISO,
+            link: links.join(', '),
             pncpLink: item.link_sistema,
-            risk: aiData?.process?.risk || 'Médio',
+            risk: riskTag as any,
             companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
+            ...(reminderDate ? { reminderDate, reminderStatus, reminderType } : {}),
             observations: JSON.stringify([{
                 id: crypto.randomUUID?.() || Date.now().toString(),
-                text: `Importado do PNCP | Órgão: ${item.orgao_nome} | ${item.municipio}-${item.uf}${item.data_encerramento_proposta ? ' | Prazo Limite: ' + new Date(item.data_encerramento_proposta).toLocaleString('pt-BR') : ''}`,
+                text: observationText,
                 createdAt: new Date().toISOString(), author: 'Sistema'
             }])
         };

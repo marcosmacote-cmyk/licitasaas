@@ -177,7 +177,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 <div style={inputContainerStyle}>
                                     <Globe size={18} color="var(--color-text-tertiary)" />
                                     {(!form.formData.portal || [
-                                        "ComprasNet", "BLL", "BNC", "Licitações-e (BB)", 
+                                        "ComprasNet", "Compras.gov.br", "BLL", "BNC", "Licitações-e (BB)", 
                                         "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet"
                                     ].includes(form.formData.portal)) && form.formData.portal !== 'Outro_Manual_Entry' ? (
                                         <select name="portal" style={inputInnerStyle} value={form.formData.portal || ''} onChange={(e) => {
@@ -188,7 +188,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             }
                                         }}>
                                             <option value="">-- Selecione --</option>
-                                            {["ComprasNet", "BLL", "BNC", "Licitações-e (BB)", "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                            {["ComprasNet", "Compras.gov.br", "BLL", "BNC", "Licitações-e (BB)", "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                             <option value="Outro">Outro...</option>
                                         </select>
                                     ) : (
