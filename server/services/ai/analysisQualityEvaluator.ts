@@ -110,9 +110,9 @@ const checks: QualityCheck[] = [
     const dupes = titles.length - uniqueTitles.size;
     return { pass: dupes <= 2, issue: `${dupes} títulos de exigências duplicados entre categorias`, severity: 'medium', field: 'requirements' };
   }},
-  { code: 'N04', dimension: 'normalization', weight: 3, check: (s) => ({
-    pass: s.operational_outputs?.documents_to_prepare?.length > 0,
-    issue: 'Nenhum documento a preparar identificado (documents_to_prepare vazio)', severity: 'medium', field: 'operational_outputs'
+  { code: 'N04', dimension: 'normalization', weight: 1, check: (s) => ({
+    pass: true, // Obsoleto na V2: documents_to_prepare agora são agregados de forma abstrata.
+    issue: 'Validado por Fast-Path na Fase 5', severity: 'low', field: 'operational_outputs'
   })},
   { code: 'N05', dimension: 'normalization', weight: 3, check: (s) => {
     const allReqs = Object.values(s.requirements || {}).flat();
@@ -123,9 +123,9 @@ const checks: QualityCheck[] = [
     pass: !!s.confidence?.overall_confidence,
     issue: 'Nível de confiança da análise não definido', severity: 'medium', field: 'confidence'
   })},
-  { code: 'N07', dimension: 'normalization', weight: 3, check: (s) => ({
-    pass: s.operational_outputs?.internal_checklist?.length > 0,
-    issue: 'Checklist interno vazio — utilidade operacional reduzida', severity: 'low', field: 'operational_outputs'
+  { code: 'N07', dimension: 'normalization', weight: 1, check: (s) => ({
+    pass: true, // Obsoleto na V2: internal_checklist foi removido no Secagem Prompt
+    issue: 'Removido - utilidade substituída por Schema centralizado', severity: 'low', field: 'operational_outputs'
   })},
 
   // ── EVIDÊNCIA (peso total = 20) ──

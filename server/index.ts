@@ -2465,7 +2465,8 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         }
 
         // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION ──
-        // Detect if critical categories are missing (likely due to output truncation)
+// ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION ──
+/* [FASE 5 - Otimizado] Loop de re-extração desabilitado por custo de tempo (add 60s+).
         const expectedCategories: Record<string, string[]> = {
             'obra_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
             'servico_comum_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
@@ -2561,7 +2562,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 v2Result.confidence.warnings.push(`Re-extração de categorias faltantes falhou: ${reErr.message}`);
             }
         }
-
+} */
 
         // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
         sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
