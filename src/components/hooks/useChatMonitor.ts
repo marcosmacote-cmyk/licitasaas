@@ -377,6 +377,18 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     finally { setIsGlobalSearching(false); }
   };
 
+  const openGlobalSearch = () => {
+    setGlobalSearchQuery('');
+    setGlobalSearchResults([]);
+    setShowGlobalSearch(true);
+  };
+
+  const closeGlobalSearch = () => {
+    setShowGlobalSearch(false);
+    setGlobalSearchQuery('');
+    setGlobalSearchResults([]);
+  };
+
   // ══════════════════════════════════════
   // ── Filters ──
   // ══════════════════════════════════════
@@ -438,7 +450,7 @@ export function useChatMonitor({ }: UseChatMonitorParams) {
     handleClosureAction, removeMonitoring,
     handleTestNotification, handleSaveConfig,
     // Global Search
-    showGlobalSearch, setShowGlobalSearch,
+    showGlobalSearch, openGlobalSearch, closeGlobalSearch,
     globalSearchQuery, setGlobalSearchQuery,
     globalSearchResults, isGlobalSearching, handleGlobalSearch,
   };

@@ -435,7 +435,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
             </div>
           )}
 
-          <button className="btn btn-ghost" onClick={() => c.setShowGlobalSearch(true)} title="Busca Global" style={{ padding: '6px', color: c.showGlobalSearch ? 'var(--color-primary)' : undefined }}>
+          <button className="btn btn-ghost" onClick={() => c.openGlobalSearch()} title="Busca Global" style={{ padding: '6px', color: c.showGlobalSearch ? 'var(--color-primary)' : undefined }}>
             <Search size={16} />
           </button>
           <button className="btn btn-ghost" onClick={() => c.fetchProcesses(true)} title="Atualizar" style={{ padding: '6px' }}>
@@ -471,7 +471,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                   {c.isGlobalSearching ? <Loader2 size={16} className="spinner" /> : 'Buscar'}
                 </button>
               </form>
-              <button onClick={() => c.setShowGlobalSearch(false)} className="btn btn-ghost" style={{ padding: '4px' }}>
+              <button onClick={() => c.closeGlobalSearch()} className="btn btn-ghost" style={{ padding: '4px' }}>
                 <X size={20} />
               </button>
             </div>
@@ -511,7 +511,7 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                   {/* Footer do Card */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-3)' }}>
                      <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', textTransform: 'capitalize', fontWeight: 500 }}>Enviado por: {msg.authorType || 'Desconhecido'}</span>
-                     <button onClick={() => { c.setShowGlobalSearch(false); c.handleSelectProcess(msg.biddingProcessId); }} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: 'var(--radius-full)' }}>
+                     <button onClick={() => { c.closeGlobalSearch(); c.handleSelectProcess(msg.biddingProcessId); }} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: 'var(--radius-full)' }}>
                        Abrir Processo <ExternalLink size={12} style={{ marginLeft: '4px' }} />
                      </button>
                   </div>
