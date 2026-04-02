@@ -657,18 +657,12 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     if (onRequestAiAnalysis) { onRequestAiAnalysis(); } else { form.setShowAiModal(true); }
                                 }} style={{
                                     padding: 'var(--space-3) var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                                    color: 'var(--color-ai)', borderColor: 'var(--color-ai-border)', background: 'var(--color-ai-bg)'
+                                    color: 'var(--color-ai)', borderColor: 'var(--color-ai-border)', background: 'var(--color-ai-bg)',
+                                    marginRight: 'auto'
                                 }}>
                                     <ScanSearch size={18} /> Ver Relatório IA
                                 </button>
                             )}
-                            <button type="button" className="btn btn-primary" onClick={form.handleAiExtract} disabled={form.isCheckingAi} style={{
-                                padding: 'var(--space-3) var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                                marginRight: 'auto', backgroundColor: 'var(--color-ai)', borderColor: 'var(--color-ai)'
-                            }}>
-                                {form.isCheckingAi ? <Loader2 size={18} className="spinner" /> : <Cpu size={18} />}
-                                {form.isCheckingAi ? 'Analisando PDF...' : 'IA: Extrair edital'}
-                            </button>
                             <button type="button" className="btn btn-outline" onClick={onClose} style={{ padding: 'var(--space-3) var(--space-6)' }}>
                                 Cancelar
                             </button>
