@@ -317,6 +317,11 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                     process={b.viewingProcessForAnalysis}
                     onClose={() => b.setViewingProcessForAnalysis(null)}
                     onUpdate={b.refreshData}
+                    onBackToHub={() => {
+                        const proc = b.viewingProcessForAnalysis;
+                        b.setViewingProcessForAnalysis(null);
+                        if (proc) b.handleEdit(proc);
+                    }}
                 />
             )}
 

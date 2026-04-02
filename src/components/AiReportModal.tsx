@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, BarChart3, Building2, FileDown } from 'lucide-react';
+import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, BarChart3, Building2, FileDown, ArrowLeft } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
@@ -12,9 +12,10 @@ interface Props {
     onClose: () => void;
     onUpdate: () => void;
     onImport?: () => void;
+    onBackToHub?: () => void;
 }
 
-export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }: Props) {
+export function AiReportModal({ analysis, process, onClose, onUpdate, onImport, onBackToHub }: Props) {
     const [activeTab, setActiveTab] = useState<'report' | 'chat'>('report');
 
     const {
@@ -1058,6 +1059,17 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                         {analysis?.modelUsed && (<><span>•</span><span>{analysis.modelUsed}</span></>)}
                     </div>
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+                        {onBackToHub && (
+                            <button onClick={onBackToHub} style={{
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                                border: '1px solid var(--color-primary)', background: 'var(--color-bg-surface)', color: 'var(--color-primary)', fontWeight: 'var(--font-semibold)',
+                                fontSize: 'var(--text-md)', cursor: 'pointer', transition: 'var(--transition-fast)'
+                            }}
+                                onMouseOver={(e) => { e.currentTarget.style.background = 'var(--color-primary)'; e.currentTarget.style.color = '#ffffff'; }}
+                                onMouseOut={(e) => { e.currentTarget.style.background = 'var(--color-bg-surface)'; e.currentTarget.style.color = 'var(--color-primary)'; }}>
+                                <ArrowLeft size={16} /> Voltar ao Hub
+                            </button>
+                        )}
                         <button onClick={handleExportPdf} style={{
                             display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
                             border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)',
