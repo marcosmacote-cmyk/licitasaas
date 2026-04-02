@@ -6217,6 +6217,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
 
         // ── Helper: Calculate estimated value from itens or schema ──
         const calcEstimatedValue = (): number => {
+            // Strategy 1: Sum from itens_licitados
             const itens = result.proposal_analysis?.itens_licitados || [];
             if (Array.isArray(itens) && itens.length > 0) {
                 const total = itens.reduce((sum: number, it: any) => {
@@ -6227,12 +6228,43 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 }, 0);
                 if (total > 0) return Math.round(total * 100) / 100;
             }
-            // Fallback: try capital_social_minimo or patrimonio_liquido_minimo as proxy
+
+            // Strategy 2: Parse R$ value from objeto_completo or object text
+            const textsToSearch = [
+                result.process_identification?.objeto_completo || '',
+                result.process_identification?.objeto_resumido || '',
+                ...(result.contractual_analysis?.obrigacoes_contratada || []),
+                ...(result.proposal_analysis?.observacoes_proposta || []),
+            ].join(' ');
+            // Match: R$ 1.234.567,89 or R$1234567.89 or valor estimado/global de R$ ...
+            const valueMatch = textsToSearch.match(/(?:valor\s*(?:estimado|global|total|máximo|referência)[^R$]*)?R\$\s*([\d.]+,\d{2})/i);
+            if (valueMatch) {
+                const cleaned = valueMatch[1].replace(/\./g, '').replace(',', '.');
+                const val = parseFloat(cleaned);
+                if (val > 0) return Math.round(val * 100) / 100;
+            }
+            // Also try without R$: "valor estimado de 1.234.567,89"
+            const altMatch = textsToSearch.match(/valor\s*(?:estimado|global|total|máximo)\s*(?:de|:)?\s*(?:R\$\s*)?([\d.]+,\d{2})/i);
+            if (altMatch) {
+                const cleaned = altMatch[1].replace(/\./g, '').replace(',', '.');
+                const val = parseFloat(cleaned);
+                if (val > 0) return Math.round(val * 100) / 100;
+            }
+
+            // Strategy 3: Derive from capital_social_minimo (≈10% do valor)
             const csm = result.economic_financial_analysis?.capital_social_minimo;
             if (csm) {
                 const v = parseFloat(String(csm).replace(/[^\d.,]/g, '').replace(',', '.'));
-                if (v > 0) return v * 10; // Capital mínimo ≈ 10% do valor
+                if (v > 0) return Math.round(v * 10 * 100) / 100;
             }
+
+            // Strategy 4: patrimonio_liquido_minimo (≈10% do valor)
+            const plm = result.economic_financial_analysis?.patrimonio_liquido_minimo;
+            if (plm) {
+                const v = parseFloat(String(plm).replace(/[^\d.,]/g, '').replace(',', '.'));
+                if (v > 0) return Math.round(v * 10 * 100) / 100;
+            }
+
             return 0;
         };
 
