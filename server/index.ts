@@ -6301,7 +6301,18 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
 
         const legacyCompat = {
             process: {
-                title: result.process_identification.objeto_resumido || result.process_identification.numero_edital,
+                title: (() => {
+                    const mod = result.process_identification.modalidade || '';
+                    const numProc = result.process_identification.numero_processo || '';
+                    const numEdit = result.process_identification.numero_edital || '';
+                    const orgao = (result.process_identification.orgao || '').toUpperCase();
+                    const numero = numProc || numEdit;
+                    // Format: "Pregão Eletrônico 2613030301-PE - PREFEITURA MUNICIPAL DE X"
+                    if (mod && numero && orgao) return `${mod} ${numero} - ${orgao}`;
+                    if (mod && numero) return `${mod} ${numero}`;
+                    if (numero && orgao) return `${numero} - ${orgao}`;
+                    return result.process_identification.objeto_resumido || numero || 'Sem título';
+                })(),
                 summary: result.process_identification.objeto_completo || result.process_identification.objeto_resumido,
                 modality: normalizeModality(result.process_identification.modalidade),
                 object: result.process_identification.objeto_completo,

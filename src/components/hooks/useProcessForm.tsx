@@ -399,8 +399,19 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             // Extract summary from schemaV2 or legacy
             const summary = proc.summary || proc.object || schema?.process_identification?.objeto_completo || schema?.process_identification?.objeto_resumido || '';
 
-            // Extract title
-            const title = proc.title || schema?.process_identification?.objeto_resumido || schema?.process_identification?.numero_edital || '';
+            // Extract title — format: "Modalidade NumProcesso - ÓRGÃO"
+            let title = proc.title || '';
+            if (!title && schema?.process_identification) {
+                const mod = schema.process_identification.modalidade || '';
+                const numProc = schema.process_identification.numero_processo || '';
+                const numEdit = schema.process_identification.numero_edital || '';
+                const orgao = (schema.process_identification.orgao || '').toUpperCase();
+                const numero = numProc || numEdit;
+                if (mod && numero && orgao) title = `${mod} ${numero} - ${orgao}`;
+                else if (mod && numero) title = `${mod} ${numero}`;
+                else if (numero && orgao) title = `${numero} - ${orgao}`;
+                else title = schema.process_identification.objeto_resumido || numero || '';
+            }
 
             // Extract modality
             const modality = proc.modality || schema?.process_identification?.modalidade || '';
