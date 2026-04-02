@@ -6229,22 +6229,34 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 if (total > 0) return Math.round(total * 100) / 100;
             }
 
-            // Strategy 2: Parse R$ value from objeto_completo or object text
+            // Strategy 2: Parse R$ value from ALL text fields in the result
             const textsToSearch = [
                 result.process_identification?.objeto_completo || '',
                 result.process_identification?.objeto_resumido || '',
                 ...(result.contractual_analysis?.obrigacoes_contratada || []),
+                ...(result.contractual_analysis?.obrigacoes_contratante || []),
+                ...(result.contractual_analysis?.penalidades || []),
+                ...(result.contractual_analysis?.matriz_risco_contratual || []),
+                result.contractual_analysis?.medicao_pagamento || '',
                 ...(result.proposal_analysis?.observacoes_proposta || []),
+                ...(result.proposal_analysis?.criterios_exequibilidade || []),
+                result.participation_conditions?.garantia_contratual_detalhes || '',
+                result.participation_conditions?.garantia_proposta_detalhes || '',
+                ...(result.evidence_registry || []).map((e: any) => e.excerpt || ''),
+                ...(result.legal_risk_review?.critical_points || []).map((cp: any) => `${cp.description} ${cp.reason}`),
+                ...(result.confidence?.warnings || []),
             ].join(' ');
-            // Match: R$ 1.234.567,89 or R$1234567.89 or valor estimado/global de R$ ...
-            const valueMatch = textsToSearch.match(/(?:valor\s*(?:estimado|global|total|máximo|referência)[^R$]*)?R\$\s*([\d.]+,\d{2})/i);
-            if (valueMatch) {
-                const cleaned = valueMatch[1].replace(/\./g, '').replace(',', '.');
+            // Match: R$ 1.234.567,89 or R$1234567.89
+            const allRValues = textsToSearch.matchAll(/R\$\s*([\d.]+,\d{2})/gi);
+            let maxValue = 0;
+            for (const m of allRValues) {
+                const cleaned = m[1].replace(/\./g, '').replace(',', '.');
                 const val = parseFloat(cleaned);
-                if (val > 0) return Math.round(val * 100) / 100;
+                if (val > maxValue) maxValue = val;
             }
-            // Also try without R$: "valor estimado de 1.234.567,89"
-            const altMatch = textsToSearch.match(/valor\s*(?:estimado|global|total|máximo)\s*(?:de|:)?\s*(?:R\$\s*)?([\d.]+,\d{2})/i);
+            if (maxValue > 0) return Math.round(maxValue * 100) / 100;
+            // Also try: "valor estimado de 1.234.567,89" (without R$)
+            const altMatch = textsToSearch.match(/valor\s*(?:estimado|global|total|máximo|contrat)\w*\s*(?:de|:)?\s*(?:R\$\s*)?([\d.]+,\d{2})/i);
             if (altMatch) {
                 const cleaned = altMatch[1].replace(/\./g, '').replace(',', '.');
                 const val = parseFloat(cleaned);
@@ -6278,11 +6290,14 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             if (/bnc\b|bolsa\s*nacional/i.test(allText)) return 'BNC';
             if (/bll\b|bolsadedigital/i.test(allText)) return 'BLL';
             if (/licitanet/i.test(allText)) return 'Licitanet';
-            if (/bbmnet/i.test(allText)) return 'BBMNET';
+            if (/bbmnet/i.test(allText)) return 'BBMNet';
             if (/portaldecompras|portal\s*de\s*compras|portaldecompraspublicas/i.test(allText)) return 'Portal de Compras Públicas';
-            // Detect by orgao type
+            if (/licita[çc][õo]es[\s-]*e|banco\s*do\s*brasil|bb\b/i.test(allText)) return 'Licitações-e (BB)';
+            if (/bec[\s/]*sp|bolsa\s*eletr[ôo]nica/i.test(allText)) return 'BEC/SP';
+            if (/m2a/i.test(allText)) return 'M2A Tecnologia';
+            // Detect by orgao type — federal organs use Compras.gov.br
             if (/federal|ministério|minist[eé]rio|uni[aã]o|autarquia federal|ibama|inss|inpe|icmbio/i.test(orgao)) return 'Compras.gov.br';
-            if (/prefeitura|munic[ií]p|câmara municipal|c[aâ]mara\s*municipal/i.test(orgao)) return 'Outro Portal';
+            // Municipal/state organs — don't force a portal, leave empty for user to select
             return '';
         };
 

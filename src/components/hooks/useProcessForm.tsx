@@ -477,6 +477,15 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 else if (criticals.length >= 1) risk = 'Alto';
                 else if (medias.length >= 2) risk = 'Médio';
             }
+            // Auto-fill reminder: 24h before session date
+            let reminderDate = '';
+            if (formattedSessionDate) {
+                const sessionD = new Date(formattedSessionDate);
+                if (!isNaN(sessionD.getTime())) {
+                    sessionD.setHours(sessionD.getHours() - 24);
+                    reminderDate = sessionD.toISOString().slice(0, 16);
+                }
+            }
 
             setFormData(prev => ({
                 ...prev,
@@ -486,7 +495,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 portal: portal || prev.portal,
                 estimatedValue: estimatedValue || prev.estimatedValue,
                 sessionDate: formattedSessionDate,
-                risk: risk as any
+                risk: risk as any,
+                reminderDate: reminderDate || prev.reminderDate,
             }));
 
             // Step 4: Store full analysis
