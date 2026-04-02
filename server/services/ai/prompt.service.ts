@@ -305,7 +305,7 @@ import { generateTaxonomyPromptBlock, generateObjectTypeReinforcement, ObjectTyp
  *   MINOR = melhoria de prompt que altera qualidade
  *   PATCH = ajuste de formatação ou exemplos
  */
-export const V2_PROMPT_VERSION = 'v4.0.0';
+export const V2_PROMPT_VERSION = 'v4.1.0';
 
 // Pre-generate taxonomy block for all prompts
 const TAXONOMY_BLOCK = generateTaxonomyPromptBlock();
@@ -387,12 +387,29 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
    - QTP (Profissional): Pertence ao PROFISSIONAL (Vínculo do RT, CAT/Acervo, Declaração de RT).
    - NUNCA misture! O que for atestado da empresa vai em QTO. Acervo do engenheiro vai em QTP.
 6. BLOCO QTO OBRIGATÓRIO: QTO deve conter (a) Certidão PJ no Conselho (se houver), (b) Visitas Técnicas (se houver) e (c) Atestados da Empresa.
-7. ANTI-GENERICIDADE CÍVICA (QTO/QTP): PROIBIDO usar "serviços similares" ou "parcelas de maior relevância". TRANSCREVA item por item da parcela com QUANTIDADE e UNIDADE (ex: "Estrutura Metálica - mínimo 5.000 KG").
+7. ANTI-GENERICIDADE CÍVICA (QTO/QTP): PROIBIDO usar "serviços similares" ou "parcelas de maior relevância". TRANSCREVA item por item da parcela com QUANTIDADE MÍNIMA e UNIDADE (ex: "Pavimentação asfáltica, camada de rolamento, espessura=4cm — QUANTIDADE MÍNIMA: 3.500,00 m²").
+   ⚠️ REGRA ABSOLUTA DE QUANTITATIVOS: Para CADA atestado/CAT exigido, a description DEVE incluir:
+   - O serviço/parcela EXATA (transcrita literalmente)
+   - O QUANTITATIVO MÍNIMO exigido pelo edital (ex: "quantidade mínima de 50% do quantitativo previsto = 3.500,00 m²")
+   - A UNIDADE de medida (m², m³, kg, km, m, un, etc.)
+   - Se o edital define percentual mínimo sobre o quantitativo do objeto, CALCULE e inclua o valor absoluto quando disponível
+   - Se o edital NÃO especificar quantidade mínima, registre: "sem quantitativo mínimo definido"
+   EXEMPLO CORRETO: "Atestado comprovando execução de pavimentação com concreto asfáltico, camada de rolamento (espessura=4cm) — Quantidade mínima exigida: 50% do quantitativo previsto (ver planilha do Projeto Básico)"
+   EXEMPLO ERRADO: "Atestado comprovando execução de serviços de pavimentação asfáltica"
 8. VISITA TÉCNICA: Pertence a QTO. Deve ser uma exigência com obligation_type="obrigatoria_universal". NUNCA coloque em QTP.
 9. GARANTIAS: Garantia de proposta, execução, seguro ou caução vão SEMPRE em QEF, nunca em Documentos Complementares (DC).
 10. OBLIGATION TYPE: Use "obrigatoria_universal" por padrão. Use "condicional", "se_aplicavel" ou "alternativa" APENAS se o edital for literal sobre a condição ("somente para consórcio", "quando aplicável").
 11. MULTIPLAS PARCELAS EM QTP: Se o edital exige CAT para 3 parcelas diferentes, crie 3 ITENS de exigência_principal em QTP. Proibido item guarda-chuva.
-12. OBRIGATÓRIOS RFT: CNPJ, CND Federal, CND Estadual, CND Municipal, FGTS, CNDT. DEVEM ser itens separados em "regularidade_fiscal_trabalhista". CNPJ é obrigatório por lei.
+12. OBRIGATÓRIOS RFT — DEVEM ser itens separados seguindo ESTA ORDEM HIERÁRQUICA:
+    RFT-01: CNPJ (prova de inscrição no Cadastro Nacional de Pessoa Jurídica)
+    RFT-02: Inscrição estadual no cadastro de contribuintes (se exigida)
+    RFT-03: Inscrição municipal no cadastro de contribuintes (se exigida)
+    RFT-04: CND Federal (Certidão Conjunta RFB/PGFN)
+    RFT-05: CND Estadual (Fazenda Estadual)
+    RFT-06: CND Municipal (Fazenda Municipal)
+    RFT-07: CRF/FGTS
+    RFT-08: CNDT (Débitos Trabalhistas)
+    ⚠️ CNPJ, IE e IM devem ser os PRIMEIROS itens da categoria, ANTES das certidões de débitos. Esta ordem reflete a hierarquia documental legal.
 13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
 14. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
 15. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
@@ -698,18 +715,21 @@ ATENÇÃO REFORÇADA:
 9. DOCUMENTE AUSENÇAS: se uma categoria de habilitação não tiver exigências, anote no evidence_registry: 'categoria X não identificada no edital'.
 
 AUTOCONFERÊNCIA ANTES DE RESPONDER:
-→ RFT tem CNPJ como item separado? (OBRIGATÓRIO — nunca omitir)
-→ RFT tem inscrição estadual + inscrição municipal? (se exigidos)
-→ RFT tem os 5-8 documentos fiscais individuais (CNPJ, CND Federal, Estadual, Municipal, FGTS, CNDT)?
+→ RFT: itens estão na ORDEM HIERÁRQUICA? (CNPJ → IE → IM → CND Federal → Estadual → Municipal → FGTS → CNDT)
+→ RFT tem CNPJ como PRIMEIRO item separado? (OBRIGATÓRIO — nunca omitir)
+→ RFT tem inscrição estadual + inscrição municipal LOGO APÓS o CNPJ? (se exigidos no edital)
+→ RFT tem os 5-8 documentos fiscais individuais?
 → HJ tem ato constitutivo e demais docs societários?
 → QTO tem Certidão PJ CREA/CAU como documental (BLOCO A)? Não como atestado operacional.
-→ QTO: cada parcela relevante da empresa é item principal com quantitativo mínimo literal (BLOCO C)?
+→ QTO: cada parcela relevante da empresa é item principal com QUANTITATIVO MÍNIMO LITERAL e UNIDADE (BLOCO C)?
+→ QTO: a description de cada atestado contém a QUANTIDADE MÍNIMA exigida pelo edital? (⚠️ NUNCA omitir)
 → QTO: se visita técnica, está em BLOCO B com alternativas visita/declaração?
 → QTP: contém APENAS credenciais do profissional? Sem Certidão PJ, sem Visto, sem Visita.
 → QTP: cada parcela relevante do profissional é item PRINCIPAL separado (não subitem genérico)?
+→ QTP: a description de cada CAT contém a QUANTIDADE MÍNIMA e UNIDADE exigida? (⚠️ NUNCA omitir)
 → QTO/QTP: contém expressões genéricas proibidas (se sim, substituir pela transcrição literal)?
 → Há ao menos 1 EV por exigência principal?
-→ Quantitativos técnicos estão com valor exato e fonte?
+→ Quantitativos técnicos estão com valor exato, unidade e fonte?
 
 {domainReinforcement}
 
@@ -767,6 +787,9 @@ Cada item DEVE receber um entry_type:
      • Inscrição estadual no cadastro de contribuintes
      • Inscrição municipal no cadastro de contribuintes
      • CND Federal, CND Estadual, CND Municipal, FGTS, CNDT
+   ORDEM HIERÁRQUICA OBRIGATÓRIA para RFT:
+     RFT-01: CNPJ → RFT-02/03: Inscrições (IE, IM) → RFT-04+: Certidões de débitos (Federal, Estadual, Municipal, FGTS, CNDT)
+     As inscrições cadastrais (CNPJ, IE, IM) devem SEMPRE preceder as certidões de regularidade fiscal.
    Se algum desses itens chegou da extração, PRESERVE como exigencia_principal.
 9. Se duas entradas têm títulos semanticamente idênticos (ex: "CND Federal" e "Certidão Negativa de Débitos Federais"), UNIFIQUE na que tiver melhor descrição.
 10. Observações sobre prazo de validade, forma de apresentação ou exceções NÃO devem gerar cards separados — devem ser subitens ou observações do card principal.
@@ -780,6 +803,7 @@ Cada item DEVE receber um entry_type:
     → Cada parcela com quantitativo mínimo é exigencia_principal, não subitem.
     → NUNCA consolide "Atestado parcela A (5.000m²)" + "Atestado parcela B (500m²)" em 1 card genérico "Atestados".
     → Preserve descriptions longas e literais para QTO/QTP — não truncar na normalização.
+    → QUANTIDADES MÍNIMAS SÃO OBRIGATÓRIAS: se a extração trouxe o quantitativo mínimo na description, PRESERVE. Se não trouxe mas consta no source_ref ou evidence_refs, ADICIONE. A description de cada atestado/CAT DEVE conter o quantitativo mínimo exigido com unidade de medida.
 18. QTP — EXPLOSÃO DE CAT GENÉRICO:
     Se a extração trouxe um ÚNICO item "Atestado de Capacidade Técnica" ou "CAT/CAU" genérico
     que na description menciona MÚLTIPLAS parcelas (ex: "obras similares", "parcelas de maior relevância"),
