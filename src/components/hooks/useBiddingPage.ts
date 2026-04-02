@@ -7,7 +7,7 @@ import { aiService } from '../../services/ai';
 import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../../types';
 import { COLUMNS } from '../../types';
-import { resolveStage, getDefaultSubstage, getGovernance, type KanbanStage, type SystemModule } from '../../governance';
+import { resolveStage, getDefaultSubstage, getGovernance, KANBAN_STAGES, type KanbanStage, type SystemModule } from '../../governance';
 import { useToast } from '../ui';
 
 // ===== FILTER TYPES =====
@@ -131,7 +131,21 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
     // ===== SETTINGS =====
     const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
         const saved = localStorage.getItem('biddingVisibleColumns');
-        return saved ? JSON.parse(saved) : [...COLUMNS];
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved) as string[];
+                // Migrate: remove any legacy labels that are not valid KANBAN_STAGES
+                const validStages = new Set(KANBAN_STAGES as readonly string[]);
+                const cleaned = parsed.filter(s => validStages.has(s));
+                // If we lost entries (legacy labels), reset to full canonical list
+                if (cleaned.length < KANBAN_STAGES.length) {
+                    localStorage.setItem('biddingVisibleColumns', JSON.stringify([...KANBAN_STAGES]));
+                    return [...KANBAN_STAGES];
+                }
+                return cleaned;
+            } catch { return [...KANBAN_STAGES]; }
+        }
+        return [...KANBAN_STAGES];
     });
     const [sortBy, setSortBy] = useState<'default' | 'date-asc' | 'date-desc' | 'value-desc' | 'value-asc' | 'risk'>(() => {
         return (localStorage.getItem('biddingSortBy') as any) || 'default';
@@ -547,18 +561,18 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
         }
     };
 
-    // ===== PIPELINE COUNTERS =====
     const dynamicCounters = useMemo(() => {
-        return visibleColumns.map(stageName => {
+        // Always use canonical KANBAN_STAGES order for the pipeline indicators
+        return KANBAN_STAGES.map(stageName => {
             const count = items.filter(i => resolveStage(i.status) === stageName).length;
-            const gov = getGovernance(stageName as KanbanStage);
+            const gov = getGovernance(stageName);
             return {
                 label: stageName,
                 count,
                 color: gov.themeColor || 'var(--color-primary)'
             };
         });
-    }, [visibleColumns, items]);
+    }, [items]);
 
     return {
         // View

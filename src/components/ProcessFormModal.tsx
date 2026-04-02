@@ -134,6 +134,38 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                     {/* ═══ FORM TAB ═══ */}
                     <form onSubmit={form.handleSubmit} style={{ padding: 'var(--space-8)', overflowY: 'auto', flex: 1, display: (!form.isEditMode || form.hubTab === 'form') ? undefined : 'none' }}>
+
+                        {/* ── AI Quick-Fill Banner (only for new processes) ── */}
+                        {!form.isEditMode && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-4)',
+                                padding: 'var(--space-4) var(--space-5)',
+                                background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-ai) 8%, transparent), color-mix(in srgb, var(--color-primary) 6%, transparent))',
+                                border: '1px solid color-mix(in srgb, var(--color-ai) 20%, transparent)',
+                                borderRadius: 'var(--radius-lg)',
+                                marginBottom: 'var(--space-6)',
+                            }}>
+                                <div style={{ padding: 'var(--space-2)', background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))', borderRadius: 'var(--radius-md)' }}>
+                                    <Cpu size={18} color="white" />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}>Preencher com IA</div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Faça upload do edital em PDF e a IA extrairá os dados automaticamente</div>
+                                </div>
+                                <button type="button" onClick={form.handleAiExtract} disabled={form.isCheckingAi} style={{
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                    padding: 'var(--space-2) var(--space-5)', borderRadius: 'var(--radius-md)',
+                                    border: 'none', background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
+                                    color: 'white', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer',
+                                    boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)', transition: 'var(--transition-fast)',
+                                    opacity: form.isCheckingAi ? 0.7 : 1,
+                                }}>
+                                    {form.isCheckingAi ? <Loader2 size={14} className="spinner" /> : <UploadCloud size={14} />}
+                                    {form.isCheckingAi ? 'Extraindo...' : 'Enviar PDF'}
+                                </button>
+                            </div>
+                        )}
+
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                             {/* Título */}

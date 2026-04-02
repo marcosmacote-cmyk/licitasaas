@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Plus, LayoutGrid, List, Cpu, Loader2, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff } from 'lucide-react';
+import { Plus, LayoutGrid, List, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -110,10 +110,6 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                     </div>
                     <div className="flex-gap">
                         <input type="file" accept="application/pdf" ref={b.fileInputRef} style={{ display: 'none' }} onChange={b.handleFileUpload} multiple />
-                        <button className="btn btn-ai" onClick={b.handleAIAssistClick} disabled={b.isParsingAI}>
-                            {b.isParsingAI ? <Loader2 size={16} className="spinner" /> : <Cpu size={16} />}
-                            {b.isParsingAI ? 'Analisando...' : 'IA: Extrair Edital'}
-                        </button>
                         <button className="btn btn-primary" onClick={b.handleCreateNew}>
                             <Plus size={16} /> Nova Licitação
                         </button>
