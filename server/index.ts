@@ -6,6 +6,7 @@ import { fallbackToOpenAi, fallbackToOpenAiV2 } from "./services/ai/openai.servi
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
 import { executeRiskRules } from "./services/ai/riskRulesEngine";
 import { evaluateAnalysisQuality } from "./services/ai/analysisQualityEvaluator";
+import { enforceSchema } from "./services/ai/schemaEnforcer";
 import { buildModuleContext, ModuleName } from "./services/ai/modules/moduleContextContracts";
 import { CHAT_SYSTEM_PROMPT, CHAT_USER_INSTRUCTION } from "./services/ai/modules/prompts/chatPromptV2";
 import { PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION as PETITION_V2_USER_INSTRUCTION } from "./services/ai/modules/prompts/petitionPromptV2";
@@ -2234,9 +2235,9 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         const PIPELINE_MODELS = {
             extraction: 'gemini-2.5-flash',         // Etapa 1: PDF parsing (multimodal, proven)
             reExtraction: 'gemini-2.5-flash',       // Re-extraction fallback  
-            normalization: 'gemini-2.5-flash-lite',  // Etapa 2: text-only JSON→JSON (fast, cheap)
+            normalization: 'gemini-2.5-flash',       // Etapa 2: text-only JSON→JSON — upgraded from flash-lite (QTO/QTP confusion fix)
             normQtp: 'gemini-2.5-flash',             // Etapa 2 QTP: needs full Flash for Rule 18 (CAT explosion)
-            riskReview: 'gemini-2.5-flash-lite',     // Etapa 3: text-only risk analysis (fast, cheap)
+            riskReview: 'gemini-2.5-flash',          // Etapa 3: text-only risk analysis — upgraded from flash-lite (better critical_points)
         };
         console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
 
@@ -2969,6 +2970,20 @@ Responda APENAS com JSON array:
         if (discardedFiles.length > 0) {
             (v2Result.analysis_meta as any).discarded_files = discardedFiles;
             v2Result.confidence.warnings.push(`${discardedFiles.length} anexo(s) ignorado(s) por limite de tamanho: ${discardedFiles.join(', ')}`);
+        }
+
+        // ── Schema Enforcement (Level 1, 2, 3) — ANTES da validação ──
+        // Corrige campos vazios com defaults inteligentes, normaliza formatos,
+        // e injeta categorias faltantes. Beneficia todos os 8 módulos downstream.
+        const enforceResult = enforceSchema(v2Result);
+        if (enforceResult.corrections > 0) {
+            v2Result.confidence.warnings.push(
+                `SchemaEnforcer: ${enforceResult.corrections} campo(s) padronizado(s) automaticamente`
+            );
+            (v2Result.analysis_meta as any).schema_enforcer = {
+                corrections: enforceResult.corrections,
+                details: enforceResult.details.slice(0, 20),
+            };
         }
 
         // ── Validation (no AI) ──
@@ -5608,7 +5623,7 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
     const allReqItems = Object.values(schema.requirements || {}).reduce((acc: any[], arr) => acc.concat(Array.isArray(arr) ? arr : []), [] as any[]);
     const totalReqs = allReqItems.filter((r: any) => !r.entry_type || r.entry_type === 'exigencia_principal').length;
     check(totalReqs > 0, 'Nenhuma exigência de habilitação identificada');
-    check(totalReqs >= 3, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
+    check(totalReqs >= 10, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
 
     // ── 4. Condições de Participação ──
     check(
@@ -5644,7 +5659,7 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
     const evCount = schema.evidence_registry?.length || 0;
     check(evCount > 0, 'Nenhuma evidência textual registrada');
     check(
-        evCount >= 5,
+        evCount >= 10,
         `Poucas evidências registradas (apenas ${evCount}), rastreabilidade comprometida`
     );
 
@@ -5664,7 +5679,7 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
     const confidence_score = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
 
     return {
-        valid: confidence_score >= 60, // 60%+ das checagens passaram
+        valid: confidence_score >= 80, // FASE 2: exigência mínima subiu de 60% para 80%
         issues,
         confidence_score
     };
@@ -6039,6 +6054,18 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 result.analysis_meta.workflow_stage_status.risk_review = 'failed';
                 result.confidence.warnings.push(`Etapa 3 (Risco) falhou: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
             }
+        }
+
+        // ── Schema Enforcement (Level 1, 2, 3) ──
+        const enforceResult = enforceSchema(result);
+        if (enforceResult.corrections > 0) {
+            result.confidence.warnings.push(
+                `SchemaEnforcer: ${enforceResult.corrections} campo(s) padronizado(s) automaticamente`
+            );
+            (result.analysis_meta as any).schema_enforcer = {
+                corrections: enforceResult.corrections,
+                details: enforceResult.details.slice(0, 20),
+            };
         }
 
         // ── 5. Validação Automática (sem IA) ──

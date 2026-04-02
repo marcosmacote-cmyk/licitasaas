@@ -67,8 +67,8 @@ const checks: QualityCheck[] = [
     issue: 'Data da sessão pública não extraída', severity: 'high', field: 'timeline.data_sessao'
   })},
   { code: 'E06', dimension: 'extraction', weight: 2, check: (s) => ({
-    pass: (s.evidence_registry?.length || 0) >= 3,
-    issue: `Registro de evidências fraco (${s.evidence_registry?.length || 0} evidências). Mínimo esperado: 3.`, severity: 'medium', field: 'evidence_registry'
+    pass: (s.evidence_registry?.length || 0) >= 10,
+    issue: `Registro de evidências fraco (${s.evidence_registry?.length || 0} evidências). Mínimo esperado: 10.`, severity: 'medium', field: 'evidence_registry'
   })},
   { code: 'E07', dimension: 'extraction', weight: 2, check: (s) => ({
     pass: !!s.process_identification.criterio_julgamento,
@@ -81,8 +81,8 @@ const checks: QualityCheck[] = [
   { code: 'E09', dimension: 'extraction', weight: 3, check: (s) => {
     const allReqs = Object.values(s.requirements || {}).flat();
     return {
-      pass: allReqs.length >= 5,
-      issue: `Apenas ${allReqs.length} exigências extraídas. Editais normais têm 10+.`, severity: 'high', field: 'requirements'
+      pass: allReqs.length >= 15,
+      issue: `Apenas ${allReqs.length} exigências extraídas. Editais normais têm 20+.`, severity: 'high', field: 'requirements'
     };
   }},
   { code: 'E10', dimension: 'extraction', weight: 3, check: (s) => ({
@@ -100,7 +100,7 @@ const checks: QualityCheck[] = [
     // Verifica se categorias não estão vazias quando esperado
     const categories = Object.keys(s.requirements || {});
     const nonEmpty = categories.filter(k => (s.requirements as any)[k]?.length > 0);
-    return { pass: nonEmpty.length >= 3, issue: `Apenas ${nonEmpty.length} categorias de exigência preenchidas (esperado >= 3)`, severity: 'medium', field: 'requirements' };
+    return { pass: nonEmpty.length >= 5, issue: `Apenas ${nonEmpty.length} categorias de exigência preenchidas (esperado >= 5)`, severity: 'medium', field: 'requirements' };
   }},
   { code: 'N03', dimension: 'normalization', weight: 2, check: (s) => {
     // Verifica duplicatas óbvias (mesmo título em categorias diferentes)
@@ -130,8 +130,8 @@ const checks: QualityCheck[] = [
 
   // ── EVIDÊNCIA (peso total = 20) ──
   { code: 'EV01', dimension: 'evidence', weight: 5, check: (s) => ({
-    pass: (s.evidence_registry?.length || 0) >= 5,
-    issue: `Registro de evidências muito pequeno (${s.evidence_registry?.length || 0}). Editais complexos devem ter 10+.`, severity: 'medium', field: 'evidence_registry'
+    pass: (s.evidence_registry?.length || 0) >= 15,
+    issue: `Registro de evidências muito pequeno (${s.evidence_registry?.length || 0}). Editais complexos devem ter 20+.`, severity: 'medium', field: 'evidence_registry'
   })},
   { code: 'EV02', dimension: 'evidence', weight: 5, check: (s) => {
     const allReqs = Object.values(s.requirements || {}).flat();

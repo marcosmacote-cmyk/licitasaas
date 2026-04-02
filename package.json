@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "benchmark:list": "tsx server/services/ai/benchmark/cli.ts list",
+    "benchmark:run": "tsx server/services/ai/benchmark/cli.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
