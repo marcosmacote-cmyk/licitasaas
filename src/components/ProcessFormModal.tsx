@@ -257,7 +257,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                 const platformLabel = isComprasNet ? 'ComprasNet' : isBLL ? 'BLL' : isBNC ? 'BNC' : isM2A ? 'M2A' : isBBMNet ? 'BBMNet' : '';
                                 const title = isMonitorable
-                                    ? 'Monitoramento M2A suportado'
+                                    ? `Monitoramento ${platformLabel} suportado`
                                     : isOtherPlatform
                                         ? 'Licitação em portal externo'
                                         : 'Monitor de Chat';
