@@ -1,11 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { evaluateAgainstBenchmark, generateBenchmarkSummary, BenchmarkResult } from './benchmarkRunner';
 import { AnalysisSchemaV1 } from '../analysis-schema-v1';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /**
  * ══════════════════════════════════════════════════════════════════
@@ -15,7 +11,7 @@ const __dirname = path.dirname(__filename);
  */
 
 function carregarManifesto() {
-    return JSON.parse(fs.readFileSync(path.join(__dirname, 'benchmarkManifest.json'), 'utf-8'));
+    return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'server', 'services', 'ai', 'benchmark', 'benchmarkManifest.json'), 'utf-8'));
 }
 
 async function run() {
