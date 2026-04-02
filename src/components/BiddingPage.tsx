@@ -125,15 +125,32 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                     scrollbarWidth: 'none', // Firefox
                     msOverflowStyle: 'none' // IE and Edge
                 }} className="hide-scrollbar">
-                    {b.dynamicCounters.map(s => (
-                        <div key={s.label} style={{ flex: '1 1 0', minWidth: '100px', maxWidth: '140px', textAlign: 'center', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-lg)', transition: 'all 150ms' }}
-                             onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-base)'}
-                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >
-                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.count > 0 ? s.color : 'var(--color-text-tertiary)', lineHeight: 1.2 }}>{s.count}</div>
-                            <div style={{ fontSize: '0.75rem', color: s.count > 0 ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.label}>{s.label}</div>
-                        </div>
-                    ))}
+                    {b.dynamicCounters.map((s, idx) => {
+                        const shortLabel: Record<string, string> = {
+                            'Captado': 'Captado', 'Em Análise': 'Análise', 'Aprovado para Participação': 'Aprovado',
+                            'Preparando Documentação': 'Prep. Docs', 'Preparando Proposta': 'Prep. Proposta',
+                            'Em Sessão': 'Em Sessão', 'Pós-Sessão': 'Pós-Sessão', 'Recurso': 'Recurso',
+                            'Ganho': 'Ganho', 'Não Participar': 'Não Participar', 'Perdido': 'Perdido', 'Arquivado': 'Arquivado',
+                        };
+                        return (
+                            <div key={s.label} style={{
+                                flex: '1 1 0', minWidth: 0, textAlign: 'center',
+                                padding: 'var(--space-2) var(--space-1)', borderRadius: 'var(--radius-lg)',
+                                transition: 'all 150ms', position: 'relative',
+                                borderRight: idx < b.dynamicCounters.length - 1 ? '1px solid var(--color-border)' : 'none',
+                            }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-base)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: s.count > 0 ? s.color : 'var(--color-text-tertiary)', lineHeight: 1.2 }}>{s.count}</div>
+                                <div style={{
+                                    fontSize: '0.65rem', color: s.count > 0 ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                                    fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase', marginTop: '3px',
+                                    lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }} title={s.label}>{shortLabel[s.label] || s.label}</div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 
