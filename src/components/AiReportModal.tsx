@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
-import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, BarChart3, Building2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ScanSearch, FileCheck, DollarSign, AlertTriangle, X, Send, Loader2, MessageSquare, Calendar, ShieldAlert, BadgeCheck, FileX, CheckCircle2, FileSearch2, Plus, BarChart3, Building2, FileDown } from 'lucide-react';
 import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
+import { exportAiReportPdf } from './report/AiReportPdfExporter';
+import type { ReportPdfData } from './report/AiReportPdfExporter';
 
 interface Props {
     analysis: AiAnalysis;
@@ -97,6 +99,56 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
 
     const hasConditions = report.conditions.length > 0;
     const hasTechnicalOpinion = report.hasContent(report.technicalOpinion);
+
+    const handleExportPdf = useCallback(() => {
+        const pdfData: ReportPdfData = {
+            processTitle: process?.title || '',
+            confidence: report.pipelineMeta?.confidence || null,
+            scorePercentage: report.pipelineMeta?.scorePercentage ?? null,
+            metadata: report.processMetadata,
+            executiveSummary: report.executiveSummary,
+            risks: report.flagList.map((f: any) => ({
+                severity: f.severity || 'media',
+                title: f.title || '',
+                text: f.text || '',
+                action: f.action || '',
+                sourceRef: f.sourceRef || '',
+            })),
+            conditions: report.conditions.map((c: any) => ({
+                label: c.label || '',
+                value: c.value || '',
+                sourceRef: c.sourceRef || '',
+                type: c.type || 'info',
+            })),
+            categorizedDocs: Object.fromEntries(
+                Object.entries(report.categorizedDocs).map(([cat, docs]) => [
+                    cat,
+                    (docs as any[]).map((d: any) => ({
+                        item: d.item || '',
+                        title: d.title || '',
+                        description: d.description || '',
+                        obligationType: d.obligationType || 'obrigatoria_universal',
+                        phase: d.phase || '',
+                        riskIfMissing: d.riskIfMissing || '',
+                        sourceRef: d.sourceRef || '',
+                        entryType: d.entryType || 'exigencia_principal',
+                        parentId: d.parentId || null,
+                    })),
+                ])
+            ),
+            financialText: report.financialText,
+            deadlineList: report.deadlineList,
+            penaltiesStructured: report.penaltiesStructured,
+            penaltiesText: report.penaltiesText,
+            pipelineDurationS: analysis?.pipelineDurationS ?? null,
+            traceability: report.pipelineMeta?.traceabilityPercentage !== null
+                ? `${report.pipelineMeta?.tracedRequirements}/${report.pipelineMeta?.totalRequirements} (${report.pipelineMeta?.traceabilityPercentage}%)`
+                : report.pipelineMeta?.evidenceCount ? `${report.pipelineMeta.evidenceCount} evidências` : '',
+            qualityScore: report.pipelineMeta?.qualityScore !== null ? `${report.pipelineMeta?.qualityScore}%` : null,
+            model: report.pipelineMeta?.model || analysis?.modelUsed || null,
+        };
+        exportAiReportPdf(pdfData);
+    }, [report, process, analysis]);
 
     return (
         <div className="modal-overlay" style={{
@@ -1006,6 +1058,15 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport }
                         {analysis?.modelUsed && (<><span>•</span><span>{analysis.modelUsed}</span></>)}
                     </div>
                     <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+                        <button onClick={handleExportPdf} style={{
+                            display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
+                            border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)',
+                            fontSize: 'var(--text-md)', cursor: 'pointer', transition: 'var(--transition-fast)'
+                        }}
+                            onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--color-primary)'; e.currentTarget.style.color = 'var(--color-primary)'; e.currentTarget.style.background = 'var(--color-primary-light)'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; e.currentTarget.style.background = 'var(--color-bg-surface)'; }}>
+                            <FileDown size={16} /> Exportar Relatório
+                        </button>
                         {onImport && (
                             <button onClick={onImport} style={{
                                 display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-6)', borderRadius: 'var(--radius-lg)',
