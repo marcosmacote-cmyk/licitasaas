@@ -742,6 +742,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             else if (link.includes('bec.sp')) bestPortalName = "BEC/SP";
             else if (link.includes('m2atecnologia') || link.includes('m2a.')) bestPortalName = "M2A Tecnologia";
             else if (link.includes('bbmnet')) bestPortalName = "BBMNet";
+            else if (link.includes('licitamaisbrasil')) bestPortalName = "Licita Mais Brasil";
             else if (link.includes('compras.gov.br') || link.includes('pncp.gov.br')) bestPortalName = "Compras.gov.br";
         }
 
@@ -776,13 +777,21 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // 3. SMART TITLE — constrói título enriquecido
         // ═══════════════════════════════════════════════════════════
         let title = aiData?.process?.title || item.titulo;
+        // Normalize for comparison: lowercase, remove accents, remove common prefixes
+        const normalizeForCompare = (s: string) => s.toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/prefeitura municipal d[eo] /gi, '')
+            .replace(/municipio d[eo] /gi, '')
+            .replace(/secretaria d[eo] /gi, '')
+            .replace(/\s+/g, ' ').trim();
         // Se o título não inclui referência ao órgão e é curto, enriqueça
-        if (title && !title.includes(item.orgao_nome) && !title.includes('Município') && title.length < 80) {
+        const titleNorm = normalizeForCompare(title || '');
+        const orgNorm = normalizeForCompare(item.orgao_nome || '');
+        const alreadyHasOrg = titleNorm.includes(orgNorm.slice(0, 10)) || orgNorm.includes(titleNorm.slice(-15));
+        if (title && !alreadyHasOrg && !title.includes('Município') && title.length < 80) {
             const orgParts = item.orgao_nome.split(' ');
             const orgShort = orgParts.length > 4 ? orgParts.slice(0, 4).join(' ') : item.orgao_nome;
-            if (!title.toLowerCase().includes(orgShort.toLowerCase().slice(0, 15))) {
-                title = `${title} - ${orgShort}`;
-            }
+            title = `${title} - ${orgShort}`;
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -891,7 +900,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             observations: JSON.stringify([{
                 id: crypto.randomUUID?.() || Date.now().toString(),
                 text: observationText,
-                createdAt: new Date().toISOString(), author: 'Sistema'
+                timestamp: new Date().toISOString(), author: 'Sistema'
             }])
         };
         setEditingProcess(processData);
