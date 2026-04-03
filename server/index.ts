@@ -1,6 +1,6 @@
 import { robustJsonParse, robustJsonParseDetailed } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser } from "./services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser, MANUAL_EXTRACTION_ADDON } from "./services/ai/prompt.service";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "./services/ai/analysis-schema-v1";
 import { fallbackToOpenAi, fallbackToOpenAiV2 } from "./services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "./services/ai/rag.service";
@@ -5767,6 +5767,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
         const t1Start = Date.now();
 
         let modelsUsed: string[] = [];
+        // Append manual-only extraction rules (valor, portal, data+hora) — NOT used by PNCP
+        const manualUserInstruction = V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') + MANUAL_EXTRACTION_ADDON;
 
         try {
             const extractionResponse = await callGeminiWithRetry(ai.models, {
@@ -5775,7 +5777,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                     role: 'user',
                     parts: [
                         ...pdfParts,
-                        { text: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') }
+                        { text: manualUserInstruction }
                     ]
                 }],
                 config: {
@@ -5802,7 +5804,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             try {
                 const openAiResult = await fallbackToOpenAiV2({
                     systemPrompt: V2_EXTRACTION_PROMPT,
-                    userPrompt: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
+                    userPrompt: manualUserInstruction,
                     pdfParts,
                     temperature: 0.05,
                     stageName: 'Etapa 1 (Extração)'

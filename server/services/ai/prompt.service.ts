@@ -413,9 +413,6 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
 14. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
 15. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
-16. VALOR ESTIMADO GLOBAL (OBRIGATÓRIO): Extraia o VALOR TOTAL ESTIMADO DA CONTRATAÇÃO como número decimal em "valor_estimado_global". Procure por: "valor estimado", "valor global", "valor total", "valor de referência", "R$" seguido de valor no preâmbulo ou no corpo do edital/TR. NUNCA retorne 0 se houver qualquer menção a valor no documento. Converta "R$ 1.234.567,89" para 1234567.89 (notação decimal).
-17. PORTAL DE LICITAÇÃO (OBRIGATÓRIO): Identifique o PORTAL/SISTEMA ELETRÔNICO usado para a licitação em "portal_licitacao". Opções: "Compras.gov.br", "BNC", "BLL", "Licitanet", "BBMNet", "Portal de Compras Públicas", "Licitações-e (BB)", "BEC/SP", "M2A Tecnologia", "PNCP". Se não identificar o portal, use "outro".
-18. DATA DA SESSÃO COM HORÁRIO (OBRIGATÓRIO): O campo "data_sessao" DEVE conter DATA E HORA no formato "DD/MM/AAAA HH:MM" (24h). NUNCA retorne apenas a data sem horário. Procure por: "abertura da sessão pública", "início da sessão", "data de abertura", "recebimento das propostas". Se houver somente data sem hora, extraia a hora de outros campos próximos.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -424,9 +421,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "modalidade": "", "forma_disputa": "", "criterio_julgamento": "", "regime_execucao": "",
     "tipo_objeto": "servico_comum|servico_comum_engenharia|obra_engenharia|fornecimento|locacao|outro",
     "objeto_resumido": "até 150 caracteres", "objeto_completo": "transcrição integral",
-    "fonte_oficial": "", "municipio_uf": "",
-    "valor_estimado_global": 0.00,
-    "portal_licitacao": "Compras.gov.br|BNC|BLL|Licitanet|BBMNet|Portal de Compras Públicas|Licitações-e (BB)|BEC/SP|M2A Tecnologia|PNCP|outro"
+    "fonte_oficial": "", "municipio_uf": ""
   },
   "timeline": {
     "data_publicacao": "DD/MM/AAAA", "data_sessao": "DD/MM/AAAA HH:MM",
@@ -739,6 +734,21 @@ AUTOCONFERÊNCIA ANTES DE RESPONDER:
 {domainReinforcement}
 
 Retorne EXCLUSIVAMENTE o JSON especificado.`;
+
+
+/**
+ * Addon para extração manual (Nova Licitação) — regras adicionais para
+ * valor_estimado_global, portal_licitacao e data_sessao com horário.
+ * NUNCA injetar no pipeline PNCP — lá esses dados já vêm da API.
+ */
+export const MANUAL_EXTRACTION_ADDON = `
+
+═══ REGRAS ADICIONAIS PARA UPLOAD MANUAL ═══
+
+16. VALOR ESTIMADO GLOBAL (OBRIGATÓRIO): Extraia o VALOR TOTAL ESTIMADO DA CONTRATAÇÃO como número decimal em "valor_estimado_global" dentro de "process_identification". Procure por: "valor estimado", "valor global", "valor total", "valor de referência", "R$" seguido de valor no preâmbulo ou no corpo do edital/TR. NUNCA retorne 0 se houver qualquer menção a valor no documento. Converta "R$ 1.234.567,89" para 1234567.89 (notação decimal).
+17. PORTAL DE LICITAÇÃO (OBRIGATÓRIO): Identifique o PORTAL/SISTEMA ELETRÔNICO usado para a licitação em "portal_licitacao" dentro de "process_identification". Opções: "Compras.gov.br", "BNC", "BLL", "Licitanet", "BBMNet", "Portal de Compras Públicas", "Licitações-e (BB)", "BEC/SP", "M2A Tecnologia", "PNCP". Se não identificar o portal, use "outro".
+18. DATA DA SESSÃO COM HORÁRIO (OBRIGATÓRIO): O campo "data_sessao" DEVE conter DATA E HORA no formato "DD/MM/AAAA HH:MM" (24h). NUNCA retorne apenas a data sem horário. Procure por: "abertura da sessão pública", "início da sessão", "data de abertura", "recebimento das propostas".
+`;
 
 
 /**
