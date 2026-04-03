@@ -378,7 +378,7 @@ visita, prazo ou condição de habilitação/desclassificação deve virar item 
   • Já exista em qualquer licitação
 NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é implícito".
 
-1. EXTRAÇÃO PURA: Extraia SOMENTE o que está escrito. ZERO inferências ou opiniões. EXCEÇÃO PRÉ-QUALIFICAÇÃO: Se a habilitação for comprovada exclusivamente por Certificado de Pré-Qualificação, CRC ou SICAF, extraia APENAS o Certificado e os docs expressamente exigidos em complemento. NÃO invente exigências de CNPJ, Contrato Social ou CNDs se não estiverem literalmente no texto. Se não existir no edital, use null ou array vazio [].
+1. EXTRAÇÃO PURA: Extraia SOMENTE o que está escrito. ZERO inferências ou opiniões. Se não existir no edital, use null ou array vazio [].
 2. GRANULARIDADE: Crie 1 item estruturado para CADA documento/exigência. NUNCA mescle CNPJ, FGTS, CNDs ou atestados em um único bloco.
 3. RASTREABILIDADE (EVIDÊNCIAS): CADA item DEVE ter uma "source_ref" (ex: "Edital, item 8.1") e apontar para um "evidence_registry" com trecho literal de 30-80 caracteres. Item sem source_ref é INVÁLIDO.
 4. TAXONOMIA OBRIGATÓRIA: Classifique em -> HJ (Jurídica), RFT (Fiscal/Trabalhista), QEF (Econômico-Financeira), QTO (Técnico-Operacional/Empresa), QTP (Técnico-Profissional/Pessoa Física), PC (Comercial), DC (Complementares).
@@ -400,7 +400,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 9. GARANTIAS: Garantia de proposta, execução, seguro ou caução vão SEMPRE em QEF, nunca em Documentos Complementares (DC).
 10. OBLIGATION TYPE: Use "obrigatoria_universal" por padrão. Use "condicional", "se_aplicavel" ou "alternativa" APENAS se o edital for literal sobre a condição ("somente para consórcio", "quando aplicável").
 11. MULTIPLAS PARCELAS EM QTP: Se o edital exige CAT para 3 parcelas diferentes, crie 3 ITENS de exigência_principal em QTP. Proibido item guarda-chuva.
-12. OBRIGATÓRIOS RFT — A ORDEM HIERÁRQUICA ABAIXO É ESTRITA E INEGOCIÁVEL (Cumpra a sequência exatamente como descrita, a menos que substituído por Pré-Qualificação/CRC/SICAF):
+12. OBRIGATÓRIOS RFT — A ORDEM HIERÁRQUICA ABAIXO É ESTRITA E INEGOCIÁVEL:
     RFT-01: CNPJ (prova de inscrição no Cadastro Nacional de Pessoa Jurídica)
     RFT-02: Inscrição estadual no cadastro de contribuintes (se exigida)
     RFT-03: Inscrição municipal no cadastro de contribuintes (se exigida)
@@ -410,9 +410,11 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     RFT-07: CRF/FGTS
     RFT-08: CNDT (Débitos Trabalhistas)
     ⚠️ REGRA DE OURO RFT: CNPJ, Inscrição Estadual (IE) e Inscrição Municipal (IM) DEVEM ABSOLUTAMENTE ser os 3 primeiros itens listados, sempre ANTES de qualquer certidão ou prova de regularidade fiscal.
-13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica" (A NÃO SER QUE dispensados expressamente por Certificado de Registro/Pré-Qualificação).
+13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
 14. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
 15. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
+
+⚠️ NOTA SOBRE PRÉ-QUALIFICAÇÃO: Se o edital estabelecer que a habilitação é comprovada EXCLUSIVAMENTE por Certificado de Pré-Qualificação, CRC ou SICAF (sem listar documentos individuais), extraia apenas o certificado e eventuais complementos expressos. Esta exceção SÓ se aplica quando o edital NÃO lista documentos individuais de habilitação.
 
 FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seções iniciais são mais críticas):
 {
@@ -698,7 +700,7 @@ Responda APENAS com o JSON. Sem texto antes ou depois.`;
 export const V2_EXTRACTION_USER_INSTRUCTION = `Analise os documentos de licitação fornecidos e execute a EXTRAÇÃO FACTUAL conforme as regras do sistema.
 
 ═══ PRIORIDADE MÁXIMA: COMPLETUDE + NÃO OMISSÃO ═══
-Toda exigência expressa deve virar item estruturado — inclusive as "óbvias" (CNPJ, contrato social, CND Federal, CNDT, FGTS), SALVO se o edital for baseado em Pré-Qualificação fechada e dispensar expressamente as certidões genéricas.
+Toda exigência expressa deve virar item estruturado — inclusive as "óbvias" (CNPJ, contrato social, CND Federal, CNDT, FGTS).
 Se houver ambiguidade ou dado incerto, marque description="[ambiguidade de extração: ...]" e inclua source_ref.
 NÃO omita por achar redundante, óbvio ou implícito.
 
@@ -716,8 +718,8 @@ ATENÇÃO REFORÇADA:
 
 AUTOCONFERÊNCIA ANTES DE RESPONDER:
 → RFT: itens estão na ORDEM HIERÁRQUICA? (CNPJ → IE → IM → CND Federal → Estadual → Municipal → FGTS → CNDT)
-→ RFT tem CNPJ como PRIMEIRO item separado? (OBRIGATÓRIO — nunca omitir, SALVO Pré-Qualificação exclusiva)
-→ RFT tem inscrição estadual + municipal LOGO APÓS o CNPJ? (se exigidos no edital, SALVO Pré-Qualificação)
+→ RFT tem CNPJ como PRIMEIRO item separado? (OBRIGATÓRIO — nunca omitir)
+→ RFT tem inscrição estadual + municipal LOGO APÓS o CNPJ? (se exigidos no edital)
 → RFT tem os 5-8 documentos fiscais individuais?
 → HJ tem ato constitutivo e demais docs societários?
 → QTO tem Certidão PJ CREA/CAU como documental (BLOCO A)? Não como atestado operacional.
