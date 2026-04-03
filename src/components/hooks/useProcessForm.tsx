@@ -46,23 +46,17 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
     // Initialize form data from initialData
     useEffect(() => {
         if (initialData) {
-            let formattedSessionDate = '';
-            if (initialData.sessionDate) {
-                const d = new Date(initialData.sessionDate);
-                if (!isNaN(d.getTime())) {
-                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                    formattedSessionDate = d.toISOString().slice(0, 16);
-                }
-            }
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const toDatetimeLocal = (dateStr: string | undefined | null): string => {
+                if (!dateStr) return '';
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return '';
+                // Build datetime-local string from LOCAL time components (no UTC conversion)
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            };
 
-            let formattedReminderDate = '';
-            if (initialData.reminderDate) {
-                const d = new Date(initialData.reminderDate);
-                if (!isNaN(d.getTime())) {
-                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                    formattedReminderDate = d.toISOString().slice(0, 16);
-                }
-            }
+            const formattedSessionDate = toDatetimeLocal(initialData.sessionDate);
+            const formattedReminderDate = toDatetimeLocal(initialData.reminderDate);
 
             setFormData({
                 ...initialData,
@@ -267,8 +261,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 if (aiData.process.sessionDate) {
                     const d = new Date(aiData.process.sessionDate);
                     if (!isNaN(d.getTime())) {
-                        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                        formattedSessionDate = d.toISOString().slice(0, 16);
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        formattedSessionDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
                     }
                 }
 

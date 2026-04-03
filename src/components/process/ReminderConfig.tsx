@@ -86,8 +86,9 @@ export function ReminderConfig({ formData, setFormData, handleChange, inputConta
                                 const today = new Date();
                                 const [h, m] = e.target.value.split(':');
                                 today.setHours(parseInt(h), parseInt(m), 0, 0);
-                                today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
-                                setFormData(prev => ({ ...prev, reminderDate: today.toISOString().slice(0, 16) }));
+                                const pad = (n: number) => String(n).padStart(2, '0');
+                                const localStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}T${pad(today.getHours())}:${pad(today.getMinutes())}`;
+                                setFormData(prev => ({ ...prev, reminderDate: localStr }));
                             } else {
                                 handleChange(e);
                             }
