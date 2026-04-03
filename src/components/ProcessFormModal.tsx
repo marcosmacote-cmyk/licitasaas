@@ -255,7 +255,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     <Globe size={18} color="var(--color-text-tertiary)" />
                                     {(!form.formData.portal || [
                                         "ComprasNet", "Compras.gov.br", "BLL", "BNC", "Licitações-e (BB)", 
-                                        "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet"
+                                        "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet", "Licita Mais Brasil"
                                     ].includes(form.formData.portal)) && form.formData.portal !== 'Outro_Manual_Entry' ? (
                                         <select name="portal" style={inputInnerStyle} value={form.formData.portal || ''} onChange={(e) => {
                                             if (e.target.value === 'Outro') {
@@ -265,7 +265,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             }
                                         }}>
                                             <option value="">-- Selecione --</option>
-                                            {["ComprasNet", "Compras.gov.br", "BLL", "BNC", "Licitações-e (BB)", "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                            {["ComprasNet", "Compras.gov.br", "BLL", "BNC", "Licitações-e (BB)", "Portal de Compras Públicas", "BEC/SP", "M2A Tecnologia", "PNCP", "BBMNet", "Licita Mais Brasil"].map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                             <option value="Outro">Outro...</option>
                                         </select>
                                     ) : (
@@ -301,8 +301,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const isBNC = link.includes('bnccompras') || portal.includes('bnc');
                                 const isM2A = link.includes('m2atecnologia') || portal.includes('m2a');
                                 const isBBMNet = link.includes('bbmnet') || portal.includes('bbmnet');
+                                const isLicitaMaisBrasil = link.includes('licitamaisbrasil') || portal.includes('licita mais brasil');
                                 
-                                const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet;
+                                const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet || isLicitaMaisBrasil;
                                 const isOtherPlatform = link.includes('pncp.gov.br') && !isMonitorable;
 
                                 let hasCredentials = true;
@@ -319,6 +320,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             if (isBNC && (cp.includes('bnc') || cu.includes('bnc'))) score++;
                                             if (isM2A && (cp.includes('m2a') || cu.includes('m2a'))) score++;
                                             if (isBBMNet && (cp.includes('bbmnet') || cu.includes('bbmnet'))) score++;
+                                            if (isLicitaMaisBrasil && (cp.includes('licita mais') || cu.includes('licitamaisbrasil'))) score++;
                                             return score;
                                         });
                                         hasCredentials = Math.max(...scored) > 0;
@@ -332,7 +334,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const iconBg = isMonitorable ? 'rgba(34, 197, 94, 0.12)' : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
                                 const iconColor = isMonitorable ? '#22c55e' : isOtherPlatform ? '#6366f1' : '#6b7280';
 
-                                const platformLabel = isComprasNet ? 'ComprasNet' : isBLL ? 'BLL' : isBNC ? 'BNC' : isM2A ? 'M2A' : isBBMNet ? 'BBMNet' : '';
+                                const platformLabel = isComprasNet ? 'ComprasNet' : isBLL ? 'BLL' : isBNC ? 'BNC' : isM2A ? 'M2A' : isBBMNet ? 'BBMNet' : isLicitaMaisBrasil ? 'Licita Mais Brasil' : '';
                                 const title = isMonitorable
                                     ? `Monitoramento ${platformLabel} suportado`
                                     : isOtherPlatform
@@ -345,9 +347,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                         <CheckCircle size={11} color="#22c55e" /> Detectado para {platformLabel}. O chat será monitorado.
                                       </span>
                                     : isOtherPlatform
-                                        ? <span>Monitoramento apenas para ComprasNet, BLL, BNC, M2A e BBMNet.</span>
+                                        ? <span>Monitoramento apenas para ComprasNet, BLL, BNC, M2A, BBMNet e Licita Mais Brasil.</span>
                                         : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o portal correto para ativar o webhook M2A
+                                            <AlertTriangle size={11} color="#9ca3af" /> Adicione o portal correto para ativar o monitoramento
                                           </span>;
 
                                 const IconComponent = isOtherPlatform ? Globe : SignalHigh;
