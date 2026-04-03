@@ -793,13 +793,22 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         if (item.link_comprasnet && !links.includes(item.link_comprasnet)) links.push(item.link_comprasnet);
 
         // ═══════════════════════════════════════════════════════════
-        // 5. SESSION DATE — prioriza data de abertura (sessão pública real)
+        // 5. SESSION DATE — prioriza data extraída pela IA (da análise do edital)
         // ═══════════════════════════════════════════════════════════
+        // PNCP API fields:
+        //   data_abertura = dataAberturaProposta = início do RECEBIMENTO de propostas (ex: 23/03)
+        //   data_encerramento_proposta = prazo final para enviar propostas (ex: 09/04 17:00)
+        // Nenhum dos dois é a sessão pública. A sessão real vem da IA (timeline.data_sessao).
         let sessionDateISO: string;
-        if (item.data_abertura) {
-            sessionDateISO = new Date(item.data_abertura).toISOString();
+        if (aiData?.process?.sessionDate && aiData.process.sessionDate.length > 5) {
+            // AI extracted the actual session date from the edital text
+            const parsed = new Date(aiData.process.sessionDate);
+            sessionDateISO = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
         } else if (item.data_encerramento_proposta) {
+            // Closest proxy: proposal deadline is usually 1 day before session
             sessionDateISO = new Date(item.data_encerramento_proposta).toISOString();
+        } else if (item.data_abertura) {
+            sessionDateISO = new Date(item.data_abertura).toISOString();
         } else {
             sessionDateISO = new Date().toISOString();
         }
@@ -963,7 +972,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 summary: processObj.summary || item.objeto, portal: 'PNCP',
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
-                sessionDate: item.data_abertura || item.data_encerramento_proposta || new Date().toISOString(),
+                sessionDate: processObj.sessionDate || item.data_encerramento_proposta || item.data_abertura || new Date().toISOString(),
                 link: [item.link_sistema, item.link_comprasnet].filter(Boolean).join(', '),
                 pncpLink: item.link_sistema, risk: processObj.risk || 'Médio',
                 companyProfileId: selectedSearchCompanyId || '', createdAt: new Date().toISOString(),

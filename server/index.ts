@@ -3128,7 +3128,9 @@ Responda APENAS com JSON array:
             const d: any = detailRes.data;
             if (d) {
                 pncpApiValue = Number(d.valorTotalEstimado ?? d.valorTotalHomologado ?? d.valorGlobal ?? 0) || 0;
-                pncpApiSessionDate = d.dataAberturaProposta || d.dataAberturaEdital || '';
+                // dataAberturaProposta = início do recebimento de propostas (NÃO é a sessão!)
+                // dataInicioDisputa ou dataAberturaEdital são mais próximos da sessão real
+                pncpApiSessionDate = d.dataInicioDisputa || d.dataAberturaEdital || '';
             }
         } catch (e: any) {
             console.warn(`[PNCP-V2] Failed to fetch PNCP metadata for value: ${e.message}`);
