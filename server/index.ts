@@ -6209,6 +6209,9 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             if (!dateStr) return '';
             // Already ISO
             if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+            // PT-BR: "27/05/2025 às 09:00" (SchemaEnforcer normalized format)
+            const mAux = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+às\s+(\d{2}):(\d{2})/);
+            if (mAux) return `${mAux[3]}-${mAux[2]}-${mAux[1]}T${mAux[4]}:${mAux[5]}:00`;
             // PT-BR: "27/05/2025 09:00" or "27/05/2025"
             const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2})?/);
             if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4] || '00:00'}:00`;
@@ -6314,6 +6317,13 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
 
         const estimatedValueCalc = calcEstimatedValue();
 
+        // Prefer AI-extracted value, fall back to regex-based extraction
+        const finalEstimatedValue = result.process_identification.valor_estimado_global || estimatedValueCalc;
+        // Prefer AI-extracted portal, fall back to regex-based detection
+        const finalPortal = result.process_identification.portal_licitacao && result.process_identification.portal_licitacao !== 'outro'
+            ? result.process_identification.portal_licitacao
+            : detectPortal() || result.process_identification.portal_licitacao || '';
+
         const legacyCompat = {
             process: {
                 title: (() => {
@@ -6332,8 +6342,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 modality: normalizeModality(result.process_identification.modalidade),
                 object: result.process_identification.objeto_completo,
                 agency: result.process_identification.orgao,
-                portal: detectPortal(),
-                estimatedValue: estimatedValueCalc,
+                portal: finalPortal,
+                estimatedValue: finalEstimatedValue,
                 sessionDate: parsePtBrDate(result.timeline.data_sessao),
                 risk: autoRisk(),
             },

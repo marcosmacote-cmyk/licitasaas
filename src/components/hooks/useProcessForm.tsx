@@ -416,8 +416,13 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             // Extract modality
             const modality = proc.modality || schema?.process_identification?.modalidade || '';
 
-            // Extract portal — not in legacy, try to detect from links or schema
+            // Extract portal — prefer AI-extracted portal_licitacao, fallback to legacy and link detection
             let portal = proc.portal || '';
+            // Priority 1: Direct AI extraction from schema V2
+            if (!portal && schema?.process_identification?.portal_licitacao && schema.process_identification.portal_licitacao !== 'outro') {
+                portal = schema.process_identification.portal_licitacao;
+            }
+            // Priority 2: Try from links in schema
             if (!portal && schema?.process_identification?.links_uteis) {
                 const links = Array.isArray(schema.process_identification.links_uteis) 
                     ? schema.process_identification.links_uteis.join(' ') 
@@ -430,14 +435,23 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 else if (/licitanet/i.test(links)) portal = 'Licitanet';
                 else if (/portaldecompras|portal de compras/i.test(links)) portal = 'Portal de Compras Públicas';
             }
-            // If still no portal, try from orgao name or uploaded file
+            // Priority 3: Try from orgao name
             if (!portal && schema?.process_identification?.orgao) {
                 const orgao = schema.process_identification.orgao.toLowerCase();
                 if (orgao.includes('federal') || orgao.includes('ministério')) portal = 'Compras.gov.br';
             }
 
-            // Extract estimatedValue — from legacy or itens_licitados sum
-            let estimatedValue = proc.estimatedValue ? parseFloat(String(proc.estimatedValue).replace(/[^\d.,]/g, '').replace(',', '.')) : 0;
+            // Extract estimatedValue — prefer AI-extracted valor_estimado_global, fallback to legacy and itens sum
+            let estimatedValue = 0;
+            // Priority 1: Direct AI extraction (valor_estimado_global from schema V2)
+            if (schema?.process_identification?.valor_estimado_global) {
+                estimatedValue = parseFloat(String(schema.process_identification.valor_estimado_global)) || 0;
+            }
+            // Priority 2: Legacy proc.estimatedValue from backend legacyCompat
+            if (!estimatedValue && proc.estimatedValue) {
+                estimatedValue = parseFloat(String(proc.estimatedValue).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+            }
+            // Priority 3: Sum from itens_licitados
             if (!estimatedValue && schema?.proposal_analysis?.itens_licitados) {
                 const itens = schema.proposal_analysis.itens_licitados;
                 if (Array.isArray(itens) && itens.length > 0) {
@@ -455,16 +469,23 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             let formattedSessionDate = formData.sessionDate;
             const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
             if (rawDate) {
-                let dateStr = rawDate;
-                // Convert PT-BR "27/05/2025 09:00" to ISO
-                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2})?/);
+                // Convert PT-BR "27/05/2025 09:00" to datetime-local format "2025-05-27T09:00"
+                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}):(\d{2})/);
                 if (ptBrMatch) {
-                    dateStr = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4] || '00:00'}:00`;
-                }
-                const d = new Date(dateStr);
-                if (!isNaN(d.getTime())) {
-                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                    formattedSessionDate = d.toISOString().slice(0, 16);
+                    formattedSessionDate = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4]}:${ptBrMatch[5]}`;
+                } else {
+                    // Already ISO-like: "2025-05-27T09:00:00" or "2025-05-27T09:00:00Z"
+                    const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                    if (isoMatch) {
+                        formattedSessionDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
+                    } else {
+                        // Try as generic date
+                        const d = new Date(rawDate);
+                        if (!isNaN(d.getTime())) {
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            formattedSessionDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        }
+                    }
                 }
             }
 
@@ -477,13 +498,18 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 else if (criticals.length >= 1) risk = 'Alto';
                 else if (medias.length >= 2) risk = 'Médio';
             }
-            // Auto-fill reminder: 24h before session date
+            // Auto-fill reminder: 24h before session date (same local time, day before)
             let reminderDate = '';
             if (formattedSessionDate) {
-                const sessionD = new Date(formattedSessionDate);
-                if (!isNaN(sessionD.getTime())) {
-                    sessionD.setHours(sessionD.getHours() - 24);
-                    reminderDate = sessionD.toISOString().slice(0, 16);
+                // formattedSessionDate is "YYYY-MM-DDTHH:MM" (datetime-local format)
+                const parts = formattedSessionDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                if (parts) {
+                    const yr = parseInt(parts[1]), mo = parseInt(parts[2]) - 1, dy = parseInt(parts[3]);
+                    const hr = parseInt(parts[4]), mn = parseInt(parts[5]);
+                    const dt = new Date(yr, mo, dy, hr, mn);
+                    dt.setHours(dt.getHours() - 24);
+                    const pad = (n: number) => String(n).padStart(2, '0');
+                    reminderDate = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
                 }
             }
 

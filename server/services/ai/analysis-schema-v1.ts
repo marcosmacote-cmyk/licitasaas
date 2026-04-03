@@ -67,6 +67,8 @@ export interface ProcessIdentification {
   objeto_completo: string;
   fonte_oficial: string;
   municipio_uf: string;
+  valor_estimado_global: number;
+  portal_licitacao: string;
 }
 
 export interface Timeline {
@@ -294,6 +296,7 @@ export function createEmptyAnalysisSchema(): AnalysisSchemaV1 {
       orgao: '', unidade_compradora: '', numero_processo: '', numero_edital: '',
       modalidade: '', forma_disputa: '', criterio_julgamento: '', regime_execucao: '',
       tipo_objeto: 'outro', objeto_resumido: '', objeto_completo: '', fonte_oficial: '', municipio_uf: '',
+      valor_estimado_global: 0, portal_licitacao: '',
     },
     timeline: {
       data_publicacao: '', data_sessao: '', prazo_impugnacao: '', prazo_esclarecimento: '',
