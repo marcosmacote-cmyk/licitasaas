@@ -304,6 +304,11 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 const orgao = schema.process_identification.orgao.toLowerCase();
                 if (orgao.includes('federal') || orgao.includes('ministério')) portal = 'Compras.gov.br';
             }
+            // Priority 4: Use fonte_oficial as free-text portal (portais estaduais/municipais)
+            if (!portal && schema?.process_identification?.fonte_oficial) {
+                const fonte = schema.process_identification.fonte_oficial.trim();
+                if (fonte && fonte !== 'outro' && fonte !== 'Não informado') portal = fonte;
+            }
 
             // Value: schema → proc → itens
             let estimatedValue = 0;
@@ -552,6 +557,11 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             if (!portal && schema?.process_identification?.orgao) {
                 const orgao = schema.process_identification.orgao.toLowerCase();
                 if (orgao.includes('federal') || orgao.includes('ministério')) portal = 'Compras.gov.br';
+            }
+            // Priority 4: Use fonte_oficial as free-text portal (portais estaduais/municipais)
+            if (!portal && schema?.process_identification?.fonte_oficial) {
+                const fonte = schema.process_identification.fonte_oficial.trim();
+                if (fonte && fonte !== 'outro' && fonte !== 'Não informado') portal = fonte;
             }
 
             // Extract estimatedValue — prefer AI-extracted valor_estimado_global, fallback to legacy and itens sum
