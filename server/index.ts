@@ -3131,6 +3131,7 @@ Responda APENAS com JSON array:
                 // dataAberturaProposta = início do recebimento de propostas (NÃO é a sessão!)
                 // dataInicioDisputa ou dataAberturaEdital são mais próximos da sessão real
                 pncpApiSessionDate = d.dataInicioDisputa || d.dataAberturaEdital || '';
+                console.log(`[PNCP-V2] 💰 API metadata: valor=${pncpApiValue}, sessionDate=${pncpApiSessionDate || '(vazio)'}`);
             }
         } catch (e: any) {
             console.warn(`[PNCP-V2] Failed to fetch PNCP metadata for value: ${e.message}`);
@@ -3139,9 +3140,25 @@ Responda APENAS com JSON array:
         // Resolve estimatedValue: AI extraction > PNCP API > 0
         const aiExtractedValue = Number(v2Result.process_identification?.valor_estimado_global) || 0;
         const resolvedEstimatedValue = aiExtractedValue > 0 ? aiExtractedValue : pncpApiValue;
+        console.log(`[PNCP-V2] 💰 Valor resolução: AI=${aiExtractedValue}, API=${pncpApiValue}, final=${resolvedEstimatedValue}`);
 
         // Resolve sessionDate: AI timeline > PNCP API data_abertura
-        const resolvedSessionDate = v2Result.timeline.data_sessao || pncpApiSessionDate || '';
+        const resolvedSessionDateRaw = v2Result.timeline.data_sessao || pncpApiSessionDate || '';
+
+        // Convert Brazilian "DD/MM/AAAA às HH:MM" to ISO for frontend Date() compatibility
+        const parseBrazilianDateToISO = (dateStr: string): string => {
+            if (!dateStr) return '';
+            // Already ISO? Return as-is
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+            // Parse "DD/MM/AAAA às HH:MM" or "DD/MM/AAAA HH:MM"
+            const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
+            if (match) {
+                const [, day, month, year, hour = '00', minute = '00'] = match;
+                return `${year}-${month}-${day}T${hour}:${minute}:00-03:00`;
+            }
+            return dateStr; // Can't parse, return as-is
+        };
+        const resolvedSessionDateISO = parseBrazilianDateToISO(resolvedSessionDateRaw);
 
         const legacyProcess = {
             title: v2Result.process_identification.numero_edital
@@ -3152,7 +3169,7 @@ Responda APENAS com JSON array:
                 `Critério: ${v2Result.process_identification.criterio_julgamento || ''}\n` +
                 `Regime: ${v2Result.process_identification.regime_execucao || ''}\n` +
                 `Município: ${v2Result.process_identification.municipio_uf || ''}\n` +
-                `Sessão: ${resolvedSessionDate}\n` +
+                `Sessão: ${resolvedSessionDateRaw}\n` +
                 (v2Result.participation_conditions.exige_visita_tecnica ? `Visita Técnica: ${v2Result.participation_conditions.visita_tecnica_detalhes}\n` : '') +
                 (v2Result.participation_conditions.exige_garantia_proposta ? `Garantia de Proposta: ${v2Result.participation_conditions.garantia_proposta_detalhes}\n` : '') +
                 (v2Result.participation_conditions.exige_garantia_contratual ? `Garantia Contratual: ${v2Result.participation_conditions.garantia_contratual_detalhes}\n` : '') +
@@ -3166,7 +3183,7 @@ Responda APENAS com JSON array:
             risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
                 : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
                 : v2Result.legal_risk_review.critical_points.length > 0 ? 'Médio' : 'Baixo',
-            sessionDate: resolvedSessionDate
+            sessionDate: resolvedSessionDateISO
         };
 
         const legacyAnalysis = {

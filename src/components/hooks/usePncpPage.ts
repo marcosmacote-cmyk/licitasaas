@@ -967,12 +967,23 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 analyzedAt: new Date().toISOString()
             };
 
+            // Helper: parse Brazilian "DD/MM/AAAA às HH:MM" to ISO if needed
+            const toISOSafe = (d: string): string => {
+                if (!d) return new Date().toISOString();
+                const parsed = new Date(d);
+                if (!isNaN(parsed.getTime())) return parsed.toISOString();
+                // Try Brazilian format
+                const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
+                if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4] || '00'}:${m[5] || '00'}:00-03:00`).toISOString();
+                return new Date().toISOString();
+            };
+
             const fakeProcess: BiddingProcess = {
                 id: `pncp-${item.id}`, title: processObj.title || item.titulo,
                 summary: processObj.summary || item.objeto, portal: 'PNCP',
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
-                sessionDate: processObj.sessionDate || item.data_encerramento_proposta || item.data_abertura || new Date().toISOString(),
+                sessionDate: toISOSafe(processObj.sessionDate || item.data_encerramento_proposta || item.data_abertura || ''),
                 link: [item.link_sistema, item.link_comprasnet].filter(Boolean).join(', '),
                 pncpLink: item.link_sistema, risk: processObj.risk || 'Médio',
                 companyProfileId: selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
