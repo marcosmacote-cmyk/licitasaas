@@ -6337,6 +6337,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             if (/bll\b|bolsadedigital/i.test(allText)) return 'BLL';
             if (/licitanet/i.test(allText)) return 'Licitanet';
             if (/bbmnet/i.test(allText)) return 'BBMNet';
+            if (/licita\s*mais|licita\s*mais\s*brasil|licitamaisbrasil/i.test(allText)) return 'Licita Mais Brasil';
             if (/portaldecompras|portal\s*de\s*compras|portaldecompraspublicas/i.test(allText)) return 'Portal de Compras Públicas';
             if (/licita[çc][õo]es[\s-]*e|banco\s*do\s*brasil|bb\b/i.test(allText)) return 'Licitações-e (BB)';
             if (/bec[\s/]*sp|bolsa\s*eletr[ôo]nica/i.test(allText)) return 'BEC/SP';
