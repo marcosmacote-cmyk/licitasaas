@@ -96,7 +96,7 @@ export async function fallbackToOpenAiV2(opts: {
         }
     }
 
-    const model = 'gpt-4o-mini';
+    const model = 'gpt-4o';
     console.log(`[OpenAI V2 Fallback] ${opts.stageName} → chamando ${model}...`);
     const startTime = Date.now();
 
@@ -108,6 +108,7 @@ export async function fallbackToOpenAiV2(opts: {
         ],
         temperature: opts.temperature ?? 0.1,
         response_format: { type: "json_object" },
+        max_tokens: 16384,
     });
 
     const duration = (Date.now() - startTime) / 1000;

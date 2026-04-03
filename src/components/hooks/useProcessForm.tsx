@@ -513,6 +513,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 }
             }
 
+            console.log(`[AI Fill] sessionDate=${formattedSessionDate}, reminderDate=${reminderDate}, value=${estimatedValue}, portal=${portal}`);
+
             setFormData(prev => ({
                 ...prev,
                 title: title || prev.title,
@@ -523,6 +525,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 sessionDate: formattedSessionDate,
                 risk: risk as any,
                 reminderDate: reminderDate || prev.reminderDate,
+                reminderType: reminderDate ? 'once' : prev.reminderType,
             }));
 
             // Step 4: Store full analysis
