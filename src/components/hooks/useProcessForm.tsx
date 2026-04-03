@@ -256,27 +256,135 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
             const aiData = await res.json();
 
-            if (aiData.process) {
-                let formattedSessionDate = formData.sessionDate;
-                if (aiData.process.sessionDate) {
-                    const d = new Date(aiData.process.sessionDate);
-                    if (!isNaN(d.getTime())) {
-                        const pad = (n: number) => String(n).padStart(2, '0');
-                        formattedSessionDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            // ═══ Apply AI data with full fallbacks (same quality as handleQuickAiFileChange) ═══
+            const schema = aiData.schemaV2;
+            const proc = aiData.process || {};
+
+            const summary = proc.summary || proc.object || schema?.process_identification?.objeto_completo || schema?.process_identification?.objeto_resumido || '';
+
+            let title = proc.title || '';
+            if (!title && schema?.process_identification) {
+                const mod = schema.process_identification.modalidade || '';
+                const numProc = schema.process_identification.numero_processo || '';
+                const numEdit = schema.process_identification.numero_edital || '';
+                const orgao = (schema.process_identification.orgao || '').toUpperCase();
+                const numero = numProc || numEdit;
+                if (mod && numero && orgao) title = `${mod} ${numero} - ${orgao}`;
+                else if (mod && numero) title = `${mod} ${numero}`;
+                else if (numero && orgao) title = `${numero} - ${orgao}`;
+                else title = schema.process_identification.objeto_resumido || numero || '';
+            }
+
+            const modality = proc.modality || schema?.process_identification?.modalidade || '';
+
+            // Portal: proc → schema portal_licitacao → links_uteis → fonte_oficial → orgao
+            let portal = proc.portal || '';
+            if (!portal && schema?.process_identification?.portal_licitacao && schema.process_identification.portal_licitacao !== 'outro') {
+                portal = schema.process_identification.portal_licitacao;
+            }
+            if (!portal && schema?.process_identification?.links_uteis) {
+                const links = Array.isArray(schema.process_identification.links_uteis)
+                    ? schema.process_identification.links_uteis.join(' ')
+                    : String(schema.process_identification.links_uteis || '');
+                if (/licitamaisbrasil/i.test(links)) portal = 'Licita Mais Brasil';
+                else if (/compras\.gov|comprasnet|cnetmobile|pncp/i.test(links)) portal = 'Compras.gov.br';
+                else if (/bll/i.test(links)) portal = 'BLL';
+                else if (/bnc/i.test(links)) portal = 'BNC';
+                else if (/m2a/i.test(links)) portal = 'M2A Tecnologia';
+                else if (/bbmnet/i.test(links)) portal = 'BBMNet';
+                else if (/licitanet/i.test(links)) portal = 'Licitanet';
+                else if (/portaldecompras|portal de compras/i.test(links)) portal = 'Portal de Compras Públicas';
+            }
+            if (!portal && schema?.process_identification?.fonte_oficial) {
+                const fonte = schema.process_identification.fonte_oficial.toLowerCase();
+                if (/licitamaisbrasil/i.test(fonte)) portal = 'Licita Mais Brasil';
+                else if (/compras\.gov|comprasnet|pncp/i.test(fonte)) portal = 'Compras.gov.br';
+            }
+            if (!portal && schema?.process_identification?.orgao) {
+                const orgao = schema.process_identification.orgao.toLowerCase();
+                if (orgao.includes('federal') || orgao.includes('ministério')) portal = 'Compras.gov.br';
+            }
+
+            // Value: schema → proc → itens
+            let estimatedValue = 0;
+            if (schema?.process_identification?.valor_estimado_global) {
+                estimatedValue = parseFloat(String(schema.process_identification.valor_estimado_global)) || 0;
+            }
+            if (!estimatedValue && proc.estimatedValue) {
+                estimatedValue = parseFloat(String(proc.estimatedValue).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+            }
+            if (!estimatedValue && schema?.proposal_analysis?.itens_licitados) {
+                const itens = schema.proposal_analysis.itens_licitados;
+                if (Array.isArray(itens) && itens.length > 0) {
+                    estimatedValue = itens.reduce((sum: number, it: any) => {
+                        const price = parseFloat(String(it.referencePrice || 0)) || 0;
+                        const qty = parseFloat(String(it.quantity || 1)) || 1;
+                        const mult = parseFloat(String(it.multiplier || 1)) || 1;
+                        return sum + (price * qty * mult);
+                    }, 0);
+                    estimatedValue = Math.round(estimatedValue * 100) / 100;
+                }
+            }
+
+            // Session date (with "às" support)
+            let formattedSessionDate = formData.sessionDate;
+            const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
+            if (rawDate) {
+                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(?:às\s*)?(\d{2}):(\d{2})/);
+                if (ptBrMatch) {
+                    formattedSessionDate = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4]}:${ptBrMatch[5]}`;
+                } else {
+                    const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                    if (isoMatch) {
+                        formattedSessionDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
+                    } else {
+                        const d = new Date(rawDate);
+                        if (!isNaN(d.getTime())) {
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            formattedSessionDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        }
                     }
                 }
-
-                setFormData(prev => ({
-                    ...prev,
-                    title: aiData.process.title || prev.title,
-                    summary: aiData.process.summary || prev.summary,
-                    modality: aiData.process.modality || prev.modality,
-                    portal: aiData.process.portal || prev.portal,
-                    estimatedValue: aiData.process.estimatedValue || prev.estimatedValue,
-                    sessionDate: formattedSessionDate,
-                    risk: aiData.process.risk || prev.risk
-                }));
             }
+
+            // Auto-risk from critical_points (severity in PT)
+            let risk = proc.risk || 'Baixo';
+            if (schema?.legal_risk_review?.critical_points) {
+                const criticals = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'critica' || cp.severity === 'alta');
+                const medias = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'media');
+                if (criticals.length >= 2) risk = 'Crítico';
+                else if (criticals.length >= 1) risk = 'Alto';
+                else if (medias.length >= 2) risk = 'Médio';
+            }
+
+            // Auto-reminder: 24h before session (local time, no UTC)
+            let reminderDate = '';
+            if (formattedSessionDate) {
+                const parts = formattedSessionDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                if (parts) {
+                    const yr = parseInt(parts[1]), mo = parseInt(parts[2]) - 1, dy = parseInt(parts[3]);
+                    const hr = parseInt(parts[4]), mn = parseInt(parts[5]);
+                    const dt = new Date(yr, mo, dy, hr, mn);
+                    dt.setHours(dt.getHours() - 24);
+                    const pad = (n: number) => String(n).padStart(2, '0');
+                    reminderDate = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+                }
+            }
+
+            console.log(`[AI Extract] sessionDate=${formattedSessionDate}, reminderDate=${reminderDate}, value=${estimatedValue}, portal=${portal}`);
+
+            setFormData(prev => ({
+                ...prev,
+                title: title || prev.title,
+                summary: summary || prev.summary,
+                modality: modality || prev.modality,
+                portal: portal || prev.portal,
+                estimatedValue: estimatedValue || prev.estimatedValue,
+                sessionDate: formattedSessionDate,
+                risk: risk as any,
+                reminderDate: reminderDate || prev.reminderDate,
+                reminderType: reminderDate ? 'once' : prev.reminderType,
+            }));
             if (aiData.analysis) {
                 const analysisObj: AiAnalysis = {
                     id: uuidv4(),
@@ -421,13 +529,24 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 const links = Array.isArray(schema.process_identification.links_uteis) 
                     ? schema.process_identification.links_uteis.join(' ') 
                     : String(schema.process_identification.links_uteis || '');
-                if (/compras\.gov|comprasnet|cnetmobile|pncp/i.test(links)) portal = 'Compras.gov.br';
+                if (/licitamaisbrasil/i.test(links)) portal = 'Licita Mais Brasil';
+                else if (/compras\.gov|comprasnet|cnetmobile|pncp/i.test(links)) portal = 'Compras.gov.br';
                 else if (/bnc/i.test(links)) portal = 'BNC';
                 else if (/bll/i.test(links)) portal = 'BLL';
-                else if (/m2a/i.test(links)) portal = 'M2A';
-                else if (/bbmnet/i.test(links)) portal = 'BBMNET';
+                else if (/m2a/i.test(links)) portal = 'M2A Tecnologia';
+                else if (/bbmnet/i.test(links)) portal = 'BBMNet';
                 else if (/licitanet/i.test(links)) portal = 'Licitanet';
                 else if (/portaldecompras|portal de compras/i.test(links)) portal = 'Portal de Compras Públicas';
+            }
+            // Priority 2.5: Try from fonte_oficial (URL of the actual portal)
+            if (!portal && schema?.process_identification?.fonte_oficial) {
+                const fonte = schema.process_identification.fonte_oficial.toLowerCase();
+                if (/licitamaisbrasil/i.test(fonte)) portal = 'Licita Mais Brasil';
+                else if (/compras\.gov|comprasnet|pncp/i.test(fonte)) portal = 'Compras.gov.br';
+                else if (/bnc/i.test(fonte)) portal = 'BNC';
+                else if (/bll/i.test(fonte)) portal = 'BLL';
+                else if (/m2a/i.test(fonte)) portal = 'M2A Tecnologia';
+                else if (/bbmnet/i.test(fonte)) portal = 'BBMNet';
             }
             // Priority 3: Try from orgao name
             if (!portal && schema?.process_identification?.orgao) {
@@ -464,7 +583,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
             if (rawDate) {
                 // Convert PT-BR "27/05/2025 09:00" to datetime-local format "2025-05-27T09:00"
-                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}):(\d{2})/);
+                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(?:às\s*)?(\d{2}):(\d{2})/);
                 if (ptBrMatch) {
                     formattedSessionDate = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4]}:${ptBrMatch[5]}`;
                 } else {
@@ -567,7 +686,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
         onSave({
             ...formData,
-            sessionDate: formData.sessionDate ? new Date(formData.sessionDate).toISOString() : new Date().toISOString(),
+            sessionDate: formData.sessionDate ? `${formData.sessionDate}:00` : new Date().toISOString(),
             reminderDate: formData.reminderDate ? new Date(formData.reminderDate).toISOString() : (null as any),
             reminderStatus: formData.reminderDate ? 'pending' : (null as any)
         }, aiAnalysisData);
