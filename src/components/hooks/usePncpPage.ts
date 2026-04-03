@@ -884,10 +884,17 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // ═══════════════════════════════════════════════════════════
         // BUILD & SET PROCESS
         // ═══════════════════════════════════════════════════════════
+        // Smart portal resolution: bestPortalName from links is specific → wins over generic AI portal
+        const genericPortals = ['compras.gov.br', 'pncp', 'não informado', ''];
+        const aiPortal = aiData?.process?.portal || '';
+        const resolvedPortal = (bestPortalName && !genericPortals.includes(bestPortalName.toLowerCase()))
+            ? bestPortalName  // Link-based detection is specific (e.g. Licita Mais Brasil) → use it
+            : (aiPortal || bestPortalName);  // AI portal or fallback
+
         const processData: Partial<BiddingProcess> = {
             title,
             summary,
-            portal: aiData?.process?.portal || bestPortalName,
+            portal: resolvedPortal,
             modality,
             status: "Captado",
             estimatedValue: aiData?.process?.estimatedValue || item.valor_estimado || 0,

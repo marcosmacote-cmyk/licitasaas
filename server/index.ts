@@ -3376,7 +3376,20 @@ function normalizePortal(portal: string, link?: string | null): string {
     const p = (portal || '').toLowerCase().trim();
     const l = (link || '').toLowerCase();
 
-    // Prioridade 1: Inferir pelo link (mais confiável)
+    // ═══════════════════════════════════════════════════════════
+    // Prioridade 0: Texto do portal contém URL/nome ESPECÍFICO de plataforma
+    // (Deve ser avaliado ANTES do link genérico PNCP para não ser sobrescrito)
+    // ═══════════════════════════════════════════════════════════
+    if (p.includes('m2a') || p.includes('m2atecnologia')) return 'M2A';
+    if (p.includes('bbmnet')) return 'BBMNET';
+    if (p.includes('bll')) return 'BLL';
+    if (p.includes('bnc') && !p.includes('banco')) return 'BNC';
+    if (p.includes('licita mais') || p.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
+    if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
+    if (p.includes('licitanet')) return 'Licitanet';
+    if (p.includes('bolsa de licita')) return 'Bolsa de Licitações';
+
+    // Prioridade 1: Inferir pelo link (mais confiável para portais de disputa)
     if (l) {
         if (l.includes('m2atecnologia') || l.includes('precodereferencia')) return 'M2A';
         if (l.includes('bbmnet') || l.includes('novabbmnet')) return 'BBMNET';
@@ -3389,15 +3402,7 @@ function normalizePortal(portal: string, link?: string | null): string {
         if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras') || l.includes('pncp.gov.br')) return 'Compras.gov.br';
     }
 
-    // Prioridade 2: Normalizar texto do portal
-    if (p.includes('m2a') || p.includes('m2atecnologia')) return 'M2A';
-    if (p.includes('bbmnet')) return 'BBMNET';
-    if (p.includes('bll')) return 'BLL';
-    if (p.includes('bnc')) return 'BNC';
-    if (p.includes('licita mais') || p.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
-    if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
-    if (p.includes('licitanet')) return 'Licitanet';
-    if (p.includes('bolsa de licita')) return 'Bolsa de Licitações';
+    // Prioridade 2: Texto do portal → Compras.gov.br (genérico, avaliado por último)
     if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile') || p.includes('pncp')) return 'Compras.gov.br';
 
     // Prioridade 3: URL crua → tentar extrair plataforma
