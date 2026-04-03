@@ -387,20 +387,20 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
    - QTP (Profissional): Pertence ao PROFISSIONAL (Vínculo do RT, CAT/Acervo, Declaração de RT).
    - NUNCA misture! O que for atestado da empresa vai em QTO. Acervo do engenheiro vai em QTP.
 6. BLOCO QTO OBRIGATÓRIO: QTO deve conter (a) Certidão PJ no Conselho (se houver), (b) Visitas Técnicas (se houver) e (c) Atestados da Empresa.
-7. ANTI-GENERICIDADE CÍVICA (QTO/QTP): PROIBIDO usar "serviços similares" ou "parcelas de maior relevância". TRANSCREVA item por item da parcela com QUANTIDADE MÍNIMA e UNIDADE (ex: "Pavimentação asfáltica, camada de rolamento, espessura=4cm — QUANTIDADE MÍNIMA: 3.500,00 m²").
-   ⚠️ REGRA ABSOLUTA DE QUANTITATIVOS: Para CADA atestado/CAT exigido, a description DEVE incluir:
+7. PARCELAS DE MAIOR RELEVÂNCIA (QTO/QTP): Devem ser SEMPRE tratadas como EXIGÊNCIAS DE HABILITAÇÃO (risk_if_missing="inabilitacao"). É PROIBIDO criar um item genérico apenas escrito "Comprovar parcelas de maior relevância". Você DEVE destrinchar CADA parcela em um item estruturado SECUNDÁRIO, copiando textualmente a descrição da parcela.
+   ⚠️ REGRA ABSOLUTA DE QUANTITATIVOS: Para CADA atestado/CAT listado como parcela de maior relevância, a description DEVE OBRIGATORIAMENTE incluir:
    - O serviço/parcela EXATA (transcrita literalmente)
    - O QUANTITATIVO MÍNIMO exigido pelo edital (ex: "quantidade mínima de 50% do quantitativo previsto = 3.500,00 m²")
    - A UNIDADE de medida (m², m³, kg, km, m, un, etc.)
    - Se o edital define percentual mínimo sobre o quantitativo do objeto, CALCULE e inclua o valor absoluto quando disponível
    - Se o edital NÃO especificar quantidade mínima, registre: "sem quantitativo mínimo definido"
-   EXEMPLO CORRETO: "Atestado comprovando execução de pavimentação com concreto asfáltico, camada de rolamento (espessura=4cm) — Quantidade mínima exigida: 50% do quantitativo previsto (ver planilha do Projeto Básico)"
-   EXEMPLO ERRADO: "Atestado comprovando execução de serviços de pavimentação asfáltica"
+   EXEMPLO CORRETO: "Atestado comprovando execução de pavimentação asfáltica (parcela de maior relevância) — Quantidade mínima exigida: 3.500,00 m²"
+   EXEMPLO ERRADO: "Atestado de capacidade técnica com serviços similares e parcelas de maior relevância"
 8. VISITA TÉCNICA: Pertence a QTO. Deve ser uma exigência com obligation_type="obrigatoria_universal". NUNCA coloque em QTP.
 9. GARANTIAS: Garantia de proposta, execução, seguro ou caução vão SEMPRE em QEF, nunca em Documentos Complementares (DC).
 10. OBLIGATION TYPE: Use "obrigatoria_universal" por padrão. Use "condicional", "se_aplicavel" ou "alternativa" APENAS se o edital for literal sobre a condição ("somente para consórcio", "quando aplicável").
 11. MULTIPLAS PARCELAS EM QTP: Se o edital exige CAT para 3 parcelas diferentes, crie 3 ITENS de exigência_principal em QTP. Proibido item guarda-chuva.
-12. OBRIGATÓRIOS RFT — DEVEM ser itens separados seguindo ESTA ORDEM HIERÁRQUICA (EXCETO se integralmente substituídos por Pré-Qualificação/CRC/SICAF no edital):
+12. OBRIGATÓRIOS RFT — A ORDEM HIERÁRQUICA ABAIXO É ESTRITA E INEGOCIÁVEL (Cumpra a sequência exatamente como descrita, a menos que substituído por Pré-Qualificação/CRC/SICAF):
     RFT-01: CNPJ (prova de inscrição no Cadastro Nacional de Pessoa Jurídica)
     RFT-02: Inscrição estadual no cadastro de contribuintes (se exigida)
     RFT-03: Inscrição municipal no cadastro de contribuintes (se exigida)
@@ -409,7 +409,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     RFT-06: CND Municipal (Fazenda Municipal)
     RFT-07: CRF/FGTS
     RFT-08: CNDT (Débitos Trabalhistas)
-    ⚠️ CNPJ, IE e IM devem ser os PRIMEIROS itens. (Se for edital focado em Pré-Qualificação, ignore essa lista padrão se o edital referir-se apenas ao Certificado).
+    ⚠️ REGRA DE OURO RFT: CNPJ, Inscrição Estadual (IE) e Inscrição Municipal (IM) DEVEM ABSOLUTAMENTE ser os 3 primeiros itens listados, sempre ANTES de qualquer certidão ou prova de regularidade fiscal.
 13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica" (A NÃO SER QUE dispensados expressamente por Certificado de Registro/Pré-Qualificação).
 14. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
 15. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
