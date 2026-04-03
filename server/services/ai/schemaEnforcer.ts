@@ -414,6 +414,62 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
     // NÍVEL 3: Completude por Categoria
     // ═══════════════════════════════════════════
 
+    // ── REGRA DE OURO RFT: CNPJ → IE → IM devem ser os 3 primeiros ──
+    if (schema.requirements) {
+        const rftItems = (schema.requirements as any).regularidade_fiscal_trabalhista;
+        if (Array.isArray(rftItems) && rftItems.length >= 3) {
+            // Identify IE and IM items by ID or title pattern
+            const isIE = (r: any) =>
+                /^RFT-IE$/i.test(r.requirement_id) ||
+                /inscri[çc][ãa]o\s+estadual/i.test(r.title || '') ||
+                /cadastro\s+de\s+contribuintes\s+estadual/i.test(r.description || '');
+            const isIM = (r: any) =>
+                /^RFT-IM$/i.test(r.requirement_id) ||
+                /inscri[çc][ãa]o\s+municipal/i.test(r.title || '') ||
+                /cadastro\s+de\s+contribuintes\s+municipal/i.test(r.description || '');
+            const isCNPJ = (r: any) =>
+                /^RFT-01$/i.test(r.requirement_id) ||
+                /CNPJ/i.test(r.title || '');
+
+            const cnpjIdx = rftItems.findIndex(isCNPJ);
+            const ieIdx = rftItems.findIndex(isIE);
+            const imIdx = rftItems.findIndex(isIM);
+
+            // Only reorder if CNPJ exists and IE/IM are NOT already right after it
+            if (cnpjIdx >= 0 && (ieIdx > cnpjIdx + 2 || imIdx > cnpjIdx + 2 || (ieIdx >= 0 && ieIdx !== cnpjIdx + 1) || (imIdx >= 0 && imIdx !== cnpjIdx + 2))) {
+                const reordered: any[] = [];
+                const ieItem = ieIdx >= 0 ? rftItems[ieIdx] : null;
+                const imItem = imIdx >= 0 ? rftItems[imIdx] : null;
+                const skipIndices = new Set([ieIdx, imIdx].filter(i => i >= 0));
+
+                // Insert items in order: CNPJ, then IE, then IM, then rest
+                for (let i = 0; i < rftItems.length; i++) {
+                    if (skipIndices.has(i)) continue;
+                    reordered.push(rftItems[i]);
+                    // After CNPJ (position cnpjIdx), insert IE and IM
+                    if (i === cnpjIdx) {
+                        if (ieItem) reordered.push(ieItem);
+                        if (imItem) reordered.push(imItem);
+                    }
+                }
+
+                // Renumber all IDs sequentially
+                let rftCounter = 1;
+                for (const item of reordered) {
+                    const oldId = item.requirement_id;
+                    item.requirement_id = `RFT-${String(rftCounter).padStart(2, '0')}`;
+                    if (oldId !== item.requirement_id) {
+                        corrections++;
+                    }
+                    rftCounter++;
+                }
+
+                (schema.requirements as any).regularidade_fiscal_trabalhista = reordered;
+                correct('RFT', 'IE/IM fora de posição', 'reordenado: CNPJ → IE → IM → CNDs (Regra de Ouro)');
+            }
+        }
+    }
+
     // HJ: if empty but other categories exist, inject basic doc
     if (schema.requirements) {
         const hj = (schema.requirements as any).habilitacao_juridica || [];

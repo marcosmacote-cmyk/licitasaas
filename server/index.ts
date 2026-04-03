@@ -3119,6 +3119,28 @@ Responda APENAS com JSON array:
             return acc;
         }, {} as Record<string, any[]>);
 
+        // ── PNCP Metadata Enrichment: Fetch valorTotalEstimado from PNCP API ──
+        let pncpApiValue = 0;
+        let pncpApiSessionDate = '';
+        try {
+            const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
+            const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 5000 } as any);
+            const d: any = detailRes.data;
+            if (d) {
+                pncpApiValue = Number(d.valorTotalEstimado ?? d.valorTotalHomologado ?? d.valorGlobal ?? 0) || 0;
+                pncpApiSessionDate = d.dataAberturaProposta || d.dataAberturaEdital || '';
+            }
+        } catch (e: any) {
+            console.warn(`[PNCP-V2] Failed to fetch PNCP metadata for value: ${e.message}`);
+        }
+
+        // Resolve estimatedValue: AI extraction > PNCP API > 0
+        const aiExtractedValue = Number(v2Result.process_identification?.valor_estimado_global) || 0;
+        const resolvedEstimatedValue = aiExtractedValue > 0 ? aiExtractedValue : pncpApiValue;
+
+        // Resolve sessionDate: AI timeline > PNCP API data_abertura
+        const resolvedSessionDate = v2Result.timeline.data_sessao || pncpApiSessionDate || '';
+
         const legacyProcess = {
             title: v2Result.process_identification.numero_edital
                 ? `${v2Result.process_identification.modalidade} ${v2Result.process_identification.numero_edital} - ${v2Result.process_identification.orgao}`
@@ -3128,7 +3150,7 @@ Responda APENAS com JSON array:
                 `Critério: ${v2Result.process_identification.criterio_julgamento || ''}\n` +
                 `Regime: ${v2Result.process_identification.regime_execucao || ''}\n` +
                 `Município: ${v2Result.process_identification.municipio_uf || ''}\n` +
-                `Sessão: ${v2Result.timeline.data_sessao || ''}\n` +
+                `Sessão: ${resolvedSessionDate}\n` +
                 (v2Result.participation_conditions.exige_visita_tecnica ? `Visita Técnica: ${v2Result.participation_conditions.visita_tecnica_detalhes}\n` : '') +
                 (v2Result.participation_conditions.exige_garantia_proposta ? `Garantia de Proposta: ${v2Result.participation_conditions.garantia_proposta_detalhes}\n` : '') +
                 (v2Result.participation_conditions.exige_garantia_contratual ? `Garantia Contratual: ${v2Result.participation_conditions.garantia_contratual_detalhes}\n` : '') +
@@ -3138,11 +3160,11 @@ Responda APENAS com JSON array:
                 ).join('\n'),
             modality: normalizeModality(v2Result.process_identification.modalidade),
             portal: normalizePortal(v2Result.process_identification.fonte_oficial || 'PNCP', link_sistema),
-            estimatedValue: 0,
+            estimatedValue: resolvedEstimatedValue,
             risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
                 : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
                 : v2Result.legal_risk_review.critical_points.length > 0 ? 'Médio' : 'Baixo',
-            sessionDate: v2Result.timeline.data_sessao || ''
+            sessionDate: resolvedSessionDate
         };
 
         const legacyAnalysis = {

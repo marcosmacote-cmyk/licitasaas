@@ -793,13 +793,13 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         if (item.link_comprasnet && !links.includes(item.link_comprasnet)) links.push(item.link_comprasnet);
 
         // ═══════════════════════════════════════════════════════════
-        // 5. SESSION DATE — prioriza data de encerramento (sessão real)
+        // 5. SESSION DATE — prioriza data de abertura (sessão pública real)
         // ═══════════════════════════════════════════════════════════
         let sessionDateISO: string;
-        if (item.data_encerramento_proposta) {
-            sessionDateISO = new Date(item.data_encerramento_proposta).toISOString();
-        } else if (item.data_abertura) {
+        if (item.data_abertura) {
             sessionDateISO = new Date(item.data_abertura).toISOString();
+        } else if (item.data_encerramento_proposta) {
+            sessionDateISO = new Date(item.data_encerramento_proposta).toISOString();
         } else {
             sessionDateISO = new Date().toISOString();
         }
@@ -963,7 +963,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 summary: processObj.summary || item.objeto, portal: 'PNCP',
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
-                sessionDate: item.data_encerramento_proposta || item.data_abertura || new Date().toISOString(),
+                sessionDate: item.data_abertura || item.data_encerramento_proposta || new Date().toISOString(),
                 link: [item.link_sistema, item.link_comprasnet].filter(Boolean).join(', '),
                 pncpLink: item.link_sistema, risk: processObj.risk || 'Médio',
                 companyProfileId: selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
