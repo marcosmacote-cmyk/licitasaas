@@ -1039,8 +1039,52 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         try {
             setIsParsingAI(true);
             const { process: parsedData, analysis } = await aiService.parseEditalPDF(files);
-            setEditingProcess(parsedData);
-            setPendingAiAnalysis(analysis);
+            
+            // Helper to build dates consistently 
+            const toISOSafe = (d: string): string => {
+                if (!d) return new Date().toISOString();
+                const parsed = new Date(d);
+                if (!isNaN(parsed.getTime())) return parsed.toISOString();
+                const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
+                if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4] || '00'}:${m[5] || '00'}:00-03:00`).toISOString();
+                return new Date().toISOString();
+            };
+
+            const fakeItem: any = {
+                id: `manual-upload-${Date.now()}`,
+                titulo: parsedData.title || 'Licitação Captada (Processo Manual)',
+                objeto: parsedData.summary || '',
+                orgao_nome: '',
+                municipio: '',
+                uf: '',
+                modalidade_nome: parsedData.modality || '',
+                valor_estimado: parsedData.estimatedValue || 0,
+                data_abertura: toISOSafe(parsedData.sessionDate || ''),
+                data_encerramento_proposta: toISOSafe(parsedData.sessionDate || ''),
+                link_sistema: parsedData.link || '',
+            };
+
+            const fakeProcess: BiddingProcess = {
+                id: fakeItem.id,
+                title: parsedData.title || fakeItem.titulo,
+                summary: parsedData.summary || fakeItem.objeto,
+                portal: parsedData.portal || 'Não Informado',
+                modality: parsedData.modality || 'Não Informado',
+                status: 'Captado',
+                estimatedValue: parsedData.estimatedValue || 0,
+                sessionDate: toISOSafe(parsedData.sessionDate || ''),
+                link: parsedData.link || '',
+                pncpLink: '',
+                risk: parsedData.risk || 'Médio',
+                companyProfileId: selectedSearchCompanyId || '',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                observations: '[]'
+            } as BiddingProcess;
+
+            setAnalyzedPncpItem(fakeItem);
+            setPncpAnalysis({ process: parsedData, analysis });
+            setViewingAnalysisProcess(fakeProcess);
         } catch (error) {
             console.error('Failed to parse document with AI', error);
             const errorMessage = error instanceof Error ? error.message : 'Falha ao extrair dados do Edital.';
