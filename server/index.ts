@@ -5880,8 +5880,8 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                         const files = [...extracted.files].filter(f => f.fileHeader.name.toLowerCase().endsWith('.pdf') && !f.fileHeader.flags.directory && f.extraction);
                         for (const rarFile of files) {
                             if (pdfParts.length >= MAX_PDF_PARTS) break;
-                            const entryBuffer = Buffer.from(rarFile.extraction);
-                            if (entryBuffer.length > 0) {
+                            if (rarFile.extraction && rarFile.extraction.length > 0) {
+                                const entryBuffer = Buffer.from(rarFile.extraction);
                                 pdfParts.push({ inlineData: { data: entryBuffer.toString('base64'), mimeType: 'application/pdf' } });
                                 sourceFiles.push(`${fileName}/${rarFile.fileHeader.name}`);
                                 console.log(`[AI-V2] ✅ Extracted PDF from RAR: ${rarFile.fileHeader.name} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
