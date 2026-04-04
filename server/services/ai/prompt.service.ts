@@ -393,6 +393,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
    - O QUANTITATIVO MÍNIMO exigido pelo edital (ex: "quantidade mínima de 50% do quantitativo previsto = 3.500,00 m²")
    - A UNIDADE de medida (m², m³, kg, km, m, un, etc.)
    - Se o edital define percentual mínimo sobre o quantitativo do objeto, CALCULE e inclua o valor absoluto quando disponível
+   - ATENÇÃO EXTREMA: Se for obra de engenharia, É QUASE CERTO que há CAT e Atestados. Vasculhe o documento até encontrar.
    - Se o edital NÃO especificar quantidade mínima, registre: "sem quantitativo mínimo definido"
    EXEMPLO CORRETO: "Atestado comprovando execução de pavimentação asfáltica (parcela de maior relevância) — Quantidade mínima exigida: 3.500,00 m²"
    EXEMPLO ERRADO: "Atestado de capacidade técnica com serviços similares e parcelas de maior relevância"
@@ -411,8 +412,10 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     RFT-08: CNDT (Débitos Trabalhistas)
     ⚠️ REGRA DE OURO RFT: CNPJ, Inscrição Estadual (IE) e Inscrição Municipal (IM) DEVEM ABSOLUTAMENTE ser os 3 primeiros itens listados, sempre ANTES de qualquer certidão ou prova de regularidade fiscal.
 13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
-14. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
-15. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
+14. OBRIGATÓRIOS QEF: Balanço Patrimonial, Índices Contábeis (SG/LG/LC) e Certidão de Falência/Recuperação Judicial. DEVEM ir impreterivelmente para "qualificacao_economico_financeira". NÃO os jogue em Documentos Complementares.
+15. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
+16. OBJETO E CRITÉRIO: Ao preencher "objeto_resumido", elabore um resumo lógico e seguro. NUNCA copie referências quebradas como "[espaço em branco]". Para "criterio_julgamento", NUNCA deixe "Não informado" em Conc/Pregão; se não encontrar no texto, classifique como "Menor Preço" ou "Maior Desconto".
+17. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
 
 ⚠️ NOTA SOBRE PRÉ-QUALIFICAÇÃO: Se o edital estabelecer que a habilitação é comprovada EXCLUSIVAMENTE por Certificado de Pré-Qualificação, CRC ou SICAF (sem listar documentos individuais), extraia apenas o certificado e eventuais complementos expressos. Esta exceção SÓ se aplica quando o edital NÃO lista documentos individuais de habilitação.
 
