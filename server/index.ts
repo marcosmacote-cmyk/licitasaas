@@ -3530,7 +3530,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                         const apiData = await apiRes.json();
                         const platformUrl = (apiData.linkSistemaOrigem || '').trim();
                         if (platformUrl && hasMonitorableDomain(platformUrl)) {
-                            // Prevent duplicates
+                            // Case 1: linkSistemaOrigem IS monitorable (e.g., cnetmobile, bllcompras)
                             const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
                             if (!existingParts.some((part: string) => part === platformUrl)) {
                                 enrichedLink = `${enrichedLink}, ${platformUrl}`;
@@ -3539,6 +3539,15 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                             // Re-normalize portal with the enriched link
                             biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
                             console.log(`[AutoEnrich] Fetched platform link for new process from PNCP API: ${platformUrl.substring(0, 60)}`);
+                        } else if (platformUrl) {
+                            // Case 2: linkSistemaOrigem is NOT monitorable (e.g., portalcompras.ce.gov.br)
+                            // Still add it for reference, but warn that it's not monitorable
+                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                            if (!existingParts.some((part: string) => part === platformUrl)) {
+                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                biddingData.link = enrichedLink;
+                            }
+                            console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable: ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal}`);
                         }
                     }
                 }
@@ -3548,9 +3557,16 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         }
 
         // ── Step 2: Auto-enable monitoring for all supported platforms ──
-        if (hasMonitorableDomain(enrichedLink)) {
+        // Also enable for Compras.gov.br processes (even without cnetmobile link — worker can use URL Discovery)
+        const portalLower = (biddingData.portal || '').toLowerCase();
+        const isComprasGovPortal = portalLower.includes('compras.gov') || portalLower.includes('comprasnet');
+        if (hasMonitorableDomain(enrichedLink) || isComprasGovPortal) {
             biddingData.isMonitored = true;
-            console.log(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
+            if (isComprasGovPortal && !hasMonitorableDomain(enrichedLink)) {
+                console.log(`[AutoMonitor] Auto-enabled monitoring for Compras.gov.br process (needs cnetmobile link for worker). Portal: ${biddingData.portal}`);
+            } else {
+                console.log(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
+            }
         }
 
         // ── Step 3: Auto-backfill pncpLink from link ──
@@ -3926,6 +3942,14 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                                 biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
                             }
                             console.log(`[AutoEnrich] Fetched platform link for process "${id}" from PNCP API: ${platformUrl.substring(0, 60)}`);
+                        } else if (platformUrl) {
+                            // linkSistemaOrigem is NOT monitorable — still add for reference
+                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                            if (!existingParts.some((part: string) => part === platformUrl)) {
+                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                biddingData.link = enrichedLink;
+                            }
+                            console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable for "${id}": ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal || 'N/A'}`);
                         }
                     }
                 }
@@ -3935,11 +3959,17 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         }
 
         // ── Step 2: Auto-enable monitoring for all supported platforms ──
-        if (hasMonitorableDomain(enrichedLink) && biddingData.isMonitored === undefined) {
-            const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
-            if (current && !current.isMonitored) {
-                biddingData.isMonitored = true;
-                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
+        // Also enable for Compras.gov.br processes (even without cnetmobile link)
+        const putPortalLower = (biddingData.portal || '').toLowerCase();
+        const isPutComprasGovPortal = putPortalLower.includes('compras.gov') || putPortalLower.includes('comprasnet');
+        if (biddingData.isMonitored === undefined) {
+            const shouldAutoMonitor = hasMonitorableDomain(enrichedLink) || isPutComprasGovPortal;
+            if (shouldAutoMonitor) {
+                const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
+                if (current && !current.isMonitored) {
+                    biddingData.isMonitored = true;
+                    console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
+                }
             }
         }
 

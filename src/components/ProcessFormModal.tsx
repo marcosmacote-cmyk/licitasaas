@@ -296,7 +296,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const link = (form.formData.link || '').toLowerCase();
                                 const portal = (form.formData.portal || '').toLowerCase();
                                 
-                                const isComprasNet = link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('comprasnet');
+                                const isComprasNet = link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('comprasnet') || portal.includes('compras.gov');
                                 const isBLL = link.includes('bllcompras') || link.includes('bll.org') || portal === 'bll';
                                 const isBNC = link.includes('bnccompras') || portal.includes('bnc');
                                 const isM2A = link.includes('m2atecnologia') || portal.includes('m2a');
@@ -304,6 +304,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const isLicitaMaisBrasil = link.includes('licitamaisbrasil') || portal.includes('licita mais brasil');
                                 
                                 const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet || isLicitaMaisBrasil;
+                                // ComprasNet detected by portal name but missing actual cnetmobile URL for the worker
+                                const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+                                const needsComprasNetLink = isComprasNet && !hasComprasNetLink;
                                 const isOtherPlatform = link.includes('pncp.gov.br') && !isMonitorable;
 
                                 let hasCredentials = true;
@@ -315,7 +318,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             const cp = cred.platform.toLowerCase();
                                             const cu = (cred.url || '').toLowerCase();
                                             let score = 0;
-                                            if (isComprasNet && (cp.includes('comprasnet') || cu.includes('comprasnet'))) score++;
+                                            if (isComprasNet && (cp.includes('comprasnet') || cp.includes('compras.gov') || cu.includes('comprasnet') || cu.includes('compras.gov') || cu.includes('gov.br/compras'))) score++;
                                             if (isBLL && (cp.includes('bll') || cu.includes('bll'))) score++;
                                             if (isBNC && (cp.includes('bnc') || cu.includes('bnc'))) score++;
                                             if (isM2A && (cp.includes('m2a') || cu.includes('m2a'))) score++;
@@ -328,24 +331,40 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 }
 
                                 const bgStyle = isMonitorable
-                                    ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
+                                    ? needsComprasNetLink
+                                        ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(234, 179, 8, 0.06))'
+                                        : 'linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(37, 99, 235, 0.06))'
                                     : 'var(--color-bg-secondary)';
-                                const borderColor = isMonitorable ? 'rgba(34, 197, 94, 0.2)' : 'var(--color-border)';
-                                const iconBg = isMonitorable ? 'rgba(34, 197, 94, 0.12)' : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
-                                const iconColor = isMonitorable ? '#22c55e' : isOtherPlatform ? '#6366f1' : '#6b7280';
+                                const borderColor = isMonitorable
+                                    ? needsComprasNetLink ? 'rgba(245, 158, 11, 0.25)' : 'rgba(34, 197, 94, 0.2)'
+                                    : 'var(--color-border)';
+                                const iconBg = isMonitorable
+                                    ? needsComprasNetLink ? 'rgba(245, 158, 11, 0.12)' : 'rgba(34, 197, 94, 0.12)'
+                                    : isOtherPlatform ? 'rgba(99, 102, 241, 0.1)' : 'rgba(107, 114, 128, 0.1)';
+                                const iconColor = isMonitorable
+                                    ? needsComprasNetLink ? '#f59e0b' : '#22c55e'
+                                    : isOtherPlatform ? '#6366f1' : '#6b7280';
 
                                 const platformLabel = isComprasNet ? 'ComprasNet' : isBLL ? 'BLL' : isBNC ? 'BNC' : isM2A ? 'M2A' : isBBMNet ? 'BBMNet' : isLicitaMaisBrasil ? 'Licita Mais Brasil' : '';
                                 const title = isMonitorable
-                                    ? `Monitoramento ${platformLabel} suportado`
+                                    ? needsComprasNetLink
+                                        ? 'Link do ComprasNet necessário'
+                                        : `Monitoramento ${platformLabel} suportado`
                                     : isOtherPlatform
                                         ? 'Licitação em portal externo'
                                         : 'Monitor de Chat';
-                                const titleColor = isMonitorable ? '#22c55e' : 'var(--color-text-tertiary)';
+                                const titleColor = isMonitorable
+                                    ? needsComprasNetLink ? '#f59e0b' : '#22c55e'
+                                    : 'var(--color-text-tertiary)';
 
                                 const subtitle = isMonitorable
-                                    ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                        <CheckCircle size={11} color="#22c55e" /> Detectado para {platformLabel}. O chat será monitorado.
-                                      </span>
+                                    ? needsComprasNetLink
+                                        ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                            <AlertTriangle size={11} color="#f59e0b" /> Adicione o link do ComprasNet (cnetmobile) nos links para ativar o monitoramento de chat.
+                                          </span>
+                                        : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                            <CheckCircle size={11} color="#22c55e" /> Detectado para {platformLabel}. O chat será monitorado.
+                                          </span>
                                     : isOtherPlatform
                                         ? <span>Monitoramento apenas para ComprasNet, BLL, BNC, M2A, BBMNet e Licita Mais Brasil.</span>
                                         : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
