@@ -5846,14 +5846,51 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             const pdfBuffer = await getFileBufferSafe(fileToFetch, req.user.tenantId);
 
             if (pdfBuffer) {
-                console.log(`[AI-V2] Read file ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
-                pdfParts.push({
-                    inlineData: {
-                        data: pdfBuffer.toString('base64'),
-                        mimeType: 'application/pdf'
-                    }
-                });
-                sourceFiles.push(fileName);
+                const magic = pdfBuffer.length >= 4 ? pdfBuffer.toString('hex', 0, 4) : '';
+                const isPdf = fileName.toLowerCase().endsWith('.pdf') || magic.startsWith('25504446');
+                const isZip = fileName.toLowerCase().endsWith('.zip') || magic.startsWith('504b0304');
+                const isRar = fileName.toLowerCase().endsWith('.rar') || magic.startsWith('52617221');
+                const MAX_PDF_PARTS = 15;
+
+                if (isPdf) {
+                    console.log(`[AI-V2] Read PDF file ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                    pdfParts.push({ inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } });
+                    sourceFiles.push(fileName);
+                } else if (isZip) {
+                    console.log(`[AI-V2] 📦 ZIP detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const JSZip = require('jszip');
+                        const zip = await JSZip.loadAsync(pdfBuffer);
+                        let zipEntries = Object.keys(zip.files).filter((name: string) => !name.toLowerCase().endsWith('.pdf') || zip.files[name].dir ? false : !['comprovante','resumo'].some(pat => name.toLowerCase().includes(pat)));
+                        for (const entryName of zipEntries) {
+                            if (pdfParts.length >= MAX_PDF_PARTS) break;
+                            const entryBuffer = await zip.files[entryName].async('nodebuffer');
+                            if (entryBuffer.length > 0) {
+                                pdfParts.push({ inlineData: { data: entryBuffer.toString('base64'), mimeType: 'application/pdf' } });
+                                sourceFiles.push(`${fileName}/${entryName}`);
+                                console.log(`[AI-V2] ✅ Extracted PDF from ZIP: ${entryName} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
+                    } catch (e: any) { console.warn(`[AI-V2] Failed to extract ZIP ${fileName}: ${e.message}`); }
+                } else if (isRar) {
+                    console.log(`[AI-V2] 📦 RAR detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const extractor = await createExtractorFromData({ data: new Uint8Array(pdfBuffer).buffer });
+                        const extracted = extractor.extract({});
+                        const files = [...extracted.files].filter(f => f.fileHeader.name.toLowerCase().endsWith('.pdf') && !f.fileHeader.flags.directory && f.extraction);
+                        for (const rarFile of files) {
+                            if (pdfParts.length >= MAX_PDF_PARTS) break;
+                            const entryBuffer = Buffer.from(rarFile.extraction);
+                            if (entryBuffer.length > 0) {
+                                pdfParts.push({ inlineData: { data: entryBuffer.toString('base64'), mimeType: 'application/pdf' } });
+                                sourceFiles.push(`${fileName}/${rarFile.fileHeader.name}`);
+                                console.log(`[AI-V2] ✅ Extracted PDF from RAR: ${rarFile.fileHeader.name} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
+                    } catch (e: any) { console.warn(`[AI-V2] Failed to extract RAR ${fileName}: ${e.message}`); }
+                } else {
+                    console.warn(`[AI-V2] ⏭️ Skipped non-PDF/ZIP/RAR: ${fileName} (magic: ${magic})`);
+                }
             } else {
                 console.error(`[AI-V2] Could not find file: ${fileName}`);
             }
