@@ -1021,6 +1021,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const handleSaveProcess = async (data: Partial<BiddingProcess>, aiData?: any) => {
         try {
             const token = localStorage.getItem('token');
+            console.log('[PNCP Save] Sending payload:', Object.keys(data));
             const res = await fetch(`${API_BASE_URL}/api/biddings`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -1040,8 +1041,12 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 setEditingProcess(null); setPendingAiAnalysis(null);
                 setPncpAnalysis(null); setAnalyzedPncpItem(null);
                 if (onRefresh) await onRefresh();
-            } else { throw new Error("Erro ao importar."); }
-        } catch (e) { console.error(e); toast.error('Erro ao importar licitação.'); }
+            } else {
+                const errBody = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+                console.error('[PNCP Save] Server error:', errBody);
+                throw new Error(errBody.details || errBody.error || `HTTP ${res.status}`);
+            }
+        } catch (e: any) { console.error(e); toast.error(`Erro ao importar licitação: ${e.message}`); }
     };
 
     const activeFilterCount = [

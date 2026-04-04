@@ -747,8 +747,21 @@ export const MANUAL_EXTRACTION_ADDON = `
 
 ═══ REGRAS ADICIONAIS PARA UPLOAD MANUAL ═══
 
-16. VALOR ESTIMADO GLOBAL (OBRIGATÓRIO): Extraia o VALOR TOTAL ESTIMADO DA CONTRATAÇÃO como número decimal em "valor_estimado_global" dentro de "process_identification". Procure por: "valor estimado", "valor global", "valor total", "valor de referência", "R$" seguido de valor no preâmbulo ou no corpo do edital/TR. NUNCA retorne 0 se houver qualquer menção a valor no documento. Converta "R$ 1.234.567,89" para 1234567.89 (notação decimal).
-17. PORTAL DE LICITAÇÃO (OBRIGATÓRIO): Identifique o PORTAL/SISTEMA ELETRÔNICO usado para a licitação em "portal_licitacao" dentro de "process_identification". Opções: "Compras.gov.br", "BNC", "BLL", "Licitanet", "BBMNet", "Portal de Compras Públicas", "Licitações-e (BB)", "BEC/SP", "M2A Tecnologia", "PNCP". Se não identificar o portal, use "outro".
+16. VALOR ESTIMADO GLOBAL (OBRIGATÓRIO — HIERARQUIA RÍGIDA):
+    Extraia o VALOR TOTAL ESTIMADO DA CONTRATAÇÃO como número decimal em "valor_estimado_global" dentro de "process_identification".
+    
+    HIERARQUIA DE BUSCA (seguir nesta ordem, usar o PRIMEIRO valor encontrado):
+    a) PLANILHA ORÇAMENTÁRIA: Procure "VALOR TOTAL DO ORÇAMENTO", "VALOR GLOBAL DA PLANILHA", "TOTAL GERAL", "VALOR TOTAL" em tabelas/planilhas. Este é o valor mais confiável para OBRAS e SERVIÇOS DE ENGENHARIA.
+    b) PREÂMBULO DO EDITAL: Procure "valor estimado", "valor global", "valor de referência", "valor total estimado" no início do edital.
+    c) CORPO DO EDITAL / TERMO DE REFERÊNCIA: Procure "R$" seguido de valor significativo.
+    
+    REGRAS ANTI-ERRO:
+    - Para OBRAS/SERVIÇOS DE ENGENHARIA: o valor SEMPRE estará na casa de milhares ou milhões. Se encontrar apenas valores pequenos (< R$ 10.000), há ALTA probabilidade de ser taxa, emolumento, garantia de proposta ou valor simbólico — continue procurando o valor real na planilha orçamentária.
+    - NUNCA use como valor estimado: taxa de inscrição, valor de garantia de proposta (1-5%), valor de caução, valor de emolumentos.
+    - Se o valor for "sigiloso" ou não informado explicitamente, retorne 0.
+    - Converta "R$ 26.187.894,32" para 26187894.32 (notação decimal, sem pontos de milhar).
+    
+17. PORTAL DE LICITAÇÃO (OBRIGATÓRIO): Identifique o PORTAL/SISTEMA ELETRÔNICO usado para a licitação em "portal_licitacao" dentro de "process_identification". Opções: "Compras.gov.br", "BNC", "BLL", "Licitanet", "BBMNet", "Portal de Compras Públicas", "Licitações-e (BB)", "BEC/SP", "M2A Tecnologia", "PNCP", "Licita Mais Brasil". Se não identificar o portal, use "outro".
 18. DATA DA SESSÃO COM HORÁRIO (OBRIGATÓRIO): O campo "data_sessao" DEVE conter DATA E HORA no formato "DD/MM/AAAA HH:MM" (24h). NUNCA retorne apenas a data sem horário. Procure por: "abertura da sessão pública", "início da sessão", "data de abertura", "recebimento das propostas".
 `;
 

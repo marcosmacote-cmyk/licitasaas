@@ -469,7 +469,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify(process)
             }).then(async (res) => {
-                if (!res.ok) { const errorObj = await res.json(); throw new Error(errorObj.error || 'Server error'); }
+                if (!res.ok) { const errorObj = await res.json().catch(() => ({})); throw new Error(errorObj.details || errorObj.error || 'Server error'); }
                 setItems(prev => prev.map(p => p.id === editingProcess.id ? { ...p, ...process } as BiddingProcess : p));
                 const finalAnalysisPayload = aiData || pendingAnalysis;
                 if (finalAnalysisPayload) {
@@ -480,13 +480,13 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                     }).then((res) => { if (res.ok) setItems(prev => prev.map(p => p.id === editingProcess.id ? { ...p, aiAnalysis: finalAnalysis } : p)); }).catch(console.error);
                     setPendingAnalysis(null);
                 }
-            }).catch(e => { console.error("Update error:", e); toast.error("Erro ao atualizar a licitação no servidor."); });
+            }).catch(e => { console.error("Update error:", e); toast.error(`Erro ao atualizar a licitação: ${e instanceof Error ? e.message : String(e)}`); });
         } else {
             fetch(`${API_BASE_URL}/api/biddings`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify(process)
             }).then(async (res) => {
-                if (!res.ok) { const errorObj = await res.json(); throw new Error(errorObj.error || 'Server error'); }
+                if (!res.ok) { const errorObj = await res.json().catch(() => ({})); throw new Error(errorObj.details || errorObj.error || 'Server error'); }
                 const newProcess = await res.json();
                 setItems(prev => [newProcess, ...prev]);
                 const finalAnalysisPayload = aiData || pendingAnalysis;

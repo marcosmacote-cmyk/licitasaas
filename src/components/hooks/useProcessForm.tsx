@@ -694,10 +694,18 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
             return;
         }
 
+        // Convert datetime-local format to ISO string safely
+        const toISO = (dtLocal: string): string => {
+            // datetime-local produces "YYYY-MM-DDTHH:MM", adding sec for parse safety
+            const withSec = dtLocal.includes(':') && dtLocal.split(':').length === 2 ? `${dtLocal}:00` : dtLocal;
+            const parsed = new Date(withSec);
+            return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+        };
+
         onSave({
             ...formData,
-            sessionDate: formData.sessionDate ? `${formData.sessionDate}:00` : new Date().toISOString(),
-            reminderDate: formData.reminderDate ? new Date(formData.reminderDate).toISOString() : (null as any),
+            sessionDate: formData.sessionDate ? toISO(formData.sessionDate) : new Date().toISOString(),
+            reminderDate: formData.reminderDate ? toISO(formData.reminderDate) : (null as any),
             reminderStatus: formData.reminderDate ? 'pending' : (null as any)
         }, aiAnalysisData);
     };

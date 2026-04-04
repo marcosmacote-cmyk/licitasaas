@@ -3447,6 +3447,48 @@ function detectPlatformFromLink(link: string): string | null {
     return null;
 }
 
+// ── Sanitize BiddingProcess fields — only allow valid Prisma scalar fields ──
+const BIDDING_ALLOWED_FIELDS = new Set([
+    'title', 'summary', 'portal', 'modality', 'status', 'substage',
+    'risk', 'estimatedValue', 'sessionDate', 'link', 'pncpLink',
+    'uasg', 'modalityCode', 'processNumber', 'processYear',
+    'isMonitored', 'observations', 'reminderDate', 'reminderStatus',
+    'reminderType', 'reminderDays',
+]);
+function sanitizeBiddingData(raw: Record<string, any>): Record<string, any> {
+    const clean: Record<string, any> = {};
+    for (const key of Object.keys(raw)) {
+        if (BIDDING_ALLOWED_FIELDS.has(key)) {
+            clean[key] = raw[key];
+        }
+    }
+    // Ensure sessionDate is a valid ISO string
+    if (clean.sessionDate && typeof clean.sessionDate === 'string') {
+        const parsed = new Date(clean.sessionDate);
+        if (isNaN(parsed.getTime())) {
+            console.warn(`[Sanitize] Invalid sessionDate "${clean.sessionDate}", using current date`);
+            clean.sessionDate = new Date().toISOString();
+        } else {
+            clean.sessionDate = parsed.toISOString();
+        }
+    }
+    // Ensure reminderDate is valid or null
+    if (clean.reminderDate !== undefined) {
+        if (clean.reminderDate === null || clean.reminderDate === '' || clean.reminderDate === 'null') {
+            clean.reminderDate = null;
+        } else if (typeof clean.reminderDate === 'string') {
+            const parsed = new Date(clean.reminderDate);
+            if (isNaN(parsed.getTime())) {
+                console.warn(`[Sanitize] Invalid reminderDate "${clean.reminderDate}", setting null`);
+                clean.reminderDate = null;
+            } else {
+                clean.reminderDate = parsed.toISOString();
+            }
+        }
+    }
+    return clean;
+}
+
 // Bidding Processes
 app.get('/api/biddings', authenticateToken, async (req: any, res) => {
     try {
@@ -3462,8 +3504,9 @@ app.get('/api/biddings', authenticateToken, async (req: any, res) => {
 
 app.post('/api/biddings', authenticateToken, async (req: any, res) => {
     try {
-        let { companyProfileId, ...biddingData } = req.body;
+        let { companyProfileId, ...rawData } = req.body;
         const tenantId = req.user.tenantId;
+        let biddingData = sanitizeBiddingData(rawData);
 
         if (companyProfileId === '') {
             companyProfileId = null;
@@ -3518,7 +3561,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         }
 
         const bidding = await prisma.biddingProcess.create({
-            data: { ...biddingData, tenantId, companyProfileId }
+            data: { ...biddingData, tenantId, companyProfileId } as any
         });
         res.json(bidding);
     } catch (error) {
@@ -3847,16 +3890,9 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         const { id } = req.params;
         const tenantId = req.user.tenantId;
 
-        // Remove relation fields and id to avoid Prisma update errors
-        const {
-            aiAnalysis,
-            company,
-            tenant,
-            id: _id,
-            tenantId: _tId,
-            companyProfileId,
-            ...biddingData
-        } = req.body;
+        // Extract companyProfileId separately; sanitize the rest
+        const { companyProfileId, ...rawData } = req.body;
+        const biddingData = sanitizeBiddingData(rawData);
 
         // ── Step 0: Normalize portal & modality ──
         if (biddingData.portal !== undefined) {
