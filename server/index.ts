@@ -3182,8 +3182,8 @@ Responda APENAS com JSON array:
         const bestObjCompleto = cleanObjCompleto || cleanObjResumo || rawObjCompleto;
         let cleanNumProcesso = v2Result.process_identification.numero_processo || '';
         let cleanNumEdital = v2Result.process_identification.numero_edital || '';
-        if (/^XX\/\d{4}$/.test(cleanNumProcesso)) cleanNumProcesso = '';
-        if (/^XX\/\d{4}$/.test(cleanNumEdital)) cleanNumEdital = '';
+        if (/XX\/\d{4}/.test(cleanNumProcesso)) cleanNumProcesso = '';
+        if (/XX\/\d{4}/.test(cleanNumEdital)) cleanNumEdital = '';
         if (rawObjResumo !== bestObjResumo) {
             console.log(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
         }
