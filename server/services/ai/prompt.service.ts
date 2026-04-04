@@ -397,13 +397,14 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
    - QTP (Profissional): Pertence ao PROFISSIONAL (Vínculo do RT, CAT/Acervo, Declaração de RT).
    - NUNCA misture! O que for atestado da empresa vai em QTO. Acervo do engenheiro vai em QTP.
 6. BLOCO QTO OBRIGATÓRIO: QTO deve conter (a) Certidão PJ no Conselho (se houver), (b) Visitas Técnicas (se houver) e (c) Atestados da Empresa.
-7. PARCELAS DE MAIOR RELEVÂNCIA (QTO/QTP): Devem ser SEMPRE tratadas como EXIGÊNCIAS DE HABILITAÇÃO (risk_if_missing="inabilitacao"). É PROIBIDO criar um item genérico apenas escrito "Comprovar parcelas de maior relevância". Você DEVE destrinchar CADA parcela em um item estruturado SECUNDÁRIO, copiando textualmente a descrição da parcela.
+7. PARCELAS DE MAIOR RELEVÂNCIA E ATESTADOS (QTO/QTP): 
+   🚨 ALERTA VERMELHO: Em licitações de ENGENHARIA (obras ou serviços), é IMPOSSÍVEL e INACEITÁVEL não haver exigência de ATESTADO DE CAPACIDADE TÉCNICA (da Empresa) e CAT (do Profissional). Se o objeto envolver engenharia, PARE TUDO e VASCULHE o edital e o ETP inteiro atrás da Qualificação Técnica. Extraia meticulosamente cada parcela de maior relevância.
+   Devem ser SEMPRE tratadas como EXIGÊNCIAS DE HABILITAÇÃO (risk_if_missing="inabilitacao"). É PROIBIDO criar um item genérico apenas escrito "Comprovar parcelas de maior relevância". Você DEVE destrinchar CADA parcela em um item estruturado SECUNDÁRIO, copiando textualmente a descrição da parcela.
    ⚠️ REGRA ABSOLUTA DE QUANTITATIVOS: Para CADA atestado/CAT listado como parcela de maior relevância, a description DEVE OBRIGATORIAMENTE incluir:
    - O serviço/parcela EXATA (transcrita literalmente)
    - O QUANTITATIVO MÍNIMO exigido pelo edital (ex: "quantidade mínima de 50% do quantitativo previsto = 3.500,00 m²")
    - A UNIDADE de medida (m², m³, kg, km, m, un, etc.)
    - Se o edital define percentual mínimo sobre o quantitativo do objeto, CALCULE e inclua o valor absoluto quando disponível
-   - ATENÇÃO EXTREMA: Se for obra de engenharia, É QUASE CERTO que há CAT e Atestados. Vasculhe o documento até encontrar.
    - Se o edital NÃO especificar quantidade mínima, registre: "sem quantitativo mínimo definido"
    EXEMPLO CORRETO: "Atestado comprovando execução de pavimentação asfáltica (parcela de maior relevância) — Quantidade mínima exigida: 3.500,00 m²"
    EXEMPLO ERRADO: "Atestado de capacidade técnica com serviços similares e parcelas de maior relevância"
@@ -412,6 +413,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 10. OBLIGATION TYPE: Use "obrigatoria_universal" por padrão. Use "condicional", "se_aplicavel" ou "alternativa" APENAS se o edital for literal sobre a condição ("somente para consórcio", "quando aplicável").
 11. MULTIPLAS PARCELAS EM QTP: Se o edital exige CAT para 3 parcelas diferentes, crie 3 ITENS de exigência_principal em QTP. Proibido item guarda-chuva.
 12. OBRIGATÓRIOS RFT — A ORDEM HIERÁRQUICA ABAIXO É ESTRITA E INEGOCIÁVEL:
+    🚨 ALERTA VERMELHO: É absolutamente INACEITÁVEL omitir Certidões Negativas (CNDs). Você DEVE ler toda a seção de "Regularidade Fiscal e Trabalhista" e transcrever cada uma:
     RFT-01: CNPJ (prova de inscrição no Cadastro Nacional de Pessoa Jurídica)
     RFT-02: Inscrição estadual no cadastro de contribuintes (se exigida)
     RFT-03: Inscrição municipal no cadastro de contribuintes (se exigida)
@@ -420,6 +422,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     RFT-06: CND Municipal (Fazenda Municipal)
     RFT-07: CRF/FGTS
     RFT-08: CNDT (Débitos Trabalhistas)
+    Se o edital mencionar SICAF ou equivalente, liste todas elas com a evidência de que "podem ser comprovadas via SICAF", mas NUNCA as omita.
     ⚠️ REGRA DE OURO RFT: CNPJ, Inscrição Estadual (IE) e Inscrição Municipal (IM) DEVEM ABSOLUTAMENTE ser os 3 primeiros itens listados, sempre ANTES de qualquer certidão ou prova de regularidade fiscal.
 13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
 14. OBRIGATÓRIOS QEF: Balanço Patrimonial, Índices Contábeis (SG/LG/LC) e Certidão de Falência/Recuperação Judicial. DEVEM ir impreterivelmente para "qualificacao_economico_financeira". NÃO os jogue em Documentos Complementares.
