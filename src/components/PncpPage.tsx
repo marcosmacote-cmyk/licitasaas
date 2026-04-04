@@ -54,7 +54,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', alignItems: 'flex-end', flex: '1 1 auto' }}>
                     {/* ── Botão de Upload Manual ── */}
                     <div style={{ display: 'flex' }}>
-                        <input type="file" accept="application/pdf" ref={p.fileInputRef} style={{ display: 'none' }} onChange={p.handleFileUpload} multiple />
+                        <input type="file" accept="application/pdf, application/zip, application/x-zip-compressed, application/vnd.rar, .rar, .zip" ref={p.fileInputRef} style={{ display: 'none' }} onChange={p.handleFileUpload} multiple />
                         <button className="btn btn-primary" onClick={p.handleAIAssistClick} disabled={p.isParsingAI} style={{ padding: '10px 24px', boxShadow: 'var(--shadow-md)' }}>
                             {p.isParsingAI ? <><Loader2 size={16} className="spinner" /> Processando PDF...</> : <><FolderOpen size={16} /> Upload de Edital</>}
                         </button>
