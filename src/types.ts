@@ -174,6 +174,7 @@ export interface PncpBiddingItem {
     link_sistema: string;
     link_comprasnet?: string;
     status: string;
+    esfera_id?: string;  // 'E' = Estadual, 'M' = Municipal, 'F' = Federal
 }
 
 export interface ProposalItem {

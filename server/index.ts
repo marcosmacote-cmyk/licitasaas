@@ -1598,7 +1598,8 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
                     : (item.linkSistemaOrigem || item.link || ''),
                 link_comprasnet: item.linkSistemaOrigem || '',
-                status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
+                status: item.situacao_nome || item.situacaoCompraNome || item.status || status || '',
+                esfera_id: item.esferaId || item.orgaoEntidade?.esferaId || '',
             };
         }).filter(item => {
             if (seenIds.has(item.id)) return false;

@@ -744,6 +744,16 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
             else if (link.includes('bbmnet')) bestPortalName = "BBMNet";
             else if (link.includes('licitamaisbrasil')) bestPortalName = "Licita Mais Brasil";
             else if (link.includes('compras.gov.br') || link.includes('pncp.gov.br')) bestPortalName = "Compras.gov.br";
+
+            // State-level override: Ceará (CE) State agencies use ComprasNet for disputes (except Dispensa)
+            if (bestPortalName === 'PNCP' || bestPortalName === 'Compras.gov.br') { // Keep Compras.gov.br mapping or PNCP default
+                const isCE = (item.uf?.toUpperCase() === 'CE');
+                const isStateLevel = (item.esfera_id === 'E');
+                const isDispensa = /dispensa|cota[çc][ãa]o/i.test(item.modalidade_nome || '');
+                if (isCE && isStateLevel && !isDispensa) {
+                    bestPortalName = "Compras.gov.br";
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════════
