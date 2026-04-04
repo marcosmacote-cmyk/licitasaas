@@ -355,6 +355,18 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
             corrections++;
         }
 
+        // Scrub placeholders from numbers
+        if (pid.numero_processo && /XX\/\d{4}/.test(pid.numero_processo)) {
+            const clean = pid.numero_processo.replace(/XX\/\d{4}/g, '').trim();
+            correct('numero_processo', pid.numero_processo, clean || 'vazio');
+            pid.numero_processo = clean;
+        }
+        if (pid.numero_edital && /XX\/\d{4}/.test(pid.numero_edital)) {
+            const clean = pid.numero_edital.replace(/XX\/\d{4}/g, '').trim();
+            correct('numero_edital', pid.numero_edital, clean || 'vazio');
+            pid.numero_edital = clean;
+        }
+
         // municipio_uf: try to extract from orgao
         if (!pid.municipio_uf && pid.orgao) {
             const derived = extractMunicipioFromOrgao(pid.orgao);
