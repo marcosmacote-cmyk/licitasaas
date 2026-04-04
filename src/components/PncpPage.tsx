@@ -32,8 +32,15 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
             {/* Page Header */}
             <div className="page-header" style={{ marginBottom: 'var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
                 <div>
-                    <h1 className="page-title">Busca PNCP</h1>
-                    <p className="page-subtitle">Pesquise editais diretamente no Portal Nacional de Contratações Públicas.</p>
+                    <h1 className="page-title">Módulo de Oportunidades</h1>
+                    <p className="page-subtitle">Central de prospecção e ingestão de licitações com IA.</p>
+                </div>
+                {/* ── Botão de Upload Manual ── */}
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    <input type="file" accept="application/pdf" ref={p.fileInputRef} style={{ display: 'none' }} onChange={p.handleFileUpload} multiple />
+                    <button className="btn btn-primary" onClick={p.handleAIAssistClick} disabled={p.isParsingAI}>
+                        {p.isParsingAI ? <><Loader2 size={16} className="spinner" /> Processando PDF...</> : <><FolderOpen size={16} /> Upload de Edital</>}
+                    </button>
                 </div>
                 {/* ── Dashboard Indicators ── */}
                 <div style={{ display: 'flex', gap: 'var(--space-3)', overflowX: 'auto', paddingBottom: '4px' }}>
@@ -872,14 +879,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                         <Trash2 size={15} />
                                                     </button>
                                                 )}
-                                                <button
-                                                    className="btn btn-primary"
-                                                    style={{ padding: '7px var(--space-3)', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', gap: '4px', whiteSpace: 'nowrap' }}
-                                                    onClick={() => p.handleImportToFunnel(item)}
-                                                    title="Importar para o Funil de Licitações"
-                                                >
-                                                    <Plus size={14} /> Importar
-                                                </button>
+
                                                 <button
                                                     className="btn"
                                                     style={{
@@ -903,7 +903,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                     {p.analyzingItemId === item.id ? (
                                                         <><Loader2 size={14} className="spinner" /> {p.analysisProgress ? `${p.analysisProgress.percent}%` : 'Analisando...'}</>
                                                     ) : (
-                                                        <><Brain size={14} /> IA</>
+                                                        <><Brain size={14} /> Analisar com IA</>
                                                     )}
                                                 </button>
                                                 <a

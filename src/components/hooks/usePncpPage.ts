@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from '../../config';
 import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../../types';
 import { useToast } from '../ui';
 import { v4 as uuidv4 } from 'uuid';
+import { aiService } from '../../services/ai';
 
 export const UFS = [
     'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
@@ -98,6 +99,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const [analyzedPncpItem, setAnalyzedPncpItem] = useState<PncpBiddingItem | null>(null);
     const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
     const [analysisProgress, setAnalysisProgress] = useState<{ step: number; total: number; percent: number; message: string; detail?: string } | null>(null);
+    const [isParsingAI, setIsParsingAI] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // ─── Multi-list Favorites State (DB-backed) ───
     const [favStore, setFavStore] = useState<FavStore>({ version: 2, lists: [], items: [] });
@@ -1028,6 +1031,26 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         } finally { setAnalyzingItemId(null); setAnalysisProgress(null); }
     };
 
+    const handleAIAssistClick = () => { fileInputRef.current?.click(); };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        try {
+            setIsParsingAI(true);
+            const { process: parsedData, analysis } = await aiService.parseEditalPDF(files);
+            setEditingProcess(parsedData);
+            setPendingAiAnalysis(analysis);
+        } catch (error) {
+            console.error('Failed to parse document with AI', error);
+            const errorMessage = error instanceof Error ? error.message : 'Falha ao extrair dados do Edital.';
+            toast.error(errorMessage);
+        } finally {
+            setIsParsingAI(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
     const handleSaveProcess = async (data: Partial<BiddingProcess>, aiData?: any) => {
         try {
             const token = localStorage.getItem('token');
@@ -1102,7 +1125,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         dataInicio, setDataInicio, dataFim, setDataFim,
         page, setPage, totalResults,
         // Modal state
-        editingProcess, setEditingProcess,
+        editingProcess, setEditingProcess, fileInputRef, handleAIAssistClick, handleFileUpload, isParsingAI,
         // AI state
         analyzingItemId, analysisProgress, pncpAnalysis, setPncpAnalysis,
         viewingAnalysisProcess, setViewingAnalysisProcess,

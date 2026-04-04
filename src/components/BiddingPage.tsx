@@ -109,10 +109,7 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                         </p>
                     </div>
                     <div className="flex-gap">
-                        <input type="file" accept="application/pdf" ref={b.fileInputRef} style={{ display: 'none' }} onChange={b.handleFileUpload} multiple />
-                        <button className="btn btn-primary" onClick={b.handleCreateNew}>
-                            <Plus size={16} /> Nova Licitação
-                        </button>
+                        {/* Processos novos agora devem ser inseridos exclusivamente via Módulo de Oportunidades (Upload de PDF ou Busca no portal) */}
                     </div>
                 </div>
 
