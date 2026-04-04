@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, Cpu, ScanSearch, SignalHigh, CheckCircle, AlertTriangle, Building2, FileText, Paperclip, Link2, Pencil } from 'lucide-react';
+import { X, Save, UploadCloud, Loader2, MessageSquare, PlusCircle, Briefcase, Globe, Tag, Link, DollarSign, Calendar, ExternalLink, ScanSearch, SignalHigh, CheckCircle, AlertTriangle, Building2, FileText, Paperclip, Link2, Pencil } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { AiReportModal } from './AiReportModal';
 import { LiveCountdown, StatusBadge, NextStepBanner } from './ui';
@@ -135,82 +135,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                     {/* ═══ FORM TAB ═══ */}
                     <form onSubmit={form.handleSubmit} style={{ padding: 'var(--space-8)', overflowY: 'auto', flex: 1, display: (!form.isEditMode || form.hubTab === 'form') ? undefined : 'none' }}>
 
-                        {/* ── AI Quick-Fill Banner (only for new processes) ── */}
-                        {!form.isEditMode && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-4)',
-                                padding: 'var(--space-4) var(--space-5)',
-                                background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-ai) 8%, transparent), color-mix(in srgb, var(--color-primary) 6%, transparent))',
-                                border: '1px solid color-mix(in srgb, var(--color-ai) 20%, transparent)',
-                                borderRadius: 'var(--radius-lg)',
-                                marginBottom: 'var(--space-6)',
-                            }}>
-                                <div style={{ padding: 'var(--space-2)', background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))', borderRadius: 'var(--radius-md)' }}>
-                                    <Cpu size={18} color="white" />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}>Preencher com IA</div>
-                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                                        {form.isCheckingAi ? 'Enviando e analisando o edital... isso pode levar alguns segundos' : 'Faça upload do edital (PDF, ZIP ou RAR) e a IA extrairá os dados e gerará o relatório completo'}
-                                    </div>
-                                </div>
-                                <input type="file" accept="application/pdf, application/zip, application/x-zip-compressed, application/vnd.rar, .rar, .zip" ref={form.aiQuickUploadRef} style={{ display: 'none' }} onChange={form.handleQuickAiFileChange} multiple />
-                                <button type="button" onClick={form.handleQuickAiUpload} disabled={form.isCheckingAi} style={{
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-                                    padding: 'var(--space-2) var(--space-5)', borderRadius: 'var(--radius-md)',
-                                    border: 'none', background: 'linear-gradient(135deg, var(--color-ai), var(--color-primary))',
-                                    color: 'white', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer',
-                                    boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)', transition: 'var(--transition-fast)',
-                                    opacity: form.isCheckingAi ? 0.7 : 1,
-                                }}>
-                                    {form.isCheckingAi ? <Loader2 size={14} className="spinner" /> : <UploadCloud size={14} />}
-                                    {form.isCheckingAi ? 'Analisando...' : 'Enviar PDF'}
-                                </button>
-                            </div>
-                        )}
 
-                        {/* ── AI Progress Bar (PNCP-style) ── */}
-                        {form.aiProgress && (
-                            <div style={{
-                                background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%)',
-                                border: '1px solid rgba(99,102,241,0.15)',
-                                borderRadius: 'var(--radius-lg)',
-                                padding: '12px 16px',
-                                marginBottom: 'var(--space-6)',
-                                display: 'flex', alignItems: 'center', gap: '12px',
-                                animation: 'fadeIn 0.3s ease',
-                            }}>
-                                <Loader2 size={18} className="spinner" style={{ color: 'var(--color-ai)', flexShrink: 0 }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                                        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                                            {form.aiProgress.message}
-                                        </span>
-                                        <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
-                                            Etapa {form.aiProgress.step}/{form.aiProgress.total}
-                                        </span>
-                                    </div>
-                                    <div style={{
-                                        width: '100%', height: '6px',
-                                        background: 'rgba(99,102,241,0.12)',
-                                        borderRadius: '3px', overflow: 'hidden',
-                                    }}>
-                                        <div style={{
-                                            width: `${form.aiProgress.percent}%`,
-                                            height: '100%',
-                                            background: 'linear-gradient(90deg, var(--color-primary), var(--color-ai))',
-                                            borderRadius: '3px',
-                                            transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        }} />
-                                    </div>
-                                    {form.aiProgress.detail && (
-                                        <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '3px', display: 'block' }}>
-                                            {form.aiProgress.detail}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        )}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
 
                             {/* Título */}
