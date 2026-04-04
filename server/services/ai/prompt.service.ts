@@ -366,6 +366,16 @@ export const V2_EXTRACTION_PROMPT = `${LICITACAO_SYSTEM_PROMPT_BASE}
 
 Você está na ETAPA 1 da análise. Seu objetivo é EXCLUSIVAMENTE extrair dados factuais presentes nos documentos fornecidos.
 
+── REGRA 0 — HIERARQUIA DOCUMENTAL (PRIORIDADE ABSOLUTA) ──
+
+Ao preencher os campos de IDENTIFICAÇÃO DO PROCESSO (orgao, numero_processo, numero_edital, objeto_resumido, objeto_completo, municipio_uf), siga esta HIERARQUIA RÍGIDA de fontes:
+  1.🥇 EDITAL (cabeçalho, preâmbulo, seções iniciais) — FONTE PRIMÁRIA
+  2.🥈 TERMO DE REFERÊNCIA / PROJETO BÁSICO / ETP
+  3.🥉 MINUTA DO CONTRATO — FONTE TERCIÁRIA (usar SOMENTE para cláusulas contratuais como penalidades, pagamento, reajuste)
+
+A MINUTA DO CONTRATO é um template genérico, frequentemente com campos em branco como '[espaço em branco]', '[nome da empresa]', '[CNPJ]', 'XX/2026'. NUNCA extraia dados de identificação (objeto, número do processo, órgão) da Minuta se existirem no Edital ou no TR/ETP.
+Se o Edital principal contiver o objeto de forma vaga ou genérica, BUSQUE o texto mais preciso no TR, ETP ou Projeto Básico.
+
 ── PRIORIDADE MÁXIMA: COMPLETUDE + RASTREABILIDADE + NÃO OMISSÃO ──
 
 NENHUMA exigência expressa pode ser omitida.
@@ -414,8 +424,16 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
 14. OBRIGATÓRIOS QEF: Balanço Patrimonial, Índices Contábeis (SG/LG/LC) e Certidão de Falência/Recuperação Judicial. DEVEM ir impreterivelmente para "qualificacao_economico_financeira". NÃO os jogue em Documentos Complementares.
 15. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
-16. OBJETO E CRITÉRIO: Ao preencher "objeto_resumido", elabore um resumo lógico e seguro. NUNCA copie referências quebradas como "[espaço em branco]". Para "criterio_julgamento", NUNCA deixe "Não informado" em Conc/Pregão; se não encontrar no texto, classifique como "Menor Preço" ou "Maior Desconto".
+16. OBJETO E CRITÉRIO:
+    a) "objeto_resumido" deve ter NO MÁXIMO 150 caracteres e descrever O QUÊ será contratado de forma clara e direta. NUNCA comece com 'TERMO DE CONTRATO QUE ENTRE SI FAZEM...', 'O presente contrato tem por objeto...' ou texto de preâmbulos/minutas. EXEMPLOS CORRETOS: 'Execução e recuperação de estradas vicinais no município de Baturité/CE', 'Locação de veículos sem motorista para transporte de passageiros'. EXEMPLOS ERRADOS: 'TERMO DE CONTRATO QUE ENTRE SI FAZEM A PREFEITURA...', 'O presente contrato tem por objeto a execução dos serviços de [espaço em branco]...'.
+    b) "objeto_completo" deve ser a transcrição integral do objeto conforme o EDITAL ou o TERMO DE REFERÊNCIA/ETP. NUNCA transcreva de minutas de contrato.
+    c) NUNCA copie referências quebradas como '[espaço em branco]', '[nome]', '[CNPJ]', 'XX/AAAA' ou placeholders de template.
+    d) Para "criterio_julgamento", NUNCA deixe 'Não informado' em Conc/Pregão; se não encontrar no texto, classifique como 'Menor Preço' ou 'Maior Desconto'.
+    e) Para "numero_processo" e "numero_edital": extraia do CABEÇALHO do Edital, NUNCA de templates de minuta. Se o número não existir no Edital, use string vazia em vez de placeholders como 'XX/2026'.
 17. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
+18. CRONOGRAMA ("timeline"):
+    a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".
+    b) Use "prazo_envio_proposta" para datas/horários fixos (ex: "até 09:00 do dia 15/04").
 
 ⚠️ NOTA SOBRE PRÉ-QUALIFICAÇÃO: Se o edital estabelecer que a habilitação é comprovada EXCLUSIVAMENTE por Certificado de Pré-Qualificação, CRC ou SICAF (sem listar documentos individuais), extraia apenas o certificado e eventuais complementos expressos. Esta exceção SÓ se aplica quando o edital NÃO lista documentos individuais de habilitação.
 

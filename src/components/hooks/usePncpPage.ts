@@ -865,14 +865,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         const observationText = obsParts.join(' | ');
 
         // ═══════════════════════════════════════════════════════════
-        // 8. SUMMARY — prefere AI summary (mais rico) ou objeto do PNCP
+        // 8. SUMMARY — prefere AI summary que já vem sanitizado do backend
         // ═══════════════════════════════════════════════════════════
         let summary = aiData?.process?.summary || item.objeto;
-        // Se AI tem schemaV2 com objeto_completo, usar este que é mais detalhado
-        if (aiData?.analysis?.schemaV2?.process_identification?.objeto_completo) {
-            const obj = aiData.analysis.schemaV2.process_identification.objeto_completo;
-            if (obj.length > (summary?.length || 0)) summary = obj;
-        }
 
         // ═══════════════════════════════════════════════════════════
         // 9. MODALITY — normaliza para o padrão do dropdown

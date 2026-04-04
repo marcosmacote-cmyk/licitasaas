@@ -3161,11 +3161,38 @@ Responda APENAS com JSON array:
         };
         const resolvedSessionDateISO = parseBrazilianDateToISO(resolvedSessionDateRaw);
 
+        // ── SANITIZAÇÃO DO OBJETO (anti-poluição por Minuta) ──
+        const sanitizeObjeto = (text: string): string => {
+            if (!text) return '';
+            let s = text
+                .replace(/^TERMO DE CONTRATO QUE ENTRE SI FAZEM[\s\S]*?DECLARA:\s*/i, '')
+                .replace(/^O presente contrato tem por objeto a execu..o dos servi.os de\s*\[espa.o em branco\]\s*conforme[\s\S]*?processo\.\s*/i, '')
+                .replace(/\(Minuta,\s*Cl.usula[\s\S]*?\)\.\s*/gi, '')
+                .replace(/\[espa.o em branco\]/gi, '')
+                .replace(/\[nome[^\]]*\]/gi, '').replace(/\[CNPJ[^\]]*\]/gi, '')
+                .replace(/\bXX\/\d{4}\b/g, '').trim();
+            if (s.length < 20) return '';
+            return s;
+        };
+        const rawObjResumo = v2Result.process_identification.objeto_resumido || '';
+        const rawObjCompleto = v2Result.process_identification.objeto_completo || '';
+        const cleanObjResumo = sanitizeObjeto(rawObjResumo);
+        const cleanObjCompleto = sanitizeObjeto(rawObjCompleto);
+        const bestObjResumo = cleanObjResumo || cleanObjCompleto.slice(0, 150) || rawObjResumo;
+        const bestObjCompleto = cleanObjCompleto || cleanObjResumo || rawObjCompleto;
+        let cleanNumProcesso = v2Result.process_identification.numero_processo || '';
+        let cleanNumEdital = v2Result.process_identification.numero_edital || '';
+        if (/^XX\/\d{4}$/.test(cleanNumProcesso)) cleanNumProcesso = '';
+        if (/^XX\/\d{4}$/.test(cleanNumEdital)) cleanNumEdital = '';
+        if (rawObjResumo !== bestObjResumo) {
+            console.log(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
+        }
+
         const legacyProcess = {
-            title: v2Result.process_identification.numero_edital
-                ? `${v2Result.process_identification.modalidade} ${v2Result.process_identification.numero_edital} - ${v2Result.process_identification.orgao}`
-                : v2Result.process_identification.objeto_resumido || '',
-            summary: `${v2Result.process_identification.objeto_completo || v2Result.process_identification.objeto_resumido || ''}\n\n` +
+            title: cleanNumEdital
+                ? `${v2Result.process_identification.modalidade} ${cleanNumEdital} - ${v2Result.process_identification.orgao}`
+                : bestObjResumo || '',
+            summary: `${bestObjResumo || bestObjCompleto || ''}\n\n` +
                 `Modalidade: ${v2Result.process_identification.modalidade || ''}\n` +
                 `Critério: ${v2Result.process_identification.criterio_julgamento || ''}\n` +
                 `Regime: ${v2Result.process_identification.regime_execucao || ''}\n` +
@@ -3194,8 +3221,8 @@ Responda APENAS com JSON array:
                 + (v2Result.contractual_analysis.medicao_pagamento ? `\nPagamento: ${v2Result.contractual_analysis.medicao_pagamento}` : '')
                 + (v2Result.contractual_analysis.reajuste ? `\nReajuste: ${v2Result.contractual_analysis.reajuste}` : ''),
             irregularitiesFlags: v2Result.legal_risk_review.critical_points.map(cp => `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description}`),
-            fullSummary: `ANÁLISE V2 PIPELINE — ${v2Result.process_identification.objeto_resumido || ''}\n\n` +
-                `Objeto: ${v2Result.process_identification.objeto_completo || ''}\n` +
+            fullSummary: `ANÁLISE V2 PIPELINE — ${bestObjResumo || ''}\n\n` +
+                `Objeto: ${bestObjCompleto || ''}\n` +
                 `Órgão: ${v2Result.process_identification.orgao || ''}\n` +
                 `Sessão: ${v2Result.timeline.data_sessao || ''}\n\n` +
                 `--- CONDIÇÕES ---\n` +
