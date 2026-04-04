@@ -396,6 +396,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
    - QTO (Operacional): Pertence à EMPRESA (Atestados PJ, Registro CREA da PJ, Visita Técnica).
    - QTP (Profissional): Pertence ao PROFISSIONAL (Vínculo do RT, CAT/Acervo, Declaração de RT).
    - NUNCA misture! O que for atestado da empresa vai em QTO. Acervo do engenheiro vai em QTP.
+6. ATENÇÃO A PROCESSOS ESCANEADOS (FLS.): O edital principal frequentemente está "enterrado" no meio de grandes processos administrativos digitalizados (ex: entre as fls. 150 e 200). VOCÊ DEVE realizar OCR visual e varrer o documento inteiro ativamente procurando pelos títulos "HABILITAÇÃO" e "QUALIFICAÇÃO" antes de desistir ou basear a extração apenas em Anexos/ETP.
 6. BLOCO QTO OBRIGATÓRIO: QTO deve conter (a) Certidão PJ no Conselho (se houver), (b) Visitas Técnicas (se houver) e (c) Atestados da Empresa.
 7. PARCELAS DE MAIOR RELEVÂNCIA E ATESTADOS (QTO/QTP): 
    🚨 ALERTA VERMELHO: Em licitações de ENGENHARIA (obras ou serviços), é IMPOSSÍVEL e INACEITÁVEL não haver exigência de ATESTADO DE CAPACIDADE TÉCNICA (da Empresa) e CAT (do Profissional). Se o objeto envolver engenharia, PARE TUDO e VASCULHE o edital e o ETP inteiro atrás da Qualificação Técnica. Extraia meticulosamente cada parcela de maior relevância.
