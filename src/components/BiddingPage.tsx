@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Plus, LayoutGrid, List, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff } from 'lucide-react';
+import { LayoutGrid, List, Bell, Search, Filter, X, CheckCircle2, CalendarDays, BellOff } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
