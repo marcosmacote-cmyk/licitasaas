@@ -8095,10 +8095,10 @@ app.get('/api/chat-monitor/internal/test-bll-fetch', authenticateWorker, async (
 app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWorker, async (req: any, res) => {
     try {
         const { processId } = req.params;
-        const { certameId, certameUrl } = req.body;
+        const { certameId, certameUrl, link } = req.body;
 
-        if (!certameId && !certameUrl) {
-            return res.status(400).json({ error: 'certameId or certameUrl required' });
+        if (!certameId && !certameUrl && !link) {
+            return res.status(400).json({ error: 'certameId, certameUrl, or link required' });
         }
 
         // Verify process exists
@@ -8110,6 +8110,23 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
             return res.status(404).json({ error: 'Process not found' });
         }
 
+        // ── CASE 1: Generic link update (ComprasNet discovery write-back) ──
+        if (link && !certameId && !certameUrl) {
+            const currentLink = process.link || '';
+            // Append discovered ComprasNet URL to existing links (preserve PNCP link)
+            if (currentLink.includes(link)) {
+                return res.json({ success: true, updated: false, reason: 'link already present' });
+            }
+            const newLink = currentLink ? `${link}, ${currentLink}` : link;
+            await prisma.biddingProcess.update({
+                where: { id: processId },
+                data: { link: newLink },
+            });
+            console.log(`[Worker Discovery] Link updated for ${processId.substring(0, 8)} → ${link.substring(0, 60)}`);
+            return res.json({ success: true, updated: true, newLink });
+        }
+
+        // ── CASE 2: M2A certame write-back (legacy) ──
         // Build canonical M2A certame URL if only certameId was provided
         const canonicalUrl = certameUrl ||
             `http://precodereferencia.m2atecnologia.com.br/fornecedores/contratacao/contratacao_fornecedor/pregao_eletronico/lei_14133/detalhes/certame/${certameId}/`;
@@ -8128,7 +8145,7 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
         console.log(`[Worker M2A] Link updated for ${processId.substring(0, 8)} → certame/${certameId}`);
         res.json({ success: true, updated: true, newLink: canonicalUrl });
     } catch (error: any) {
-        console.error('[Worker M2A] Error updating link:', error.message);
+        console.error('[Worker Link] Error updating link:', error.message);
         res.status(500).json({ error: 'Failed to update process link', details: error.message });
     }
 });
