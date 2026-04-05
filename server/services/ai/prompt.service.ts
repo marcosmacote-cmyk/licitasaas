@@ -400,7 +400,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 6. BLOCO QTO OBRIGATÓRIO: QTO deve conter (a) Certidão PJ no Conselho (se houver), (b) Visitas Técnicas (se houver) e (c) Atestados da Empresa.
 7. PARCELAS DE MAIOR RELEVÂNCIA E ATESTADOS (QTO/QTP): 
    🚨 ALERTA VERMELHO: Em licitações de ENGENHARIA (obras ou serviços), é IMPOSSÍVEL e INACEITÁVEL não haver exigência de ATESTADO DE CAPACIDADE TÉCNICA (da Empresa) e CAT (do Profissional). Se o objeto envolver engenharia, PARE TUDO e VASCULHE o edital e o ETP inteiro atrás da Qualificação Técnica. Extraia meticulosamente cada parcela de maior relevância.
-   Devem ser SEMPRE tratadas como EXIGÊNCIAS DE HABILITAÇÃO (risk_if_missing="inabilitacao"). É PROIBIDO criar um item genérico apenas escrito "Comprovar parcelas de maior relevância". Você DEVE destrinchar CADA parcela em um item estruturado SECUNDÁRIO, copiando textualmente a descrição da parcela.
+   Devem ser SEMPRE tratadas como EXIGÊNCIAS DE HABILITAÇÃO PRINCIPAIS (risk_if_missing="inabilitacao"). É PROIBIDO CRIAR UM ITEM GUARDA-CHUVA GENÉRICO COM SUBITENS. Você DEVE destrinchar CADA parcela em um item estruturado PRINCIPAL/AUTÔNOMO INDEPENDENTE, copiando textualmente a descrição da parcela. NUNCA classifique as parcelas como "subitem" ou "observação".
    ⚠️ REGRA ABSOLUTA DE QUANTITATIVOS: Para CADA atestado/CAT listado como parcela de maior relevância, a description DEVE OBRIGATORIAMENTE incluir:
    - O serviço/parcela EXATA (transcrita literalmente)
    - O QUANTITATIVO MÍNIMO exigido pelo edital (ex: "quantidade mínima de 50% do quantitativo previsto = 3.500,00 m²")
@@ -856,25 +856,22 @@ Cada item DEVE receber um entry_type:
 14. Se reclassificar um item para outra categoria (ex: garantia de DC→QEF), EXCLUA o item desta categoria e retorne os demais. O item será processado na categoria correta.
 15. TODO subitem e observação DEVE preservar source_ref do pai ou ter source_ref próprio. NUNCA null/vazio em nenhum nível hierárquico.
 16. obligation_type="condicional" SOMENTE quando o edital contém explicitamente condição suspensiva. NÃO infira condicionalidade. Na dúvida: "obrigatoria_universal".
-17. QTO/QTP ANTI-CONSOLIDAÇÃO: se a extração trouxe parcelas relevantes como itens separados, MANTENHA separados na normalização.
-    → Cada parcela com quantitativo mínimo é exigencia_principal, não subitem.
-    → NUNCA consolide "Atestado parcela A (5.000m²)" + "Atestado parcela B (500m²)" em 1 card genérico "Atestados".
-    → Preserve descriptions longas e literais para QTO/QTP — não truncar na normalização.
-    → QUANTIDADES MÍNIMAS SÃO OBRIGATÓRIAS: se a extração trouxe o quantitativo mínimo na description, PRESERVE. Se não trouxe mas consta no source_ref ou evidence_refs, ADICIONE. A description de cada atestado/CAT DEVE conter o quantitativo mínimo exigido com unidade de medida.
-18. QTP — EXPLOSÃO DE CAT GENÉRICO:
-    Se a extração trouxe um ÚNICO item "Atestado de Capacidade Técnica" ou "CAT/CAU" genérico
-    que na description menciona MÚLTIPLAS parcelas (ex: "obras similares", "parcelas de maior relevância"),
-    EXPLODA em N itens separados — um por parcela, com:
-      → title: "CAT: [Nome da parcela]"
-      → description com quantitativo mínimo literal
+17. QTO/QTP ANTI-CONSOLIDAÇÃO E DESVINCULAÇÃO SUBITEM:
+    ⚠️ AS PARCELAS DE MAIOR RELEVÂNCIA COM QUANTITATIVOS MÍNIMOS SÃO SEMPRE DOCUMENTOS PRINCIPAIS!
+    → NUNCA as classifique como "subitem" ou "observacao". DEVE ser sempre "exigencia_principal" (parent_id: null).
+    → Se a extração as trouxe como subitens de um item guarda-chuva genérico (ex: "Atestado de capacidade técnica da empresa"), VOCÊ DEVE DESVINCULÁ-LAS, elevando cada parcela individual a "exigencia_principal" com título explícito (ex: "Atestado de execução de BANQUETA DE CONCRETO").
+    → Se o item pai original se tornar vazio/redundante, EXCLUA o pai. Preserve o pai SOMENTE se ditar regras gerais de acervo não contidas nas parcelas.
+    → NUNCA consolide Múltiplas Parcelas em 1 card genérico.
+    → Preserve descriptions longas e com quantidades literais.
+18. QTP/QTO — EXPLOSÃO DE CAT/ATESTADO GENÉRICO:
+    Se a extração trouxe um ÚNICO item genérico e na description dele menciona MÚLTIPLAS parcelas (ex: "obras similares", "regularização do sub-leito"), EXPLODA em N itens separados — um por parcela, com:
+      → title: "Atestado/CAT: [Nome da parcela]"
       → entry_type: "exigencia_principal", parent_id: null
-    As parcelas do profissional são AS MESMAS parcelas da empresa (QTO bloco C).
-    Consulte os itens de QTO para identificar quais parcelas existem.
     
-    DETECÇÃO DE GUARDA-CHUVA:
-    Se um item tem title como "Profissional de nível superior" ou "Profissional no quadro permanente":
-      → Converter para "Comprovação de vínculo do RT" (se não existir outro item de vínculo)
-      → Ou REMOVER se já existir item de vínculo RT separado
+    DETECÇÃO DE GUARDA-CHUVA E VÍNCULO DO RT (QTP):
+    Se um item QTP tem title como "Profissional de nível superior" ou "Profissional no quadro permanente":
+      → Converter para "Comprovação de vínculo do RT" (se não existir)
+      → Ou REMOVER se já existir.
 
 ── RASTREABILIDADE OBRIGATÓRIA (source_ref) ──
 
