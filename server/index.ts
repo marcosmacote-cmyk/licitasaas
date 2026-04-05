@@ -3217,7 +3217,8 @@ Responda APENAS com JSON array:
             risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
                 : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
                 : v2Result.legal_risk_review.critical_points.length > 0 ? 'Médio' : 'Baixo',
-            sessionDate: resolvedSessionDateISO
+            sessionDate: resolvedSessionDateISO,
+            link_sistema: v2Result.process_identification.link_sistema
         };
 
         const legacyAnalysis = {

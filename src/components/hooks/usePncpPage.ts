@@ -1009,7 +1009,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
                 sessionDate: toISOSafe(processObj.sessionDate || item.data_encerramento_proposta || item.data_abertura || ''),
-                link: [item.link_sistema, item.link_comprasnet].filter(Boolean).join(', '),
+                link: [processObj.link_sistema, item.link_sistema, item.link_comprasnet].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', '),
                 pncpLink: item.link_sistema, risk: processObj.risk || 'Médio',
                 companyProfileId: selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(), observations: '[]'
