@@ -1792,7 +1792,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
 
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 3; // Send only top 3 most important docs to Stage 1 (Edital + TR + 1 annex)
+        const MAX_PDF_PARTS = 5; // Send only top 5 most important docs to Stage 1 (Edital + TR + Planilha + etc)
         const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
@@ -1937,8 +1937,8 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             const nameA = a.titulo || a.nomeArquivo || a.nome || '';
             const nameB = b.titulo || b.nomeArquivo || b.nome || '';
             // Edital tipo always first
-            const aIsEdital = (a.tipoDocumentoId === 1 || a.tipoDocumentoDescricao === 'Edital');
-            const bIsEdital = (b.tipoDocumentoId === 1 || b.tipoDocumentoDescricao === 'Edital');
+            const aIsEdital = ([1, 2].includes(a.tipoDocumentoId) || /edital/i.test(a.tipoDocumentoDescricao));
+            const bIsEdital = ([1, 2].includes(b.tipoDocumentoId) || /edital/i.test(b.tipoDocumentoDescricao));
             if (aIsEdital && !bIsEdital) return -1;
             if (!aIsEdital && bIsEdital) return 1;
             return archivePriorityScore(nameA) - archivePriorityScore(nameB);
@@ -2071,44 +2071,47 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                         console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s) (sorted): ${zipEntries.join(', ')}`);
 
                         for (const entryName of zipEntries) {
-                            if (pdfParts.length >= MAX_PDF_PARTS) break;
+                            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
                             const entrySizeKB = pdfBuffer.length / 1024;
                             const MAX_SINGLE_FILE_KB = 8000;
                             
-                            if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
-                                try {
-                                    const apiKey = process.env.GEMINI_API_KEY;
-                                    if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
-                                    const filesAi = new GoogleGenAI({ apiKey });
-                                    const tempPath = path.join(uploadDir, `temp_zip_${Date.now()}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`);
-                                    fs.writeFileSync(tempPath, pdfBuffer);
-                                    const uploadedFile = await filesAi.files.upload({
-                                        file: tempPath,
-                                        config: { mimeType: 'application/pdf', displayName: entryName }
-                                    });
-                                    try { fs.unlinkSync(tempPath); } catch (_e) {}
-                                    if (uploadedFile && uploadedFile.uri) {
-                                        pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                        console.log(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
+                            if (!pdfPartsFull) {
+                                if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                    console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                    try {
+                                        const apiKey = process.env.GEMINI_API_KEY;
+                                        if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                        const filesAi = new GoogleGenAI({ apiKey });
+                                        const tempPath = path.join(uploadDir, `temp_zip_${Date.now()}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                        fs.writeFileSync(tempPath, pdfBuffer);
+                                        const uploadedFile = await filesAi.files.upload({
+                                            file: tempPath,
+                                            config: { mimeType: 'application/pdf', displayName: entryName }
+                                        });
+                                        try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                        if (uploadedFile && uploadedFile.uri) {
+                                            pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                            console.log(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
+                                        }
+                                    } catch (e: any) {
+                                        console.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
                                     }
-                                } catch (e: any) {
-                                    console.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
+                                    totalPdfSizeAccum += 1;
+                                } else {
+                                    if (pdfBuffer.length > 0) {
+                                        if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                            console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                        } else {
+                                            totalPdfSizeAccum += entrySizeKB;
+                                            pdfParts.push({
+                                                inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                            });
+                                        }
+                                    }
                                 }
-                                totalPdfSizeAccum += 1;
                             } else {
-                                if (pdfBuffer.length > 0) {
-                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                        console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
-                                        discardedFiles.push(`${entryName} (ZIP, ${Math.round(entrySizeKB)}KB)`);
-                                        continue;
-                                    }
-                                    totalPdfSizeAccum += entrySizeKB;
-                                    pdfParts.push({
-                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                    });
-                                }
+                                console.log(`[PNCP-AI] 📁 Salvando "${entryName}" (${Math.round(entrySizeKB)}KB) do ZIP apenas no storage (limite da IA atingido)`);
                             }
 
                             if (pdfBuffer.length > 0) {
@@ -2152,43 +2155,46 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                         console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s) (sorted): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
 
                         for (const rarFile of pdfFiles) {
-                            if (pdfParts.length >= MAX_PDF_PARTS) break;
+                            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
                             if (rarFile.extraction && rarFile.extraction.length > 0) {
                                 const pdfBuffer = Buffer.from(rarFile.extraction);
                                 const entrySizeKB = pdfBuffer.length / 1024;
                                 const MAX_SINGLE_FILE_KB = 8000;
                                 
-                                if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                    console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
-                                    try {
-                                        const apiKey = process.env.GEMINI_API_KEY;
-                                        if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
-                                        const filesAi = new GoogleGenAI({ apiKey });
-                                        const tempPath = path.join(uploadDir, `temp_rar_${Date.now()}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`);
-                                        fs.writeFileSync(tempPath, pdfBuffer);
-                                        const uploadedFile = await filesAi.files.upload({
-                                            file: tempPath,
-                                            config: { mimeType: 'application/pdf', displayName: rarFile.fileHeader.name }
-                                        });
-                                        try { fs.unlinkSync(tempPath); } catch (_e) {}
-                                        if (uploadedFile && uploadedFile.uri) {
-                                            pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                            console.log(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
+                                if (!pdfPartsFull) {
+                                    if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                        console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                        try {
+                                            const apiKey = process.env.GEMINI_API_KEY;
+                                            if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                            const filesAi = new GoogleGenAI({ apiKey });
+                                            const tempPath = path.join(uploadDir, `temp_rar_${Date.now()}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                            fs.writeFileSync(tempPath, pdfBuffer);
+                                            const uploadedFile = await filesAi.files.upload({
+                                                file: tempPath,
+                                                config: { mimeType: 'application/pdf', displayName: rarFile.fileHeader.name }
+                                            });
+                                            try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                            if (uploadedFile && uploadedFile.uri) {
+                                                pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                                console.log(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
+                                            }
+                                        } catch (e: any) {
+                                            console.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
                                         }
-                                    } catch (e: any) {
-                                        console.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
+                                        totalPdfSizeAccum += 1;
+                                    } else {
+                                        if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                            console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
+                                        } else {
+                                            totalPdfSizeAccum += entrySizeKB;
+                                            pdfParts.push({
+                                                inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                            });
+                                        }
                                     }
-                                    totalPdfSizeAccum += 1;
                                 } else {
-                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                        console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
-                                        discardedFiles.push(`${rarFile.fileHeader.name} (RAR, ${Math.round(entrySizeKB)}KB)`);
-                                        continue;
-                                    }
-                                    totalPdfSizeAccum += entrySizeKB;
-                                    pdfParts.push({
-                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                    });
+                                    console.log(`[PNCP-AI] 📁 Salvando "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB) do RAR apenas no storage (limite da IA atingido)`);
                                 }
 
                                 const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
