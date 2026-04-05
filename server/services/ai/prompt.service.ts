@@ -305,7 +305,7 @@ import { generateTaxonomyPromptBlock, generateObjectTypeReinforcement, ObjectTyp
  *   MINOR = melhoria de prompt que altera qualidade
  *   PATCH = ajuste de formatação ou exemplos
  */
-export const V2_PROMPT_VERSION = 'v4.1.0';
+export const V2_PROMPT_VERSION = 'v4.2.0';
 
 // Pre-generate taxonomy block for all prompts
 const TAXONOMY_BLOCK = generateTaxonomyPromptBlock();
@@ -658,6 +658,7 @@ Você DEVE avaliar CADA um dos seguintes pontos e reportar quando identificar al
    → Falta de informação sobre forma de pagamento?
    → Falta de cronograma em obra?
    → Matriz de riscos: SOMENTE aponte como omissão quando: (a) o objeto for obra/serviço de engenharia de valor estimado > R$10 milhões, OU (b) o regime for contratação integrada/semi-integrada, OU (c) houver alocação de risco contratual explícita no edital que deveria estar na MR. NÃO aponte falta de MR para serviços comuns de pequeno porte.
+   ⚠️ REGRA ANTI-ALUCINAÇÃO (CRÍTICA): É ESTRITAMENTE PROIBIDO apontar omissão de documentos de Habilitação Jurídica, Regularidade Fiscal, Qualificação Técnica (empresa ou profissional) ou Econômico-Financeira se esses documentos JÁ ESTIVEREM PRESENTES na estrutura JSON (Etapa 1/2) que você recebeu. CRUZE OS DADOS! Se o JSON contém "Ato constitutivo", não invente risco de omissão de "Contrato Social". Aponte omissão de certidões/habilitação SOMENTE se a respectiva classe estiver INTEGRALMENTE VAZIA e o edital de fato não as exigir.
 
 ── REGRAS DE QUALIDADE ──
 
