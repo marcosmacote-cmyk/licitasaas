@@ -378,6 +378,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
             console.log(`[AI Extract] sessionDate=${formattedSessionDate}, reminderDate=${reminderDate}, value=${estimatedValue}, portal=${portal}`);
 
+            const extractedLink = proc.link || schema?.process_identification?.link_sistema;
+
             setFormData(prev => ({
                 ...prev,
                 title: title || prev.title,
@@ -389,6 +391,9 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 risk: risk as any,
                 reminderDate: reminderDate || prev.reminderDate,
                 reminderType: reminderDate ? 'once' : prev.reminderType,
+                link: extractedLink && !prev.link?.includes(extractedLink) 
+                    ? (prev.link ? `${prev.link}, ${extractedLink}` : extractedLink) 
+                    : prev.link,
             }));
             if (aiData.analysis) {
                 const analysisObj: AiAnalysis = {
@@ -638,6 +643,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
             console.log(`[AI Fill] sessionDate=${formattedSessionDate}, reminderDate=${reminderDate}, value=${estimatedValue}, portal=${portal}`);
 
+            const extractedLink = proc.link || schema?.process_identification?.link_sistema;
+
             setFormData(prev => ({
                 ...prev,
                 title: title || prev.title,
@@ -649,6 +656,9 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 risk: risk as any,
                 reminderDate: reminderDate || prev.reminderDate,
                 reminderType: reminderDate ? 'once' : prev.reminderType,
+                link: extractedLink && !prev.link?.includes(extractedLink) 
+                    ? (prev.link ? `${prev.link}, ${extractedLink}` : extractedLink) 
+                    : prev.link,
             }));
 
             // Step 4: Store full analysis

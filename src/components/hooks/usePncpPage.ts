@@ -811,7 +811,8 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // 4. LINK COMPOSITION — combina todos os links relevantes
         // ═══════════════════════════════════════════════════════════
         const links: string[] = [];
-        if (item.link_sistema) links.push(item.link_sistema);
+        if (aiData?.process?.link && !links.includes(aiData.process.link)) links.push(aiData.process.link);
+        if (item.link_sistema && !links.includes(item.link_sistema)) links.push(item.link_sistema);
         if (item.link_comprasnet && !links.includes(item.link_comprasnet)) links.push(item.link_comprasnet);
 
         // ═══════════════════════════════════════════════════════════

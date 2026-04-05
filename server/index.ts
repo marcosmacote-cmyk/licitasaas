@@ -6532,6 +6532,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 estimatedValue: finalEstimatedValue,
                 sessionDate: parsePtBrDate(result.timeline.data_sessao),
                 risk: autoRisk(),
+                link: result.process_identification.link_sistema || undefined,
             },
             analysis: {
                 fullSummary: `ANÁLISE V2 — ${result.process_identification.objeto_resumido}\n\n` +
