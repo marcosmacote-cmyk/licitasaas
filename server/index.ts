@@ -3194,6 +3194,18 @@ Responda APENAS com JSON array:
             console.log(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
         }
 
+        // ── COMPRASNET UASG MARKER RESOLUTION ──
+        // A IA extrai "COMPRASNET:UASG:943001" como marcador. Resolvemos para a URL
+        // de busca do ComprasNet que o watcher usará para auto-descobrir o ?compra= real.
+        const rawAiLink = v2Result.process_identification.link_sistema || '';
+        const uasgMatch = rawAiLink.match(/^COMPRASNET:UASG:(\d{4,7})$/);
+        if (uasgMatch) {
+            const uasgCode = uasgMatch[1];
+            v2Result.process_identification.link_sistema = 
+                `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras?coUasg=${uasgCode}`;
+            console.log(`[PNCP-V2] 🔗 UASG ${uasgCode} → URL de busca ComprasNet para discovery`);
+        }
+
         const legacyProcess = {
             title: cleanNumEdital
                 ? `${v2Result.process_identification.modalidade} ${cleanNumEdital} - ${v2Result.process_identification.orgao}`
