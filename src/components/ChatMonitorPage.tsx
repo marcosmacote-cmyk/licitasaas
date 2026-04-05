@@ -76,15 +76,17 @@ function portalBadge(portal: string, link?: string) {
   const l = (link || '').toLowerCase();
   // Verificar link primeiro (mais confiável), depois portal
   // BLL deve ser verificado ANTES de ComprasNet (ambos podem conter 'compras')
-  if (l.includes('licitamaisbrasil') || p.includes('licita mais brasil') || p.includes('licitamaisbrasil')) return { label: 'Licita+Brasil', color: '#0d9488', bg: 'rgba(13, 148, 136, 0.08)' };
-  if (l.includes('licitanet.com.br') || p.includes('licitanet')) return { label: 'Licitanet', color: '#e85d04', bg: 'rgba(232, 93, 4, 0.08)' };
-  if (l.includes('portaldecompraspublicas') || p.includes('portal de compras')) return { label: 'PCP', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)' };
-  if (l.includes('bllcompras') || l.includes('bll.org') || p.includes('bll')) return { label: 'BLL Compras', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' };
-  if (l.includes('bnccompras') || p.includes('bnc')) return { label: 'BNC Compras', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)' };
-  if (l.includes('bbmnet') || l.includes('sala.bbmnet') || p.includes('bbmnet')) return { label: 'BBMNET', color: '#0066cc', bg: 'rgba(0, 102, 204, 0.08)' };
-  if (l.includes('m2atecnologia') || p.includes('m2a')) return { label: 'M2A', color: '#059669', bg: 'rgba(5, 150, 105, 0.08)' };
-  if (l.includes('cnetmobile') || l.includes('comprasnet') || p.includes('compras') || p.includes('cnet')) return { label: 'ComprasNet', color: 'var(--color-success)', bg: 'var(--color-success-bg)' };
-  if (p.includes('pncp') || l.includes('pncp.gov.br')) return { label: 'PNCP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' };
+  // Ignorar urls do supabase.co pois podem conter as strings por via dos nomes dos arquivos PDF de upload (o que causa falso positivo)
+  const isSupabase = l.includes('supabase.co');
+  if (!isSupabase && (l.includes('licitamaisbrasil') || p.includes('licita mais brasil') || p.includes('licitamaisbrasil'))) return { label: 'Licita+Brasil', color: '#0d9488', bg: 'rgba(13, 148, 136, 0.08)' };
+  if (!isSupabase && (l.includes('licitanet.com.br') || p.includes('licitanet'))) return { label: 'Licitanet', color: '#e85d04', bg: 'rgba(232, 93, 4, 0.08)' };
+  if (!isSupabase && (l.includes('portaldecompraspublicas') || p.includes('portal de compras'))) return { label: 'PCP', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)' };
+  if (!isSupabase && (l.includes('bllcompras') || l.includes('bll.org') || p.includes('bll'))) return { label: 'BLL Compras', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' };
+  if (!isSupabase && (l.includes('bnccompras') || p.includes('bnc'))) return { label: 'BNC Compras', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)' };
+  if (!isSupabase && (l.includes('bbmnet') || l.includes('sala.bbmnet') || p.includes('bbmnet'))) return { label: 'BBMNET', color: '#0066cc', bg: 'rgba(0, 102, 204, 0.08)' };
+  if (!isSupabase && (l.includes('m2atecnologia') || p.includes('m2a'))) return { label: 'M2A', color: '#059669', bg: 'rgba(5, 150, 105, 0.08)' };
+  if (!isSupabase && (l.includes('cnetmobile') || l.includes('comprasnet')) || p.includes('compras') || p.includes('cnet')) return { label: 'ComprasNet', color: 'var(--color-success)', bg: 'var(--color-success-bg)' };
+  if (!isSupabase && (l.includes('pncp.gov.br')) || p.includes('pncp')) return { label: 'PNCP', color: 'var(--color-primary)', bg: 'var(--color-primary-light)' };
   return { label: portal || 'Outro', color: 'var(--color-neutral)', bg: 'var(--color-neutral-bg)' };
 }
 

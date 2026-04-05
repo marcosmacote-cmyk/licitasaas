@@ -222,15 +222,16 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const portal = (form.formData.portal || '').toLowerCase();
                                 
                                 const isComprasNet = link.includes('cnetmobile') || link.includes('comprasnet') || portal.includes('comprasnet') || portal.includes('compras.gov');
-                                const isBLL = link.includes('bllcompras') || link.includes('bll.org') || portal === 'bll';
-                                const isBNC = link.includes('bnccompras') || portal.includes('bnc');
-                                const isM2A = link.includes('m2atecnologia') || portal.includes('m2a');
-                                const isBBMNet = link.includes('bbmnet') || portal.includes('bbmnet');
-                                const isLicitaMaisBrasil = link.includes('licitamaisbrasil') || portal.includes('licita mais brasil');
+                                const isBLL = link.includes('bllcompras') || portal.includes('BLL');
+                                const isBNC = link.includes('bnccompras') || portal.includes('BNC');
+                                const isM2A = link.includes('m2atecnologia') || portal.includes('M2A');
+                                const isBBMNet = link.includes('bbmnet') || portal.includes('BBMNet');
+                                const isLicitaMaisBrasil = link.includes('licitamaisbrasil') || portal.includes('Licita Mais Brasil');
                                 
                                 const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet || isLicitaMaisBrasil;
-                                // ComprasNet detected by portal name but missing actual cnetmobile URL for the worker
-                                const hasComprasNetLink = link.includes('cnetmobile') || link.includes('comprasnet');
+                                
+                                const validLinksExt = link.split(',').filter(l => !l.includes('supabase.co'));
+                                const hasComprasNetLink = validLinksExt.some(l => l.includes('cnetmobile') || l.includes('comprasnet'));
                                 const needsComprasNetLink = isComprasNet && !hasComprasNetLink;
                                 const isOtherPlatform = link.includes('pncp.gov.br') && !isMonitorable;
 
@@ -403,12 +404,12 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                     // Classificar cada link
                                     const classifyLink = (url: string) => {
+                                        if (url.includes('supabase.co') && url.includes('.pdf')) return { type: 'PDF', IconComp: FileText, color: '#ef4444', label: 'PDF do Edital' };
+                                        if (url.includes('supabase.co')) return { type: 'Arquivo', IconComp: Paperclip, color: '#8b5cf6', label: 'Arquivo Anexo' };
                                         if (url.includes('pncp.gov.br')) return { type: 'PNCP', IconComp: Building2, color: '#6366f1', label: 'Portal PNCP' };
                                         if (url.includes('cnetmobile') || url.includes('comprasnet')) return { type: 'ComprasNet', IconComp: MessageSquare, color: '#22c55e', label: 'ComprasNet (Chat)' };
                                         if (url.includes('bllcompras') || url.includes('bll.org')) return { type: 'BLL', IconComp: MessageSquare, color: '#f59e0b', label: 'BLL Compras (Chat)' };
                                         if (url.includes('bnccompras')) return { type: 'BNC', IconComp: MessageSquare, color: '#3b82f6', label: 'BNC Compras (Chat)' };
-                                        if (url.includes('supabase.co') && url.includes('.pdf')) return { type: 'PDF', IconComp: FileText, color: '#ef4444', label: 'PDF do Edital' };
-                                        if (url.includes('supabase.co')) return { type: 'Arquivo', IconComp: Paperclip, color: '#8b5cf6', label: 'Arquivo Anexo' };
                                         return { type: 'Link', IconComp: Link2, color: '#3b82f6', label: 'Link Externo' };
                                     };
 
