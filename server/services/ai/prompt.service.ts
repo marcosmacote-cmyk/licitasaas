@@ -434,6 +434,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     c) NUNCA copie referências quebradas como '[espaço em branco]', '[nome]', '[CNPJ]', 'XX/AAAA' ou placeholders de template.
     d) Para "criterio_julgamento", NUNCA deixe 'Não informado' em Conc/Pregão; se não encontrar no texto, classifique como 'Menor Preço' ou 'Maior Desconto'.
     e) Para "numero_processo" e "numero_edital": extraia do CABEÇALHO do Edital, NUNCA de templates de minuta. Se o número não existir no Edital, use string vazia em vez de placeholders como 'XX/2026'.
+    f) Para "link_sistema": Extraia a URL oficial do portal expressa no edital, se houver. ⚠️ REGRA ESPECIAL COMPRASNET: Se o edital/termo informar que a licitação opera no "Compras.gov.br" ou afins, e exibir graficamente o número "UASG" ou "Código da Unidade Compradora", mas não trouxer link expresso, você DEVE construir obrigatoriamente o link oficial de rastreio blindado e injetá-lo em "link_sistema": "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras?coUasg=[NUMERO_UASG]". Em outros casos, deixe vazio.
 17. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
 18. CRONOGRAMA ("timeline"):
     a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".
@@ -448,7 +449,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "modalidade": "", "forma_disputa": "", "criterio_julgamento": "", "regime_execucao": "",
     "tipo_objeto": "servico_comum|servico_comum_engenharia|obra_engenharia|fornecimento|locacao|outro",
     "objeto_resumido": "até 150 caracteres", "objeto_completo": "transcrição integral",
-    "fonte_oficial": "", "municipio_uf": ""
+    "fonte_oficial": "", "municipio_uf": "", "link_sistema": ""
   },
   "timeline": {
     "data_publicacao": "DD/MM/AAAA", "data_sessao": "DD/MM/AAAA HH:MM",
@@ -787,8 +788,7 @@ export const MANUAL_EXTRACTION_ADDON = `
     - Se o valor for "sigiloso" ou não informado explicitamente, retorne 0.
     - Converta "R$ 26.187.894,32" para 26187894.32 (notação decimal, sem pontos de milhar).
     
-17. PORTAL DE LICITAÇÃO E LINK PÚBLICO (OBRIGATÓRIO): Identifique o PORTAL/SISTEMA ELETRÔNICO usado para a licitação em "portal_licitacao" dentro de "process_identification". Opções: "Compras.gov.br", "BNC", "BLL", "Licitanet", "BBMNet", "Portal de Compras Públicas", "Licitações-e (BB)", "BEC/SP", "M2A Tecnologia", "PNCP", "Licita Mais Brasil". Se não identificar o portal, use "outro". EXIJA atenção: Se houver uma URL/link expresso no edital para o portal da disputa (ex: "www.novobbmnet.com.br", "www.bll.org.br", "bnc.org.br", "licitamaisbrasil.com.br"), extraia obrigatoriamente essa URL para "link_sistema". Se não houver, deixe como null.
-    ⚠️ REGRA ESPECIAL CNETMOBILE (COMPRASNET/ACESSO PÚBLICO): Se o portal for "Compras.gov.br" e o edital não trouxer link expresso, mas informar o código "UASG" (Unidade de Atendimento de Serviços Gerais, ex: 123456), você DEVE compor e injetar em "link_sistema" a seguinte URL oficial de rastreio público: "https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras?coUasg=[NUMERO_UASG]". Se não houver link nem UASG, deixe null.
+17. PORTAL DE LICITAÇÃO (OBRIGATÓRIO): Identifique o PORTAL/SISTEMA ELETRÔNICO usado para a licitação em "portal_licitacao" dentro de "process_identification". Opções: "Compras.gov.br", "BNC", "BLL", "Licitanet", "BBMNet", "Portal de Compras Públicas", "Licitações-e (BB)", "BEC/SP", "M2A Tecnologia", "PNCP", "Licita Mais Brasil". Se não identificar o portal, use "outro". 
     ⚠️ REGRA ESPECIAL DE PORTAL (CEARÁ): Se o órgão for do Governo do Estado do Ceará (SOP, PMCE, Secretarias Estaduais do CE, etc) e a modalidade NÃO for Dispensa ou Cotação Eletrônica, a plataforma de disputa oficial é SEMPRE "Compras.gov.br", MESMO QUE o edital cite "Portal Compras.CE" apenas de forma secundária para consulta ou publicação.
 18. DATA DA SESSÃO COM HORÁRIO (OBRIGATÓRIO): O campo "data_sessao" DEVE conter DATA E HORA no formato "DD/MM/AAAA HH:MM" (24h). NUNCA retorne apenas a data sem horário. Procure por: "abertura da sessão pública", "início da sessão", "data de abertura", "recebimento das propostas".
 `;
