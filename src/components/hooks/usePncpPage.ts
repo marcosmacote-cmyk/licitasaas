@@ -811,6 +811,9 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // 4. LINK COMPOSITION — combina todos os links relevantes
         // ═══════════════════════════════════════════════════════════
         const links: string[] = [];
+        // AI-inferred link (e.g. cnetmobile via UASG) — highest priority
+        const aiLinkSistema = (aiData?.process as any)?.link_sistema as string | undefined;
+        if (aiLinkSistema && !links.includes(aiLinkSistema)) links.push(aiLinkSistema);
         if (aiData?.process?.link && !links.includes(aiData.process.link)) links.push(aiData.process.link);
         if (item.link_sistema && !links.includes(item.link_sistema)) links.push(item.link_sistema);
         if (item.link_comprasnet && !links.includes(item.link_comprasnet)) links.push(item.link_comprasnet);
