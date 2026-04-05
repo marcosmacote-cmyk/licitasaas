@@ -643,7 +643,7 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
 
             console.log(`[AI Fill] sessionDate=${formattedSessionDate}, reminderDate=${reminderDate}, value=${estimatedValue}, portal=${portal}`);
 
-            const extractedLink = proc.link || schema?.process_identification?.link_sistema;
+            const aiSystemLink = schema?.process_identification?.link_sistema;
 
             setFormData(prev => ({
                 ...prev,
@@ -656,8 +656,8 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
                 risk: risk as any,
                 reminderDate: reminderDate || prev.reminderDate,
                 reminderType: reminderDate ? 'once' : prev.reminderType,
-                link: extractedLink && !prev.link?.includes(extractedLink) 
-                    ? (prev.link ? `${prev.link}, ${extractedLink}` : extractedLink) 
+                link: aiSystemLink && !prev.link?.includes(aiSystemLink) 
+                    ? (prev.link ? `${prev.link}, ${aiSystemLink}` : aiSystemLink) 
                     : prev.link,
             }));
 
