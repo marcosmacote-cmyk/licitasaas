@@ -2,6 +2,7 @@ import { Upload, Search, FileText, Trash2, HardHat, FileBadge, CheckCircle2, Ale
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { ConfirmDialog } from '../ui';
 import { useTechnicalOracle, CATEGORIES_HIERARCHY } from '../hooks/useTechnicalOracle';
+import { OraclePdfExporter } from '../hooks/OraclePdfExporter';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -12,6 +13,13 @@ interface Props {
 
 export function TechnicalOracle({ biddings, companies, onRefresh, initialBiddingId }: Props) {
     const o = useTechnicalOracle({ biddings, onRefresh, initialBiddingId });
+
+    const handleExportPdf = () => {
+        if (!o.analysisResult || !o.selectedBiddingId) return;
+        const bidding = biddings.find(b => b.id === o.selectedBiddingId);
+        if (!bidding) return;
+        new OraclePdfExporter().export(bidding, o.analysisResult);
+    };
 
     return (
         <>
@@ -146,11 +154,21 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             </select>
                         </div>
                         {!o.analysisResult ? (
-                            <button className="btn btn-primary" disabled={!o.selectedBiddingId || o.selectedCertIds.size === 0 || o.isAnalyzing} onClick={o.handleAnalyzeCompatibility} style={{ padding: '10px 24px' }}>
-                                {o.isAnalyzing ? 'Processando Somatório...' : 'Analisar Somatório'}
-                            </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <button className="btn btn-primary" disabled={!o.selectedBiddingId || o.selectedCertIds.size === 0 || o.isAnalyzing} onClick={o.handleAnalyzeCompatibility} style={{ padding: '10px 24px' }}>
+                                    {o.isAnalyzing ? 'Processando Somatório...' : 'Analisar Somatório'}
+                                </button>
+                                {o.isAnalyzing && (
+                                    <div style={{ width: '100%', height: '6px', background: 'var(--color-bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
+                                        <div style={{ height: '100%', background: 'var(--color-primary)', width: `${o.analysisProgress}%`, transition: 'width 0.3s ease' }}></div>
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-outline" onClick={handleExportPdf} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} title="Gerar Relatório Premium em PDF">
+                                    <FileText size={16} /> Exportar PDF
+                                </button>
                                 <button className="btn btn-primary" onClick={o.handleAddToDossier} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} title="Vincular certificados selecionados ao Dossiê desta licitação">
                                     <Package size={16} /> Adicionar ao Dossiê
                                 </button>

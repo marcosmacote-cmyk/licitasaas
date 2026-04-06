@@ -83,6 +83,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [selectedBiddingId, setSelectedBiddingId] = useState<string | null>(initialBiddingId || null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisProgress, setAnalysisProgress] = useState(0);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
     const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -161,19 +162,40 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
     const handleAnalyzeCompatibility = async () => {
         if (!selectedBiddingId || selectedCertIds.size === 0) return;
         setIsAnalyzing(true);
+        setAnalysisProgress(0);
         setAnalysisResult(null);
+
+        // Progress simulator
+        const progressInterval = setInterval(() => {
+            setAnalysisProgress(prev => {
+                if (prev >= 95) return 95;
+                // Acelera no começo, desacelera perto de 90
+                const increment = prev < 50 ? 5 : (prev < 80 ? 2 : 1);
+                return prev + increment;
+            });
+        }, 300);
+
         try {
             const res = await axios.post(`${API_BASE_URL}/api/technical-certificates/compare`, {
                 biddingProcessId: selectedBiddingId,
                 technicalCertificateIds: Array.from(selectedCertIds),
                 disabledRequirements: Array.from(disabledRequirements)
             }, getAuthHeaders());
-            setAnalysisResult(res.data);
+            
+            setAnalysisProgress(100);
+            
+            // Dá um tempo pra barra bater 100% e sumir
+            setTimeout(() => {
+                setAnalysisResult(res.data);
+                setIsAnalyzing(false);
+            }, 400);
+
         } catch (error) {
             console.error('Failed to analyze compatibility:', error);
             toast.error('Erro ao realizar a análise de compatibilidade.');
-        } finally {
             setIsAnalyzing(false);
+        } finally {
+            clearInterval(progressInterval);
         }
     };
 
@@ -301,7 +323,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         selectedCompanyId, setSelectedCompanyId,
         confirmDeleteId, setConfirmDeleteId,
         selectedBiddingId, setSelectedBiddingId,
-        isAnalyzing, analysisResult,
+        isAnalyzing, analysisResult, analysisProgress,
         expandedCompanies, selectedCategory, setSelectedCategory,
         requirementsToAnalyze, disabledRequirements, toggleRequirement,
         // Derived
