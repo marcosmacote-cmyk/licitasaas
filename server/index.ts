@@ -3219,7 +3219,23 @@ Responda APENAS com JSON array:
                 : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
                 : v2Result.legal_risk_review.critical_points.length > 0 ? 'Médio' : 'Baixo',
             sessionDate: resolvedSessionDateISO,
-            link_sistema: v2Result.process_identification.link_sistema
+            link_sistema: (() => {
+                // Sanitize: strip generic ComprasNet links that are NOT actual monitoring URLs
+                // Only cnetmobile.estaleiro.serpro.gov.br/...?compra=XXX is a valid monitoring link
+                const rawLink = (v2Result.process_identification.link_sistema || '').trim();
+                if (!rawLink) return '';
+                const lower = rawLink.toLowerCase();
+                const isGenericComprasNet = (
+                    lower.includes('comprasnet.gov.br') ||
+                    lower.includes('www.gov.br/compras') ||
+                    lower.includes('compras.gov.br') && !lower.includes('cnetmobile')
+                );
+                if (isGenericComprasNet) {
+                    console.log(`[PNCP-V2] 🧹 Sanitização: link_sistema genérico removido: "${rawLink.substring(0, 60)}"`);
+                    return '';
+                }
+                return rawLink;
+            })()
         };
 
         const legacyAnalysis = {
@@ -3321,9 +3337,13 @@ Responda APENAS com JSON array:
 // NOTE: Only include domains that have an active monitor/worker/cron.
 // Removed 'compras.fortaleza.ce.gov.br' — no monitor exists, was causing false-positive isMonitored=true.
 const MONITORABLE_DOMAINS = [
-    'cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org',
+    'cnetmobile', 'licitamaisbrasil', 'bllcompras', 'bll.org',
     'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia',
     'precodereferencia',
+    // ⚠️ NÃO incluir 'comprasnet' aqui! O domínio www.comprasnet.gov.br é o portal antigo de LOGIN
+    // (ex: https://www.comprasnet.gov.br/seguro/loginPortal.asp) — NÃO é monitorável.
+    // O único domínio ComprasNet monitorável é 'cnetmobile' (cnetmobile.estaleiro.serpro.gov.br).
+    // Incluir 'comprasnet' causa falso-positivo que impede o AutoEnrich de buscar o link correto.
 ];
 
 // Map platform canonical names → domains they use (for credential matching)
