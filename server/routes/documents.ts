@@ -2,15 +2,17 @@ import express from 'express';
 import multer from 'multer';
 import prisma from '../lib/prisma';
 import { authenticateToken } from '../middlewares/auth';
+import { aiLimiter } from '../lib/security';
 import { storageService } from '../storage';
 import { GoogleGenAI } from '@google/genai';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { callGeminiWithRetry } from '../services/ai/gemini.service';
+import { fallbackToOpenAiV2 } from '../services/ai/openai.service';
 import { EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT } from '../services/ai/prompt.service';
 import { buildModuleContext } from '../services/ai/modules/moduleContextContracts';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } }); // 30MB max
 
 // ── Documents CRUD ──
 
@@ -135,35 +137,45 @@ router.get('/technical-certificates', authenticateToken, async (req: any, res) =
     }
 });
 
-router.post('/technical-certificates', authenticateToken, upload.single('file'), async (req: any, res: any) => {
+router.post('/technical-certificates', authenticateToken, aiLimiter, upload.single('file'), async (req: any, res: any) => {
     try {
         const { companyProfileId, title, type, category } = req.body;
         if (!req.file) return res.status(400).json({ error: 'File is required' });
 
         const { url: fileUrl } = await storageService.uploadFile(req.file, req.user.tenantId);
 
-        // AI Extraction
+        // AI Extraction with Gemini → OpenAI fallback
         const apiKey = process.env.GEMINI_API_KEY;
         const ai = new GoogleGenAI({ apiKey: apiKey! });
+        const pdfParts = [{ inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } }];
+        const userInstruction = "Extraia os dados técnicos deste documento seguindo o formato JSON especificado.";
 
-        console.log(`[AI Oracle] Analyzing certificate: ${req.file.originalname}`);
-        const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.0-flash',
-            contents: [
-                {
+        console.log(`[AI Oracle] Analyzing certificate: ${req.file.originalname} (${(req.file.size / 1024).toFixed(0)}KB)`);
+        let result: any;
+        try {
+            result = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{
                     role: 'user',
-                    parts: [
-                        { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } },
-                        { text: "Extraia os dados técnicos deste documento seguindo o formato JSON especificado." }
-                    ]
+                    parts: [...pdfParts, { text: userInstruction }]
+                }],
+                config: {
+                    systemInstruction: EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
+                    temperature: 0.1,
+                    responseMimeType: 'application/json'
                 }
-            ],
-            config: {
-                systemInstruction: EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
+            }, 3, { tenantId: req.user.tenantId, operation: 'process_document', metadata: { docType: 'technical_certificate' } });
+        } catch (geminiErr: any) {
+            console.warn(`[AI Oracle] Gemini falhou na extração: ${geminiErr.message}. Fallback → OpenAI...`);
+            const oaiResult = await fallbackToOpenAiV2({
+                systemPrompt: EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
+                userPrompt: userInstruction,
+                pdfParts,
                 temperature: 0.1,
-                responseMimeType: 'application/json'
-            }
-        }, 3, { tenantId: req.user.tenantId, operation: 'process_document', metadata: { docType: 'technical_certificate' } });
+                stageName: 'oracle-extract'
+            });
+            result = { text: oaiResult.text };
+        }
 
         const extracted = robustJsonParse(result.text);
 
@@ -217,7 +229,7 @@ router.delete('/technical-certificates/:id', authenticateToken, async (req: any,
     }
 });
 
-router.post('/technical-certificates/compare', authenticateToken, async (req: any, res) => {
+router.post('/technical-certificates/compare', authenticateToken, aiLimiter, async (req: any, res) => {
     try {
         const { biddingProcessId, technicalCertificateIds } = req.body;
         const tenantId = req.user.tenantId;
@@ -247,6 +259,8 @@ router.post('/technical-certificates/compare', authenticateToken, async (req: an
         const aggregatedCertData = certificates.map(cert => ({
             atestado_titulo: cert.title,
             objeto: cert.object,
+            executingCompany: cert.executingCompany || null,
+            technicalResponsible: cert.technicalResponsible || null,
             experiencias: cert.experiences.map(e => ({
                 description: e.description,
                 quantity: e.quantity,
@@ -257,24 +271,30 @@ router.post('/technical-certificates/compare', authenticateToken, async (req: an
 
         const apiKey = process.env.GEMINI_API_KEY;
         const ai = new GoogleGenAI({ apiKey: apiKey! });
+        const userContent = `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(aggregatedCertData, null, 2)}`;
 
         console.log(`[AI Oracle] Comparing ${certificates.length} certs with bidding ${bidding.title}`);
-        const result = await callGeminiWithRetry(ai.models, {
-            model: 'gemini-2.0-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { text: `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(aggregatedCertData, null, 2)}` }
-                    ]
+        let result: any;
+        try {
+            result = await callGeminiWithRetry(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: userContent }] }],
+                config: {
+                    systemInstruction: COMPARE_CERTIFICATE_SYSTEM_PROMPT,
+                    temperature: 0.1,
+                    responseMimeType: 'application/json'
                 }
-            ],
-            config: {
-                systemInstruction: COMPARE_CERTIFICATE_SYSTEM_PROMPT,
+            }, 3, { tenantId: req.user.tenantId, operation: 'bidding_matching', metadata: { type: 'certificate_comparison' } });
+        } catch (geminiErr: any) {
+            console.warn(`[AI Oracle] Gemini falhou na comparação: ${geminiErr.message}. Fallback → OpenAI...`);
+            const oaiResult = await fallbackToOpenAiV2({
+                systemPrompt: COMPARE_CERTIFICATE_SYSTEM_PROMPT,
+                userPrompt: userContent,
                 temperature: 0.1,
-                responseMimeType: 'application/json'
-            }
-        }, 3, { tenantId: req.user.tenantId, operation: 'bidding_matching', metadata: { type: 'certificate_comparison' } });
+                stageName: 'oracle-compare'
+            });
+            result = { text: oaiResult.text };
+        }
 
         const analysis = robustJsonParse(result.text);
         res.json(analysis);

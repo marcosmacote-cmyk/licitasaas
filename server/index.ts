@@ -4112,6 +4112,44 @@ app.get('/api/admin/ai-usage', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ── Oracle Evidence Persistence ──
+app.put('/api/biddings/:id/oracle-evidence', authenticateToken, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { oracleEvidence } = req.body;
+        const tenantId = req.user.tenantId;
+
+        const bidding = await prisma.biddingProcess.findFirst({
+            where: { id, tenantId },
+            include: { aiAnalysis: true }
+        });
+
+        if (!bidding) {
+            return res.status(404).json({ error: 'Processo não encontrado.' });
+        }
+
+        // Persist oracle evidence alongside existing schemaV2 metadata
+        if (bidding.aiAnalysis) {
+            const existingSchema = (bidding.aiAnalysis.schemaV2 as any) || {};
+            await prisma.aiAnalysis.update({
+                where: { id: bidding.aiAnalysis.id },
+                data: {
+                    schemaV2: {
+                        ...existingSchema,
+                        oracle_evidence: oracleEvidence
+                    }
+                }
+            });
+            console.log(`[Oracle] Evidências persistidas para bidding ${id} (${Object.keys(oracleEvidence || {}).length} exigências)`);
+        }
+
+        res.json({ success: true });
+    } catch (error: any) {
+        console.error('[Oracle Evidence]', error);
+        res.status(500).json({ error: 'Falha ao persistir evidências.' });
+    }
+});
+
 app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
     try {
         const { id } = req.params;

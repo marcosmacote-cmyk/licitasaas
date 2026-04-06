@@ -237,8 +237,10 @@ export function useDossierExporter({ biddings, companies, initialBiddingId }: Us
                 if (!response.ok) throw new Error(`API ${response.status}`);
                 const data = await response.json();
 
+                // Oracle evidence: primeiro tenta localStorage, fallback para schemaV2 persistido
                 const savedEvidence = localStorage.getItem(`oracle_evidence_${selectedBiddingId}`);
-                const parsedEvidence = savedEvidence ? JSON.parse(savedEvidence) : {};
+                const schemaV2Evidence = selectedBidding?.aiAnalysis?.schemaV2?.oracle_evidence;
+                const parsedEvidence = savedEvidence ? JSON.parse(savedEvidence) : (schemaV2Evidence || {});
                 const combinedMatches = { ...(data.matches || {}) };
                 const notes: Record<string, string> = {};
 

@@ -181,7 +181,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         setViewingCert(null);
     };
 
-    const handleAddToDossier = () => {
+    const handleAddToDossier = async () => {
         if (!selectedBiddingId || !analysisResult) return;
         const evidence: Record<string, { docIds: string[], note: string }> = {};
         analysisResult.analysis.forEach(item => {
@@ -192,7 +192,18 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
                 };
             }
         });
+
+        // Dual write: localStorage (para compatibilidade imediata com Dossier) + API (persistência real)
         localStorage.setItem(`oracle_evidence_${selectedBiddingId}`, JSON.stringify(evidence));
+
+        try {
+            await axios.put(`${API_BASE_URL}/api/biddings/${selectedBiddingId}/oracle-evidence`, {
+                oracleEvidence: evidence
+            }, getAuthHeaders());
+        } catch (err) {
+            console.warn('[Oracle] Falha ao persistir evidências via API, mantendo localStorage:', err);
+        }
+
         toast.success('Evidências vinculadas ao Dossiê com sucesso!');
     };
 
