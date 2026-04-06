@@ -71,6 +71,7 @@ export interface ProcessIdentification {
   portal_licitacao: string;
   link_sistema: string | null;
   numero_comprasnet?: string;
+  uasg_comprasnet?: string;
 }
 
 export interface Timeline {

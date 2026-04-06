@@ -3309,10 +3309,11 @@ Responda APENAS com JSON array:
                             if (nuCompraRaw && coModalidade) {
                                 const nuCompra = nuCompraRaw.padStart(5, '0');
                                 
-                                // UASG: (1) regex no texto IA, (2) fallback para PNCP API
+                                // UASG: (1) campo IA 'uasg_comprasnet', (2) regex no texto, (3) PNCP API
                                 // UASG do edital pode diferir da PNCP (ex: CE-SOP: edital=943001, PNCP=081401)
+                                const aiUasg = ((v2Result.process_identification as any).uasg_comprasnet || '').trim();
                                 const uasgMatch = allTextFields.match(/UASG\s*:?\s*(\d{6})/i);
-                                const editalUasg = uasgMatch ? uasgMatch[1] : pncpUasg;
+                                const editalUasg = aiUasg || (uasgMatch ? uasgMatch[1] : '') || pncpUasg;
                                 
                                 if (editalUasg && editalUasg.length === 6) {
                                     const compraId = `${editalUasg}${coModalidade}${nuCompra}${compraAno}`;
