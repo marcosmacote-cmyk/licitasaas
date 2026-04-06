@@ -3561,35 +3561,51 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                 const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
-                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                    if (apiRes.ok) {
-                        const apiData = await apiRes.json();
-                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
-                            // Case 1: linkSistemaOrigem IS monitorable (e.g., cnetmobile, bllcompras)
-                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                            if (!existingParts.some((part: string) => part === platformUrl)) {
-                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                biddingData.link = enrichedLink;
+                    const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+                    console.log(`[AutoEnrich] 🔍 Buscando linkSistemaOrigem: ${enrichUrl}`);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 10000);
+                    try {
+                        const apiRes = await fetch(enrichUrl, { signal: controller.signal });
+                        clearTimeout(timeout);
+                        if (apiRes.ok) {
+                            const apiData = await apiRes.json();
+                            const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                            console.log(`[AutoEnrich] 📋 linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
+                            if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                                // Case 1: linkSistemaOrigem IS monitorable (e.g., cnetmobile, bllcompras)
+                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                                if (!existingParts.some((part: string) => part === platformUrl)) {
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                }
+                                // Re-normalize portal with the enriched link
+                                biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
+                                console.log(`[AutoEnrich] ✅ Link monitorável adicionado: ${platformUrl.substring(0, 60)}`);
+                            } else if (platformUrl) {
+                                // Case 2: linkSistemaOrigem is NOT monitorable (e.g., portalcompras.ce.gov.br)
+                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                                if (!existingParts.some((part: string) => part === platformUrl)) {
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                }
+                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable: ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal}`);
+                            } else {
+                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem VAZIO para ${cnpj}/${ano}/${seq}`);
                             }
-                            // Re-normalize portal with the enriched link
-                            biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
-                            console.log(`[AutoEnrich] Fetched platform link for new process from PNCP API: ${platformUrl.substring(0, 60)}`);
-                        } else if (platformUrl) {
-                            // Case 2: linkSistemaOrigem is NOT monitorable (e.g., portalcompras.ce.gov.br)
-                            // Still add it for reference, but warn that it's not monitorable
-                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                            if (!existingParts.some((part: string) => part === platformUrl)) {
-                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                biddingData.link = enrichedLink;
-                            }
-                            console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable: ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal}`);
+                        } else {
+                            console.log(`[AutoEnrich] ⚠️ API retornou status ${apiRes.status} para ${cnpj}/${ano}/${seq}`);
                         }
+                    } catch (fetchErr: any) {
+                        clearTimeout(timeout);
+                        console.warn(`[AutoEnrich] ⏱️ Fetch falhou (timeout ou rede): ${fetchErr.message}`);
                     }
                 }
             } catch (e) {
                 console.warn('[AutoEnrich] Failed to fetch platform link:', e);
             }
+        } else if (!hasPlatformLink) {
+            console.log(`[AutoEnrich] ⏭ Skipped: link="${enrichedLink?.substring(0, 60)}" hasPlatform=${hasPlatformLink} pncp=${enrichedLink.includes('pncp.gov.br')} editais=${enrichedLink.includes('editais')}`);
         }
 
         // ── Step 2: Auto-enable monitoring for all supported platforms ──
@@ -3963,30 +3979,39 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                 const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
-                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                    if (apiRes.ok) {
-                        const apiData = await apiRes.json();
-                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
-                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                            if (!existingParts.some((part: string) => part === platformUrl)) {
-                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                biddingData.link = enrichedLink;
+                    const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+                    console.log(`[AutoEnrich] 🔍 Update: Buscando linkSistemaOrigem: ${enrichUrl}`);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 10000);
+                    try {
+                        const apiRes = await fetch(enrichUrl, { signal: controller.signal });
+                        clearTimeout(timeout);
+                        if (apiRes.ok) {
+                            const apiData = await apiRes.json();
+                            const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                            console.log(`[AutoEnrich] 📋 Update: linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
+                            if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                                if (!existingParts.some((part: string) => part === platformUrl)) {
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                }
+                                if (biddingData.portal !== undefined) {
+                                    biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
+                                }
+                                console.log(`[AutoEnrich] ✅ Update: link monitorável adicionado para "${id}": ${platformUrl.substring(0, 60)}`);
+                            } else if (platformUrl) {
+                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
+                                if (!existingParts.some((part: string) => part === platformUrl)) {
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                }
+                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable for "${id}": ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal || 'N/A'}`);
                             }
-                            // Re-normalize portal with enriched link
-                            if (biddingData.portal !== undefined) {
-                                biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
-                            }
-                            console.log(`[AutoEnrich] Fetched platform link for process "${id}" from PNCP API: ${platformUrl.substring(0, 60)}`);
-                        } else if (platformUrl) {
-                            // linkSistemaOrigem is NOT monitorable — still add for reference
-                            const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                            if (!existingParts.some((part: string) => part === platformUrl)) {
-                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                biddingData.link = enrichedLink;
-                            }
-                            console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable for "${id}": ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal || 'N/A'}`);
                         }
+                    } catch (fetchErr: any) {
+                        clearTimeout(timeout);
+                        console.warn(`[AutoEnrich] ⏱️ Update fetch falhou: ${fetchErr.message}`);
                     }
                 }
             } catch (e) {
