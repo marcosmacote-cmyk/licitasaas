@@ -3238,6 +3238,33 @@ Responda APENAS com JSON array:
             })()
         };
 
+        // ── AUTO-ENRICH: Buscar link de monitoramento ComprasNet da API PNCP ──
+        // Se link_sistema está vazio (ComprasNet sanitizado) e temos orgao_cnpj/ano/seq,
+        // buscamos linkSistemaOrigem diretamente da API de consulta PNCP.
+        // Isso garante que o preview já mostra o link cnetmobile correto.
+        if (!legacyProcess.link_sistema && orgao_cnpj && ano && numero_sequencial) {
+            try {
+                const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
+                console.log(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl}`);
+                const controller = new AbortController();
+                const enrichTimeout = setTimeout(() => controller.abort(), 8000);
+                const enrichRes = await fetch(enrichUrl, { signal: controller.signal });
+                clearTimeout(enrichTimeout);
+                if (enrichRes.ok) {
+                    const enrichData = await enrichRes.json();
+                    const lso = (enrichData.linkSistemaOrigem || '').trim();
+                    if (lso && lso.includes('cnetmobile')) {
+                        legacyProcess.link_sistema = lso;
+                        console.log(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido: ${lso.substring(0, 80)}`);
+                    } else {
+                        console.log(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'}`);
+                    }
+                }
+            } catch (err: any) {
+                console.warn(`[PNCP-V2] ⏱️ Enrich falhou: ${err.message}`);
+            }
+        }
+
         const legacyAnalysis = {
             requiredDocuments: allReqs,
             pricingConsiderations: v2Result.economic_financial_analysis.indices_exigidos
