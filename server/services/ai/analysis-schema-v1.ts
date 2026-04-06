@@ -70,6 +70,7 @@ export interface ProcessIdentification {
   valor_estimado_global: number;
   portal_licitacao: string;
   link_sistema: string | null;
+  numero_comprasnet?: string;
 }
 
 export interface Timeline {

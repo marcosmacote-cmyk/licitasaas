@@ -3257,7 +3257,77 @@ Responda APENAS com JSON array:
                         legacyProcess.link_sistema = lso;
                         console.log(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido: ${lso.substring(0, 80)}`);
                     } else {
-                        console.log(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'}`);
+                        console.log(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'} → tentando Fallback B (edital)`);
+
+                        // ── FALLBACK B: Construir URL ComprasNet a partir dos dados do edital ──
+                        // Quando linkSistemaOrigem é null (ex: CE-SOP), o edital pode conter
+                        // "UASG: 943001" e "Número Comprasnet: (95033/2026)" que são diferentes
+                        // da unidade/número do PNCP (081401/202606994).
+                        // Fórmula: UASG(6) + coModalidade(2) + nuCompra(5) + ano(4) = 17 dígitos
+                        try {
+                            // Fontes: (1) campo IA 'numero_comprasnet', (2) regex nos campos textuais
+                            const aiNumComprasnet = ((v2Result.process_identification as any).numero_comprasnet || '').trim();
+                            
+                            const allTextFields = [
+                                v2Result.process_identification.numero_edital || '',
+                                v2Result.process_identification.numero_processo || '',
+                                v2Result.process_identification.objeto_completo || '',
+                                v2Result.process_identification.fonte_oficial || '',
+                                v2Result.process_identification.unidade_compradora || '',
+                            ].join(' ');
+
+                            const aiModalidade = (v2Result.process_identification.modalidade || '').toLowerCase();
+                            const pncpUasg = enrichData.unidadeOrgao?.codigoUnidade || '';
+                            
+                            // Fonte 1: campo IA numero_comprasnet
+                            // Fonte 2: regex "Número Comprasnet: (95033/2026)" nos campos textuais
+                            let nuCompraRaw = aiNumComprasnet;
+                            let compraAno = ano;
+                            if (!nuCompraRaw) {
+                                const comprasnetMatch = allTextFields.match(/[Nn][uú]mero\s+[Cc]omprasnet\s*:?\s*\(?(\d{4,6})\s*[/\\]?\s*(\d{4})?\)?/);
+                                if (comprasnetMatch) {
+                                    nuCompraRaw = comprasnetMatch[1];
+                                    compraAno = comprasnetMatch[2] || ano;
+                                }
+                            }
+                            
+                            // Mapeamento de modalidade → código ComprasNet (SISG)
+                            const MODALIDADE_TO_CODE: Record<string, string> = {
+                                'pregão': '05', 'pregao': '05',
+                                'concorrência': '03', 'concorrencia': '03',
+                                'tomada de preço': '02', 'tomada de preco': '02',
+                                'convite': '04', 'concurso': '01',
+                                'leilão': '07', 'leilao': '07',
+                                'dispensa': '08', 'inexigibilidade': '09',
+                            };
+                            
+                            let coModalidade = '';
+                            for (const [key, code] of Object.entries(MODALIDADE_TO_CODE)) {
+                                if (aiModalidade.includes(key)) { coModalidade = code; break; }
+                            }
+
+                            if (nuCompraRaw && coModalidade) {
+                                const nuCompra = nuCompraRaw.padStart(5, '0');
+                                
+                                // UASG: (1) regex no texto IA, (2) fallback para PNCP API
+                                // UASG do edital pode diferir da PNCP (ex: CE-SOP: edital=943001, PNCP=081401)
+                                const uasgMatch = allTextFields.match(/UASG\s*:?\s*(\d{6})/i);
+                                const editalUasg = uasgMatch ? uasgMatch[1] : pncpUasg;
+                                
+                                if (editalUasg && editalUasg.length === 6) {
+                                    const compraId = `${editalUasg}${coModalidade}${nuCompra}${compraAno}`;
+                                    const fallbackUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
+                                    
+                                    legacyProcess.link_sistema = fallbackUrl;
+                                    console.log(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
+                                    console.log(`[PNCP-V2]    UASG=${editalUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${aiNumComprasnet ? 'AI' : 'REGEX'}`);
+                                }
+                            } else {
+                                console.log(`[PNCP-V2] ℹ️ Fallback B: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'})`);
+                            }
+                        } catch (fbErr: any) {
+                            console.warn(`[PNCP-V2] ⚠️ Fallback B falhou: ${fbErr.message}`);
+                        }
                     }
                 }
             } catch (err: any) {

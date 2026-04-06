@@ -435,6 +435,7 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     d) Para "criterio_julgamento", NUNCA deixe 'Não informado' em Conc/Pregão; se não encontrar no texto, classifique como 'Menor Preço' ou 'Maior Desconto'.
     e) Para "numero_processo" e "numero_edital": extraia do CABEÇALHO do Edital, NUNCA de templates de minuta. Se o número não existir no Edital, use string vazia em vez de placeholders como 'XX/2026'.
     f) Para "link_sistema": Extraia a URL oficial do portal de disputa eletrônica expressa no edital, se houver (ex: "www.novobbmnet.com.br", "www.bll.org.br", "bnc.org.br", "licitamaisbrasil.com.br"). ⚠️ REGRA COMPRASNET: Se o portal for "Compras.gov.br" ou "ComprasNet", deixe "link_sistema" VAZIO — NUNCA extraia URLs genéricas como "www.comprasnet.gov.br", "comprasnet.gov.br/seguro/loginPortal.asp" ou "www.gov.br/compras". O sistema resolve o link correto automaticamente via API.
+    g) Para "numero_comprasnet": Se o cabeçalho do edital mencionar "Número Comprasnet" ou "Nº Comprasnet" seguido de um número (ex: "Número Comprasnet: (95033/2026)"), extraia APENAS o número (sem o ano). Formato: "95033". Se não houver, deixe string vazia "".
 17. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
 18. CRONOGRAMA ("timeline"):
     a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".
@@ -449,7 +450,7 @@ FORMATO DE SAÍDA — JSON com estas seções (SIGA ESTA ORDEM EXATA — seçõe
     "modalidade": "", "forma_disputa": "", "criterio_julgamento": "", "regime_execucao": "",
     "tipo_objeto": "servico_comum|servico_comum_engenharia|obra_engenharia|fornecimento|locacao|outro",
     "objeto_resumido": "até 150 caracteres", "objeto_completo": "transcrição integral",
-    "fonte_oficial": "", "municipio_uf": "", "link_sistema": ""
+    "fonte_oficial": "", "municipio_uf": "", "link_sistema": "", "numero_comprasnet": ""
   },
   "timeline": {
     "data_publicacao": "DD/MM/AAAA", "data_sessao": "DD/MM/AAAA HH:MM",
