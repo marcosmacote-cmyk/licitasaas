@@ -285,8 +285,24 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
 
                                 const subtitle = isMonitorable
                                     ? needsComprasNetLink
-                                        ? <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                            <AlertTriangle size={11} color="#f59e0b" /> Adicione o link do ComprasNet (cnetmobile) nos links para ativar o monitoramento de chat.
+                                        ? <span style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                <AlertTriangle size={11} color="#f59e0b" /> Adicione o link do ComprasNet (cnetmobile) nos links para ativar o monitoramento de chat.
+                                            </span>
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                                                <a 
+                                                    href="https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras" 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    style={{
+                                                        fontSize: '11px', color: '#2563eb', textDecoration: 'underline',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    🔍 Buscar processo no Acesso Público
+                                                </a>
+                                                <span style={{ fontSize: '10px', color: '#9ca3af' }}>→ copie o link da página do processo e cole em "Editar links"</span>
+                                            </span>
                                           </span>
                                         : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                                             <CheckCircle size={11} color="#22c55e" /> Detectado para {platformLabel}. O chat será monitorado.
