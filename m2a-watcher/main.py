@@ -148,6 +148,37 @@ def match_process_to_certame(
                 logger.info(f'  🔗 Match direto via link: certame #{cid}')
                 return c
 
+    # ── Estratégia 1.5: Match por número de certame (URLs da vitrine pública) ──
+    # Processos importados pelo PNCP Scanner podem vir com link da vitrine pública
+    # (compras.m2atecnologia.com.br) que não contém certame_id numérico.
+    # Extraímos o número do certame (ex: "01.018/2026") do title/summary e
+    # comparamos com os títulos dos certames descobertos via "Minhas Contratações".
+    if 'compras.m2atecnologia' in link or ('m2atecnologia' in link and 'certame' not in link):
+        # Extrair padrões de número de certame do processo
+        combined_text = f'{title} {summary}'
+        certame_num_patterns = re.findall(
+            r'(\d{2,3}[./]\d{2,4}[/-]?\d{0,4})',
+            combined_text
+        )
+        if certame_num_patterns:
+            for pattern in certame_num_patterns:
+                # Normalizar: remover separadores para comparação flexível
+                normalized_pattern = re.sub(r'[./-]', '', pattern)
+                for c in certames:
+                    ctitle = c.get('title', '')
+                    # Verificar se o título do certame contém esse número
+                    normalized_ctitle = re.sub(r'[./-]', '', ctitle)
+                    if normalized_pattern and len(normalized_pattern) >= 4 and normalized_pattern in normalized_ctitle:
+                        logger.info(
+                            f'  🔢 Match via número de certame "{pattern}" → '
+                            f'certame #{c["certame_id"]} "{ctitle[:60]}"'
+                        )
+                        return c
+            logger.info(
+                f'  📋 URL pública M2A detectada. Números extraídos: {certame_num_patterns}. '
+                f'Nenhum match direto — tentando fuzzy match...'
+            )
+
     # ── Estratégia 2: Match por summary (objeto da licitação) ──
     SUMMARY_THRESHOLD = 0.50  # v4.2: elevado de 0.35 para reduzir falsos-positivos
     TITLE_THRESHOLD = 0.45    # v4.2: elevado de 0.30 para reduzir falsos-positivos
