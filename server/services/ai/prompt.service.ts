@@ -435,7 +435,10 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     d) Para "criterio_julgamento", NUNCA deixe 'Não informado' em Conc/Pregão; se não encontrar no texto, classifique como 'Menor Preço' ou 'Maior Desconto'.
     e) Para "numero_processo" e "numero_edital": extraia do CABEÇALHO do Edital, NUNCA de templates de minuta. Se o número não existir no Edital, use string vazia em vez de placeholders como 'XX/2026'.
     f) Para "link_sistema": Extraia a URL oficial do portal de disputa eletrônica expressa no edital, se houver (ex: "www.novobbmnet.com.br", "www.bll.org.br", "bnc.org.br", "licitamaisbrasil.com.br"). ⚠️ REGRA COMPRASNET: Se o portal for "Compras.gov.br" ou "ComprasNet", deixe "link_sistema" VAZIO — NUNCA extraia URLs genéricas como "www.comprasnet.gov.br", "comprasnet.gov.br/seguro/loginPortal.asp" ou "www.gov.br/compras". O sistema resolve o link correto automaticamente via API.
-    g) Para "numero_comprasnet" e "uasg_comprasnet": Se o cabeçalho do edital mencionar "Número Comprasnet" seguido de um número (ex: "Número Comprasnet: (95033/2026)"), extraia APENAS o número sem o ano → "95033". Se mostrar "UASG:" seguido de um código de 6 dígitos (ex: "UASG: 943001"), extraia → "943001". Se não houver, deixe string vazia "".
+    g) 🚨 ALERTA VERMELHO — "numero_comprasnet" e "uasg_comprasnet": Editais de licitações realizadas no ComprasNet/Compras.gov.br SEMPRE contêm no CABEÇALHO (primeira página) dois dados ESSENCIAIS que você DEVE extrair:
+       - "UASG: 943001" → extraia "943001" para "uasg_comprasnet" (código de 6 dígitos)
+       - "Número Comprasnet: (95033/2026)" → extraia "95033" para "numero_comprasnet" (APENAS o número, SEM o ano)
+       Esses campos aparecem tipicamente logo abaixo do título da Concorrência/Pregão, junto com o Processo nº. PROCURE ATIVAMENTE na primeira página. Se o edital NÃO for ComprasNet ou não mencionar esses dados, deixe "".
 17. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
 18. CRONOGRAMA ("timeline"):
     a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".

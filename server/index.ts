@@ -3265,8 +3265,9 @@ Responda APENAS com JSON array:
                         // da unidade/número do PNCP (081401/202606994).
                         // Fórmula: UASG(6) + coModalidade(2) + nuCompra(5) + ano(4) = 17 dígitos
                         try {
-                            // Fontes: (1) campo IA 'numero_comprasnet', (2) regex nos campos textuais
+                            // Fontes: (1) campo IA, (2) regex nos campos IA, (3) regex no PDF direto
                             const aiNumComprasnet = ((v2Result.process_identification as any).numero_comprasnet || '').trim();
+                            const aiUasg = ((v2Result.process_identification as any).uasg_comprasnet || '').trim();
                             
                             const allTextFields = [
                                 v2Result.process_identification.numero_edital || '',
@@ -3279,17 +3280,66 @@ Responda APENAS com JSON array:
                             const aiModalidade = (v2Result.process_identification.modalidade || '').toLowerCase();
                             const pncpUasg = enrichData.unidadeOrgao?.codigoUnidade || '';
                             
-                            // Fonte 1: campo IA numero_comprasnet
-                            // Fonte 2: regex "Número Comprasnet: (95033/2026)" nos campos textuais
+                            // ── Resolução de numero_comprasnet ──
+                            // Prioridade: campo IA > regex campos IA > regex PDF direto
                             let nuCompraRaw = aiNumComprasnet;
                             let compraAno = ano;
+                            let resolvedUasg = aiUasg;
+                            let extractionSrc = aiNumComprasnet ? 'AI' : '';
+                            
                             if (!nuCompraRaw) {
                                 const comprasnetMatch = allTextFields.match(/[Nn][uú]mero\s+[Cc]omprasnet\s*:?\s*\(?(\d{4,6})\s*[/\\]?\s*(\d{4})?\)?/);
                                 if (comprasnetMatch) {
                                     nuCompraRaw = comprasnetMatch[1];
                                     compraAno = comprasnetMatch[2] || ano;
+                                    extractionSrc = 'REGEX-FIELD';
                                 }
                             }
+                            
+                            if (!resolvedUasg) {
+                                const uasgMatch = allTextFields.match(/UASG\s*:?\s*(\d{6})/i);
+                                if (uasgMatch) resolvedUasg = uasgMatch[1];
+                            }
+                            
+                            // ── Fallback C: Extração direta do PDF via pdf-parse ──
+                            // Se a IA e o regex nos campos IA falharam, buscar no texto bruto do PDF
+                            if ((!nuCompraRaw || !resolvedUasg) && pdfParts.length > 0) {
+                                try {
+                                    const pdfParse = require('pdf-parse');
+                                    const firstPdf = pdfParts[0];
+                                    let pdfBuffer: Buffer | null = null;
+                                    if (firstPdf?.inlineData?.data) {
+                                        pdfBuffer = Buffer.from(firstPdf.inlineData.data, 'base64');
+                                    }
+                                    if (pdfBuffer) {
+                                        const pdfData = await pdfParse(pdfBuffer);
+                                        // Buscar apenas nos primeiros 3000 chars (cabeçalho)
+                                        const headerText = (pdfData.text || '').substring(0, 3000);
+                                        
+                                        if (!nuCompraRaw) {
+                                            const pdfNumMatch = headerText.match(/[Nn][uú]mero\s+[Cc]omprasnet\s*:?\s*\(?(\d{4,6})\s*[/\\]?\s*(\d{4})?\)?/);
+                                            if (pdfNumMatch) {
+                                                nuCompraRaw = pdfNumMatch[1];
+                                                compraAno = pdfNumMatch[2] || ano;
+                                                extractionSrc = 'PDF-PARSE';
+                                                console.log(`[PNCP-V2] 📄 Fallback C: numero_comprasnet=${nuCompraRaw} extraído do PDF direto`);
+                                            }
+                                        }
+                                        if (!resolvedUasg) {
+                                            const pdfUasgMatch = headerText.match(/UASG\s*:?\s*(\d{6})/i);
+                                            if (pdfUasgMatch) {
+                                                resolvedUasg = pdfUasgMatch[1];
+                                                console.log(`[PNCP-V2] 📄 Fallback C: uasg=${resolvedUasg} extraído do PDF direto`);
+                                            }
+                                        }
+                                    }
+                                } catch (pdfErr: any) {
+                                    console.warn(`[PNCP-V2] ⚠️ Fallback C (pdf-parse) falhou: ${pdfErr.message}`);
+                                }
+                            }
+                            
+                            // Fallback final para UASG: usar PNCP API
+                            if (!resolvedUasg) resolvedUasg = pncpUasg;
                             
                             // Mapeamento de modalidade → código ComprasNet (SISG)
                             const MODALIDADE_TO_CODE: Record<string, string> = {
@@ -3306,25 +3356,16 @@ Responda APENAS com JSON array:
                                 if (aiModalidade.includes(key)) { coModalidade = code; break; }
                             }
 
-                            if (nuCompraRaw && coModalidade) {
+                            if (nuCompraRaw && coModalidade && resolvedUasg && resolvedUasg.length === 6) {
                                 const nuCompra = nuCompraRaw.padStart(5, '0');
+                                const compraId = `${resolvedUasg}${coModalidade}${nuCompra}${compraAno}`;
+                                const fallbackUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
                                 
-                                // UASG: (1) campo IA 'uasg_comprasnet', (2) regex no texto, (3) PNCP API
-                                // UASG do edital pode diferir da PNCP (ex: CE-SOP: edital=943001, PNCP=081401)
-                                const aiUasg = ((v2Result.process_identification as any).uasg_comprasnet || '').trim();
-                                const uasgMatch = allTextFields.match(/UASG\s*:?\s*(\d{6})/i);
-                                const editalUasg = aiUasg || (uasgMatch ? uasgMatch[1] : '') || pncpUasg;
-                                
-                                if (editalUasg && editalUasg.length === 6) {
-                                    const compraId = `${editalUasg}${coModalidade}${nuCompra}${compraAno}`;
-                                    const fallbackUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
-                                    
-                                    legacyProcess.link_sistema = fallbackUrl;
-                                    console.log(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
-                                    console.log(`[PNCP-V2]    UASG=${editalUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${aiNumComprasnet ? 'AI' : 'REGEX'}`);
-                                }
+                                legacyProcess.link_sistema = fallbackUrl;
+                                console.log(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
+                                console.log(`[PNCP-V2]    UASG=${resolvedUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${extractionSrc}`);
                             } else {
-                                console.log(`[PNCP-V2] ℹ️ Fallback B: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'})`);
+                                console.log(`[PNCP-V2] ℹ️ Fallback B+C: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'}, uasg=${resolvedUasg || 'N/A'})`);
                             }
                         } catch (fbErr: any) {
                             console.warn(`[PNCP-V2] ⚠️ Fallback B falhou: ${fbErr.message}`);
