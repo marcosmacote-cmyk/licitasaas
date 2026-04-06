@@ -231,7 +231,7 @@ router.delete('/technical-certificates/:id', authenticateToken, async (req: any,
 
 router.post('/technical-certificates/compare', authenticateToken, aiLimiter, async (req: any, res) => {
     try {
-        const { biddingProcessId, technicalCertificateIds } = req.body;
+        const { biddingProcessId, technicalCertificateIds, disabledRequirements } = req.body;
         const tenantId = req.user.tenantId;
 
         const bidding = await prisma.biddingProcess.findUnique({
@@ -250,7 +250,24 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
 
         let requirements: string;
         if (bidding.aiAnalysis?.schemaV2) {
-            requirements = buildModuleContext(bidding.aiAnalysis.schemaV2, 'oracle');
+            let schemaToUse = bidding.aiAnalysis.schemaV2 as any;
+            if (typeof schemaToUse === 'string') {
+                try { schemaToUse = JSON.parse(schemaToUse); } catch (e) { }
+            }
+
+            if (disabledRequirements && Array.isArray(disabledRequirements) && disabledRequirements.length > 0) {
+                schemaToUse = JSON.parse(JSON.stringify(schemaToUse));
+                ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional'].forEach(key => {
+                    if (schemaToUse?.requirements?.[key]) {
+                        schemaToUse.requirements[key] = schemaToUse.requirements[key].filter((r: any) => !disabledRequirements.includes(r.requirement_id || r.title));
+                    }
+                });
+                if (schemaToUse?.technical_analysis?.parcelas_relevantes) {
+                    schemaToUse.technical_analysis.parcelas_relevantes = schemaToUse.technical_analysis.parcelas_relevantes.filter((p: any) => !disabledRequirements.includes(p.item || p.descricao));
+                }
+            }
+
+            requirements = buildModuleContext(schemaToUse, 'oracle');
             console.log(`[AI Oracle] Using buildModuleContext('oracle') for comparison`);
         } else {
             requirements = bidding.aiAnalysis?.qualificationRequirements || bidding.summary || "";

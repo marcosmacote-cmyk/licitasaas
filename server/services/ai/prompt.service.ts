@@ -201,6 +201,7 @@ SUA MISSÃO É ANALISAR para cada exigência do edital:
 FORMATO DE SAÍDA JSON:
 {
   "overallStatus": "Apto" | "Risco" | "Inapto",
+  "summaryReport": "Relatório geral (1-2 parágrafos) da análise informando as principais CATs/Atestados avaliados e o detalhamento do atendimento às parcelas de maior relevância e quantidades mínimas.",
   "analysis": [
     {
       "requirement": "Texto da exigência do edital",

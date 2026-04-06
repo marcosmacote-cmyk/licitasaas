@@ -17,6 +17,7 @@ export interface AnalysisItem {
 
 export interface AnalysisResult {
     overallStatus: 'Apto' | 'Risco' | 'Inapto';
+    summaryReport?: string;
     analysis: AnalysisItem[];
 }
 
@@ -85,6 +86,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
     const [selectedCategory, setSelectedCategory] = useState<string>('');
+    const [disabledRequirements, setDisabledRequirements] = useState<Set<string>>(new Set());
 
     useEffect(() => { fetchCertificates(); }, []);
 
@@ -163,7 +165,8 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         try {
             const res = await axios.post(`${API_BASE_URL}/api/technical-certificates/compare`, {
                 biddingProcessId: selectedBiddingId,
-                technicalCertificateIds: Array.from(selectedCertIds)
+                technicalCertificateIds: Array.from(selectedCertIds),
+                disabledRequirements: Array.from(disabledRequirements)
             }, getAuthHeaders());
             setAnalysisResult(res.data);
         } catch (error) {
@@ -226,6 +229,44 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         })
     , [biddings]);
 
+    const parsedSchemaV2 = useMemo(() => {
+        if (!selectedBiddingId) return null;
+        const bidding = biddingsWithAnalysis.find(b => b.id === selectedBiddingId);
+        if (!bidding?.aiAnalysis?.schemaV2) return null;
+        let schema = bidding.aiAnalysis.schemaV2;
+        if (typeof schema === 'string') {
+            try { schema = JSON.parse(schema); } catch(e){ return null; }
+        }
+        return schema;
+    }, [selectedBiddingId, biddingsWithAnalysis]);
+
+    const requirementsToAnalyze = useMemo(() => {
+        if (!parsedSchemaV2) return [];
+        const schema = parsedSchemaV2 as any;
+        const list: { id: string, text: string, type: string }[] = [];
+
+        (schema.requirements?.qualificacao_tecnica_operacional || []).forEach((r: any) => {
+             const key = r.requirement_id || r.title;
+             if (key) list.push({ id: key, text: `${r.title}: ${r.description}`, type: 'Operacional' });
+        });
+        (schema.requirements?.qualificacao_tecnica_profissional || []).forEach((r: any) => {
+             const key = r.requirement_id || r.title;
+             if (key) list.push({ id: key, text: `${r.title}: ${r.description}`, type: 'Profissional' });
+        });
+        (schema.technical_analysis?.parcelas_relevantes || []).forEach((p: any) => {
+             const key = p.item || p.descricao;
+             if (key) list.push({ id: key, text: `${p.item || 'PARCELA'}: ${p.descricao} - Mínimo: ${p.quantitativo_minimo} ${p.unidade}`, type: 'Parcela de Relevância' });
+        });
+        return list;
+    }, [parsedSchemaV2]);
+
+    const toggleRequirement = (reqId: string) => {
+        const newSet = new Set(disabledRequirements);
+        if (newSet.has(reqId)) newSet.delete(reqId);
+        else newSet.add(reqId);
+        setDisabledRequirements(newSet);
+    };
+
     const groupedCertificates = useMemo(() => {
         const groups: Record<string, TechnicalCertificate[]> = {};
         filteredCertificates.forEach(cert => {
@@ -262,6 +303,7 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         selectedBiddingId, setSelectedBiddingId,
         isAnalyzing, analysisResult,
         expandedCompanies, selectedCategory, setSelectedCategory,
+        requirementsToAnalyze, disabledRequirements, toggleRequirement,
         // Derived
         filteredCertificates, biddingsWithAnalysis, groupedCertificates,
         // Handlers

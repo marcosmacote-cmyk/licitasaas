@@ -168,6 +168,31 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                             </span>
                         </div>
                     )}
+
+                    {/* Pre-analysis Requirements Checklist */}
+                    {o.selectedBiddingId && !o.analysisResult && o.requirementsToAnalyze.length > 0 && (
+                        <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-4)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+                            <h4 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <CheckCircle2 size={16} /> Exigências que serão analisadas
+                            </h4>
+                            <p style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                                Desmarque as exigências que deseja ignorar nesta análise específica (por exemplo, exigências de outro lote).
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
+                                {o.requirementsToAnalyze.map(req => (
+                                    <label key={req.id} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px', background: o.disabledRequirements.has(req.id) ? 'var(--color-bg-surface)' : 'var(--color-primary-light)', borderRadius: 'var(--radius-md)', border: `1px solid ${o.disabledRequirements.has(req.id) ? 'var(--color-border)' : 'var(--color-primary-border)'}`, cursor: 'pointer', transition: 'all 0.2s', opacity: o.disabledRequirements.has(req.id) ? 0.6 : 1 }}>
+                                        <input type="checkbox" checked={!o.disabledRequirements.has(req.id)} onChange={() => o.toggleRequirement(req.id)} style={{ marginTop: '4px', width: '16px', height: '16px', cursor: 'pointer' }} />
+                                        <div style={{ flex: 1 }}>
+                                            <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '2px 6px', background: 'var(--color-bg-surface)', borderRadius: '4px', border: '1px solid var(--color-border)', marginBottom: '4px', color: 'var(--color-text-secondary)', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                                {req.type}
+                                            </span>
+                                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}>{req.text}</div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Analysis Results */}
@@ -182,6 +207,18 @@ export function TechnicalOracle({ biddings, companies, onRefresh, initialBidding
                                 <p style={{ margin: 0, fontSize: 'var(--text-base)', color: 'var(--color-text-tertiary)' }}>Análise fundamentada considerando o somatório do acervo técnico.</p>
                             </div>
                         </div>
+
+                        {o.analysisResult.summaryReport && (
+                            <div style={{ padding: 'var(--space-4) var(--space-5)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-6)' }}>
+                                <h4 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <HardHat size={16} color="var(--color-primary)" /> Resumo Técnico
+                                </h4>
+                                <p style={{ margin: 0, fontSize: 'var(--text-base)', lineHeight: '1.5', color: 'var(--color-text-secondary)', whiteSpace: 'pre-line' }}>
+                                    {o.analysisResult.summaryReport}
+                                </p>
+                            </div>
+                        )}
+
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                             {o.analysisResult.analysis.map((item, idx) => (
                                 <div key={idx} style={{ padding: 'var(--space-5)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
