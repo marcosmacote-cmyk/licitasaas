@@ -6,7 +6,7 @@ const prisma = new PrismaClient({
 });
 async function main() {
   const pList = await prisma.biddingProcess.findMany({
-    orderBy: { createdAt: 'desc' },
+    orderBy: { id: 'desc' },
     take: 3
   });
   pList.forEach(p => {
