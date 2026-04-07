@@ -1,0 +1,2128 @@
+{
+  "timeline": {
+    "data_sessao": "22/03/2024 09:00",
+    "outros_prazos": [
+      {
+        "data": "11/03/2024 16:00",
+        "descricao": "Início do acolhimento das propostas"
+      },
+      {
+        "data": "22/03/2024 08:30",
+        "descricao": "Data de abertura das propostas"
+      },
+      {
+        "data": "22/03/2024 09:00",
+        "descricao": "Início da sessão de disputa de preços"
+      },
+      {
+        "data": "2 horas",
+        "descricao": "Prazo para envio da proposta ajustada pelo vencedor"
+      },
+      {
+        "data": "03 dias úteis",
+        "descricao": "Prazo para substituição de amostra reprovada"
+      },
+      {
+        "data": "05 dias úteis",
+        "descricao": "Prazo para assinatura do contrato"
+      },
+      {
+        "data": "05 dias úteis",
+        "descricao": "Prazo para regularização fiscal/trabalhista (ME/EPP)"
+      }
+    ],
+    "prazo_amostra": "05 dias úteis",
+    "prazo_recurso": null,
+    "data_publicacao": null,
+    "prazo_impugnacao": null,
+    "prazo_contrarrazoes": null,
+    "prazo_envio_proposta": "22/03/2024 08:30",
+    "prazo_esclarecimento": "19/03/2024",
+    "prazo_envio_habilitacao": null
+  },
+  "confidence": {
+    "warnings": [
+      "Nenhuma exigência econômico-financeira identificada"
+    ],
+    "traceability": {
+      "total_requirements": 47,
+      "traced_requirements": 47,
+      "evidence_registry_count": 57,
+      "traceability_percentage": 100
+    },
+    "pipeline_health": {
+      "parseRepairs": 0,
+      "stagesFailed": 0,
+      "fallbacksUsed": 0
+    },
+    "missing_sections": [],
+    "score_percentage": 79,
+    "overall_confidence": "alta",
+    "section_confidence": {
+      "risk_review": "alta"
+    }
+  },
+  "pncp_source": {
+    "analyzed_at": "2026-03-16T20:45:59.580Z",
+    "attachments": [
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/07655277000100/compras/2024/12/arquivos/1",
+        "ativo": true,
+        "titulo": "EDITAL",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 1,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      }
+    ],
+    "link_sistema": "https://pncp.gov.br/app/editais/07655277000100/2024/12",
+    "discarded_files": [],
+    "downloaded_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/3b422ee7-4ba3-47fc-8a4e-bd9c5597ba8c"
+    ]
+  },
+  "requirements": {
+    "proposta_comercial": [
+      {
+        "phase": "proposta",
+        "title": "Cadastramento da proposta de preços inicial",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.1 e 7.1.1",
+        "description": "Proposta deve ser preenchida na plataforma eletrônica com descrição do objeto e preços até a data de abertura.",
+        "evidence_refs": [
+          "EV-22",
+          "EV-23"
+        ],
+        "requirement_id": "PC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Indicação da especificação do objeto por lote",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.2, alínea 'a'",
+        "description": "Indicar em cada lote a especificação do objeto licitado com todos seus itens, conforme ANEXO I - TERMO DE REFERÊNCIA.",
+        "evidence_refs": [
+          "EV-24"
+        ],
+        "requirement_id": "PC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Preço unitário e global do lote cotado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.2, alínea 'b'",
+        "description": "Preço unitário de cada item e global do lote cotado, em algarismos, com no máximo 2 casas decimais.",
+        "evidence_refs": [
+          "EV-25"
+        ],
+        "requirement_id": "PC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Prazo de validade da proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.2, alínea 'c'",
+        "description": "Prazo de validade da proposta não inferior a 60 dias, a contar da data de sua apresentação.",
+        "evidence_refs": [
+          "EV-26"
+        ],
+        "requirement_id": "PC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Inclusão de todos os custos nos valores propostos",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.9",
+        "description": "Valores propostos devem incluir todos os custos operacionais, encargos previdenciários, trabalhistas, tributários, comerciais e outros.",
+        "evidence_refs": [
+          "EV-27"
+        ],
+        "requirement_id": "PC-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Preços em reais com até 2 casas decimais",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.2",
+        "description": "Preços unitários e globais expressos em reais, com até 2 casas decimais.",
+        "evidence_refs": [
+          "EV-28"
+        ],
+        "requirement_id": "PC-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta ajustada do vencedor",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.1",
+        "description": "Proposta final em via única original, com preços ajustados ao menor lance, assinada, sem rasuras, com especificações técnicas e quantitativos.",
+        "evidence_refs": [
+          "EV-29"
+        ],
+        "requirement_id": "PC-07",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Validade da proposta final",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.2",
+        "description": "Prazo de validade não inferior a 60 dias, contados a partir da data de sua emissão.",
+        "evidence_refs": [
+          "EV-30"
+        ],
+        "requirement_id": "PC-08",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Não cotar proposta com quantitativos divergentes",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.3",
+        "description": "O licitante não poderá cotar proposta com quantitativo de itens divergentes dos contidos no respectivo lote.",
+        "evidence_refs": [
+          "EV-31"
+        ],
+        "requirement_id": "PC-09",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Não fracionar o centavo no preço unitário",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.4",
+        "description": "Na cotação do preço unitário não será admitido o fracionamento do centavo.",
+        "evidence_refs": [
+          "EV-32"
+        ],
+        "requirement_id": "PC-10",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Preços da proposta final devem incluir frete, tributos e ônus",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.5",
+        "description": "Nos preços propostos já estarão incluídas as despesas referentes a frete, tributos e demais ônus atinentes à entrega do objeto.",
+        "evidence_refs": [
+          "EV-33"
+        ],
+        "requirement_id": "PC-11",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta que identifique o licitante",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.5",
+        "description": "Serão desclassificadas as propostas que identifiquem o licitante.",
+        "evidence_refs": [
+          "EV-34"
+        ],
+        "requirement_id": "PC-12",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta sem valores atribuídos a itens",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.5",
+        "description": "Serão desclassificadas as propostas quando não forem atribuídos valores a algum dos itens componentes do respectivo lote.",
+        "evidence_refs": [
+          "EV-35"
+        ],
+        "requirement_id": "PC-13",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta com vícios insanáveis e/ou condições ilegais",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.12.1",
+        "description": "Serão desclassificadas as propostas que contiverem vícios insanáveis e/ou condições ilegais.",
+        "evidence_refs": [
+          "EV-36"
+        ],
+        "requirement_id": "PC-14",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta que não obedeça às especificações técnicas",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.12.2",
+        "description": "Serão desclassificadas as propostas que não obedecerem às especificações técnicas contidas no Termo de Referência.",
+        "evidence_refs": [
+          "EV-37"
+        ],
+        "requirement_id": "PC-15",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta com preços inexequíveis ou acima do máximo",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.12.3",
+        "description": "Serão desclassificadas as propostas que apresentarem preços manifestamente inexequíveis ou permanecerem acima do preço máximo definido para a contratação.",
+        "evidence_refs": [
+          "EV-38"
+        ],
+        "requirement_id": "PC-16",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta com exequibilidade não demonstrada",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.12.4",
+        "description": "Serão desclassificadas as propostas que não tiverem sua exequibilidade demonstrada, quando exigido pela Administração.",
+        "evidence_refs": [
+          "EV-39"
+        ],
+        "requirement_id": "PC-17",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta em desconformidade com o edital/anexos",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.12.5",
+        "description": "Serão desclassificadas as propostas que apresentarem desconformidade com quaisquer outras exigências deste Edital ou seus anexos, desde que insanável.",
+        "evidence_refs": [
+          "EV-40"
+        ],
+        "requirement_id": "PC-18",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta com item de valor superior ao estimado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.12.6",
+        "description": "Serão desclassificadas propostas com item de valor superior ao estimado, devendo o licitante readequar o valor do lote aos valores constantes no mapa de preços.",
+        "evidence_refs": [
+          "EV-41"
+        ],
+        "requirement_id": "PC-19",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Preços unitários não superiores aos valores do orçamento",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 4.3",
+        "description": "Não serão aceitos preços unitários superiores aos valores constantes no orçamento.",
+        "evidence_refs": [
+          "EV-42"
+        ],
+        "requirement_id": "PC-20",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Apresentação de amostra",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 17.1; TR, item 5.1",
+        "description": "Licitante classificado e habilitado deverá apresentar amostra de todos os produtos do lote arrematado antes da adjudicação para análise.",
+        "evidence_refs": [
+          "EV-43",
+          "EV-44"
+        ],
+        "requirement_id": "PC-21",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Substituição de amostra reprovada",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 5.1.2 e 5.1.3",
+        "description": "Em caso de não aprovação, a licitante vencedora deverá substituir a amostra uma única vez em até 3 dias úteis. Não substituição implica não contratação.",
+        "evidence_refs": [
+          "EV-45",
+          "EV-46"
+        ],
+        "requirement_id": "PC-22",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      }
+    ],
+    "habilitacao_juridica": [
+      {
+        "phase": "habilitacao",
+        "title": "Ato constitutivo, estatuto ou contrato social",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'a'",
+        "description": "Ato constitutivo, estatuto ou contrato social em vigor e seus aditivos, devidamente registrado na Junta Comercial da sede do Licitante, em se tratando de sociedades comerciais, e, no caso de sociedades por ações, acompanhada de documentos de eleição de seus administradores.",
+        "evidence_refs": [
+          "EV-01"
+        ],
+        "requirement_id": "HJ-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Registro comercial de empresa individual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'b'",
+        "description": "Registro comercial e seus aditivos, no caso de empresa individual, devidamente registrado na Junta Comercial da sede do Licitante.",
+        "evidence_refs": [
+          "EV-02"
+        ],
+        "requirement_id": "HJ-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição do ato constitutivo de sociedades civis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'c'",
+        "description": "Inscrição do ato constitutivo, no caso de sociedades civis, acompanhadas de prova de diretoria em exercício.",
+        "evidence_refs": [
+          "EV-03"
+        ],
+        "requirement_id": "HJ-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Decreto de autorização para empresa estrangeira",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'd'",
+        "description": "Decreto de autorização, em se tratando de empresa ou sociedade estrangeira em funcionamento no País, e ato de registro ou autorização para funcionamento expedido pelo órgão competente, quando a atividade assim o exigir.",
+        "evidence_refs": [
+          "EV-04"
+        ],
+        "requirement_id": "HJ-04",
+        "obligation_type": "empresa_estrangeira",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Compromisso de constituição de consórcio",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'e'",
+        "description": "Comprovação de compromisso público ou particular de constituição de consórcio, subscrito pelos consorciados em se tratando de empresas organizadas sob esta forma, devendo ser realizada a indicação da empresa líder, que será responsável por sua representação perante a Administração e apresentar declaração formal de responsabilidade solidária dos integrantes pelo atos praticados em consórcio, devidamente assinado por todos os representantes legais das empresas que farão parte da composição.",
+        "evidence_refs": [
+          "EV-05"
+        ],
+        "requirement_id": "HJ-05",
+        "obligation_type": "consorcio",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "documentos_complementares": [
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de integralidade custos trabalhistas",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'r'",
+        "description": "Propostas econômicas compreendem integralidade dos custos trabalhistas conforme legislação vigente.",
+        "evidence_refs": [
+          "EV-47",
+          "EV-48"
+        ],
+        "requirement_id": "DC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de não emprego de menores",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 's'",
+        "description": "Não possui empregados menores de 18 anos em trabalho noturno, perigoso ou insalubre e menores de 16 anos em qualquer trabalho, salvo aprendiz a partir de 14 anos.",
+        "evidence_refs": [
+          "EV-49",
+          "EV-50"
+        ],
+        "requirement_id": "DC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de cumprimento de reserva de cargos PCD",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 's'",
+        "description": "Cumpre exigências de reserva de cargos para pessoa com deficiência e reabilitado da Previdência Social.",
+        "evidence_refs": [
+          "EV-51",
+          "EV-52"
+        ],
+        "requirement_id": "DC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de atendimento aos requisitos de habilitação",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 't'",
+        "description": "Declara que atende aos requisitos de habilitação e responde pela veracidade das informações.",
+        "evidence_refs": [
+          "EV-53",
+          "EV-54"
+        ],
+        "requirement_id": "DC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Declaração de condição de ME/EPP ou cooperativa",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.3",
+        "description": "Informar condição de ME/EPP ou cooperativa no ato do encaminhamento da proposta via sistema eletrônico.",
+        "evidence_refs": [
+          "EV-55"
+        ],
+        "requirement_id": "DC-05",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de exercício da preferência (ME/EPP)",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 6.6",
+        "description": "Declarar no Portal de Compras do Município o exercício da preferência prevista na Lei Complementar n° 123/2006.",
+        "evidence_refs": [
+          "EV-56"
+        ],
+        "requirement_id": "DC-06",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Consulta a cadastros de sanções",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.8",
+        "description": "Verificação de sanções nos cadastros: SICAF, CEIS, CNEP.",
+        "evidence_refs": [
+          "EV-57"
+        ],
+        "requirement_id": "DC-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "regularidade_fiscal_trabalhista": [
+      {
+        "phase": "habilitacao",
+        "title": "Prova de inscrição no CNPJ",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'h'",
+        "description": "Prova de inscrição no Cadastro Nacional da Pessoa Jurídica - CNPJ.",
+        "evidence_refs": [
+          "EV-06"
+        ],
+        "requirement_id": "RFT-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição Estadual no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'i'",
+        "description": "Prova de inscrição no Cadastro de Contribuintes Estadual, se houver, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade e compatível com o objeto contratual.",
+        "evidence_refs": [
+          "EV-07"
+        ],
+        "requirement_id": "RFT-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição Municipal no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'i'",
+        "description": "Prova de inscrição no Cadastro de Contribuintes Municipal, se houver, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade e compatível com o objeto contratual.",
+        "evidence_refs": [
+          "EV-08"
+        ],
+        "requirement_id": "RFT-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Fazenda Federal",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'j'",
+        "description": "Prova de regularidade perante a Fazenda Federal.",
+        "evidence_refs": [
+          "EV-09"
+        ],
+        "requirement_id": "RFT-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Fazenda Estadual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'k'",
+        "description": "Prova de regularidade perante a Fazenda Estadual.",
+        "evidence_refs": [
+          "EV-10"
+        ],
+        "requirement_id": "RFT-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Fazenda Municipal",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'l'",
+        "description": "Prova de regularidade perante a Fazenda Municipal.",
+        "evidence_refs": [
+          "EV-11"
+        ],
+        "requirement_id": "RFT-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade relativa à Seguridade Social",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'm'",
+        "description": "Prova de regularidade relativa à Seguridade Social.",
+        "evidence_refs": [
+          "EV-12"
+        ],
+        "requirement_id": "RFT-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade relativa ao FGTS (CRF)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'n'",
+        "description": "Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço - FGTS.",
+        "evidence_refs": [
+          "EV-13"
+        ],
+        "requirement_id": "RFT-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Justiça do Trabalho (CNDT)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'o'",
+        "description": "Prova de regularidade perante a Justiça do Trabalho.",
+        "evidence_refs": [
+          "EV-14"
+        ],
+        "requirement_id": "RFT-09",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_operacional": [
+      {
+        "phase": "habilitacao",
+        "title": "Atestado de aptidão compatível",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'f'",
+        "description": "Aptidão para desempenho de atividade pertinente e compatível em características, quantidades e prazos com o objeto. Apresentar atestado(s) de pessoa(s) jurídica(s) de direito público ou privado.",
+        "evidence_refs": [
+          "EV-20"
+        ],
+        "requirement_id": "QTO-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Diligência para comprovação",
+        "parent_id": "QTO-01",
+        "applies_to": "licitante",
+        "entry_type": "observacao",
+        "source_ref": "Edital, item 12.1, alínea 'g'",
+        "description": "Em caso de diligência, poderão ser requisitados documentos complementares para comprovar o teor do atestado técnico.",
+        "evidence_refs": [
+          "EV-21"
+        ],
+        "requirement_id": "QTO-02",
+        "obligation_type": "condicional",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_economico_financeira": [
+      {
+        "phase": "habilitacao",
+        "title": "Balanço patrimonial e demonstrações contábeis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'p' e 'p.1'",
+        "description": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais. A documentação exigida estará restrita ao último exercício social, no caso de empresas constituídas há menos de dois anos.",
+        "evidence_refs": [
+          "EV-15",
+          "EV-16"
+        ],
+        "requirement_id": "QEF-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certidão negativa de feitos sobre falência",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1, alínea 'q'",
+        "description": "Certidão negativa de feitos sobre falência expedida pelo distribuidor da sede do licitante.",
+        "evidence_refs": [
+          "EV-17"
+        ],
+        "requirement_id": "QEF-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Acréscimo de 10% no valor exigido para consórcios",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 6.4.2 e 6.4.3",
+        "description": "Para participantes em forma de consórcio, será acrescido 10% (dez por cento) sobre o valor exigido de licitante individual para fins de habilitação econômico-financeira. Não se aplica a consórcios compostos, em sua totalidade, de microempresas e pequenas empresas.",
+        "evidence_refs": [
+          "EV-18",
+          "EV-19"
+        ],
+        "requirement_id": "QEF-03",
+        "obligation_type": "consorcio",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_profissional": []
+  },
+  "analysis_meta": {
+    "model_used": "gemini-2.5-flash+gemini-2.5-flash-lite",
+    "analysis_id": "pncp_1773693759544_f8ubod",
+    "source_type": "pncp_download",
+    "stage_times": {
+      "extraction": 188.161,
+      "risk_review": 10.786,
+      "normalization": 11.87
+    },
+    "generated_at": "2026-03-16T20:42:39.544Z",
+    "source_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/3b422ee7-4ba3-47fc-8a4e-bd9c5597ba8c"
+    ],
+    "rule_findings": [
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Prazo de 2 horas para proposta ajustada\" (media) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Preços fixos e irreajustáveis por 1 ano\" (media) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Ausência de Matriz de Riscos\" (baixa) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R11",
+        "message": "48 exigências sem indicação se são obrigatórias ou não.",
+        "category": "normalizacao",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements"
+        ],
+        "recommendation": "Na maioria dos editais, exigências de habilitação são obrigatórias por padrão."
+      },
+      {
+        "code": "R19",
+        "message": "6 parcela(s) de maior relevância identificadas. Verificar se os quantitativos mínimos correspondem ao percentual legalmente aceito (normalmente ≤50% do item relevante).",
+        "category": "qualificacao_tecnica",
+        "severity": "medium",
+        "affectedFields": [
+          "technical_analysis.parcelas_relevantes"
+        ],
+        "recommendation": "Comparar quantitativos com o orçamento e verificar se estão restritos às parcelas de maior relevância."
+      },
+      {
+        "code": "R21",
+        "message": "Proposta exige documentos assinados/rubricados (PC-07). Ausência de assinatura é causa frequente de desclassificação.",
+        "category": "proposta",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements.proposta_comercial.PC-07"
+        ],
+        "recommendation": "Listar todos os documentos da proposta que exigem assinatura. Preparar checklist de conferência antes do envio."
+      },
+      {
+        "code": "R10",
+        "message": "Data da sessão (22/03/2024 09:00) aparenta estar no passado.",
+        "category": "timeline",
+        "severity": "critical",
+        "affectedFields": [
+          "timeline.data_sessao"
+        ],
+        "recommendation": "Verificar se a data extraída está correta ou se houve suspensão/adiamento."
+      }
+    ],
+    "prompt_version": "v3.1.0",
+    "quality_report": {
+      "summary": "Quality: 86% | Extract: 100% | Norm: 85% | Evidence: 100% | Risk: 100% | Ops: 100% | 1 issues, 7 rule findings",
+      "issueCount": 1,
+      "overallScore": 86,
+      "categoryScores": {
+        "evidence": 100,
+        "extraction": 100,
+        "riskReview": 100,
+        "normalization": 85,
+        "operationalUsefulness": 100
+      }
+    },
+    "analysis_version": "1.0",
+    "models_per_stage": {
+      "extraction": "gemini-2.5-flash",
+      "risk_review": "gemini-2.5-flash-lite",
+      "normalization": "gemini-2.5-flash-lite"
+    },
+    "workflow_stage_status": {
+      "extraction": "done",
+      "validation": "done",
+      "risk_review": "done",
+      "normalization": "done"
+    }
+  },
+  "evidence_registry": [
+    {
+      "page": "8",
+      "excerpt": "Ato constitutivo, estatuto ou contrato social em vigor e seus aditivos, devidamente registrado na Junta Comercial da sede do Licitante",
+      "section": "12.1, alínea 'a'",
+      "evidence_id": "EV-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica - Ato Constitutivo"
+    },
+    {
+      "page": "8",
+      "excerpt": "Registro comercial e seus aditivos, no caso de empresa individual, devidamente registrado na Junta Comercial da sede do Licitante",
+      "section": "12.1, alínea 'b'",
+      "evidence_id": "EV-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica - Registro Comercial"
+    },
+    {
+      "page": "8",
+      "excerpt": "Inscrição do ato constitutivo, no caso de sociedades civis, acompanhadas de prova de diretoria em exercício",
+      "section": "12.1, alínea 'c'",
+      "evidence_id": "EV-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica - Inscrição Ato Constitutivo"
+    },
+    {
+      "page": "9",
+      "excerpt": "Decreto de autorização, em se tratando de empresa ou sociedade estrangeira em funcionamento no País, e ato de registro ou autorização para funcionamento expedido pelo órgão competente",
+      "section": "12.1, alínea 'd'",
+      "evidence_id": "EV-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica - Empresa Estrangeira"
+    },
+    {
+      "page": "9",
+      "excerpt": "Comprovação de compromisso público ou particular de constituição de consórcio, subscrito pelos consorciados em se tratando de empresas organizadas sob esta forma",
+      "section": "12.1, alínea 'e'",
+      "evidence_id": "EV-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica - Consórcio"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de inscrição no Cadastro Nacional da Pessoa Jurídica - CNPJ",
+      "section": "12.1, alínea 'h'",
+      "evidence_id": "EV-06",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - CNPJ"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de inscrição no Cadastro de Contribuintes Estadual e/ou Municipal, se houver, relativo ao domicílio ou sede do licitante",
+      "section": "12.1, alínea 'i'",
+      "evidence_id": "EV-07",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - Inscrição Estadual"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de inscrição no Cadastro de Contribuintes Estadual e/ou Municipal, se houver, relativo ao domicílio ou sede do licitante",
+      "section": "12.1, alínea 'i'",
+      "evidence_id": "EV-08",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - Inscrição Municipal"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de regularidade perante a Fazenda Federal",
+      "section": "12.1, alínea 'j'",
+      "evidence_id": "EV-09",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - CND Federal"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de regularidade perante a Fazenda Estadual",
+      "section": "12.1, alínea 'k'",
+      "evidence_id": "EV-10",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - CND Estadual"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de regularidade perante a Fazenda Municipal",
+      "section": "12.1, alínea 'l'",
+      "evidence_id": "EV-11",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - CND Municipal"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de regularidade relativa à Seguridade Social",
+      "section": "12.1, alínea 'm'",
+      "evidence_id": "EV-12",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - Seguridade Social"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço - FGTS",
+      "section": "12.1, alínea 'n'",
+      "evidence_id": "EV-13",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - CRF FGTS"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de regularidade perante a Justiça do Trabalho",
+      "section": "12.1, alínea 'o'",
+      "evidence_id": "EV-14",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal - CNDT"
+    },
+    {
+      "page": "9",
+      "excerpt": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais",
+      "section": "12.1, alínea 'p'",
+      "evidence_id": "EV-15",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira - Balanço Patrimonial"
+    },
+    {
+      "page": "9",
+      "excerpt": "A documentação exigida acima estará restrita ao último exercício social, no caso de empresas constituídas há menos de dois anos",
+      "section": "12.1, alínea 'p.1'",
+      "evidence_id": "EV-16",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira - Balanço Patrimonial (Empresas Novas)"
+    },
+    {
+      "page": "9",
+      "excerpt": "Certidão negativa de feitos sobre falência expedida pelo distribuidor da sede do licitante",
+      "section": "12.1, alínea 'q'",
+      "evidence_id": "EV-17",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira - Certidão de Falência"
+    },
+    {
+      "page": "2",
+      "excerpt": "Para participantes em forma de consórcio, será acrescido 10% (dez por cento) sobre o valor exigido de licitante individual para fins de habilitação econômico-financeira",
+      "section": "6.4.2",
+      "evidence_id": "EV-18",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira - Consórcio"
+    },
+    {
+      "page": "2",
+      "excerpt": "O acréscimo previsto no item anterior não se aplica aos consórcios compostos, em sua totalidade, de microempresas e pequenas empresas",
+      "section": "6.4.3",
+      "evidence_id": "EV-19",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira - Consórcio ME/EPP"
+    },
+    {
+      "page": "9",
+      "excerpt": "Comprovação de aptidão para desempenho de atividade pertinente e compatível em características, quantidades e prazos com o objeto da licitação",
+      "section": "12.1, alínea 'f'",
+      "evidence_id": "EV-20",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Técnica Operacional - Atestado de Aptidão"
+    },
+    {
+      "page": "9",
+      "excerpt": "Em caso de diligência, poderão ser requisitados documentos complementares, no sentido de comprovar o que está sendo afirmado no teor do atestado de qualificação técnica apresentado",
+      "section": "12.1, alínea 'g'",
+      "evidence_id": "EV-21",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Técnica Operacional - Documentos Complementares"
+    },
+    {
+      "page": "3",
+      "excerpt": "o cadastramento da proposta de preços inicial ocorrerá por meio de chave de acesso e senha, obtidas junto à plataforma eletrônica GM Tecnologia",
+      "section": "7.1",
+      "evidence_id": "EV-22",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Cadastramento"
+    },
+    {
+      "page": "3",
+      "excerpt": "Com relação à proposta inicial, basta que a mesma seja cadastrada (preenchida) na plataforma, com a descrição do objeto ofertado e seus respectivos preços, até a data e o horário estabelecidos para abertura da sessão pública, não sendo necessário o envio da proposta inicial como arquivo digitalizado em anexo",
+      "section": "7.1.1",
+      "evidence_id": "EV-23",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Proposta Inicial"
+    },
+    {
+      "page": "3",
+      "excerpt": "Indicação em cada lote da especificação do objeto licitado com todos seus itens, de acordo com disposto no ANEXO I - TERMO DE REFERÊNCIA deste Edital",
+      "section": "7.2, alínea 'a'",
+      "evidence_id": "EV-24",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Especificação por Lote"
+    },
+    {
+      "page": "4",
+      "excerpt": "Preço unitário de cada item e global do lote cotado, em algarismos, com no máximo 2 (duas) casas decimais",
+      "section": "7.2, alínea 'b'",
+      "evidence_id": "EV-25",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Preço Unitário e Global"
+    },
+    {
+      "page": "4",
+      "excerpt": "Prazo de validade da proposta, que não poderá ser inferior a 60 (sessenta) dias, a contar da data de sua apresentação",
+      "section": "7.2, alínea 'c'",
+      "evidence_id": "EV-26",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Validade da Proposta"
+    },
+    {
+      "page": "4",
+      "excerpt": "Nos valores propostos estarão inclusos todos os custos operacionais, encargos previdenciários, trabalhistas, tributários, comerciais e quaisquer outros que incidam direta ou indiretamente no fornecimento dos itens/prestação de serviço",
+      "section": "7.9",
+      "evidence_id": "EV-27",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Custos Inclusos"
+    },
+    {
+      "page": "4",
+      "excerpt": "Os preços deverão ser expressos em reais, com até 2 (duas) casas decimais em seus valores unitários e globais",
+      "section": "8.2",
+      "evidence_id": "EV-28",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Formato dos Preços"
+    },
+    {
+      "page": "7",
+      "excerpt": "A proposta final deverá ser apresentada em via única original, com os preços ajustados ao menor lance, nos termos do Anexo II - Proposta de preços deste edital, assinada pelo representante legal do licitante",
+      "section": "11.1",
+      "evidence_id": "EV-29",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Proposta Final"
+    },
+    {
+      "page": "7",
+      "excerpt": "Prazo de validade não inferior a 60 (sessenta) dias, contados a partir da data da sua emissão",
+      "section": "11.2",
+      "evidence_id": "EV-30",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Validade da Proposta Final"
+    },
+    {
+      "page": "7",
+      "excerpt": "O licitante não poderá cotar proposta com quantitativo de itens divergentes dos contidos no respectivo lote",
+      "section": "11.3",
+      "evidence_id": "EV-31",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Quantitativos Divergentes"
+    },
+    {
+      "page": "7",
+      "excerpt": "Na cotação do preço unitário não será admitido o fracionamento do centavo",
+      "section": "11.4",
+      "evidence_id": "EV-32",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Fracionamento de Centavo"
+    },
+    {
+      "page": "7",
+      "excerpt": "Nos preços propostos já estarão incluídas as despesas referentes a frete, tributos e demais ônus atinentes à entrega do objeto",
+      "section": "11.5",
+      "evidence_id": "EV-33",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Custos Inclusos na Proposta Final"
+    },
+    {
+      "page": "5",
+      "excerpt": "Serão desclassificadas as propostas que identifiquem o licitante",
+      "section": "8.5",
+      "evidence_id": "EV-34",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Identificação"
+    },
+    {
+      "page": "5",
+      "excerpt": "assim como quando não forem atribuídos valores a algum dos itens componentes do respectivo lote",
+      "section": "8.5",
+      "evidence_id": "EV-35",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Falta de Valores"
+    },
+    {
+      "page": "8",
+      "excerpt": "Contiverem vícios insanáveis e/ou condições ilegais",
+      "section": "11.12.1",
+      "evidence_id": "EV-36",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Vícios"
+    },
+    {
+      "page": "8",
+      "excerpt": "Não obedecerem às especificações técnicas contidas no Termo de Referência",
+      "section": "11.12.2",
+      "evidence_id": "EV-37",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Especificações Técnicas"
+    },
+    {
+      "page": "8",
+      "excerpt": "Apresentarem preços manifestamente inexequíveis ou permanecerem acima do preço máximo definido para a contratação",
+      "section": "11.12.3",
+      "evidence_id": "EV-38",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Preço"
+    },
+    {
+      "page": "8",
+      "excerpt": "Não tiverem sua exequibilidade demonstrada, quando exigido pela Administração",
+      "section": "11.12.4",
+      "evidence_id": "EV-39",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Inexequibilidade"
+    },
+    {
+      "page": "8",
+      "excerpt": "Apresentarem desconformidade com quaisquer outras exigências deste Edital ou seus anexos, desde que insanável",
+      "section": "11.12.5",
+      "evidence_id": "EV-40",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Desconformidade"
+    },
+    {
+      "page": "8",
+      "excerpt": "Contiverem para o lote item com valor superior ao estimado pela Administração",
+      "section": "11.12.6",
+      "evidence_id": "EV-41",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Desclassificação por Valor Superior ao Estimado"
+    },
+    {
+      "page": "20",
+      "excerpt": "Não serão aceitos para fins de contratação, preços unitários superiores aos valores constantes no orçamento acima",
+      "section": "4.3",
+      "evidence_id": "EV-42",
+      "document_name": "ANEXO I - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Proposta Comercial - Preços Unitários Máximos"
+    },
+    {
+      "page": "13",
+      "excerpt": "Será requisitada aos licitantes melhores classificados junto aos referidos lotes a apresentação de amostras, nos termos e condições definidos no item 5 do Termo de Referência",
+      "section": "17.1",
+      "evidence_id": "EV-43",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial - Exigência de Amostra"
+    },
+    {
+      "page": "20",
+      "excerpt": "O licitante classificado em primeiro lugar e devidamente habilitado, deverá apresentar, anteriormente a adjudicação, amostra de todos os produtos referentes aos itens do lote por ele arrematado",
+      "section": "5.1",
+      "evidence_id": "EV-44",
+      "document_name": "ANEXO I - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Proposta Comercial - Exigência de Amostra"
+    },
+    {
+      "page": "20",
+      "excerpt": "No caso de não aprovação do produto apresentado através da amostra, a licitante vencedora deverá proceder com a substituição do mesmo, uma única vez, no prazo não superior a 03 (três) dias úteis",
+      "section": "5.1.2",
+      "evidence_id": "EV-45",
+      "document_name": "ANEXO I - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Proposta Comercial - Substituição de Amostra"
+    },
+    {
+      "page": "20",
+      "excerpt": "Se a licitante não proceder com a substituição da amostra anteriormente reprovada, no período previsto no subitem anterior, por uma que seja posteriormente aprovada, esta não poderá ser contratada",
+      "section": "5.1.3",
+      "evidence_id": "EV-46",
+      "document_name": "ANEXO I - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Proposta Comercial - Não Substituição de Amostra"
+    },
+    {
+      "page": "9",
+      "excerpt": "Declaração de que suas propostas econômicas compreendem a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição Federal",
+      "section": "12.1, alínea 'r'",
+      "evidence_id": "EV-47",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares - Declaração Custos Trabalhistas"
+    },
+    {
+      "page": "34",
+      "excerpt": "A proposta econômica compreende a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição Federal",
+      "section": "alínea 'a'",
+      "evidence_id": "EV-48",
+      "document_name": "ANEXO III - Modelo de Declarações",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares - Declaração Custos Trabalhistas"
+    },
+    {
+      "page": "9",
+      "excerpt": "Declaração emitida pela licitante de que não possui em seu quadro de pessoal, empregados menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre e menores de 16 (dezesseis) anos em qualquer trabalho",
+      "section": "12.1, alínea 's'",
+      "evidence_id": "EV-49",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares - Declaração Não Emprego de Menores"
+    },
+    {
+      "page": "34",
+      "excerpt": "Não possui em seu quadro de pessoal, empregados menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre e menores de 16 (dezesseis) anos em qualquer trabalho",
+      "section": "alínea 'b'",
+      "evidence_id": "EV-50",
+      "document_name": "ANEXO III - Modelo de Declarações",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares - Declaração Não Emprego de Menores"
+    },
+    {
+      "page": "10",
+      "excerpt": "Declaração de que cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social",
+      "section": "12.1, alínea 's'",
+      "evidence_id": "EV-51",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares - Declaração Reserva de Cargos PCD"
+    },
+    {
+      "page": "34",
+      "excerpt": "Cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social",
+      "section": "alínea 'c'",
+      "evidence_id": "EV-52",
+      "document_name": "ANEXO III - Modelo de Declarações",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares - Declaração Reserva de Cargos PCD"
+    },
+    {
+      "page": "10",
+      "excerpt": "Declaração de que atendem aos requisitos de habilitação, e que responderá pela veracidade das informações prestadas",
+      "section": "12.1, alínea 't'",
+      "evidence_id": "EV-53",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares - Declaração Atendimento Requisitos Habilitação"
+    },
+    {
+      "page": "34",
+      "excerpt": "Atende aos requisitos de habilitação, e que responderá pela veracidade das informações prestadas, na forma da lei",
+      "section": "alínea 'd'",
+      "evidence_id": "EV-54",
+      "document_name": "ANEXO III - Modelo de Declarações",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares - Declaração Atendimento Requisitos Habilitação"
+    },
+    {
+      "page": "4",
+      "excerpt": "O licitante deverá informar a condição de microempresa (ME) ou empresa de pequeno porte (EPP) que faz jus ao tratamento diferenciado da Lei Complementar nº 123, de 2006, ou cooperativa de que trata o artigo 34 da Lei nº 11.488, de 2007, no ato do encaminhamento da proposta",
+      "section": "7.3",
+      "evidence_id": "EV-55",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares - Declaração ME/EPP"
+    },
+    {
+      "page": "2",
+      "excerpt": "Tratando-se de microempresas e empresas de pequeno porte deverão declarar no Portal de Compras do Município (Sistema GM Tecnologia) no site www.licitacoesmilagres.com.br, o exercício da preferência prevista na Lei Complementar n° 123/2006",
+      "section": "6.6",
+      "evidence_id": "EV-56",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares - Declaração Preferência ME/EPP"
+    },
+    {
+      "page": "7",
+      "excerpt": "o(a) pregoeiro(a) verificará se o licitante provisoriamente classificado em primeiro lugar atende às condições de participação no certame, conforme previsto no art. 14 da Lei nº 14.133/2021, especialmente quanto à existência de sanção que impeça a participação no certame ou a futura contratação, mediante a consulta aos seguintes cadastros: a) SICAF; b) Cadastro Nacional de Empresas Inidôneas e Suspensas - CEIS; e c) Cadastro Nacional de Empresas Punidas - CNEP",
+      "section": "11.8",
+      "evidence_id": "EV-57",
+      "document_name": "Edital Convocatório Pregão Eletrônico nº 2024.03.07.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares - Consulta Cadastros de Sanções"
+    }
+  ],
+  "legal_risk_review": {
+    "omissions": [
+      "O edital não detalha a forma de apresentação da proposta inicial, apenas que será cadastrada na plataforma. A ausência de um modelo específico ou maiores detalhes pode gerar dúvidas."
+    ],
+    "ambiguities": [
+      "A descrição 'pequenas alterações na arte do item' a critério da secretaria pode gerar subjetividade e incerteza quanto ao produto final a ser entregue."
+    ],
+    "critical_points": [
+      {
+        "title": "Prazo de 3 dias para substituição de amostra",
+        "reason": "A Lei 14.133/2021 não estabelece prazo máximo para substituição de amostra, permitindo que a Administração defina prazos razoáveis. 3 dias úteis pode ser insuficiente.",
+        "category": "tecnica",
+        "severity": "alta",
+        "source_ref": "TR, item 5.1.2",
+        "description": "Prazo de 3 dias úteis para substituição de amostra reprovada pode ser exíguo, especialmente se a reprovação ocorrer próxima ao fim do prazo de apresentação.",
+        "evidence_refs": [
+          "EV-45"
+        ],
+        "recommended_action": "Solicitar esclarecimento sobre a razoabilidade do prazo de 3 dias úteis para substituição de amostra."
+      },
+      {
+        "title": "Amostra exigida antes da adjudicação",
+        "reason": "A Lei 14.133/2021 (Art. 41) prevê que a apresentação de amostras pode ser feita após a classificação e antes da adjudicação, mas a exigência para todos os melhores classificados pode ser vista como restritiva.",
+        "category": "tecnica",
+        "severity": "media",
+        "source_ref": "Edital, item 17.1; TR, item 5.1",
+        "description": "Exigência de apresentação de amostra antes da adjudicação pode onerar licitantes não vencedores.",
+        "evidence_refs": [
+          "EV-43",
+          "EV-44"
+        ],
+        "recommended_action": "Avaliar impugnação para que a amostra seja exigida apenas do primeiro colocado, após a classificação."
+      },
+      {
+        "title": "Alteração de arte de uniforme a critério da secretaria",
+        "reason": "A descrição do objeto deve ser clara e precisa. Alterações a critério da Administração podem ser vistas como subjetivas e potencialmente restritivas.",
+        "category": "tecnica",
+        "severity": "media",
+        "source_ref": "TR, itens 1, 2, 3, 4, 5, 6",
+        "description": "A possibilidade de 'pequenas alterações na arte do item' a critério da secretaria pode gerar incerteza quanto ao produto final.",
+        "evidence_refs": [
+          "EV-58",
+          "EV-59",
+          "EV-60",
+          "EV-61",
+          "EV-62",
+          "EV-63"
+        ],
+        "recommended_action": "Solicitar esclarecimento sobre a natureza e o limite das 'pequenas alterações' na arte do item."
+      },
+      {
+        "title": "Prazo de 2 horas para proposta ajustada",
+        "reason": "A Lei 14.133/2021 não estabelece prazo para proposta ajustada, permitindo que a Administração defina. 2 horas pode ser insuficiente para ajustes complexos.",
+        "category": "prazo",
+        "severity": "media",
+        "source_ref": "Processo, item 'data_sessao'",
+        "description": "Prazo de 2 horas para apresentação da proposta ajustada pelo vencedor pode ser exíguo.",
+        "evidence_refs": [],
+        "recommended_action": "Solicitar esclarecimento sobre a razoabilidade do prazo de 2 horas para apresentação da proposta ajustada."
+      },
+      {
+        "title": "Preços fixos e irreajustáveis por 1 ano",
+        "reason": "A Lei 14.133/2021 (Art. 124) permite reajuste de preços em contratos de serviços contínuos. A ausência de previsão de reajuste em prazo inferior a 1 ano pode ser desvantajosa.",
+        "category": "contratual",
+        "severity": "media",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava, item 8.1",
+        "description": "Cláusula de preços fixos e irreajustáveis por 1 ano pode ser desvantajosa em contratos de longa duração ou com alta volatilidade de custos.",
+        "evidence_refs": [],
+        "recommended_action": "Avaliar a necessidade de solicitar inclusão de cláusula de reajuste em prazo inferior a 1 ano, dependendo da natureza do serviço e volatilidade de custos."
+      },
+      {
+        "title": "Ausência de Matriz de Riscos",
+        "reason": "Para obras e serviços de engenharia de valor estimado superior a R$ 10 milhões, a Lei 14.133/2021 (Art. 101) exige a elaboração de Matriz de Riscos. Este edital trata de serviço comum, mas a ausência de MR pode ser um ponto de atenção para a gestão contratual.",
+        "category": "contratual",
+        "severity": "baixa",
+        "source_ref": "Edital",
+        "description": "O edital não apresenta uma Matriz de Riscos detalhada.",
+        "evidence_refs": [],
+        "recommended_action": "Nenhuma ação imediata, mas monitorar a gestão contratual quanto à alocação de riscos."
+      }
+    ],
+    "inconsistencies": [],
+    "possible_restrictive_clauses": [
+      "A exigência de apresentação de amostra por todos os melhores classificados antes da adjudicação pode ser considerada restritiva à competitividade, pois onera licitantes que não serão contratados. Recomenda-se que a exigência seja feita apenas ao primeiro colocado após a classificação."
+    ],
+    "points_for_impugnation_or_clarification": [
+      "Recomenda-se solicitar esclarecimento sobre o prazo de 3 dias úteis para substituição de amostra reprovada (Edital, item 17.1; TR, item 5.1.2), pois pode ser insuficiente para a logística e produção de nova amostra.",
+      "Recomenda-se solicitar esclarecimento sobre a natureza e o limite das 'pequenas alterações na arte do item' a critério da secretaria (TR, itens 1, 2, 3, 4, 5, 6), para garantir maior clareza e previsibilidade.",
+      "Recomenda-se solicitar esclarecimento sobre a razoabilidade do prazo de 2 horas para apresentação da proposta ajustada pelo vencedor (Data da sessão), pois pode ser insuficiente para ajustes complexos."
+    ]
+  },
+  "proposal_analysis": {
+    "itens_licitados": [
+      {
+        "unit": "Und",
+        "quantity": 2500,
+        "itemNumber": "1",
+        "multiplier": 1,
+        "description": "Camisa regata infantil, confeccionada em malha PV, 67% poliéster e 33% viscose, gramatura mínima de 160G/M², na cor branca, gola redonda vermelha, cavas e barra nas cores vermelha, azul e amarelo, com viés de 2 cm. Na altura do peito esquerdo deverá conter o brasão e legenda do Governo Municipal de Milagres, na parte das costas, terá um silk com a logomarca do Governo Municipal de Milagres e nome da Secretaria Municipal de Educação (conforme arte anexa). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "referencePrice": 41.99,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "Und",
+        "quantity": 2500,
+        "itemNumber": "2",
+        "multiplier": 1,
+        "description": "Bermuda infantil de helanca, com composição 100% de fibra de poliamida, gramatura 280 gr/m² (tolerância de variação de 4%) todo na cor vermelha, texturizado, tingimento, corante, disperso e reativo costurado em máquina interloque de 4 fios, com elástico no cós de 4cm de largura rebatido com máquina de 04 agulhas em ponto corrente, com cadarço embutido. Na parte da frente na perna esquerda, com brasão do Governo Municipal de Milagres. OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A bermuda deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "referencePrice": 44.9,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "Und",
+        "quantity": 3200,
+        "itemNumber": "1",
+        "multiplier": 1,
+        "description": "Camisa infantojuvenil, unissex, gola redonda, de malha PV, contendo 67% de fibra de poliéster e 33% de fibra de viscose, gramatura 160 gr/m² (tolerância de variação de 3%) na cor branca, com manga vermelha, com gola, barra e punho nas cores vermelha, azul e amarelo, de 2 cm de largura, costurada em máquina overloque 3 fios, ombros e mangas rebatidas com galoneira 3 agulhas. Na parte da frente deve conter um silk localizado na lateral esquerda com a logomarca da Prefeitura Municipal de Milagres, logo abaixo Secretaria Municipal de Educação. Na parte das costas terá um silk localizada no meio da cava com a logomarca e brasão do Governo Municipal de Milagres (conforme arte em anexo). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "referencePrice": 47.9,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "Und",
+        "quantity": 3200,
+        "itemNumber": "2",
+        "multiplier": 1,
+        "description": "Camisa regata infantojuvenil confeccionada em malha PV, 67% poliéster e 33% viscose, gramatura mínima de 160G/M², na cor branca, gola redonda vermelha, cavas e barra nas cores vermelha, azul e amarelo, com viés de 2 cm. Na altura do peito esquerdo deverá conter o brasão e legenda do Governo Municipal de Milagres, na parte das costas, terá um silk com a logomarca do Governo Municipal de Milagres e nome da Secretaria Municipal de Educação (conforme arte anexa). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "referencePrice": 40.99,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "Und",
+        "quantity": 3200,
+        "itemNumber": "3",
+        "multiplier": 1,
+        "description": "Calça de helanca, com composição 100% de fibra de poliamida, gramatura 280 gr/m² (tolerância de variação de 4%) todo na cor vermelha, texturizado, tingimento, corante, disperso e reativo costurado em máquina interloque de 4 fios, com elástico no cós de 4cm de largura rebatido com máquina de 04 agulhas em ponto corrente, com cadarço embutido. Na parte da frente na perna esquerda, com brasão do Governo Municipal de Milagres. OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A calça deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "referencePrice": 122.99,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "Und",
+        "quantity": 650,
+        "itemNumber": "1",
+        "multiplier": 1,
+        "description": "Camisa adulto, unissex, gola redonda, de malha PV, contendo 67% de fibra de poliéster e 33% de fibra de viscose, gramatura 160 gr/m² (tolerância de variação de 3%) na cor branca, com manga vermelha, com gola, barra e punho nas cores vermelha, azul e amarelo, de 2 cm de largura, costurada em máquina overloque 3 fios, ombros e mangas rebatidas com galoneira 3 agulhas. Na parte da frente deve conter um silk localizado na lateral esquerda com a logomarca da Prefeitura Municipal de Milagres, logo abaixo Secretaria Municipal de Educação. Na parte das costas terá um silk localizada no meio da cava com a logomarca e brasão do Governo Municipal de Milagres (conforme arte em anexo). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "referencePrice": 48.9,
+        "multiplierLabel": ""
+      }
+    ],
+    "exige_cronograma": null,
+    "criterios_desempate": [
+      "Critérios de desempate previstos no art. 60 da Lei nº 14.133, de 2021. (Edital, item 9.11)"
+    ],
+    "exige_carta_proposta": true,
+    "exige_composicao_bdi": null,
+    "observacoes_proposta": [
+      "Na elaboração da proposta inicial, o preço cotado poderá ultrapassar o limite máximo discriminado no Anexo I - TERMO DE REFERÊNCIA; entretanto, na fase de lances, o lance final deverá atingir preço igual ou inferior ao limite máximo estipulado pela Administração e, caso o lote cotado seja composto de itens, o preço unitário destes deverá ser igual ou inferior aos limites previstos para cada item no Termo de Referência. (Edital, item 8.4)",
+      "Os preços, tanto na proposta inicial, quanto na etapa de lances, serão de exclusiva responsabilidade do licitante, não lhe assistindo o direito de pleitear qualquer alteração sob alegação de erro, omissão ou qualquer outro pretexto. (Edital, item 7.10)"
+    ],
+    "criterios_exequibilidade": [
+      "Será considerado indício de inexequibilidade das propostas, valores inferiores a 50% (cinquenta por cento) do valor orçado pela Administração, nos termos da Instrução Normativa SEGES/ME nº 73/2022. (Edital, item 11.13)"
+    ],
+    "exige_declaracao_fabricante": null,
+    "exige_planilha_orcamentaria": true,
+    "exige_marca_modelo_fabricante": null,
+    "criterios_desclassificacao_proposta": [
+      "Propostas que identifiquem o licitante (Edital, item 8.5)",
+      "Propostas sem valores atribuídos a algum dos itens (Edital, item 8.5)",
+      "Propostas com vícios insanáveis e/ou condições ilegais (Edital, item 11.12.1)",
+      "Propostas que não obedecerem às especificações técnicas contidas no Termo de Referência (Edital, item 11.12.2)",
+      "Propostas com preços manifestamente inexequíveis ou permanecerem acima do preço máximo definido para a contratação (Edital, item 11.12.3)",
+      "Propostas que não tiverem sua exequibilidade demonstrada, quando exigido pela Administração (Edital, item 11.12.4)",
+      "Propostas que apresentarem desconformidade com quaisquer outras exigências deste Edital ou seus anexos, desde que insanável (Edital, item 11.12.5)",
+      "Propostas que contiverem para o lote item com valor superior ao estimado pela Administração (Edital, item 11.12.6)",
+      "Preços unitários superiores aos valores constantes no orçamento (TR, item 4.3)",
+      "Não apresentação da proposta de preços final no prazo estipulado (Edital, item 10.8)",
+      "Não cotar proposta com quantitativo de itens divergentes (Edital, item 11.3)",
+      "Não admitido fracionamento do centavo na cotação do preço unitário (Edital, item 11.4)",
+      "Não substituição da amostra reprovada (TR, item 5.1.3)"
+    ],
+    "exige_catalogo_ficha_tecnica_manual": null
+  },
+  "technical_analysis": {
+    "exige_art": null,
+    "exige_cat": null,
+    "exige_rrt": null,
+    "parcelas_relevantes": [
+      {
+        "item": "1",
+        "tipo": "operacional",
+        "unidade": "Und",
+        "descricao": "Camisa regata infantil, confeccionada em malha PV, 67% poliéster e 33% viscose, gramatura mínima de 160G/M², na cor branca, gola redonda vermelha, cavas e barra nas cores vermelha, azul e amarelo, com viés de 2 cm. Na altura do peito esquerdo deverá conter o brasão e legenda do Governo Municipal de Milagres, na parte das costas, terá um silk com a logomarca do Governo Municipal de Milagres e nome da Secretaria Municipal de Educação (conforme arte anexa). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "evidence_refs": [
+          "EV-58"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "2500"
+      },
+      {
+        "item": "2",
+        "tipo": "operacional",
+        "unidade": "Und",
+        "descricao": "Bermuda infantil de helanca, com composição 100% de fibra de poliamida, gramatura 280 gr/m² (tolerância de variação de 4%) todo na cor vermelha, texturizado, tingimento, corante, disperso e reativo costurado em máquina interloque de 4 fios, com elástico no cós de 4cm de largura rebatido com máquina de 04 agulhas em ponto corrente, com cadarço embutido. Na parte da frente na perna esquerda, com brasão do Governo Municipal de Milagres. OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A bermuda deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "evidence_refs": [
+          "EV-59"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "2500"
+      },
+      {
+        "item": "1",
+        "tipo": "operacional",
+        "unidade": "Und",
+        "descricao": "Camisa infantojuvenil, unissex, gola redonda, de malha PV, contendo 67% de fibra de poliéster e 33% de fibra de viscose, gramatura 160 gr/m² (tolerância de variação de 3%) na cor branca, com manga vermelha, com gola, barra e punho nas cores vermelha, azul e amarelo, de 2 cm de largura, costurada em máquina overloque 3 fios, ombros e mangas rebatidas com galoneira 3 agulhas. Na parte da frente deve conter um silk localizado na lateral esquerda com a logomarca da Prefeitura Municipal de Milagres, logo abaixo Secretaria Municipal de Educação. Na parte das costas terá um silk localizada no meio da cava com a logomarca e brasão do Governo Municipal de Milagres (conforme arte em anexo). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "evidence_refs": [
+          "EV-60"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "3200"
+      },
+      {
+        "item": "2",
+        "tipo": "operacional",
+        "unidade": "Und",
+        "descricao": "Camisa regata infantojuvenil confeccionada em malha PV, 67% poliéster e 33% viscose, gramatura mínima de 160G/M², na cor branca, gola redonda vermelha, cavas e barra nas cores vermelha, azul e amarelo, com viés de 2 cm. Na altura do peito esquerdo deverá conter o brasão e legenda do Governo Municipal de Milagres, na parte das costas, terá um silk com a logomarca do Governo Municipal de Milagres e nome da Secretaria Municipal de Educação (conforme arte anexa). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "evidence_refs": [
+          "EV-61"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "3200"
+      },
+      {
+        "item": "3",
+        "tipo": "operacional",
+        "unidade": "Und",
+        "descricao": "Calça de helanca, com composição 100% de fibra de poliamida, gramatura 280 gr/m² (tolerância de variação de 4%) todo na cor vermelha, texturizado, tingimento, corante, disperso e reativo costurado em máquina interloque de 4 fios, com elástico no cós de 4cm de largura rebatido com máquina de 04 agulhas em ponto corrente, com cadarço embutido. Na parte da frente na perna esquerda, com brasão do Governo Municipal de Milagres. OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A calça deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "evidence_refs": [
+          "EV-62"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "3200"
+      },
+      {
+        "item": "1",
+        "tipo": "operacional",
+        "unidade": "Und",
+        "descricao": "Camisa adulto, unissex, gola redonda, de malha PV, contendo 67% de fibra de poliéster e 33% de fibra de viscose, gramatura 160 gr/m² (tolerância de variação de 3%) na cor branca, com manga vermelha, com gola, barra e punho nas cores vermelha, azul e amarelo, de 2 cm de largura, costurada em máquina overloque 3 fios, ombros e mangas rebatidas com galoneira 3 agulhas. Na parte da frente deve conter um silk localizado na lateral esquerda com a logomarca da Prefeitura Municipal de Milagres, logo abaixo Secretaria Municipal de Educação. Na parte das costas terá um silk localizada no meio da cava com a logomarca e brasão do Governo Municipal de Milagres (conforme arte em anexo). OBS: os quantitativos de cada tamanho podem sofrer alteração a critério da secretaria municipal de educação. A camisa deve ser embalada individualmente em saco plástico transparente e depois em embalagens contendo 10 peças. A secretaria de educação poderá fazer pequenas alterações na arte do item.",
+        "evidence_refs": [
+          "EV-63"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "650"
+      }
+    ],
+    "exige_registro_conselho": null,
+    "exige_acervo_profissional": null,
+    "exige_responsavel_tecnico": null,
+    "registro_conselho_detalhes": [],
+    "responsavel_tecnico_detalhes": [],
+    "exigencias_tecnicas_especificas": [],
+    "exige_atestado_capacidade_tecnica": true,
+    "exige_comprovacao_parcelas_relevantes": true
+  },
+  "operational_outputs": {
+    "proposal_routes": [],
+    "declaration_routes": [],
+    "internal_checklist": [],
+    "documents_to_prepare": [
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ato constitutivo, estatuto ou contrato social",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Registro comercial de empresa individual",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição do ato constitutivo de sociedades civis",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Decreto de autorização para empresa estrangeira",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Compromisso de constituição de consórcio",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de inscrição no CNPJ",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição Estadual no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição Municipal no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Federal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Estadual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Municipal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade relativa à Seguridade Social",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade relativa ao FGTS (CRF)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Justiça do Trabalho (CNDT)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Balanço patrimonial e demonstrações contábeis",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão negativa de feitos sobre falência",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Acréscimo de 10% no valor exigido para consórcios",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Verificar se o edital especifica quantitativos mínimos ou tipos de serviços/obras que devem constar nos atestados.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "critica",
+        "document_name": "Atestado(s) de Capacidade Técnica",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1, alínea 'r'.",
+        "category": "documentos_complementares",
+        "priority": "critica",
+        "document_name": "Declaração de integralidade dos custos trabalhistas",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1, alínea 's'.",
+        "category": "documentos_complementares",
+        "priority": "critica",
+        "document_name": "Declaração de não emprego de menores",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1, alínea 's'.",
+        "category": "documentos_complementares",
+        "priority": "critica",
+        "document_name": "Declaração de cumprimento de reserva de cargos para PCD",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1, alínea 't'.",
+        "category": "documentos_complementares",
+        "priority": "critica",
+        "document_name": "Declaração de atendimento aos requisitos de habilitação",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 7.3. Deve ser feita via sistema eletrônico.",
+        "category": "documentos_complementares",
+        "priority": "critica",
+        "document_name": "Declaração de condição de ME/EPP ou cooperativa",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Conforme Edital, item 6.6. Deve ser feita via Portal de Compras do Município.",
+        "category": "documentos_complementares",
+        "priority": "critica",
+        "document_name": "Declaração de exercício da preferência (ME/EPP)",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Conforme Edital, item 11.8. Evidenciar consulta a SICAF, CEIS e CNEP.",
+        "category": "documentos_complementares",
+        "priority": "critica",
+        "document_name": "Comprovação de consulta a cadastros de sanções",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Apresentar conforme exigências do edital, incluindo especificações técnicas, preços unitários e globais, prazo de validade e todos os custos inclusos.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Proposta de Preços",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Apresentar amostras dos produtos do lote arrematado após classificação e habilitação, conforme item 17.1 do Edital e item 5.1 do TR. Preparar para possível substituição em caso de reprovação.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Amostras de Produtos",
+        "responsible_area": "engenharia"
+      }
+    ],
+    "proposal_inputs_needed": [],
+    "possible_petition_routes": [
+      "Impugnação do item 17.1 e TR, item 5.1, com base no Art. 41 da Lei 14.133/2021, para que a exigência de amostra seja restrita ao primeiro colocado após a classificação, visando maior competitividade.",
+      "Pedido de Esclarecimento sobre o prazo de 3 dias úteis para substituição de amostra (TR, item 5.1.2), com base na razoabilidade e na ausência de previsão legal específica que justifique prazo tão exíguo."
+    ],
+    "technical_documents_needed": [],
+    "questions_for_consultor_chat": [
+      "Qual a interpretação legal sobre a exigência de amostras de todos os melhores classificados antes da adjudicação?",
+      "É possível que a Administração aceite declarações de capacidade técnica em substituição a atestados, caso estes sejam de difícil obtenção?",
+      "Como proceder caso a amostra seja reprovada e o prazo de 3 dias úteis não seja suficiente para a substituição?",
+      "Qual o impacto de não apresentar a proposta ajustada dentro do prazo de 2 horas?",
+      "Quais os riscos de apresentar uma proposta com preços fixos por 1 ano em um contrato de serviços contínuos?"
+    ]
+  },
+  "contractual_analysis": {
+    "reajuste": "Preços fixos e irreajustáveis por 1 ano. Após 1 ano, reajuste pelo IPCA (Índice de Preços ao Consumidor Amplo). (Minuta do Contrato, Cláusula Oitava, item 8.1 e 8.2)",
+    "penalidades": [
+      {
+        "tipo": "Multa",
+        "fonte": "Edital, item 16.4, 16.4.1, 16.4.2; Minuta do Contrato, Cláusula Décima Primeira, item 11.4, 11.4.1, 11.4.2",
+        "descricao": "Multa de 0,5% a 30% incidente sobre o valor do contrato. Para infrações dos itens 16.1.1, 16.1.2 e 16.1.3, a multa será de 0,5% a 15% do valor do contrato. Para infrações dos itens 16.1.4, 16.1.5, 16.1.6, 16.1.7 e 16.1.8, a multa será de 15% a 30% do valor do contrato."
+      },
+      {
+        "tipo": "Advertência",
+        "fonte": "Edital, item 16.2.1; Minuta do Contrato, Cláusula Décima Primeira, item 11.2.1",
+        "descricao": "Advertência. (Edital, item 16.2.1; Minuta do Contrato, Cláusula Décima Primeira, item 11.2.1)"
+      },
+      {
+        "tipo": "Impedimento de Licitar e Contratar",
+        "fonte": "Edital, item 16.2.3, 16.7; Minuta do Contrato, Cláusula Décima Primeira, item 11.2.3, 11.7",
+        "descricao": "Impedimento de licitar e contratar pelo prazo máximo de 3 (três) anos. (Edital, item 16.2.3, 16.7; Minuta do Contrato, Cláusula Décima Primeira, item 11.2.3, 11.7)"
+      },
+      {
+        "tipo": "Declaração de Inidoneidade",
+        "fonte": "Edital, item 16.2.4, 16.8; Minuta do Contrato, Cláusula Décima Primeira, item 11.2.4, 11.8",
+        "descricao": "Declaração de inidoneidade para licitar ou contratar. (Edital, item 16.2.4, 16.8; Minuta do Contrato, Cláusula Décima Primeira, item 11.2.4, 11.8)"
+      },
+      {
+        "tipo": "Perda da Garantia de Proposta",
+        "fonte": "Edital, item 19.5; Minuta do Contrato, Cláusula Décima Primeira, item 11.9",
+        "descricao": "A recusa injustificada do adjudicatário em assinar o contrato ou a ata de registro de preço, ou em aceitar ou retirar o instrumento equivalente no prazo estabelecido pela Administração, caracterizará o descumprimento total da obrigação assumida e o sujeitará às penalidades e à imediata perda da garantia de proposta em favor do órgão ou entidade promotora da licitação, quando tiver sido exigida. (Edital, item 19.5; Minuta do Contrato, Cláusula Décima Primeira, item 11.9)"
+      }
+    ],
+    "repactuacao": null,
+    "prazo_execucao": "30 dias (entrega dos produtos a contar do recebimento da Ordem de Compra); 5 dias (substituição de produtos recusados).",
+    "prazo_vigencia": "Até 31 de dezembro de 2024, contados da data de sua assinatura.",
+    "medicao_pagamento": "Pagamento será efetuado no prazo máximo de até 30 (trinta) dias, contados do recebimento da Nota Fiscal/Fatura. (TR, item 10.3.1; Minuta do Contrato, Cláusula Sétima, item 7.3.1)",
+    "obrigacoes_contratada": [
+      {
+        "fonte": "TR, item 13.1; Minuta do Contrato, Cláusula Décima, item 10.1",
+        "descricao": "Responsabilizar-se pelos vícios e danos decorrentes do objeto, de acordo com o Código de Defesa do Consumidor (Lei nº 8.078, de 1990)."
+      },
+      {
+        "fonte": "TR, item 13.2; Minuta do Contrato, Cláusula Décima, item 10.2",
+        "descricao": "Comunicar à Contratante, no prazo máximo de 24 (vinte e quatro) horas que antecede a data da entrega, os motivos que impossibilitem o cumprimento do prazo previsto, com a devida comprovação."
+      },
+      {
+        "fonte": "TR, item 13.3; Minuta do Contrato, Cláusula Décima, item 10.3",
+        "descricao": "Atender às determinações regulares emitidas pelo fiscal ou gestor do contrato ou autoridade superior (art. 137, II, da Lei nº 14.133, de 2021) e prestar todo esclarecimento ou informação por eles solicitados."
+      },
+      {
+        "fonte": "TR, item 13.4; Minuta do Contrato, Cláusula Décima, item 10.4",
+        "descricao": "Reparar, corrigir, remover, reconstruir ou substituir, às suas expensas, no total ou em parte, no prazo fixado pelo fiscal do contrato, os produtos/materiais nos quais se verificarem vícios, defeitos ou incorreções resultantes da execução ou dos materiais empregados."
+      },
+      {
+        "fonte": "TR, item 13.5; Minuta do Contrato, Cláusula Décima, item 10.5",
+        "descricao": "Responsabilizar-se pelos vícios e danos decorrentes da execução do objeto, bem como por todo e qualquer dano causado à Administração ou terceiros, não reduzindo essa responsabilidade a fiscalização ou o acompanhamento da execução contratual pelo contratante, que ficará autorizado a descontar dos pagamentos devidos, o valor correspondente aos danos sofridos."
+      },
+      {
+        "fonte": "TR, item 13.6; Minuta do Contrato, Cláusula Décima, item 10.6",
+        "descricao": "Entregar ao setor responsável pela fiscalização do contrato, junto com a Nota Fiscal para fins de pagamento, os seguintes documentos: 1) prova de regularidade relativa à Seguridade Social; 2) certidão conjunta relativa aos tributos federais e à Dívida Ativa da União; 3) certidões que comprovem a regularidade perante a Fazenda Estadual ou Distrital e Municipal do domicílio ou sede da contratada; 4) Certidão de Regularidade do FGTS - CRF; e 5) Certidão Negativa de Débitos Trabalhistas - CNDT."
+      },
+      {
+        "fonte": "TR, item 13.7; Minuta do Contrato, Cláusula Décima, item 10.7",
+        "descricao": "Responsabilizar-se pelo cumprimento de todas as obrigações trabalhistas, previdenciárias, fiscais, comerciais e as demais previstas em legislação específica, cuja inadimplência não transfere a responsabilidade ao contratante e não poderá onerar o objeto do contrato."
+      },
+      {
+        "fonte": "TR, item 13.8; Minuta do Contrato, Cláusula Décima, item 10.8",
+        "descricao": "Comunicar ao Fiscal do contrato, em tempo hábil, qualquer ocorrência anormal ou acidente que se verifique no local da execução do objeto contratual."
+      },
+      {
+        "fonte": "TR, item 13.9; Minuta do Contrato, Cláusula Décima, item 10.9",
+        "descricao": "Paralisar, por determinação da Contratante, qualquer atividade que não esteja sendo executada de acordo com a boa técnica ou que ponha em risco a segurança de pessoas ou bens de terceiros."
+      },
+      {
+        "fonte": "TR, item 13.10; Minuta do Contrato, Cláusula Décima, item 10.10",
+        "descricao": "Manter durante toda a vigência do contrato, em compatibilidade com as obrigações assumidas, todas as condições exigidas para habilitação."
+      },
+      {
+        "fonte": "TR, item 13.11; Minuta do Contrato, Cláusula Décima, item 10.11",
+        "descricao": "Cumprir, durante todo o período de execução do contrato, a reserva de cargos prevista em lei para pessoa com deficiência, para reabilitado da Previdência Social ou para aprendiz, bem como as reservas de cargos previstas na legislação (art. 116, da Lei nº 14.133, de 2021)."
+      },
+      {
+        "fonte": "TR, item 13.12; Minuta do Contrato, Cláusula Décima, item 10.12",
+        "descricao": "Comprovar a reserva de cargos a que se refere a cláusula acima, no prazo fixado pelo fiscal do contrato, com a indicação dos empregados que preencheram as referidas vagas (art. 116, parágrafo único, da Lei nº 14.133, de 2021)."
+      },
+      {
+        "fonte": "TR, item 13.13; Minuta do Contrato, Cláusula Décima, item 10.13",
+        "descricao": "Guardar sigilo sobre todas as informações obtidas em decorrência do cumprimento do contrato."
+      },
+      {
+        "fonte": "TR, item 13.14; Minuta do Contrato, Cláusula Décima, item 10.14",
+        "descricao": "Arcar com o ônus decorrente de eventual equívoco no dimensionamento dos quantitativos de sua proposta, inclusive quanto aos custos variáveis decorrentes de fatores futuros e incertos, devendo complementá-los, caso o previsto inicialmente em sua proposta não seja satisfatório para o atendimento do objeto da contratação, exceto quando ocorrer algum dos eventos arrolados no art. 124, II, d, da Lei nº 14.133, de 2021."
+      },
+      {
+        "fonte": "TR, item 13.15; Minuta do Contrato, Cláusula Décima, item 10.15",
+        "descricao": "Cumprir, além dos postulados legais vigentes de âmbito federal, estadual ou municipal, as normas de segurança da Contratante."
+      },
+      {
+        "fonte": "TR, item 13.16; Minuta do Contrato, Cláusula Décima, item 10.16",
+        "descricao": "Alocar os empregados necessários, com habilitação e conhecimento adequados, ao perfeito cumprimento das cláusulas do contrato, fornecendo os materiais, equipamentos, ferramentas e utensílios demandados, cuja quantidade, qualidade e tecnologia deverão atender às recomendações de boa técnica e a legislação de regência."
+      },
+      {
+        "fonte": "TR, item 13.17; Minuta do Contrato, Cláusula Décima, item 10.17",
+        "descricao": "Orientar e treinar seus empregados sobre os deveres previstos na Lei nº 13.709, de 14 de agosto de 2018, adotando medidas eficazes para proteção de dados pessoais a que tenha acesso por força da execução do futuro contrato."
+      },
+      {
+        "fonte": "TR, item 13.18; Minuta do Contrato, Cláusula Décima, item 10.18",
+        "descricao": "Conduzir os trabalhos com estrita observância às normas da legislação pertinente, cumprindo as determinações dos Poderes Públicos."
+      },
+      {
+        "fonte": "TR, item 13.19; Minuta do Contrato, Cláusula Décima, item 10.19",
+        "descricao": "Submeter previamente, por escrito, ao contratante, para análise e aprovação, quaisquer mudanças nos métodos executivos que fujam às especificações do memorial descritivo ou instrumento congênere."
+      },
+      {
+        "fonte": "TR, item 13.20; Minuta do Contrato, Cláusula Décima, item 10.20",
+        "descricao": "Não permitir a utilização de qualquer trabalho do menor de dezesseis anos, exceto na condição de aprendiz para os maiores de quatorze anos, nem permitir a utilização do trabalho do menor de dezoito anos em trabalho noturno, perigoso ou insalubre."
+      },
+      {
+        "fonte": "Edital, item 19.2",
+        "descricao": "Manter, durante toda a execução do contrato, em compatibilidade com as obrigações por ele assumidas, todas as condições exigidas para a habilitação na presente licitação."
+      }
+    ],
+    "obrigacoes_contratante": [
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.1",
+        "descricao": "Exigir o cumprimento de todas as obrigações assumidas pela Contratada, de acordo com o presente contrato."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.2",
+        "descricao": "Receber o objeto no prazo e condições estabelecidas no Termo de Referência, vinculado ao presente contrato."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.3",
+        "descricao": "Notificar a Contratada, por escrito, sobre vícios, defeitos ou incorreções verificadas no objeto fornecido, para que seja por ele substituído, reparado ou corrigido, no total ou em parte, às suas expensas."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.4",
+        "descricao": "Acompanhar e fiscalizar a execução do contrato e o cumprimento das obrigações pela Contratada."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.5",
+        "descricao": "Comunicar a empresa para emissão de Nota Fiscal no que pertine à parcela incontroversa da execução do objeto, para efeito de liquidação e pagamento, quando houver controvérsia sobre a execução do objeto, quanto à dimensão, qualidade e quantidade, conforme Art. 143, da Lei nº 14.133/2021."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.6",
+        "descricao": "Efetuar o pagamento à Contratada do valor correspondente ao fornecimento do objeto, no prazo, forma e condições estabelecidos no Termo de Referência e no presente Contrato."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.7",
+        "descricao": "Aplicar à Contratada as sanções previstas na lei e no presente Contrato."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.8",
+        "descricao": "Cientificar o Órgão competente para adoção das medidas cabíveis, quando do descumprimento de obrigações pela Contratada."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.9",
+        "descricao": "Explicitamente emitir decisão sobre todas as solicitações e reclamações relacionadas à execução do Contrato, ressalvados os requerimentos manifestamente impertinentes, meramente protelatórios ou de nenhum interesse para a boa execução do ajuste."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.9.1",
+        "descricao": "A Administração terá o prazo de 10 (dez) dias úteis, a contar da data do protocolo do requerimento, para decidir, admitida a prorrogação por igual período, quando motivada."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.10",
+        "descricao": "Responder eventuais pedidos de reestabelecimento do equilíbrio econômico-financeiro feitos pela contratada, no prazo máximo de 15 (quinze) dias úteis."
+      },
+      {
+        "fonte": "Minuta do Contrato, Cláusula Nona, item 9.11",
+        "descricao": "A Administração não responderá por quaisquer compromissos assumidos pela Contratada com terceiros, ainda que vinculados à execução do contrato, bem como por qualquer dano causado a terceiros em decorrência de ato da Contratada, de seus empregados, prepostos ou subordinados."
+      }
+    ],
+    "matriz_risco_contratual": []
+  },
+  "process_identification": {
+    "orgao": "PREFEITURA MUNICIPAL DE MILAGRES",
+    "modalidade": "PREGÃO ELETRÔNICO",
+    "tipo_objeto": "servico_comum",
+    "municipio_uf": "Milagres/CE",
+    "fonte_oficial": "www.licitacoesmilagres.com.br",
+    "forma_disputa": "ABERTO E FECHADO",
+    "numero_edital": "2024.03.07.1",
+    "numero_processo": null,
+    "objeto_completo": "CONTRATAÇÃO DE SERVIÇOS A SEREM PRESTADOS NA CONFECÇÃO DE UNIFORME/FARDAMENTO ESCOLAR E ASSESSÓRIOS DE USO ESCOLAR, DESTINADOS AOS ALUNOS DA REDE PÚBLICA DE ENSINO, ATRAVÉS DA SECRETARIA MUNICIPAL DE EDUCAÇÃO DE MILAGRES/CE, conforme anexos, partes integrantes deste edital.",
+    "objeto_resumido": "Contratação de serviços de confecção de uniforme/fardamento escolar e acessórios de uso escolar.",
+    "regime_execucao": "Indefinido",
+    "unidade_compradora": "Secretaria Municipal de Educação Básica",
+    "criterio_julgamento": "MENOR PREÇO (POR LOTE)"
+  },
+  "participation_conditions": {
+    "exige_amostra": true,
+    "amostra_detalhes": "Será requisitada aos licitantes melhores classificados a apresentação de amostras, conforme item 5 do Termo de Referência. O licitante classificado em primeiro lugar e devidamente habilitado, deverá apresentar, anteriormente a adjudicação, amostra de todos os produtos referentes aos itens do lote por ele arrematado, para a competente análise da Secretaria/Órgão Municipal Contratante. (Edital, item 17.1; TR, item 5.1)",
+    "outras_condicoes": [
+      {
+        "fonte": "Edital, item 6.1",
+        "descricao": "Credenciamento junto ao Portal de Compras do Município de Milagres/CE, com suporte técnico do sistema GM TECNOLOGIA."
+      }
+    ],
+    "permite_consorcio": true,
+    "tratamento_me_epp": "Garantido tratamento diferenciado e preferência de contratação, conforme Art. 34 da Lei Federal nº 11.488/2007 e Lei Complementar nº 123/2006. Licitantes ME/EPP devem declarar o exercício da preferência no Portal de Compras do Município. Possuem prazo de 5 dias úteis para regularização fiscal/trabalhista. (Edital, item 6.5, 6.6, 12.4, 13.1)",
+    "consorcio_detalhes": "Poderá participar desta licitação toda e qualquer pessoa jurídica isoladamente ou em consórcio. Para consórcios, será admitida a apresentação dos quantitativos de cada consorciado para habilitação técnica e o somatório dos valores para habilitação econômico-financeira. Será acrescido 10% sobre o valor exigido de licitante individual para fins de habilitação econômico-financeira, exceto para consórcios compostos integralmente por ME/EPP. O consórcio vencedor deverá, antes da celebração do contrato, promover a constituição e o registro do consórcio. (Edital, item 6.3, 6.4.1, 6.4.2, 6.4.3, 6.4.4)",
+    "exige_visita_tecnica": null,
+    "participacao_restrita": "Não atender às condições do edital; Autor do anteprojeto, projeto básico ou executivo (PF ou PJ); Empresa responsável pela elaboração do projeto básico ou executivo, ou empresa da qual o autor do projeto seja dirigente, gerente, controlador, acionista ou detentor de mais de 5% do capital com direito a voto, responsável técnico ou subcontratado; Pessoa física ou jurídica impossibilitada de participar por sanção; Vínculo técnico, comercial, econômico, financeiro, trabalhista ou civil com dirigente/agente público do órgão/entidade contratante ou que atue na fiscalização/gestão do contrato, ou cônjuge/companheiro/parente até 3º grau; Empresas controladoras, controladas ou coligadas concorrendo entre si; Pessoa física ou jurídica condenada judicialmente nos 5 anos anteriores por exploração de trabalho infantil, submissão a condições análogas à escravo ou contratação de adolescentes em casos vedados; Agente público do órgão/entidade contratante, direta ou indiretamente. (Edital, item 6.8)",
+    "permite_subcontratacao": false,
+    "exige_garantia_proposta": null,
+    "subcontratacao_detalhes": "Não será admitida a subcontratação do objeto contratual. (TR, item 7.2; Minuta do Contrato, Cláusula Quarta, item 5.1)",
+    "visita_tecnica_detalhes": null,
+    "exige_garantia_contratual": false,
+    "garantia_proposta_detalhes": null,
+    "garantia_contratual_detalhes": "Não haverá exigência de garantia contratual da execução. (TR, item 7.3; Minuta do Contrato, Cláusula Décima Segunda, item 12.1)"
+  },
+  "economic_financial_analysis": {
+    "exige_balanco": true,
+    "exige_indices": null,
+    "indices_exigidos": [],
+    "outras_exigencias_ef": [],
+    "capital_social_minimo": null,
+    "patrimonio_liquido_minimo": null,
+    "exige_garantias_adicionais": null,
+    "exige_capital_social_minimo": null,
+    "exige_patrimonio_liquido_minimo": null
+  }
+}

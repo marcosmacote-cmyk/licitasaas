@@ -3,77 +3,42 @@
  *  exportGold.ts — Exporta análises do banco para Gold Dataset
  * ══════════════════════════════════════════════════════════════════
  *
- *  Conecta no banco Prisma, busca análises com schemaV2 e exporta
- *  os JSONs para o diretório gold/ com IDs sequenciais.
- *
  *  Uso:
- *    npx tsx server/services/ai/benchmark/exportGold.ts
- *    npx tsx server/services/ai/benchmark/exportGold.ts --limit 20
- *    npx tsx server/services/ai/benchmark/exportGold.ts --process-id <id>
- *
- *  O que faz:
- *    1. Busca análises recentes que têm schemaV2 preenchido
- *    2. Exibe resumo de cada uma (título, score, tipo_objeto)
- *    3. Salva as selecionadas em gold/gold-real-{NNN}.json
- *    4. Gera entries pro benchmarkManifest.json
+ *    DATABASE_URL="postgresql://..." npx tsx server/services/ai/benchmark/exportGold.ts
+ *    DATABASE_URL="postgresql://..." npx tsx server/services/ai/benchmark/exportGold.ts --save
  */
 
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const prisma = new PrismaClient();
+const dbUrl = process.env.DATABASE_URL;
+if (!dbUrl || dbUrl.includes('localhost')) {
+    console.error(`\n❌ DATABASE_URL aponta para localhost ou não está definida.`);
+    console.error(`   Uso: DATABASE_URL="postgresql://..." npx tsx exportGold.ts\n`);
+    process.exit(1);
+}
+
+const prisma = new PrismaClient({ datasources: { db: { url: dbUrl } } });
 const GOLD_DIR = path.join(__dirname, 'gold');
 const MANIFEST_PATH = path.join(__dirname, 'benchmarkManifest.json');
 
-interface GoldCandidate {
-    analysisId: string;
-    processId: string;
-    title: string;
-    portal: string;
-    tipoObjeto: string;
-    overallConfidence: string | null;
-    qualityScore: number | null;
-    promptVersion: string | null;
-    requirementCount: number;
-    riskCount: number;
-    evidenceCount: number;
-    categoryCount: number;
-    categories: string[];
-    analyzedAt: string | null;
-    pncpLink: string | null;
-    schemaV2: any;
-}
-
 async function main() {
     const args = process.argv.slice(2);
+    const shouldSave = args.includes('--save');
     const limitIdx = args.indexOf('--limit');
-    const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) || 20 : 20;
-    const processIdIdx = args.indexOf('--process-id');
-    const specificProcessId = processIdIdx >= 0 ? args[processIdIdx + 1] : null;
+    const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) || 25 : 25;
 
     console.log(`\n${'═'.repeat(60)}`);
     console.log(`📦  GOLD DATASET EXPORTER`);
     console.log(`${'═'.repeat(60)}\n`);
-
-    // Query analyses with schemaV2
-    const where: any = {
-        schemaV2: { not: null },
-    };
-    if (specificProcessId) {
-        where.biddingProcessId = specificProcessId;
-    }
+    console.log(`⏳ Conectando ao banco de produção...`);
 
     const analyses = await prisma.aiAnalysis.findMany({
-        where,
+        where: { schemaV2: { not: null } },
         include: {
             biddingProcess: {
-                select: {
-                    title: true,
-                    portal: true,
-                    pncpLink: true,
-                    modality: true,
-                }
+                select: { title: true, portal: true, pncpLink: true, modality: true }
             }
         },
         orderBy: { analyzedAt: 'desc' },
@@ -81,23 +46,20 @@ async function main() {
     });
 
     if (analyses.length === 0) {
-        console.log('⚠️ Nenhuma análise com schemaV2 encontrada no banco.');
+        console.log('⚠️ Nenhuma análise com schemaV2 encontrada.');
         await prisma.$disconnect();
         return;
     }
 
-    console.log(`📋 ${analyses.length} análises encontradas:\n`);
+    console.log(`✅ ${analyses.length} análises com schemaV2 encontradas:\n`);
 
-    const candidates: GoldCandidate[] = [];
+    const typeDistribution: Record<string, number> = {};
+    const candidates: any[] = [];
 
     for (let i = 0; i < analyses.length; i++) {
         const a = analyses[i];
-        const schema = typeof a.schemaV2 === 'string' ? JSON.parse(a.schemaV2) : a.schemaV2;
-        
-        if (!schema || !schema.process_identification) {
-            console.log(`  ${i + 1}. ⏭ ${a.id.slice(0, 8)} — schemaV2 inválido`);
-            continue;
-        }
+        const schema = typeof a.schemaV2 === 'string' ? JSON.parse(a.schemaV2 as string) : a.schemaV2 as any;
+        if (!schema?.process_identification) { continue; }
 
         const tipoObjeto = schema.process_identification?.tipo_objeto || 'unknown';
         const allReqs = Object.values(schema.requirements || {}).flat() as any[];
@@ -107,135 +69,93 @@ async function main() {
         const risks = schema.legal_risk_review?.critical_points || [];
         const evidence = schema.evidence_registry || [];
 
-        const candidate: GoldCandidate = {
-            analysisId: a.id,
-            processId: a.biddingProcessId,
-            title: (a.biddingProcess as any)?.title || 'Sem título',
-            portal: (a.biddingProcess as any)?.portal || 'N/A',
-            tipoObjeto,
-            overallConfidence: a.overallConfidence,
-            qualityScore: null, // será calculado depois se necessário
-            promptVersion: a.promptVersion,
-            requirementCount: allReqs.length,
-            riskCount: risks.length,
-            evidenceCount: evidence.length,
-            categoryCount: categories.length,
-            categories,
-            analyzedAt: a.analyzedAt ? new Date(a.analyzedAt).toISOString() : null,
-            pncpLink: (a.biddingProcess as any)?.pncpLink || null,
-            schemaV2: schema,
-        };
+        typeDistribution[tipoObjeto] = (typeDistribution[tipoObjeto] || 0) + 1;
 
-        candidates.push(candidate);
+        const bp = a.biddingProcess as any;
+        candidates.push({
+            analysisId: a.id, processId: a.biddingProcessId,
+            title: bp?.title || 'Sem título', portal: bp?.portal || 'N/A',
+            modality: bp?.modality || 'N/A', tipoObjeto,
+            overallConfidence: a.overallConfidence, promptVersion: a.promptVersion,
+            requirementCount: allReqs.length, riskCount: risks.length,
+            evidenceCount: evidence.length, categoryCount: categories.length,
+            categories, pncpLink: bp?.pncpLink || null, schemaV2: schema,
+            analyzedAt: a.analyzedAt,
+        });
 
-        const confidenceIcon = a.overallConfidence === 'alta' ? '🟢' :
-            a.overallConfidence === 'media' ? '🟡' : '🔴';
-
+        const icon = a.overallConfidence === 'alta' ? '🟢' : a.overallConfidence === 'media' ? '🟡' : '🔴';
         console.log(
-            `  ${String(i + 1).padStart(2)}. ${confidenceIcon} [${tipoObjeto}] ${candidate.title.slice(0, 60)}` +
-            `\n      ${allReqs.length} exig. | ${risks.length} riscos | ${evidence.length} evid. | ${categories.length} cats | ${a.promptVersion || 'N/A'}`
+            `  ${String(i + 1).padStart(2)}. ${icon} [${tipoObjeto}] ${(bp?.title || '').slice(0, 65)}` +
+            `\n      ${bp?.portal} | ${bp?.modality} | ${allReqs.length} exig. | ${risks.length} riscos | ${evidence.length} evid. | v${a.promptVersion || 'N/A'}\n`
         );
     }
 
-    console.log(`\n${'─'.repeat(60)}`);
-    console.log(`\nPara salvar todos como gold files, rode com --save:`);
-    console.log(`  npx tsx server/services/ai/benchmark/exportGold.ts --save\n`);
-    console.log(`Para salvar um específico:`);
-    console.log(`  npx tsx server/services/ai/benchmark/exportGold.ts --process-id <id> --save\n`);
+    console.log(`${'─'.repeat(60)}`);
+    console.log(`📊 Distribuição: ${Object.entries(typeDistribution).map(([k, v]) => `${k}(${v})`).join(', ')}`);
+    console.log(`📊 Total: ${candidates.length}\n`);
 
-    // If --save flag, export gold files
-    if (args.includes('--save')) {
-        console.log(`\n💾 Salvando ${candidates.length} gold files...\n`);
-
-        if (!fs.existsSync(GOLD_DIR)) fs.mkdirSync(GOLD_DIR, { recursive: true });
-
-        // Load existing manifest to find next available case number
-        let manifest: any = { cases: [], scoring: {} };
-        if (fs.existsSync(MANIFEST_PATH)) {
-            manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'));
-        }
-
-        const existingRealCases = (manifest.cases || [])
-            .filter((c: any) => c.id.startsWith('real-'))
-            .map((c: any) => parseInt(c.id.replace('real-', '')))
-            .filter((n: number) => !isNaN(n));
-        
-        let nextNum = existingRealCases.length > 0 ? Math.max(...existingRealCases) + 1 : 1;
-        const newCases: any[] = [];
-
-        for (const candidate of candidates) {
-            const caseId = `real-${String(nextNum).padStart(3, '0')}`;
-            const goldFilename = `gold-${caseId}.json`;
-            const goldPath = path.join(GOLD_DIR, goldFilename);
-
-            // Check if already exported (by processId match)
-            const alreadyExported = (manifest.cases || []).some(
-                (c: any) => c.pncp_ref?.processId === candidate.processId
-            );
-            if (alreadyExported) {
-                console.log(`  ⏭ ${candidate.title.slice(0, 50)} — já exportado`);
-                continue;
-            }
-
-            // Save gold JSON
-            fs.writeFileSync(goldPath, JSON.stringify(candidate.schemaV2, null, 2));
-            console.log(`  ✅ ${goldFilename} — ${candidate.title.slice(0, 50)}`);
-
-            // Parse PNCP reference
-            let pncpRef: any = null;
-            if (candidate.pncpLink) {
-                const match = candidate.pncpLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-                if (match) {
-                    pncpRef = { cnpj: match[1], ano: match[2], seq: match[3], processId: candidate.processId };
-                }
-            }
-
-            // Build manifest case entry
-            const newCase = {
-                id: caseId,
-                name: candidate.title.slice(0, 80),
-                tipo_objeto: candidate.tipoObjeto,
-                complexity: candidate.requirementCount > 20 ? 'alta' : candidate.requirementCount > 12 ? 'media' : 'baixa',
-                description: `${candidate.portal} — ${candidate.tipoObjeto} — ${candidate.requirementCount} exigências`,
-                pncp_ref: pncpRef,
-                source: {
-                    analysisId: candidate.analysisId,
-                    processId: candidate.processId,
-                    promptVersion: candidate.promptVersion,
-                    exportedAt: new Date().toISOString(),
-                },
-                expected: {
-                    tipo_objeto_expected: candidate.tipoObjeto,
-                    categories_to_find: candidate.categories,
-                    key_requirements: [], // TODO: preencher manualmente com exigências-chave
-                    critical_points: [],  // TODO: preencher manualmente com pontos críticos
-                    min_requirements: Math.max(Math.floor(candidate.requirementCount * 0.7), 5),
-                    min_evidence_refs: Math.max(Math.floor(candidate.evidenceCount * 0.5), 3),
-                },
-            };
-
-            newCases.push(newCase);
-            nextNum++;
-        }
-
-        if (newCases.length > 0) {
-            // Merge new cases into manifest
-            manifest.cases = [...(manifest.cases || []), ...newCases];
-            manifest.total_cases = manifest.cases.length;
-            manifest.updated_at = new Date().toISOString().split('T')[0];
-
-            fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2));
-            console.log(`\n📋 Manifest atualizado: ${manifest.cases.length} casos totais (+${newCases.length} novos)`);
-        } else {
-            console.log(`\nℹ️ Nenhum caso novo para adicionar.`);
-        }
+    if (!shouldSave) {
+        console.log(`Para salvar, rode com --save\n`);
+        await prisma.$disconnect();
+        return;
     }
 
+    // ── SAVE ──
+    if (!fs.existsSync(GOLD_DIR)) fs.mkdirSync(GOLD_DIR, { recursive: true });
+
+    let manifest: any = { cases: [], scoring: {
+        tipoObjetoCorrect: 10, categoriesFoundPct: 25, keyRequirementsFoundPct: 30,
+        criticalPointsFoundPct: 20, minRequirementsMet: 10, minEvidenceMet: 5
+    }};
+    if (fs.existsSync(MANIFEST_PATH)) manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'));
+
+    const existingNums = (manifest.cases || [])
+        .filter((c: any) => c.id.startsWith('real-'))
+        .map((c: any) => parseInt(c.id.replace('real-', '')))
+        .filter((n: number) => !isNaN(n));
+    let nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+    let newCount = 0;
+
+    for (const c of candidates) {
+        if ((manifest.cases || []).some((mc: any) => mc.source?.processId === c.processId)) {
+            console.log(`  ⏭ ${c.title.slice(0, 50)} — já exportado`);
+            continue;
+        }
+
+        const caseId = `real-${String(nextNum).padStart(3, '0')}`;
+        fs.writeFileSync(path.join(GOLD_DIR, `gold-${caseId}.json`), JSON.stringify(c.schemaV2, null, 2));
+        console.log(`  ✅ gold-${caseId}.json — [${c.tipoObjeto}] ${c.title.slice(0, 50)}`);
+
+        let pncpRef: any = null;
+        if (c.pncpLink) {
+            const m = c.pncpLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
+            if (m) pncpRef = { cnpj: m[1], ano: m[2], seq: m[3] };
+        }
+
+        manifest.cases.push({
+            id: caseId, name: c.title.slice(0, 80), tipo_objeto: c.tipoObjeto,
+            complexity: c.requirementCount > 20 ? 'alta' : c.requirementCount > 12 ? 'media' : 'baixa',
+            description: `${c.portal} | ${c.modality} — ${c.requirementCount} exig., ${c.riskCount} riscos`,
+            pncp_ref: pncpRef,
+            source: { processId: c.processId, promptVersion: c.promptVersion, exportedAt: new Date().toISOString() },
+            expected: {
+                tipo_objeto_expected: c.tipoObjeto,
+                categories_to_find: c.categories,
+                key_requirements: [], critical_points: [],
+                min_requirements: Math.max(Math.floor(c.requirementCount * 0.7), 5),
+                min_evidence_refs: Math.max(Math.floor(c.evidenceCount * 0.5), 3),
+            },
+        });
+        nextNum++;
+        newCount++;
+    }
+
+    manifest.total_cases = manifest.cases.length;
+    manifest.updated_at = new Date().toISOString().split('T')[0];
+    fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2));
+    console.log(`\n📋 Manifest: ${manifest.cases.length} casos (+${newCount} novos)`);
+    console.log(`\n✅ Agora rode: npx tsx server/services/ai/benchmark/runAll.ts --save\n`);
     await prisma.$disconnect();
 }
 
-main().catch(async (err) => {
-    console.error(`\n❌ Erro: ${err.message}`);
-    await prisma.$disconnect();
-    process.exit(1);
-});
+main().catch(async (e) => { console.error(`\n❌ ${e.message}`); await prisma.$disconnect(); process.exit(1); });

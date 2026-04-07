@@ -1,0 +1,3086 @@
+{
+  "timeline": {
+    "data_sessao": "10/04/2026 às 08:30",
+    "outros_prazos": [
+      {
+        "data": "60 (sessenta) dias",
+        "descricao": "Prazo de validade da proposta"
+      },
+      {
+        "data": "03 (TRÊS) dias úteis",
+        "descricao": "Prazo para assinatura do contrato"
+      },
+      {
+        "data": "06 (seis) meses",
+        "descricao": "Prazo de execução dos serviços"
+      },
+      {
+        "data": "12 (doze) meses",
+        "descricao": "Prazo de vigência da contratação"
+      }
+    ],
+    "prazo_amostra": null,
+    "prazo_recurso": "3 (três) dias úteis",
+    "data_publicacao": null,
+    "prazo_impugnacao": "até 3 (três) dias úteis antes da data da abertura do certame",
+    "prazo_contrarrazoes": "mesmo prazo do recurso",
+    "prazo_envio_proposta": "09/04/2026 às 17:00",
+    "prazo_esclarecimento": "até 3 (três) dias úteis, limitado ao último dia útil anterior à data da abertura do certame",
+    "prazo_envio_habilitacao": "09/04/2026 às 17:00"
+  },
+  "confidence": {
+    "warnings": [
+      "SchemaEnforcer: 15 campo(s) padronizado(s) automaticamente"
+    ],
+    "traceability": {
+      "total_requirements": 59,
+      "traced_requirements": 59,
+      "evidence_registry_count": 97,
+      "traceability_percentage": 100
+    },
+    "pipeline_health": {
+      "parseRepairs": 0,
+      "stagesFailed": 0,
+      "fallbacksUsed": 0
+    },
+    "missing_sections": [],
+    "score_percentage": 98,
+    "overall_confidence": "alta",
+    "section_confidence": {
+      "risk_review": "alta"
+    }
+  },
+  "pncp_source": {
+    "analyzed_at": "2026-04-03T20:10:48.026Z",
+    "attachments": [
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/07438468000101/compras/2026/11/arquivos/1",
+        "ativo": true,
+        "titulo": "EDITAL DE LICITACAO.pdf",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 1,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/07438468000101/compras/2026/11/arquivos/2",
+        "ativo": true,
+        "titulo": "ANEXOS - PARTE I.pdf",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 2,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/07438468000101/compras/2026/11/arquivos/3",
+        "ativo": true,
+        "titulo": "ANEXOS - PARTE II.pdf",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 3,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/07438468000101/compras/2026/11/arquivos/4",
+        "ativo": true,
+        "titulo": "ANEXOS - PARTE III.pdf",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 4,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      }
+    ],
+    "link_sistema": "https://pncp.gov.br/app/editais/07438468000101/2026/11",
+    "discarded_files": [],
+    "downloaded_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/17913a76-be82-495d-8c77-a47eafca8742.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/3b6aa905-50a6-48ae-97fe-d81e66b1433c.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/c172f027-1b19-4145-b9f8-3196c17971d1.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/025b05cc-b934-4801-be20-9130391e3d32.pdf"
+    ]
+  },
+  "requirements": {
+    "proposta_comercial": [
+      {
+        "phase": "proposta",
+        "title": "Valor unitário e total da proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 10.1.1",
+        "description": "Apresentar valor unitário e total para cada item ou lote de itens, em moeda corrente nacional.",
+        "evidence_refs": [
+          "EV-PC-01"
+        ],
+        "requirement_id": "PC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Marca dos itens ofertados",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 10.1.2",
+        "description": "Informar a marca de cada item ofertado, quando aplicável.",
+        "evidence_refs": [
+          "EV-PC-02"
+        ],
+        "requirement_id": "PC-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Fabricante dos itens ofertados",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 10.1.3",
+        "description": "Informar o fabricante de cada item ofertado, quando aplicável.",
+        "evidence_refs": [
+          "EV-PC-03"
+        ],
+        "requirement_id": "PC-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Descrição do objeto da proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 10.1.4",
+        "description": "Apresentar descrição do objeto similar à especificação do Termo de Referência/Projeto Básico.",
+        "evidence_refs": [
+          "EV-PC-04"
+        ],
+        "requirement_id": "PC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Prazo de validade da proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 10.5",
+        "description": "A proposta deve ter prazo de validade não inferior a 60 (sessenta) dias, a contar da data de sua apresentação.",
+        "evidence_refs": [
+          "EV-PC-05"
+        ],
+        "requirement_id": "PC-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Formato da proposta comercial escrita",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.2.a",
+        "description": "Proposta em papel timbrado da empresa, com CNPJ, endereço, telefone, e-mail, referência ao certame, órgão, valor global e prazo de validade.",
+        "evidence_refs": [
+          "EV-PC-06"
+        ],
+        "requirement_id": "PC-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Declaração de inclusão de todos os custos",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.3",
+        "description": "Declaração expressa de que o preço global inclui todas as despesas diretas, indiretas e necessárias à execução.",
+        "evidence_refs": [
+          "EV-PC-07"
+        ],
+        "requirement_id": "PC-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Declaração sobre despesas da proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.4",
+        "description": "Declaração expressa de que as despesas de elaboração da proposta correm por conta da licitante, sem direito a indenização.",
+        "evidence_refs": [
+          "EV-PC-08"
+        ],
+        "requirement_id": "PC-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Planilha Orçamentária",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.5",
+        "description": "Planilha orçamentária conforme modelo do edital, com preços unitários e totais, percentual do BDI e preço global.",
+        "evidence_refs": [
+          "EV-PC-09"
+        ],
+        "requirement_id": "PC-09",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Cronograma físico-financeiro",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.6",
+        "description": "Apresentar cronograma físico-financeiro da execução das obras e serviços.",
+        "evidence_refs": [
+          "EV-PC-10"
+        ],
+        "requirement_id": "PC-10",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Valor do faturamento mensal previsto",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.7",
+        "description": "Informar o valor do faturamento mensal previsto para a execução do contrato.",
+        "evidence_refs": [
+          "EV-PC-11"
+        ],
+        "requirement_id": "PC-11",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Detalhamento Financeiro Complementar",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.8",
+        "description": "Apresentar informações financeiras adicionais e detalhamento do BDI.",
+        "evidence_refs": [
+          "EV-PC-12"
+        ],
+        "requirement_id": "PC-12",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Valor acumulado do faturamento previsto",
+        "parent_id": "PC-12",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 11.8",
+        "description": "Informar o valor acumulado do faturamento previsto ao longo da execução das obras.",
+        "evidence_refs": [
+          "EV-PC-12"
+        ],
+        "requirement_id": "PC-12.1",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Detalhamento do BDI",
+        "parent_id": "PC-12",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 11.8",
+        "description": "Apresentar a composição analítica do BDI (Benefícios e Despesas Indiretas).",
+        "evidence_refs": [
+          "EV-PC-12"
+        ],
+        "requirement_id": "PC-12.2",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Planilha de composição de custos unitários",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.9",
+        "description": "Planilha de composição de custos unitários explicitando preços de insumos e índices de produtividade.",
+        "evidence_refs": [
+          "EV-PC-13"
+        ],
+        "requirement_id": "PC-13",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      }
+    ],
+    "habilitacao_juridica": [
+      {
+        "phase": "habilitacao",
+        "title": "Ato constitutivo, estatuto ou contrato social",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.1",
+        "description": "Ato constitutivo, estatuto ou contrato social em vigor, devidamente registrado na Junta Comercial da respectiva sede.",
+        "evidence_refs": [
+          "EV-HJ-01"
+        ],
+        "requirement_id": "HJ-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Cédula de identidade do(s) administrador(es)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.2",
+        "description": "Cédula de identidade do(s) administrador(es).",
+        "evidence_refs": [
+          "EV-HJ-02"
+        ],
+        "requirement_id": "HJ-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição no Registro Público de Empresas Mercantis (Empresário Individual)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.3",
+        "description": "No caso de empresário individual: inscrição no Registro Público de Empresas Mercantis a cargo da Junta Comercial da respectiva sede.",
+        "evidence_refs": [
+          "EV-HJ-03"
+        ],
+        "requirement_id": "HJ-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição no Registro Público de Empresas Mercantis (Sucursal, Filial ou Agência)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.4",
+        "description": "Inscrição no Registro Público de Empresas Mercantis onde opera, com averbação no Registro onde tem sede a matriz, no caso de ser o participante sucursal, filial ou agência.",
+        "evidence_refs": [
+          "EV-HJ-04"
+        ],
+        "requirement_id": "HJ-04",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas (Sociedade Simples)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.5",
+        "description": "No caso de sociedade simples: inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas a respectiva sede, acompanhada de prova da indicação dos seus administradores.",
+        "evidence_refs": [
+          "EV-HJ-05"
+        ],
+        "requirement_id": "HJ-05",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Ata de fundação e estatuto social (Cooperativa)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.6",
+        "description": "No caso de cooperativa: ata de fundação e estatuto social em vigor, com a ata da assembleia que o aprovou, devidamente arquivado na Junta Comercial ou inscrito no Registro Civil das Pessoas Jurídicas da respectiva sede, bem como o registro de que trata o art. 107 da Lei nº 5.764/71.",
+        "evidence_refs": [
+          "EV-HJ-06"
+        ],
+        "requirement_id": "HJ-06",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Decreto de autorização (Empresa Estrangeira)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.7",
+        "description": "No caso de empresa ou sociedade estrangeira em funcionamento no País: decreto de autorização.",
+        "evidence_refs": [
+          "EV-HJ-07"
+        ],
+        "requirement_id": "HJ-07",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Documentos acompanhados de alterações ou consolidação",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.1.8",
+        "description": "Os documentos acima deverão estar acompanhados de todas as alterações ou da consolidação respectiva.",
+        "evidence_refs": [
+          "EV-HJ-08"
+        ],
+        "requirement_id": "HJ-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "documentos_complementares": [
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de ME/EPP",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.12.1",
+        "description": "Declaração de que atende aos requisitos do art. 3º da LC n° 123/2006, para fazer jus aos benefícios. Modelo no Anexo IV.",
+        "evidence_refs": [
+          "EV-DC-01"
+        ],
+        "requirement_id": "DC-01",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de não emprego de menores",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.12.2",
+        "description": "Declaração de que não emprega menor de 18 anos em trabalho noturno, perigoso ou insalubre, e não emprega menor de 16 anos, salvo aprendiz a partir de 14 anos (Art. 7º, XXXIII, CF). Modelo no Anexo V.",
+        "evidence_refs": [
+          "EV-DC-02"
+        ],
+        "requirement_id": "DC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de disponibilidade de equipe técnica",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.12.3",
+        "description": "Declaração de disponibilidade de equipe técnica. Modelo no Anexo VI.",
+        "evidence_refs": [
+          "EV-DC-03"
+        ],
+        "requirement_id": "DC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de conhecimento da natureza do serviço",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.12.4",
+        "description": "Declaração de conhecimento da natureza do serviço. Modelo no Anexo VII.",
+        "evidence_refs": [
+          "EV-DC-04"
+        ],
+        "requirement_id": "DC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de inexistência de fato impeditivo",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.12.5",
+        "description": "Declaração de que inexistem fatos impeditivos para a habilitação, ciente da obrigatoriedade de declarar ocorrências posteriores. Modelo no Anexo VIII.",
+        "evidence_refs": [
+          "EV-DC-05"
+        ],
+        "requirement_id": "DC-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de cumprimento dos requisitos de habilitação",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.12.6",
+        "description": "Declaração de que cumpre plenamente as condições de habilitação fixadas no Edital e seus apêndices. Modelo no Anexo IX.",
+        "evidence_refs": [
+          "EV-DC-06"
+        ],
+        "requirement_id": "DC-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de ciência e concordância com o edital",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 9.3.1",
+        "description": "Declaração, em campo próprio do sistema, de ciência e concordância com as condições do edital e anexos, e que a proposta compreende a integralidade dos custos trabalhistas.",
+        "evidence_refs": [
+          "EV-DC-07"
+        ],
+        "requirement_id": "DC-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "regularidade_fiscal_trabalhista": [
+      {
+        "phase": "habilitacao",
+        "title": "Prova de inscrição no CNPJ",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.1",
+        "description": "Prova de inscrição no Cadastro Nacional de Pessoas Jurídicas - CNPJ.",
+        "evidence_refs": [
+          "EV-RFT-01"
+        ],
+        "requirement_id": "RFT-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição estadual no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.1",
+        "description": "Prova de inscrição no cadastro de contribuintes estadual, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição municipal no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.1",
+        "description": "Prova de inscrição no cadastro de contribuintes municipal, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade fiscal perante a Fazenda Nacional",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.3",
+        "description": "Prova de regularidade fiscal perante a Fazenda Nacional, mediante apresentação de certidão expedida conjuntamente pela Secretaria da Receita Federal do Brasil (RFB) e pela Procuradoria-Geral da Fazenda Nacional (PGFN), referente a todos os créditos tributários Federais e à Dívida Ativa da União (DAU).",
+        "evidence_refs": [
+          "EV-RFT-03"
+        ],
+        "requirement_id": "RFT-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade com a Fazenda Estadual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.4",
+        "description": "Prova de regularidade com a Fazenda Estadual do domicílio ou sede da licitante, relativa à atividade em cujo exercício contrata ou concorre.",
+        "evidence_refs": [
+          "EV-RFT-04"
+        ],
+        "requirement_id": "RFT-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Comprovação de isenção de tributos estaduais (se aplicável)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.5",
+        "description": "Caso a licitante seja considerada isenta dos tributos estaduais relacionados ao objeto licitatório, deverá comprovar tal condição mediante certidão/declaração da Fazenda Estadual do seu domicílio ou sede, ou outra equivalente, na forma da lei.",
+        "evidence_refs": [
+          "EV-RFT-05"
+        ],
+        "requirement_id": "RFT-06",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade com a Fazenda Municipal",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.6",
+        "description": "Prova de regularidade com a Fazenda Municipal do domicílio ou sede da licitante, relativa à atividade em cujo exercício contrata ou concorre.",
+        "evidence_refs": [
+          "EV-RFT-06"
+        ],
+        "requirement_id": "RFT-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Comprovação de isenção de tributos municipais (se aplicável)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.7",
+        "description": "Caso a licitante seja considerada isenta dos tributos municipais relacionados ao objeto licitatório, deverá comprovar tal condição mediante certidão/declaração da Fazenda Municipal do seu domicílio ou sede, ou outra equivalente, na forma da lei.",
+        "evidence_refs": [
+          "EV-RFT-07"
+        ],
+        "requirement_id": "RFT-08",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade com o FGTS",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.8",
+        "description": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS).",
+        "evidence_refs": [
+          "EV-RFT-08"
+        ],
+        "requirement_id": "RFT-09",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de inexistência de débitos trabalhistas",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.9",
+        "description": "Prova de inexistência de débitos inadimplidos perante a justiça do trabalho, mediante a apresentação de certidão negativa ou positiva com efeito de negativa de Débitos Trabalhista.",
+        "evidence_refs": [
+          "EV-RFT-09"
+        ],
+        "requirement_id": "RFT-10",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Documentação de regularidade fiscal para ME/EPP com restrição",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.2.10",
+        "description": "A licitante qualificada como microempresa, empresa de pequeno porte e as sociedades cooperativas mencionadas no art. 34 da Lei nº 11.488/07, conforme o caso, deverá encaminhar a documentação de habilitação exigida para efeito de comprovação de regularidade fiscal, ainda que haja alguma restrição, nos termos do que dispõe o art. 43, §1º da Lei Complementar nº 123/06, sob pena de inabilitação.",
+        "evidence_refs": [
+          "EV-RFT-10"
+        ],
+        "requirement_id": "RFT-11",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_operacional": [
+      {
+        "phase": "habilitacao",
+        "title": "Registro da empresa no CREA/CAU",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.4",
+        "description": "Comprovação de registro ou inscrição da empresa licitante no CREA e/ou CAU, conforme as áreas de atuação, para o exercício das atividades.",
+        "evidence_refs": [
+          "EV-QTO-01"
+        ],
+        "requirement_id": "QTO-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado QTO: Regularização do Sub-leito",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.5",
+        "description": "Atestado(s) de Capacidade Técnico-Operacional comprovando execução de serviços de REGULARIZAÇÃO DO SUB-LEITO, em quantidade mínima de 12.089,69 M².",
+        "evidence_refs": [
+          "EV-QTO-02"
+        ],
+        "requirement_id": "QTO-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado QTO: Compactação de Aterros 95% P.N.",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.5",
+        "description": "Atestado(s) de Capacidade Técnico-Operacional comprovando execução de serviços de COMPACTAÇÃO DE ATERROS 95% P.N., em quantidade mínima de 1.433,45 M³.",
+        "evidence_refs": [
+          "EV-QTO-03"
+        ],
+        "requirement_id": "QTO-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado QTO: Transporte Local com DMT até 4,00KM",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.5",
+        "description": "Atestado(s) de Capacidade Técnico-Operacional comprovando execução de serviços de TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32), em quantidade mínima de 4.144,64 T.",
+        "evidence_refs": [
+          "EV-QTO-04"
+        ],
+        "requirement_id": "QTO-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado QTO: Indenização de Jazida",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.5",
+        "description": "Atestado(s) de Capacidade Técnico-Operacional comprovando execução de serviços de INDENIZAÇÃO DE JAZIDA, em quantidade mínima de 2.981,42 M³.",
+        "evidence_refs": [
+          "EV-QTO-05"
+        ],
+        "requirement_id": "QTO-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_economico_financeira": [
+      {
+        "phase": "habilitacao",
+        "title": "Certidão negativa de falência",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.11.1",
+        "description": "Certidão negativa de falência expedida pelo distribuidor da sede da licitante.",
+        "evidence_refs": [
+          "EV-QEF-01"
+        ],
+        "requirement_id": "QEF-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certidão Simplificada e Específica",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.11.2",
+        "description": "CERTIDÃO SIMPLIFICADA E ESPECÍFICA comprovando o registro, indicando o objeto, endereço, com emissão até 30 (trinta) dias anteriores da data da abertura do certame.",
+        "evidence_refs": [
+          "EV-QEF-02"
+        ],
+        "requirement_id": "QEF-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Balanço patrimonial e demonstrações contábeis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.11.3",
+        "description": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais, acompanhado do termo de abertura e encerramento.",
+        "evidence_refs": [
+          "EV-QEF-03"
+        ],
+        "requirement_id": "QEF-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Balanço patrimonial para empresa constituída no exercício social vigente",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.11.4",
+        "description": "No caso de empresa constituída no exercício social vigente, admite-se a apresentação de balanço patrimonial e demonstrações contábeis referentes ao período de existência da empresa.",
+        "evidence_refs": [
+          "EV-QEF-04"
+        ],
+        "requirement_id": "QEF-04",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Última auditoria contábil-financeira (Cooperativa)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.11.5",
+        "description": "Caso a licitante seja cooperativa, tais documentos deverão ser acompanhados da última auditoria contábil-financeira, conforme dispõe o art. 112º da Lei Federal nº 5.764/71, ou de uma declaração, sob as penas da lei, de que tal auditoria não foi exigida pelo órgão fiscalizador.",
+        "evidence_refs": [
+          "EV-QEF-05"
+        ],
+        "requirement_id": "QEF-05",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certidão de Regularidade do Profissional do contador",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.11.6",
+        "description": "Certidão de Regularidade do Profissional do contador responsável, emitido pelo órgão competente.",
+        "evidence_refs": [
+          "EV-QEF-06"
+        ],
+        "requirement_id": "QEF-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Garantia de Participação",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.11.7",
+        "description": "Garantia de Participação, referente a 1% (um por cento) do valor total orçado, constante da(s) planilha(s) orçamentária(s) anexo(s) deste edital, nos termos do \"caput\" e § 1º do art. 96 da Lei Federal nº 14.133/21.",
+        "evidence_refs": [
+          "EV-QEF-07"
+        ],
+        "requirement_id": "QEF-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_profissional": [
+      {
+        "phase": "habilitacao",
+        "title": "Registro de RT no CREA/CAU",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.4",
+        "description": "Registro ou inscrição dos responsáveis técnicos no CREA e/ou CAU, conforme as áreas de atuação, comprovando sua habilitação para o exercício das atividades.",
+        "evidence_refs": [
+          "EV-QTP-01"
+        ],
+        "requirement_id": "QTP-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "CAT: Regularização do Sub-leito (12.089,69 M²)",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.6",
+        "description": "Certidão de Acervo Técnico (CAT) COM REGISTRO DE ATESTADO do profissional responsável técnico, comprovando execução de serviços de REGULARIZAÇÃO DO SUB-LEITO, em quantidade mínima de 12.089,69 M².",
+        "evidence_refs": [
+          "EV-QTP-02"
+        ],
+        "requirement_id": "QTP-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "CAT: Compactação de Aterros 95% P.N. (1.433,45 M³)",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.6",
+        "description": "Certidão de Acervo Técnico (CAT) COM REGISTRO DE ATESTADO do profissional responsável técnico, comprovando execução de serviços de COMPACTAÇÃO DE ATERROS 95% P.N., em quantidade mínima de 1.433,45 M³.",
+        "evidence_refs": [
+          "EV-QTP-03"
+        ],
+        "requirement_id": "QTP-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "CAT: Transporte Local com DMT até 4,00KM (4.144,64 T)",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.6",
+        "description": "Certidão de Acervo Técnico (CAT) COM REGISTRO DE ATESTADO do profissional responsável técnico, comprovando execução de serviços de TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32), em quantidade mínima de 4.144,64 T.",
+        "evidence_refs": [
+          "EV-QTP-04"
+        ],
+        "requirement_id": "QTP-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "CAT: Indenização de Jazida (2.981,42 M³)",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.6",
+        "description": "Certidão de Acervo Técnico (CAT) COM REGISTRO DE ATESTADO do profissional responsável técnico, comprovando execução de serviços de INDENIZAÇÃO DE JAZIDA, em quantidade mínima de 2.981,42 M³.",
+        "evidence_refs": [
+          "EV-QTP-05"
+        ],
+        "requirement_id": "QTP-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Comprovação de vínculo do RT com a licitante",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.1.8",
+        "description": "Comprovação de vínculo do profissional detentor da CAT com a empresa, através de ficha/livro de registro de empregados, participação societária ou contrato de prestação de serviço.",
+        "evidence_refs": [
+          "EV-QTP-06"
+        ],
+        "requirement_id": "QTP-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de disponibilidade dos RTs",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "documento_complementar",
+        "source_ref": "Edital, item 8.1.9",
+        "description": "Declaração de disponibilidade dos profissionais Responsáveis Técnicos indicados, incluindo os detentores de CAT, para participação nos serviços objeto da licitação.",
+        "evidence_refs": [
+          "EV-QTP-07"
+        ],
+        "requirement_id": "QTP-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de conhecimento do serviço pelo RT",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "documento_complementar",
+        "source_ref": "Edital, item 8.1.10",
+        "description": "Declaração expressa do Responsável Técnico, com firma reconhecida, de pleno conhecimento dos projetos, condições e natureza do trabalho, incluindo geotecnia, assumindo total responsabilidade.",
+        "evidence_refs": [
+          "EV-QTP-08"
+        ],
+        "requirement_id": "QTP-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Engenheiro Civil de Obra Pleno na equipe",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 2.0",
+        "description": "Manter na obra profissional Engenheiro Civil de Obra Pleno.",
+        "evidence_refs": [
+          "EV-QTP-09"
+        ],
+        "requirement_id": "QTP-09",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Encarregado Geral/Mestre de Obra na equipe",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 2.0",
+        "description": "Manter na obra profissional Encarregado Geral/Mestre de Obra.",
+        "evidence_refs": [
+          "EV-QTP-10"
+        ],
+        "requirement_id": "QTP-10",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ]
+  },
+  "analysis_meta": {
+    "model_used": "gemini-2.5-flash",
+    "analysis_id": "pncp_1775246816939_56vulw",
+    "source_type": "pncp_download",
+    "stage_times": {
+      "extraction": 196.614,
+      "risk_review": 27.677,
+      "normalization": 33.779
+    },
+    "generated_at": "2026-04-03T20:06:56.939Z",
+    "source_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/17913a76-be82-495d-8c77-a47eafca8742.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/3b6aa905-50a6-48ae-97fe-d81e66b1433c.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/c172f027-1b19-4145-b9f8-3196c17971d1.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/025b05cc-b934-4801-be20-9130391e3d32.pdf"
+    ],
+    "rule_findings": [
+      {
+        "code": "R16",
+        "message": "Exigência de firma reconhecida/assinatura autenticada identificada (QTP-08). Requer providência presencial em cartório com antecedência.",
+        "category": "qualificacao_tecnica",
+        "severity": "high",
+        "affectedFields": [
+          "requirements.QTP-08"
+        ],
+        "recommendation": "Providenciar reconhecimento de firma em cartório com antecedência. Se houver dúvida sobre base legal, avaliar esclarecimento ao órgão antes de impugnar."
+      },
+      {
+        "code": "R17",
+        "message": "Exigência de comprovação de vínculo do responsável técnico (QTP-06). Formas aceitas: CTPS, contrato social, contrato de prestação de serviços. Verificar se o edital restringe as formas admissíveis.",
+        "category": "qualificacao_tecnica",
+        "severity": "high",
+        "affectedFields": [
+          "requirements.qualificacao_tecnica_profissional.QTP-06"
+        ],
+        "recommendation": "Verificar antecipadamente que a forma de vínculo do RT atende aos termos do edital. Se restrito a CTPS, preparar documentação comprobatória junto ao RH."
+      },
+      {
+        "code": "R18",
+        "message": "Garantia de proposta exigida (1% (um por cento) do valor total orçado, constante da(s) planilha(s) orçamentária(s) anexo(s) deste edital, nos termos do \"caput\" e § 1º do art. 96 da Lei Federal nº 14.133/21. Modalidades: Caução em dinheiro, Caução em Título da Dívida Pública, Caução por Seguro-Garantia, Caução por Fiança Bancária. (Edital, item 8.1.11.7 e 8.1.11.7.1)). Requisito de habilitação: ausência = inabilitação imediata. Exige modalidade correta (seguro-garantia, fiança bancária ou caução) e upload no prazo.",
+        "category": "economico_financeira",
+        "severity": "high",
+        "affectedFields": [
+          "participation_conditions.exige_garantia_proposta"
+        ],
+        "recommendation": "Confirmar modalidade aceita, valor exato, e prazo de validade. Providenciar documento junto à seguradora/banco com antecedência."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Vedação de Subcontratação\" (media) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R11",
+        "message": "63 exigências sem indicação se são obrigatórias ou não.",
+        "category": "normalizacao",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements"
+        ],
+        "recommendation": "Na maioria dos editais, exigências de habilitação são obrigatórias por padrão."
+      },
+      {
+        "code": "R19",
+        "message": "8 parcela(s) de maior relevância identificadas. Verificar se os quantitativos mínimos correspondem ao percentual legalmente aceito (normalmente ≤50% do item relevante).",
+        "category": "qualificacao_tecnica",
+        "severity": "medium",
+        "affectedFields": [
+          "technical_analysis.parcelas_relevantes"
+        ],
+        "recommendation": "Comparar quantitativos com o orçamento e verificar se estão restritos às parcelas de maior relevância."
+      },
+      {
+        "code": "R21b",
+        "message": "Proposta exige 5 documentos técnicos/financeiros (planilha, BDI, cronograma). Conferir completude antes do envio.",
+        "category": "proposta",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements.proposta_comercial"
+        ],
+        "recommendation": "Preparar todos os anexos com antecedência e conferir formatação conforme modelo do edital."
+      },
+      {
+        "code": "R22",
+        "message": "Licitação de obra com critério \"Menor Preço\". Há risco de análise de inexequibilidade sobre propostas com desconto elevado.",
+        "category": "proposta",
+        "severity": "medium",
+        "affectedFields": [
+          "process_identification.criterio_julgamento"
+        ],
+        "recommendation": "Para obras/serviços de engenharia, proposta abaixo de 75% do orçamento referencial gera presunção de inexequibilidade (art. 59, §3º da Lei 14.133/21). Fundamentar BDI e composições unitárias."
+      },
+      {
+        "code": "R12",
+        "message": "35 evidências no registry sem referência de nenhuma exigência ou ponto crítico.",
+        "category": "evidencia",
+        "severity": "low",
+        "affectedFields": [
+          "evidence_registry"
+        ]
+      }
+    ],
+    "prompt_version": "v4.1.0",
+    "quality_report": {
+      "summary": "Quality: 91.5% | Extract: 100% | Norm: 100% | Evidence: 100% | Risk: 100% | Ops: 100% | 0 issues, 9 rule findings",
+      "issueCount": 0,
+      "overallScore": 91.5,
+      "categoryScores": {
+        "evidence": 100,
+        "extraction": 100,
+        "riskReview": 100,
+        "normalization": 100,
+        "operationalUsefulness": 100
+      }
+    },
+    "schema_enforcer": {
+      "details": [
+        "timeline.data_sessao: \"10/04/2026 08:30\" → \"10/04/2026 às 08:30\"",
+        "timeline.prazo_envio_proposta: \"09/04/2026 17:00\" → \"09/04/2026 às 17:00\"",
+        "timeline.prazo_envio_habilitacao: \"09/04/2026 17:00\" → \"09/04/2026 às 17:00\"",
+        "participation_conditions.exige_amostra: \"null\" → \"false (default conservador)\"",
+        "RFT: \"IE/IM fora de posição\" → \"reordenado: CNPJ → IE → IM → CNDs (Regra de Ouro)\""
+      ],
+      "corrections": 15
+    },
+    "analysis_version": "1.0",
+    "models_per_stage": {
+      "extraction": "gemini-2.5-flash",
+      "risk_review": "gemini-2.5-flash",
+      "normalization": "gemini-2.5-flash"
+    },
+    "workflow_stage_status": {
+      "extraction": "done",
+      "validation": "done",
+      "risk_review": "done",
+      "normalization": "done"
+    }
+  },
+  "evidence_registry": [
+    {
+      "page": "5",
+      "excerpt": "Ato constitutivo, estatuto ou contrato social em vigor, devidamente registrado na Junta Comercial da respectiva sede, acompanhado de documento comprobatório de seus administradores;",
+      "section": "8.1.1.1",
+      "evidence_id": "EV-HJ-01",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "Cédula de identidade do(s) administrador(es);",
+      "section": "8.1.1.2",
+      "evidence_id": "EV-HJ-02",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "No caso de empresário individual: inscrição no Registro Público de Empresas Mercantis a cargo da Junta Comercial da respectiva sede;",
+      "section": "8.1.1.3",
+      "evidence_id": "EV-HJ-03",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Inscrição no Registro Público de Empresas Mercantis onde opera, com averbação no Registro onde tem sede a matriz, no caso de ser o participante sucursal, filial ou agência;",
+      "section": "8.1.1.4",
+      "evidence_id": "EV-HJ-04",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "No caso de sociedade simples: inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas a respectiva sede, acompanhada de prova da indicação dos seus administradores;",
+      "section": "8.1.1.5",
+      "evidence_id": "EV-HJ-05",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "No caso de cooperativa: ata de fundação e estatuto social em vigor, com a ata da assembleia que o aprovou, devidamente arquivado na Junta Comercial ou inscrito no Registro Civil das Pessoas Jurídicas da respectiva sede, bem como o registro de que trata o art. 107 da Lei nº 5.764/71;",
+      "section": "8.1.1.6",
+      "evidence_id": "EV-HJ-06",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "No caso de empresa ou sociedade estrangeira em funcionamento no País: decreto de autorização;",
+      "section": "8.1.1.7",
+      "evidence_id": "EV-HJ-07",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Os documentos acima deverão estar acompanhados de todas as alterações ou da consolidação respectiva;",
+      "section": "8.1.1.8",
+      "evidence_id": "EV-HJ-08",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Prova de inscrição no Cadastro Nacional de Pessoas Jurídicas - CNPJ;",
+      "section": "8.1.2.1",
+      "evidence_id": "EV-RFT-01",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Prova de inscrição no cadastro de contribuintes estadual ou municipal, relativo ao domicílio ou sede da licitante, pertinente ao seu ramo de atividade e compatível com o objeto da licitação;",
+      "section": "8.1.2.2",
+      "evidence_id": "EV-RFT-02",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Prova de regularidade fiscal perante a Fazenda Nacional, mediante apresentação de certidão expedida conjuntamente pela Secretaria da Receita Federal do Brasil (RFB) e pela Procuradoria-Geral da Fazenda Nacional (PGFN), referente a todos os créditos tributários Federais e à Dívida Ativa da União (DAU) por elas administrados;",
+      "section": "8.1.2.3",
+      "evidence_id": "EV-RFT-03",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Prova de regularidade com a Fazenda Estadual do domicílio ou sede da licitante, relativa à atividade em cujo exercício contrata ou concorre;",
+      "section": "8.1.2.4",
+      "evidence_id": "EV-RFT-04",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Caso a licitante seja considerada isenta dos tributos estaduais relacionados ao objeto licitatório, deverá comprovar tal condição mediante certidão/declaração da Fazenda Estadual do seu domicílio ou sede, ou outra equivalente, na forma da lei;",
+      "section": "8.1.2.5",
+      "evidence_id": "EV-RFT-05",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Prova de regularidade com a Fazenda Municipal do domicílio ou sede da licitante, relativa à atividade em cujo exercício contrata ou concorre;",
+      "section": "8.1.2.6",
+      "evidence_id": "EV-RFT-06",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Caso a licitante seja considerada isenta dos tributos municipais relacionados ao objeto licitatório, deverá comprovar tal condição mediante certidão/declaração da Fazenda Municipal do seu domicílio ou sede, ou outra equivalente, na forma da lei;",
+      "section": "8.1.2.7",
+      "evidence_id": "EV-RFT-07",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS);",
+      "section": "8.1.2.8",
+      "evidence_id": "EV-RFT-08",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Prova de inexistência de débitos inadimplidos perante a justiça do trabalho, mediante a apresentação de certidão negativa ou positiva com efeito de negativa de Débitos Trabalhista, nos termos do Título VII-A da Consolidação das Leis do Trabalho, aprovada pelo Decreto-Lei nº 5.452/43;",
+      "section": "8.1.2.9",
+      "evidence_id": "EV-RFT-09",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "A licitante qualificada como microempresa, empresa de pequeno porte e as sociedades cooperativas mencionadas no art. 34 da Lei nº 11.488/07, conforme o caso, deverá encaminhar a documentação de habilitação exigida para efeito de comprovação de regularidade fiscal, ainda que haja alguma restrição, nos termos do que dispõe o art. 43, §1º da Lei Complementar nº 123/06, sob pena de inabilitação.",
+      "section": "8.1.2.10",
+      "evidence_id": "EV-RFT-10",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "Certidão negativa de falência expedida pelo distribuidor da sede da licitante;",
+      "section": "8.1.11.1",
+      "evidence_id": "EV-QEF-01",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "CERTIDÃO SIMPLIFICADA E ESPECÍFICA comprovando o registro, indicando o objeto, endereço, com emissão até 30 (trinta) dias anteriores da data da abertura do certame;",
+      "section": "8.1.11.2",
+      "evidence_id": "EV-QEF-02",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais, acompanhado do termo de abertura e encerramento;",
+      "section": "8.1.11.3",
+      "evidence_id": "EV-QEF-03",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "9",
+      "excerpt": "No caso de empresa constituída no exercício social vigente, admite-se a apresentação de balanço patrimonial e demonstrações contábeis referentes ao período de existência da empresa;",
+      "section": "8.1.11.4",
+      "evidence_id": "EV-QEF-04",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "9",
+      "excerpt": "Caso a licitante seja cooperativa, tais documentos deverão ser acompanhados da última auditoria contábil-financeira, conforme dispõe o art. 112º da Lei Federal nº 5.764/71, ou de uma declaração, sob as penas da lei, de que tal auditoria não foi exigida pelo órgão fiscalizador;",
+      "section": "8.1.11.5",
+      "evidence_id": "EV-QEF-05",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "9",
+      "excerpt": "Certidão de Regularidade do Profissional do contador responsável, emitido pelo órgão competente.",
+      "section": "8.1.11.6",
+      "evidence_id": "EV-QEF-06",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "9",
+      "excerpt": "Garantia de Participação, referente a 1% (um por cento) do valor total orçado, constante da(s) planilha(s) orçamentária(s) anexo(s) deste edital, nos termos do \"caput\" e § 1º do art. 96 da Lei Federal nº 14.133/21.",
+      "section": "8.1.11.7",
+      "evidence_id": "EV-QEF-07",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Registro ou inscrição da empresa licitante e de seus responsáveis técnicos no CREA (Conselho Regional de Engenharia e Agronomia) e/ou CAU (Conselho de Arquitetura e Urbanismo), conforme as áreas de atuação e que comprove sua habilitação para o exercício das atividades.",
+      "section": "8.1.4",
+      "evidence_id": "EV-QTO-01",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Comprovação da capacidade TÉCNICO-OPERACIONAL da licitante em possuir Certidões ou Atestados, fornecido(s) por pessoa(s) jurídica (s) de direito público ou privado, em que figurem o nome da empresa proponente na condição de \"contratada\", demonstrando que a empresa executou diretamente serviços similares de complexidade operacional equivalente ou superior com as do objeto ora licitado em quantidade igual ou superior. Para fins da comprovação que trata esse subitem são consideradas relevantes, pertinentes e compatíveis com o objeto dessa licitação, na forma prevista no art. 67, § 10, § 2º, Lei nº 14.133/2021. Para fins de comprovação entende-se como parcela de maior relevância, os itens descritos abaixo: DESCRIÇÃO DO SERVIÇO REGULARIZAÇÃO DO SUB-LEITO. QUANTIDADE MÍNIMA 12.089,69 M² (referente a 15% do quantitativo total do orçamento);",
+      "section": "8.1.5",
+      "evidence_id": "EV-QTO-02",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "COMPACTAÇÃO DE ATERROS 95% P.N. QUANTIDADE MÍNIMA 1.433,45 M³ (referente a 5% do quantitativo total do orçamento);",
+      "section": "8.1.5",
+      "evidence_id": "EV-QTO-03",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32). QUANTIDADE MÍNIMA 4.144,64 T (referente a 20% do quantitativo total do orçamento);",
+      "section": "8.1.5",
+      "evidence_id": "EV-QTO-04",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "INDENIZAÇÃO DE JAZIDA. QUANTIDADE MÍNIMA 2.981,42 M³ (referente a 5% do quantitativo total do orçamento);",
+      "section": "8.1.5",
+      "evidence_id": "EV-QTO-05",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Registro ou inscrição da empresa licitante e de seus responsáveis técnicos no CREA (Conselho Regional de Engenharia e Agronomia) e/ou CAU (Conselho de Arquitetura e Urbanismo), conforme as áreas de atuação e que comprove sua habilitação para o exercício das atividades.",
+      "section": "8.1.4",
+      "evidence_id": "EV-QTP-01",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Comprovação da capacidade TÉCNICO-PROFISSIONAL da licitante em possuir como Responsável Técnico ou em seu quadro permanente, na data prevista para entrega dos documentos, profissional(is) de nível superior, reconhecido(s) pelo CREA ou CAU, detentor(es) de Certidão de Acervo Técnico COM REGISTRO DE ATESTADO que tenha executado serviços de características técnicas similares ou superior ao objeto ora licitado em quantidade igual ou superior. Para fins da comprovação que trata esse subitem são consideradas relevantes, pertinentes e compatíveis com o objeto dessa licitação, na forma prevista no art. 67, § 10, § 2º, Lei nº 14.133/2021. Para fins de comprovação entende-se como parcela de maior relevância, o item descrito abaixo: DESCRIÇÃO DO SERVIÇO REGULARIZAÇÃO DO SUB-LEITO. QUANTIDADE MÍNIMA 12.089,69 M² (referente a 15% do quantitativo total do orçamento);",
+      "section": "8.1.6",
+      "evidence_id": "EV-QTP-02",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "COMPACTAÇÃO DE ATERROS 95% P.N. QUANTIDADE MÍNIMA 1.433,45 M³ (referente a 5% do quantitativo total do orçamento);",
+      "section": "8.1.6",
+      "evidence_id": "EV-QTP-03",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32). QUANTIDADE MÍNIMA 4.144,64 T (referente a 20% do quantitativo total do orçamento);",
+      "section": "8.1.6",
+      "evidence_id": "EV-QTP-04",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "INDENIZAÇÃO DE JAZIDA. QUANTIDADE MÍNIMA 2.981,42 M³ (referente a 5% do quantitativo total do orçamento);",
+      "section": "8.1.6",
+      "evidence_id": "EV-QTP-05",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "No caso de o profissional detentor da CERTIDÃO DE ACERVO TÉCNICO não constar da relação de responsáveis técnicos junto ao CREA ou CAU, o acervo do profissional será aceito, desde que ele demonstre ser pertencente ao quadro permanente da empresa através de um dos seguintes documentos: a) Cópia autenticada da \"FICHA OU LIVRO DE REGISTRO DE EMPREGADOS\" onde se identifique os campos de admissão e rescisão, juntamente com o Termo de Abertura do livro de registro de empregados, quando se tratar de empregado, comprovando que o profissional detentor do Atestado de Responsabilidade Técnica faz parte do quadro permanente da licitante; b) Comprovação da participação societária, no caso de sócio, através de cópia do Contrato Social. c) Comprovação do vínculo do profissional através do Contrato de Regime de Prestação de Serviço, sem vínculo trabalhista e regido pela legislação civil comum.",
+      "section": "8.1.8",
+      "evidence_id": "EV-QTP-06",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "Declaração de disponibilidade dos profissionais Responsáveis Técnicos indicados pela licitante, para fins de formação da Equipe Técnica, incluindo o(s) Responsável(is) Técnico(s) detentor(es) do Atestado de Capacidade Técnica, declarando que participarão dos serviços objeto desta licitação, nos termos deste Edital.",
+      "section": "8.1.9",
+      "evidence_id": "EV-QTP-07",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "Declaração expressa do Responsável Técnico da Licitante, com firma reconhecida em cartório competente, que tem pleno conhecimento dos projetos básicos/executivos, das condições e da natureza do trabalho, inclusive geotecnia do local e que tem pleno conhecimento das condições e peculiaridades inerentes a natureza dos trabalhos, e ainda que assume total responsabilidade por esse fato e que não utilizará deste, para quaisquer questionamentos futuros que ensejem avenças técnicas ou financeiras com a Administração.",
+      "section": "8.1.10",
+      "evidence_id": "EV-QTP-08",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "11",
+      "excerpt": "Durante o período da obra deverá ser mantido na obra, os seguintes profissionais/ equipamentos mínimos necessários a execução dos serviços: ENGENHEIRO CIVIL DE OBRA PLENO",
+      "section": "2.0",
+      "evidence_id": "EV-QTP-09",
+      "document_name": "ANEXO II TERMO DE REFERÊNCIA",
+      "document_type": "tr"
+    },
+    {
+      "page": "11",
+      "excerpt": "Durante o período da obra deverá ser mantido na obra, os seguintes profissionais/ equipamentos mínimos necessários a execução dos serviços: ENCARREGADO GERAL/MESTRE DE OBRA",
+      "section": "2.0",
+      "evidence_id": "EV-QTP-10",
+      "document_name": "ANEXO II TERMO DE REFERÊNCIA",
+      "document_type": "tr"
+    },
+    {
+      "page": "12",
+      "excerpt": "Valor unitário e total para cada item ou lote de itens (conforme o caso), em moeda corrente nacional;",
+      "section": "10.1.1",
+      "evidence_id": "EV-PC-01",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "12",
+      "excerpt": "Marca de cada item ofertado, quando for o caso;",
+      "section": "10.1.2",
+      "evidence_id": "EV-PC-02",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "12",
+      "excerpt": "Fabricante de cada item ofertado, quando for o caso;",
+      "section": "10.1.3",
+      "evidence_id": "EV-PC-03",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "12",
+      "excerpt": "Descrição do objeto, contendo as informações similares à especificação do Termo de Referência/Projeto Básico.",
+      "section": "10.1.4",
+      "evidence_id": "EV-PC-04",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "12",
+      "excerpt": "O prazo de validade da proposta não será inferior a 60 (sessenta) dias, a contar da data de sua apresentação.",
+      "section": "10.5",
+      "evidence_id": "EV-PC-05",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "12",
+      "excerpt": "A PROPOSTA COMERCIAL ESCRITA deverá conter, preferencialmente, as seguintes informações e documentos: a) folha de rosto em papel timbrado da empresa, contendo a firma ou denominação do particular, inclusive com o número do CNPJ, endereço, telefone e e-mail, bem como referência ao número do presente certame, o nome do Órgão a quem se destina, valor global em algarismos e por extenso, prazo de validade, e outras informações pertinentes;",
+      "section": "11.2.a",
+      "evidence_id": "EV-PC-06",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "12",
+      "excerpt": "Declaração expressa na proposta de que, no preço global proposto, estão incluídas todas as despesas diretas, indiretas e quaisquer outras necessárias à total e perfeita execução das obras e serviços desta licitação, constituindo-se, portanto, na única remuneração devida pelo contratante.",
+      "section": "11.3",
+      "evidence_id": "EV-PC-07",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "13",
+      "excerpt": "Declaração expressa na proposta de que as despesas decorrentes da elaboração da proposta correm por conta da licitante, não lhe cabendo direito a indenização de qualquer natureza;",
+      "section": "11.4",
+      "evidence_id": "EV-PC-08",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "13",
+      "excerpt": "Planilha Orçamentária formulada segundo o modelo que integra o projeto básico e este Edital, onde constem todos os preços unitários e totais, percentual do BDI e o preço global para a execução das obras e serviços licitados;",
+      "section": "11.5",
+      "evidence_id": "EV-PC-09",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "13",
+      "excerpt": "Cronograma físico-financeiro.",
+      "section": "11.6",
+      "evidence_id": "EV-PC-10",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "13",
+      "excerpt": "Valor do faturamento mensal previsto;",
+      "section": "11.7",
+      "evidence_id": "EV-PC-11",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "13",
+      "excerpt": "Valor acumulado do faturamento previsto ao longo da execução das obras; Detalhamento do BDI; e",
+      "section": "11.8",
+      "evidence_id": "EV-PC-12",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "13",
+      "excerpt": "A planilha de composição de custos unitários que explicitam os preços de insumos e os índices de produtividade.",
+      "section": "11.9",
+      "evidence_id": "EV-PC-13",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "10",
+      "excerpt": "DECLARAÇÃO DE MICROEMPRESA OU EMPRESA DE PEQUENO PORTE - de que atende aos requisitos do art. 3º da LC n° 123/2006, para fazer jus aos benefícios previstos nessa lei Modelo no Anexo IV;",
+      "section": "8.1.12.1",
+      "evidence_id": "EV-DC-01",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "10",
+      "excerpt": "DECLARAÇÃO QUE NÃO EMPREGA TRABALHO DE MENOR - de que não emprega menor de 18 anos em trabalhonoturno, perigoso ou insalubre, e não emprega menor de 16 anos, salvo, a partir de 14 anos, na condição de aprendiz, nos termos do inciso XXXIII, do art. 7º da Constituição Federal Modelo no Anexo V;",
+      "section": "8.1.12.2",
+      "evidence_id": "EV-DC-02",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "10",
+      "excerpt": "DECLARAÇÃO DE DISPONIBILIDADE DE EQUIPE TÉCNICA Modelo no Anexo VI;",
+      "section": "8.1.12.3",
+      "evidence_id": "EV-DC-03",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "10",
+      "excerpt": "DECLARAÇÃO DE CONHECIMENTO DA NATUREZA DO SERVIÇO Modelo no Anexo VII;",
+      "section": "8.1.12.4",
+      "evidence_id": "EV-DC-04",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "10",
+      "excerpt": "DECLARAÇÃO DE INEXISTÊNCIA DE FATO IMPEDITIVO de que inexistem fatos impeditivos para a habilitação no presente processo licitatório, ciente da obrigatoriedade de declarar ocorrências posteriores Modelo no Anexo VIII;",
+      "section": "8.1.12.5",
+      "evidence_id": "EV-DC-05",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "10",
+      "excerpt": "DECLARAÇÃO DE REQUISITOS DE HABILITAÇÃO de que cumpre plenamente as condições de habilitação fixadas no Edital e seus apêndices Modelo no Anexo IX;",
+      "section": "8.1.12.6",
+      "evidence_id": "EV-DC-06",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "11",
+      "excerpt": "No cadastramento da proposta inicial, o licitante declarará, em campo próprio do sistema, que: 9.3.1. Está ciente e concorda com as condições contidas no edital e seus anexos, bem como de que a proposta apresentada compreende a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição Federal, nas leis trabalhistas, nas normas infralegais, nas convenções coletivas de trabalho e nos termos de ajustamento de conduta vigentes na data de sua entrega em definitivo e que cumpre plenamente os requisitos de habilitação definidos no instrumento convocatório",
+      "section": "9.3.1",
+      "evidence_id": "EV-DC-07",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "11",
+      "excerpt": "O interessado que estiver mais bem colocado na disputa deverá apresentar à Administração, por meio eletrônico, planilha que contenha o preço global, os quantitativos e os preços unitários tidos como relevantes, conforme modelo de planilha elaborada pela Administração, para efeito de avaliação de exequibilidade (art. 59, §3°, da Lei nº 14.133/2021);",
+      "section": "8.2.2",
+      "evidence_id": "EV-PC-00",
+      "document_name": "ANEXO II TERMO DE REFERÊNCIA",
+      "document_type": "tr"
+    },
+    {
+      "page": "13",
+      "excerpt": "Os preços unitários não sejam superiores àqueles orçados e fixados na Planilha Orçamentária integrante deste Edital, apenas poderão ser aceitos se, simultaneamente, forem atendidos os seguintes requisitos: 11.10.1. Os valores não ultrapassem os preços unitários orçados e fixados na Planilha Orçamentária integrante deste Edital, e 11.10.2. O preço global proposto pela licitante seja inferior ou igual àquele orçado e fixado na Planilha Orçamentária integrante deste Edital.",
+      "section": "11.10",
+      "evidence_id": "EV-PC-00-2",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "13",
+      "excerpt": "As licitantes deverão apresentar as propostas na seguinte ordem: planilhas com detalhamento do BDI, cronograma e composição de custos unitários.",
+      "section": "11.11",
+      "evidence_id": "EV-PC-00-3",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "17",
+      "excerpt": "Será desclassificada a proposta vencedora que: 13.7.1. Se enquadrarem nos casos previstos no Art. 59, da Lei Federal nº 14.133/21. 13.7.1.1. contiverem vícios insanáveis; 13.7.1.2. não obedecerem às especificações técnicas pormenorizadas no edital; 13.7.1.3.apresentarem preços inexequíveis ou permanecerem acima do orçamento estimado para a contratação; 13.7.1.4.-não tiverem sua exequibilidade demonstrada, quando exigido pela Administração; 13.7.1.5. apresentarem desconformidade com quaisquer outras exigências do edital, desde que insanável.",
+      "section": "13.7.1",
+      "evidence_id": "EV-PC-00-4",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "18",
+      "excerpt": "Em conformidade com o § 4º do art. 59 da Lei nº 14.133/2021 em obras e serviços de engenharia, serão consideradas inexequíveis as propostas cujos valores forem inferiores a 75% (setenta e cinco por cento) do valor orçado pela Administração.",
+      "section": "13.8",
+      "evidence_id": "EV-PC-00-5",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "18",
+      "excerpt": "Acórdão TCU nº 465/2024 - Plenário: O critério definido no art. 59, § 4º, da Lei 14.133/2021 conduz a uma presunção relativa de inexequibilidade de preços, devendo a Administração, nos termos do art. 59, § 2º, da referida lei, dar à licitante a oportunidade de demonstrar a exequibilidade de sua proposta.",
+      "section": "13.8.1",
+      "evidence_id": "EV-PC-00-6",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "18",
+      "excerpt": "Será exigida garantia adicional do licitante vencedor cuja proposta for inferior a 85% (oitenta e cinco por cento) do valor orçado pela Administração, equivalente à diferença entre este último e o valor da proposta, sem prejuízo das demais garantias exigíveis, conforme disposto no art. 59 §5º da Lei 14.133/21.",
+      "section": "13.8.2",
+      "evidence_id": "EV-PC-00-7",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "18",
+      "excerpt": "Erros no preenchimento da planilha não constituem motivo para a desclassificação da proposta. A planilha poderá ser ajustada pelo fornecedor, no prazo indicado pelo sistema, desde que não haja majoração do preço.",
+      "section": "13.11",
+      "evidence_id": "EV-PC-00-8",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "18",
+      "excerpt": "Considera-se erro no preenchimento da planilha passível de correção a indicação de recolhimento de impostos e contribuições na forma do Simples Nacional, quando não cabível esse regime.",
+      "section": "13.11.2",
+      "evidence_id": "EV-PC-00-9",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "14",
+      "excerpt": "Será desclassificada a proposta que identifique o licitante.",
+      "section": "12.2.1",
+      "evidence_id": "EV-PC-00-10",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Será concedido tratamento favorecido para as microempresas, empresas de pequeno porte e microempreendedores individuais nos termos do artigo 16 da Lei Federal nº 14.133, de 2021 e da Lei Complementar nº 123, de 2006.",
+      "section": "3.4",
+      "evidence_id": "EV-PC-00-11",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Não cumprir os requisitos formais deste certame",
+      "section": "5.1",
+      "evidence_id": "EV-PC-00-12",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "tenha elaborado, participado ou contribuído com a elaboração do projeto básico ou executivo;",
+      "section": "5.2",
+      "evidence_id": "EV-PC-00-13",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "seja empresa estrangeira sem autorização de funcionamento no País;",
+      "section": "5.3",
+      "evidence_id": "EV-PC-00-14",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "esteja impedida de licitar e contratar com o MUNICÍPIO DE APUIARÉS",
+      "section": "5.4",
+      "evidence_id": "EV-PC-00-15",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "tenha sido declarada inidônea para licitar e contratar com Administração Pública, por decisão definitiva de qualquer órgão da Administração Pública, direta ou indireta, integrantes dos Poderes Legislativo, Executivo e Judiciário da União, Estados, Distrito Federal e Municípios, ou por força do art. 46, da Lei 8.443/1993, determinado pelo Tribunal de Contas da União - TCU;",
+      "section": "5.5",
+      "evidence_id": "EV-PC-00-16",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Os licitantes que não atendam às condições deste Edital e seu(s) anexo(s);",
+      "section": "5.6.1",
+      "evidence_id": "EV-PC-00-17",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Os licitantes que se enquadrem no Art. 14, da Lei Federal nº 14.133/21;",
+      "section": "5.6.2",
+      "evidence_id": "EV-PC-00-18",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Os agentes públicos de órgão ou da entidade licitante ou contratante, nos termos do § 1º do art. 9º da Lei Federal n.º 14.133, de 2021;",
+      "section": "5.6.3",
+      "evidence_id": "EV-PC-00-19",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Empresa, isoladamente ou em consórcio, responsável pela elaboração do projeto básico ou do projeto executivo, ou empresa da qual o autor do projeto seja dirigente, gerente, controlador, acionista ou detentor de mais de 5% (cinco por cento) do capital com direito a voto, responsável técnico ou subcontratado, quando a licitação versar sobre serviços ou fornecimento de bens a ela necessários;",
+      "section": "5.6.4",
+      "evidence_id": "EV-PC-00-20",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Pessoa física ou jurídica que se encontre, ao tempo da licitação, impossibilitada de participar da licitação em decorrência de sanção que lhe foi imposta;",
+      "section": "5.6.5",
+      "evidence_id": "EV-PC-00-21",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Aquele que mantenha vínculo de natureza técnica, comercial, econômica, financeira, trabalhista ou civil com dirigente do órgão ou entidade contratante ou com agente público que desempenhe função na licitação ou atue na fiscalização ou na gestão do contrato, ou que deles seja cônjuge, companheiro ou parente em linha reta, colateral ou por afinidade, até o terceiro grau;",
+      "section": "5.6.6",
+      "evidence_id": "EV-PC-00-22",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Empresas controladoras, controladas ou coligadas, nos termos da Lei nº 6.404, de 15 de dezembro de 1976, concorrendo entre si;",
+      "section": "5.6.7",
+      "evidence_id": "EV-PC-00-23",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Pessoa física ou jurídica que, nos 5 (cinco) anos anteriores à divulgação do edital, tenha sido condenada judicialmente, com trânsito em julgado, por exploração de trabalho infantil, por submissão de trabalhadores a condições análogas às de escravo ou por contratação de adolescentes nos casos vedados pela legislação trabalhista;",
+      "section": "5.6.8",
+      "evidence_id": "EV-PC-00-24",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Agente público do órgão ou entidade licitante;",
+      "section": "5.6.9",
+      "evidence_id": "EV-PC-00-25",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Pessoas jurídicas reunidas em consórcio;",
+      "section": "5.6.10",
+      "evidence_id": "EV-PC-00-26",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Organizações da Sociedade Civil de Interesse Público - OSCIP, atuando nessa condição;",
+      "section": "5.6.11",
+      "evidence_id": "EV-PC-00-27",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Não poderá participar, direta ou indiretamente, da licitação ou da execução do contrato agente público do órgão ou entidade contratante, devendo ser observadas as situações que possam configurar conflito de interesses no exercício ou após o exercício do cargo ou emprego, nos termos da legislação que disciplina a matéria, conforme § 1º do art. 9º da Lei nº 14.133, de 2021.",
+      "section": "5.6.12",
+      "evidence_id": "EV-PC-00-28",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "15",
+      "excerpt": "Durante a fase de lances, o Agente de contratação poderá EXCLUIR qualquer lance cujo valor seja considerado supostamente irrisório ou inexequível, ou até que entenda ter sido lançado erroneamente, cabendo ao sistema o encaminhamento de mensagem automática ao licitante, o qual terá a faculdade de repetir tal lance.",
+      "section": "12.13.6",
+      "evidence_id": "EV-PC-00-29",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "18",
+      "excerpt": "Se houver indícios de inexequibilidade da proposta de preço, ou em caso da necessidade de esclarecimentos complementares, poderão ser efetuadas diligências, para que a empresa comprove a exequibilidade da proposta.",
+      "section": "13.9",
+      "evidence_id": "EV-PC-00-30",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "18",
+      "excerpt": "Caso o custo global estimado do objeto licitado tenha sido decomposto em seus respectivos custos unitários por meio de Planilha de Custos e Formação de Preços elaborada pela Administração, o licitante classificado em primeiro lugar será convocado para apresentar Planilha por ele elaborada, com os respectivos valores adequados ao valor final da sua proposta, sob pena de não aceitação da proposta.",
+      "section": "13.10",
+      "evidence_id": "EV-PC-00-31",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "19",
+      "excerpt": "Apresentar proposta em desacordo com as especificações do edital;",
+      "section": "15.1.2.4",
+      "evidence_id": "EV-PC-00-32",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "19",
+      "excerpt": "Apresentar declaração ou documentação falsa exigida para o certame ou prestar declaração falsa durante a licitação;",
+      "section": "15.1.4",
+      "evidence_id": "EV-PC-00-33",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "19",
+      "excerpt": "Fraudar a licitação;",
+      "section": "15.1.5",
+      "evidence_id": "EV-PC-00-34",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "19",
+      "excerpt": "Comportar-se de modo inidôneo ou cometer fraude de qualquer natureza, em especial quando: 15.1.6.1. Induzir deliberadamente a erro no julgamento;",
+      "section": "15.1.6",
+      "evidence_id": "EV-PC-00-35",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "20",
+      "excerpt": "Praticar atos ilícitos com vistas a frustrar os objetivos da licitação;",
+      "section": "15.1.7",
+      "evidence_id": "EV-PC-00-36",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    },
+    {
+      "page": "20",
+      "excerpt": "Praticar ato lesivo previsto no art. 5º da Lei n.º 12.846, de 2013.",
+      "section": "15.1.8",
+      "evidence_id": "EV-PC-00-37",
+      "document_name": "Edital de Concorrência Eletrônica N° 0062026CESDUI",
+      "document_type": "edital"
+    }
+  ],
+  "legal_risk_review": {
+    "omissions": [],
+    "ambiguities": [
+      "A forma de comprovação da manutenção dos profissionais 'ENGENHEIRO CIVIL DE OBRA PLENO' e 'ENCARREGADO GERAL/MESTRE DE OBRA' na fase de habilitação, visto que a exigência se refere à 'manutenção na obra' durante a execução (TR, item 2.0)."
+    ],
+    "critical_points": [
+      {
+        "title": "Duplicidade de Atestados QTO e QTP para mesmas parcelas",
+        "reason": "Risco elevado de inabilitação se um único documento for apresentado para ambas as exigências, pois a Lei 14.133/2021 distingue a capacidade da pessoa jurídica da capacidade da pessoa física.",
+        "category": "tecnica",
+        "severity": "critica",
+        "source_ref": "Edital, itens 8.1.5 e 8.1.6",
+        "description": "O edital exige atestados de capacidade técnico-operacional (empresa) e certidões de acervo técnico (profissional) para as MESMAS parcelas de maior relevância e com os MESMOS quantitativos mínimos (Edital, itens 8.1.5 e 8.1.6).",
+        "evidence_refs": [
+          "EV-QTO-02",
+          "EV-QTO-03",
+          "EV-QTO-04",
+          "EV-QTO-05",
+          "EV-QTP-02",
+          "EV-QTP-03",
+          "EV-QTP-04",
+          "EV-QTP-05"
+        ],
+        "recommended_action": "Providenciar atestados distintos para a empresa e CATs para o profissional, ou solicitar esclarecimento sobre a aceitação de um único documento para ambas as exigências."
+      },
+      {
+        "title": "Garantia de Participação de 1% do valor total",
+        "reason": "Embora permitido pelo Art. 96 da Lei 14.133/2021, 1% pode representar um valor financeiro considerável para uma Concorrência de obras, elevando a barreira de entrada e restringindo a competitividade.",
+        "category": "economico_financeira",
+        "severity": "alta",
+        "source_ref": "Edital, item 8.1.11.7",
+        "description": "Exigência de garantia de participação de 1% do valor total orçado (Edital, item 8.1.11.7).",
+        "evidence_refs": [
+          "EV-QEF-07"
+        ],
+        "recommended_action": "Avaliar o custo da garantia de proposta e o impacto na competitividade. Considerar pedido de esclarecimento sobre a justificativa do percentual."
+      },
+      {
+        "title": "Declaração do Responsável Técnico com firma reconhecida",
+        "reason": "A exigência de reconhecimento de firma é uma formalidade que contraria o princípio da desburocratização da Lei 14.133/2021, que privilegia a autenticidade de documentos por meios eletrônicos ou declaração de autenticidade.",
+        "category": "tecnica",
+        "severity": "media",
+        "source_ref": "Edital, item 8.1.10",
+        "description": "Exigência de declaração expressa do Responsável Técnico com firma reconhecida em cartório (Edital, item 8.1.10).",
+        "evidence_refs": [
+          "EV-QTP-08"
+        ],
+        "recommended_action": "Cumprir a exigência providenciando o reconhecimento de firma. Caso inviável, solicitar esclarecimento sobre a aceitação de assinatura digital ou eletrônica com certificação ICP-Brasil."
+      },
+      {
+        "title": "Vedação de Consórcio",
+        "reason": "A vedação de consórcio é uma medida restritiva à competitividade, conforme Art. 15, § 7º da Lei 14.133/2021, que só deve ocorrer mediante justificativa técnica e econômica. A justificativa deve ser robusta.",
+        "category": "habilitacao",
+        "severity": "alta",
+        "source_ref": "Edital, item 5.6.10; Participation Conditions",
+        "description": "O edital veda a participação de pessoas jurídicas reunidas em consórcio, apresentando justificativa em anexo (Edital, item 5.6.10 e Participation Conditions).",
+        "evidence_refs": [
+          "EV-PC-00-26"
+        ],
+        "recommended_action": "Analisar a justificativa apresentada no Anexo XI. Se a justificativa for genérica ou insuficiente, avaliar a possibilidade de impugnação do edital."
+      },
+      {
+        "title": "Vedação de Subcontratação",
+        "reason": "A vedação total de subcontratação pode limitar a flexibilidade da execução e a competitividade, especialmente em obras de engenharia que podem envolver serviços especializados.",
+        "category": "contratual",
+        "severity": "media",
+        "source_ref": "TR, item 4.8.1",
+        "description": "Não é admitida a subcontratação do objeto contratual (TR, item 4.8.1).",
+        "evidence_refs": [],
+        "recommended_action": "Avaliar o impacto da vedação total na capacidade de execução e na estratégia de preços. Considerar solicitar esclarecimento sobre a possibilidade de subcontratação de parcelas específicas, se aplicável."
+      },
+      {
+        "title": "Preços Unitários da Proposta não podem ser superiores aos orçados",
+        "reason": "Esta exigência restringe a liberdade do licitante em compor sua proposta, impedindo a compensação de preços unitários (jogo de planilha) para otimizar a oferta global, o que pode limitar a competitividade.",
+        "category": "proposta",
+        "severity": "alta",
+        "source_ref": "Edital, item 11.10",
+        "description": "Os preços unitários da proposta não podem ser superiores aos orçados e fixados na Planilha Orçamentária do Edital, mesmo que o preço global seja inferior (Edital, item 11.10).",
+        "evidence_refs": [
+          "EV-PC-00-2"
+        ],
+        "recommended_action": "Revisar a planilha de preços unitários para garantir que nenhum item exceda o preço de referência da Administração. Considerar pedido de esclarecimento ou impugnação se a restrição for considerada excessiva e sem justificativa técnica."
+      },
+      {
+        "title": "Garantia Adicional para propostas abaixo de 85%",
+        "reason": "Esta exigência impõe um ônus financeiro adicional significativo para propostas agressivas, podendo desestimular lances mais baixos e impactar a exequibilidade financeira da contratação.",
+        "category": "economico_financeira",
+        "severity": "alta",
+        "source_ref": "Edital, item 13.8.2",
+        "description": "Será exigida garantia adicional do licitante vencedor cuja proposta for inferior a 85% do valor orçado pela Administração (Edital, item 13.8.2).",
+        "evidence_refs": [
+          "EV-PC-00-7"
+        ],
+        "recommended_action": "Considerar o impacto financeiro da garantia adicional ao formular a proposta, especialmente se a estratégia for apresentar um preço competitivo abaixo de 85% do valor orçado."
+      },
+      {
+        "title": "Profissionais na Obra listados como requisito de Habilitação",
+        "reason": "Embora a presença desses profissionais seja essencial para a execução, a listagem como requisito de habilitação pode gerar ambiguidade sobre a forma de comprovação na fase inicial do certame.",
+        "category": "tecnica",
+        "severity": "media",
+        "source_ref": "TR, item 2.0",
+        "description": "A exigência de manter profissionais (Engenheiro Civil de Obra Pleno, Encarregado Geral/Mestre de Obra) na obra está listada como requisito de qualificação técnica profissional na fase de habilitação (TR, item 2.0).",
+        "evidence_refs": [
+          "EV-QTP-09",
+          "EV-QTP-10"
+        ],
+        "recommended_action": "Preparar documentação que comprove a disponibilidade e o vínculo desses profissionais para a fase de habilitação, mesmo que a atuação seja na execução. Em caso de dúvida, solicitar esclarecimento sobre a forma de comprovação."
+      }
+    ],
+    "inconsistencies": [],
+    "possible_restrictive_clauses": [
+      "Vedação de consórcio sem justificativa robusta (Edital, item 5.6.10)",
+      "Vedação total de subcontratação (TR, item 4.8.1)",
+      "Exigência de garantia de proposta de 1% do valor total orçado (Edital, item 8.1.11.7)",
+      "Exigência de que preços unitários da proposta não sejam superiores aos orçados pela Administração (Edital, item 11.10)"
+    ],
+    "points_for_impugnation_or_clarification": [
+      "Recomenda-se solicitar esclarecimento sobre a exigência de atestados de capacidade técnico-operacional e profissional para as MESMAS parcelas e quantitativos, questionando se um único documento pode atender a ambas as exigências, ou se são necessários documentos distintos (Edital, itens 8.1.5 e 8.1.6).",
+      "Recomenda-se solicitar esclarecimento sobre a justificativa para a vedação de consórcio, caso a justificativa apresentada no Anexo XI seja genérica ou não demonstre inviabilidade técnica ou econômica (Edital, item 5.6.10).",
+      "Recomenda-se solicitar esclarecimento sobre a justificativa para a vedação total de subcontratação, especialmente se houver parcelas do objeto que poderiam ser executadas por empresas especializadas (TR, item 4.8.1).",
+      "Recomenda-se solicitar esclarecimento sobre a exigência de que os preços unitários da proposta não sejam superiores aos orçados pela Administração, mesmo com preço global inferior, questionando a base legal e a razoabilidade da restrição à composição de preços (Edital, item 11.10)."
+    ]
+  },
+  "proposal_analysis": {
+    "itens_licitados": [],
+    "exige_cronograma": true,
+    "criterios_desempate": [],
+    "exige_carta_proposta": true,
+    "exige_composicao_bdi": true,
+    "observacoes_proposta": [
+      {
+        "descricao": "Os preços unitários não sejam superiores àqueles orçados e fixados na Planilha Orçamentária integrante deste Edital, apenas poderão ser aceitos se, simultaneamente, forem atendidos os seguintes requisitos: Os valores não ultrapassem os preços unitários orçados e fixados na Planilha Orçamentária integrante deste Edital, e O preço global proposto pela licitante seja inferior ou igual àquele orçado e fixado na Planilha Orçamentária integrante deste Edital.",
+        "source_ref": "Edital, item 11.10"
+      },
+      {
+        "descricao": "As licitantes deverão apresentar as propostas na seguinte ordem: planilhas com detalhamento do BDI, cronograma e composição de custos unitários.",
+        "source_ref": "Edital, item 11.11"
+      },
+      {
+        "descricao": "Erros no preenchimento da planilha não constituem motivo para desclassificação da proposta. A planilha poderá ser ajustada pelo fornecedor, no prazo indicado pelo sistema, desde que não haja majoração do preço.",
+        "source_ref": "Edital, item 13.11"
+      },
+      {
+        "descricao": "Considera-se erro no preenchimento da planilha passível de correção a indicação de recolhimento de impostos e contribuições na forma do Simples Nacional, quando não cabível esse regime.",
+        "source_ref": "Edital, item 13.11.2"
+      }
+    ],
+    "criterios_exequibilidade": [
+      {
+        "descricao": "Propostas cujos valores forem inferiores a 75% (setenta e cinco por cento) do valor orçado pela Administração serão consideradas inexequíveis em obras e serviços de engenharia.",
+        "source_ref": "Edital, item 13.8"
+      },
+      {
+        "descricao": "A Administração dará à licitante a oportunidade de demonstrar a exequibilidade de sua proposta.",
+        "source_ref": "Edital, item 13.8.1"
+      },
+      {
+        "descricao": "Será exigida garantia adicional do licitante vencedor cuja proposta for inferior a 85% (oitenta e cinco por cento) do valor orçado pela Administração, equivalente à diferença entre este último e o valor da proposta.",
+        "source_ref": "Edital, item 13.8.2"
+      },
+      {
+        "descricao": "Se houver indícios de inexequibilidade da proposta de preço, ou em caso da necessidade de esclarecimentos complementares, poderão ser efetuadas diligências, para que a empresa comprove a exequibilidade da proposta.",
+        "source_ref": "Edital, item 13.9"
+      }
+    ],
+    "exige_declaracao_fabricante": null,
+    "exige_planilha_orcamentaria": true,
+    "exige_marca_modelo_fabricante": true,
+    "criterios_desclassificacao_proposta": [
+      {
+        "descricao": "Proposta que identifique o licitante.",
+        "source_ref": "Edital, item 12.2.1"
+      },
+      {
+        "descricao": "Proposta que se enquadre nos casos previstos no Art. 59, da Lei Federal nº 14.133/21.",
+        "source_ref": "Edital, item 13.7.1"
+      },
+      {
+        "descricao": "Proposta que contiver vícios insanáveis.",
+        "source_ref": "Edital, item 13.7.1.1"
+      },
+      {
+        "descricao": "Proposta que não obedecer às especificações técnicas pormenorizadas no edital.",
+        "source_ref": "Edital, item 13.7.1.2"
+      },
+      {
+        "descricao": "Proposta que apresentar preços inexequíveis ou permanecer acima do orçamento estimado para a contratação.",
+        "source_ref": "Edital, item 13.7.1.3"
+      },
+      {
+        "descricao": "Proposta que não tiver sua exequibilidade demonstrada, quando exigido pela Administração.",
+        "source_ref": "Edital, item 13.7.1.4"
+      },
+      {
+        "descricao": "Proposta que apresentar desconformidade com quaisquer outras exigências do edital, desde que insanável.",
+        "source_ref": "Edital, item 13.7.1.5"
+      },
+      {
+        "descricao": "Propostas cujos valores forem inferiores a 75% (setenta e cinco por cento) do valor orçado pela Administração serão consideradas inexequíveis em obras e serviços de engenharia.",
+        "source_ref": "Edital, item 13.8"
+      },
+      {
+        "descricao": "Caso o custo global estimado do objeto licitado tenha sido decomposto em seus respectivos custos unitários por meio de Planilha de Custos e Formação de Preços elaborada pela Administração, o licitante classificado em primeiro lugar será convocado para apresentar Planilha por ele elaborada, com os respectivos valores adequados ao valor final da sua proposta, sob pena de não aceitação da proposta.",
+        "source_ref": "Edital, item 13.10"
+      },
+      {
+        "descricao": "Cometer infração administrativa por apresentar proposta em desacordo com as especificações do edital.",
+        "source_ref": "Edital, item 15.1.2.4"
+      },
+      {
+        "descricao": "Cometer infração administrativa por apresentar declaração ou documentação falsa exigida para o certame ou prestar declaração falsa durante a licitação.",
+        "source_ref": "Edital, item 15.1.4"
+      },
+      {
+        "descricao": "Cometer infração administrativa por fraudar a licitação.",
+        "source_ref": "Edital, item 15.1.5"
+      },
+      {
+        "descricao": "Cometer infração administrativa por comportar-se de modo inidôneo ou cometer fraude de qualquer natureza, induzindo deliberadamente a erro no julgamento.",
+        "source_ref": "Edital, item 15.1.6"
+      },
+      {
+        "descricao": "Cometer infração administrativa por praticar atos ilícitos com vistas a frustrar os objetivos da licitação.",
+        "source_ref": "Edital, item 15.1.7"
+      },
+      {
+        "descricao": "Cometer infração administrativa por praticar ato lesivo previsto no art. 5º da Lei n.º 12.846, de 2013.",
+        "source_ref": "Edital, item 15.1.8"
+      }
+    ],
+    "exige_catalogo_ficha_tecnica_manual": null
+  },
+  "technical_analysis": {
+    "exige_art": null,
+    "exige_cat": true,
+    "exige_rrt": null,
+    "parcelas_relevantes": [
+      {
+        "item": "REGULARIZAÇÃO DO SUB-LEITO",
+        "tipo": "operacional",
+        "unidade": "M²",
+        "descricao": "REGULARIZAÇÃO DO SUB-LEITO",
+        "evidence_refs": [
+          "EV-QTO-02"
+        ],
+        "percentual_minimo": "15%",
+        "quantitativo_minimo": "12.089,69"
+      },
+      {
+        "item": "COMPACTAÇÃO DE ATERROS 95% P.N.",
+        "tipo": "operacional",
+        "unidade": "M³",
+        "descricao": "COMPACTAÇÃO DE ATERROS 95% P.N.",
+        "evidence_refs": [
+          "EV-QTO-03"
+        ],
+        "percentual_minimo": "5%",
+        "quantitativo_minimo": "1.433,45"
+      },
+      {
+        "item": "TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32)",
+        "tipo": "operacional",
+        "unidade": "T",
+        "descricao": "TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32)",
+        "evidence_refs": [
+          "EV-QTO-04"
+        ],
+        "percentual_minimo": "20%",
+        "quantitativo_minimo": "4.144,64"
+      },
+      {
+        "item": "INDENIZAÇÃO DE JAZIDA",
+        "tipo": "operacional",
+        "unidade": "M³",
+        "descricao": "INDENIZAÇÃO DE JAZIDA",
+        "evidence_refs": [
+          "EV-QTO-05"
+        ],
+        "percentual_minimo": "5%",
+        "quantitativo_minimo": "2.981,42"
+      },
+      {
+        "item": "REGULARIZAÇÃO DO SUB-LEITO",
+        "tipo": "profissional",
+        "unidade": "M²",
+        "descricao": "REGULARIZAÇÃO DO SUB-LEITO",
+        "evidence_refs": [
+          "EV-QTP-02"
+        ],
+        "percentual_minimo": "15%",
+        "quantitativo_minimo": "12.089,69"
+      },
+      {
+        "item": "COMPACTAÇÃO DE ATERROS 95% P.N.",
+        "tipo": "profissional",
+        "unidade": "M³",
+        "descricao": "COMPACTAÇÃO DE ATERROS 95% P.N.",
+        "evidence_refs": [
+          "EV-QTP-03"
+        ],
+        "percentual_minimo": "5%",
+        "quantitativo_minimo": "1.433,45"
+      },
+      {
+        "item": "TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32)",
+        "tipo": "profissional",
+        "unidade": "T",
+        "descricao": "TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32)",
+        "evidence_refs": [
+          "EV-QTP-04"
+        ],
+        "percentual_minimo": "20%",
+        "quantitativo_minimo": "4.144,64"
+      },
+      {
+        "item": "INDENIZAÇÃO DE JAZIDA",
+        "tipo": "profissional",
+        "unidade": "M³",
+        "descricao": "INDENIZAÇÃO DE JAZIDA",
+        "evidence_refs": [
+          "EV-QTP-05"
+        ],
+        "percentual_minimo": "5%",
+        "quantitativo_minimo": "2.981,42"
+      }
+    ],
+    "exige_registro_conselho": true,
+    "exige_acervo_profissional": true,
+    "exige_responsavel_tecnico": true,
+    "registro_conselho_detalhes": [
+      {
+        "conselho": "CREA",
+        "source_ref": "Edital, item 8.1.4",
+        "tipo_registro": "Registro ou inscrição da empresa licitante e de seus responsáveis técnicos"
+      },
+      {
+        "conselho": "CAU",
+        "source_ref": "Edital, item 8.1.4",
+        "tipo_registro": "Registro ou inscrição da empresa licitante e de seus responsáveis técnicos"
+      }
+    ],
+    "responsavel_tecnico_detalhes": [
+      {
+        "cargo": "ENGENHEIRO CIVIL DE OBRA PLENO",
+        "source_ref": "TR, item 2.0; Edital, item 8.1.8",
+        "vinculo_comprovacao": "Cópia autenticada da \"FICHA OU LIVRO DE REGISTRO DE EMPREGADOS\", comprovação de participação societária, ou contrato de regime de prestação de serviço"
+      },
+      {
+        "cargo": "ENCARREGADO GERAL/MESTRE DE OBRA",
+        "source_ref": "TR, item 2.0; Edital, item 8.1.8",
+        "vinculo_comprovacao": "Cópia autenticada da \"FICHA OU LIVRO DE REGISTRO DE EMPREGADOS\", comprovação de participação societária, ou contrato de regime de prestação de serviço"
+      }
+    ],
+    "exigencias_tecnicas_especificas": [],
+    "exige_atestado_capacidade_tecnica": true,
+    "exige_comprovacao_parcelas_relevantes": true
+  },
+  "operational_outputs": {
+    "proposal_routes": [],
+    "declaration_routes": [],
+    "internal_checklist": [],
+    "documents_to_prepare": [
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ato constitutivo, estatuto ou contrato social",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Cédula de identidade do(s) administrador(es)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição no Registro Público de Empresas Mercantis (Empresário Individual)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição no Registro Público de Empresas Mercantis (Sucursal, Filial ou Agência)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas (Sociedade Simples)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ata de fundação e estatuto social (Cooperativa)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Decreto de autorização (Empresa Estrangeira)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Documentos acompanhados de alterações ou consolidação",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de inscrição no CNPJ",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade fiscal perante a Fazenda Nacional",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade com a Fazenda Estadual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Comprovação de isenção de tributos estaduais (se aplicável)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade com a Fazenda Municipal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Comprovação de isenção de tributos municipais (se aplicável)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade com o FGTS",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de inexistência de débitos trabalhistas",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Documentação de regularidade fiscal para ME/EPP com restrição",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição estadual no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição municipal no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão negativa de falência",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão Simplificada e Específica",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Balanço patrimonial e demonstrações contábeis",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Balanço patrimonial para empresa constituída no exercício social vigente",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Última auditoria contábil-financeira (Cooperativa)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão de Regularidade do Profissional do contador",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Garantia de Participação",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Comprovar o registro ou inscrição da empresa no conselho profissional competente (CREA/CAU) para as atividades objeto da licitação.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Certidão de Registro de Pessoa Jurídica no CREA/CAU",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Atestado(s) comprovando a execução de serviços de REGULARIZAÇÃO DO SUB-LEITO, com quantidade mínima de 12.089,69 M².",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica (Regularização Sub-leito)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Atestado(s) comprovando a execução de serviços de COMPACTAÇÃO DE ATERROS 95% P.N., com quantidade mínima de 1.433,45 M³.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica (Compactação de Aterros)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Atestado(s) comprovando a execução de serviços de TRANSPORTE LOCAL COM DMT ATÉ 4,00KM (Y=1,26X+1,32), com quantidade mínima de 4.144,64 T.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica (Transporte Local)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Atestado(s) comprovando a execução de serviços de INDENIZAÇÃO DE JAZIDA, com quantidade mínima de 2.981,42 M³.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica (Indenização de Jazida)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Preencher conforme modelo do Anexo IV do Edital.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Microempresa ou Empresa de Pequeno Porte (Anexo IV)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Preencher conforme modelo do Anexo V do Edital.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de não emprego de menores (Anexo V)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Preencher conforme modelo do Anexo VI do Edital.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de disponibilidade de equipe técnica (Anexo VI)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Preencher conforme modelo do Anexo VII do Edital.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de conhecimento da natureza do serviço (Anexo VII)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Preencher conforme modelo do Anexo VIII do Edital.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de inexistência de fato impeditivo (Anexo VIII)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Preencher conforme modelo do Anexo IX do Edital.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de cumprimento dos requisitos de habilitação (Anexo IX)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "A ser preenchida diretamente no sistema eletrônico de licitações.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de ciência e concordância com o edital e custos trabalhistas (Sistema)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Deve conter valores unitários e totais, marcas, fabricantes (se aplicável), descrição do objeto e prazo de validade. Preferencialmente em papel timbrado da empresa, com dados de identificação.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Proposta de Preços",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Declaração expressa de que o preço global proposto inclui todas as despesas diretas, indiretas e quaisquer outras necessárias à execução.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Declaração de Inclusão de Custos",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Declaração expressa de que as despesas de elaboração da proposta correm por conta da licitante, sem direito a indenização.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Declaração de Responsabilidade por Custos da Proposta",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Formulada conforme modelo do edital, contendo preços unitários e totais, percentual do BDI e preço global.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Planilha Orçamentária",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Documento detalhando a programação física e financeira da execução das obras/serviços.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Cronograma Físico-Financeiro",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Informar o valor do faturamento mensal e acumulado previsto ao longo da execução do contrato.",
+        "category": "proposta_comercial",
+        "priority": "media",
+        "document_name": "Detalhamento de Faturamento Previsto",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Apresentar a composição analítica do BDI (Benefícios e Despesas Indiretas).",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Detalhamento do BDI",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Planilha que explicita os preços de insumos e os índices de produtividade utilizados na composição dos custos unitários.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Planilha de Composição de Custos Unitários",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Documento que comprove o registro ativo do(s) responsável(is) técnico(s) no conselho de classe competente.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "Comprovante de Registro no CREA/CAU do RT",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Certidão de Acervo Técnico do profissional responsável técnico, comprovando a execução do serviço na quantidade mínima exigida.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "CAT com Atestado de Regularização do Sub-leito (12.089,69 M²)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Certidão de Acervo Técnico do profissional responsável técnico, comprovando a execução do serviço na quantidade mínima exigida.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "CAT com Atestado de Compactação de Aterros 95% P.N. (1.433,45 M³)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Certidão de Acervo Técnico do profissional responsável técnico, comprovando a execução do serviço na quantidade mínima exigida.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "CAT com Atestado de Transporte Local com DMT até 4,00KM (4.144,64 T)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Certidão de Acervo Técnico do profissional responsável técnico, comprovando a execução do serviço na quantidade mínima exigida.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "CAT com Atestado de Indenização de Jazida (2.981,42 M³)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Cópia autenticada da ficha/livro de registro de empregados, contrato social ou contrato de prestação de serviço que comprove o vínculo do RT com a empresa.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "Comprovante de Vínculo do RT (CLT/Contrato/Sócio)",
+        "responsible_area": "administrativo"
+      },
+      {
+        "notes": "Declaração assinada pelos profissionais responsáveis técnicos, atestando sua disponibilidade para os serviços.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "Declaração de Disponibilidade dos RTs",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Declaração do RT, com firma reconhecida, atestando conhecimento dos projetos e condições do trabalho, e assumindo responsabilidade.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "Declaração de Conhecimento do Serviço pelo RT",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Documentos que comprovem a qualificação e o vínculo do Engenheiro Civil de Obra Pleno com a empresa, conforme exigências do edital.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "media",
+        "document_name": "Comprovante de Qualificação e Vínculo do Engenheiro Civil Pleno",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Documentos que comprovem a qualificação e o vínculo do Encarregado Geral/Mestre de Obra com a empresa, conforme exigências do edital.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "media",
+        "document_name": "Comprovante de Qualificação e Vínculo do Encarregado Geral/Mestre de Obra",
+        "responsible_area": "engenharia"
+      }
+    ],
+    "proposal_inputs_needed": [],
+    "possible_petition_routes": [
+      "Impugnação do Edital: Exigência de atestados duplicados para QTO e QTP nas mesmas parcelas, por violação do Art. 67 da Lei 14.133/2021 e restrição indevida à competitividade.",
+      "Impugnação do Edital: Vedação de consórcio sem justificativa técnica e econômica robusta, por violação do Art. 15, § 7º da Lei 14.133/2021 e do princípio da competitividade.",
+      "Impugnação do Edital: Exigência de que preços unitários da proposta não sejam superiores aos orçados, por violação do princípio da competitividade e da liberdade de composição de preços, conforme jurisprudência do TCU."
+    ],
+    "technical_documents_needed": [],
+    "questions_for_consultor_chat": [
+      "O edital permite que um único atestado/CAT comprove tanto a capacidade técnico-operacional da empresa quanto a capacidade técnico-profissional do RT para as mesmas parcelas?",
+      "Qual a melhor estratégia para lidar com a exigência de garantia de proposta de 1% do valor total em uma Concorrência de obras?",
+      "É possível apresentar a declaração do Responsável Técnico com assinatura digital certificada ICP-Brasil em vez de firma reconhecida em cartório?",
+      "Como a vedação de consórcio e subcontratação afeta a estratégia de participação e execução da obra?",
+      "Como a restrição de preços unitários (não superiores aos orçados) impacta a formulação da proposta e a margem de lucro?"
+    ]
+  },
+  "contractual_analysis": {
+    "reajuste": "Após o interregno de um ano, a pedido do contratado, os preços iniciais poderão ser reajustados, mediante a aplicação, pelo contratante, do índice Nacional da Construção Civil - INCC.",
+    "penalidades": [
+      {
+        "tipo": "Advertência",
+        "descricao": "Quando o contratado der causa à inexecução parcial do contrato, sempre que não se justificar a imposição de penalidade mais grave.",
+        "source_ref": "Edital, item 15.2.1; Minuta do Contrato, Cláusula Décima Segunda 12.2.i"
+      },
+      {
+        "tipo": "Multa",
+        "descricao": "Percentual de 0,5% a 30% incidente sobre o valor do contrato licitado, recolhida no prazo máximo de 30 (trinta) dias úteis. Para infrações dos itens 15.1.1, 15.1.2 e 15.1.3, a multa será de 0,5% a 15%. Para infrações dos itens 15.1.4, 15.1.5, 15.1.6, 15.1.7 e 15.1.8, a multa será de 15% a 30%.",
+        "source_ref": "Edital, item 15.4 e 15.4.1-15.4.2; Minuta do Contrato, Cláusula Décima Segunda 12.2.iv"
+      },
+      {
+        "tipo": "Impedimento de licitar e contratar",
+        "descricao": "Aplicada ao responsável em decorrência das infrações administrativas relacionadas nos itens 15.1.1, 15.1.2 e 15.1.3, quando não se justificar a imposição de penalidade mais grave, e impedirá o responsável de licitar e contratar no âmbito da Administração Pública direta e indireta do ente federativo a qual pertencer o órgão ou entidade, pelo prazo máximo de 3 (três) anos.",
+        "source_ref": "Edital, item 15.2.3 e 15.7; Minuta do Contrato, Cláusula Décima Segunda 12.2.ii"
+      },
+      {
+        "tipo": "Declaração de inidoneidade para licitar ou contratar",
+        "descricao": "Aplicada ao responsável em decorrência da prática das infrações dispostas nos itens 15.1.4, 15.1.5, 15.1.6, 15.1.7 e 15.1.8, bem como pelas infrações administrativas previstas nos itens 15.1.1, 15.1.2 e 15.1.3 que justifiquem a imposição de penalidade mais grave que a sanção de impedimento de licitar e contratar, cuja duração observará o prazo previsto no art. 156, §5º, da Lei n.º 14.133/2021.",
+        "source_ref": "Edital, item 15.2.4 e 15.8; Minuta do Contrato, Cláusula Décima Segunda 12.2.iii"
+      }
+    ],
+    "repactuacao": null,
+    "prazo_execucao": "06 (seis) meses, com início na data do contrato.",
+    "prazo_vigencia": "12 (doze) meses, contados da data da sua assinatura, na forma do inciso XVII, do Art. 6º e 105 da Lei nº 14.133/2021 (Contrato por Escopo). O prazo de vigência poderá ser prorrogado, mediante termo aditivo, quando o objeto não for concluído no período firmado acima, ressalvadas as providências cabíveis no caso de culpa do contratado, previstas neste instrumento.",
+    "medicao_pagamento": "O pagamento será efetuado no prazo de até 30 (trinta) dias contados da finalização da liquidação da despesa.",
+    "obrigacoes_contratada": [
+      {
+        "descricao": "Cumprir todas as obrigações constantes do Contrato e de seus anexos, assumindo como exclusivamente seus os riscos e as despesas decorrentes da boa e perfeita execução do objeto.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.1"
+      },
+      {
+        "descricao": "Manter preposto aceito pela Administração no local do serviço para representá-lo na execução do contrato.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.2"
+      },
+      {
+        "descricao": "Atender às determinações regulares emitidas pelo fiscal do contrato ou autoridade superior e prestar todo esclarecimento ou informação por eles solicitados.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.3"
+      },
+      {
+        "descricao": "Alocar os empregados necessários ao perfeito cumprimento das cláusulas deste contrato, com habilitação e conhecimento adequados, fornecendo os materiais, equipamentos, ferramentas e utensílios demandados.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.4"
+      },
+      {
+        "descricao": "Reparar, corrigir, remover, reconstruir ou substituir, às suas expensas, no total ou em parte, no prazo fixado pelo fiscal do contrato, os serviços nos quais se verificarem vícios, defeitos ou incorreções.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.5"
+      },
+      {
+        "descricao": "Responsabilizar-se pelos vícios e danos decorrentes da execução do objeto, de acordo com o Código de Defesa do Consumidor (Lei nº 8.078, de 1990), bem como por todo e qualquer dano causado à Administração ou terceiros.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.6"
+      },
+      {
+        "descricao": "Efetuar comunicação ao Contratante, assim que tiver ciência da impossibilidade de realização ou finalização do serviço no prazo estabelecido.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.7"
+      },
+      {
+        "descricao": "Não contratar, durante a vigência do contrato, cônjuge, companheiro ou parente em linha reta, colateral ou por afinidade, até o terceiro grau, de dirigente do contratante ou do fiscal ou gestor do contrato.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.8"
+      },
+      {
+        "descricao": "Entregar ao setor responsável pela fiscalização do contrato, até o dia trinta do mês seguinte ao da prestação dos serviços, prova de regularidade relativa à Seguridade Social, certidão conjunta relativa aos tributos federais e à Dívida Ativa da União, certidões que comprovem a regularidade perante a Fazenda Municipal ou Distrital, Certidão de Regularidade do FGTS - CRF, e Certidão Negativa de Débitos Trabalhistas - CNDT, quando não for possível a verificação da regularidade no Sistema de Cadastro de Fornecedores - SICAF.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.9"
+      },
+      {
+        "descricao": "Responsabilizar-se pelo cumprimento das obrigações previstas em Acordo, Convenção, Dissídio Coletivo de Trabalho ou equivalentes das categorias abrangidas pelo contrato, por todas as obrigações trabalhistas, sociais, previdenciárias, tributárias e as demais previstas em legislação específica.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.10"
+      },
+      {
+        "descricao": "Comunicar ao Fiscal do contrato, no prazo de 24 (vinte e quatro) horas, qualquer ocorrência anormal ou acidente que se verifique no local dos serviços.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.11"
+      },
+      {
+        "descricao": "Prestar todo esclarecimento ou informação solicitado pelo Contratante ou por seus prepostos, garantindo-lhes o acesso, a qualquer tempo, ao local dos trabalhos, bem como aos documentos relativos à execução do empreendimento.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.12"
+      },
+      {
+        "descricao": "Paralisar, por determinação do Contratante, qualquer atividade que não esteja sendo executada de acordo com a boa técnica ou que ponha em risco a segurança de pessoas ou bens de terceiros.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.13"
+      },
+      {
+        "descricao": "Promover a guarda, manutenção e vigilância de materiais, ferramentas, e tudo o que for necessário à execução do objeto, durante a vigência do contrato.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.14"
+      },
+      {
+        "descricao": "Conduzir os trabalhos com estrita observância às normas da legislação pertinente, cumprindo as determinações dos Poderes Públicos, mantendo sempre limpo o local dos serviços e nas melhores condições de segurança, higiene e disciplina.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.15"
+      },
+      {
+        "descricao": "Submeter previamente, por escrito, ao Contratante, para análise e aprovação, quaisquer mudanças nos métodos executivos que fujam às especificações do memorial descritivo ou instrumento congênere.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.16"
+      },
+      {
+        "descricao": "Não permitir a utilização de qualquer trabalho do menor de dezesseis anos, exceto na condição de aprendiz para os maiores de quatorze anos, nem permitir a utilização do trabalho do menor de dezoito anos em trabalho noturno, perigoso ou insalubre.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.17"
+      },
+      {
+        "descricao": "Manter durante toda a vigência do contrato, em compatibilidade com as obrigações assumidas, todas as condições exigidas para habilitação na licitação.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.18"
+      },
+      {
+        "descricao": "Cumprir, durante todo o período de execução do contrato, a reserva de cargos prevista em lei para pessoa com deficiência, para reabilitado da Previdência Social ou para aprendiz, bem como as reservas de cargos previstas na legislação (art. 116).",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.19"
+      },
+      {
+        "descricao": "Comprovar a reserva de cargos a que se refere a cláusula acima, no prazo fixado pelo fiscal do contrato, com a indicação dos empregados que preencheram as referidas vagas (art. 116, parágrafo único).",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.20"
+      },
+      {
+        "descricao": "Guardar sigilo sobre todas as informações obtidas em decorrência do cumprimento do contrato.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.21"
+      },
+      {
+        "descricao": "Arcar com o ônus decorrente de eventual equívoco no dimensionamento dos quantitativos de sua proposta, inclusive quanto aos custos variáveis decorrentes de fatores futuros e incertos, devendo complementá-los, caso o previsto inicialmente em sua proposta não seja satisfatório para o atendimento do objeto da contratação, exceto quando ocorrer algum dos eventos arrolados no art. 124, II, d, da Lei nº 14.133, de 2021.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.22"
+      },
+      {
+        "descricao": "Cumprir, além dos postulados legais vigentes de âmbito federal, estadual ou municipal, as normas de segurança do Contratante.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.23"
+      },
+      {
+        "descricao": "Realizar os serviços de manutenção e assistência técnica, no prazo de garantia da obra.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.24"
+      },
+      {
+        "descricao": "Realizar a transição contratual com transferência de conhecimento, tecnologia e técnicas empregadas, sem perda de informações, podendo exigir, inclusive, a capacitação dos técnicos do contratante ou da nova empresa que continuará a execução dos serviços.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.25"
+      },
+      {
+        "descricao": "Ceder ao Contratante todos os direitos patrimoniais relativos ao objeto contratado, o qual poderá ser livremente utilizado e/ou alterado em outras ocasiões, sem necessidade de nova autorização do Contratado.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.26"
+      },
+      {
+        "descricao": "Manter os empregados nos horários predeterminados pelo Contratante.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.27"
+      },
+      {
+        "descricao": "Apresentar os empregados devidamente identificados por meio de crachá.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.28"
+      },
+      {
+        "descricao": "Apresentar ao Contratante, quando for o caso, a relação nominal dos empregados que adentrarão no órgão para a execução do serviço.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.19"
+      },
+      {
+        "descricao": "Observar os preceitos da legislação sobre a jornada de trabalho, conforme a categoria profissional.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.20"
+      },
+      {
+        "descricao": "Atender às solicitações do Contratante quanto à substituição dos empregados alocados, no prazo fixado pela fiscalização do contrato, nos casos em que ficar constatado descumprimento das obrigações relativas à execução do serviço.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.21"
+      },
+      {
+        "descricao": "Instruir seus empregados quanto à necessidade de acatar as Normas Internas do Contratante.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.22"
+      },
+      {
+        "descricao": "Instruir seus empregados a respeito das atividades a serem desempenhadas, alertando-os a não executarem atividades não abrangidas pelo contrato, devendo o Contratado relatar ao Contratante toda e qualquer ocorrência neste sentido, a fim de evitar desvio de função.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.23"
+      },
+      {
+        "descricao": "Instruir os seus empregados, quanto à prevenção de incêndios nas áreas do Contratante.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.24"
+      },
+      {
+        "descricao": "Adotar as providências e precauções necessárias, inclusive consulta nos respectivos órgãos, se necessário for, a fim de que não venham a ser danificadas as redes hidrossanitárias, elétricas e de comunicação.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.25"
+      },
+      {
+        "descricao": "Estar registrada ou inscrita no Conselho Profissional competente, conforme as áreas de atuação previstas no Projeto Básico, em plena validade.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.26"
+      },
+      {
+        "descricao": "Obter junto aos órgãos competentes, conforme o caso, as licenças necessárias e demais documentos e autorizações exigíveis, na forma da legislação aplicável.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.27"
+      },
+      {
+        "descricao": "Elaborar o Diário de Obra, incluindo diariamente, pelo Engenheiro preposto responsável, as informações sobre o andamento do empreendimento.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.28"
+      },
+      {
+        "descricao": "Refazer, às suas expensas, os trabalhos executados em desacordo com o estabelecido nas especificações, bem como substituir aqueles realizados com materiais defeituosos ou com vício de construção, pelo prazo de 05 (cinco) anos, contado da data de emissão do Termo de Recebimento Definitivo.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.29"
+      },
+      {
+        "descricao": "Utilizar somente matéria-prima florestal procedente, nos termos do artigo 11 do Decreto nº 5.975, de 2006.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.30"
+      },
+      {
+        "descricao": "Comprovar a procedência legal dos produtos ou subprodutos florestais utilizados em cada etapa da execução contratual, nos termos do artigo 4°, inciso IX, da Instrução Normativa SLTI/MP n° 1, de 19/01/2010, por ocasião da respectiva medição, mediante a apresentação dos seguintes documentos: Cópias autenticadas das notas fiscais de aquisição dos produtos ou subprodutos florestais; Cópia dos Comprovantes de Registro do fornecedor e do transportador dos produtos ou subprodutos florestais junto ao Cadastro Técnico Federal de Atividades Potencialmente Poluidoras ou Utilizadoras de Recursos Ambientais - CTF, mantido pelo IBAMA, quando tal inscrição for obrigatória, acompanhados dos respectivos Certificados de Regularidade válidos; Documento de Origem Florestal - DOF, instituído pela Portaria nº 253, de 18/08/2006, do Ministério do Meio Ambiente, e Instrução Normativa IBAMA n° 21, de 24/12/2014, quando se tratar de produtos ou subprodutos florestais de origem nativa cujo transporte e armazenamento exijam a emissão de tal licença obrigatória.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.31"
+      },
+      {
+        "descricao": "Observar as diretrizes, critérios e procedimentos para a gestão dos resíduos da construção civil estabelecidos na Resolução nº 307, de 05/07/2002, com as alterações posteriores, do Conselho Nacional de Meio Ambiente - CONAMA.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.32"
+      },
+      {
+        "descricao": "Não dispor os resíduos originários da contratação em aterros de resíduos sólidos urbanos, áreas de \"bota fora\", encostas, corpos d'água, lotes vagos e áreas protegidas por Lei, bem como em áreas não licenciadas.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.33"
+      },
+      {
+        "descricao": "Comprovar, sob pena de multa, que todos os resíduos removidos estão acompanhados de Controle de Transporte de Resíduos, em conformidade com as normas da ABNT, ABNT NBR nºs. 15.112, 15.113, 15.114, 15.115 e 15.116, de 2004.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.33.1"
+      },
+      {
+        "descricao": "Observar as diretrizes de caráter ambiental, incluindo limites máximos de emissão de poluentes e ruídos.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.34"
+      },
+      {
+        "descricao": "Utilizar, na execução contratual, agregados reciclados, sempre que existir a oferta de tais materiais, capacidade de suprimento e custo inferior em relação aos agregados naturais.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.35"
+      },
+      {
+        "descricao": "Responder por qualquer acidente de trabalho na execução dos serviços, por uso indevido de patentes registradas em nome de terceiros, por danos resultantes de defeitos ou incorreções dos serviços ou dos bens do Contratante, de seus funcionários ou de terceiros, ainda que ocorridos em via pública junto ao serviço de engenharia.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.36"
+      },
+      {
+        "descricao": "Realizar, conforme o caso, por meio de laboratórios previamente aprovados pela fiscalização e sob suas custas, os testes, ensaios, exames e provas que lhe caibam necessárias ao controle de qualidade dos materiais, serviços e equipamentos a serem aplicados nos trabalhos.",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.37"
+      },
+      {
+        "descricao": "Providenciar, conforme o caso, as ligações definitivas das utilidades previstas no projeto (água, esgoto, gás, energia elétrica, telefone etc.), bem como atuar junto aos órgãos federais, estaduais e municipais e concessionárias de serviços públicos para a obtenção de licenças e regularização dos serviços e atividades concluídas (ex.: Habite-se, Licença Ambiental de Operação etc.).",
+        "source_ref": "Minuta do Contrato, Cláusula Nona 9.38"
+      },
+      {
+        "descricao": "Cumprir a Lei nº 13.709, de 14 de agosto de 2018 (LGPD), quanto a todos os dados pessoais a que tenham acesso em razão do certame ou do contrato administrativo.",
+        "source_ref": "Minuta do Contrato, Cláusula Décima 10.1"
+      }
+    ],
+    "obrigacoes_contratante": [
+      {
+        "descricao": "Exigir o cumprimento de todas as obrigações assumidas pelo Contratado, de acordo com o contrato e seus anexos.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.2"
+      },
+      {
+        "descricao": "Receber o objeto no prazo e condições estabelecidas no Projeto Básico.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.3"
+      },
+      {
+        "descricao": "Notificar o Contratado por escrito da ocorrência de eventuais imperfeições, falhas ou irregularidades constatadas no curso da execução dos serviços, fixando prazo para a sua correção.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.4"
+      },
+      {
+        "descricao": "Notificar o Contratado, por escrito, sobre vícios, defeitos ou incorreções verificadas no objeto fornecido, para que seja por ele substituído, reparado ou corrigido, no total ou em parte, às suas expensas.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.5"
+      },
+      {
+        "descricao": "Acompanhar e fiscalizar a execução do contrato e o cumprimento das obrigações pelo Contratado.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.6"
+      },
+      {
+        "descricao": "Comunicar a empresa para emissão de Nota Fiscal no que se refere à parcela incontroversa da execução do objeto, para efeito de liquidação e pagamento, quando houver controvérsia sobre a execução do objeto, quanto à dimensão, qualidade e quantidade, conforme o art. 143 da Lei nº 14.133, de 2021.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.7"
+      },
+      {
+        "descricao": "Efetuar o pagamento ao Contratado do valor correspondente à execução do objeto, no prazo, forma e condições estabelecidos no presente Contrato e no Projeto Básico.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.8"
+      },
+      {
+        "descricao": "Aplicar ao Contratado as sanções previstas na lei e neste Contrato.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.9"
+      },
+      {
+        "descricao": "Cientificar o órgão de representação judicial para adoção das medidas cabíveis quando do descumprimento de obrigações pelo Contratado.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.10"
+      },
+      {
+        "descricao": "Explicitamente emitir decisão sobre todas as solicitações e reclamações relacionadas à execução do presente Contrato, ressalvados os requerimentos manifestamente impertinentes, meramente protelatórios ou de nenhum interesse para a boa execução do ajuste.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.11"
+      },
+      {
+        "descricao": "Responder eventuais pedidos de reestabelecimento do equilíbrio econômico-financeiro feitos pelo contratado no prazo máximo de 10 (dez) dias.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.12"
+      },
+      {
+        "descricao": "Notificar os emitentes das garantias quanto ao início de processo administrativo para apuração de descumprimento de cláusulas contratuais.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.13"
+      },
+      {
+        "descricao": "Comunicar o Contratado na hipótese de posterior alteração do projeto pelo Contratante, no caso do art. 93, §2º, da Lei nº 14.133, de 2021.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.14"
+      },
+      {
+        "descricao": "Fornecer por escrito as informações necessárias para o desenvolvimento dos serviços objeto do contrato.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.15"
+      },
+      {
+        "descricao": "Realizar avaliações periódicas da qualidade dos serviços, após seu recebimento.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.16"
+      },
+      {
+        "descricao": "Exigir do Contratado que providencie a seguinte documentação como condição indispensável para o recebimento definitivo de objeto, quando for o caso: \"as built\", comprovação das ligações definitivas de energia, água, laudo de vistoria do corpo de bombeiros, carta \"habite-se\", certidão negativa de débitos previdenciários específica para o registro da obra.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.17"
+      },
+      {
+        "descricao": "Arquivar, entre outros documentos, de projetos, \"as built\", especificações técnicas, orçamentos, termos de recebimento, contratos e aditamentos, relatórios de inspeções técnicas após o recebimento do serviço e notificações expedidas.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.18"
+      },
+      {
+        "descricao": "Assegurar que o ambiente de trabalho, inclusive seus equipamentos e instalações, apresentem condições adequadas ao cumprimento, pelo Contratado, das normas de segurança e saúde no trabalho.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.19"
+      },
+      {
+        "descricao": "Não responder por quaisquer compromissos assumidos pelo Contratado com terceiros, ainda que vinculados à execução do contrato, bem como por qualquer dano causado a terceiros em decorrência de ato do Contratado, de seus empregados, prepostos ou subordinados.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.20"
+      },
+      {
+        "descricao": "Previamente à expedição da ordem de serviço, verificar pendências, liberar áreas e/ou adotar providências cabíveis para a regularidade do início da sua execução.",
+        "source_ref": "Minuta do Contrato, Cláusula Oitava 8.21"
+      }
+    ],
+    "matriz_risco_contratual": []
+  },
+  "process_identification": {
+    "orgao": "Prefeitura Municipal de Apuiarés-Ce",
+    "modalidade": "Concorrência Eletrônica",
+    "tipo_objeto": "obra_engenharia",
+    "municipio_uf": "Apuiarés-Ce",
+    "fonte_oficial": "www.licitamaisbrasil.com.br",
+    "forma_disputa": "Aberto",
+    "numero_edital": "0062026CESDUI",
+    "numero_processo": "0062026CESDUI",
+    "objeto_completo": "CONTRATAÇÃO DE EMPRESA PARA EXECUTAR A RECUPERAÇÃO DE ESTRADAS VICINAIS NO MUNICÍPIO DE APUIARÉS/CE.",
+    "objeto_resumido": "CONTRATAÇÃO DE EMPRESA PARA EXECUTAR A RECUPERAÇÃO DE ESTRADAS VICINAIS NO MUNICÍPIO DE APUIARÉS/CE.",
+    "regime_execucao": "empreitada_por_preco_global",
+    "unidade_compradora": "Secretaria de Desenvolvimento Urbano e Infraestrutura",
+    "criterio_julgamento": "Menor Preço"
+  },
+  "participation_conditions": {
+    "exige_amostra": false,
+    "permite_consorcio": false,
+    "tratamento_me_epp": "Será concedido tratamento favorecido para as microempresas, empresas de pequeno porte e microempreendedores individuais nos termos do artigo 16 da Lei Federal nº 14.133, de 2021 e da Lei Complementar nº 123, de 2006. (Edital, item 3.4)",
+    "consorcio_detalhes": "O Município de Apuiarés-Ce, através da Secretaria de Desenvolvimento Urbano e Infraestrutura, vem por meio desta, perante o procedimento administrativo de Concorrência Eletrônica nº 0062026CESDUI, apresentar adiante, as justificativas necessárias que levaram ao impedimento da participação de empresas sob a forma de Consórcio. (Anexo XI, p.34)",
+    "exige_visita_tecnica": false,
+    "participacao_restrita": "Não cumprir os requisitos formais deste certame; Tenha elaborado, participado ou contribuído com a elaboração do projeto básico ou executivo; Seja empresa estrangeira sem autorização de funcionamento no País; Esteja impedida de licitar e contratar com o MUNICÍPIO DE APUIARÉS; Tenha sido declarada inidônea para licitar e contratar com Administração Pública; Licitantes que não atendam às condições deste Edital e seu(s) anexo(s); Licitantes que se enquadrem no Art. 14, da Lei Federal nº 14.133/21; Agentes públicos de órgão ou da entidade licitante ou contratante; Empresa, isoladamente ou em consórcio, responsável pela elaboração do projeto básico ou do projeto executivo, ou empresa da qual o autor do projeto seja dirigente, gerente, controlador, acionista ou detentor de mais de 5% (cinco por cento) do capital com direito a voto, responsável técnico ou subcontratado, quando a licitação versar sobre serviços ou fornecimento de bens a ela necessários; Pessoa física ou jurídica que se encontre, ao tempo da licitação, impossibilitada de participar da licitação em decorrência de sanção que lhe foi imposta; Aquele que mantenha vínculo de natureza técnica, comercial, econômica, financeira, trabalhista ou civil com dirigente do órgão ou entidade contratante ou com agente público que desempenhe função na licitação ou atue na fiscalização ou na gestão do contrato, ou que deles seja cônjuge, companheiro ou parente em linha reta, colateral ou por afinidade, até o terceiro grau; Empresas controladoras, controladas ou coligadas, nos termos da Lei nº 6.404, de 15 de dezembro de 1976, concorrendo entre si; Pessoa física ou jurídica que, nos 5 (cinco) anos anteriores à divulgação do edital, tenha sido condenada judicialmente, com trânsito em julgado, por exploração de trabalho infantil, por submissão de trabalhadores a condições análogas às de escravo ou por contratação de adolescentes nos casos vedados pela legislação trabalhista; Agente público do órgão ou entidade licitante; Pessoas jurídicas reunidas em consórcio; Organizações da Sociedade Civil de Interesse Público - OSCIP, atuando nessa condição; Não poderá participar, direta ou indiretamente, da licitação ou da execução do contrato agente público do órgão ou entidade contratante, devendo ser observadas as situações que possam configurar conflito de interesses no exercício ou após o exercício do cargo ou emprego, nos termos da legislação que disciplina a matéria, conforme § 1º do art. 9º da Lei nº 14.133, de 2021.",
+    "permite_subcontratacao": false,
+    "exige_garantia_proposta": true,
+    "subcontratacao_detalhes": "Não é admitida a subcontratação do objeto contratual. (TR, item 4.8.1)",
+    "visita_tecnica_detalhes": "Não Haverá obrigatoriedade de vistoria da obra in loco, porém a licitante a seu critério, para o correto dimensionamento e elaboração de sua proposta, poderá realizar vistoria nas instalações do local de execução dos serviços, acompanhado por servidor designado para esse fim, de segunda à sexta-feira, das 08 horas às 12:00 horas, devendo o agendamento ser efetuado previamente. (TR, item 4.7.1)",
+    "exige_garantia_contratual": false,
+    "garantia_proposta_detalhes": "1% (um por cento) do valor total orçado, constante da(s) planilha(s) orçamentária(s) anexo(s) deste edital, nos termos do \"caput\" e § 1º do art. 96 da Lei Federal nº 14.133/21. Modalidades: Caução em dinheiro, Caução em Título da Dívida Pública, Caução por Seguro-Garantia, Caução por Fiança Bancária. (Edital, item 8.1.11.7 e 8.1.11.7.1)",
+    "garantia_contratual_detalhes": "Não será exigido exigência da garantia da contratação. (TR, item 4.10.1)"
+  },
+  "economic_financial_analysis": {
+    "exige_balanco": true,
+    "exige_indices": false,
+    "indices_exigidos": [],
+    "outras_exigencias_ef": [
+      {
+        "descricao": "Garantia adicional do licitante vencedor cuja proposta for inferior a 85% (oitenta e cinco por cento) do valor orçado pela Administração, equivalente à diferença entre este último e o valor da proposta.",
+        "source_ref": "Edital, item 13.8.2"
+      }
+    ],
+    "capital_social_minimo": null,
+    "patrimonio_liquido_minimo": null,
+    "exige_garantias_adicionais": true,
+    "exige_capital_social_minimo": null,
+    "exige_patrimonio_liquido_minimo": null
+  }
+}

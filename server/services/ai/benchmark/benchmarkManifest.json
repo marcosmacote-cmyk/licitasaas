@@ -2,9 +2,9 @@
   "version": "1.0.0",
   "description": "Benchmark jurídico-licitatório — Casos reais anonimizados para avaliação objetiva do pipeline V2",
   "created_at": "2026-03-12",
-  "updated_at": "2026-03-12",
+  "updated_at": "2026-04-07",
   "prompt_version": "v3.0.0",
-  "total_cases": 10,
+  "total_cases": 35,
   "distribution": {
     "fornecimento": 2,
     "servico_comum": 2,
@@ -21,8 +21,17 @@
       "complexity": "baixa",
       "description": "Pregão Eletrônico para aquisição de material de escritório com exigência de catálogo e ficha técnica",
       "expected": {
-        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "proposta_comercial"],
-        "key_requirements": ["Catálogo ou ficha técnica dos produtos", "Certidão Conjunta Federal", "CRF FGTS", "CNDT"],
+        "categories_to_find": [
+          "habilitacao_juridica",
+          "regularidade_fiscal_trabalhista",
+          "proposta_comercial"
+        ],
+        "key_requirements": [
+          "Catálogo ou ficha técnica dos produtos",
+          "Certidão Conjunta Federal",
+          "CRF FGTS",
+          "CNDT"
+        ],
         "critical_points": [],
         "tipo_objeto_expected": "fornecimento",
         "min_requirements": 8,
@@ -36,9 +45,22 @@
       "complexity": "media",
       "description": "Pregão para aquisição de equipamentos hospitalares com exigência de amostra, registro ANVISA e declaração do fabricante",
       "expected": {
-        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "proposta_comercial", "documentos_complementares"],
-        "key_requirements": ["Amostra", "Registro ANVISA", "Declaração do fabricante ou distribuidor autorizado", "Ficha técnica"],
-        "critical_points": ["amostra_sem_criterios", "registro_anvisa"],
+        "categories_to_find": [
+          "habilitacao_juridica",
+          "regularidade_fiscal_trabalhista",
+          "proposta_comercial",
+          "documentos_complementares"
+        ],
+        "key_requirements": [
+          "Amostra",
+          "Registro ANVISA",
+          "Declaração do fabricante ou distribuidor autorizado",
+          "Ficha técnica"
+        ],
+        "critical_points": [
+          "amostra_sem_criterios",
+          "registro_anvisa"
+        ],
         "tipo_objeto_expected": "fornecimento",
         "min_requirements": 12,
         "min_evidence_refs": 8
@@ -51,9 +73,22 @@
       "complexity": "media",
       "description": "Pregão Eletrônico para contratação de serviço de limpeza e conservação predial com exigências de regularidade trabalhista e atestado de capacidade técnica",
       "expected": {
-        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "qualificacao_tecnica_operacional", "execucao_contratual"],
-        "key_requirements": ["CNDT", "CRF FGTS", "Atestado de capacidade técnica de serviços similares", "Planilha de composição de custos"],
-        "critical_points": ["repactuacao", "encargos_sociais"],
+        "categories_to_find": [
+          "habilitacao_juridica",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "execucao_contratual"
+        ],
+        "key_requirements": [
+          "CNDT",
+          "CRF FGTS",
+          "Atestado de capacidade técnica de serviços similares",
+          "Planilha de composição de custos"
+        ],
+        "critical_points": [
+          "repactuacao",
+          "encargos_sociais"
+        ],
         "tipo_objeto_expected": "servico_comum",
         "min_requirements": 15,
         "min_evidence_refs": 10
@@ -66,9 +101,23 @@
       "complexity": "alta",
       "description": "Pregão para contratação de serviço de vigilância patrimonial armada com exigências de autorização da PF, certificado de regularidade do SESMT e atestados",
       "expected": {
-        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "qualificacao_tecnica_operacional", "qualificacao_economico_financeira", "documentos_complementares"],
-        "key_requirements": ["Autorização da Polícia Federal", "Certificado de Regularidade do SESMT", "Atestado de vigilância armada", "Alvará de funcionamento"],
-        "critical_points": ["exigencia_pf_limitante", "seguro_obrigatorio"],
+        "categories_to_find": [
+          "habilitacao_juridica",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "documentos_complementares"
+        ],
+        "key_requirements": [
+          "Autorização da Polícia Federal",
+          "Certificado de Regularidade do SESMT",
+          "Atestado de vigilância armada",
+          "Alvará de funcionamento"
+        ],
+        "critical_points": [
+          "exigencia_pf_limitante",
+          "seguro_obrigatorio"
+        ],
         "tipo_objeto_expected": "servico_comum",
         "min_requirements": 20,
         "min_evidence_refs": 12
@@ -81,9 +130,18 @@
       "complexity": "alta",
       "description": "Pregão para serviço de manutenção predial com exigência de atestado de capacidade técnica operacional e responsável técnico com registro no CREA",
       "expected": {
-        "categories_to_find": ["qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional"],
-        "key_requirements": ["Atestado de capacidade técnica operacional", "Responsável técnico com registro CREA", "Comprovação de vínculo do RT"],
-        "critical_points": ["distincao_operacional_profissional"],
+        "categories_to_find": [
+          "qualificacao_tecnica_operacional",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [
+          "Atestado de capacidade técnica operacional",
+          "Responsável técnico com registro CREA",
+          "Comprovação de vínculo do RT"
+        ],
+        "critical_points": [
+          "distincao_operacional_profissional"
+        ],
         "tipo_objeto_expected": "servico_comum_engenharia",
         "min_requirements": 18,
         "min_evidence_refs": 12
@@ -96,9 +154,25 @@
       "complexity": "alta",
       "description": "Concorrência Eletrônica para obra de pavimentação asfáltica com CAT, ART, parcelas de maior relevância e quantitativos mínimos",
       "expected": {
-        "categories_to_find": ["qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional", "qualificacao_economico_financeira", "proposta_comercial"],
-        "key_requirements": ["CAT do profissional", "ART", "Parcelas de maior relevância", "Balanço patrimonial", "Planilha orçamentária com BDI", "Cronograma físico-financeiro"],
-        "critical_points": ["quantitativo_minimo_parcela", "bdi_imposto", "cat_vs_atestado"],
+        "categories_to_find": [
+          "qualificacao_tecnica_operacional",
+          "qualificacao_tecnica_profissional",
+          "qualificacao_economico_financeira",
+          "proposta_comercial"
+        ],
+        "key_requirements": [
+          "CAT do profissional",
+          "ART",
+          "Parcelas de maior relevância",
+          "Balanço patrimonial",
+          "Planilha orçamentária com BDI",
+          "Cronograma físico-financeiro"
+        ],
+        "critical_points": [
+          "quantitativo_minimo_parcela",
+          "bdi_imposto",
+          "cat_vs_atestado"
+        ],
         "tipo_objeto_expected": "obra_engenharia",
         "min_requirements": 25,
         "min_evidence_refs": 15
@@ -111,9 +185,23 @@
       "complexity": "alta",
       "description": "Concorrência para construção de edifício público com índices LG, LC, SG, patrimônio líquido mínimo e certidão de falência",
       "expected": {
-        "categories_to_find": ["qualificacao_economico_financeira", "qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional"],
-        "key_requirements": ["LG >= 1.0", "LC >= 1.0", "SG >= 1.0", "Patrimônio líquido mínimo de 10%", "Certidão de falência", "CAT para obras de edificação"],
-        "critical_points": ["indice_sem_formula", "patrimonio_elevado"],
+        "categories_to_find": [
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [
+          "LG >= 1.0",
+          "LC >= 1.0",
+          "SG >= 1.0",
+          "Patrimônio líquido mínimo de 10%",
+          "Certidão de falência",
+          "CAT para obras de edificação"
+        ],
+        "critical_points": [
+          "indice_sem_formula",
+          "patrimonio_elevado"
+        ],
         "tipo_objeto_expected": "obra_engenharia",
         "min_requirements": 22,
         "min_evidence_refs": 14
@@ -126,9 +214,20 @@
       "complexity": "media",
       "description": "Pregão SRP para aquisição de materiais de informática em 5 lotes com Termo de Referência em anexo separado e planilha quantitativa",
       "expected": {
-        "categories_to_find": ["habilitacao_juridica", "regularidade_fiscal_trabalhista", "proposta_comercial"],
-        "key_requirements": ["Proposta por lote com marca e modelo", "Garantia mínima dos equipamentos", "Prazo de entrega por lote"],
-        "critical_points": ["lotes_multiplos", "anexo_divergente"],
+        "categories_to_find": [
+          "habilitacao_juridica",
+          "regularidade_fiscal_trabalhista",
+          "proposta_comercial"
+        ],
+        "key_requirements": [
+          "Proposta por lote com marca e modelo",
+          "Garantia mínima dos equipamentos",
+          "Prazo de entrega por lote"
+        ],
+        "critical_points": [
+          "lotes_multiplos",
+          "anexo_divergente"
+        ],
         "tipo_objeto_expected": "fornecimento",
         "min_requirements": 12,
         "min_evidence_refs": 8
@@ -141,9 +240,19 @@
       "complexity": "alta",
       "description": "Pregão para serviço de engenharia com exigência de visita técnica obrigatória, vedação de consórcio sem justificativa e atestado com quantitativo mínimo de 70%",
       "expected": {
-        "categories_to_find": ["qualificacao_tecnica_operacional", "qualificacao_tecnica_profissional"],
-        "key_requirements": ["Visita técnica obrigatória", "Atestado com 70% do quantitativo"],
-        "critical_points": ["visita_tecnica_restricao", "vedacao_consorcio_injustificada", "quantitativo_70_porcento"],
+        "categories_to_find": [
+          "qualificacao_tecnica_operacional",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [
+          "Visita técnica obrigatória",
+          "Atestado com 70% do quantitativo"
+        ],
+        "critical_points": [
+          "visita_tecnica_restricao",
+          "vedacao_consorcio_injustificada",
+          "quantitativo_70_porcento"
+        ],
         "tipo_objeto_expected": "servico_comum_engenharia",
         "min_requirements": 15,
         "min_evidence_refs": 10
@@ -156,12 +265,840 @@
       "complexity": "alta",
       "description": "Tomada de Preços para obra com prazo de execução diferente entre corpo do edital (12 meses) e Termo de Referência (8 meses), e quantitativos divergentes na planilha",
       "expected": {
-        "categories_to_find": ["qualificacao_tecnica_operacional", "proposta_comercial", "execucao_contratual"],
-        "key_requirements": ["Planilha com composição de custos", "Cronograma físico-financeiro"],
-        "critical_points": ["divergencia_prazo_edital_tr", "divergencia_quantitativos", "inconsistencia_entre_documentos"],
+        "categories_to_find": [
+          "qualificacao_tecnica_operacional",
+          "proposta_comercial",
+          "execucao_contratual"
+        ],
+        "key_requirements": [
+          "Planilha com composição de custos",
+          "Cronograma físico-financeiro"
+        ],
+        "critical_points": [
+          "divergencia_prazo_edital_tr",
+          "divergencia_quantitativos",
+          "inconsistencia_entre_documentos"
+        ],
         "tipo_objeto_expected": "obra_engenharia",
         "min_requirements": 18,
         "min_evidence_refs": 12
+      }
+    },
+    {
+      "id": "real-001",
+      "name": "Pregão Eletrônico PE20260002 - CASA CIVIL - ESTADO DO CEARA",
+      "tipo_objeto": "servico_comum",
+      "complexity": "alta",
+      "description": "Compras.gov.br | Pregão — 35 exig., 5 riscos",
+      "pncp_ref": {
+        "cnpj": "07954480000179",
+        "ano": "2026",
+        "seq": "5762"
+      },
+      "source": {
+        "processId": "2f2f4a3d-4838-40a8-8002-b4b4b817dd64",
+        "promptVersion": "v4.2.0",
+        "exportedAt": "2026-04-07T01:05:40.288Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 24,
+        "min_evidence_refs": 72
+      }
+    },
+    {
+      "id": "real-002",
+      "name": "Concorrência 20260010 - SOP - SUPERINTENDÊNCIA DE OBRAS PÚBLICAS - ESTADO DO CEA",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Compras.gov.br | Concorrência — 52 exig., 4 riscos",
+      "pncp_ref": {
+        "cnpj": "07954480000179",
+        "ano": "2026",
+        "seq": "6850"
+      },
+      "source": {
+        "processId": "e2b1776e-c45d-48bc-9fec-775e36d12bb3",
+        "promptVersion": "v4.2.0",
+        "exportedAt": "2026-04-07T01:05:40.290Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 36,
+        "min_evidence_refs": 26
+      }
+    },
+    {
+      "id": "real-003",
+      "name": "Concorrência 90006/2026-CP-FMS - PREFEITURA DE JAGUARUANA",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Compras.gov.br | Concorrência — 56 exig., 7 riscos",
+      "pncp_ref": {
+        "cnpj": "07615750000117",
+        "ano": "2026",
+        "seq": "33"
+      },
+      "source": {
+        "processId": "bcd07f80-709e-485a-b9dc-62630f4d1be4",
+        "promptVersion": "v4.2.0",
+        "exportedAt": "2026-04-07T01:05:40.290Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 39,
+        "min_evidence_refs": 28
+      }
+    },
+    {
+      "id": "real-004",
+      "name": "Concorrência Eletrônica 17.03.01/2026 - PREFEITURA MUNICIPAL DE BATURITÉ/CE",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "BBMNET | Concorrência — 69 exig., 5 riscos",
+      "pncp_ref": {
+        "cnpj": "07387343000108",
+        "ano": "2026",
+        "seq": "35"
+      },
+      "source": {
+        "processId": "c9dc8f70-9dbb-4f59-b84b-ae1155e4272e",
+        "promptVersion": "v4.2.0",
+        "exportedAt": "2026-04-07T01:05:40.291Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 48,
+        "min_evidence_refs": 35
+      }
+    },
+    {
+      "id": "real-005",
+      "name": "Pregão Eletrônico 24001.044222/2025-59 - SECRETARIA DA SAÚDE",
+      "tipo_objeto": "locacao",
+      "complexity": "alta",
+      "description": "Compras.gov.br | Pregão — 51 exig., 4 riscos",
+      "pncp_ref": null,
+      "source": {
+        "processId": "7dfd2293-f3b3-47f0-bc32-2abbe1370527",
+        "promptVersion": "v4.1.0",
+        "exportedAt": "2026-04-07T01:05:40.292Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "locacao",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 35,
+        "min_evidence_refs": 32
+      }
+    },
+    {
+      "id": "real-006",
+      "name": "Concorrência Eletrônica 0062026CESDUI - Prefeitura Municipal de Apuiarés-Ce",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Licita Mais Brasil | Concorrência — 63 exig., 8 riscos",
+      "pncp_ref": {
+        "cnpj": "07438468000101",
+        "ano": "2026",
+        "seq": "11"
+      },
+      "source": {
+        "processId": "77f39fb5-8e71-469a-a97d-f4fa05e3d34a",
+        "promptVersion": "v4.1.0",
+        "exportedAt": "2026-04-07T01:05:40.293Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 44,
+        "min_evidence_refs": 48
+      }
+    },
+    {
+      "id": "real-007",
+      "name": "Concorrência Eletrônica CE 03/2026-SEINFRA - PREFEITURA MUNICIPAL DE VIÇOSA DO C",
+      "tipo_objeto": "servico_comum_engenharia",
+      "complexity": "alta",
+      "description": "Compras.gov.br | Concorrência — 77 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "10462497000113",
+        "ano": "2026",
+        "seq": "29"
+      },
+      "source": {
+        "processId": "4b0b1f85-c7de-400e-97fe-fc4bf892e650",
+        "promptVersion": "v4.1.0",
+        "exportedAt": "2026-04-07T01:05:40.293Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 53,
+        "min_evidence_refs": 38
+      }
+    },
+    {
+      "id": "real-008",
+      "name": "Concorrência Eletrônica 0303001-2026 - MUNICÍPIO DE BEBERIBE/CE",
+      "tipo_objeto": "servico_comum_engenharia",
+      "complexity": "alta",
+      "description": "BLL | Concorrência — 59 exig., 7 riscos",
+      "pncp_ref": {
+        "cnpj": "07528292000189",
+        "ano": "2026",
+        "seq": "32"
+      },
+      "source": {
+        "processId": "ffedac03-50cd-4b97-9327-2c8e31e34bbf",
+        "promptVersion": "v4.1.0",
+        "exportedAt": "2026-04-07T01:05:40.294Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 41,
+        "min_evidence_refs": 79
+      }
+    },
+    {
+      "id": "real-009",
+      "name": "Concorrência 01.018/2026-CE - Município de Ubajara/CE",
+      "tipo_objeto": "servico_comum_engenharia",
+      "complexity": "alta",
+      "description": "M2A | Concorrência — 58 exig., 8 riscos",
+      "pncp_ref": {
+        "cnpj": "07735541000107",
+        "ano": "2026",
+        "seq": "19"
+      },
+      "source": {
+        "processId": "410afada-2a6e-47bf-9ad6-5dd6ad35d6b3",
+        "promptVersion": "v4.1.0",
+        "exportedAt": "2026-04-07T01:05:40.295Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 40,
+        "min_evidence_refs": 26
+      }
+    },
+    {
+      "id": "real-010",
+      "name": "Pregão Eletrônico 001/2026 - Consórcio Público de Saúde da Microrregião de Limoe",
+      "tipo_objeto": "servico_comum",
+      "complexity": "alta",
+      "description": "BLL | Pregão — 46 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "13328683000152",
+        "ano": "2026",
+        "seq": "3"
+      },
+      "source": {
+        "processId": "4f9090f7-9a5d-4d35-a0f0-75d7058d4699",
+        "promptVersion": "v4.1.0",
+        "exportedAt": "2026-04-07T01:05:40.295Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 32,
+        "min_evidence_refs": 26
+      }
+    },
+    {
+      "id": "real-011",
+      "name": "Concorrência PCS-CE-01.120226-SEINFRA - Município de Santa Quitéria/CE",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "BNC | Concorrência — 64 exig., 4 riscos",
+      "pncp_ref": {
+        "cnpj": "07725138000105",
+        "ano": "2026",
+        "seq": "45"
+      },
+      "source": {
+        "processId": "3e73cc9d-ff1d-4fb2-b00f-df61f9cad9b7",
+        "promptVersion": "v4.1.0",
+        "exportedAt": "2026-04-07T01:05:40.296Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 44,
+        "min_evidence_refs": 36
+      }
+    },
+    {
+      "id": "real-012",
+      "name": "PREGÃO ELETRÔNICO 2026.03.11.1 - Prefeitura Municipal de Umari",
+      "tipo_objeto": "servico_comum",
+      "complexity": "alta",
+      "description": "Licita Mais Brasil | Pregão — 42 exig., 7 riscos",
+      "pncp_ref": {
+        "cnpj": "07520372000198",
+        "ano": "2026",
+        "seq": "3"
+      },
+      "source": {
+        "processId": "5cb9124e-a02a-4c09-98ce-30b48fce2b07",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.296Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 29,
+        "min_evidence_refs": 57
+      }
+    },
+    {
+      "id": "real-013",
+      "name": "CONCORRÊNCIA 20260011 - SECRETARIA DA CULTURA DO ESTADO DO CEARÁ - SECULT",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Compras.gov.br | Concorrência — 24 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "07954480000179",
+        "ano": "2026",
+        "seq": "4753"
+      },
+      "source": {
+        "processId": "90ff13c7-faac-4688-b92a-0924b66ea798",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.297Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 16,
+        "min_evidence_refs": 10
+      }
+    },
+    {
+      "id": "real-014",
+      "name": "CONCORRÊNCIA ELETRÔNICA N.º CE-002/2026 - SESA - PREFEITURA MUNICIPAL DE TABULEI",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "BLL | Concorrência — 48 exig., 7 riscos",
+      "pncp_ref": {
+        "cnpj": "07891682000119",
+        "ano": "2026",
+        "seq": "12"
+      },
+      "source": {
+        "processId": "4f8fa159-6471-417e-ba42-d2434574f4b7",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.298Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 33,
+        "min_evidence_refs": 86
+      }
+    },
+    {
+      "id": "real-015",
+      "name": "LICITAÇÃO ELETRÔNICA 90003/2026 - MINISTÉRIO DA INTEGRAÇÃO E DO DESENVOLVIMENTO ",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "www.gov.br/compras | LICITAÇÃO ELETRÔNICA — 56 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "00399857000126",
+        "ano": "2026",
+        "seq": "69"
+      },
+      "source": {
+        "processId": "2ac992b4-302d-4562-9ed1-fc650d01be93",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.299Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 39,
+        "min_evidence_refs": 53
+      }
+    },
+    {
+      "id": "real-016",
+      "name": "CONCORRÊNCIA ELETRÔNICA 008/2026-CP - PREFEITURA MUNICIPAL DE PEDRA BRANCA",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "https://compras.gov.br/ | CONCORRÊNCIA ELETRÔNICA — 67 exig., 7 riscos",
+      "pncp_ref": {
+        "cnpj": "07726540000104",
+        "ano": "2026",
+        "seq": "26"
+      },
+      "source": {
+        "processId": "64ae20c9-268d-4399-a458-45fcc5b9d8d0",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.300Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 46,
+        "min_evidence_refs": 33
+      }
+    },
+    {
+      "id": "real-017",
+      "name": "Concorrência Eletrônica 2026.03.03.002 - Secretaria Municipal de Conservação e S",
+      "tipo_objeto": "servico_comum_engenharia",
+      "complexity": "alta",
+      "description": "Licita Mais Brasil | Concorrência Eletrônica — 70 exig., 7 riscos",
+      "pncp_ref": {
+        "cnpj": "07660350000123",
+        "ano": "2026",
+        "seq": "34"
+      },
+      "source": {
+        "processId": "8af83c9b-acc3-429b-9ec2-655cf7b52727",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.300Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 49,
+        "min_evidence_refs": 87
+      }
+    },
+    {
+      "id": "real-018",
+      "name": "PREGÃO ELETRÔNICO 20250069 - SECRETARIA DA EDUCAÇÃO",
+      "tipo_objeto": "servico_comum",
+      "complexity": "alta",
+      "description": "Compras.gov.br  | PREGÃO ELETRÔNICO — 55 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "07954480000179",
+        "ano": "2025",
+        "seq": "25999"
+      },
+      "source": {
+        "processId": "7ab05206-b45c-4b75-8297-e8fdd28f14ae",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.301Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 38,
+        "min_evidence_refs": 26
+      }
+    },
+    {
+      "id": "real-019",
+      "name": "CONCORRÊNCIA ELETRÔNICA 01/2026-SEDUC/CELOS - PREFEITURA MUNICIPAL DE ARACATI",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "BLL | CONCORRÊNCIA ELETRÔNICA — 58 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "07684756000146",
+        "ano": "2026",
+        "seq": "38"
+      },
+      "source": {
+        "processId": "c2e7ae29-998c-4e48-9202-8221bbdb525e",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.302Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 40,
+        "min_evidence_refs": 30
+      }
+    },
+    {
+      "id": "real-020",
+      "name": "CONCORRÊNCIA ELETRÔNICA INTERNACIONAL 11159 / 90006/2026 - SECRETARIA MUNICIPAL ",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Compras.gov.br  | CONCORRÊNCIA ELETRÔNICA INTERNACIONAL — 86 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "07954605000160",
+        "ano": "2026",
+        "seq": "130"
+      },
+      "source": {
+        "processId": "c6af6fd0-608d-4bd5-90fc-6bf530510ced",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.302Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 60,
+        "min_evidence_refs": 49
+      }
+    },
+    {
+      "id": "real-021",
+      "name": "CONCORRÊNCIA ELETRÔNICA INTERNACIONAL N°. 90007/2026 11160 - SECRETARIA MUNICIPA",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "Compras.gov.br  | CONCORRÊNCIA ELETRÔNICA INTERNACIONAL N°. 90007/2026 — 90 exig., 7 riscos",
+      "pncp_ref": {
+        "cnpj": "07954605000160",
+        "ano": "2026",
+        "seq": "131"
+      },
+      "source": {
+        "processId": "361abd91-2434-4c2b-881c-aba3c1ade3f1",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.303Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 62,
+        "min_evidence_refs": 55
+      }
+    },
+    {
+      "id": "real-022",
+      "name": "CONCORRÊNCIA ELETRÔNICA CE-001/2026-GABINETE - PREFEITURA MUNICIPAL DE TABULEIRO",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "https://bllcompras.com/Home/PublicAccess | CONCORRÊNCIA ELETRÔNICA — 49 exig., 8 riscos",
+      "pncp_ref": {
+        "cnpj": "07891682000119",
+        "ano": "2026",
+        "seq": "8"
+      },
+      "source": {
+        "processId": "c1dec053-6067-41b8-9292-5a169635cba0",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.304Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 34,
+        "min_evidence_refs": 25
+      }
+    },
+    {
+      "id": "real-023",
+      "name": "Concorrência Eletrônica 08.004/2026-CE - Prefeitura de Maracanaú",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "https://bllcompras.com | Concorrência Eletrônica — 54 exig., 8 riscos",
+      "pncp_ref": {
+        "cnpj": "07605850000162",
+        "ano": "2026",
+        "seq": "27"
+      },
+      "source": {
+        "processId": "aaece572-9469-45a5-88d1-977670f4d4e3",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.305Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 37,
+        "min_evidence_refs": 74
+      }
+    },
+    {
+      "id": "real-024",
+      "name": "PREGÃO ELETRÔNICO 2024.03.07.1 - PREFEITURA MUNICIPAL DE MILAGRES",
+      "tipo_objeto": "servico_comum",
+      "complexity": "alta",
+      "description": "www.licitacoesmilagres.com.br | PREGÃO ELETRÔNICO — 48 exig., 6 riscos",
+      "pncp_ref": {
+        "cnpj": "07655277000100",
+        "ano": "2024",
+        "seq": "12"
+      },
+      "source": {
+        "processId": "fd91ccd3-feff-4ffd-80a1-b718ccab3423",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.305Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "servico_comum",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 33,
+        "min_evidence_refs": 28
+      }
+    },
+    {
+      "id": "real-025",
+      "name": "Concorrência 2026.03.04.012-CE-SPDU - GOVERNO MUNICIPAL DE CHOROZINHO",
+      "tipo_objeto": "obra_engenharia",
+      "complexity": "alta",
+      "description": "compras.m2atecnologia.com.br | Concorrência — 46 exig., 5 riscos",
+      "pncp_ref": {
+        "cnpj": "23555279000175",
+        "ano": "2026",
+        "seq": "37"
+      },
+      "source": {
+        "processId": "51919a08-610e-42e4-aa45-789e8be013e3",
+        "promptVersion": "v3.1.0",
+        "exportedAt": "2026-04-07T01:05:40.306Z"
+      },
+      "expected": {
+        "tipo_objeto_expected": "obra_engenharia",
+        "categories_to_find": [
+          "proposta_comercial",
+          "habilitacao_juridica",
+          "documentos_complementares",
+          "regularidade_fiscal_trabalhista",
+          "qualificacao_tecnica_operacional",
+          "qualificacao_economico_financeira",
+          "qualificacao_tecnica_profissional"
+        ],
+        "key_requirements": [],
+        "critical_points": [],
+        "min_requirements": 32,
+        "min_evidence_refs": 36
       }
     }
   ],

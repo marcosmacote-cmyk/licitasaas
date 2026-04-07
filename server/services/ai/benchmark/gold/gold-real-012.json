@@ -1,0 +1,2627 @@
+{
+  "timeline": {
+    "data_sessao": "01/04/2026 09:10",
+    "outros_prazos": [
+      {
+        "data": "60 dias",
+        "descricao": "Prazo de validade da proposta"
+      },
+      {
+        "data": "5 (cinco) dias úteis",
+        "descricao": "Prazo para regularização fiscal e trabalhista para ME/EPP"
+      },
+      {
+        "data": "2 (duas) horas",
+        "descricao": "Prazo para envio da proposta ajustada pelo vencedor"
+      },
+      {
+        "data": "5 (cinco) dias úteis",
+        "descricao": "Prazo para assinatura do contrato"
+      },
+      {
+        "data": "10 (dez) dias úteis",
+        "descricao": "Prazo para apresentação da garantia contratual"
+      }
+    ],
+    "prazo_amostra": null,
+    "prazo_recurso": "3 (três) dias úteis para apresentação das razões",
+    "data_publicacao": null,
+    "prazo_impugnacao": "Até 3 dias úteis antes da data de abertura das propostas",
+    "prazo_contrarrazoes": "Igual prazo do recorrente",
+    "prazo_envio_proposta": "De 13/03/2026 09:00 até 01/04/2026 09:00",
+    "prazo_esclarecimento": "Até 3 dias úteis anteriores à data fixada para abertura das propostas",
+    "prazo_envio_habilitacao": "2 (duas) horas após solicitação do Pregoeiro para o vencedor"
+  },
+  "confidence": {
+    "warnings": [
+      "Nenhuma exigência econômico-financeira identificada"
+    ],
+    "traceability": {
+      "total_requirements": 32,
+      "traced_requirements": 32,
+      "evidence_registry_count": 114,
+      "traceability_percentage": 100
+    },
+    "pipeline_health": {
+      "parseRepairs": 0,
+      "stagesFailed": 0,
+      "fallbacksUsed": 0
+    },
+    "missing_sections": [],
+    "score_percentage": 79,
+    "overall_confidence": "alta",
+    "section_confidence": {
+      "risk_review": "media"
+    }
+  },
+  "pncp_source": {
+    "analyzed_at": "2026-04-01T00:27:03.247Z",
+    "attachments": [
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/07520372000198/compras/2026/3/arquivos/1",
+        "ativo": true,
+        "titulo": "Edital e Anexos PREGAO ELETRONICO N 2026.03.11.1.pdf",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 1,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      }
+    ],
+    "link_sistema": "https://pncp.gov.br/app/editais/07520372000198/2026/3",
+    "discarded_files": [],
+    "downloaded_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/7448c801-b6ef-40ad-84cf-68f50cb17ac4.pdf"
+    ]
+  },
+  "requirements": {
+    "proposta_comercial": [
+      {
+        "phase": "proposta",
+        "title": "Cadastramento da Proposta Inicial",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.1.1, 7.2.a, 7.2.b",
+        "description": "Cadastramento da proposta de preços inicial na plataforma com descrição do objeto e preços. Preço unitário e global com no máximo 2 casas decimais.",
+        "evidence_refs": [
+          "EV-PC-01"
+        ],
+        "requirement_id": "PC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Prazo de validade da proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.2.c",
+        "description": "Prazo de validade da proposta não inferior a 60 dias, a contar da data de apresentação.",
+        "evidence_refs": [
+          "EV-PC-02"
+        ],
+        "requirement_id": "PC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Informação de condição de ME/EPP ou cooperativa",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.3",
+        "description": "Informar condição de ME/EPP ou cooperativa no ato do encaminhamento da proposta via sistema eletrônico.",
+        "evidence_refs": [
+          "EV-PC-03"
+        ],
+        "requirement_id": "PC-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta Final e Garantia (Vencedor)",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 10.6",
+        "description": "Licitante mais bem classificado deverá enviar proposta adequada ao último lance, acompanhada de garantia e documentos complementares, se necessários.",
+        "evidence_refs": [
+          "EV-PC-04"
+        ],
+        "requirement_id": "PC-04",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta Final em via única original",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.1",
+        "description": "Proposta final em via única original, com preços ajustados, assinada, com especificações técnicas, marca e modelo (se aplicável).",
+        "evidence_refs": [
+          "EV-PC-05"
+        ],
+        "requirement_id": "PC-05",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Preços da Proposta Final em reais com 2 casas decimais",
+        "parent_id": "PC-05",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 11.1.1",
+        "description": "Preços expressos em reais, com até 2 casas decimais em valores unitários e globais.",
+        "evidence_refs": [
+          "EV-PC-06"
+        ],
+        "requirement_id": "PC-06",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proibição de cotar com quantitativos divergentes",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.3",
+        "description": "Não cotar proposta com quantitativo de itens divergentes dos contidos no lote.",
+        "evidence_refs": [
+          "EV-PC-07"
+        ],
+        "requirement_id": "PC-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proibição de fracionamento de centavo",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.4",
+        "description": "Não admitir o fracionamento do centavo na cotação do preço unitário.",
+        "evidence_refs": [
+          "EV-PC-08"
+        ],
+        "requirement_id": "PC-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Inclusão de despesas nos preços propostos",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.5",
+        "description": "Preços propostos já incluem despesas de frete, tributos e demais ônus de entrega.",
+        "evidence_refs": [
+          "EV-PC-09"
+        ],
+        "requirement_id": "PC-09",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Modelo de Proposta de Preços (Anexo III)",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Anexo III, p.46",
+        "description": "Preencher e assinar Modelo de Proposta de Preços (Anexo III), contendo declarações, objeto, valor, validade, identificação, dados bancários e assinatura.",
+        "evidence_refs": [
+          "EV-PC-10"
+        ],
+        "requirement_id": "PC-10",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      }
+    ],
+    "habilitacao_juridica": [
+      {
+        "phase": "habilitacao",
+        "title": "Ato constitutivo, estatuto ou contrato social",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.a",
+        "description": "Ato constitutivo, estatuto ou contrato social em vigor e seus aditivos, devidamente registrado na Junta Comercial da sede do Licitante, em se tratando de sociedades comerciais, e, no caso de sociedades por ações, acompanhada de documentos de eleição de seus administradores.",
+        "evidence_refs": [
+          "EV-HJ-01"
+        ],
+        "requirement_id": "HJ-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Registro comercial e aditivos (empresa individual)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.b",
+        "description": "Registro comercial e seus aditivos, no caso de empresa individual, devidamente registrado na Junta Comercial da sede do Licitante.",
+        "evidence_refs": [
+          "EV-HJ-02"
+        ],
+        "requirement_id": "HJ-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição do ato constitutivo (sociedades civis)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.c",
+        "description": "Inscrição do ato constitutivo, no caso de sociedades civis, acompanhadas de prova de diretoria em exercício.",
+        "evidence_refs": [
+          "EV-HJ-03"
+        ],
+        "requirement_id": "HJ-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Decreto de autorização (empresa estrangeira)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.d",
+        "description": "Decreto de autorização, em se tratando de empresa ou sociedade estrangeira em funcionamento no País, e ato de registro ou autorização para funcionamento expedido pelo órgão competente, quando a atividade assim o exigir.",
+        "evidence_refs": [
+          "EV-HJ-04"
+        ],
+        "requirement_id": "HJ-04",
+        "obligation_type": "empresa_estrangeira",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certificado da Condição de Microempreendedor Individual (CCMEI)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.e",
+        "description": "Certificado da Condição de Microempreendedor Individual - CCMEI, cuja aceitação ficará condicionada à verificação da autenticidade no sítio www.portaldoempreendedor.gov.br, em se tratando de Microempreendedor Individual - MEI.",
+        "evidence_refs": [
+          "EV-HJ-05"
+        ],
+        "requirement_id": "HJ-05",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "documentos_complementares": [
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de integralidade custos trabalhistas",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.q",
+        "description": "Declaração de que propostas compreendem integralidade dos custos trabalhistas.",
+        "evidence_refs": [
+          "EV-DC-01"
+        ],
+        "requirement_id": "DC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de não emprego de menores",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.r",
+        "description": "Declaração de que não emprega menores de 18 anos em trabalho noturno, perigoso ou insalubre e menores de 16 anos em qualquer trabalho.",
+        "evidence_refs": [
+          "EV-DC-02"
+        ],
+        "requirement_id": "DC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de cumprimento de reserva de cargos",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.s",
+        "description": "Declaração de cumprimento de reserva de cargos para pessoa com deficiência e reabilitado da Previdência Social, e jovem aprendiz.",
+        "evidence_refs": [
+          "EV-DC-03"
+        ],
+        "requirement_id": "DC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de atendimento requisitos habilitação",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.t",
+        "description": "Declaração de que atende aos requisitos de habilitação e responde pela veracidade das informações.",
+        "evidence_refs": [
+          "EV-DC-04"
+        ],
+        "requirement_id": "DC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de exercício da preferência (ME/EPP)",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 6.6",
+        "description": "Declaração de exercício da preferência prevista na LC 123/2006 no sistema www.licitamaisbrasil.com.br.",
+        "evidence_refs": [
+          "EV-DC-05"
+        ],
+        "requirement_id": "DC-05",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "regularidade_fiscal_trabalhista": [
+      {
+        "phase": "habilitacao",
+        "title": "Prova de inscrição no CNPJ",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.g",
+        "description": "Prova de inscrição no Cadastro Nacional da Pessoa Jurídica - CNPJ.",
+        "evidence_refs": [
+          "EV-RFT-01"
+        ],
+        "requirement_id": "RFT-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Fazenda Federal",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.i",
+        "description": "Prova de regularidade perante a Fazenda Federal.",
+        "evidence_refs": [
+          "EV-RFT-03"
+        ],
+        "requirement_id": "RFT-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Fazenda Estadual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.j",
+        "description": "Prova de regularidade perante a Fazenda Estadual.",
+        "evidence_refs": [
+          "EV-RFT-04"
+        ],
+        "requirement_id": "RFT-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Fazenda Municipal",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.k",
+        "description": "Prova de regularidade perante a Fazenda Municipal.",
+        "evidence_refs": [
+          "EV-RFT-05"
+        ],
+        "requirement_id": "RFT-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade relativa à Seguridade Social",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.l",
+        "description": "Prova de regularidade relativa à Seguridade Social.",
+        "evidence_refs": [
+          "EV-RFT-06"
+        ],
+        "requirement_id": "RFT-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço (FGTS)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.m",
+        "description": "Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço - FGTS.",
+        "evidence_refs": [
+          "EV-RFT-07"
+        ],
+        "requirement_id": "RFT-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Justiça do Trabalho",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.n",
+        "description": "Prova de regularidade perante a Justiça do Trabalho.",
+        "evidence_refs": [
+          "EV-RFT-08"
+        ],
+        "requirement_id": "RFT-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição municipal no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.g",
+        "description": "Prova de inscrição no cadastro de contribuintes municipal, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-IM",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_operacional": [
+      {
+        "phase": "habilitacao",
+        "title": "Atestado de Capacidade Técnica da Empresa",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.f",
+        "description": "Comprovação de aptidão para locação de maquinário (compactador, roçadeira mecânica e caminhão) para coleta e transporte de resíduos sólidos domiciliares e urbanos, compatível com o objeto licitado.",
+        "evidence_refs": [
+          "EV-QTO-01",
+          "EV-TR-01"
+        ],
+        "requirement_id": "QTO-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_economico_financeira": [
+      {
+        "phase": "habilitacao",
+        "title": "Balanço patrimonial e demonstrações contábeis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.o",
+        "description": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais.",
+        "evidence_refs": [
+          "EV-QEF-01"
+        ],
+        "requirement_id": "QEF-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certidão negativa de feitos sobre falência",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.p",
+        "description": "Certidão negativa de feitos sobre falência expedida pelo distribuidor da sede do licitante.",
+        "evidence_refs": [
+          "EV-QEF-02"
+        ],
+        "requirement_id": "QEF-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Garantia de Proposta",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.4, 7.4.1",
+        "description": "Comprovação da garantia no montante estipulado em 1% (um por cento) do valor estimado para a contratação, conforme previsto no art. 58 da Lei Federal n. 14.133/2021. Deve ser emitida na mesma data do cadastro da proposta de preços inicial e anexada na plataforma até a data e horário marcados para o início da sessão de disputa.",
+        "evidence_refs": [
+          "EV-QEF-03"
+        ],
+        "requirement_id": "QEF-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Caução em dinheiro (Garantia de Proposta)",
+        "parent_id": "QEF-03",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 7.4.4.I, 7.4.5",
+        "description": "Comprovante de DEPÓSITO BANCÁRIO (com a identificação do depositante/licitante) a ser feito em nome da Prefeitura Municipal de Umari/CE, Conta Corrente n. 28020-8, Agência n. 0547-9 - Banco do Brasil.",
+        "evidence_refs": [
+          "EV-QEF-04"
+        ],
+        "requirement_id": "QEF-03-01",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Títulos da dívida pública (Garantia de Proposta)",
+        "parent_id": "QEF-03",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 7.4.4.I",
+        "description": "Títulos da dívida pública emitidos sob a forma escritural, mediante registro em sistema centralizado de liquidação e de custódia autorizado pelo Banco Central do Brasil, e avaliados por seus valores econômicos, conforme definido pelo Ministério da Economia.",
+        "evidence_refs": [
+          "EV-QEF-05"
+        ],
+        "requirement_id": "QEF-03-02",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Seguro-garantia (Garantia de Proposta)",
+        "parent_id": "QEF-03",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 7.4.4.II, 7.4.6",
+        "description": "Comprovação da apólice ou de documento hábil expedido pela seguradora, cuja vigência deverá contemplar toda a validade da proposta de preços apresentada.",
+        "evidence_refs": [
+          "EV-QEF-06"
+        ],
+        "requirement_id": "QEF-03-03",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Fiança bancária (Garantia de Proposta)",
+        "parent_id": "QEF-03",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 7.4.4.III, 7.4.7",
+        "description": "Documento fornecido pela instituição que a concede, do qual deverá obrigatoriamente, constar: Beneficiário: Prefeitura Municipal de Umari; Objeto: Garantia da participação no PREGÃO ELETRÔNICO N. 2026.03.11.1; Valor: 1% (um por cento) do valor estimado da Contratação; Prazo de Validade: Deverá contemplar toda a vigência da proposta de preços apresentada.",
+        "evidence_refs": [
+          "EV-QEF-07"
+        ],
+        "requirement_id": "QEF-03-04",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Título de capitalização (Garantia de Proposta)",
+        "parent_id": "QEF-03",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Edital, item 7.4.4.IV",
+        "description": "Título de capitalização custeado por pagamento único, com resgate pelo valor total.",
+        "evidence_refs": [
+          "EV-QEF-08"
+        ],
+        "requirement_id": "QEF-03-05",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "contratacao",
+        "title": "Garantia de Execução Contratual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 11.4; Minuta, Cláusula Décima Segunda, 12.1, 12.2",
+        "description": "A contratação conta com garantia de execução, nos moldes do art. 96, da Lei Federal n. 14.133/2021, em valor correspondente a 5% (cinco por cento) do valor total do contrato. O contratado apresentará, no prazo máximo de 10 (dez) dias úteis, prorrogáveis por igual período, a critério do contratante, contado da assinatura do contrato, comprovante de prestação de garantia.",
+        "evidence_refs": [
+          "EV-QEF-09"
+        ],
+        "requirement_id": "QEF-04",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "penalidade"
+      },
+      {
+        "phase": "contratacao",
+        "title": "Caução em dinheiro (Garantia Contratual)",
+        "parent_id": "QEF-04",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Minuta, Cláusula Décima Segunda, 12.2, 18.9",
+        "description": "Caução em dinheiro, com depósito na Conta Corrente n. 28020-8, Agência n. 0547-9 - Banco do Brasil.",
+        "evidence_refs": [
+          "EV-QEF-10"
+        ],
+        "requirement_id": "QEF-04-01",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "penalidade"
+      },
+      {
+        "phase": "contratacao",
+        "title": "Títulos da dívida pública (Garantia Contratual)",
+        "parent_id": "QEF-04",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Minuta, Cláusula Décima Segunda, 12.2, 18.8.a",
+        "description": "Títulos da dívida pública emitidos sob a forma escritural, mediante registro em sistema centralizado de liquidação e custódia, autorizado pelo Banco Central do Brasil e avaliados por seus valores econômicos, conforme definido pelo Ministério da Fazenda.",
+        "evidence_refs": [
+          "EV-QEF-11"
+        ],
+        "requirement_id": "QEF-04-02",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "penalidade"
+      },
+      {
+        "phase": "contratacao",
+        "title": "Seguro-garantia (Garantia Contratual)",
+        "parent_id": "QEF-04",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Minuta, Cláusula Décima Segunda, 12.2, 12.3, 18.10",
+        "description": "Apólice de seguro-garantia com validade durante a vigência do contrato e por mais 90 (noventa) dias após o término deste prazo de vigência, permanecendo em vigor mesmo que o contratado não pague o prêmio nas datas convencionadas. A apólice deverá indicar o Município de Umari, Estado do Ceará, como beneficiário e não conter cláusula contrária aos interesses do Município.",
+        "evidence_refs": [
+          "EV-QEF-12"
+        ],
+        "requirement_id": "QEF-04-03",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "penalidade"
+      },
+      {
+        "phase": "contratacao",
+        "title": "Fiança bancária (Garantia Contratual)",
+        "parent_id": "QEF-04",
+        "applies_to": "licitante",
+        "entry_type": "subitem",
+        "source_ref": "Minuta, Cláusula Décima Segunda, 12.2, 12.11, 18.11",
+        "description": "Fiança bancária emitida por banco ou instituição financeira devidamente autorizada a operar no País pelo Banco Central do Brasil, com prazo de validade correspondente ao período de vigência do contrato, expressa afirmação do fiador de que, como devedor solidário, fará o pagamento ao Município de Umari, Estado do Ceará, independentemente de interpelação judicial, caso o afiançado não cumpra suas obrigações; renúncia expressa do fiador ao benefício de ordem e aos direitos previstos nos artigos 827 e 838 do Código Civil Brasileiro; e cláusula que assegure a atualização do valor afiançado, de acordo com o previsto neste Edital.",
+        "evidence_refs": [
+          "EV-QEF-13"
+        ],
+        "requirement_id": "QEF-04-04",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "penalidade"
+      }
+    ],
+    "qualificacao_tecnica_profissional": []
+  },
+  "analysis_meta": {
+    "model_used": "gemini-2.5-flash+gemini-2.5-flash-lite",
+    "analysis_id": "pncp_1775003002092_4mi5mf",
+    "source_type": "pncp_download",
+    "stage_times": {
+      "extraction": 215.258,
+      "risk_review": 5.888,
+      "normalization": 3.775
+    },
+    "generated_at": "2026-04-01T00:23:22.092Z",
+    "source_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/7448c801-b6ef-40ad-84cf-68f50cb17ac4.pdf"
+    ],
+    "rule_findings": [
+      {
+        "code": "R18",
+        "message": "Garantia de proposta exigida (1% (um por cento) do valor estimado para a contratação, conforme previsto no art. 58 da Lei Federal n. 14.133/2021. Modalidades: caução em dinheiro, títulos da dívida pública, seguro-garantia, fiança bancária, título de capitalização.) — QEF-03. Requisito de habilitação: ausência = inabilitação imediata. Exige modalidade correta (seguro-garantia, fiança bancária ou caução) e upload no prazo.",
+        "category": "economico_financeira",
+        "severity": "high",
+        "affectedFields": [
+          "participation_conditions.exige_garantia_proposta",
+          "requirements.qualificacao_economico_financeira.QEF-03"
+        ],
+        "recommendation": "Confirmar modalidade aceita, valor exato, e prazo de validade. Providenciar documento junto à seguradora/banco com antecedência."
+      },
+      {
+        "code": "R11",
+        "message": "42 exigências sem indicação se são obrigatórias ou não.",
+        "category": "normalizacao",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements"
+        ],
+        "recommendation": "Na maioria dos editais, exigências de habilitação são obrigatórias por padrão."
+      },
+      {
+        "code": "R19",
+        "message": "1 parcela(s) de maior relevância identificadas. Verificar se os quantitativos mínimos correspondem ao percentual legalmente aceito (normalmente ≤50% do item relevante).",
+        "category": "qualificacao_tecnica",
+        "severity": "medium",
+        "affectedFields": [
+          "technical_analysis.parcelas_relevantes"
+        ],
+        "recommendation": "Comparar quantitativos com o orçamento e verificar se estão restritos às parcelas de maior relevância."
+      },
+      {
+        "code": "R21",
+        "message": "Proposta exige documentos assinados/rubricados (PC-05, PC-10). Ausência de assinatura é causa frequente de desclassificação.",
+        "category": "proposta",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements.proposta_comercial.PC-05",
+          "requirements.proposta_comercial.PC-10"
+        ],
+        "recommendation": "Listar todos os documentos da proposta que exigem assinatura. Preparar checklist de conferência antes do envio."
+      },
+      {
+        "code": "R10",
+        "message": "Data da sessão (01/04/2026 09:10) aparenta estar no passado.",
+        "category": "timeline",
+        "severity": "critical",
+        "affectedFields": [
+          "timeline.data_sessao"
+        ],
+        "recommendation": "Verificar se a data extraída está correta ou se houve suspensão/adiamento."
+      },
+      {
+        "code": "R12",
+        "message": "67 evidências no registry sem referência de nenhuma exigência ou ponto crítico.",
+        "category": "evidencia",
+        "severity": "low",
+        "affectedFields": [
+          "evidence_registry"
+        ]
+      }
+    ],
+    "prompt_version": "v3.1.0",
+    "quality_report": {
+      "summary": "Quality: 86% | Extract: 100% | Norm: 85% | Evidence: 100% | Risk: 100% | Ops: 100% | 1 issues, 6 rule findings",
+      "issueCount": 1,
+      "overallScore": 86,
+      "categoryScores": {
+        "evidence": 100,
+        "extraction": 100,
+        "riskReview": 100,
+        "normalization": 85,
+        "operationalUsefulness": 100
+      }
+    },
+    "analysis_version": "1.0",
+    "models_per_stage": {
+      "extraction": "gemini-2.5-flash",
+      "risk_review": "gemini-2.5-flash-lite",
+      "normalization": "gemini-2.5-flash-lite"
+    },
+    "workflow_stage_status": {
+      "extraction": "done",
+      "validation": "done",
+      "risk_review": "done",
+      "normalization": "done"
+    }
+  },
+  "evidence_registry": [
+    {
+      "page": "1",
+      "excerpt": "A PREFEITURA MUNICIPAL DE UMARI sito à Rua 03 de Agosto, 200, Centro, Umari/CE, por intermédio do Pregoeiro e Membros da Equipe de Apoio designados pela Portaria n. 2025.01.17.001, de 17 de janeiro de 2025, torna público, para conhecimento dos interessados, que no dia e hora abaixo indicados será realizada licitação na modalidade PREGÃO ELETRÔNICO, do tipo MENOR PREÇO que será regida pela Lei Federal n. 14.133, de 1º de abril de 2021, observados os termos da Lei Complementar n. 123, de 14 de dezembro de 2006, assim como as exigências estabelecidas neste Edital. A presente licitação será no site https://www.licitamaisbrasil.com.br.",
+      "section": "1ª Parte: PREÂMBULO",
+      "evidence_id": "EV-PI-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Identificação do Processo"
+    },
+    {
+      "page": "1",
+      "excerpt": "1.1. A presente licitação tem por objeto a contratação de serviços a serem prestados na locação de maquinário (compactador, roçadeira mecânica e caminhão), destinados a coleta e transporte de resíduos sólidos domiciliares e urbanos do Município de Umari/CE, conforme anexos, partes integrantes deste edital.",
+      "section": "1.0 DO OBJETO",
+      "evidence_id": "EV-PI-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Objeto da Licitação"
+    },
+    {
+      "page": "1",
+      "excerpt": "3.1 - INÍCIO DO ACOLHIMENTO DAS PROPOSTAS: 13 de março de 2026 às 9h00min. 3.2 - DATA DE ABERTURA DAS PROPOSTAS: 01 de abril de 2026 às 9h00min. 3.3 - INÍCIO DA SESSÃO DE DISPUTA DE PREÇOS: 01 de abril de 2026 às 9h10min. 3.4. REFERÊNCIA DE TEMPO: Para todas as referências de tempo utilizadas pelo sistema será observado o horário de Brasília/DF.",
+      "section": "3.0 DAS DATAS E HORÁRIOS DO CERTAME",
+      "evidence_id": "EV-PI-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Datas e Horários do Certame"
+    },
+    {
+      "page": "15",
+      "excerpt": "20.1. Constituem anexos deste edital, dele fazendo parte: ANEXO I - Projeto de Custo Operacional ANEXO II - Termo de Referência ANEXO III - Modelo de Proposta de Preços ANEXO IV - Modelos de Declarações ANEXO V - Minuta do Contrato",
+      "section": "20. DOS ANEXOS",
+      "evidence_id": "EV-PI-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Anexos do Edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "9.5. O modo de disputa adotado para este certame será o \"ABERTO E FECHADO\", nos termos do art. 56, da Lei Federal n. 14.133/2021, do art. 22, inciso Il e do art. 24, da Instrução Normativa SEGES/ME n. 73/2022, observados os seguintes termos:",
+      "section": "9.0. DA ETAPA DE LANCES",
+      "evidence_id": "EV-PI-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Forma de Disputa"
+    },
+    {
+      "page": "11",
+      "excerpt": "14.1. Os pedidos de esclarecimentos referentes ao presente processo licitatório deverão ser enviados ao(a) pregoeiro(a), até 3 (três) dias úteis anteriores à data fixada para abertura das propostas, exclusivamente por meio eletrônico, no endereço umari20252028@gmail.com, informando o número deste pregão e órgão interessado ou por meio da plataforma www.licitamaisbrasil.com.br.",
+      "section": "14. DOS PEDIDOS DE ESCLARECIMENTOS E DA IMPUGNAÇÃO DO ATO CONVOCATÓRIO",
+      "evidence_id": "EV-TL-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Prazo de Esclarecimento"
+    },
+    {
+      "page": "11",
+      "excerpt": "14.4. Até 3 (três) dias úteis antes da data fixada para abertura das propostas, qualquer pessoa poderá impugnar o presente edital, mediante petição por escrito, exclusivamente por meio eletrônico, no endereço umari20252028@gmail.com, informando o número deste pregão e o órgão interessado ou por meio da plataforma www.licitamaisbrasil.com.br.",
+      "section": "14. DOS PEDIDOS DE ESCLARECIMENTOS E DA IMPUGNAÇÃO DO ATO CONVOCATÓRIO",
+      "evidence_id": "EV-TL-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Prazo de Impugnação"
+    },
+    {
+      "page": "3",
+      "excerpt": "7.2. No preenchimento da proposta inicial, por meio da plataforma digital, deverá ser informado necessariamente o seguinte: c) Prazo de validade da proposta, que não poderá ser inferior a 60 (sessenta) dias, a contar da data de sua apresentação;",
+      "section": "7.0. DA FORMA DE APRESENTAÇÃO DA PROPOSTA INICIAL",
+      "evidence_id": "EV-TL-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Prazo de Validade da Proposta"
+    },
+    {
+      "page": "10",
+      "excerpt": "12.3. O(s) licitante(s) vencedor(es) deverá (ão) encaminhar/anexar, exclusivamente, junto a plataforma eletrônica www.licitamaisbrasil.com.br, em formato digital, os documentos de habilitação exigidos neste Edital, após solicitação do(a) Pregoeiro(a), por meio do sistema eletrônico, no prazo de 2 (duas) horas, podendo ser prorrogado, por igual período, nas situações elencadas no § 3º do art. 29, da Instrução Normativa SEGES/ME N. 73, de 30 de setembro de 2022.",
+      "section": "12.0 DA FASE DE HABILITAÇÃO",
+      "evidence_id": "EV-TL-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Prazo de Envio de Habilitação"
+    },
+    {
+      "page": "11",
+      "excerpt": "15.2. Declarado o vencedor, a intenção de recorrer deverá ser manifestada imediatamente, sob pena de preclusão, em campo próprio do sistema, quando será concedido o prazo de 3 (três) dias úteis para apresentação das razões por escrito, exclusivamente por meio eletrônico, através da plataforma www.licitamaisbrasil.com.br.",
+      "section": "15. DOS RECURSOS ADMINISTRATIVOS",
+      "evidence_id": "EV-TL-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Prazo de Recurso"
+    },
+    {
+      "page": "11",
+      "excerpt": "15.2.1. Os demais licitantes ficarão desde logo notificados a apresentar contrarrazões dentro de igual prazo, que começará a contar a partir do término do prazo cio recorrente, sendo-lhes assegurado vista imediata dos elementos indispensáveis à defesa de seus interesses.",
+      "section": "15. DOS RECURSOS ADMINISTRATIVOS",
+      "evidence_id": "EV-TL-06",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Prazo de Contrarrazões"
+    },
+    {
+      "page": "7",
+      "excerpt": "10.6. O(À) pregoeiro(a) solicitará ao licitante mais bem classificado que, no prazo de 2 (duas) horas, exclusivamente por meio do sistema, envie a proposta adequada ao último lance ofertado, após a negociação realizada, acompanhada de sua garantia, e ainda, se for o caso, dos documentos complementares, quando necessários à confirmação daqueles exigidos neste Edital e já apresentados.",
+      "section": "10.0 DA NEGOCIAÇÃO DA PROPOSTA E DO LICITANTE ARREMATANTE",
+      "evidence_id": "EV-TL-07",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Prazo para envio de proposta ajustada"
+    },
+    {
+      "page": "50",
+      "excerpt": "3.1 O presente contrato terá vigência de 12 (doze) meses, contados a partir da data de sua assinatura, podendo ser prorrogado na forma dos artigos 106 e 107 da Lei Federal n. 14.133/2021.",
+      "section": "CLÁUSULA TERCEIRA - DA VIGÊNCIA E PRORROGAÇÃO",
+      "evidence_id": "EV-TL-08",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Prazo de Vigência Contratual"
+    },
+    {
+      "page": "50",
+      "excerpt": "18.1. A adjudicatária terá o prazo de 5 (cinco) dias úteis, contados a partir da convocação, para a assinatura do contrato. Este prazo poderá ser prorrogado uma vez por igual período, desde que solicitado durante o seu transcurso e, ainda assim, se devidamente justificado e aceito.",
+      "section": "CLÁUSULA DÉCIMA OITAVA - DA CONTRATAÇÃO",
+      "evidence_id": "EV-TL-09",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Prazo para assinatura do contrato"
+    },
+    {
+      "page": "56",
+      "excerpt": "12.2. O contratado apresentará, no prazo máximo de 10 (dez) dias úteis, prorrogáveis por igual período, a critério do contratante, contado da assinatura do contrato, comprovante de prestação de garantia, podendo optar por caução em dinheiro, títulos da dívida pública, seguro-garantia ou fiança bancária, em valor correspondente a 5% (cinco por cento) do valor total do contrato.",
+      "section": "CLÁUSULA DÉCIMA SEGUNDA - DA GARANTIA DE EXECUÇÃO",
+      "evidence_id": "EV-TL-10",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Prazo para apresentação da garantia contratual"
+    },
+    {
+      "page": "9",
+      "excerpt": "a) Ato constitutivo, estatuto ou contrato social ern vigor e seus aditivos, devidamente registrado na Junta Comercial da sede do Licitante, em se tratando de sociedades comerciais, e, no caso de sociedades por ações, acompanhada de documentos de eleição de seus administradores;",
+      "section": "12.1.a",
+      "evidence_id": "EV-HJ-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "b) Registro comercial e seus aditivos, no caso de empresa individual, devidamente registrado na Junta Comercial da sede do Licitante;",
+      "section": "12.1.b",
+      "evidence_id": "EV-HJ-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "c) Inscrição do ato constitutivo, no caso de sociedades civis, acompanhadas de prova de diretoria em exercício;",
+      "section": "12.1.c",
+      "evidence_id": "EV-HJ-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "d) Decreto de autorização, em se tratando de empresa ou sociedade estrangeira em funcionamento no País, e ato de registro ou autorização para funcionamento expedido pelo órgão competente, quando a atividade assim o exigir;",
+      "section": "12.1.d",
+      "evidence_id": "EV-HJ-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "e) Certificado da Condição de Microempreendedor Individual - CCMEI, cuja aceitação ficará condicionada à verificação da autenticidade no sítio www.portaldoempreendedor.gov.br, em se tratando de Microempreendedor Individual - MEI.",
+      "section": "12.1.e",
+      "evidence_id": "EV-HJ-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "g) Prova de inscrição no Cadastro Nacional da Pessoa Jurídica - CNPJ;",
+      "section": "12.1.g",
+      "evidence_id": "EV-RFT-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal"
+    },
+    {
+      "page": "9",
+      "excerpt": "h) Prova de inscrição no Cadastro de Contribuintes Estadual e/ou Municipal, se houver, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade e compatível com o objeto contratual;",
+      "section": "12.1.h",
+      "evidence_id": "EV-RFT-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal"
+    },
+    {
+      "page": "9",
+      "excerpt": "i) Prova de regularidade perante a Fazenda Federal;",
+      "section": "12.1.i",
+      "evidence_id": "EV-RFT-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal"
+    },
+    {
+      "page": "9",
+      "excerpt": "j) Prova de regularidade perante a Fazenda Estadual;",
+      "section": "12.1.j",
+      "evidence_id": "EV-RFT-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal"
+    },
+    {
+      "page": "9",
+      "excerpt": "k) Prova de regularidade perante a Fazenda Municipal;",
+      "section": "12.1.k",
+      "evidence_id": "EV-RFT-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal"
+    },
+    {
+      "page": "9",
+      "excerpt": "l) Prova de regularidade relativa à Seguridade Social;",
+      "section": "12.1.l",
+      "evidence_id": "EV-RFT-06",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal"
+    },
+    {
+      "page": "9",
+      "excerpt": "m) Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço - FGTS;",
+      "section": "12.1.m",
+      "evidence_id": "EV-RFT-07",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Trabalhista"
+    },
+    {
+      "page": "9",
+      "excerpt": "n) Prova de regularidade perante a Justiça do Trabalho;",
+      "section": "12.1.n",
+      "evidence_id": "EV-RFT-08",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Trabalhista"
+    },
+    {
+      "page": "9",
+      "excerpt": "o) Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais;",
+      "section": "12.1.o",
+      "evidence_id": "EV-QEF-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "10",
+      "excerpt": "p) Certidão negativa de feitos sobre falência expedida pelo distribuidor da sede do licitante;",
+      "section": "12.1.p",
+      "evidence_id": "EV-QEF-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "3",
+      "excerpt": "7.4. A licitante deverá apresentar, no momento do cadastramento da sua PROPOSTA DE PREÇOS INICIAL, como requisito de pré-habilitação, a comprovação da garantia no montante estipulado em 1% (um por cento), do valor estimado para a contratação, conforme previsto no art. 58 da Lei Federal n. 14.133/2021.",
+      "section": "7.4",
+      "evidence_id": "EV-QEF-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Garantia de Proposta"
+    },
+    {
+      "page": "4",
+      "excerpt": "I) caução em dinheiro ou em títulos da dívida pública emitidos sob a forma escritural, mediante registro em sistema centralizado de liquidação e de custódia autorizado pelo Banco Central do Brasil, e avaliados por seus valores econômicos, conforme definido pelo Ministério da Economia; 7.4.5. Optando por caução em dinheiro, o licitante deverá apresentar o comprovante de DEPÓSITO BANCÁRIO, (com a identificação do depositante/licitante) a ser feito em nome da Prefeitura Municipal de Umari/CE, Conta Corrente n. 28020-8, Agência n. 0547-9 - Banco do Brasil, sendo que depósitos efetuados em caixas de autoatendimento, só serão validados após sua compensação.",
+      "section": "7.4.4.I, 7.4.5",
+      "evidence_id": "EV-QEF-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Modalidade de Garantia de Proposta"
+    },
+    {
+      "page": "4",
+      "excerpt": "I) caução em dinheiro ou em títulos da dívida pública emitidos sob a forma escritural, mediante registro em sistema centralizado de liquidação e de custódia autorizado pelo Banco Central do Brasil, e avaliados por seus valores econômicos, conforme definido pelo Ministério da Economia;",
+      "section": "7.4.4.I",
+      "evidence_id": "EV-QEF-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Modalidade de Garantia de Proposta"
+    },
+    {
+      "page": "4",
+      "excerpt": "II) seguro-garantia; 7.4.6. Caso a modalidade de garantia seja seguro garantia, o licitante deverá fazer a comprovação da apólice ou de documento hábil expedido pela seguradora, cuja vigência deverá contemplar toda a validade da proposta de preços apresentada.",
+      "section": "7.4.4.II, 7.4.6",
+      "evidence_id": "EV-QEF-06",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Modalidade de Garantia de Proposta"
+    },
+    {
+      "page": "4",
+      "excerpt": "III) fiança bancária emitida por banco ou instituição financeira devidamente autorizada a operar no País pelo Banco Central do Brasil; 7.4.7. Caso a modalidade de garantia escolhida seja a fiança bancária, o licitante enviará o documento fornecido pela instituição que a concede, do qual deverá obrigatoriamente, constar: - Beneficiário: Prefeitura Municipal de Umari. - Objeto: Garantia da participação no PREGÃO ELETRÔNICO N. 2026.03.11.1. - Valor: 1% (um por cento) do valor estimado da Contratação. - Prazo de Validade: Deverá contemplar toda a vigência da proposta de preços apresentada.",
+      "section": "7.4.4.III, 7.4.7",
+      "evidence_id": "EV-QEF-07",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Modalidade de Garantia de Proposta"
+    },
+    {
+      "page": "4",
+      "excerpt": "IV) título de capitalização custeado por pagamento único, com resgate pelo valor total.",
+      "section": "7.4.4.IV",
+      "evidence_id": "EV-QEF-08",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Modalidade de Garantia de Proposta"
+    },
+    {
+      "page": "56",
+      "excerpt": "12.1 - A contratação conta com garantia de execução, nos moldes do art. 96, da Lei Federal n. 14.133/2021, em valor correspondente a 5% (cinco por cento) do valor total do contrato. 12.2 - O contratado apresentará, no prazo máximo de 10 (dez) dias úteis, prorrogáveis por igual período, a critério do contratante, contado da assinatura do contrato, comprovante de prestação de garantia, podendo optar por caução em dinheiro, títulos da dívida pública, seguro-garantia ou fiança bancária, em valor correspondente a 5% (cinco por cento) do valor total do contrato.",
+      "section": "CLÁUSULA DÉCIMA SEGUNDA - DA GARANTIA DE EXECUÇÃO",
+      "evidence_id": "EV-QEF-09",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Garantia Contratual"
+    },
+    {
+      "page": "14",
+      "excerpt": "18.9. Em se tratando de garantia prestada por meio de caução em dinheiro, o depósito deverá ser feito na Conta Corrente n. 28020-8, Agência n. 0547-9 - Banco do Brasil.",
+      "section": "18.9",
+      "evidence_id": "EV-QEF-10",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Modalidade de Garantia Contratual"
+    },
+    {
+      "page": "14",
+      "excerpt": "a) caução em dinheiro ou títulos da dívida pública emitidos sob a forma escritura], mediante registro em sistema centralizado de liquidação e custódia, autorizado pelo Banco Central do Brasil e avaliados por seus valores econômicos, conforme definido pelo Ministério da Fazenda;",
+      "section": "18.8.a",
+      "evidence_id": "EV-QEF-11",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Modalidade de Garantia Contratual"
+    },
+    {
+      "page": "56",
+      "excerpt": "12.3 - Caso utilizada a modalidade de seguro-garantia, a apólice deverá ter validade durante a vigência do contrato e por mais 90 (noventa) dias após término deste prazo de vigência, permanecendo em vigor mesmo que o contratado não pague o prêmio nas datas convencionadas.",
+      "section": "12.3",
+      "evidence_id": "EV-QEF-12",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Modalidade de Garantia Contratual"
+    },
+    {
+      "page": "56",
+      "excerpt": "12.11 - No caso de garantia na modalidade de fiança bancária, deverá ser emitida por banco ou instituição financeira, devidamente autorizada a operar no País pelo Banco Central do Brasil, e deverá constar expressa renúncia do fiador aos benefícios do artigo 827 do Código Civil.",
+      "section": "12.11",
+      "evidence_id": "EV-QEF-13",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Modalidade de Garantia Contratual"
+    },
+    {
+      "page": "9",
+      "excerpt": "f) Comprovação de aptidão para desempenho de atividade pertinente e compatível em características, quantidades e prazos com o objeto da licitação, sendo esta feita mediante a apresentação de atestado(s), fornecido(s) por pessoa(s) jurídica(s) de direito público ou privado;",
+      "section": "12.1.f",
+      "evidence_id": "EV-QTO-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Técnica Operacional"
+    },
+    {
+      "page": "36",
+      "excerpt": "5.1 - A empresa a ser contratada, deverá fornecer os serviços conforme descrição e limite máximo de valor especificados na planilha abaixo: Item 01 Serviços a serem prestados na locação de maquinário (compactador, roçadeira mecânica e caminhão), destinados a coleta e transporte de resíduos sólidos domiciliares Serv. 01 R$ 514.073,40 e urbanos do Município de Umari/CE",
+      "section": "5.1",
+      "evidence_id": "EV-TR-01",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Técnica Operacional"
+    },
+    {
+      "page": "3",
+      "excerpt": "7.1.1. Com relação à proposta inicial, basta que a mesma seja cadastrada (preenchida) na plataforma, com a descrição do objeto ofertado e seus respectivos preços, até a data e o horário estabelecidos para abertura da sessão pública, não sendo necessário o envio da proposta inicial como arquivo digitalizado em anexo. 7.2. No preenchimento da proposta inicial, por meio da plataforma digital, deverá ser informado necessariamente o seguinte: a) Indicação em cada lote da especificação do objeto licitado com todos seus itens, de acordo com o disposto no ANEXO I - PROJETO DE CUSTO OPERACIONAL deste Edital; b) Preço unitário de cada item e global do lote cotado, em algarismos, com no máximo 2 (duas) casas decimais;",
+      "section": "7.1.1, 7.2.a, 7.2.b",
+      "evidence_id": "EV-PC-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "3",
+      "excerpt": "c) Prazo de validade da proposta, que não poderá ser inferior a 60 (sessenta) dias, a contar da data de sua apresentação;",
+      "section": "7.2.c",
+      "evidence_id": "EV-PC-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "3",
+      "excerpt": "7.3. O licitante deverá informar a condição de microempresa (ME) ou empresa de pequeno porte (EPP) que faz jus ao tratamento diferenciado da Lei Complementar n. 123/2006, ou cooperativa de que trata o artigo 34 da Lei n. 11.488/2007, no ato do encaminhamento da proposta, por intermédio de funcionalidade disponível no sistema eletrônico do site www.licitamaisbrasil.com.br.",
+      "section": "7.3",
+      "evidence_id": "EV-PC-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "7",
+      "excerpt": "10.6. O(À) pregoeiro(a) solicitará ao licitante mais bem classificado que, no prazo de 2 (duas) horas, exclusivamente por meio do sistema, envie a proposta adequada ao último lance ofertado, após a negociação realizada, acompanhada de sua garantia, e ainda, se for o caso, dos documentos complementares, quando necessários à confirmação daqueles exigidos neste Edital e já apresentados.",
+      "section": "10.6",
+      "evidence_id": "EV-PC-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "7",
+      "excerpt": "11.1. A proposta final deverá ser apresentada em via única original, com os preços ajustados ao menor lance, nos termos do ANEXO III - Modelo de Proposta de Preços deste edital, assinada pelo representante legal do licitante, em linguagem clara e concisa, sem emendas, rasuras ou entrelinhas, com as especificações técnicas, MARCA E MODELO (se for o caso), quantitativos e demais informações relativas ao produto/serviço ofertado.",
+      "section": "11.1",
+      "evidence_id": "EV-PC-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.1.1. Os preços deverão ser expressos em reais, com até 2 (duas) casas decimais em seus valores unitários e globais.",
+      "section": "11.1.1",
+      "evidence_id": "EV-PC-06",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.3. O licitante não poderá cotar proposta com quantitativo de itens divergentes dos contidos no respectivo lote.",
+      "section": "11.3",
+      "evidence_id": "EV-PC-07",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.4. Na cotação do preço unitário não será admitido o fracionamento do centavo.",
+      "section": "11.4",
+      "evidence_id": "EV-PC-08",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.5. Nos preços propostos já estarão incluídas as despesas referentes a frete, tributos e demais ônus atinentes à entrega do objeto.",
+      "section": "11.5",
+      "evidence_id": "EV-PC-09",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "46",
+      "excerpt": "Pela presente declaramos inteira submissão aos preceitos legais em vigor, especialmente os da Lei Federal n. 14.133/2021, bem como às cláusulas e condições do Processo Licitatório na modalidade Pregão Eletrônico n. 2026.03.11.1. Declaramos que não ocorreu fato que nos impeça de participar do mencionado Processo de Licitação. Declaramos, ainda, que em nossa proposta os valores apresentados englobam todas as despesas com tributos, impostos, contribuições fiscais, parafiscais ou taxas, inclusive, porventura, com serviços de terceiros, que incidam direta ou indiretamente no valor dos combustíveis e derivados de petróleo cotados que venham a onerar o objeto desta contratação. Assumimos o compromisso de bem e fielmente prestar os serviços especificados no Anexo I, caso sejamos vencedor(es) do presente Processo de Licitação. Objeto: Contratação de serviços a serem prestados na locação de maquinário (compactador, roçadeira mecânica e caminhão), destinados a coleta e transporte de resíduos sólidos domiciliares e urbanos do Município de Umari/CE, conforme especificações apresentadas no quadro abaixo: Item 01 Especificação Serviços a serem prestados na locação de maquinário (compactador, roçadeira Und Qtde Valor Total mecânica e caminhão), destinados a coleta e transporte de resíduos sólidos domiciliares Serv. 01 e urbanos do Município de Umari/CE O valor total da proposta é de R$ (...). Validade da Proposta: 60 (sessenta) dias. IDENTIFICAÇÃO DA EMPRESA Empresa: CNPJ: Endereço: Cidade: Telefone: .e-mail: INDICAÇÃO DO RESPONSAVEL PARA ASSINATURA DO CONTRATO Representante Legal: CPF: Telefone: .e-mail: DADOS BANCÁRIOS Banco: Agência: Conta para depósito: Titular: Data: Assinatura do Proponente",
+      "section": "PROPOSTA DE PREÇOS",
+      "evidence_id": "EV-PC-10",
+      "document_name": "ANEXO III - Modelo de Proposta de Preços",
+      "document_type": "anexo",
+      "normalized_topic": "Modelo de Proposta de Preços"
+    },
+    {
+      "page": "10",
+      "excerpt": "q) Declaração de que suas propostas econômicas compreendem a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição Federal, nas leis trabalhistas, nas normas infralegais, nas convenções coletivas de trabalho e nos termos de ajustamento de conduta vigentes na data de entrega das propostas;",
+      "section": "12.1.q",
+      "evidence_id": "EV-DC-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Declaração de Custos Trabalhistas"
+    },
+    {
+      "page": "10",
+      "excerpt": "r) Declaração emitida pela licitante de que não possui em seu quadro de pessoal, empregados menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre e menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz a partir de 14 (quatorze) anos, nos termos do inciso XXXIII, do art. 7° da Constituição Federal;",
+      "section": "12.1.r",
+      "evidence_id": "EV-DC-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Declaração de Não Emprego de Menores"
+    },
+    {
+      "page": "10",
+      "excerpt": "s) Declaração de que cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social, e jovem aprendiz previstas em lei e em outras normas específicas.",
+      "section": "12.1.s",
+      "evidence_id": "EV-DC-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Declaração de Reserva de Cargos"
+    },
+    {
+      "page": "10",
+      "excerpt": "t) Declaração de que atendem aos requisitos de habilitação, e que responderá pela veracidade das informações prestadas, na forma da lei.",
+      "section": "12.1.t",
+      "evidence_id": "EV-DC-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Declaração de Atendimento aos Requisitos de Habilitação"
+    },
+    {
+      "page": "2",
+      "excerpt": "6.6. Tratando-se de microempresas e empresas de pequeno porte deverão declarar no Sistema www.licitamaisbrasil.com.br o exercício da preferência prevista na Lei Complementar n. 123/2006.",
+      "section": "6.6",
+      "evidence_id": "EV-DC-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Declaração ME/EPP"
+    },
+    {
+      "page": "5",
+      "excerpt": "8.5. Serão desclassificadas as propostas que identifiquem o licitante, assim como quando não forem atribuídos valores a algum dos itens componentes do respectivo iote.",
+      "section": "8.5",
+      "evidence_id": "EV-PC-01-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "5",
+      "excerpt": "8.5. Serão desclassificadas as propostas que identifiquem o licitante, assim como quando não forem atribuídos valores a algum dos itens componentes do respectivo iote.",
+      "section": "8.5",
+      "evidence_id": "EV-PC-02-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "5",
+      "excerpt": "8.5.1.1 - Forem elaboradas em desacordo com os termos deste Edital e de seus anexos; que forem omissas, vagas ou que apresentarem irregularidades insanáveis ou defeitos capazes de dificultar o julgamento; que se oponham a qualquer dispositivo legal vigente, mormente no que tange aos aspectos tributários; ou que contenha preços excessivos ou rnanifestamente inexequíveis, preços unitários simbólicos, preços irrisórios ou com valor zero e ainda, preços ou vantagens baseadas nas ofertas das demais licitantes; ou que contenha identificação do licitante.",
+      "section": "8.5.1.1",
+      "evidence_id": "EV-PC-03-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "5",
+      "excerpt": "8.5.1.2 - Que após a fase de lances ou negociação, quando houver, permanecerem com seus preços unitários e total dos itens superiores aos preços no Anexo I (Terrno de Referência).",
+      "section": "8.5.1.2",
+      "evidence_id": "EV-PC-04-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "10.8. A não apresentação da proposta de preços final e de sua garantia, exclusivamente por meio do sistema, no sítio eletrônico www.licitamaisbrasil.com.br dentro do prazo estipulado no item 10.6, acarretará a desclassificação do proponente, sendo convocado o licitante subsequente, e assim sucessivamente, observada a ordem de classificação, sem prejuízo da sanção prevista no art. 156, inciso III, da Lei Federal n. 14.133/2021.",
+      "section": "10.8",
+      "evidence_id": "EV-PC-05-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.12.1. Contiverem vícios insanáveis e/ou condições ilegais;",
+      "section": "11.12.1",
+      "evidence_id": "EV-PC-06-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.12.2. Não obedecerem às especificações técnicas contidas no Termo de Referência;",
+      "section": "11.12.2",
+      "evidence_id": "EV-PC-07-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.12.3. Apresentarem preços manifestamente inexequíveis ou permanecerem acima do preço máximo definido para a contratação;",
+      "section": "11.12.3",
+      "evidence_id": "EV-PC-08-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.12.4. Não tiverem sua exequibilidade demonstrada, quando exigido pela Administração;",
+      "section": "11.12.4",
+      "evidence_id": "EV-PC-09-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.12.5. Apresentarem desconformidade corn quaisquer outras exigências deste Edital ou seus anexos, desde que insanável.",
+      "section": "11.12.5",
+      "evidence_id": "EV-PC-10-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.12.6. Contiverem para o lote item com valor superior ao estimado pela Administração, independentemente do valor total do lote, devendo o licitante, readequar o valor do lote aos valores constantes no mapa de preços emitido pela plataforma eletrônica.",
+      "section": "11.12.6",
+      "evidence_id": "EV-PC-11-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desclassificação de Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "11.13. Será considerado indício de inexequibilidade das propostas, valores inferiores a 50% (cinquenta por cento) do valor orçado pela Administração, nos termos da instrução Normativa SEGES/ME n. 73/2022.",
+      "section": "11.13",
+      "evidence_id": "EV-PC-12-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Exequibilidade da Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "9.11. Em caso de empate entre duas ou mais propostas, após encerradas todas as etapas transcritas acima, serão utilizados os critérios de desempate previstos no art. 60 da Lei Federal n. 14.133/2021.",
+      "section": "9.11",
+      "evidence_id": "EV-PC-13-CRIT",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Critério de Desempate"
+    },
+    {
+      "page": "5",
+      "excerpt": "8.4.1. Caso não sejam realizados envios de lances, o licitante que cotou na proposta inicial o menor preço deverá reduzi-lo a um valor igual ou inferior ao limite máximo previsto pela Administração, junto ao ANEXO I - PROJETO DE CUSTO OPERACIONAL.",
+      "section": "8.4.1",
+      "evidence_id": "EV-PC-14-OBS",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Observações da Proposta"
+    },
+    {
+      "page": "19",
+      "excerpt": "ART: Projeto/Orçamento.",
+      "section": "Estrutura do Projeto",
+      "evidence_id": "EV-ART-01",
+      "document_name": "Memorial Descritivo",
+      "document_type": "memorial",
+      "normalized_topic": "ART do Projeto"
+    },
+    {
+      "page": "33",
+      "excerpt": "FRANCISCO FABIO ERNESTO DE SOUZA Título profissional: ENGENHEIRO CIVIL RNP: 0601070666 Registro: 11951D CE",
+      "section": "1. Responsável Técnico",
+      "evidence_id": "EV-ART-002",
+      "document_name": "ART N° CE20261808307",
+      "document_type": "anexo",
+      "normalized_topic": "Dados do Responsável Técnico do Projeto"
+    },
+    {
+      "page": "12",
+      "excerpt": "16.2.1. Advertência;",
+      "section": "16.2.1",
+      "evidence_id": "EV-EC-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Penalidades Contratuais"
+    },
+    {
+      "page": "12",
+      "excerpt": "16.4. A multa será recolhida em percentual de 0,5% a 30% incidente sobre o valor do contrato licitado, recolhida no prazo máximo de 30 (trinta) dias úteis, a contar da comunicação oficial.",
+      "section": "16.4",
+      "evidence_id": "EV-EC-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Penalidades Contratuais"
+    },
+    {
+      "page": "13",
+      "excerpt": "16.7. A sanção de impedimento de licitar e contratar será aplicada ao responsável em decorrência das infrações administrativas relacionadas nos itens 16.1.1, 16.1.2 e 16.1.3, quando não se justificar a imposição de penalidade mais grave, e impedirá o responsável de licitar e contratar no âmbito da Administração Pública direta e indireta do ente federativo a qual pertencer o órgão ou entidade, pelo prazo máximo de 3 (três) anos.",
+      "section": "16.7",
+      "evidence_id": "EV-EC-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Penalidades Contratuais"
+    },
+    {
+      "page": "12",
+      "excerpt": "16.2.4. Declaração de inidoneidade para licitar ou contratar, eriquanto perdurarem os motivos determinantes da punição ou até que seja promovida sua reabilitação perante a própria autoridade que aplicou a penalidade.",
+      "section": "16.2.4",
+      "evidence_id": "EV-EC-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico N. 2026.03.11.1",
+      "document_type": "edital",
+      "normalized_topic": "Penalidades Contratuais"
+    },
+    {
+      "page": "26",
+      "excerpt": "A contratada responsabilizar: se a pelo socorro mecânico com guincho, bem como pela manutenção preventiva e corretiva, atendendo-se a preventiva aquela constante no pano de manutenção do fabricante (descrita no manual do veículo) e corretiva aquela destinada aos reparos de defeitos que ocorreram de maneira aleatório, durante os intervalos entre a manutenção preventiva e quais que outra despesas que direta e indiretamente, incidam ou venha incidir sobre a execução do objeto deste memorial descritivo.",
+      "section": "3.1-OBRIGAÇÃO DA CONTRATADA",
+      "evidence_id": "EV-EC-05",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "26",
+      "excerpt": "A contratada responsabilizar: se pela realizar a imediata e tempestiva manutenção preventiva corretiva dos veículos e maquinários, mantendo o mesmo em perfeito estado para a prestação dos serviços contratados, observando o prazo de 24 horas as manutenções e substituição dos veículos e maquinários, feito a parti da comunicação do gestor do contrato.",
+      "section": "3.1-OBRIGAÇÃO DA CONTRATADA",
+      "evidence_id": "EV-EC-06",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "26",
+      "excerpt": "A contratada se responsabiliza pela cobertura contra danos matérias e pessoas ocasionados a terceiros, já incluso o valor do contrato.",
+      "section": "3.1-OBRIGAÇÃO DA CONTRATADA",
+      "evidence_id": "EV-EC-07",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "26",
+      "excerpt": "A contratada disponibilizar veículos/maquinários reserva com mesma característica técnicas, contidas nesse instrumento, de modo a garantir a continuidade do serviço.",
+      "section": "3.1-OBRIGAÇÃO DA CONTRATADA",
+      "evidence_id": "EV-EC-08",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "26",
+      "excerpt": "A contratada deverá disponibilizar 24 horas por dia, inclusive sábado e domingo e feriado, serviço de socorro (guincho), nos casos de acidentes, de modo a proporcionar atendimento imediato.",
+      "section": "3.1-OBRIGAÇÃO DA CONTRATADA",
+      "evidence_id": "EV-EC-09",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "6.1 - Os serviços serão prestados pela CONTRATADA diariamente, satisfeitas integralmente as necessidades objeto deste Termo de Referência e do futuro contrato.",
+      "section": "6.1",
+      "evidence_id": "EV-EC-10",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "6.2 - Os veículos ficarão sob a guarda e responsabilidade da Secretaria Municipal contratante, 24 (vinte e quatro) horas por dia, todos os dias da semana, inclusive feriados, não havendo limite de quilometragem a ser percorrida.",
+      "section": "6.2",
+      "evidence_id": "EV-EC-11",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "6.3 - A contratação estará sujeita à prévia vistoria realizada nos veículos apresentados pela CONTRATADA e somente será efetivada se os mesmos atenderem às especificações contidas neste Termo de Referência.",
+      "section": "6.3",
+      "evidence_id": "EV-EC-12",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "6.4 - As inspeções/vistorias veiculares poderão ser feitas a qualquer tempo, por ordem da Administração, para atender à necessária segurança.",
+      "section": "6.4",
+      "evidence_id": "EV-EC-13",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "6.6 - Os veículos a serem utilizados para a execução dos serviços deverão atender a todas as exigências da legislação e regulamentos de trânsito atuais ou que venham a ser expedidos pelos órgãos normatizadores.",
+      "section": "6.6",
+      "evidence_id": "EV-EC-14",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "6.7 A contratada, ao substituir algum veículo, deverá consultar a contratante, indicando o yeículo a ser substituído e a característica do veículo substituto, cabendo a contratante a aprovação ou rejeição após inspeção veicular.",
+      "section": "6.7",
+      "evidence_id": "EV-EC-15",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "6.8 - Os veículos deverão ser entregues higienizados, com a devida documentação legal, na sede de cada secretaria contratante, em horário acordado entre as partes.",
+      "section": "6.8",
+      "evidence_id": "EV-EC-16",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "36",
+      "excerpt": "7.1 - A CONTRATADA deverá se responsabilizar integralmente pelo pagamento da importância referente a multas, taxas e/ou despesas, inclusive com guinchos e estadias decorrentes da Infração.",
+      "section": "7.1",
+      "evidence_id": "EV-EC-17",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "37",
+      "excerpt": "8.5 - Caso a avaria seja de responsabilidade da CONTRATADA, o gestor do contrato comunicará a CONTRATANTE, por escrito, anexando cópia do boletim de ocorrência policial, sendo a CONTRATADA responsável integralmente pelo pagamento dos serviços de recuperação.",
+      "section": "8.5",
+      "evidence_id": "EV-EC-18",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "37",
+      "excerpt": "10.1 - Os veículos deverão ser mantidos em perfeito estado de conservação e funcionamento, cabendo à CONTRATADA prestar manutenção preventiva e corretiva, empreendendo a limpeza dos componentes e peças, substituição de peças em razão de defeito ou desgaste natural, conserto, reparação, troca de componentes e equipamentos danificados de modo a deixar, o veículo em perfeitas condições de uso.",
+      "section": "10.1",
+      "evidence_id": "EV-EC-19",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "37",
+      "excerpt": "10.2 - As manutenções preventivas ocorrerão periodicamente, em dias e horários a serem acordados entre as partes, enquanto as corretivas, se darão sempre que solicitadas pela CONTRATANTE, ocasiões em que deverá a CONTRATADA providenciar a substituição imediata do veículo por outro similar ou superior.",
+      "section": "10.2",
+      "evidence_id": "EV-EC-20",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "37",
+      "excerpt": "10.3 - As manutenções preventivas e corretivas abrangerão também a troca de pneus, bem como a realização dos serviços de alinhamento e balanceamento, se houver.",
+      "section": "10.3",
+      "evidence_id": "EV-EC-21",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "41",
+      "excerpt": "16.10 - Manter durante toda a vigência do contrato, ern compatibilidade com as obrigações assumidas, todas as condições exigidas para habilitação;",
+      "section": "16.10",
+      "evidence_id": "EV-EC-22",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "41",
+      "excerpt": "16.6 Entregar ao setor responsável pela fiscalização do contrato, junto com a Nota Fiscal para fins de pagamento, os seguintes documentos: 1) prova de regularidade relativa à Seguridade Social; 2) certidão conjunta relativa aos tributos federais e à Dívida Ativa da União; 3) certidões que comprovem a regularidade perante a Fazenda Estadual ou Distrital e Municipal do domicílio ou sede da contratada; 4) Certidão de Regularidade do FGTS - CRF; e 5) Certidão Negativa de Débitos Trabalhistas - CNDT;",
+      "section": "16.6",
+      "evidence_id": "EV-EC-23",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.19 - Submeter previamente, por escrito, ao contratante, para análise e aprovação, quaisquer mudanças nos métodos executivos que fujam às especificações do memorial descritivo ou instrumento congênere;",
+      "section": "16.19",
+      "evidence_id": "EV-EC-24",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.20 - Não permitir a utilização de qualquer trabalho do menor de dezesseis anos, exceto na condição de aprendiz para os maiores de quatorze anos, nem permitir a utilização do trabalho do menor de dezoito anos em trabalho noturno, perigoso ou insalubre.",
+      "section": "16.20",
+      "evidence_id": "EV-EC-25",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.21 - Cumprir fielmente o objeto do presente instrumento, seguindo a legislação vigente e pertinente (Código Nacional de Trânsito), dentro dos prazos e horários pré-estabelecidos pela Secretaria ou Órgão onde estão sendo prestados os serviços.",
+      "section": "16.21",
+      "evidence_id": "EV-EC-26",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.22 Substituir no prazo máximo de 72 (setenta e duas) horas por outro veículo compatível, em caráter temporário, a partir do momento em que o mesmo vier a sofrer serviços de manutenção corretiva ou preventiva.",
+      "section": "16.22",
+      "evidence_id": "EV-EC-27",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.23 Reparar ou substituir (nas mesmas características e condições exigidas) sem ônus para a CONTRATANTE, o veículo locado, caso suas condições venham a comprometer a segurança dos usuários ou a boa qualidade dos serviços, responsabilizando-se pelos danos causados diretamente à CONTRATANTE, seus prepostos, ou a terceiros, decorrentes de sua culpa ou dolo, na execução do contrato.",
+      "section": "16.23",
+      "evidence_id": "EV-EC-28",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.24 - Providenciar a substituição de qualquer veículo/protissional envolvido na execução do objeto contratual cujo desempenho seja considerado indesejável pela fiscalização da CONTRATANTE.",
+      "section": "16.24",
+      "evidence_id": "EV-EC-29",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.25 - Utilizar profissionais devidamente habilitados (motorista/condutor), para execução dos serviços.",
+      "section": "16.25",
+      "evidence_id": "EV-EC-30",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "42",
+      "excerpt": "16.27 - Arcar com as despesas relativas ao emplacarmento e licenciamento do(s) veículo(s) alugado(s), bem como fornecer a contratante a documentação correspondente atualizada.",
+      "section": "16.27",
+      "evidence_id": "EV-EC-31",
+      "document_name": "ANEXO V - Minuta do Contrato",
+      "document_type": "minuta",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "27",
+      "excerpt": "Efetuar os pagamentos devido a contratada.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-32",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "27",
+      "excerpt": "Receber os serviços objeto do contrato, nos termos, prazo, condições e especificas estabelecidas nesse instrumento.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-33",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "27",
+      "excerpt": "Designar servidor responsável pela fiscalização e acompanhamento do contrato.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-34",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "27",
+      "excerpt": "Rejeitar no todo ou em parte, por intermédio da fiscalização, o fornecimento de serviços que esteja em desacordo com o firmado, podendo exigir, a qualquer tempo, a substituição dos que jugar insuficientes ou inadequados.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-35",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "27",
+      "excerpt": "Aplica a contratada as penalidades depois de constatada as irregularidades garantidas o contraditório e ampla defesa.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-36",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "27",
+      "excerpt": "Fornecer a contratada todas as informações, esclarecimentos, documentos e demais condições necessárias à execução do contrato.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-37",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "27",
+      "excerpt": "Notificar a vencedora, por escrito, sobre imperfeições, falhas ou irregularidades constadas na execução do contrato, para que seja adotada as medidas corretivas necessárias.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-38",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "27",
+      "excerpt": "A gestão e o acompanhamento do contrato ficarão a cargo do setor competente a ser indicada pela contratante.",
+      "section": "3.2-OBRIGAÇÃO DA CONTRATANTE",
+      "evidence_id": "EV-EC-39",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    },
+    {
+      "page": "37",
+      "excerpt": "9.1 - A CONTRATANTE abastecerá os veículos contratados, durante o tempo da prestação dos serviços.",
+      "section": "9-DO ABASTECIMENTO",
+      "evidence_id": "EV-EC-40",
+      "document_name": "ANEXO II - Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratante"
+    }
+  ],
+  "legal_risk_review": {
+    "omissions": [
+      "O edital não especifica o critério de reajuste de preços após o primeiro ano, apenas menciona a possibilidade de reajuste pelo IPCA. Detalhes sobre a periodicidade e cálculo exato poderiam ser mais claros."
+    ],
+    "ambiguities": [
+      "O edital não detalha os critérios para aceitação de 'similar ou superior' em caso de substituição de veículo, o que pode gerar subjetividade na fiscalização."
+    ],
+    "critical_points": [
+      {
+        "title": "Prazo para envio da proposta ajustada pelo vencedor",
+        "reason": "Prazo exíguo pode ser insuficiente para preparar e enviar a documentação, especialmente a garantia, gerando risco de desclassificação.",
+        "category": "prazo",
+        "severity": "media",
+        "source_ref": "Edital, item 10.6",
+        "description": "O licitante vencedor tem apenas 2 horas para enviar a proposta ajustada e a garantia após solicitação do pregoeiro.",
+        "evidence_refs": [
+          "EV-TL-07"
+        ],
+        "recommended_action": "Solicitar esclarecimento sobre a possibilidade de prorrogação do prazo para envio da proposta ajustada e garantia."
+      },
+      {
+        "title": "Garantia de Proposta - Prazo de Validade",
+        "reason": "Exigência de validade da garantia atrelada à validade da proposta pode ser um entrave se a proposta for válida por 60 dias e a emissão da garantia demorar.",
+        "category": "habilitacao",
+        "severity": "media",
+        "source_ref": "Edital, item 7.4.6, 7.4.7",
+        "description": "A garantia de proposta (seguro-garantia ou fiança bancária) deve ter validade que contemple toda a vigência da proposta de preços.",
+        "evidence_refs": [
+          "EV-QEF-06",
+          "EV-QEF-07"
+        ],
+        "recommended_action": "Avaliar a viabilidade de obter garantia com validade superior a 60 dias, caso a proposta seja aceita."
+      },
+      {
+        "title": "Garantia Contratual - Prazo de Validade",
+        "reason": "Exigência de validade estendida da garantia contratual pode impactar o custo e a disponibilidade do seguro.",
+        "category": "contratual",
+        "severity": "media",
+        "source_ref": "Minuta, Cláusula Décima Segunda, 12.3",
+        "description": "A apólice de seguro-garantia deve ter validade durante a vigência do contrato e por mais 90 dias após o término.",
+        "evidence_refs": [
+          "EV-QEF-12"
+        ],
+        "recommended_action": "Verificar a necessidade e o custo de apólices de seguro-garantia com validade estendida."
+      },
+      {
+        "title": "Atestado de Capacidade Técnica",
+        "reason": "A exigência de atestado para serviços específicos pode ser restritiva se o licitante tiver experiência similar, mas não idêntica.",
+        "category": "tecnica",
+        "severity": "media",
+        "source_ref": "Edital, item 12.1.f; TR, item 5.1",
+        "description": "Exige comprovação de aptidão para locação de maquinário (compactador, roçadeira mecânica e caminhão) para coleta e transporte de resíduos sólidos.",
+        "evidence_refs": [
+          "EV-QTO-01",
+          "EV-TR-01"
+        ],
+        "recommended_action": "Analisar a compatibilidade dos atestados existentes com a descrição do objeto licitado."
+      },
+      {
+        "title": "Critério de Exequibilidade da Proposta",
+        "reason": "Pode gerar desclassificação de propostas com preços agressivos, mas exequíveis, exigindo demonstração detalhada.",
+        "category": "proposta",
+        "severity": "media",
+        "source_ref": "Edital, item 11.13",
+        "description": "Valores inferiores a 50% do orçado pela Administração são considerados indício de inexequibilidade.",
+        "evidence_refs": [
+          "EV-PC-12-CRIT"
+        ],
+        "recommended_action": "Preparar justificativa de exequibilidade caso a proposta fique abaixo de 50% do valor orçado."
+      },
+      {
+        "title": "Obrigações da Contratada - Manutenção e Substituição",
+        "reason": "Obrigações rigorosas de manutenção e substituição podem gerar custos elevados e exigir estrutura robusta para atendimento rápido.",
+        "category": "contratual",
+        "severity": "media",
+        "source_ref": "TR, item 3.1; Minuta, Cláusula Décima, 16.22",
+        "description": "Exige manutenção preventiva/corretiva e substituição imediata de veículos em até 72h.",
+        "evidence_refs": [
+          "EV-EC-06",
+          "EV-EC-27"
+        ],
+        "recommended_action": "Avaliar a capacidade operacional e de estoque de peças para atender aos prazos de manutenção e substituição."
+      },
+      {
+        "title": "Obrigações da Contratada - Cobertura de Danos a Terceiros",
+        "reason": "A responsabilidade integral por danos a terceiros exige seguro adequado e pode representar um risco financeiro significativo.",
+        "category": "contratual",
+        "severity": "media",
+        "source_ref": "TR, item 3.1",
+        "description": "Contratada se responsabiliza pela cobertura contra danos materiais e a pessoas ocasionados a terceiros.",
+        "evidence_refs": [
+          "EV-EC-07"
+        ],
+        "recommended_action": "Verificar a necessidade de seguro de responsabilidade civil com cobertura adequada."
+      }
+    ],
+    "inconsistencies": [],
+    "possible_restrictive_clauses": [
+      "A exigência de atestado de capacidade técnica para locação de maquinário específico (compactador, roçadeira mecânica e caminhão) para coleta e transporte de resíduos sólidos pode ser restritiva se a experiência similar não for explicitamente aceita."
+    ],
+    "points_for_impugnation_or_clarification": [
+      "Recomenda-se solicitar esclarecimento sobre a possibilidade de prorrogação do prazo de 2 horas para envio da proposta ajustada e garantia pelo vencedor (Edital, item 10.6), pois o prazo é exíguo. Base legal: Art. 43, § 1º da Lei 14.133/2021 (princípio da eficiência e busca pela proposta mais vantajosa)."
+    ]
+  },
+  "proposal_analysis": {
+    "itens_licitados": [],
+    "exige_cronograma": true,
+    "criterios_desempate": [
+      {
+        "descricao": "Critérios de desempate previstos no art. 60 da Lei Federal n. 14.133/2021, após encerradas todas as etapas de desempate para ME/EPP.",
+        "source_ref": "Edital, item 9.11",
+        "evidence_refs": [
+          "EV-PC-13-CRIT"
+        ]
+      }
+    ],
+    "exige_carta_proposta": true,
+    "exige_composicao_bdi": true,
+    "observacoes_proposta": [
+      {
+        "descricao": "A licitante que cotou na proposta inicial o menor preço deverá reduzi-lo a um valor igual ou inferior ao limite máximo previsto pela Administração, junto ao ANEXO I - PROJETO DE CUSTO OPERACIONAL, caso não sejam realizados envios de lances.",
+        "source_ref": "Edital, item 8.4.1",
+        "evidence_refs": [
+          "EV-PC-14-OBS"
+        ]
+      }
+    ],
+    "criterios_exequibilidade": [
+      {
+        "descricao": "Será considerado indício de inexequibilidade das propostas, valores inferiores a 50% (cinquenta por cento) do valor orçado pela Administração, nos termos da Instrução Normativa SEGES/ME n. 73/2022.",
+        "source_ref": "Edital, item 11.13",
+        "evidence_refs": [
+          "EV-PC-12-CRIT"
+        ]
+      }
+    ],
+    "exige_declaracao_fabricante": null,
+    "exige_planilha_orcamentaria": true,
+    "exige_marca_modelo_fabricante": true,
+    "criterios_desclassificacao_proposta": [
+      {
+        "descricao": "Propostas que identifiquem o licitante.",
+        "source_ref": "Edital, item 8.5",
+        "evidence_refs": [
+          "EV-PC-01-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas sem valores atribuídos a algum dos itens componentes do respectivo lote.",
+        "source_ref": "Edital, item 8.5",
+        "evidence_refs": [
+          "EV-PC-02-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas elaboradas em desacordo com os termos do Edital e de seus anexos; que forem omissas, vagas ou que apresentarem irregularidades insanáveis ou defeitos capazes de dificultar o julgamento; que se oponham a qualquer dispositivo legal vigente, mormente no que tange aos aspectos tributários; ou que contenha preços excessivos ou manifestamente inexequíveis, preços unitários simbólicos, preços irrisórios ou com valor zero e ainda, preços ou vantagens baseadas nas ofertas das demais licitantes; ou que contenha identificação do licitante.",
+        "source_ref": "Edital, item 8.5.1.1",
+        "evidence_refs": [
+          "EV-PC-03-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas que, após a fase de lances ou negociação, permanecerem com seus preços unitários e total dos itens superiores aos preços no Anexo I (Termo de Referência).",
+        "source_ref": "Edital, item 8.5.1.2",
+        "evidence_refs": [
+          "EV-PC-04-CRIT"
+        ]
+      },
+      {
+        "descricao": "Não apresentação da proposta de preços final e de sua garantia, exclusivamente por meio do sistema, no sítio eletrônico www.licitamaisbrasil.com.br dentro do prazo estipulado no item 10.6.",
+        "source_ref": "Edital, item 10.8",
+        "evidence_refs": [
+          "EV-PC-05-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas que contiverem vícios insanáveis e/ou condições ilegais.",
+        "source_ref": "Edital, item 11.12.1",
+        "evidence_refs": [
+          "EV-PC-06-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas que não obedecerem às especificações técnicas contidas no Termo de Referência.",
+        "source_ref": "Edital, item 11.12.2",
+        "evidence_refs": [
+          "EV-PC-07-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas que apresentarem preços manifestamente inexequíveis ou permanecerem acima do preço máximo definido para a contratação.",
+        "source_ref": "Edital, item 11.12.3",
+        "evidence_refs": [
+          "EV-PC-08-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas que não tiverem sua exequibilidade demonstrada, quando exigido pela Administração.",
+        "source_ref": "Edital, item 11.12.4",
+        "evidence_refs": [
+          "EV-PC-09-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas que apresentarem desconformidade com quaisquer outras exigências deste Edital ou seus anexos, desde que insanável.",
+        "source_ref": "Edital, item 11.12.5",
+        "evidence_refs": [
+          "EV-PC-10-CRIT"
+        ]
+      },
+      {
+        "descricao": "Propostas que contiverem para o lote item com valor superior ao estimado pela Administração, independentemente do valor total do lote, devendo o licitante, readequar o valor do lote aos valores constantes no mapa de preços emitido pela plataforma eletrônica.",
+        "source_ref": "Edital, item 11.12.6",
+        "evidence_refs": [
+          "EV-PC-11-CRIT"
+        ]
+      }
+    ],
+    "exige_catalogo_ficha_tecnica_manual": null
+  },
+  "technical_analysis": {
+    "exige_art": null,
+    "exige_cat": null,
+    "exige_rrt": null,
+    "parcelas_relevantes": [
+      {
+        "item": "01",
+        "tipo": "operacional",
+        "unidade": "Serv.",
+        "descricao": "Serviços a serem prestados na locação de maquinário (compactador, roçadeira mecânica e caminhão), destinados a coleta e transporte de resíduos sólidos domiciliares e urbanos",
+        "evidence_refs": [
+          "EV-QTO-01",
+          "EV-TR-01"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "01"
+      }
+    ],
+    "exige_registro_conselho": null,
+    "exige_acervo_profissional": null,
+    "exige_responsavel_tecnico": null,
+    "registro_conselho_detalhes": [],
+    "responsavel_tecnico_detalhes": [],
+    "exigencias_tecnicas_especificas": [
+      {
+        "descricao": "ART de Projeto/Orçamento para os serviços de Limpeza Urbana com Locação de Maquinário, emitida por Fco. Fábio Ernesto de Souza, Engenheiro Civil, CREA-CE 11951D, ART N° CE20261808307. Esta ART é referente ao projeto da licitação, não sendo uma exigência de qualificação técnica para o licitante.",
+        "source_ref": "Memorial, p.19; ART, p.33",
+        "evidence_refs": [
+          "EV-ART-01",
+          "EV-ART-002"
+        ]
+      }
+    ],
+    "exige_atestado_capacidade_tecnica": true,
+    "exige_comprovacao_parcelas_relevantes": true
+  },
+  "operational_outputs": {
+    "proposal_routes": [],
+    "declaration_routes": [],
+    "internal_checklist": [],
+    "documents_to_prepare": [
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ato constitutivo, estatuto ou contrato social",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Registro comercial e aditivos (empresa individual)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição do ato constitutivo (sociedades civis)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Decreto de autorização (empresa estrangeira)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Certificado da Condição de Microempreendedor Individual (CCMEI)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de inscrição no CNPJ",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Federal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Estadual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Municipal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade relativa à Seguridade Social",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço (FGTS)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Justiça do Trabalho",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição municipal no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Balanço patrimonial e demonstrações contábeis",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão negativa de feitos sobre falência",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "alta",
+        "document_name": "Garantia de Proposta",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "alta",
+        "document_name": "Garantia de Execução Contratual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Deve comprovar a execução de serviços de locação de maquinário (compactador, roçadeira mecânica e caminhão) para coleta e transporte de resíduos sólidos domiciliares e urbanos.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "critica",
+        "document_name": "Atestado de Capacidade Técnica",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1.q e Anexo IV, item a.",
+        "category": "documentos_complementares",
+        "priority": "media",
+        "document_name": "Declaração de integralidade dos custos trabalhistas",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1.r e Anexo IV, item b.",
+        "category": "documentos_complementares",
+        "priority": "media",
+        "document_name": "Declaração de não emprego de menores",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1.s e Anexo IV, item c.",
+        "category": "documentos_complementares",
+        "priority": "media",
+        "document_name": "Declaração de cumprimento de reserva de cargos",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 12.1.t e Anexo IV, item d.",
+        "category": "documentos_complementares",
+        "priority": "media",
+        "document_name": "Declaração de atendimento aos requisitos de habilitação e veracidade das informações",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Edital, item 6.6. Deve ser realizada no sistema www.licitamaisbrasil.com.br.",
+        "category": "documentos_complementares",
+        "priority": "media",
+        "document_name": "Declaração de exercício da preferência (ME/EPP)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Deve ser preenchida e assinada conforme modelo e instruções do edital e anexo.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Proposta de Preços (Anexo III)",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Apresentada pelo vencedor após negociação, conforme item 10.6 do edital.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Proposta Final",
+        "responsible_area": "licitacoes"
+      }
+    ],
+    "proposal_inputs_needed": [],
+    "possible_petition_routes": [
+      "Pedido de Esclarecimento: Solicitar detalhamento sobre a aceitação de atestados de capacidade técnica com serviços similares, mas não idênticos, ao objeto licitado. Tese: Art. 37, XXI, CF c/c Art. 9º da Lei 14.133/2021 (ampla competitividade)."
+    ],
+    "technical_documents_needed": [],
+    "questions_for_consultor_chat": [
+      "Qual a interpretação do órgão sobre 'compatível em características, quantidades e prazos' para o atestado de capacidade técnica no item 12.1.f?",
+      "É possível apresentar atestados de empresas consorciadas para comprovar a capacidade técnica operacional?",
+      "Como a Administração pretende fiscalizar a manutenção preventiva e corretiva dos equipamentos locados?",
+      "Qual o procedimento para a substituição de veículos, caso o veículo substituto não seja aprovado pela contratante?"
+    ]
+  },
+  "contractual_analysis": {
+    "reajuste": "Preços fixos e irreajustáveis no prazo de um ano contado da data do orçamento estimado. Após o interregno de um ano, os preços iniciais poderão ser reajustados, mediante a aplicação, pelo contratante, do IPCA (Índice de Preços ao Consumidor Amplo), exclusivamente para as obrigações iniciadas e concluídas após a ocorrência da anualidade.",
+    "penalidades": [
+      {
+        "descricao": "Advertência.",
+        "source_ref": "Edital, item 16.2.1; Minuta, Cláusula Décima Primeira, 17.2.1",
+        "evidence_refs": [
+          "EV-EC-01"
+        ]
+      },
+      {
+        "descricao": "Multa de 0,5% a 30% incidente sobre o valor do contrato licitado, recolhida no prazo máximo de 30 (trinta) dias úteis.",
+        "source_ref": "Edital, item 16.4; Minuta, Cláusula Décima Primeira, 17.4",
+        "evidence_refs": [
+          "EV-EC-02"
+        ]
+      },
+      {
+        "descricao": "Impedimento de licitar e contratar no âmbito da Administração Pública direta e indireta do ente federativo a qual pertencer o órgão ou entidade, pelo prazo máximo de 3 (três) anos.",
+        "source_ref": "Edital, item 16.7; Minuta, Cláusula Décima Primeira, 17.7",
+        "evidence_refs": [
+          "EV-EC-03"
+        ]
+      },
+      {
+        "descricao": "Declaração de inidoneidade para licitar ou contratar, enquanto perdurarem os motivos determinantes da punição ou até que seja promovida sua reabilitação.",
+        "source_ref": "Edital, item 16.2.4; Minuta, Cláusula Décima Primeira, 17.2.4",
+        "evidence_refs": [
+          "EV-EC-04"
+        ]
+      }
+    ],
+    "repactuacao": null,
+    "prazo_execucao": null,
+    "prazo_vigencia": "12 (doze) meses, contados a partir da data de sua assinatura, podendo ser prorrogado.",
+    "medicao_pagamento": "Pagamento será efetuado no prazo máximo de até 30 (trinta) dias, contados do recebimento da Nota Fiscal/Fatura.",
+    "obrigacoes_contratada": [
+      {
+        "descricao": "Responsabilizar-se pelo socorro mecânico com guincho, bem como pela manutenção preventiva e corretiva, atendendo-se a preventiva aquela constante no pano de manutenção do fabricante (descrita no manual do veículo) e corretiva aquela destinada aos reparos de defeitos que ocorreram de maneira aleatório, durante os intervalos entre a manutenção preventiva e quais que outra despesas que direta e indiretamente, incidam ou venha incidir sobre a execução do objeto deste memorial descritivo.",
+        "source_ref": "TR, item 3.1",
+        "evidence_refs": [
+          "EV-EC-05"
+        ]
+      },
+      {
+        "descricao": "Realizar a imediata e tempestiva manutenção preventiva corretiva dos veículos e maquinários, mantendo o mesmo em perfeito estado para a prestação dos serviços contratados, observando o prazo de 24 horas as manutenções e substituição dos veículos e maquinários, feito a parti da comunicação do gestor do contrato.",
+        "source_ref": "TR, item 3.1",
+        "evidence_refs": [
+          "EV-EC-06"
+        ]
+      },
+      {
+        "descricao": "Responsabilizar-se pela cobertura contra danos matérias e pessoas ocasionados a terceiros, já incluso o valor do contrato.",
+        "source_ref": "TR, item 3.1",
+        "evidence_refs": [
+          "EV-EC-07"
+        ]
+      },
+      {
+        "descricao": "Disponibilizar veículos/maquinários reserva com mesma característica técnicas, contidas nesse instrumento, de modo a garantir a continuidade do serviço.",
+        "source_ref": "TR, item 3.1",
+        "evidence_refs": [
+          "EV-EC-08"
+        ]
+      },
+      {
+        "descricao": "Disponibilizar 24 horas por dia, inclusive sábado e domingo e feriado, serviço de socorro (guincho), nos casos de acidentes, de modo a proporcionar atendimento imediato.",
+        "source_ref": "TR, item 3.1",
+        "evidence_refs": [
+          "EV-EC-09"
+        ]
+      },
+      {
+        "descricao": "Prestar os serviços diariamente, satisfeitas integralmente as necessidades objeto deste Termo de Referência e do futuro contrato.",
+        "source_ref": "TR, item 6.1",
+        "evidence_refs": [
+          "EV-EC-10"
+        ]
+      },
+      {
+        "descricao": "Manter os veículos sob guarda e responsabilidade da Secretaria Municipal contratante, 24 (vinte e quatro) horas por dia, todos os dias da semana, inclusive feriados, não havendo limite de quilometragem a ser percorrida.",
+        "source_ref": "TR, item 6.2",
+        "evidence_refs": [
+          "EV-EC-11"
+        ]
+      },
+      {
+        "descricao": "Submeter-se à prévia vistoria dos veículos apresentados e atender às especificações contidas neste Termo de Referência.",
+        "source_ref": "TR, item 6.3",
+        "evidence_refs": [
+          "EV-EC-12"
+        ]
+      },
+      {
+        "descricao": "Submeter-se a inspeções/vistorias veiculares a qualquer tempo, por ordem da Administração.",
+        "source_ref": "TR, item 6.4",
+        "evidence_refs": [
+          "EV-EC-13"
+        ]
+      },
+      {
+        "descricao": "Atender a todas as exigências da legislação e regulamentos de trânsito atuais ou que venham a ser expedidos pelos órgãos normatizadores.",
+        "source_ref": "TR, item 6.6",
+        "evidence_refs": [
+          "EV-EC-14"
+        ]
+      },
+      {
+        "descricao": "Consultar a contratante ao substituir algum veículo, indicando o veículo a ser substituído e a característica do veículo substituto.",
+        "source_ref": "TR, item 6.7",
+        "evidence_refs": [
+          "EV-EC-15"
+        ]
+      },
+      {
+        "descricao": "Entregar os veículos higienizados, com a devida documentação legal, na sede de cada secretaria contratante, em horário acordado entre as partes.",
+        "source_ref": "TR, item 6.8",
+        "evidence_refs": [
+          "EV-EC-16"
+        ]
+      },
+      {
+        "descricao": "Responsabilizar-se integralmente pelo pagamento da importância referente a multas, taxas e/ou despesas, inclusive com guinchos e estadias decorrentes da infração.",
+        "source_ref": "TR, item 7.1",
+        "evidence_refs": [
+          "EV-EC-17"
+        ]
+      },
+      {
+        "descricao": "Pagar os serviços de recuperação em caso de avaria de sua responsabilidade.",
+        "source_ref": "TR, item 8.5",
+        "evidence_refs": [
+          "EV-EC-18"
+        ]
+      },
+      {
+        "descricao": "Prestar manutenção preventiva e corretiva, empreendendo a limpeza dos componentes e peças, substituição de peças em razão de defeito ou desgaste natural, conserto, reparação, troca de componentes e equipamentos danificados.",
+        "source_ref": "TR, item 10.1",
+        "evidence_refs": [
+          "EV-EC-19"
+        ]
+      },
+      {
+        "descricao": "Providenciar a substituição imediata do veículo por outro similar ou superior em caso de manutenção corretiva.",
+        "source_ref": "TR, item 10.2",
+        "evidence_refs": [
+          "EV-EC-20"
+        ]
+      },
+      {
+        "descricao": "Realizar troca de pneus, alinhamento e balanceamento, se houver.",
+        "source_ref": "TR, item 10.3",
+        "evidence_refs": [
+          "EV-EC-21"
+        ]
+      },
+      {
+        "descricao": "Manter durante toda a vigência do contrato, em compatibilidade com as obrigações assumidas, todas as condições exigidas para habilitação.",
+        "source_ref": "TR, item 16.10; Minuta, Cláusula Décima, 10.10",
+        "evidence_refs": [
+          "EV-EC-22"
+        ]
+      },
+      {
+        "descricao": "Entregar ao setor responsável pela fiscalização do contrato, junto com a Nota Fiscal para fins de pagamento, os seguintes documentos: 1) prova de regularidade relativa à Seguridade Social; 2) certidão conjunta relativa aos tributos federais e à Dívida Ativa da União; 3) certidões que comprovem a regularidade perante a Fazenda Estadual ou Distrital e Municipal do domicílio ou sede da contratada; 4) Certidão de Regularidade do FGTS - CRF; e 5) Certidão Negativa de Débitos Trabalhistas - CNDT.",
+        "source_ref": "TR, item 16.6; Minuta, Cláusula Décima, 10.6",
+        "evidence_refs": [
+          "EV-EC-23"
+        ]
+      },
+      {
+        "descricao": "Submeter previamente, por escrito, ao contratante, para análise e aprovação, quaisquer mudanças nos métodos executivos que fujam às especificações do memorial descritivo ou instrumento congênere.",
+        "source_ref": "Minuta, Cláusula Décima, 16.19",
+        "evidence_refs": [
+          "EV-EC-24"
+        ]
+      },
+      {
+        "descricao": "Não permitir a utilização de qualquer trabalho do menor de dezesseis anos, exceto na condição de aprendiz para os maiores de quatorze anos, nem permitir a utilização do trabalho do menor de dezoito anos em trabalho noturno, perigoso ou insalubre.",
+        "source_ref": "Minuta, Cláusula Décima, 16.20",
+        "evidence_refs": [
+          "EV-EC-25"
+        ]
+      },
+      {
+        "descricao": "Cumprir fielmente o objeto do presente instrumento, seguindo a legislação vigente e pertinente (Código Nacional de Trânsito), dentro dos prazos e horários pré-estabelecidos pela Secretaria ou Órgão onde estão sendo prestados os serviços.",
+        "source_ref": "Minuta, Cláusula Décima, 16.21",
+        "evidence_refs": [
+          "EV-EC-26"
+        ]
+      },
+      {
+        "descricao": "Substituir no prazo máximo de 72 (setenta e duas) horas por outro veículo compatível, em caráter temporário, a partir do momento em que o mesmo vier a sofrer serviços de manutenção corretiva ou preventiva.",
+        "source_ref": "Minuta, Cláusula Décima, 16.22",
+        "evidence_refs": [
+          "EV-EC-27"
+        ]
+      },
+      {
+        "descricao": "Reparar ou substituir (nas mesmas características e condições exigidas) sem ônus para a CONTRATANTE, o veículo locado, caso suas condições venham a comprometer a segurança dos usuários ou a boa qualidade dos serviços, responsabilizando-se pelos danos causados diretamente à CONTRATANTE, seus prepostos, ou a terceiros, decorrentes de sua culpa ou dolo, na execução do contrato.",
+        "source_ref": "Minuta, Cláusula Décima, 16.23",
+        "evidence_refs": [
+          "EV-EC-28"
+        ]
+      },
+      {
+        "descricao": "Providenciar a substituição de qualquer veículo/profissional envolvido na execução do objeto contratual cujo desempenho seja considerado indesejável pela fiscalização da CONTRATANTE.",
+        "source_ref": "Minuta, Cláusula Décima, 16.24",
+        "evidence_refs": [
+          "EV-EC-29"
+        ]
+      },
+      {
+        "descricao": "Utilizar profissionais devidamente habilitados (motorista/condutor), para execução dos serviços.",
+        "source_ref": "Minuta, Cláusula Décima, 16.25",
+        "evidence_refs": [
+          "EV-EC-30"
+        ]
+      },
+      {
+        "descricao": "Arcar com as despesas relativas ao emplacamento e licenciamento do(s) veículo(s) alugado(s), bem como fornecer a contratante a documentação correspondente atualizada.",
+        "source_ref": "Minuta, Cláusula Décima, 16.27",
+        "evidence_refs": [
+          "EV-EC-31"
+        ]
+      }
+    ],
+    "obrigacoes_contratante": [
+      {
+        "descricao": "Efetuar os pagamentos devido a contratada.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-32"
+        ]
+      },
+      {
+        "descricao": "Receber os serviços objeto do contrato, nos termos, prazo, condições e especificas estabelecidas nesse instrumento.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-33"
+        ]
+      },
+      {
+        "descricao": "Designar servidor responsável pela fiscalização e acompanhamento do contrato.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-34"
+        ]
+      },
+      {
+        "descricao": "Rejeitar no todo ou em parte, por intermédio da fiscalização, o fornecimento de serviços que esteja em desacordo com o firmado, podendo exigir, a qualquer tempo, a substituição dos que jugar insuficientes ou inadequados.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-35"
+        ]
+      },
+      {
+        "descricao": "Aplicar a contratada as penalidades depois de constatada as irregularidades garantidas o contraditório e ampla defesa.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-36"
+        ]
+      },
+      {
+        "descricao": "Fornecer a contratada todas as informações, esclarecimentos, documentos e demais condições necessárias à execução do contrato.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-37"
+        ]
+      },
+      {
+        "descricao": "Notificar a vencedora, por escrito, sobre imperfeições, falhas ou irregularidades constadas na execução do contrato, para que seja adotada as medidas corretivas necessárias.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-38"
+        ]
+      },
+      {
+        "descricao": "A gestão e o acompanhamento do contrato ficarão a cargo do setor competente a ser indicada pela contratante.",
+        "source_ref": "TR, item 3.2",
+        "evidence_refs": [
+          "EV-EC-39"
+        ]
+      },
+      {
+        "descricao": "Abastecer os veículos contratados, durante o tempo da prestação dos serviços.",
+        "source_ref": "TR, item 9.1",
+        "evidence_refs": [
+          "EV-EC-40"
+        ]
+      }
+    ],
+    "matriz_risco_contratual": []
+  },
+  "process_identification": {
+    "orgao": "Prefeitura Municipal de Umari",
+    "modalidade": "PREGÃO ELETRÔNICO",
+    "tipo_objeto": "servico_comum",
+    "municipio_uf": "Umari/CE",
+    "fonte_oficial": "https://www.licitamaisbrasil.com.br",
+    "forma_disputa": "ABERTO E FECHADO",
+    "numero_edital": "2026.03.11.1",
+    "numero_processo": null,
+    "objeto_completo": "A presente licitação tem por objeto a contratação de serviços a serem prestados na locação de maquinário (compactador, roçadeira mecânica e caminhão), destinados a coleta e transporte de resíduos sólidos domiciliares e urbanos do Município de Umari/CE, conforme anexos, partes integrantes deste edital.",
+    "objeto_resumido": "Contratação de serviços de locação de maquinário (compactador, roçadeira mecânica e caminhão) para coleta e transporte de resíduos sólidos domiciliares e urbanos.",
+    "regime_execucao": "outro",
+    "unidade_compradora": "Governo Municipal",
+    "criterio_julgamento": "MENOR PREÇO"
+  },
+  "participation_conditions": {
+    "exige_amostra": null,
+    "amostra_detalhes": "Fiscalização e Supervisão poderão solicitar a apresentação de certificados de ensaios relativos a materiais a serem utilizados e o fornecimento de amostras dos mesmos.",
+    "outras_condicoes": [],
+    "permite_consorcio": true,
+    "tratamento_me_epp": "Garantido tratamento diferenciado e preferencial, incluindo critério de desempate e prazo para regularização fiscal/trabalhista. Devem declarar o exercício da preferência.",
+    "consorcio_detalhes": "Será admitida para efeito de habilitação técnica, a apresentação dos quantitativos de cada consorciado e, para efeito de habilitação econômico-financeira, o somatório dos valores de cada consorciado; Para participantes em forma de consórcio, será acrescido 10% (dez por cento) sobre o valor exigido de licitante individual para fins de habilitação econômico-financeira; O acréscimo previsto no item anterior não se aplica aos consórcios compostos, em sua totalidade, de microempresas e pequenas empresas, assim definidas em lei; Em caso de ser declarado vencedor, o consórcio deverá, antes da celebração do contrato, promover a constituição e o registro do consórcio, nos termos do compromisso público ou particular de constituição de consórcio, subscrito pelos consorciados; A substituição de consorciado deverá ser expressamente autorizada pelo órgão contratante e deverá ser apresentada a comprovação de que a nova empresa do consórcio possui, no mínimo, os mesmos quantitativos para efeito de habilitação técnica e os mesmos valores para efeito de qualificação econômico-financeira apresentados pela empresa substituída, para fins de habilitação do consórcio no processo licitatório que originou o contrato.",
+    "exige_visita_tecnica": null,
+    "participacao_restrita": "Não atender condições do edital e anexos; Autor do anteprojeto, projeto básico ou executivo; Empresa responsável pela elaboração do projeto básico ou executivo, ou empresa da qual o autor do projeto seja dirigente, gerente, controlador, acionista ou detentor de mais de 5% do capital com direito a voto, responsável técnico ou subcontratado; Pessoa física ou jurídica impossibilitada de participar por sanção; Pessoa com vínculo técnico, comercial, econômico, financeiro, trabalhista ou civil com dirigente do órgão/entidade contratante ou agente público que desempenhe função na licitação ou fiscalização/gestão do contrato, ou cônjuge, companheiro ou parente até terceiro grau; Empresas controladoras, controladas ou coligadas concorrendo entre si; Pessoa física ou jurídica condenada judicialmente nos 5 anos anteriores por exploração de trabalho infantil, submissão a condições análogas à escravidão ou contratação de adolescentes em casos vedados; Agente público do órgão/entidade contratante; Licitante que atue em substituição a pessoa física/jurídica com sanção.",
+    "permite_subcontratacao": false,
+    "exige_garantia_proposta": true,
+    "subcontratacao_detalhes": "Não será admitida a subcontratação do objeto contratual.",
+    "visita_tecnica_detalhes": null,
+    "exige_garantia_contratual": true,
+    "garantia_proposta_detalhes": "1% (um por cento) do valor estimado para a contratação, conforme previsto no art. 58 da Lei Federal n. 14.133/2021. Modalidades: caução em dinheiro, títulos da dívida pública, seguro-garantia, fiança bancária, título de capitalização.",
+    "garantia_contratual_detalhes": "5% (cinco por cento) do valor total do contrato, conforme o art. 96 e seguintes da Lei Federal n. 14.133/2021. Modalidades: caução em dinheiro, títulos da dívida pública, seguro-garantia ou fiança bancária."
+  },
+  "economic_financial_analysis": {
+    "exige_balanco": true,
+    "exige_indices": null,
+    "indices_exigidos": [],
+    "outras_exigencias_ef": [
+      {
+        "descricao": "Documentação contábil restrita ao último exercício social para empresas constituídas há menos de dois anos.",
+        "source_ref": "Edital, item 12.1.o.1",
+        "evidence_refs": [
+          "EV-QEF-02"
+        ]
+      }
+    ],
+    "capital_social_minimo": null,
+    "patrimonio_liquido_minimo": null,
+    "exige_garantias_adicionais": null,
+    "exige_capital_social_minimo": null,
+    "exige_patrimonio_liquido_minimo": null
+  }
+}
