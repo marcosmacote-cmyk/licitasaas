@@ -3715,7 +3715,20 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         let enrichedLink = biddingData.link || '';
         const hasPlatformLink = hasMonitorableDomain(enrichedLink);
 
-        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
+        // Check if the platform link is "functional" (has the params needed for chat monitoring).
+        // A link like "bllcompras.com/Home/PublicAccess" is monitorable-by-domain but NOT functional
+        // because it lacks param1. Similarly, "compras.m2atecnologia.com.br/processos/publicacao/..."
+        // is monitorable but lacks /certame/{id}. In these cases, we still need AutoEnrich.
+        const isGenericPlatformLink = hasPlatformLink && (() => {
+            const l = enrichedLink.toLowerCase();
+            // BLL: functional links have "param1=" or "ProcessView"
+            if (l.includes('bllcompras') && !l.includes('param1=') && !l.includes('processview')) return true;
+            // M2A: functional links have "/certame/" (not the public "/publicacao/" vitrine)
+            if (l.includes('m2atecnologia') && !l.includes('/certame/') && !l.includes('precodereferencia')) return true;
+            return false;
+        })();
+
+        if ((!hasPlatformLink || isGenericPlatformLink) && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
             try {
                 const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
@@ -4171,7 +4184,15 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         let enrichedLink = biddingData.link || '';
         const hasPlatformLink = hasMonitorableDomain(enrichedLink);
 
-        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
+        // Same generic-link detection as POST (see POST /api/biddings for full docs)
+        const isGenericPlatformLink = hasPlatformLink && (() => {
+            const l = enrichedLink.toLowerCase();
+            if (l.includes('bllcompras') && !l.includes('param1=') && !l.includes('processview')) return true;
+            if (l.includes('m2atecnologia') && !l.includes('/certame/') && !l.includes('precodereferencia')) return true;
+            return false;
+        })();
+
+        if ((!hasPlatformLink || isGenericPlatformLink) && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
             try {
                 const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
