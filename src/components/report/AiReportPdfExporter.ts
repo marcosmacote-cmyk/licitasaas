@@ -18,6 +18,7 @@ export interface ReportPdfData {
         objeto: string | null;
         orgao: string | null;
         numeroProcesso: string | null;
+        portal: string | null;
         modalidade: string | null;
         criterioJulgamento: string | null;
         regimeExecucao: string | null;
@@ -417,6 +418,7 @@ function buildReportHtml(data: ReportPdfData): string {
                 ${metaField('Órgão / Entidade', data.metadata.orgao)}
                 ${metaField('Nº do Processo', data.metadata.numeroProcesso)}
                 ${metaField('Modalidade', data.metadata.modalidade)}
+                ${metaField('Portal', data.metadata.portal)}
                 ${metaField('Critério de Julgamento', data.metadata.criterioJulgamento)}
                 ${metaField('Regime de Execução', data.metadata.regimeExecucao)}
                 ${metaField('Local', data.metadata.local)}

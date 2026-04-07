@@ -115,6 +115,7 @@ export function useAiReport({ analysis, process }: UseAiReportOptions) {
             objeto: pi.objeto_completo || pi.objeto_resumido || safeText(process?.title) || null,
             orgao: pi.orgao || pi.unidade_compradora || null,
             numeroProcesso: pi.numero_processo || pi.numero_edital || null,
+            portal: process?.portal || pi.portal || null,
             modalidade: pi.modalidade || null,
             criterioJulgamento: pi.criterio_julgamento || null,
             regimeExecucao: pi.regime_execucao || null,
