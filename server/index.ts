@@ -3747,13 +3747,32 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                             if (platformUrl && hasMonitorableDomain(platformUrl)) {
                                 // Case 1: linkSistemaOrigem IS monitorable (e.g., cnetmobile, bllcompras)
                                 const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                                if (!existingParts.some((part: string) => part === platformUrl)) {
+                                
+                                if (isGenericPlatformLink) {
+                                    // REPLACE: Remove the generic link and add the functional one
+                                    // e.g., "bllcompras.com/Home/PublicAccess" → "bllcompras.com/Process/ProcessView?param1=..."
+                                    const platformDomain = (() => {
+                                        try { return new URL(platformUrl).hostname.replace('www.', ''); } catch { return ''; }
+                                    })();
+                                    const filteredParts = existingParts.filter((part: string) => {
+                                        try {
+                                            const partDomain = new URL(part).hostname.replace('www.', '');
+                                            // Remove parts from the same platform domain (the generic link)
+                                            return partDomain !== platformDomain;
+                                        } catch { return true; } // keep non-URL parts
+                                    });
+                                    filteredParts.push(platformUrl);
+                                    enrichedLink = filteredParts.join(', ');
+                                    biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] 🔄 Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
+                                } else if (!existingParts.some((part: string) => part === platformUrl)) {
+                                    // APPEND: No generic link — just add alongside existing
                                     enrichedLink = `${enrichedLink}, ${platformUrl}`;
                                     biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] ✅ Link monitorável adicionado: ${platformUrl.substring(0, 60)}`);
                                 }
                                 // Re-normalize portal with the enriched link
                                 biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
-                                console.log(`[AutoEnrich] ✅ Link monitorável adicionado: ${platformUrl.substring(0, 60)}`);
                             } else if (platformUrl) {
                                 // Case 2: linkSistemaOrigem is NOT monitorable (e.g., portalcompras.ce.gov.br)
                                 const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
@@ -4210,14 +4229,30 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                             console.log(`[AutoEnrich] 📋 Update: linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
                             if (platformUrl && hasMonitorableDomain(platformUrl)) {
                                 const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                                if (!existingParts.some((part: string) => part === platformUrl)) {
+                                
+                                if (isGenericPlatformLink) {
+                                    // REPLACE: Remove the generic link and add the functional one
+                                    const platformDomain = (() => {
+                                        try { return new URL(platformUrl).hostname.replace('www.', ''); } catch { return ''; }
+                                    })();
+                                    const filteredParts = existingParts.filter((part: string) => {
+                                        try {
+                                            const partDomain = new URL(part).hostname.replace('www.', '');
+                                            return partDomain !== platformDomain;
+                                        } catch { return true; }
+                                    });
+                                    filteredParts.push(platformUrl);
+                                    enrichedLink = filteredParts.join(', ');
+                                    biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] 🔄 Update: Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
+                                } else if (!existingParts.some((part: string) => part === platformUrl)) {
                                     enrichedLink = `${enrichedLink}, ${platformUrl}`;
                                     biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] ✅ Update: link monitorável adicionado para "${id}": ${platformUrl.substring(0, 60)}`);
                                 }
                                 if (biddingData.portal !== undefined) {
                                     biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
                                 }
-                                console.log(`[AutoEnrich] ✅ Update: link monitorável adicionado para "${id}": ${platformUrl.substring(0, 60)}`);
                             } else if (platformUrl) {
                                 const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
                                 if (!existingParts.some((part: string) => part === platformUrl)) {
