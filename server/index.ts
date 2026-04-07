@@ -3393,6 +3393,17 @@ Responda APENAS com JSON array:
             }
         }
 
+        // ── Re-normalize portal after Auto-Enrich ──
+        // If we enriched link_sistema to a platform URL (BLL, BNC, etc.), the portal
+        // was still set to "PNCP" from L3216. Re-normalize with the enriched link.
+        if (legacyProcess.link_sistema && hasMonitorableDomain(legacyProcess.link_sistema)) {
+            const enrichedPortal = normalizePortal(legacyProcess.portal || 'PNCP', legacyProcess.link_sistema);
+            if (enrichedPortal !== legacyProcess.portal) {
+                console.log(`[PNCP-V2] 🔄 Portal re-normalizado: "${legacyProcess.portal}" → "${enrichedPortal}" (Auto-Enrich)`);
+                legacyProcess.portal = enrichedPortal;
+            }
+        }
+
         const legacyAnalysis = {
             requiredDocuments: allReqs,
             pricingConsiderations: v2Result.economic_financial_analysis.indices_exigidos

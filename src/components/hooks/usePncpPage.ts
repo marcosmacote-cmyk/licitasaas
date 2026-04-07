@@ -723,30 +723,33 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // 1. SMART PORTAL DETECTION — resolve o portal real de operação
         // ═══════════════════════════════════════════════════════════
         let bestPortalName = "PNCP";
-        const link = (item.link_sistema || '').toLowerCase();
+        // V4.6.1: Check AI-enriched link first (e.g. BLL functional URL from Auto-Enrich),
+        // then fall back to item.link_sistema (PNCP link)
+        const aiEnrichedLink = ((aiData?.process as any)?.link_sistema || '').toLowerCase();
+        const allLinksForDetection = [aiEnrichedLink, (item.link_sistema || '').toLowerCase()].filter(Boolean).join(' ');
 
         // Check registered credentials first
         if (companies.length > 0) {
             const allCreds = companies.flatMap(c => c.credentials || []);
             const match = allCreds.find(c => {
                 const cu = (c.url || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
-                return cu && link.includes(cu.split('/')[0]);
+                return cu && allLinksForDetection.includes(cu.split('/')[0]);
             });
             if (match) bestPortalName = match.platform;
         }
 
         // Fallback: infer from link patterns (more comprehensive)
         if (bestPortalName === 'PNCP') {
-            if (link.includes('comprasnet') || link.includes('cnetmobile') || link.includes('gov.br/compras')) bestPortalName = "ComprasNet";
-            else if (link.includes('bllcompras') || link.includes('bll.org')) bestPortalName = "BLL";
-            else if (link.includes('bnccompras') || link.includes('bnc.org.br')) bestPortalName = "BNC";
-            else if (link.includes('licitacoes-e')) bestPortalName = "Licitações-e (BB)";
-            else if (link.includes('portaldecompraspublicas')) bestPortalName = "Portal de Compras Públicas";
-            else if (link.includes('bec.sp')) bestPortalName = "BEC/SP";
-            else if (link.includes('m2atecnologia') || link.includes('m2a.')) bestPortalName = "M2A Tecnologia";
-            else if (link.includes('bbmnet')) bestPortalName = "BBMNet";
-            else if (link.includes('licitamaisbrasil')) bestPortalName = "Licita Mais Brasil";
-            else if (link.includes('compras.gov.br') || link.includes('pncp.gov.br')) bestPortalName = "Compras.gov.br";
+            if (allLinksForDetection.includes('comprasnet') || allLinksForDetection.includes('cnetmobile') || allLinksForDetection.includes('gov.br/compras')) bestPortalName = "ComprasNet";
+            else if (allLinksForDetection.includes('bllcompras') || allLinksForDetection.includes('bll.org')) bestPortalName = "BLL";
+            else if (allLinksForDetection.includes('bnccompras') || allLinksForDetection.includes('bnc.org.br')) bestPortalName = "BNC";
+            else if (allLinksForDetection.includes('licitacoes-e')) bestPortalName = "Licitações-e (BB)";
+            else if (allLinksForDetection.includes('portaldecompraspublicas')) bestPortalName = "Portal de Compras Públicas";
+            else if (allLinksForDetection.includes('bec.sp')) bestPortalName = "BEC/SP";
+            else if (allLinksForDetection.includes('m2atecnologia') || allLinksForDetection.includes('m2a.')) bestPortalName = "M2A Tecnologia";
+            else if (allLinksForDetection.includes('bbmnet')) bestPortalName = "BBMNet";
+            else if (allLinksForDetection.includes('licitamaisbrasil')) bestPortalName = "Licita Mais Brasil";
+            else if (allLinksForDetection.includes('compras.gov.br') || allLinksForDetection.includes('pncp.gov.br')) bestPortalName = "Compras.gov.br";
 
             // State-level override: Ceará (CE) State agencies use ComprasNet for disputes (except Dispensa)
             if (bestPortalName === 'PNCP' || bestPortalName === 'Compras.gov.br') { // Keep Compras.gov.br mapping or PNCP default
