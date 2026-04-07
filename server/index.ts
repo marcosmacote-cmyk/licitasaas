@@ -7967,22 +7967,23 @@ app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any,
                         processNumber: { not: null },
                         processYear: { not: null },
                     },
-                    // BBMNET processes (have bbmnet link)
-                    {
-                        link: { contains: 'bbmnet', mode: 'insensitive' },
-                    },
-                    // BLL processes
-                    {
-                        link: { contains: 'bllcompras', mode: 'insensitive' },
-                    },
-                    // BNC processes
-                    {
-                        link: { contains: 'bnccompras', mode: 'insensitive' },
-                    },
-                    // M2A Compras processes
-                    {
-                        link: { contains: 'm2atecnologia', mode: 'insensitive' },
-                    },
+                    // ── Platform detection via LINK ──
+                    { link: { contains: 'bbmnet', mode: 'insensitive' } },
+                    { link: { contains: 'bllcompras', mode: 'insensitive' } },
+                    { link: { contains: 'bnccompras', mode: 'insensitive' } },
+                    { link: { contains: 'm2atecnologia', mode: 'insensitive' } },
+                    { link: { contains: 'portaldecompraspublicas', mode: 'insensitive' } },
+                    { link: { contains: 'licitanet', mode: 'insensitive' } },
+                    { link: { contains: 'licitamaisbrasil', mode: 'insensitive' } },
+                    // ── Platform detection via PORTAL (fallback for manual imports
+                    //    where link is a file upload path, not a platform URL) ──
+                    { portal: { contains: 'bbmnet', mode: 'insensitive' } },
+                    { portal: { contains: 'bll', mode: 'insensitive' } },
+                    { portal: { contains: 'bnc', mode: 'insensitive' } },
+                    { portal: { contains: 'm2a', mode: 'insensitive' } },
+                    { portal: { contains: 'portal de compras', mode: 'insensitive' } },
+                    { portal: { contains: 'licitanet', mode: 'insensitive' } },
+                    { portal: { contains: 'licita mais', mode: 'insensitive' } },
                 ],
             },
             select: {
