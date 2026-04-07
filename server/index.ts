@@ -3238,14 +3238,29 @@ Responda APENAS com JSON array:
             })()
         };
 
-        // ── AUTO-ENRICH: Buscar link de monitoramento ComprasNet da API PNCP ──
-        // Se link_sistema está vazio (ComprasNet sanitizado) e temos orgao_cnpj/ano/seq,
-        // buscamos linkSistemaOrigem diretamente da API de consulta PNCP.
-        // Isso garante que o preview já mostra o link cnetmobile correto.
-        if (!legacyProcess.link_sistema && orgao_cnpj && ano && numero_sequencial) {
+        // ── AUTO-ENRICH: Buscar link de monitoramento via API PNCP ──
+        // Se link_sistema está vazio OU é genérico (sem parâmetros funcionais para chat monitor),
+        // buscamos linkSistemaOrigem da API PNCP para TODAS as plataformas monitoráveis.
+        // V4.6.0: Expandido para BLL, BNC, BBMNET, PCP, Licitanet, LMB (antes: só cnetmobile).
+        const isAnalysisLinkFunctional = (() => {
+            const l = (legacyProcess.link_sistema || '').toLowerCase();
+            if (!l) return false;
+            // BLL: functional links need param1= or ProcessView
+            if ((l.includes('bllcompras') || l.includes('bll.org')) && !l.includes('param1=') && !l.includes('processview')) return false;
+            // M2A: functional links need /certame/
+            if (l.includes('m2atecnologia') && !l.includes('/certame/')) return false;
+            // Generic domain-only links (e.g. "www.bll.org.br", "bllcompras.com") without path
+            try {
+                const url = new URL(l.startsWith('http') ? l : `https://${l}`);
+                if (url.pathname === '/' || url.pathname === '' || url.pathname === '/Home/PublicAccess') return false;
+            } catch { /* not a parseable URL, treat as non-functional */ return false; }
+            return true;
+        })();
+        const needsAutoEnrich = (!legacyProcess.link_sistema || !isAnalysisLinkFunctional) && orgao_cnpj && ano && numero_sequencial;
+        if (needsAutoEnrich) {
             try {
                 const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
-                console.log(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl}`);
+                console.log(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl} (link_sistema=${legacyProcess.link_sistema ? 'genérico' : 'vazio'})`);
                 const controller = new AbortController();
                 const enrichTimeout = setTimeout(() => controller.abort(), 8000);
                 const enrichRes = await fetch(enrichUrl, { signal: controller.signal });
@@ -3253,9 +3268,10 @@ Responda APENAS com JSON array:
                 if (enrichRes.ok) {
                     const enrichData = await enrichRes.json();
                     const lso = (enrichData.linkSistemaOrigem || '').trim();
-                    if (lso && lso.includes('cnetmobile')) {
+                    if (lso && hasMonitorableDomain(lso)) {
                         legacyProcess.link_sistema = lso;
-                        console.log(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido: ${lso.substring(0, 80)}`);
+                        const platform = detectPlatformFromLink(lso) || 'desconhecida';
+                        console.log(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido (${platform}): ${lso.substring(0, 80)}`);
                     } else {
                         console.log(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'} → tentando Fallback B (edital)`);
 
