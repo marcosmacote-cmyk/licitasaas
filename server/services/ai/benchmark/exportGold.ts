@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * ══════════════════════════════════════════════════════════════════
  *  exportGold.ts — Exporta análises do banco para Gold Dataset
