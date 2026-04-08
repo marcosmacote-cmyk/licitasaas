@@ -2440,6 +2440,54 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         }
         console.log(`[PNCP-V2] 📊 Extração: ${extractedReqs} exigências, ${extractedEvidence} evidências, processo=${hasProcessId}`);
 
+        // ── ANTI-HALLUCINATION GATE (V4.7.1) ──
+        // Detect when the AI generates template/example data from prompt examples
+        // instead of reading the actual PDF documents.
+        const hallucinationSignals: string[] = [];
+        const processId = extractionJson.process_identification || {};
+        const allProcessText = [
+            processId.orgao, processId.objeto_resumido, processId.objeto_completo,
+            processId.municipio_uf, processId.link_sistema, processId.fonte_oficial,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        // Known template/example patterns from prompt examples and taxonomy
+        const HALLUCINATION_PATTERNS = [
+            { pattern: /prefeitura\s+municipal\s+de\s+exemplo/i, label: 'orgão fictício "Prefeitura Municipal de Exemplo"' },
+            { pattern: /exemplo\.gov/i, label: 'URL fictícia "exemplo.gov"' },
+            { pattern: /exemplo\/ex\b/i, label: 'UF fictícia "EX"' },
+            { pattern: /\bmunicípio\s+de\s+exemplo\b/i, label: 'município fictício "Exemplo"' },
+            { pattern: /\borgão\s+de\s+exemplo\b/i, label: 'órgão fictício' },
+            { pattern: /\bcidade\s+exemplo\b/i, label: 'cidade fictícia' },
+        ];
+
+        for (const hp of HALLUCINATION_PATTERNS) {
+            if (hp.pattern.test(allProcessText)) {
+                hallucinationSignals.push(hp.label);
+            }
+        }
+
+        // Additional check: if ALL source_refs are generic "Edital, item X.X" with sequential numbering
+        // AND the orgao contains "Exemplo" — strong hallucination signal
+        const evidences = extractionJson.evidence_registry || [];
+        if (evidences.length > 0) {
+            const genericRefCount = evidences.filter((e: any) => /^Edital,\s*item\s+\d+\.\d+$/i.test(e.source_ref || '')).length;
+            if (genericRefCount === evidences.length && hallucinationSignals.length > 0) {
+                hallucinationSignals.push('todas as referências são genéricas "Edital, item X.X"');
+            }
+        }
+
+        if (hallucinationSignals.length > 0) {
+            console.error(`[PNCP-V2] 🚨 ALUCINAÇÃO DETECTADA: ${hallucinationSignals.join(', ')}`);
+            console.error(`[PNCP-V2] 🚨 A IA gerou dados de TEMPLATE em vez de ler o PDF real. Abortando análise.`);
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
+            return sendError(
+                'Alucinação detectada — a IA não conseguiu ler os documentos',
+                `A IA gerou dados fictícios (${hallucinationSignals.join('; ')}) em vez de extrair do edital real. ` +
+                    `Isso geralmente ocorre quando o PDF está protegido, escaneado sem OCR, ou houve falha de comunicação com a IA. ` +
+                    `Tente novamente em alguns minutos.`
+            );
+        }
+
         // Hard failure: Extraction returned materially empty content
         const MIN_REQUIREMENTS = 3;
         const MIN_EVIDENCE = 1;
