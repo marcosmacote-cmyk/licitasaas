@@ -312,6 +312,78 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                 }
             }
         }
+
+        // ── CLEANUP 1: Remove phantom items (no title AND no description) ──
+        // These are artifacts of JSON truncation/repair or AI hallucination
+        for (const [category, items] of Object.entries(schema.requirements)) {
+            if (!Array.isArray(items)) continue;
+            const before = items.length;
+            const cleaned = items.filter((req: any) => {
+                const hasTitle = req.title && req.title.trim().length > 0;
+                const hasDesc = req.description && req.description.trim().length > 0;
+                return hasTitle || hasDesc;
+            });
+            if (cleaned.length < before) {
+                (schema.requirements as any)[category] = cleaned;
+                const removed = before - cleaned.length;
+                correct(`${category}`, `${removed} item(ns) fantasma`, `removido(s) — sem título nem descrição`);
+            }
+        }
+
+        // ── CLEANUP 2: Remove generic wrapper items when sub_items exist ──
+        // Items like "Documentos de Qualificação Técnica Operacional" that just
+        // repeat the category label without adding real requirements, while
+        // sub_items contain the actual detailed requirements.
+        const GENERIC_WRAPPER_PATTERNS = [
+            /^documentos?\s+(de|da)\s+qualifica[çc][ãa]o/i,
+            /^documentos?\s+(de|da)\s+habilita[çc][ãa]o/i,
+            /^documentos?\s+que\s+comprov/i,
+            /^comprovação\s+de\s+regularidade/i,
+            /^documentos?\s+(de|da)\s+regularidade/i,
+        ];
+
+        for (const [category, items] of Object.entries(schema.requirements)) {
+            if (!Array.isArray(items) || items.length <= 1) continue;
+
+            const cleaned = items.filter((req: any) => {
+                const title = (req.title || '').trim();
+                const isGenericWrapper = GENERIC_WRAPPER_PATTERNS.some(p => p.test(title));
+                const hasSubs = Array.isArray(req.sub_items) && req.sub_items.length > 0;
+                // Only remove if: (1) matches generic pattern AND (2) has sub_items OR other real items exist
+                if (isGenericWrapper && (hasSubs || items.length > 1)) {
+                    // If it has sub_items, promote them to top-level items
+                    if (hasSubs) {
+                        const prefix = ID_PREFIX_BY_CATEGORY[category] || 'XX';
+                        const existingIds = new Set(items.map((r: any) => r.requirement_id));
+                        let counter = items.length + 1;
+                        for (const sub of req.sub_items) {
+                            if (!sub.requirement_id || existingIds.has(sub.requirement_id)) {
+                                while (existingIds.has(`${prefix}-${String(counter).padStart(2, '0')}`)) counter++;
+                                sub.requirement_id = `${prefix}-${String(counter).padStart(2, '0')}`;
+                            }
+                            existingIds.add(sub.requirement_id);
+                            // Ensure sub has required fields
+                            if (!sub.obligation_type) sub.obligation_type = req.obligation_type || 'obrigatoria_universal';
+                            if (!sub.phase) sub.phase = req.phase || PHASE_BY_CATEGORY[category] || 'habilitacao';
+                            if (!sub.risk_if_missing) sub.risk_if_missing = req.risk_if_missing || RISK_BY_CATEGORY[category] || 'inabilitacao';
+                            if (!sub.applies_to) sub.applies_to = 'licitante';
+                            if (!sub.entry_type) sub.entry_type = 'exigencia_principal';
+                            items.push(sub);
+                            counter++;
+                        }
+                        correct(category, `wrapper genérico "${title}"`, `removido + ${req.sub_items.length} subitens promovidos`);
+                    } else {
+                        correct(category, `wrapper genérico "${title}"`, 'removido (items reais existem)');
+                    }
+                    return false; // Remove the wrapper
+                }
+                return true;
+            });
+
+            if (cleaned.length !== items.length) {
+                (schema.requirements as any)[category] = cleaned;
+            }
+        }
     }
 
     // ═══════════════════════════════════════════

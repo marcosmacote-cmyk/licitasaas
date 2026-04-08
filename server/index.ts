@@ -2331,6 +2331,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                     userPrompt: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
                     pdfParts,
                     temperature: 0.05,
+                    maxTokens: 65536,
                     stageName: 'PNCP Etapa 1 (Extração)'
                 });
                 if (!openAiResult.text) throw new Error('OpenAI retornou vazio');

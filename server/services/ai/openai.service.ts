@@ -131,6 +131,7 @@ export async function fallbackToOpenAiV2(opts: {
     userPrompt: string;
     pdfParts?: any[];
     temperature?: number;
+    maxTokens?: number;
     stageName: string;
 }): Promise<{ text: string; model: string }> {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -166,7 +167,7 @@ export async function fallbackToOpenAiV2(opts: {
                 ],
                 temperature: opts.temperature ?? 0.1,
                 response_format: { type: "json_object" },
-                max_tokens: 16384,
+                max_tokens: opts.maxTokens || 16384,
             });
 
             const duration = (Date.now() - startTime) / 1000;
