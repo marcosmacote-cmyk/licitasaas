@@ -5046,13 +5046,18 @@ ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
 10. Retorne os itens SEMPRE na ordem natural crescente: 1, 2, 3... ou 1.1, 1.2, 2.1...
 11. NUNCA misture formatos no mesmo array
 
-Responda APENAS com um JSON array, sem markdown:
+⚠️ ANTI-TRUNCAMENTO:
+12. Você DEVE retornar ABSOLUTAMENTE TODOS os itens — se houver 200 itens, retorne 200. NUNCA pare antes de completar a lista inteira.
+13. NÃO duplique a descrição (ex: "EXAME DE X EXAME DE X" → use apenas "EXAME DE X")
+14. Para descrições curtas (ex: nome de exame), NÃO adicione texto extra — use a descrição literal do edital.
+
+Responda APENAS com um JSON array válido:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
 
             const result = await callGeminiWithRetry(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: prompt,
-                config: { temperature: 0.05, maxOutputTokens: 8192 },
+                config: { temperature: 0.05, maxOutputTokens: 65536, responseMimeType: 'application/json' },
             }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'analysis' } });
 
             const responseText = result.text?.trim() || '';
