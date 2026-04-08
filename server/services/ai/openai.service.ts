@@ -147,16 +147,29 @@ export async function fallbackToOpenAiV2(opts: {
         const extractedText = await extractTextFromPdfParts(opts.pdfParts);
         if (extractedText.trim()) {
             userContent += `\n\nTEXTO COMPLETO DO(S) DOCUMENTO(S):\n${extractedText}`;
+        } else {
+            // All PDFs failed text extraction — likely scanned images without OCR
+            throw new Error(`Não foi possível extrair texto de ${opts.pdfParts.length} PDF(s). Possível documento escaneado sem OCR. O Gemini processa imagens diretamente, mas o fallback OpenAI requer texto extraível.`);
         }
     }
 
     // gpt-4o-mini: 128k context, higher TPM → primary for large extractions
     // gpt-4o: better quality but 30k TPM limit → fallback for smaller payloads
+    // Model-specific max output token limits (OpenAI enforces these strictly)
+    const MODEL_MAX_TOKENS: Record<string, number> = {
+        'gpt-4o-mini': 16384,
+        'gpt-4o': 16384,
+    };
+
     const models = ['gpt-4o-mini', 'gpt-4o'] as const;
     let lastError: any = null;
 
     for (const model of models) {
-        console.log(`[OpenAI V2 Fallback] ${opts.stageName} → chamando ${model}...`);
+        // Cap max_tokens to model's limit (avoid 400 errors)
+        const modelLimit = MODEL_MAX_TOKENS[model] || 16384;
+        const effectiveMaxTokens = Math.min(opts.maxTokens || 16384, modelLimit);
+
+        console.log(`[OpenAI V2 Fallback] ${opts.stageName} → chamando ${model} (max_tokens: ${effectiveMaxTokens})...`);
         const startTime = Date.now();
         try {
             const response = await openai.chat.completions.create({
@@ -167,7 +180,7 @@ export async function fallbackToOpenAiV2(opts: {
                 ],
                 temperature: opts.temperature ?? 0.1,
                 response_format: { type: "json_object" },
-                max_tokens: opts.maxTokens || 16384,
+                max_tokens: effectiveMaxTokens,
             });
 
             const duration = (Date.now() - startTime) / 1000;
@@ -179,8 +192,9 @@ export async function fallbackToOpenAiV2(opts: {
             lastError = err;
             const is429 = err.status === 429 || err.message?.includes('429');
             const isContextLimit = err.message?.includes('context_length') || err.message?.includes('too large');
-            if (is429 || isContextLimit) {
-                console.warn(`[OpenAI V2 Fallback] ${model} falhou (${is429 ? 'rate limit' : 'context'}): ${err.message}. Tentando próximo modelo...`);
+            const isMaxTokens = err.status === 400 && err.message?.includes('max_tokens');
+            if (is429 || isContextLimit || isMaxTokens) {
+                console.warn(`[OpenAI V2 Fallback] ${model} falhou (${is429 ? 'rate limit' : isMaxTokens ? 'max_tokens' : 'context'}): ${err.message}. Tentando próximo modelo...`);
                 continue;
             }
             // Non-retriable error
