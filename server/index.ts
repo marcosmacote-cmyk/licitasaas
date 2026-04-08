@@ -5069,8 +5069,17 @@ Responda APENAS com um JSON array válido:
             try { items = JSON.parse(jsonStr); }
             catch { return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) }); }
 
-            console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
-            return res.json({ items: naturalSortItems(items), totalItems: items.length, source: 'legacy_biddingItems' });
+            // ── Truncation guard: if legacy biddingItems returned suspiciously few items, 
+            // fall through to Strategy 2/3 for fuller extraction from PNCP planilhas ──
+            const estimatedValue = bidding.estimatedValue || 0;
+            const isSuspiciouslyFew = items.length <= 10 && estimatedValue > 100000;
+            if (isSuspiciouslyFew) {
+                console.warn(`[AI Populate] ⚠️ Strategy 1 returned only ${items.length} items but estimatedValue=R$${estimatedValue.toLocaleString()} — likely truncated biddingItems. Falling through to Strategy 2/3...`);
+                // Don't return — let it fall through to try PNCP planilha extraction
+            } else {
+                console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
+                return res.json({ items: naturalSortItems(items), totalItems: items.length, source: 'legacy_biddingItems' });
+            }
         }
 
         // ── Strategy 2: Download planilhas from PNCP catalog (new analyses) ──
@@ -5078,7 +5087,7 @@ Responda APENAS com um JSON array válido:
         const attachments = pncpSource?.attachments || [];
         
         // Find planilha/orçamento files in the catalog
-        const planilhaFiles = attachments.filter((a: any) => 
+        let planilhaFiles = attachments.filter((a: any) => 
             a.ativo && a.url && (
                 a.purpose === 'planilha_orcamentaria' || 
                 a.purpose === 'composicao_custos' ||
@@ -5086,6 +5095,19 @@ Responda APENAS com um JSON array válido:
                 a.purpose === 'anexo_geral'  // Include ALL annexes (downloaded or not)
             )
         );
+        
+        // If no planilha found, fall back to Edital + TR (pregões de serviço have items inside these)
+        if (planilhaFiles.length === 0) {
+            planilhaFiles = attachments.filter((a: any) =>
+                a.ativo && a.url && (
+                    a.purpose === 'edital' ||
+                    a.purpose === 'termo_referencia'
+                )
+            );
+            if (planilhaFiles.length > 0) {
+                console.log(`[AI Populate] No planilha found — using ${planilhaFiles.length} edital/TR as source for item extraction`);
+            }
+        }
         
         // Debug: log all attachment purposes to diagnose classification issues
         if (attachments.length > 0) {
@@ -5121,6 +5143,7 @@ Responda APENAS com um JSON array válido:
                         if (n.includes('composic') || n.includes('custo')) return 'composicao_custos';
                         if (n.includes('bdi') || n.includes('encargos')) return 'bdi_encargos';
                         if (n.includes('cronograma')) return 'cronograma';
+                        if (n.includes('termo') && n.includes('referencia') || n.includes('termo_referencia') || n.includes('tr_')) return 'termo_referencia';
                         if (n.includes('edital') && !n.includes('anexo')) return 'edital';
                         if (n.includes('aviso') || n.includes('publicacao')) return 'aviso';
                         if (n.includes('modelo') || n.includes('minuta')) return 'modelo';
@@ -5128,6 +5151,7 @@ Responda APENAS com um JSON array válido:
                         return 'outro';
                     };
 
+                    // First pass: look for planilha-type files
                     for (const arq of allArquivos) {
                         const purpose = classifyForProposal(arq);
                         const url = arq.url || arq.uri || '';
@@ -5143,7 +5167,29 @@ Responda APENAS com um JSON array válido:
                             });
                         }
                     }
-                    console.log(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} planilha candidates found`);
+                    
+                    // Second pass: if no planilha found, use edital/TR (pregões de serviço)
+                    if (planilhaFiles.length === 0) {
+                        for (const arq of allArquivos) {
+                            const purpose = classifyForProposal(arq);
+                            const url = arq.url || arq.uri || '';
+                            if (!url || !arq.statusAtivo) continue;
+                            if (purpose === 'edital' || purpose === 'termo_referencia' ||
+                                [1, 2, 4].includes(arq.tipoDocumentoId)) {
+                                planilhaFiles.push({
+                                    titulo: arq.titulo || arq.nomeArquivo || 'arquivo',
+                                    url,
+                                    purpose,
+                                    ativo: true,
+                                    downloaded: false
+                                });
+                            }
+                        }
+                        if (planilhaFiles.length > 0) {
+                            console.log(`[AI Populate] No planilha in PNCP fetch — using ${planilhaFiles.length} edital/TR instead`);
+                        }
+                    }
+                    console.log(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} candidates found`);
                 } catch (fetchErr: any) {
                     console.warn(`[AI Populate] Failed to fetch PNCP attachments: ${fetchErr.message}`);
                 }
