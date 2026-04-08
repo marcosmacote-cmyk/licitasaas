@@ -340,10 +340,17 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
             /^documentos?\s+que\s+comprov/i,
             /^comprovação\s+de\s+regularidade/i,
             /^documentos?\s+(de|da)\s+regularidade/i,
+            /^declara[çc][õo]es?\s+(diversas|exigidas|obrigat[óo]rias|de\s+cumprimento|de\s+habilita)/i,
+            /^declara[çc][õo]es?\s+e\s+documentos/i,
+            /^proposta\s+de\s+pre[çc]os?$/i,
         ];
 
         for (const [category, items] of Object.entries(schema.requirements)) {
-            if (!Array.isArray(items) || items.length <= 1) continue;
+            if (!Array.isArray(items)) continue;
+            // Allow cleanup even for single-item categories IF that item has sub_items
+            const hasSingleWrapperWithSubs = items.length === 1
+                && Array.isArray(items[0]?.sub_items) && items[0].sub_items.length > 0;
+            if (items.length <= 1 && !hasSingleWrapperWithSubs) continue;
 
             const cleaned = items.filter((req: any) => {
                 const title = (req.title || '').trim();
@@ -368,6 +375,8 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                             if (!sub.risk_if_missing) sub.risk_if_missing = req.risk_if_missing || RISK_BY_CATEGORY[category] || 'inabilitacao';
                             if (!sub.applies_to) sub.applies_to = 'licitante';
                             if (!sub.entry_type) sub.entry_type = 'exigencia_principal';
+                            // Inherit source_ref from parent if sub doesn't have one
+                            if (!sub.source_ref && req.source_ref) sub.source_ref = req.source_ref;
                             items.push(sub);
                             counter++;
                         }
