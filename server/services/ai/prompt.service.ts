@@ -455,7 +455,13 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
        - "UASG: 943001" → extraia "943001" para "uasg_comprasnet" (código de 6 dígitos)
        - "Número Comprasnet: (95033/2026)" → extraia "95033" para "numero_comprasnet" (APENAS o número, SEM o ano)
        Esses campos aparecem tipicamente logo abaixo do título da Concorrência/Pregão, junto com o Processo nº. PROCURE ATIVAMENTE na primeira página. Se o edital NÃO for ComprasNet ou não mencionar esses dados, deixe "".
-17. ITENS LICITADOS: Retorne "itens_licitados": [] -> VAZIO. Os itens serão processados em outra etapa.
+17. ITENS LICITADOS ("itens_licitados"):
+    a) Extraia TODOS os itens/lotes/serviços do edital, Termo de Referência, planilha orçamentária ou qualquer anexo que liste itens de fornecimento ou prestação de serviço.
+    b) Para cada item capture: número (itemNumber), descrição técnica completa (description), unidade de medida (unit), quantidade (quantity), preço unitário de referência se disponível (referencePrice).
+    c) Se o edital indica recorrência (ex: "prestação mensal por 12 meses"), use multiplier=12 e multiplierLabel="Meses".
+    d) Mantenha descrições técnicas completas — NÃO resuma. Se a quantidade ou unidade não estiver clara, use quantity=1 e unit="UN".
+    e) Se o edital/TR não detalhar itens individuais (ex: licitação por preço global sem planilha), retorne um único item com a descrição do objeto completo.
+    f) Para editais de SERVIÇO GLOBAL (ex: limpeza pública, vigilância), extraia como único item com descrição completa e valor estimado global como referencePrice.
 18. CRONOGRAMA ("timeline"):
     a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".
     b) Use "prazo_envio_proposta" para datas/horários fixos (ex: "até 09:00 do dia 15/04").
