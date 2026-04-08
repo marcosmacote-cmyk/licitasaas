@@ -330,6 +330,106 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
             }
         }
 
+        // ── CLEANUP 1.5: Deduplicate near-identical requirements ──
+        // Fallback models (e.g., gemini-3.1-pro) tend to generate massive repetition.
+        // Example: 82 QTO items where ~70 are duplicates of the same 12 base requirements.
+        // Strategy: normalize description → hash → keep first, remove dupes.
+        for (const [category, items] of Object.entries(schema.requirements)) {
+            if (!Array.isArray(items) || items.length <= 1) continue;
+            
+            const normalizeForDedup = (text: string): string => {
+                return (text || '')
+                    .toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // strip accents
+                    .replace(/\s+/g, ' ')                             // collapse whitespace
+                    .replace(/[^a-z0-9 ]/g, '')                       // strip punctuation
+                    .trim()
+                    .substring(0, 200);                               // cap length for comparison
+            };
+            
+            const seen = new Map<string, number>(); // normalized desc → index of first occurrence
+            const toRemove = new Set<number>();
+            
+            for (let i = 0; i < items.length; i++) {
+                const req = items[i] as any;
+                // Build dedup key from title + description (both normalized)
+                const titleNorm = normalizeForDedup(req.title || '');
+                const descNorm = normalizeForDedup(req.description || '');
+                // Use description as primary key (titles are often truncated/varied)
+                const dedupKey = descNorm || titleNorm;
+                if (!dedupKey) continue;
+                
+                if (seen.has(dedupKey)) {
+                    toRemove.add(i);
+                } else {
+                    // Also check for high prefix overlap (catches near-dupes with minor tail differences)
+                    let isDupe = false;
+                    for (const [existingKey] of seen) {
+                        // If the shorter string is >= 80% contained in the longer one
+                        const shorter = dedupKey.length <= existingKey.length ? dedupKey : existingKey;
+                        const longer = dedupKey.length > existingKey.length ? dedupKey : existingKey;
+                        if (shorter.length >= 30 && longer.startsWith(shorter.substring(0, Math.floor(shorter.length * 0.8)))) {
+                            isDupe = true;
+                            break;
+                        }
+                    }
+                    if (isDupe) {
+                        toRemove.add(i);
+                    } else {
+                        seen.set(dedupKey, i);
+                    }
+                }
+            }
+            
+            if (toRemove.size > 0) {
+                const deduped = items.filter((_: any, idx: number) => !toRemove.has(idx));
+                (schema.requirements as any)[category] = deduped;
+                correct(category, `${toRemove.size} exigência(s) duplicada(s)`, `removida(s) — de ${items.length} para ${deduped.length} itens`);
+                
+                // Re-number IDs after dedup
+                const prefix = ID_PREFIX_BY_CATEGORY[category] || 'XX';
+                (deduped as any[]).forEach((req: any, idx: number) => {
+                    req.requirement_id = `${prefix}-${String(idx + 1).padStart(2, '0')}`;
+                });
+            }
+        }
+
+        // ── CLEANUP 1.6: Deduplicate sub_items within each requirement ──
+        // Same problem as above but at the sub_item level (e.g., Proposta Comercial with 105 sub_items
+        // that are really 15 unique items repeated 7x each)
+        for (const [category, items] of Object.entries(schema.requirements)) {
+            if (!Array.isArray(items)) continue;
+            for (const req of items as any[]) {
+                if (!Array.isArray(req.sub_items) || req.sub_items.length <= 1) continue;
+                
+                const normalizeForDedup = (text: string): string => {
+                    return (text || '')
+                        .toLowerCase()
+                        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .replace(/[^a-z0-9 ]/g, '')
+                        .trim()
+                        .substring(0, 200);
+                };
+                
+                const seen = new Set<string>();
+                const beforeLen = req.sub_items.length;
+                req.sub_items = req.sub_items.filter((sub: any) => {
+                    const key = normalizeForDedup(sub.description || sub.title || '');
+                    if (!key) return true;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+                
+                if (req.sub_items.length < beforeLen) {
+                    const removed = beforeLen - req.sub_items.length;
+                    correct(`${req.requirement_id}.sub_items`, `${removed} subitem(ns) duplicado(s)`, 
+                        `removido(s) — de ${beforeLen} para ${req.sub_items.length}`);
+                }
+            }
+        }
+
         // ── CLEANUP 2: Remove generic wrapper items when sub_items exist ──
         // Items like "Documentos de Qualificação Técnica Operacional" that just
         // repeat the category label without adding real requirements, while
