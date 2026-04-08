@@ -2312,7 +2312,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                     maxOutputTokens: 65536,
                     responseMimeType: 'application/json'
                 }
-            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
+            }, 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText) throw new Error('Etapa 1 retornou vazio');
             const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');
@@ -2323,7 +2323,9 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             stageTimes.extraction = (Date.now() - t1Start) / 1000;
             console.log(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         } catch (err: any) {
-            console.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+            const errMsg = err?.message || String(err);
+            const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
+            console.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
             pipelineHealth.fallbacksUsed++;
             try {
                 const openAiResult = await fallbackToOpenAiV2({
@@ -2342,7 +2344,12 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                 console.log(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
             } catch (openAiErr: any) {
                 console.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
-                throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
+                // User-friendly error message that distinguishes service overload from document issues
+                if (isServiceOverload) {
+                    throw new Error(`A IA está temporariamente sobrecarregada (5 tentativas em ~90s). ` +
+                        `Tente novamente em 1-2 minutos. O edital está salvo e será processado.`);
+                }
+                throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${errMsg} | OpenAI: ${openAiErr.message}`);
             }
         }
 
@@ -2612,7 +2619,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         maxOutputTokens: 32768,
                         responseMimeType: 'application/json'
                     }
-                }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
+                }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
                 const reText = reExtractionResponse.text;
                 if (reText) {
                     const reParseResult = robustJsonParseDetailed(reText, 'PNCP-V2-ReExtraction');
@@ -2864,7 +2871,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             maxOutputTokens: 16384,
                             responseMimeType: 'application/json'
                         }
-                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'risk-review' } });
+                    }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'risk-review' } });
                     const riskText = riskResponse.text;
                     if (!riskText) throw new Error('Etapa 3 retornou vazio');
                     const parseR = robustJsonParseDetailed(riskText, 'PNCP-V2-RiskReview');
@@ -2967,7 +2974,7 @@ Responda APENAS com JSON array:
                             ]
                         }],
                         config: { temperature: 0.05, maxOutputTokens: 16384 }
-                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'item_extraction' } });
+                    }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'item_extraction' } });
 
                     const responseText = itemResult.text?.trim() || '';
                     let jsonStr = responseText;
@@ -6431,7 +6438,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                     maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
-            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
+            }, 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
 
             const extractionText = extractionResponse.text;
             if (!extractionText) throw new Error('Etapa 1 retornou vazio');
@@ -6645,7 +6652,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                     maxOutputTokens: 16384,
                     responseMimeType: 'application/json'
                 }
-            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_risk_review' } });
+            }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_risk_review' } });
 
             const riskText = riskResponse.text;
             if (!riskText) throw new Error('Etapa 3 retornou vazio');
