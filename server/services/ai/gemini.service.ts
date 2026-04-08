@@ -19,10 +19,32 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 }
 
 /**
- * Call Gemini with configurable retry count. Defaults to 4 retries on the requested model only.
+ * Gemini model cascade: when the primary model is unavailable (503),
+ * try a fallback model from the same family that uses a different capacity pool.
+ * This preserves multimodal capability (critical for scanned PDFs).
+ */
+const GEMINI_FALLBACK_MODELS: Record<string, string[]> = {
+    // Cascade: primary → idle Pro (1/2k RPM) → older Flash (different pool)
+    'gemini-2.5-flash': ['gemini-3.1-pro', 'gemini-2.0-flash'],
+    'gemini-2.5-pro': ['gemini-3.1-pro', 'gemini-2.0-flash'],
+    'gemini-2.0-flash': ['gemini-3.1-pro'],
+};
+
+/** Check if an error indicates 503/UNAVAILABLE/high demand */
+function isServiceUnavailable(error: any): boolean {
+    const errMsg = error?.message || String(error);
+    return errMsg.includes('503') || error?.status === 503 || error?.code === 503 ||
+        errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') ||
+        errMsg.includes('overloaded');
+}
+
+/**
+ * Call Gemini with configurable retry count. Defaults to 4 retries on the requested model.
  * Uses exponential backoff with jitter for 503/429 errors (service unavailable / rate limit).
- * 503 "high demand" spikes from Gemini typically last 15-45 seconds, so we need sufficient
- * wait time (~90s total window) to ride out the spike instead of failing fast.
+ * 
+ * If all retries on the primary model fail with 503/UNAVAILABLE, automatically cascades to
+ * a fallback Gemini model (e.g., gemini-2.0-flash) with 2 quick retries. This preserves
+ * multimodal capability for scanned PDFs that OpenAI cannot process.
  * 
  * Includes a 5-minute timeout per attempt to prevent indefinite hangs.
  */
@@ -36,47 +58,70 @@ export async function callGeminiWithRetry(
     const requestedModel = options.model || 'gemini-2.5-flash';
     const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes per attempt
 
-    const executeCall = async () => {
-        for (let i = 0; i < maxRetries; i++) {
+    const tryModel = async (targetModel: string, retries: number, isFallback = false): Promise<any> => {
+        const label = isFallback ? `FALLBACK ${targetModel}` : targetModel;
+        for (let i = 0; i < retries; i++) {
             try {
-                if (i > 0) console.log(`[Gemini] Retrying '${requestedModel}' (attempt ${i + 1}/${maxRetries})`);
+                if (i > 0 || isFallback) {
+                    console.log(`[Gemini] ${isFallback ? '🔄 Cascata →' : 'Retrying'} '${label}' (attempt ${i + 1}/${retries})`);
+                }
                 const result = await withTimeout(
-                    model.generateContent({ ...options, model: requestedModel }),
+                    model.generateContent({ ...options, model: targetModel }),
                     TIMEOUT_MS,
-                    `${requestedModel} attempt ${i + 1}`
+                    `${label} attempt ${i + 1}`
                 );
+                if (isFallback) {
+                    console.log(`[Gemini] ✅ Fallback '${targetModel}' respondeu com sucesso`);
+                }
                 return result;
             } catch (error: any) {
                 lastError = error;
                 const errMsg = error?.message || String(error);
                 const isTimeout = errMsg.includes('Timeout');
-                const is503 = errMsg.includes('503') || error?.status === 503 || error?.code === 503 ||
-                    errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand');
+                const is503 = isServiceUnavailable(error);
                 const is429 = errMsg.includes('429') || error?.status === 429 || error?.code === 429;
                 const isRetryable = isTimeout || is503 || is429;
-                if (isRetryable && i < maxRetries - 1) {
-                    // Exponential backoff with jitter:
-                    // 503/high demand: 5s, 12s, 25s, 40s (total ~82s window — rides out demand spikes)
-                    // 429/rate limit: 3s, 8s, 15s, 25s (total ~51s window)
-                    // Timeout: 2s, 4s, 8s (faster, likely transient)
-                    const baseDelays503 = [5000, 12000, 25000, 40000];
-                    const baseDelays429 = [3000, 8000, 15000, 25000];
+                if (isRetryable && i < retries - 1) {
+                    // Shorter delays for fallback model (it's already a backup plan)
+                    const baseDelays503 = isFallback ? [3000, 8000] : [5000, 12000, 25000, 40000];
+                    const baseDelays429 = isFallback ? [2000, 5000] : [3000, 8000, 15000, 25000];
                     const baseDelaysTimeout = [2000, 4000, 8000, 12000];
-                    const base = is503 ? (baseDelays503[i] || 40000) :
-                                 is429 ? (baseDelays429[i] || 25000) :
+                    const base = is503 ? (baseDelays503[i] || 8000) :
+                                 is429 ? (baseDelays429[i] || 5000) :
                                  (baseDelaysTimeout[i] || 12000);
-                    const jitter = Math.floor(Math.random() * 3000); // 0-3s jitter
+                    const jitter = Math.floor(Math.random() * 2000);
                     const delay = base + jitter;
-                    console.warn(`[Gemini] ${is503 ? '503/UNAVAILABLE' : is429 ? '429/RATE_LIMIT' : 'TIMEOUT'} on '${requestedModel}', retrying in ${(delay / 1000).toFixed(1)}s (attempt ${i + 1}/${maxRetries})...`);
+                    console.warn(`[Gemini] ${is503 ? '503/UNAVAILABLE' : is429 ? '429/RATE_LIMIT' : 'TIMEOUT'} on '${label}', retrying in ${(delay / 1000).toFixed(1)}s (attempt ${i + 1}/${retries})...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     continue;
                 }
-                // Non-retryable or last attempt
-                console.error(`[Gemini] Error on '${requestedModel}' after ${i + 1} attempts: ${errMsg}`);
+                console.error(`[Gemini] Error on '${label}' after ${i + 1} attempts: ${errMsg}`);
                 break;
             }
         }
+        return null; // All retries exhausted
+    };
 
+    const executeCall = async () => {
+        // Phase 1: Try the requested model with full retries
+        const primaryResult = await tryModel(requestedModel, maxRetries);
+        if (primaryResult) return primaryResult;
+
+        // Phase 2: If primary failed with 503/UNAVAILABLE, try fallback Gemini model
+        // This preserves multimodal capability (critical for scanned PDFs)
+        const primaryFailed503 = isServiceUnavailable(lastError);
+        const fallbackModels = GEMINI_FALLBACK_MODELS[requestedModel] || [];
+        
+        if (primaryFailed503 && fallbackModels.length > 0) {
+            for (const fallbackModel of fallbackModels) {
+                console.warn(`[Gemini] 🔄 Modelo '${requestedModel}' indisponível. Tentando fallback '${fallbackModel}'...`);
+                const fallbackResult = await tryModel(fallbackModel, 2, true);
+                if (fallbackResult) return fallbackResult;
+            }
+            console.error(`[Gemini] ❌ Todos os modelos Gemini falharam (${requestedModel} + fallbacks: ${fallbackModels.join(', ')})`);
+        }
+
+        // Phase 3: All Gemini models failed — throw for OpenAI fallback
         const finalErrorMsg = lastError?.message || String(lastError);
         if (finalErrorMsg.includes('leaked') || lastError?.status === 403) {
             console.error("!!! CRITICAL: GEMINI API KEY IS LEAKED OR INVALID !!!", lastError);
@@ -95,3 +140,4 @@ export async function callGeminiWithRetry(
     
     return executeCall();
 }
+
