@@ -2471,15 +2471,17 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             console.log(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
         }
 
-        // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION ──
-// ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION ──
-/* [FASE 5 - Otimizado] Loop de re-extração desabilitado por custo de tempo (add 60s+).
+        // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION (V4.7.0) ──
+        // Reativado com otimização: só dispara quando há truncamento detectado (parseRepairs>0)
+        // OU quando ≥2 categorias críticas estão vazias para o tipo de objeto.
+        // Usa apenas 1-2 PDFs e prompt focado → ~15-25s extra (vs 60s+ na V1).
         const expectedCategories: Record<string, string[]> = {
             'obra_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
             'servico_comum_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
             'servico_comum': ['qualificacao_tecnica_operacional', 'qualificacao_economico_financeira', 'proposta_comercial'],
             'fornecimento': ['qualificacao_economico_financeira', 'proposta_comercial'],
-            'outro': ['proposta_comercial'],
+            'locacao': ['qualificacao_economico_financeira', 'proposta_comercial'],
+            'outro': ['qualificacao_economico_financeira', 'proposta_comercial'],
         };
         const objType = detectedObjectType || 'outro';
         const expected = expectedCategories[objType] || expectedCategories['outro'];
@@ -2488,47 +2490,77 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             return items.length === 0;
         });
 
-        if (missingCategories.length > 0) {
-            console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')}`);
+        // Trigger conditions: (A) JSON was repaired (truncation likely) OR (B) ≥2 critical categories empty
+        const hasTruncationSignal = pipelineHealth.parseRepairs > 0;
+        const hasCriticalGap = missingCategories.length >= 2;
+        // Also check if RFT is suspiciously thin (only CNPJ/IE/IM injected, no CNDs) — sign of truncation
+        const rftOnlyInjected = rftItems.length <= 3 + injectedCount && injectedCount > 0;
+        const shouldReExtract = missingCategories.length > 0 && (hasTruncationSignal || hasCriticalGap || rftOnlyInjected);
+
+        if (shouldReExtract) {
+            console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')} ` +
+                `(truncamento=${hasTruncationSignal}, gap_critico=${hasCriticalGap}, rft_thin=${rftOnlyInjected})`);
             sendProgress(5, 'Completando categorias faltantes...', `${missingCategories.length} categorias precisam re-extração`);
             console.log(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
 
             const missingCatLabels: Record<string, string> = {
                 'qualificacao_tecnica_operacional': 'Qualificação Técnica Operacional (atestados da empresa, parcelas relevantes, visita técnica)',
                 'qualificacao_tecnica_profissional': 'Qualificação Técnica Profissional (RT, CAT, acervo técnico do profissional)',
-                'qualificacao_economico_financeira': 'Qualificação Econômico-Financeira (balanço, índices, garantia, certidão falência)',
+                'qualificacao_economico_financeira': 'Qualificação Econômico-Financeira (balanço, índices contábeis LG/LC/SG/EG, certidão falência, patrimônio/capital social mínimo)',
                 'proposta_comercial': 'Proposta Comercial (envelope de preços, planilha, BDI, validade, formato)',
                 'documentos_complementares': 'Documentos Complementares e Declarações (declarações, procurações, docs auxiliares)',
+                'regularidade_fiscal_trabalhista': 'Regularidade Fiscal e Trabalhista (CND Federal, Estadual, Municipal, FGTS, CNDT)',
             };
-            const catDescriptions = missingCategories.map(c => `- ${missingCatLabels[c] || c}`).join('\n');
 
-            const reExtractionPrompt = `ATENÇÃO: a extração anterior capturou apenas ${extractedReqs} exigências e OMITIU categorias inteiras.
-As seguintes categorias estão VAZIAS e precisam ser extraídas:
+            // Also add RFT to re-extraction if it seems truncated (only injected items, no CNDs)
+            const rftMissingCnds = rftOnlyInjected && !missingCategories.includes('regularidade_fiscal_trabalhista');
+            const effectiveMissingCategories = rftMissingCnds
+                ? [...missingCategories, 'regularidade_fiscal_trabalhista']
+                : missingCategories;
+
+            const catDescriptions = effectiveMissingCategories.map(c => `- ${missingCatLabels[c] || c}`).join('\n');
+
+            // Already-captured categories for exclusion instructions
+            const capturedCategories = Object.entries(extractionJson.requirements || {})
+                .filter(([, items]) => Array.isArray(items) && items.length > 0)
+                .map(([cat]) => cat);
+
+            const reExtractionPrompt = `ATENÇÃO: a extração anterior capturou apenas ${extractedReqs} exigências e OMITIU categorias inteiras (provável truncamento de output).
+
+As seguintes categorias estão VAZIAS e precisam ser COMPLETAMENTE extraídas dos documentos:
 ${catDescriptions}
 
-Extraia APENAS as exigências dessas categorias faltantes. NÃO re-extraia habilitação jurídica ou regularidade fiscal (já capturadas).
-Use o mesmo formato JSON de saída mas incluindo apenas as categorias listadas acima em "requirements".
-Para QTO/QTP, transcreva LITERALMENTE cada parcela de maior relevância com quantitativos exatos.
-Inclua evidence_registry com ao menos 1 evidência por exigência principal.
+Categorias JÁ CAPTURADAS (NÃO re-extraia): ${capturedCategories.join(', ')}
+
+INSTRUÇÕES:
+1. Leia ATENTAMENTE todo o edital e TR/ETP procurando as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA e REQUISITOS FINANCEIROS.
+2. Extraia TODAS as exigências das categorias faltantes listadas acima.
+3. Para QTO/QTP, transcreva LITERALMENTE cada parcela de maior relevância com quantitativos exatos.
+4. Para QEF, extraia balanço, índices (LG, LC, SG, EG), patrimônio/capital mínimo, certidão de falência.
+5. Para RFT (se listada), extraia TODAS as certidões: CND Federal (Receita + PGFN), Estadual, Municipal, CRF/FGTS, CNDT.
+6. Inclua evidence_registry com ao menos 1 evidência por exigência principal.
+
+${domainReinforcement || ''}
 
 Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "evidence_registry": [...] }`;
 
+            const t15Start = Date.now();
             try {
-                // Use only the first PDF (edital) for re-extraction — reduces context size
-                const editalPdf = pdfParts[0];
+                // Use first 2 PDFs (edital + TR typically) for re-extraction
+                const reExtractionParts = pdfParts.slice(0, Math.min(2, pdfParts.length));
                 const reExtractionResponse = await callGeminiWithRetry(ai.models, {
                     model: PIPELINE_MODELS.reExtraction,
                     contents: [{
                         role: 'user',
                         parts: [
-                            editalPdf,
+                            ...reExtractionParts,
                             { text: reExtractionPrompt }
                         ]
                     }],
                     config: {
                         systemInstruction: V2_EXTRACTION_PROMPT,
                         temperature: 0.05,
-                        maxOutputTokens: 65536,
+                        maxOutputTokens: 32768,
                         responseMimeType: 'application/json'
                     }
                 }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
@@ -2545,10 +2577,25 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             if (Array.isArray(items) && items.length > 0) {
                                 const existing = Array.isArray((extractionJson.requirements as any)?.[cat]) ? (extractionJson.requirements as any)[cat] : [];
                                 if (existing.length === 0) {
+                                    // Category was completely empty — fill with re-extracted data
                                     (extractionJson.requirements as any)[cat] = items;
                                     (v2Result.requirements as any)[cat] = items;
-                                    reExtractedCount += items.length;
-                                    console.log(`[PNCP-V2] ✅ Re-extração ${cat}: +${items.length} itens`);
+                                    reExtractedCount += (items as any[]).length;
+                                    console.log(`[PNCP-V2] ✅ Re-extração ${cat}: +${(items as any[]).length} itens`);
+                                } else if (cat === 'regularidade_fiscal_trabalhista' && rftOnlyInjected) {
+                                    // RFT had only injected items — merge real CNDs from re-extraction
+                                    const newItems = (items as any[]).filter((item: any) => {
+                                        const title = (item.title || '').toLowerCase();
+                                        // Don't duplicate CNPJ/IE/IM already injected
+                                        return !title.includes('cnpj') && !title.includes('inscrição estadual') && !title.includes('inscrição municipal');
+                                    });
+                                    if (newItems.length > 0) {
+                                        existing.push(...newItems);
+                                        (extractionJson.requirements as any).regularidade_fiscal_trabalhista = existing;
+                                        (v2Result.requirements as any).regularidade_fiscal_trabalhista = existing;
+                                        reExtractedCount += newItems.length;
+                                        console.log(`[PNCP-V2] ✅ Re-extração RFT (CNDs): +${newItems.length} itens adicionais`);
+                                    }
                                 }
                             }
                         }
@@ -2562,14 +2609,22 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         v2Result.evidence_registry = extractionJson.evidence_registry;
                     }
 
-                    console.log(`[PNCP-V2] ✅ Re-extração concluída: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
+                    const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
+                    stageTimes.re_extraction = parseFloat(reDuration);
+                    console.log(`[PNCP-V2] ✅ Re-extração concluída em ${reDuration}s: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
+                    if (reExtractedCount > 0) {
+                        v2Result.confidence.warnings.push(`Re-extração recuperou ${reExtractedCount} exigência(s) de ${effectiveMissingCategories.length} categoria(s) truncada(s)`);
+                    }
                 }
             } catch (reErr: any) {
-                console.warn(`[PNCP-V2] ⚠️ Re-extração falhou: ${reErr.message}. Continuando com dados parciais.`);
+                const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
+                console.warn(`[PNCP-V2] ⚠️ Re-extração falhou em ${reDuration}s: ${reErr.message}. Continuando com dados parciais.`);
                 v2Result.confidence.warnings.push(`Re-extração de categorias faltantes falhou: ${reErr.message}`);
+                pipelineHealth.fallbacksUsed++;
             }
+        } else if (missingCategories.length > 0) {
+            console.log(`[PNCP-V2] ℹ️ ${missingCategories.length} categorias vazias (${missingCategories.join(', ')}) — sem sinal de truncamento, mantendo extração original`);
         }
-} */
 
         // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
         sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
