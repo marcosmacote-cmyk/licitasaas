@@ -24,10 +24,11 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
  * This preserves multimodal capability (critical for scanned PDFs).
  */
 const GEMINI_FALLBACK_MODELS: Record<string, string[]> = {
-    // Cascade: primary → idle Pro (1/2k RPM) → older Flash (different pool)
-    'gemini-2.5-flash': ['gemini-3.1-pro', 'gemini-2.0-flash'],
-    'gemini-2.5-pro': ['gemini-3.1-pro', 'gemini-2.0-flash'],
-    'gemini-2.0-flash': ['gemini-3.1-pro'],
+    // gemini-2.0-flash removed: deprecated by Google (404 NOT_FOUND since Apr 2026)
+    // Cascade: primary → 3.1-pro (idle, 1/2k RPM) → 2.5-flash-lite (lightweight)
+    'gemini-2.5-flash': ['gemini-3.1-pro', 'gemini-2.5-flash-lite'],
+    'gemini-2.5-pro': ['gemini-3.1-pro', 'gemini-2.5-flash-lite'],
+    'gemini-2.5-flash-lite': ['gemini-3.1-pro'],
 };
 
 /** Check if an error indicates 503/UNAVAILABLE/high demand */
@@ -77,6 +78,15 @@ export async function callGeminiWithRetry(
             } catch (error: any) {
                 lastError = error;
                 const errMsg = error?.message || String(error);
+                
+                // 404/NOT_FOUND = model deprecated/removed → skip immediately, no retry
+                const is404 = errMsg.includes('404') || error?.status === 404 || error?.code === 404 ||
+                    errMsg.includes('NOT_FOUND') || errMsg.includes('no longer available');
+                if (is404) {
+                    console.warn(`[Gemini] ⛔ Modelo '${targetModel}' não existe (404). Pulando para próximo fallback...`);
+                    break;
+                }
+
                 const isTimeout = errMsg.includes('Timeout');
                 const is503 = isServiceUnavailable(error);
                 const is429 = errMsg.includes('429') || error?.status === 429 || error?.code === 429;
