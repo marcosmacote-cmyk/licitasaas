@@ -663,6 +663,187 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         }
     }
 
+    // ── RFT SAFETY-NET: Inject missing CNDs when RFT is suspiciously thin ──
+    // The Gemini model stubbornly omits CND Federal/Estadual/Municipal even with
+    // aggressive prompting. This safety-net detects missing CNDs and injects them.
+    if (schema.requirements) {
+        const rftItems = (schema.requirements as any).regularidade_fiscal_trabalhista;
+        if (Array.isArray(rftItems) && rftItems.length >= 2) {
+            const allText = rftItems.map((r: any) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join(' ');
+            
+            // Derive source_ref from existing RFT items
+            const rftSourceRef = rftItems.find((r: any) => r.source_ref && r.source_ref !== 'referência não localizada')?.source_ref || 'Edital, seção de Regularidade Fiscal';
+            
+            // Check for FGTS+INSS grouped in a single item and split them
+            const fgtsInssGroupedIdx = rftItems.findIndex((r: any) => {
+                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                return (text.includes('seguridade social') && text.includes('fgts')) ||
+                       (text.includes('inss') && text.includes('fgts'));
+            });
+            
+            if (fgtsInssGroupedIdx >= 0) {
+                const grouped = rftItems[fgtsInssGroupedIdx];
+                const sourceRef = grouped.source_ref || rftSourceRef;
+                
+                // Replace the grouped item with two separate items
+                const fgtsItem = {
+                    requirement_id: '', // Will be renumbered
+                    title: 'Certificado de Regularidade do FGTS (CRF)',
+                    description: 'Prova de regularidade relativa ao Fundo de Garantia do Tempo de Serviço (FGTS)',
+                    obligation_type: 'obrigatoria_universal',
+                    entry_type: 'exigencia_principal',
+                    phase: 'habilitacao',
+                    applies_to: 'licitante',
+                    risk_if_missing: 'inabilitacao',
+                    source_ref: sourceRef,
+                    evidence_refs: grouped.evidence_refs || [],
+                };
+                const inssItem = {
+                    requirement_id: '',
+                    title: 'Regularidade Seguridade Social (INSS)',
+                    description: 'Prova de regularidade relativa à Seguridade Social, demonstrando cumprimento dos encargos sociais',
+                    obligation_type: 'obrigatoria_universal',
+                    entry_type: 'exigencia_principal',
+                    phase: 'habilitacao',
+                    applies_to: 'licitante',
+                    risk_if_missing: 'inabilitacao',
+                    source_ref: sourceRef,
+                    evidence_refs: grouped.evidence_refs || [],
+                };
+                
+                // Replace grouped with the two items
+                rftItems.splice(fgtsInssGroupedIdx, 1, fgtsItem, inssItem);
+                correct('RFT', 'FGTS+INSS agrupados', 'separados em 2 itens distintos (CRF + INSS)');
+            }
+            
+            // Now check for missing CNDs and inject them
+            const refreshedText = rftItems.map((r: any) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join(' ');
+            
+            const missingCNDs: Array<{title: string; description: string; check: RegExp}> = [];
+            
+            // CND Federal (RFB/PGFN)
+            if (!/certid[ãa]o.*conjunta|rfb|pgfn|tributos federais|d[ií]vida ativa da uni[ãa]o|certid[ãa]o.*federal/i.test(refreshedText) &&
+                !/fazenda.*federal|receita federal/i.test(refreshedText)) {
+                missingCNDs.push({
+                    title: 'Certidão Conjunta RFB/PGFN (CND Federal)',
+                    description: 'Certidão Conjunta de Débitos Relativos a Tributos Federais e à Dívida Ativa da União, expedida pela RFB/PGFN',
+                    check: /federal/,
+                });
+            }
+            
+            // CND Estadual
+            if (!/fazenda.*estadual|certid[ãa]o.*estadual|tributos estaduais|d[eé]bitos estaduais|regularidade.*estadual/i.test(refreshedText) &&
+                !/cnd.*estadual/i.test(refreshedText)) {
+                missingCNDs.push({
+                    title: 'CND Estadual (Fazenda Estadual)',
+                    description: 'Prova de regularidade para com a Fazenda Estadual do domicílio ou sede do licitante',
+                    check: /estadual/,
+                });
+            }
+            
+            // CND Municipal
+            if (!/fazenda.*municipal|certid[ãa]o.*municipal|tributos municipais|d[eé]bitos municipais|regularidade.*municipal/i.test(refreshedText) &&
+                !/cnd.*municipal/i.test(refreshedText) &&
+                // Don't confuse with "inscrição municipal no cadastro de contribuintes"
+                !/certid[ãa]o negativa.*munic/i.test(refreshedText)) {
+                missingCNDs.push({
+                    title: 'CND Municipal (Fazenda Municipal)',
+                    description: 'Prova de regularidade para com a Fazenda Municipal do domicílio ou sede do licitante',
+                    check: /municipal/,
+                });
+            }
+            
+            if (missingCNDs.length > 0) {
+                for (const cnd of missingCNDs) {
+                    rftItems.push({
+                        requirement_id: '',
+                        title: cnd.title,
+                        description: cnd.description,
+                        obligation_type: 'obrigatoria_universal',
+                        entry_type: 'exigencia_principal',
+                        phase: 'habilitacao',
+                        applies_to: 'licitante',
+                        risk_if_missing: 'inabilitacao',
+                        source_ref: `${rftSourceRef} (safety-net — verificar edital)`,
+                        evidence_refs: [],
+                    });
+                }
+                correct('RFT', `${missingCNDs.length} CND(s) ausente(s)`, `injetada(s): ${missingCNDs.map(c => c.title).join(', ')}`);
+            }
+            
+            // Renumber all RFT items after modifications
+            if (fgtsInssGroupedIdx >= 0 || missingCNDs.length > 0) {
+                let rftCounter = 1;
+                for (const item of rftItems) {
+                    item.requirement_id = `RFT-${String(rftCounter).padStart(2, '0')}`;
+                    rftCounter++;
+                }
+            }
+        }
+    }
+
+    // ── QEF SAFETY-NET: Inject Balanço/Índices when QEF is suspiciously thin ──
+    // The model consistently extracts only "Certidão de Falência" and ignores
+    // Balanço Patrimonial and Índices Contábeis. This corrects that.
+    if (schema.requirements) {
+        const qefItems = (schema.requirements as any).qualificacao_economico_financeira;
+        if (Array.isArray(qefItems)) {
+            const qefText = qefItems.map((r: any) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join(' ');
+            const hasFalencia = /fal[eê]ncia|recupera[çc][ãa]o judicial/i.test(qefText);
+            const hasBalanco = /balan[çc]o|demonstra[çc][õo]es cont[áa]beis|dre/i.test(qefText);
+            const hasIndices = /[ií]ndice|lg|sg|lc|eg|liquidez|solvência|endividamento/i.test(qefText);
+            const hasCapital = /capital social|patrim[ôo]nio l[ií]quido/i.test(qefText);
+            
+            // Only inject if QEF is thin (≤2 items) AND missing critical items
+            if (qefItems.length <= 2) {
+                const qefSourceRef = qefItems.find((r: any) => r.source_ref && r.source_ref !== 'referência não localizada')?.source_ref || 'Edital, seção de Qualificação Econômico-Financeira';
+                const injected: string[] = [];
+                
+                if (!hasBalanco) {
+                    qefItems.push({
+                        requirement_id: '',
+                        title: 'Balanço Patrimonial e DRE',
+                        description: 'Balanço patrimonial e demonstrações contábeis do último exercício social, já exigíveis e apresentados na forma da lei',
+                        obligation_type: 'obrigatoria_universal',
+                        entry_type: 'exigencia_principal',
+                        phase: 'habilitacao',
+                        applies_to: 'licitante',
+                        risk_if_missing: 'inabilitacao',
+                        source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
+                        evidence_refs: [],
+                    });
+                    injected.push('Balanço/DRE');
+                }
+                
+                if (!hasIndices) {
+                    qefItems.push({
+                        requirement_id: '',
+                        title: 'Índices Contábeis (LG, SG, LC)',
+                        description: 'Comprovação de boa situação financeira através de índices de Liquidez Geral (LG), Solvência Geral (SG) e Liquidez Corrente (LC)',
+                        obligation_type: 'obrigatoria_universal',
+                        entry_type: 'exigencia_principal',
+                        phase: 'habilitacao',
+                        applies_to: 'licitante',
+                        risk_if_missing: 'inabilitacao',
+                        source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
+                        evidence_refs: [],
+                    });
+                    injected.push('Índices Contábeis');
+                }
+                
+                if (injected.length > 0) {
+                    // Renumber
+                    let qefCounter = 1;
+                    for (const item of qefItems) {
+                        item.requirement_id = `QEF-${String(qefCounter).padStart(2, '0')}`;
+                        qefCounter++;
+                    }
+                    correct('QEF', `apenas ${qefItems.length - injected.length} item(ns) (incompleto)`, `injetado(s): ${injected.join(', ')}`);
+                }
+            }
+        }
+    }
+
     // HJ: if empty but other categories exist, inject basic doc
     if (schema.requirements) {
         const hj = (schema.requirements as any).habilitacao_juridica || [];
