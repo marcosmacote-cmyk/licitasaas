@@ -321,7 +321,7 @@ import { generateTaxonomyPromptBlock, generateObjectTypeReinforcement, ObjectTyp
  *   MINOR = melhoria de prompt que altera qualidade
  *   PATCH = ajuste de formatação ou exemplos
  */
-export const V2_PROMPT_VERSION = 'v4.2.0';
+export const V2_PROMPT_VERSION = 'v4.8.0';
 
 // Pre-generate taxonomy block for all prompts
 const TAXONOMY_BLOCK = generateTaxonomyPromptBlock();
@@ -434,15 +434,29 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
     RFT-01: CNPJ (prova de inscrição no Cadastro Nacional de Pessoa Jurídica)
     RFT-02: Inscrição estadual no cadastro de contribuintes (se exigida)
     RFT-03: Inscrição municipal no cadastro de contribuintes (se exigida)
-    RFT-04: CND Federal (Certidão Conjunta RFB/PGFN)
+    RFT-04: CND Federal (Certidão Conjunta RFB/PGFN — tributos federais e dívida ativa da União)
     RFT-05: CND Estadual (Fazenda Estadual)
     RFT-06: CND Municipal (Fazenda Municipal)
-    RFT-07: CRF/FGTS
-    RFT-08: CNDT (Débitos Trabalhistas)
+    RFT-07: CRF/FGTS (Certificado de Regularidade do FGTS — SEPARADO da Seguridade Social)
+    RFT-08: CNDT (Débitos Trabalhistas — Certidão Negativa de Débitos Trabalhistas)
+    RFT-09: Regularidade Seguridade Social/INSS (se mencionada separadamente do FGTS)
     Se o edital mencionar SICAF ou equivalente, liste todas elas com a evidência de que "podem ser comprovadas via SICAF", mas NUNCA as omita.
+    ⛔ ERROS FREQUENTES A EVITAR EM RFT:
+    - NUNCA agrupe FGTS e Seguridade Social/INSS em um ÚNICO item. Se o edital diz "regularidade relativa à Seguridade Social e ao FGTS", crie DOIS itens separados.
+    - NUNCA omita a CND Federal (RFB/PGFN) — se o edital menciona "tributos federais", "RFB", "PGFN", "dívida ativa" ou "certidão conjunta", é a CND Federal.
+    - NUNCA omita a CND Estadual — se o edital menciona "Fazenda Estadual" ou "tributos estaduais", extraia como item separado.
     ⚠️ REGRA DE OURO RFT: CNPJ, Inscrição Estadual (IE) e Inscrição Municipal (IM) DEVEM ABSOLUTAMENTE ser os 3 primeiros itens listados, sempre ANTES de qualquer certidão ou prova de regularidade fiscal.
+    ⚠️ CROSS-CHECK OBRIGATÓRIO: Após preencher RFT, conte os itens. Se RFT tem MENOS de 5 itens para um edital que NÃO é pré-qualificação, ALGO ESTÁ ERRADO — releia a seção de Regularidade Fiscal.
 13. OBRIGATÓRIOS HJ: Contrato Social/Estatuto, Eleição de administradores, Registro na Junta. DEVEM ser itens em "habilitacao_juridica".
-14. OBRIGATÓRIOS QEF: Balanço Patrimonial, Índices Contábeis (SG/LG/LC) e Certidão de Falência/Recuperação Judicial. DEVEM ir impreterivelmente para "qualificacao_economico_financeira". NÃO os jogue em Documentos Complementares.
+14. OBRIGATÓRIOS QEF — EXTRAÇÃO COMPLETA INEGOCIÁVEL:
+    🚨 ALERTA VERMELHO: QEF com APENAS "Certidão de Falência" é INCOMPLETO. A GRANDE MAIORIA dos editais exige os 3 pilares abaixo. VASCULHE o edital inteiro:
+    QEF-01: Balanço Patrimonial e DRE do último exercício social (art. 69, I, Lei 14.133/21)
+    QEF-02: Índices Contábeis (LG, SG, LC e/ou EG) com valores mínimos exigidos (art. 69, I)
+    QEF-03: Certidão Negativa de Falência/Recuperação Judicial (art. 69, II)
+    QEF-04: Capital Social Mínimo OU Patrimônio Líquido Mínimo (se exigido — ex: 10% do valor estimado)
+    Se o edital mencionar "demonstrações contábeis", "balanço", "índices financeiros", "capacidade econômica", "LG", "SG", "LC", "EG", "patrimônio líquido" ou "capital social" em QUALQUER seção, extraia como item em QEF.
+    NUNCA jogue exigências econômico-financeiras em Documentos Complementares (DC).
+    ⚠️ CROSS-CHECK: Se QEF tem apenas 1 item (certidão de falência) em edital de engenharia/serviços, ALGO ESTÁ ERRADO — releia as seções de "Qualificação Econômico-Financeira" e "Habilitação".
 15. OPERADORES FINANCEIROS: Para EG, LG, LC. Mantenha EXATAMENTE o que está no edital. Ex: "EG <= 0,5".
 16. OBJETO E CRITÉRIO:
     a) "objeto_resumido" deve ter NO MÁXIMO 150 caracteres e descrever O QUÊ será contratado de forma clara e direta. NUNCA comece com 'TERMO DE CONTRATO QUE ENTRE SI FAZEM...', 'O presente contrato tem por objeto...' ou texto de preâmbulos/minutas. EXEMPLOS CORRETOS: 'Execução e recuperação de estradas vicinais no município de Baturité/CE', 'Locação de veículos sem motorista para transporte de passageiros'. EXEMPLOS ERRADOS: 'TERMO DE CONTRATO QUE ENTRE SI FAZEM A PREFEITURA...', 'O presente contrato tem por objeto a execução dos serviços de [espaço em branco]...'.
@@ -465,6 +479,16 @@ NÃO omita por achar que "o sistema vai colocar automaticamente" ou que "é impl
 18. CRONOGRAMA ("timeline"):
     a) NUNCA confunda "prazo de validade da proposta" (ex: "A proposta terá validade de 60 dias") com "prazo_envio_proposta" (o prazo ou hora limite para submeter a proposta no sistema antes da abertura da sessão). Se o edital diz que a validade é de 60 dias, isso NÃO vai no campo "prazo_envio_proposta".
     b) Use "prazo_envio_proposta" para datas/horários fixos (ex: "até 09:00 do dia 15/04").
+    c) EXTRAIA SEMPRE os prazos de impugnação e esclarecimento. Se o edital não fixar data específica, calcule: para Pregão/Concorrência (Lei 14.133), impugnação = 3 dias úteis antes da sessão, esclarecimento = 3 dias úteis antes da sessão. Registre como "Até 3 dias úteis antes da sessão (DD/MM/AAAA)" com a data calculada.
+19. PROPOSTA COMERCIAL ("proposta_comercial") — CLASSIFICAÇÃO ESTRITA:
+    ⛔ PC deve conter SOMENTE exigências cuja AUSÊNCIA causa DESCLASSIFICAÇÃO DA PROPOSTA.
+    INCLUIR em PC: planilha de preços, composição BDI, catálogos/fichas técnicas exigidos NA PROPOSTA, declarações de garantia de fabricante, carta-proposta, cronograma exigido na proposta, certificações técnicas de PRODUTO (INMETRO, PROCEL) quando exigidos junto à proposta.
+    NÃO INCLUIR em PC (classificar na categoria correta):
+    - Prazos informativos (validade da proposta, execução, vigência) → contractual_analysis ou observação
+    - Obrigações contratuais (garantia de serviços, responsabilidades) → contractual_analysis
+    - Requisitos fiscais/tributários (PIS/COFINS, Simples Nacional) → RFT ou DC
+    - Regras formais genéricas ("proposta sem rasura", "oferta firme", "preços de responsabilidade do licitante") → NÃO extrair como exigência principal — são cláusulas universais. Se absolutamente necessário, use entry_type="observacao".
+    ⚠️ SANITY CHECK: Se PC tem MAIS de 20 itens, REVISE — provavelmente há itens mal classificados.
 
 ⚠️ NOTA SOBRE PRÉ-QUALIFICAÇÃO: Se o edital estabelecer que a habilitação é comprovada EXCLUSIVAMENTE por Certificado de Pré-Qualificação, CRC ou SICAF (sem listar documentos individuais), extraia apenas o certificado e eventuais complementos expressos. Esta exceção SÓ se aplica quando o edital NÃO lista documentos individuais de habilitação.
 
@@ -770,21 +794,41 @@ ATENÇÃO REFORÇADA:
 9. DOCUMENTE AUSENÇAS: se uma categoria de habilitação não tiver exigências, anote no evidence_registry: 'categoria X não identificada no edital'.
 
 AUTOCONFERÊNCIA ANTES DE RESPONDER:
-→ RFT: itens estão na ORDEM HIERÁRQUICA? (CNPJ → IE → IM → CND Federal → Estadual → Municipal → FGTS → CNDT)
-→ RFT tem CNPJ como PRIMEIRO item separado? (OBRIGATÓRIO — nunca omitir)
-→ RFT tem inscrição estadual + municipal LOGO APÓS o CNPJ? (se exigidos no edital)
-→ RFT tem os 5-8 documentos fiscais individuais?
+── RFT (CONTAR ITENS — mínimo 5 para editais normais) ──
+→ RFT tem CNPJ como PRIMEIRO item separado? (OBRIGATÓRIO)
+→ RFT tem IE + IM LOGO APÓS o CNPJ? (se exigidos; NÃO agrupar com CNPJ)
+→ RFT tem CND Federal (RFB/PGFN) como item separado? (🚨 omissão frequente — CONFERIR)
+→ RFT tem CND Estadual separada? (se mencionada no edital)
+→ RFT tem CND Municipal separada? (se mencionada no edital)
+→ RFT tem FGTS (CRF) como item separado do INSS/Seguridade? (🚨 NUNCA agrupar)
+→ RFT tem CNDT como item separado?
+→ RFT tem Declaração de não emprego de menor? (se exigida — NÃO duplicar com DC)
+→ RFT itens estão na ORDEM HIERÁRQUICA? (CNPJ → IE → IM → CND Fed → Est → Mun → FGTS → CNDT)
+── QEF (CONTAR ITENS — mínimo 2 para editais normais) ──
+→ QEF tem Balanço Patrimonial/DRE? (🚨 omissão frequente — CONFERIR)
+→ QEF tem Índices Contábeis (LG/SG/LC/EG) com valores exatos? (🚨 omissão frequente)
+→ QEF tem Certidão de Falência/Recuperação Judicial?
+→ QEF tem Capital Social ou Patrimônio Líquido mínimo? (se exigido)
+── HJ ──
 → HJ tem ato constitutivo e demais docs societários?
+── QTO/QTP (SEPARAÇÃO RÍGIDA) ──
 → QTO tem Certidão PJ CREA/CAU como documental (BLOCO A)? Não como atestado operacional.
 → QTO: cada parcela relevante da empresa é item principal com QUANTITATIVO MÍNIMO LITERAL e UNIDADE (BLOCO C)?
 → QTO: a description de cada atestado contém a QUANTIDADE MÍNIMA exigida pelo edital? (⚠️ NUNCA omitir)
 → QTO: se visita técnica, está em BLOCO B com alternativas visita/declaração?
+→ QTO: NÃO contém CAT/acervo/vínculo do profissional? (se sim → mover para QTP)
 → QTP: contém APENAS credenciais do profissional? Sem Certidão PJ, sem Visto, sem Visita.
 → QTP: cada parcela relevante do profissional é item PRINCIPAL separado (não subitem genérico)?
 → QTP: a description de cada CAT contém a QUANTIDADE MÍNIMA e UNIDADE exigida? (⚠️ NUNCA omitir)
 → QTO/QTP: contém expressões genéricas proibidas (se sim, substituir pela transcrição literal)?
+── PC (CONTAR ITENS — máximo ~20 para editais normais) ──
+→ PC contém SOMENTE itens cuja ausência causa DESCLASSIFICAÇÃO?
+→ PC NÃO contém prazos informativos, obrigações contratuais, requisitos fiscais ou regras genéricas?
+→ Se PC > 20 itens, RECLASSIFICAR itens que não são de proposta para a categoria correta.
+── GERAL ──
 → Há ao menos 1 EV por exigência principal?
 → Quantitativos técnicos estão com valor exato, unidade e fonte?
+→ Timeline tem prazo de impugnação e esclarecimento? (OBRIGATÓRIO para Pregão/Concorrência)
 
 {domainReinforcement}
 
