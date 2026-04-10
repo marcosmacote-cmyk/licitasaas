@@ -48,8 +48,8 @@ function isServiceUnavailable(error: any): boolean {
 // that's 450s (7.5 min) of pure waste per analysis.
 //
 // Solution: Track consecutive 503 failures per model. After 3 consecutive
-// 503s, the circuit "opens" and skips directly to fallback for 2 minutes.
-// After 2 min, it "half-opens" (tries 1 quick attempt to see if recovered).
+// 503s, the circuit "opens" and skips directly to fallback for 5 minutes.
+// After 5 min, it "half-opens" (tries 1 quick attempt to see if recovered).
 // On success, the circuit resets ("closes").
 
 interface CircuitState {
@@ -59,8 +59,8 @@ interface CircuitState {
 }
 
 const circuitBreakers = new Map<string, CircuitState>();
-const CIRCUIT_OPEN_THRESHOLD = 3;     // Open after 3 consecutive 503s
-const CIRCUIT_RESET_MS = 2 * 60 * 1000; // Try again after 2 minutes
+const CIRCUIT_OPEN_THRESHOLD = 3;      // Open after 3 consecutive 503s
+const CIRCUIT_RESET_MS = 5 * 60 * 1000; // Try again after 5 minutes (was 2 min — too short for Gemini outages)
 
 function getCircuitState(model: string): CircuitState {
     if (!circuitBreakers.has(model)) {
@@ -103,26 +103,61 @@ function shouldSkipModel(model: string): boolean {
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  GLOBAL OUTAGE DETECTOR — When ALL models are down, fail fast
+// ══════════════════════════════════════════════════════════════════
+//
+// Problem: When Gemini has a PLATFORM-WIDE outage, each call still tries
+// primary (4 retries) + fallback1 (2 retries) + fallback2 (2 retries) = 8 calls.
+// With 5 pipeline stages × 3 concurrent analyses = ~120 wasted API calls.
+//
+// Solution: If ALL models in the cascade have open circuits, skip the entire
+// Gemini stack and throw immediately for the OpenAI fallback (if available).
+
+function isGlobalOutage(requestedModel: string): boolean {
+    const fallbacks = GEMINI_FALLBACK_MODELS[requestedModel] || [];
+    const allModels = [requestedModel, ...fallbacks];
+    
+    const allOpen = allModels.every(m => {
+        const state = getCircuitState(m);
+        if (!state.isOpen) return false;
+        // Only count as "open" if still within the reset window
+        return (Date.now() - state.lastFailureTime) < CIRCUIT_RESET_MS;
+    });
+    
+    return allOpen && allModels.length >= 2; // Need at least 2 models to detect global outage
+}
+
+// ══════════════════════════════════════════════════════════════════
 
 /**
- * Call Gemini with configurable retry count. Defaults to 4 retries on the requested model.
+ * Call Gemini with configurable retry count. Defaults to 3 retries on the requested model.
  * Uses exponential backoff with jitter for 503/429 errors (service unavailable / rate limit).
  * 
  * Features:
- * - Circuit breaker: skips models in sustained outage (3+ consecutive 503s → skip for 2 min)
+ * - Circuit breaker: skips models in sustained outage (3+ consecutive 503s → skip for 5 min)
+ * - Global outage detector: if ALL models are down, fails fast without any API calls
  * - Model cascade: 2.5-flash → 3.1-pro → 2.5-flash-lite (preserves multimodal capability)
  * - 404 skip: instantly moves to next model if current one is deprecated
- * - 5-minute timeout per attempt to prevent indefinite hangs
+ * - 3-minute timeout per attempt to prevent indefinite hangs
+ *
+ * V4.8.3: Reduced retries 4→3, shorter delays, 5-min circuit reset, global outage detection
  */
 export async function callGeminiWithRetry(
     model: any,
     options: any,
-    maxRetries = 4,
+    maxRetries = 3, // Reduced from 4 — less waste during outages
     trackingContext?: Pick<AiUsageContext, 'tenantId' | 'userId' | 'operation' | 'metadata'>
 ): Promise<any> {
     let lastError: any;
     const requestedModel = options.model || 'gemini-2.5-flash';
-    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes per attempt
+    const TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes per attempt (was 5 — too long)
+
+    // Global outage fast-fail: if ALL models are circuit-open, skip entirely
+    if (isGlobalOutage(requestedModel)) {
+        const fallbacks = GEMINI_FALLBACK_MODELS[requestedModel] || [];
+        console.error(`[Gemini] 🔥 GLOBAL OUTAGE DETECTADA — todos os modelos com circuit OPEN (${requestedModel}, ${fallbacks.join(', ')}). Falhando imediatamente.`);
+        throw new Error(`[Gemini] Global outage detectada — todos os modelos Gemini indisponíveis. Tente novamente em ${CIRCUIT_RESET_MS / 60000} minutos.`);
+    }
 
     const tryModel = async (targetModel: string, retries: number, isFallback = false): Promise<any> => {
         const label = isFallback ? `FALLBACK ${targetModel}` : targetModel;
@@ -174,17 +209,22 @@ export async function callGeminiWithRetry(
                 // Record 503 for circuit breaker
                 if (is503) {
                     recordFailure503(targetModel);
+                    // If circuit just opened on this model, bail immediately — no more retries
+                    if (shouldSkipModel(targetModel)) {
+                        console.warn(`[Gemini] ⚡ Circuit ABRIU durante retry — interrompendo retries para '${targetModel}'`);
+                        break;
+                    }
                 }
                 
                 const isRetryable = isTimeout || is503 || is429;
                 if (isRetryable && i < effectiveRetries - 1) {
-                    // Shorter delays for fallback model (it's already a backup plan)
-                    const baseDelays503 = isFallback ? [3000, 8000] : [5000, 12000, 25000, 40000];
-                    const baseDelays429 = isFallback ? [2000, 5000] : [3000, 8000, 15000, 25000];
-                    const baseDelaysTimeout = [2000, 4000, 8000, 12000];
+                    // Shorter delays to reduce waste during outages
+                    const baseDelays503 = isFallback ? [2000, 5000] : [3000, 8000, 15000];
+                    const baseDelays429 = isFallback ? [2000, 5000] : [3000, 8000, 15000];
+                    const baseDelaysTimeout = [2000, 4000, 8000];
                     const base = is503 ? (baseDelays503[i] || 8000) :
                                  is429 ? (baseDelays429[i] || 5000) :
-                                 (baseDelaysTimeout[i] || 12000);
+                                 (baseDelaysTimeout[i] || 8000);
                     const jitter = Math.floor(Math.random() * 2000);
                     const delay = base + jitter;
                     console.warn(`[Gemini] ${is503 ? '503/UNAVAILABLE' : is429 ? '429/RATE_LIMIT' : 'TIMEOUT'} on '${label}', retrying in ${(delay / 1000).toFixed(1)}s (attempt ${i + 1}/${effectiveRetries})...`);
