@@ -495,6 +495,120 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         }
     }
 
+    // ── CLEANUP 3: Migrate QTO items that belong to QTP ──
+    // The model frequently places CAT/acervo/vínculo items in QTO (empresa)
+    // when they should be in QTP (profissional).
+    if (schema.requirements) {
+        const qtoItems = (schema.requirements as any).qualificacao_tecnica_operacional;
+        const qtpItems = (schema.requirements as any).qualificacao_tecnica_profissional;
+        if (Array.isArray(qtoItems) && Array.isArray(qtpItems) && qtoItems.length > 2) {
+            const QTP_PATTERNS = [
+                /\bCAT\b.*profissional/i,
+                /certid[ãa]o\s+de\s+acervo\s+t[ée]cnico.*profissional/i,
+                /acervo\s+t[ée]cnico.*profissional/i,
+                /apt.*t[ée]cnico.profissional/i,
+                /comprov.*v[ií]nculo\s+profissional/i,
+                /v[ií]nculo.*t[ée]cnico\s+respons[áa]vel/i,
+                /profissional.*\bv[ií]nculo\b/i,
+                /v[ií]nculo.*profissional.*t[ée]cnico/i,
+                /engenheiro.*v[ií]nculo/i,
+                /v[ií]nculo.*engenheiro/i,
+            ];
+            
+            const toMigrate = new Set<number>();
+            for (let i = 0; i < qtoItems.length; i++) {
+                const req = qtoItems[i] as any;
+                const fullText = `${req.title || ''} ${req.description || ''}`;
+                // Check if this item matches QTP patterns
+                if (QTP_PATTERNS.some(p => p.test(fullText))) {
+                    // Verify it's not the PJ registration (CREA da empresa)
+                    if (!/registro.*empresa|inscri[çc][ãa]o.*empresa|certid[ãa]o.*PJ/i.test(fullText)) {
+                        toMigrate.add(i);
+                    }
+                }
+            }
+            
+            if (toMigrate.size > 0) {
+                // Move items from QTO to QTP
+                const migratedItems: any[] = [];
+                const remainingQTO = qtoItems.filter((_: any, idx: number) => {
+                    if (toMigrate.has(idx)) {
+                        migratedItems.push(qtoItems[idx]);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Deduplicate: don't add if QTP already has a similar item
+                const qtpText = qtpItems.map((r: any) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join('|');
+                let added = 0;
+                for (const item of migratedItems) {
+                    const itemText = `${item.title || ''}`.toLowerCase();
+                    // Simple prefix overlap check
+                    const normalizedTitle = itemText.replace(/[^a-z0-9 ]/g, '').trim().substring(0, 50);
+                    const alreadyExists = qtpText.includes(normalizedTitle.substring(0, 30));
+                    if (!alreadyExists) {
+                        qtpItems.push(item);
+                        added++;
+                    }
+                }
+                
+                (schema.requirements as any).qualificacao_tecnica_operacional = remainingQTO;
+                
+                // Renumber QTO
+                remainingQTO.forEach((req: any, idx: number) => {
+                    req.requirement_id = `QTO-${String(idx + 1).padStart(2, '0')}`;
+                });
+                // Renumber QTP
+                qtpItems.forEach((req: any, idx: number) => {
+                    req.requirement_id = `QTP-${String(idx + 1).padStart(2, '0')}`;
+                });
+                
+                correct('QTO→QTP', `${toMigrate.size} item(ns) de profissional em QTO`, `migrado(s) para QTP (${added} novo(s), ${toMigrate.size - added} já existia(m))`);
+            }
+        }
+    }
+
+    // ── CLEANUP 4: Cross-category dedup (DC items that duplicate RFT) ──
+    // "Declaração de não emprego de menor" frequently appears in both RFT and DC
+    if (schema.requirements) {
+        const rftItems = (schema.requirements as any).regularidade_fiscal_trabalhista;
+        const dcItems = (schema.requirements as any).documentos_complementares;
+        if (Array.isArray(rftItems) && Array.isArray(dcItems) && rftItems.length > 0 && dcItems.length > 0) {
+            const rftNormalized = new Set(
+                rftItems.map((r: any) => `${r.title || ''}`.toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9 ]/g, '').trim().substring(0, 40))
+            );
+            
+            const beforeLen = dcItems.length;
+            const deduped = dcItems.filter((dc: any) => {
+                const dcNorm = `${dc.title || ''}`.toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9 ]/g, '').trim().substring(0, 40);
+                // Check if any RFT item has similar title
+                for (const rftNorm of rftNormalized) {
+                    // Prefix overlap
+                    const shorter = dcNorm.length <= rftNorm.length ? dcNorm : rftNorm;
+                    const longer = dcNorm.length > rftNorm.length ? dcNorm : rftNorm;
+                    if (shorter.length >= 15 && longer.includes(shorter.substring(0, Math.floor(shorter.length * 0.7)))) {
+                        return false; // Remove from DC
+                    }
+                }
+                return true;
+            });
+            
+            if (deduped.length < beforeLen) {
+                (schema.requirements as any).documentos_complementares = deduped;
+                // Renumber DC
+                deduped.forEach((req: any, idx: number) => {
+                    req.requirement_id = `DC-${String(idx + 1).padStart(2, '0')}`;
+                });
+                correct('DC↔RFT', `${beforeLen - deduped.length} item(ns) duplicado(s)`, `removido(s) de DC (já presente em RFT)`);
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════
     // NÍVEL 2: Normalização de process_identification
     // ═══════════════════════════════════════════
@@ -791,7 +905,8 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
             const qefText = qefItems.map((r: any) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join(' ');
             const hasFalencia = /fal[eê]ncia|recupera[çc][ãa]o judicial/i.test(qefText);
             const hasBalanco = /balan[çc]o|demonstra[çc][õo]es cont[áa]beis|dre/i.test(qefText);
-            const hasIndices = /[ií]ndice|lg|sg|lc|eg|liquidez|solvência|endividamento/i.test(qefText);
+            const hasIndices = /[ií]ndice[s]?\s+cont[áa]bei|liquidez\s+(geral|corrente)|solv[eê]ncia\s+geral|endividamento/i.test(qefText) ||
+                /\b(LG|SG|LC|EG)\b/.test(qefText); // case-sensitive word-boundary for abbreviations
             const hasCapital = /capital social|patrim[ôo]nio l[ií]quido/i.test(qefText);
             
             // Only inject if QEF is thin (≤2 items) AND missing critical items
