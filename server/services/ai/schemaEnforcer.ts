@@ -609,6 +609,91 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         }
     }
 
+    // ── CLEANUP 5: PC Anti-Pollution — Remove generic clauses + migrate fiscal items ──
+    // The model non-deterministically produces 5-20 PC items. This cleanup ensures
+    // PC contains only legitimate desclassification-eligible proposal requirements.
+    if (schema.requirements) {
+        const pcItems = (schema.requirements as any).proposta_comercial;
+        if (Array.isArray(pcItems) && pcItems.length > 8) {
+            // Part A: Remove or demote generic universal clauses that every edital has
+            const GENERIC_PC_PATTERNS = [
+                /sem\s+(custos?\s+financeiro|custo\s+financeiro)/i,
+                /pre[çc]o.*n[ãa]o\s+(superior|acima|exceder)/i,
+                /pre[çc]o.*n[ãa]o\s+(irris[óo]rio|zero|zerado)/i,
+                /valor.*irris[óo]rio/i,
+                /sem\s+erros?\s+de\s+f[óo]rmula/i,
+                /sem\s+(emendas?|rasuras?|entrelinhas?|ressalvas?)/i,
+                /proposta.*sem\s+(rasura|emenda|ressalva)/i,
+                /redigida\s+em\s+portugu[êe]s/i,
+                /prazo\s+de\s+validade\s+d[ae]\s+proposta/i,
+                /validade\s+d[ae]\s+proposta.*\d+\s*dias/i,
+                /oferta\s+firme\s+e\s+irrevog[áa]vel/i,
+                /pre[çc]os?\s+de\s+(exclusiva\s+)?responsabilidade/i,
+                /n[ãa]o\s+dev(em?|erá)\s+conter\s+nenhuma\s+identifica[çc][ãa]o/i,
+                /sem\s+identifica[çc][ãa]o\s+d[aoe]\s+empresa/i,
+            ];
+
+            let removedGeneric = 0;
+            const cleaned = pcItems.filter((req: any) => {
+                const fullText = `${req.title || ''} ${req.description || ''}`;
+                if (GENERIC_PC_PATTERNS.some(p => p.test(fullText))) {
+                    removedGeneric++;
+                    return false;
+                }
+                return true;
+            });
+
+            if (removedGeneric > 0) {
+                (schema.requirements as any).proposta_comercial = cleaned;
+                correct('PC', `${removedGeneric} cláusula(s) genérica(s)/universal(is)`, 'removida(s) — não causam desclassificação específica');
+            }
+
+            // Part B: Migrate fiscal items from PC to DC
+            const pcItemsAfterA = (schema.requirements as any).proposta_comercial;
+            const dcItems = (schema.requirements as any).documentos_complementares || [];
+            const FISCAL_PC_PATTERNS = [
+                /pis\s*\/?\s*cofins/i,
+                /demonstrativo.*apura[çc][ãa]o/i,
+                /simples\s+nacional/i,
+                /extrato.*simples/i,
+                /receita\s+federal.*extrato/i,
+            ];
+
+            const toMigrateToDC: any[] = [];
+            const pcAfterMigration = pcItemsAfterA.filter((req: any) => {
+                const fullText = `${req.title || ''} ${req.description || ''}`;
+                if (FISCAL_PC_PATTERNS.some(p => p.test(fullText))) {
+                    toMigrateToDC.push(req);
+                    return false;
+                }
+                return true;
+            });
+
+            if (toMigrateToDC.length > 0) {
+                for (const item of toMigrateToDC) {
+                    dcItems.push(item);
+                }
+                (schema.requirements as any).proposta_comercial = pcAfterMigration;
+                (schema.requirements as any).documentos_complementares = dcItems;
+                correct('PC→DC', `${toMigrateToDC.length} item(ns) fiscal(is)`, `migrado(s): ${toMigrateToDC.map((r: any) => r.title).join(', ')}`);
+            }
+
+            // Renumber PC and DC after changes
+            const finalPC = (schema.requirements as any).proposta_comercial;
+            if (Array.isArray(finalPC)) {
+                finalPC.forEach((req: any, idx: number) => {
+                    req.requirement_id = `PC-${String(idx + 1).padStart(2, '0')}`;
+                });
+            }
+            const finalDC = (schema.requirements as any).documentos_complementares;
+            if (Array.isArray(finalDC)) {
+                finalDC.forEach((req: any, idx: number) => {
+                    req.requirement_id = `DC-${String(idx + 1).padStart(2, '0')}`;
+                });
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════
     // NÍVEL 2: Normalização de process_identification
     // ═══════════════════════════════════════════
