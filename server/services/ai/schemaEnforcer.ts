@@ -694,6 +694,57 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         }
     }
 
+    // ── CLEANUP 6: PC Empty Injection — When model extracts zero PC items ──
+    // The anti-pollution prompt (Rule 19) sometimes makes the model TOO conservative,
+    // resulting in PC=0 items. This safety-net injects minimum proposal requirements
+    // that EVERY edital requires (planilha + BDI).
+    if (schema.requirements) {
+        const pcItems = (schema.requirements as any).proposta_comercial;
+        if (Array.isArray(pcItems) && pcItems.length === 0) {
+            // Only inject if other categories have items (confirming this is a real extraction)
+            const otherCatsPopulated = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista',
+                'qualificacao_tecnica_operacional', 'qualificacao_economico_financeira']
+                .some(cat => {
+                    const items = (schema.requirements as any)[cat];
+                    return Array.isArray(items) && items.length > 0;
+                });
+
+            if (otherCatsPopulated) {
+                // Derive source_ref from proposal_analysis if available
+                const paSourceRef = schema.proposal_analysis?.observacoes_proposta?.[0] ||
+                    'Edital, seção de Proposta';
+
+                (schema.requirements as any).proposta_comercial = [
+                    {
+                        requirement_id: 'PC-01',
+                        title: 'Planilha de Preços / Proposta Comercial',
+                        description: 'Apresentar proposta de preços conforme modelo/planilha constante nos anexos do edital',
+                        obligation_type: 'obrigatoria_universal',
+                        entry_type: 'exigencia_principal',
+                        phase: 'proposta',
+                        applies_to: 'licitante',
+                        risk_if_missing: 'desclassificacao',
+                        source_ref: `${typeof paSourceRef === 'string' ? paSourceRef : 'Edital, seção de Proposta'} (safety-net — verificar edital)`,
+                        evidence_refs: [],
+                    },
+                    {
+                        requirement_id: 'PC-02',
+                        title: 'Composição de BDI',
+                        description: 'Indicar percentual do BDI e detalhar todos os elementos que o compõem, conforme exigências do edital',
+                        obligation_type: 'obrigatoria_universal',
+                        entry_type: 'exigencia_principal',
+                        phase: 'proposta',
+                        applies_to: 'licitante',
+                        risk_if_missing: 'desclassificacao',
+                        source_ref: `${typeof paSourceRef === 'string' ? paSourceRef : 'Edital, seção de Proposta'} (safety-net — verificar edital)`,
+                        evidence_refs: [],
+                    },
+                ];
+                correct('PC', '0 itens (vazia)', 'injetado(s): Planilha de Preços + Composição BDI (mínimo obrigatório)');
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════
     // NÍVEL 2: Normalização de process_identification
     // ═══════════════════════════════════════════
