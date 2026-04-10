@@ -1100,6 +1100,22 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                     injected.push('Índices Contábeis');
                 }
                 
+                if (!hasFalencia) {
+                    qefItems.push({
+                        requirement_id: '',
+                        title: 'Certidão Negativa de Falência/Recuperação Judicial',
+                        description: 'Certidão Negativa de Falência, Concordata ou Recuperação Judicial, expedida pelo distribuidor da sede do licitante',
+                        obligation_type: 'obrigatoria_universal',
+                        entry_type: 'exigencia_principal',
+                        phase: 'habilitacao',
+                        applies_to: 'licitante',
+                        risk_if_missing: 'inabilitacao',
+                        source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
+                        evidence_refs: [],
+                    });
+                    injected.push('Certidão Falência');
+                }
+                
                 if (injected.length > 0) {
                     // Renumber
                     let qefCounter = 1;
@@ -1109,6 +1125,24 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                     }
                     correct('QEF', `apenas ${qefItems.length - injected.length} item(ns) (incompleto)`, `injetado(s): ${injected.join(', ')}`);
                 }
+            }
+            
+            // Standalone Falência check: even if QEF has >2 items, Falência should exist
+            if (!hasFalencia && qefItems.length > 2) {
+                const qefSourceRef = qefItems.find((r: any) => r.source_ref && r.source_ref !== 'referência não localizada')?.source_ref || 'Edital, seção de Qualificação Econômico-Financeira';
+                qefItems.push({
+                    requirement_id: `QEF-${String(qefItems.length + 1).padStart(2, '0')}`,
+                    title: 'Certidão Negativa de Falência/Recuperação Judicial',
+                    description: 'Certidão Negativa de Falência, Concordata ou Recuperação Judicial, expedida pelo distribuidor da sede do licitante',
+                    obligation_type: 'obrigatoria_universal',
+                    entry_type: 'exigencia_principal',
+                    phase: 'habilitacao',
+                    applies_to: 'licitante',
+                    risk_if_missing: 'inabilitacao',
+                    source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
+                    evidence_refs: [],
+                });
+                correct('QEF', 'Certidão de Falência ausente', 'injetada: Certidão Negativa de Falência/Recuperação Judicial');
             }
         }
     }
