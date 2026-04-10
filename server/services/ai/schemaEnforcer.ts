@@ -1003,6 +1003,24 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                 });
             }
             
+            // FGTS — when completely absent (not grouped, just missing)
+            if (!/fgts|fundo de garantia|crf/i.test(refreshedText)) {
+                missingCNDs.push({
+                    title: 'Certificado de Regularidade do FGTS (CRF)',
+                    description: 'Prova de regularidade relativa ao Fundo de Garantia do Tempo de Serviço (FGTS)',
+                    check: /fgts/,
+                });
+            }
+            
+            // CNDT — when completely absent
+            if (!/cndt|justi[çc]a do trabalho|d[eé]bitos trabalhistas/i.test(refreshedText)) {
+                missingCNDs.push({
+                    title: 'Certidão Negativa de Débitos Trabalhistas (CNDT)',
+                    description: 'Certidão Negativa de Débitos Trabalhistas ou Certidão Positiva com efeito negativo, expedida pela Justiça do Trabalho',
+                    check: /cndt/,
+                });
+            }
+            
             if (missingCNDs.length > 0) {
                 for (const cnd of missingCNDs) {
                     rftItems.push({
@@ -1018,7 +1036,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                         evidence_refs: [],
                     });
                 }
-                correct('RFT', `${missingCNDs.length} CND(s) ausente(s)`, `injetada(s): ${missingCNDs.map(c => c.title).join(', ')}`);
+                correct('RFT', `${missingCNDs.length} doc(s) ausente(s)`, `injetado(s): ${missingCNDs.map(c => c.title).join(', ')}`);
             }
             
             // Renumber all RFT items after modifications
