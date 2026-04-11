@@ -64,9 +64,11 @@ interface UsePncpPageParams {
     companies: CompanyProfile[];
     onRefresh?: () => Promise<void>;
     items?: BiddingProcess[];
+    initialContext?: any;
+    onContextConsumed?: () => void;
 }
 
-export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPageParams) {
+export function usePncpPage({ companies, onRefresh, items = [], initialContext, onContextConsumed }: UsePncpPageParams) {
     const toast = useToast();
     const [savedSearches, setSavedSearches] = useState<PncpSavedSearch[]>([]);
     const [results, setResults] = useState<PncpBiddingItem[]>([]);
@@ -98,7 +100,6 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
     const [viewingAnalysisProcess, setViewingAnalysisProcess] = useState<BiddingProcess | null>(null);
     const [analyzedPncpItem, setAnalyzedPncpItem] = useState<PncpBiddingItem | null>(null);
     const [pendingAiAnalysis, setPendingAiAnalysis] = useState<AiAnalysis | null>(null);
-    const [analysisProgress, setAnalysisProgress] = useState<{ step: number; total: number; percent: number; message: string; detail?: string } | null>(null);
     const [isParsingAI, setIsParsingAI] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -932,50 +933,43 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         if (analyzingItemId) return;
         setAnalyzingItemId(item.id);
         setAnalyzedPncpItem(item);
-        setAnalysisProgress({ step: 0, total: 8, percent: 0, message: 'Iniciando análise...' });
+        
+        try {
+            const { submitBackgroundJob } = await import('./useSSE');
+            await submitBackgroundJob({
+                type: 'pncp_analysis',
+                input: {
+                    orgao_cnpj: item.orgao_cnpj, ano: item.ano,
+                    numero_sequencial: item.numero_sequencial, link_sistema: item.link_sistema,
+                    _itemData: item // Saved to reconstruct the process later
+                },
+                targetId: `pncp_${item.id}`,
+                targetTitle: `Análise PNCP: ${item.orgao_nome || item.numero_sequencial}`
+            });
+            toast.success('🧠 Análise enviada para processamento! Você será notificado quando concluir.');
+        } catch (e: any) {
+            toast.error(`Erro ao enviar análise IA: ${e.message}`);
+        } finally {
+            setAnalyzingItemId(null);
+        }
+    };
+
+    const handleLoadPncpJobResult = async (jobId: string) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/api/pncp/analyze`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orgao_cnpj: item.orgao_cnpj, ano: item.ano, numero_sequencial: item.numero_sequencial, link_sistema: item.link_sistema })
+            const jobRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-
-            // Read SSE stream
-            const reader = response.body?.getReader();
-            if (!reader) throw new Error('Falha ao abrir stream');
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let aiData: any = null;
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-
-                // Parse SSE events ("data: {...}\n\n")
-                const parts = buffer.split('\n\n');
-                buffer = parts.pop() || ''; // keep incomplete chunk
-                for (const part of parts) {
-                    const line = part.trim();
-                    if (!line.startsWith('data: ')) continue;
-                    try {
-                        const event = JSON.parse(line.slice(6));
-                        if (event.type === 'progress') {
-                            setAnalysisProgress({ step: event.step, total: event.total, percent: event.percent, message: event.message, detail: event.detail });
-                        } else if (event.type === 'result') {
-                            aiData = event.payload;
-                        } else if (event.type === 'error') {
-                            throw new Error(event.error || 'Erro desconhecido');
-                        }
-                    } catch (parseErr: any) {
-                        if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
-                    }
-                }
-            }
-
-            if (!aiData) throw new Error('Nenhum resultado recebido do servidor');
-
+            if (!jobRes.ok) throw new Error('Falha ao carregar tarefa');
+            const jobData = await jobRes.json();
+            
+            const resRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/result`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!resRes.ok) throw new Error('Falha ao buscar resultado');
+            const { result: aiData } = await resRes.json();
+            
+            const item = jobData.input?._itemData || {};
             const processObj = aiData.process || {};
             const analysisObj = aiData.analysis || {};
 
@@ -998,40 +992,43 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
                 analyzedAt: new Date().toISOString()
             };
 
-            // Helper: parse Brazilian "DD/MM/AAAA às HH:MM" to ISO if needed
             const toISOSafe = (d: string): string => {
                 if (!d) return new Date().toISOString();
                 const parsed = new Date(d);
                 if (!isNaN(parsed.getTime())) return parsed.toISOString();
-                // Try Brazilian format
                 const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
                 if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4] || '00'}:${m[5] || '00'}:00-03:00`).toISOString();
                 return new Date().toISOString();
             };
 
             const fakeProcess: BiddingProcess = {
-                id: `pncp-${item.id}`, title: processObj.title || item.titulo,
-                summary: processObj.summary || item.objeto, portal: 'PNCP',
+                id: jobData.targetId || `pncp-${item.id}`, 
+                title: processObj.title || item.titulo || 'Licitação Analisada',
+                summary: processObj.summary || item.objeto || '', 
+                portal: 'PNCP',
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
                 sessionDate: toISOSafe(processObj.sessionDate || item.data_encerramento_proposta || item.data_abertura || ''),
                 link: [processObj.link_sistema, item.link_sistema, item.link_comprasnet].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', '),
-                pncpLink: item.link_sistema, risk: processObj.risk || 'Médio',
+                pncpLink: item.link_sistema || '', risk: processObj.risk || 'Médio',
                 companyProfileId: selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(), observations: '[]'
             } as BiddingProcess;
 
+            setAnalyzedPncpItem(item);
             setPncpAnalysis({ process: processObj, analysis: analysisData });
             setViewingAnalysisProcess(fakeProcess);
         } catch (error: any) {
-            console.error('PNCP AI Analysis error:', error);
-            if (error.message?.includes('insuficiente')) {
-                toast.error(`Análise IA indisponível: A IA não conseguiu extrair dados suficientes dos documentos deste edital. Os PDFs podem estar escaneados, protegidos ou em formato não-textual.`);
-            } else {
-                toast.error(`Erro na análise IA: ${error.message}`);
-            }
-        } finally { setAnalyzingItemId(null); setAnalysisProgress(null); }
+             toast.error(`Erro ao carregar análise: ${error.message}`);
+        }
     };
+
+    useEffect(() => {
+        if (initialContext?.action === 'open_pncp_job' && initialContext.jobId) {
+            handleLoadPncpJobResult(initialContext.jobId);
+            if (onContextConsumed) onContextConsumed();
+        }
+    }, [initialContext]);
 
     const handleAIAssistClick = () => { fileInputRef.current?.click(); };
 
@@ -1173,7 +1170,7 @@ export function usePncpPage({ companies, onRefresh, items = [] }: UsePncpPagePar
         // Modal state
         editingProcess, setEditingProcess, fileInputRef, handleAIAssistClick, handleFileUpload, isParsingAI,
         // AI state
-        analyzingItemId, analysisProgress, pncpAnalysis, setPncpAnalysis,
+        analyzingItemId, pncpAnalysis, setPncpAnalysis,
         viewingAnalysisProcess, setViewingAnalysisProcess,
         analyzedPncpItem, setAnalyzedPncpItem,
         pendingAiAnalysis, setPendingAiAnalysis,

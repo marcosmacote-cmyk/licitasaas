@@ -7,14 +7,16 @@ const express_1 = __importDefault(require("express"));
 const multer_1 = __importDefault(require("multer"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_1 = require("../middlewares/auth");
+const security_1 = require("../lib/security");
 const storage_1 = require("../storage");
 const genai_1 = require("@google/genai");
 const parser_service_1 = require("../services/ai/parser.service");
 const gemini_service_1 = require("../services/ai/gemini.service");
+const openai_service_1 = require("../services/ai/openai.service");
 const prompt_service_1 = require("../services/ai/prompt.service");
 const moduleContextContracts_1 = require("../services/ai/modules/moduleContextContracts");
 const router = express_1.default.Router();
-const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
+const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } }); // 30MB max
 // ── Documents CRUD ──
 // Create document
 router.post('/documents', auth_1.authenticateToken, upload.single('file'), async (req, res) => {
@@ -128,33 +130,44 @@ router.get('/technical-certificates', auth_1.authenticateToken, async (req, res)
         res.status(500).json({ error: 'Failed to fetch certificates' });
     }
 });
-router.post('/technical-certificates', auth_1.authenticateToken, upload.single('file'), async (req, res) => {
+router.post('/technical-certificates', auth_1.authenticateToken, security_1.aiLimiter, upload.single('file'), async (req, res) => {
     try {
         const { companyProfileId, title, type, category } = req.body;
         if (!req.file)
             return res.status(400).json({ error: 'File is required' });
         const { url: fileUrl } = await storage_1.storageService.uploadFile(req.file, req.user.tenantId);
-        // AI Extraction
+        // AI Extraction with Gemini → OpenAI fallback
         const apiKey = process.env.GEMINI_API_KEY;
         const ai = new genai_1.GoogleGenAI({ apiKey: apiKey });
-        console.log(`[AI Oracle] Analyzing certificate: ${req.file.originalname}`);
-        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-            model: 'gemini-2.0-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } },
-                        { text: "Extraia os dados técnicos deste documento seguindo o formato JSON especificado." }
-                    ]
+        const pdfParts = [{ inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } }];
+        const userInstruction = "Extraia os dados técnicos deste documento seguindo o formato JSON especificado.";
+        console.log(`[AI Oracle] Analyzing certificate: ${req.file.originalname} (${(req.file.size / 1024).toFixed(0)}KB)`);
+        let result;
+        try {
+            result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{
+                        role: 'user',
+                        parts: [...pdfParts, { text: userInstruction }]
+                    }],
+                config: {
+                    systemInstruction: prompt_service_1.EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
+                    temperature: 0.1,
+                    responseMimeType: 'application/json'
                 }
-            ],
-            config: {
-                systemInstruction: prompt_service_1.EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
+            }, 3, { tenantId: req.user.tenantId, operation: 'process_document', metadata: { docType: 'technical_certificate' } });
+        }
+        catch (geminiErr) {
+            console.warn(`[AI Oracle] Gemini falhou na extração: ${geminiErr.message}. Fallback → OpenAI...`);
+            const oaiResult = await (0, openai_service_1.fallbackToOpenAiV2)({
+                systemPrompt: prompt_service_1.EXTRACT_CERTIFICATE_SYSTEM_PROMPT,
+                userPrompt: userInstruction,
+                pdfParts,
                 temperature: 0.1,
-                responseMimeType: 'application/json'
-            }
-        }, 3, { tenantId: req.user.tenantId, operation: 'process_document', metadata: { docType: 'technical_certificate' } });
+                stageName: 'oracle-extract'
+            });
+            result = { text: oaiResult.text };
+        }
         const extracted = (0, parser_service_1.robustJsonParse)(result.text);
         const certificate = await prisma_1.default.technicalCertificate.create({
             data: {
@@ -206,9 +219,9 @@ router.delete('/technical-certificates/:id', auth_1.authenticateToken, async (re
         res.status(500).json({ error: 'Failed to delete certificate' });
     }
 });
-router.post('/technical-certificates/compare', auth_1.authenticateToken, async (req, res) => {
+router.post('/technical-certificates/compare', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
     try {
-        const { biddingProcessId, technicalCertificateIds } = req.body;
+        const { biddingProcessId, technicalCertificateIds, disabledRequirements } = req.body;
         const tenantId = req.user.tenantId;
         const bidding = await prisma_1.default.biddingProcess.findUnique({
             where: { id: biddingProcessId, tenantId },
@@ -223,7 +236,25 @@ router.post('/technical-certificates/compare', auth_1.authenticateToken, async (
         }
         let requirements;
         if (bidding.aiAnalysis?.schemaV2) {
-            requirements = (0, moduleContextContracts_1.buildModuleContext)(bidding.aiAnalysis.schemaV2, 'oracle');
+            let schemaToUse = bidding.aiAnalysis.schemaV2;
+            if (typeof schemaToUse === 'string') {
+                try {
+                    schemaToUse = JSON.parse(schemaToUse);
+                }
+                catch (e) { }
+            }
+            if (disabledRequirements && Array.isArray(disabledRequirements) && disabledRequirements.length > 0) {
+                schemaToUse = JSON.parse(JSON.stringify(schemaToUse));
+                ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional'].forEach(key => {
+                    if (schemaToUse?.requirements?.[key]) {
+                        schemaToUse.requirements[key] = schemaToUse.requirements[key].filter((r) => !disabledRequirements.includes(r.requirement_id || r.title));
+                    }
+                });
+                if (schemaToUse?.technical_analysis?.parcelas_relevantes) {
+                    schemaToUse.technical_analysis.parcelas_relevantes = schemaToUse.technical_analysis.parcelas_relevantes.filter((p) => !disabledRequirements.includes(p.item || p.descricao));
+                }
+            }
+            requirements = (0, moduleContextContracts_1.buildModuleContext)(schemaToUse, 'oracle');
             console.log(`[AI Oracle] Using buildModuleContext('oracle') for comparison`);
         }
         else {
@@ -232,6 +263,8 @@ router.post('/technical-certificates/compare', auth_1.authenticateToken, async (
         const aggregatedCertData = certificates.map(cert => ({
             atestado_titulo: cert.title,
             objeto: cert.object,
+            executingCompany: cert.executingCompany || null,
+            technicalResponsible: cert.technicalResponsible || null,
             experiencias: cert.experiences.map(e => ({
                 description: e.description,
                 quantity: e.quantity,
@@ -241,23 +274,30 @@ router.post('/technical-certificates/compare', auth_1.authenticateToken, async (
         }));
         const apiKey = process.env.GEMINI_API_KEY;
         const ai = new genai_1.GoogleGenAI({ apiKey: apiKey });
+        const userContent = `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(aggregatedCertData, null, 2)}`;
         console.log(`[AI Oracle] Comparing ${certificates.length} certs with bidding ${bidding.title}`);
-        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-            model: 'gemini-2.0-flash',
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { text: `EXIGÊNCIAS DO EDITAL:\n${requirements}\n\nACERVO TÉCNICO DISPONÍVEL (JSON):\n${JSON.stringify(aggregatedCertData, null, 2)}` }
-                    ]
+        let result;
+        try {
+            result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: userContent }] }],
+                config: {
+                    systemInstruction: prompt_service_1.COMPARE_CERTIFICATE_SYSTEM_PROMPT,
+                    temperature: 0.1,
+                    responseMimeType: 'application/json'
                 }
-            ],
-            config: {
-                systemInstruction: prompt_service_1.COMPARE_CERTIFICATE_SYSTEM_PROMPT,
+            }, 3, { tenantId: req.user.tenantId, operation: 'bidding_matching', metadata: { type: 'certificate_comparison' } });
+        }
+        catch (geminiErr) {
+            console.warn(`[AI Oracle] Gemini falhou na comparação: ${geminiErr.message}. Fallback → OpenAI...`);
+            const oaiResult = await (0, openai_service_1.fallbackToOpenAiV2)({
+                systemPrompt: prompt_service_1.COMPARE_CERTIFICATE_SYSTEM_PROMPT,
+                userPrompt: userContent,
                 temperature: 0.1,
-                responseMimeType: 'application/json'
-            }
-        }, 3, { tenantId: req.user.tenantId, operation: 'bidding_matching', metadata: { type: 'certificate_comparison' } });
+                stageName: 'oracle-compare'
+            });
+            result = { text: oaiResult.text };
+        }
         const analysis = (0, parser_service_1.robustJsonParse)(result.text);
         res.json(analysis);
     }

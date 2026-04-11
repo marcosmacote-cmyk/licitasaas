@@ -45,6 +45,7 @@ function createEmptyAnalysisSchema() {
             orgao: '', unidade_compradora: '', numero_processo: '', numero_edital: '',
             modalidade: '', forma_disputa: '', criterio_julgamento: '', regime_execucao: '',
             tipo_objeto: 'outro', objeto_resumido: '', objeto_completo: '', fonte_oficial: '', municipio_uf: '',
+            valor_estimado_global: 0, portal_licitacao: '', link_sistema: null
         },
         timeline: {
             data_publicacao: '', data_sessao: '', prazo_impugnacao: '', prazo_esclarecimento: '',

@@ -12,17 +12,25 @@
  *
  * Estrutura HTML:
  * ```html
- * <div class="timeline-item">
- *   <div class="time"> 24/03/2026 17:06:09 | Sistema </div>
- *   <div class="description">Mensagem do chat aqui</div>
- * </div>
+ * <app-assistance>
+ *   <div class="timeline-item">
+ *     <div class="time"> 31/03/2026 14:33:34 | Sistema </div>
+ *     <div class="description">O lote 0002 foi adjudicado por FLAVIO LUIZ BENINI.</div>
+ *   </div>
+ * </app-assistance>
  * ```
+ *
+ * v1.1 changelog:
+ *   - eventCategory classification via regex (9 categories)
+ *   - itemRef extraction from content ("lote XXXX" → "Lote XXXX")
+ *   - Timestamp conversion to ISO 8601 (DD/MM/YYYY HH:MM:SS → ISO)
+ *   - Browser-like User-Agent (anti-blocking)
  *
  * Fluxo:
  * 1. Detecta se o link é do Portal de Compras Públicas
  * 2. Faz GET na URL pública do processo (SSR)
  * 3. Parse do HTML com Cheerio (`.timeline-item`)
- * 4. Extrai timestamp, autor e conteúdo
+ * 4. Extrai timestamp, autor, conteúdo, eventCategory e itemRef
  * 5. Retorna mensagens padronizadas para o pipeline de ingestão
  *
  * Acesso: Público, sem autenticação.
@@ -73,6 +81,64 @@ exports.PCP_PLATFORM = {
     label: 'Portal de Compras Públicas',
     captureSource: 'pcp-api',
 };
+// ── Event category classification via regex (aligned with alertTaxonomy.ts) ──
+function classifyEventCategory(text) {
+    if (!text)
+        return null;
+    const t = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    // Closure / Encerramento
+    if (/\b(encerrad[oa]|homologad[oa]|cancelad[oa]|anulad[oa]|revogad[oa]|desert[oa]|fracassad[oa]|finalizada)\b/.test(t))
+        return 'encerramento';
+    // Convocação
+    if (/\b(convoca|habilitacao|documentos?\s+de\s+habilitacao|prazo\s+para\s+(?:envio|apresentacao))\b/.test(t))
+        return 'convocacao';
+    // Suspensão
+    if (/\b(suspend?[oae]|suspen[cs]ao|interromp)\b/.test(t))
+        return 'suspensao';
+    // Reabertura
+    if (/\b(reabert[oa]|reabrir|retom[ao]d[oa]|retomada)\b/.test(t))
+        return 'reabertura';
+    // Negociação
+    if (/\b(negociacao|contraproposta|negocia[rc]|lance|melhor\s+oferta)\b/.test(t))
+        return 'negociacao';
+    // Vencedor / Adjudicação
+    if (/\b(vencedor|adjudica|arrematante|melhor\s+classificad[oa])\b/.test(t))
+        return 'vencedor';
+    // Impugnação / Recurso
+    if (/\b(impugnacao|recurso|contrarrazao|contrarraz[oo]es|intencao\s+de\s+recurso)\b/.test(t))
+        return 'impugnacao';
+    // Inabilitação
+    if (/\b(inabilit|desclassific)\b/.test(t))
+        return 'inabilitacao';
+    // Abertura / Início
+    if (/\b(abert[oa]\s+para|processo\s+.*\s+aberto|sessao\s+.*\s+aberta|lances?\s+abertos?|fase\s+de\s+lances?)\b/.test(t))
+        return 'abertura';
+    return null;
+}
+// ── Extract itemRef (lot number) from message content ──
+function extractItemRef(text) {
+    if (!text)
+        return null;
+    // Match: "lote 0001", "lote 01", "lote 1", "LOTE 0002"
+    const match = text.match(/\blote\s+([\d]+)\b/i);
+    if (match) {
+        const num = match[1].replace(/^0+/, '') || '0'; // Remove leading zeros
+        return `Lote ${num.padStart(2, '0')}`;
+    }
+    return null;
+}
+// ── Convert "DD/MM/YYYY HH:MM:SS" to ISO 8601 ──
+function convertToISO(brTimestamp) {
+    if (!brTimestamp)
+        return brTimestamp;
+    // Match: "31/03/2026 14:33:34"
+    const match = brTimestamp.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (!match)
+        return brTimestamp; // Fallback: return as-is
+    const [, day, month, year, hour, min, sec] = match;
+    // BRT is UTC-3
+    return `${year}-${month}-${day}T${hour}:${min}:${sec}-03:00`;
+}
 class PCPMonitor {
     /**
      * Verifica se um link é do Portal de Compras Públicas.
@@ -117,9 +183,9 @@ class PCPMonitor {
             const res = await fetch(processUrl, {
                 signal: controller.signal,
                 headers: {
-                    'Accept': 'text/html,application/xhtml+xml',
-                    'User-Agent': 'Mozilla/5.0 (compatible; LicitaSaaS/1.0)',
-                    'Accept-Language': 'pt-BR,pt;q=0.9',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'User-Agent': this.USER_AGENT,
+                    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
                 },
             });
             clearTimeout(timeoutId);
@@ -152,6 +218,8 @@ class PCPMonitor {
      *   <div class="time"> DD/MM/YYYY HH:MM:SS | Autor </div>
      *   <div class="description">Conteúdo</div>
      * </div>
+     *
+     * v1.1: Includes eventCategory, itemRef, ISO timestamp, fornecedor detection.
      */
     static parseMessages(html) {
         const $ = cheerio.load(html);
@@ -164,16 +232,32 @@ class PCPMonitor {
             if (!description || description.length === 0)
                 return;
             // Parse do formato: "DD/MM/YYYY HH:MM:SS | Autor"
-            const { timestamp, author } = this.parseTimeField(timeText);
-            if (!timestamp)
+            const { timestamp: rawTimestamp, author } = this.parseTimeField(timeText);
+            if (!rawTimestamp)
                 return;
-            // Determinar tipo do autor
+            // Convert timestamp to ISO 8601
+            const timestamp = convertToISO(rawTimestamp);
+            // Determine author type (sistema, pregoeiro, fornecedor)
             const authorLower = author.toLowerCase();
-            const authorType = authorLower.includes('sistema') ? 'sistema' : 'pregoeiro';
+            let authorType;
+            if (authorLower.includes('sistema')) {
+                authorType = 'sistema';
+            }
+            else if (authorLower.includes('fornecedor') || authorLower.includes('licitante')) {
+                authorType = 'fornecedor';
+            }
+            else {
+                authorType = 'pregoeiro';
+            }
+            // Classify event category via regex
+            const eventCategory = classifyEventCategory(description);
+            // Extract item/lot reference from content
+            const itemRef = extractItemRef(description);
             // Gerar messageId único via hash MD5
+            // Uses rawTimestamp + description for stability (ISO conversion doesn't affect hash)
             const messageId = crypto_1.default
                 .createHash('md5')
-                .update(`pcp|${timestamp}|${description}`)
+                .update(`pcp|${rawTimestamp}|${description}`)
                 .digest('hex')
                 .substring(0, 16);
             messages.push({
@@ -182,6 +266,8 @@ class PCPMonitor {
                 authorType,
                 timestamp,
                 captureSource: exports.PCP_PLATFORM.captureSource,
+                itemRef,
+                eventCategory,
             });
         });
         return messages;
@@ -205,3 +291,4 @@ class PCPMonitor {
 }
 exports.PCPMonitor = PCPMonitor;
 PCPMonitor.TIMEOUT_MS = 20000;
+PCPMonitor.USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';

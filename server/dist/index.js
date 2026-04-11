@@ -44,7 +44,9 @@ const openai_service_1 = require("./services/ai/openai.service");
 const rag_service_1 = require("./services/ai/rag.service");
 const riskRulesEngine_1 = require("./services/ai/riskRulesEngine");
 const analysisQualityEvaluator_1 = require("./services/ai/analysisQualityEvaluator");
+const schemaEnforcer_1 = require("./services/ai/schemaEnforcer");
 const moduleContextContracts_1 = require("./services/ai/modules/moduleContextContracts");
+const chatPromptV2_1 = require("./services/ai/modules/prompts/chatPromptV2");
 const declarationPromptV2_1 = require("./services/ai/modules/prompts/declarationPromptV2");
 const declaration_1 = require("./services/ai/declaration");
 const feedbackService_1 = require("./services/ai/governance/feedbackService");
@@ -55,6 +57,7 @@ const companyProfileService_1 = require("./services/ai/company/companyProfileSer
 const participationEngine_1 = require("./services/ai/strategy/participationEngine");
 const companyLearningInsights_1 = require("./services/ai/strategy/companyLearningInsights");
 const pncp_monitor_service_1 = require("./services/monitoring/pncp-monitor.service");
+const analysisTelemetry_1 = require("./services/ai/telemetry/analysisTelemetry");
 const alertTaxonomy_1 = require("./services/monitoring/alertTaxonomy");
 const opportunity_scanner_service_1 = require("./services/monitoring/opportunity-scanner.service");
 const batch_platform_monitor_service_1 = require("./services/monitoring/batch-platform-monitor.service");
@@ -62,6 +65,8 @@ const pcp_monitor_service_1 = require("./services/monitoring/pcp-monitor.service
 const licitanet_monitor_service_1 = require("./services/monitoring/licitanet-monitor.service");
 const licitamaisbrasil_monitor_service_1 = require("./services/monitoring/licitamaisbrasil-monitor.service");
 const ingest_service_1 = require("./services/monitoring/ingest.service");
+const backgroundJobService_1 = require("./services/backgroundJobService");
+const backgroundJobWorker_1 = require("./services/backgroundJobWorker");
 const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const axios_1 = __importDefault(require("axios"));
@@ -495,6 +500,100 @@ app.get('/api/admin/ai-usage/:tenantId', auth_1.authenticateToken, auth_1.requir
     catch (e) {
         console.error('[Admin] AI usage drill-down error:', e?.message);
         res.status(500).json({ error: 'Falha ao buscar consumo de IA do tenant.' });
+    }
+});
+// ── Pipeline Health Dashboard (Telemetry) ──
+app.get('/api/admin/pipeline-health', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const days = parseInt(req.query.days || '7');
+        const health = await (0, analysisTelemetry_1.getPipelineHealth)(days);
+        res.json({ ok: true, ...health });
+    }
+    catch (e) {
+        console.error('[Admin] Pipeline health error:', e?.message);
+        res.status(500).json({ error: 'Falha ao buscar métricas do pipeline.' });
+    }
+});
+// ── Golden Dataset Snapshot Capture ──
+app.get('/api/admin/capture-golden/:processId', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const { processId } = req.params;
+        const analysis = await prisma.aiAnalysis.findFirst({
+            where: { biddingProcessId: processId },
+            select: { schemaV2: true, modelUsed: true, promptVersion: true, pipelineDurationS: true, overallConfidence: true, analyzedAt: true },
+        });
+        if (!analysis || !analysis.schemaV2) {
+            return res.status(404).json({ error: 'Análise não encontrada ou sem schemaV2.' });
+        }
+        const process = await prisma.biddingProcess.findUnique({
+            where: { id: processId },
+            select: { title: true, modality: true, processNumber: true, estimatedValue: true, portal: true },
+        });
+        res.json({
+            ok: true,
+            snapshot: analysis.schemaV2,
+            meta: {
+                processId,
+                process: process || {},
+                modelUsed: analysis.modelUsed,
+                promptVersion: analysis.promptVersion,
+                pipelineDurationS: analysis.pipelineDurationS,
+                overallConfidence: analysis.overallConfidence,
+                analyzedAt: analysis.analyzedAt,
+                capturedAt: new Date().toISOString(),
+            },
+            instructions: 'Save the "snapshot" field as golden/<id>.snapshot.json in the benchmark directory.',
+        });
+    }
+    catch (e) {
+        console.error('[Admin] Capture golden error:', e?.message);
+        res.status(500).json({ error: 'Falha ao capturar snapshot.' });
+    }
+});
+// ── Golden Dataset: Search processes by title (to find processId) ──
+app.get('/api/admin/golden-search', auth_1.authenticateToken, auth_1.requireSuperAdmin, async (req, res) => {
+    try {
+        const q = (req.query.q || '').toString().trim();
+        if (!q || q.length < 3) {
+            return res.status(400).json({ error: 'Busca precisa de pelo menos 3 caracteres. Use ?q=macau' });
+        }
+        const processes = await prisma.biddingProcess.findMany({
+            where: {
+                tenantId: req.user.tenantId,
+                title: { contains: q, mode: 'insensitive' },
+            },
+            select: {
+                id: true,
+                title: true,
+                portal: true,
+                modality: true,
+                estimatedValue: true,
+                sessionDate: true,
+                aiAnalysis: { select: { id: true, overallConfidence: true, analyzedAt: true } },
+            },
+            orderBy: { sessionDate: 'desc' },
+            take: 10,
+        });
+        res.json({
+            ok: true,
+            query: q,
+            found: processes.length,
+            processes: processes.map(p => ({
+                processId: p.id,
+                title: p.title,
+                portal: p.portal,
+                modality: p.modality,
+                estimatedValue: p.estimatedValue,
+                sessionDate: p.sessionDate,
+                hasAnalysis: !!p.aiAnalysis,
+                analysisConfidence: p.aiAnalysis?.overallConfidence || null,
+                captureUrl: p.aiAnalysis ? `/api/admin/capture-golden/${p.id}` : null,
+            })),
+        });
+    }
+    catch (e) {
+        console.error('[Admin] Golden search error:', e?.message);
+        res.status(500).json({ error: 'Falha na busca.' });
     }
 });
 // Team & Users Management
@@ -1509,7 +1608,8 @@ app.post('/api/pncp/search', auth_1.authenticateToken, async (req, res) => {
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
                     : (item.linkSistemaOrigem || item.link || ''),
                 link_comprasnet: item.linkSistemaOrigem || '',
-                status: item.situacao_nome || item.situacaoCompraNome || item.status || status || ''
+                status: item.situacao_nome || item.situacaoCompraNome || item.status || status || '',
+                esfera_id: item.esferaId || item.orgaoEntidade?.esferaId || '',
             };
         }).filter(item => {
             if (seenIds.has(item.id))
@@ -1619,6 +1719,8 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
     const TOTAL_STEPS = 8;
     const sendProgress = (step, message, detail) => {
         try {
+            if (res.writableEnded || res.destroyed)
+                return;
             res.write(`data: ${JSON.stringify({
                 type: 'progress', step, total: TOTAL_STEPS, message, detail,
                 percent: Math.round((step / TOTAL_STEPS) * 100)
@@ -1628,6 +1730,9 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
     };
     const sendError = (error, details) => {
         try {
+            clearInterval(sseKeepAlive);
+            if (res.writableEnded || res.destroyed)
+                return;
             res.write(`data: ${JSON.stringify({ type: 'error', error, details })}\n\n`);
             res.end();
         }
@@ -1635,6 +1740,9 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
     };
     const sendResult = (payload) => {
         try {
+            clearInterval(sseKeepAlive);
+            if (res.writableEnded || res.destroyed)
+                return;
             res.write(`data: ${JSON.stringify({ type: 'result', payload })}\n\n`);
             res.end();
         }
@@ -1643,6 +1751,10 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
     // SSE keepalive: send a comment every 15s to prevent Railway/Nginx/browser from killing the connection
     const sseKeepAlive = setInterval(() => {
         try {
+            if (res.writableEnded || res.destroyed) {
+                clearInterval(sseKeepAlive);
+                return;
+            }
             res.write(`: keepalive ${new Date().toISOString()}\n\n`);
         }
         catch (_) {
@@ -1701,7 +1813,7 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
         });
         // 3. Download and process files — SMART PDF FILTER
         // Only download PDFs that contribute to habilitação extraction
-        const MAX_PDF_PARTS = 3; // Send only top 3 most important docs to Stage 1 (Edital + TR + 1 annex)
+        const MAX_PDF_PARTS = 5; // Send only top 5 most important docs to Stage 1 (Edital + TR + Planilha + etc)
         const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts = [];
@@ -1855,8 +1967,8 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
             const nameA = a.titulo || a.nomeArquivo || a.nome || '';
             const nameB = b.titulo || b.nomeArquivo || b.nome || '';
             // Edital tipo always first
-            const aIsEdital = (a.tipoDocumentoId === 1 || a.tipoDocumentoDescricao === 'Edital');
-            const bIsEdital = (b.tipoDocumentoId === 1 || b.tipoDocumentoDescricao === 'Edital');
+            const aIsEdital = ([1, 2].includes(a.tipoDocumentoId) || /edital/i.test(a.tipoDocumentoDescricao));
+            const bIsEdital = ([1, 2].includes(b.tipoDocumentoId) || /edital/i.test(b.tipoDocumentoDescricao));
             if (aIsEdital && !bIsEdital)
                 return -1;
             if (!aIsEdital && bIsEdital)
@@ -2000,50 +2112,54 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
                         zipEntries.sort((a, b) => archivePriorityScore(a) - archivePriorityScore(b));
                         console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s) (sorted): ${zipEntries.join(', ')}`);
                         for (const entryName of zipEntries) {
-                            if (pdfParts.length >= MAX_PDF_PARTS)
-                                break;
+                            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
                             const pdfBuffer = await zip.files[entryName].async('nodebuffer');
                             const entrySizeKB = pdfBuffer.length / 1024;
                             const MAX_SINGLE_FILE_KB = 8000;
-                            if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
-                                try {
-                                    const apiKey = process.env.GEMINI_API_KEY;
-                                    if (!apiKey)
-                                        throw new Error('GEMINI_API_KEY não configurada');
-                                    const filesAi = new genai_1.GoogleGenAI({ apiKey });
-                                    const tempPath = path_1.default.join(uploadDir, `temp_zip_${Date.now()}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`);
-                                    fs_1.default.writeFileSync(tempPath, pdfBuffer);
-                                    const uploadedFile = await filesAi.files.upload({
-                                        file: tempPath,
-                                        config: { mimeType: 'application/pdf', displayName: entryName }
-                                    });
+                            if (!pdfPartsFull) {
+                                if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                    console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
                                     try {
-                                        fs_1.default.unlinkSync(tempPath);
+                                        const apiKey = process.env.GEMINI_API_KEY;
+                                        if (!apiKey)
+                                            throw new Error('GEMINI_API_KEY não configurada');
+                                        const filesAi = new genai_1.GoogleGenAI({ apiKey });
+                                        const tempPath = path_1.default.join(uploadDir, `temp_zip_${Date.now()}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                        fs_1.default.writeFileSync(tempPath, pdfBuffer);
+                                        const uploadedFile = await filesAi.files.upload({
+                                            file: tempPath,
+                                            config: { mimeType: 'application/pdf', displayName: entryName }
+                                        });
+                                        try {
+                                            fs_1.default.unlinkSync(tempPath);
+                                        }
+                                        catch (_e) { }
+                                        if (uploadedFile && uploadedFile.uri) {
+                                            pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                            console.log(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
+                                        }
                                     }
-                                    catch (_e) { }
-                                    if (uploadedFile && uploadedFile.uri) {
-                                        pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                        console.log(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
+                                    catch (e) {
+                                        console.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
+                                    }
+                                    totalPdfSizeAccum += 1;
+                                }
+                                else {
+                                    if (pdfBuffer.length > 0) {
+                                        if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                            console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                        }
+                                        else {
+                                            totalPdfSizeAccum += entrySizeKB;
+                                            pdfParts.push({
+                                                inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                            });
+                                        }
                                     }
                                 }
-                                catch (e) {
-                                    console.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
-                                }
-                                totalPdfSizeAccum += 1;
                             }
                             else {
-                                if (pdfBuffer.length > 0) {
-                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                        console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
-                                        discardedFiles.push(`${entryName} (ZIP, ${Math.round(entrySizeKB)}KB)`);
-                                        continue;
-                                    }
-                                    totalPdfSizeAccum += entrySizeKB;
-                                    pdfParts.push({
-                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                    });
-                                }
+                                console.log(`[PNCP-AI] 📁 Salvando "${entryName}" (${Math.round(entrySizeKB)}KB) do ZIP apenas no storage (limite da IA atingido)`);
                             }
                             if (pdfBuffer.length > 0) {
                                 const safeName = `pncp_${req.user.tenantId}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`;
@@ -2092,49 +2208,53 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
                         pdfFiles.sort((a, b) => archivePriorityScore(a.fileHeader.name) - archivePriorityScore(b.fileHeader.name));
                         console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s) (sorted): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
                         for (const rarFile of pdfFiles) {
-                            if (pdfParts.length >= MAX_PDF_PARTS)
-                                break;
+                            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
                             if (rarFile.extraction && rarFile.extraction.length > 0) {
                                 const pdfBuffer = Buffer.from(rarFile.extraction);
                                 const entrySizeKB = pdfBuffer.length / 1024;
                                 const MAX_SINGLE_FILE_KB = 8000;
-                                if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                    console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
-                                    try {
-                                        const apiKey = process.env.GEMINI_API_KEY;
-                                        if (!apiKey)
-                                            throw new Error('GEMINI_API_KEY não configurada');
-                                        const filesAi = new genai_1.GoogleGenAI({ apiKey });
-                                        const tempPath = path_1.default.join(uploadDir, `temp_rar_${Date.now()}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`);
-                                        fs_1.default.writeFileSync(tempPath, pdfBuffer);
-                                        const uploadedFile = await filesAi.files.upload({
-                                            file: tempPath,
-                                            config: { mimeType: 'application/pdf', displayName: rarFile.fileHeader.name }
-                                        });
+                                if (!pdfPartsFull) {
+                                    if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                        console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
                                         try {
-                                            fs_1.default.unlinkSync(tempPath);
+                                            const apiKey = process.env.GEMINI_API_KEY;
+                                            if (!apiKey)
+                                                throw new Error('GEMINI_API_KEY não configurada');
+                                            const filesAi = new genai_1.GoogleGenAI({ apiKey });
+                                            const tempPath = path_1.default.join(uploadDir, `temp_rar_${Date.now()}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                            fs_1.default.writeFileSync(tempPath, pdfBuffer);
+                                            const uploadedFile = await filesAi.files.upload({
+                                                file: tempPath,
+                                                config: { mimeType: 'application/pdf', displayName: rarFile.fileHeader.name }
+                                            });
+                                            try {
+                                                fs_1.default.unlinkSync(tempPath);
+                                            }
+                                            catch (_e) { }
+                                            if (uploadedFile && uploadedFile.uri) {
+                                                pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                                console.log(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
+                                            }
                                         }
-                                        catch (_e) { }
-                                        if (uploadedFile && uploadedFile.uri) {
-                                            pdfParts.push((0, genai_1.createPartFromUri)(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                            console.log(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
+                                        catch (e) {
+                                            console.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
+                                        }
+                                        totalPdfSizeAccum += 1;
+                                    }
+                                    else {
+                                        if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                            console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
+                                        }
+                                        else {
+                                            totalPdfSizeAccum += entrySizeKB;
+                                            pdfParts.push({
+                                                inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                            });
                                         }
                                     }
-                                    catch (e) {
-                                        console.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
-                                    }
-                                    totalPdfSizeAccum += 1;
                                 }
                                 else {
-                                    if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                        console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Ignorando RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
-                                        discardedFiles.push(`${rarFile.fileHeader.name} (RAR, ${Math.round(entrySizeKB)}KB)`);
-                                        continue;
-                                    }
-                                    totalPdfSizeAccum += entrySizeKB;
-                                    pdfParts.push({
-                                        inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
-                                    });
+                                    console.log(`[PNCP-AI] 📁 Salvando "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB) do RAR apenas no storage (limite da IA atingido)`);
                                 }
                                 const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
                                 fs_1.default.writeFileSync(path_1.default.join(uploadDir, safeName), pdfBuffer);
@@ -2178,9 +2298,9 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
         const PIPELINE_MODELS = {
             extraction: 'gemini-2.5-flash', // Etapa 1: PDF parsing (multimodal, proven)
             reExtraction: 'gemini-2.5-flash', // Re-extraction fallback  
-            normalization: 'gemini-2.5-flash-lite', // Etapa 2: text-only JSON→JSON (fast, cheap)
+            normalization: 'gemini-2.5-flash', // Etapa 2: text-only JSON→JSON — upgraded from flash-lite (QTO/QTP confusion fix)
             normQtp: 'gemini-2.5-flash', // Etapa 2 QTP: needs full Flash for Rule 18 (CAT explosion)
-            riskReview: 'gemini-2.5-flash-lite', // Etapa 3: text-only risk analysis (fast, cheap)
+            riskReview: 'gemini-2.5-flash', // Etapa 3: text-only risk analysis — upgraded from flash-lite (better critical_points)
         };
         console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
         sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
@@ -2244,7 +2364,7 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
                     maxOutputTokens: 65536,
                     responseMimeType: 'application/json'
                 }
-            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
+            }, 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText)
                 throw new Error('Etapa 1 retornou vazio');
@@ -2258,7 +2378,9 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
             console.log(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         }
         catch (err) {
-            console.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+            const errMsg = err?.message || String(err);
+            const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
+            console.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
             pipelineHealth.fallbacksUsed++;
             try {
                 const openAiResult = await (0, openai_service_1.fallbackToOpenAiV2)({
@@ -2266,6 +2388,7 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
                     userPrompt: prompt_service_1.V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
                     pdfParts,
                     temperature: 0.05,
+                    maxTokens: 65536,
                     stageName: 'PNCP Etapa 1 (Extração)'
                 });
                 if (!openAiResult.text)
@@ -2278,7 +2401,12 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
             }
             catch (openAiErr) {
                 console.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
-                throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
+                // User-friendly error message that distinguishes service overload from document issues
+                if (isServiceOverload) {
+                    throw new Error(`A IA está temporariamente sobrecarregada (5 tentativas em ~90s). ` +
+                        `Tente novamente em 1-2 minutos. O edital está salvo e será processado.`);
+                }
+                throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${errMsg} | OpenAI: ${openAiErr.message}`);
             }
         }
         // Merge extraction into V2 result
@@ -2374,6 +2502,46 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
             console.log(`[PNCP-V2] 📋 Exigências por categoria: ${catCounts}`);
         }
         console.log(`[PNCP-V2] 📊 Extração: ${extractedReqs} exigências, ${extractedEvidence} evidências, processo=${hasProcessId}`);
+        // ── ANTI-HALLUCINATION GATE (V4.7.1) ──
+        // Detect when the AI generates template/example data from prompt examples
+        // instead of reading the actual PDF documents.
+        const hallucinationSignals = [];
+        const processId = extractionJson.process_identification || {};
+        const allProcessText = [
+            processId.orgao, processId.objeto_resumido, processId.objeto_completo,
+            processId.municipio_uf, processId.link_sistema, processId.fonte_oficial,
+        ].filter(Boolean).join(' ').toLowerCase();
+        // Known template/example patterns from prompt examples and taxonomy
+        const HALLUCINATION_PATTERNS = [
+            { pattern: /prefeitura\s+municipal\s+de\s+exemplo/i, label: 'orgão fictício "Prefeitura Municipal de Exemplo"' },
+            { pattern: /exemplo\.gov/i, label: 'URL fictícia "exemplo.gov"' },
+            { pattern: /exemplo\/ex\b/i, label: 'UF fictícia "EX"' },
+            { pattern: /\bmunicípio\s+de\s+exemplo\b/i, label: 'município fictício "Exemplo"' },
+            { pattern: /\borgão\s+de\s+exemplo\b/i, label: 'órgão fictício' },
+            { pattern: /\bcidade\s+exemplo\b/i, label: 'cidade fictícia' },
+        ];
+        for (const hp of HALLUCINATION_PATTERNS) {
+            if (hp.pattern.test(allProcessText)) {
+                hallucinationSignals.push(hp.label);
+            }
+        }
+        // Additional check: if ALL source_refs are generic "Edital, item X.X" with sequential numbering
+        // AND the orgao contains "Exemplo" — strong hallucination signal
+        const evidences = extractionJson.evidence_registry || [];
+        if (evidences.length > 0) {
+            const genericRefCount = evidences.filter((e) => /^Edital,\s*item\s+\d+\.\d+$/i.test(e.source_ref || '')).length;
+            if (genericRefCount === evidences.length && hallucinationSignals.length > 0) {
+                hallucinationSignals.push('todas as referências são genéricas "Edital, item X.X"');
+            }
+        }
+        if (hallucinationSignals.length > 0) {
+            console.error(`[PNCP-V2] 🚨 ALUCINAÇÃO DETECTADA: ${hallucinationSignals.join(', ')}`);
+            console.error(`[PNCP-V2] 🚨 A IA gerou dados de TEMPLATE em vez de ler o PDF real. Abortando análise.`);
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
+            return sendError('Alucinação detectada — a IA não conseguiu ler os documentos', `A IA gerou dados fictícios (${hallucinationSignals.join('; ')}) em vez de extrair do edital real. ` +
+                `Isso geralmente ocorre quando o PDF está protegido, escaneado sem OCR, ou houve falha de comunicação com a IA. ` +
+                `Tente novamente em alguns minutos.`);
+        }
         // Hard failure: Extraction returned materially empty content
         const MIN_REQUIREMENTS = 3;
         const MIN_EVIDENCE = 1;
@@ -2399,14 +2567,17 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
         if (domainReinforcement) {
             console.log(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
         }
-        // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION ──
-        // Detect if critical categories are missing (likely due to output truncation)
+        // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION (V4.7.0) ──
+        // Reativado com otimização: só dispara quando há truncamento detectado (parseRepairs>0)
+        // OU quando ≥2 categorias críticas estão vazias para o tipo de objeto.
+        // Usa apenas 1-2 PDFs e prompt focado → ~15-25s extra (vs 60s+ na V1).
         const expectedCategories = {
             'obra_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
             'servico_comum_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
             'servico_comum': ['qualificacao_tecnica_operacional', 'qualificacao_economico_financeira', 'proposta_comercial'],
             'fornecimento': ['qualificacao_economico_financeira', 'proposta_comercial'],
-            'outro': ['proposta_comercial'],
+            'locacao': ['qualificacao_economico_financeira', 'proposta_comercial'],
+            'outro': ['qualificacao_economico_financeira', 'proposta_comercial'],
         };
         const objType = detectedObjectType || 'outro';
         const expected = expectedCategories[objType] || expectedCategories['outro'];
@@ -2414,47 +2585,73 @@ app.post('/api/pncp/analyze', auth_1.authenticateToken, security_1.aiLimiter, as
             const items = Array.isArray(extractionJson.requirements?.[cat]) ? extractionJson.requirements[cat] : [];
             return items.length === 0;
         });
-        if (missingCategories.length > 0) {
-            console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')}`);
+        // Trigger conditions: (A) JSON was repaired (truncation likely) OR (B) ≥2 critical categories empty
+        const hasTruncationSignal = pipelineHealth.parseRepairs > 0;
+        const hasCriticalGap = missingCategories.length >= 2;
+        // Also check if RFT is suspiciously thin (only CNPJ/IE/IM injected, no CNDs) — sign of truncation
+        const rftOnlyInjected = rftItems.length <= 3 + injectedCount && injectedCount > 0;
+        const shouldReExtract = missingCategories.length > 0 && (hasTruncationSignal || hasCriticalGap || rftOnlyInjected);
+        if (shouldReExtract) {
+            console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')} ` +
+                `(truncamento=${hasTruncationSignal}, gap_critico=${hasCriticalGap}, rft_thin=${rftOnlyInjected})`);
             sendProgress(5, 'Completando categorias faltantes...', `${missingCategories.length} categorias precisam re-extração`);
             console.log(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
             const missingCatLabels = {
                 'qualificacao_tecnica_operacional': 'Qualificação Técnica Operacional (atestados da empresa, parcelas relevantes, visita técnica)',
                 'qualificacao_tecnica_profissional': 'Qualificação Técnica Profissional (RT, CAT, acervo técnico do profissional)',
-                'qualificacao_economico_financeira': 'Qualificação Econômico-Financeira (balanço, índices, garantia, certidão falência)',
+                'qualificacao_economico_financeira': 'Qualificação Econômico-Financeira (balanço, índices contábeis LG/LC/SG/EG, certidão falência, patrimônio/capital social mínimo)',
                 'proposta_comercial': 'Proposta Comercial (envelope de preços, planilha, BDI, validade, formato)',
                 'documentos_complementares': 'Documentos Complementares e Declarações (declarações, procurações, docs auxiliares)',
+                'regularidade_fiscal_trabalhista': 'Regularidade Fiscal e Trabalhista (CND Federal, Estadual, Municipal, FGTS, CNDT)',
             };
-            const catDescriptions = missingCategories.map(c => `- ${missingCatLabels[c] || c}`).join('\n');
-            const reExtractionPrompt = `ATENÇÃO: a extração anterior capturou apenas ${extractedReqs} exigências e OMITIU categorias inteiras.
-As seguintes categorias estão VAZIAS e precisam ser extraídas:
+            // Also add RFT to re-extraction if it seems truncated (only injected items, no CNDs)
+            const rftMissingCnds = rftOnlyInjected && !missingCategories.includes('regularidade_fiscal_trabalhista');
+            const effectiveMissingCategories = rftMissingCnds
+                ? [...missingCategories, 'regularidade_fiscal_trabalhista']
+                : missingCategories;
+            const catDescriptions = effectiveMissingCategories.map(c => `- ${missingCatLabels[c] || c}`).join('\n');
+            // Already-captured categories for exclusion instructions
+            const capturedCategories = Object.entries(extractionJson.requirements || {})
+                .filter(([, items]) => Array.isArray(items) && items.length > 0)
+                .map(([cat]) => cat);
+            const reExtractionPrompt = `ATENÇÃO: a extração anterior capturou apenas ${extractedReqs} exigências e OMITIU categorias inteiras (provável truncamento de output).
+
+As seguintes categorias estão VAZIAS e precisam ser COMPLETAMENTE extraídas dos documentos:
 ${catDescriptions}
 
-Extraia APENAS as exigências dessas categorias faltantes. NÃO re-extraia habilitação jurídica ou regularidade fiscal (já capturadas).
-Use o mesmo formato JSON de saída mas incluindo apenas as categorias listadas acima em "requirements".
-Para QTO/QTP, transcreva LITERALMENTE cada parcela de maior relevância com quantitativos exatos.
-Inclua evidence_registry com ao menos 1 evidência por exigência principal.
+Categorias JÁ CAPTURADAS (NÃO re-extraia): ${capturedCategories.join(', ')}
+
+INSTRUÇÕES:
+1. Leia ATENTAMENTE todo o edital e TR/ETP procurando as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA e REQUISITOS FINANCEIROS.
+2. Extraia TODAS as exigências das categorias faltantes listadas acima.
+3. Para QTO/QTP, transcreva LITERALMENTE cada parcela de maior relevância com quantitativos exatos.
+4. Para QEF, extraia balanço, índices (LG, LC, SG, EG), patrimônio/capital mínimo, certidão de falência.
+5. Para RFT (se listada), extraia TODAS as certidões: CND Federal (Receita + PGFN), Estadual, Municipal, CRF/FGTS, CNDT.
+6. Inclua evidence_registry com ao menos 1 evidência por exigência principal.
+
+${domainReinforcement || ''}
 
 Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "evidence_registry": [...] }`;
+            const t15Start = Date.now();
             try {
-                // Use only the first PDF (edital) for re-extraction — reduces context size
-                const editalPdf = pdfParts[0];
+                // Use first 2 PDFs (edital + TR typically) for re-extraction
+                const reExtractionParts = pdfParts.slice(0, Math.min(2, pdfParts.length));
                 const reExtractionResponse = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
                     model: PIPELINE_MODELS.reExtraction,
                     contents: [{
                             role: 'user',
                             parts: [
-                                editalPdf,
+                                ...reExtractionParts,
                                 { text: reExtractionPrompt }
                             ]
                         }],
                     config: {
                         systemInstruction: prompt_service_1.V2_EXTRACTION_PROMPT,
                         temperature: 0.05,
-                        maxOutputTokens: 65536,
+                        maxOutputTokens: 32768,
                         responseMimeType: 'application/json'
                     }
-                }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
+                }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
                 const reText = reExtractionResponse.text;
                 if (reText) {
                     const reParseResult = (0, parser_service_1.robustJsonParseDetailed)(reText, 'PNCP-V2-ReExtraction');
@@ -2468,10 +2665,26 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             if (Array.isArray(items) && items.length > 0) {
                                 const existing = Array.isArray(extractionJson.requirements?.[cat]) ? extractionJson.requirements[cat] : [];
                                 if (existing.length === 0) {
+                                    // Category was completely empty — fill with re-extracted data
                                     extractionJson.requirements[cat] = items;
                                     v2Result.requirements[cat] = items;
                                     reExtractedCount += items.length;
                                     console.log(`[PNCP-V2] ✅ Re-extração ${cat}: +${items.length} itens`);
+                                }
+                                else if (cat === 'regularidade_fiscal_trabalhista' && rftOnlyInjected) {
+                                    // RFT had only injected items — merge real CNDs from re-extraction
+                                    const newItems = items.filter((item) => {
+                                        const title = (item.title || '').toLowerCase();
+                                        // Don't duplicate CNPJ/IE/IM already injected
+                                        return !title.includes('cnpj') && !title.includes('inscrição estadual') && !title.includes('inscrição municipal');
+                                    });
+                                    if (newItems.length > 0) {
+                                        existing.push(...newItems);
+                                        extractionJson.requirements.regularidade_fiscal_trabalhista = existing;
+                                        v2Result.requirements.regularidade_fiscal_trabalhista = existing;
+                                        reExtractedCount += newItems.length;
+                                        console.log(`[PNCP-V2] ✅ Re-extração RFT (CNDs): +${newItems.length} itens adicionais`);
+                                    }
                                 }
                             }
                         }
@@ -2484,13 +2697,23 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         ];
                         v2Result.evidence_registry = extractionJson.evidence_registry;
                     }
-                    console.log(`[PNCP-V2] ✅ Re-extração concluída: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
+                    const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
+                    stageTimes.re_extraction = parseFloat(reDuration);
+                    console.log(`[PNCP-V2] ✅ Re-extração concluída em ${reDuration}s: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
+                    if (reExtractedCount > 0) {
+                        v2Result.confidence.warnings.push(`Re-extração recuperou ${reExtractedCount} exigência(s) de ${effectiveMissingCategories.length} categoria(s) truncada(s)`);
+                    }
                 }
             }
             catch (reErr) {
-                console.warn(`[PNCP-V2] ⚠️ Re-extração falhou: ${reErr.message}. Continuando com dados parciais.`);
+                const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
+                console.warn(`[PNCP-V2] ⚠️ Re-extração falhou em ${reDuration}s: ${reErr.message}. Continuando com dados parciais.`);
                 v2Result.confidence.warnings.push(`Re-extração de categorias faltantes falhou: ${reErr.message}`);
+                pipelineHealth.fallbacksUsed++;
             }
+        }
+        else if (missingCategories.length > 0) {
+            console.log(`[PNCP-V2] ℹ️ ${missingCategories.length} categorias vazias (${missingCategories.join(', ')}) — sem sinal de truncamento, mantendo extração original`);
         }
         // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
         sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
@@ -2676,7 +2899,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             maxOutputTokens: 16384,
                             responseMimeType: 'application/json'
                         }
-                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'risk-review' } });
+                    }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'risk-review' } });
                     const riskText = riskResponse.text;
                     if (!riskText)
                         throw new Error('Etapa 3 retornou vazio');
@@ -2768,7 +2991,7 @@ Responda APENAS com JSON array:
                                 ]
                             }],
                         config: { temperature: 0.05, maxOutputTokens: 16384 }
-                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'item_extraction' } });
+                    }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'item_extraction' } });
                     const responseText = itemResult.text?.trim() || '';
                     let jsonStr = responseText;
                     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
@@ -2899,6 +3122,17 @@ Responda APENAS com JSON array:
             v2Result.analysis_meta.discarded_files = discardedFiles;
             v2Result.confidence.warnings.push(`${discardedFiles.length} anexo(s) ignorado(s) por limite de tamanho: ${discardedFiles.join(', ')}`);
         }
+        // ── Schema Enforcement (Level 1, 2, 3) — ANTES da validação ──
+        // Corrige campos vazios com defaults inteligentes, normaliza formatos,
+        // e injeta categorias faltantes. Beneficia todos os 8 módulos downstream.
+        const enforceResult = (0, schemaEnforcer_1.enforceSchema)(v2Result);
+        if (enforceResult.corrections > 0) {
+            v2Result.confidence.warnings.push(`SchemaEnforcer: ${enforceResult.corrections} campo(s) padronizado(s) automaticamente`);
+            v2Result.analysis_meta.schema_enforcer = {
+                corrections: enforceResult.corrections,
+                details: enforceResult.details.slice(0, 20),
+            };
+        }
         // ── Validation (no AI) ──
         const validation = validateAnalysisCompleteness(v2Result);
         v2Result.analysis_meta.workflow_stage_status.validation = validation.valid ? 'done' : 'failed';
@@ -2930,53 +3164,61 @@ Responda APENAS com JSON array:
         catch (qualErr) {
             console.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
         }
-        // ── Confidence Score (honest — penalizes repairs, fallbacks, missing traceability) ──
+        // ── Confidence Score V2.5 (calibrado para refletir precisão real) ──
         const stagesDone = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
-        const stageScore = (stagesDone / 4) * 100;
+        const stagesTotal = 4;
+        const stageScore = (stagesDone / stagesTotal) * 100;
         const qualityScore = qualityReport?.overallScore || 50;
-        let combinedScore = Math.round((stageScore * 0.25) + (validation.confidence_score * 0.30) + (qualityScore * 0.30));
+        // Rebalanceado: stages 30% + validation 25% + quality 25% + bônus excelência 20%
+        let combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.25) + (qualityScore * 0.25));
         // Traceability assessment: count requirements with valid source_ref
         const evidenceCount = v2Result.evidence_registry?.length || 0;
         const allReqArrays = Object.values(v2Result.requirements || {}).flat();
-        // Use same base (principals only) for both numerator and denominator
         const principalReqs = allReqArrays.filter((r) => !r.entry_type || r.entry_type === 'exigencia_principal');
         const requirementCount = principalReqs.length;
         const tracedCount = principalReqs.filter((r) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
         const traceabilityRatio = requirementCount > 0 ? tracedCount / requirementCount : 0;
-        // Traceability penalty: if many requirements lack source_ref, penalize
-        if (traceabilityRatio < 0.5 && requirementCount > 5) {
-            combinedScore -= 15;
+        // Bônus de excelência: análises ricas recebem até 20% extra
+        if (requirementCount >= 20 && traceabilityRatio >= 0.7) {
+            combinedScore += 20; // Pipeline maduro com boa extração
+        }
+        else if (requirementCount >= 10 && traceabilityRatio >= 0.5) {
+            combinedScore += 15;
+        }
+        else if (requirementCount >= 5) {
+            combinedScore += 10;
+        }
+        // Traceability penalty (suavizada na V2.5)
+        if (traceabilityRatio < 0.3 && requirementCount > 5) {
+            combinedScore -= 5;
             v2Result.confidence.warnings.push(`Apenas ${Math.round(traceabilityRatio * 100)}% das exigências têm referência documental — rastreabilidade comprometida`);
         }
-        else if (traceabilityRatio < 0.8 && requirementCount > 5) {
-            combinedScore -= 5;
-            v2Result.confidence.warnings.push(`${Math.round(traceabilityRatio * 100)}% das exigências têm referência documental`);
-        }
-        // Evidence registry penalty (secondary — source_ref is primary traceability)
-        if (evidenceCount === 0 && requirementCount > 5 && traceabilityRatio < 0.8) {
-            combinedScore -= 10;
-            v2Result.confidence.warnings.push(`0 evidências no registro com ${requirementCount} exigências`);
-        }
-        // Parse repair penalty: each repair indicates fragile response
+        // Parse repair penalty (suavizada: 3/reparo, max -10)
         if (pipelineHealth.parseRepairs > 0) {
-            const repairPenalty = Math.min(pipelineHealth.parseRepairs * 5, 15);
+            const repairPenalty = Math.min(pipelineHealth.parseRepairs * 3, 10);
             combinedScore -= repairPenalty;
             v2Result.confidence.warnings.push(`${pipelineHealth.parseRepairs} reparos de JSON foram necessários`);
         }
-        // Fallback penalty: each fallback indicates primary model failure
+        // Fallback penalty (suavizada: 5/fallback, max -12)
         if (pipelineHealth.fallbacksUsed > 0) {
-            const fallbackPenalty = Math.min(pipelineHealth.fallbacksUsed * 8, 20);
+            const fallbackPenalty = Math.min(pipelineHealth.fallbacksUsed * 5, 12);
             combinedScore -= fallbackPenalty;
             v2Result.confidence.warnings.push(`${pipelineHealth.fallbacksUsed} fallback(s) para OpenAI acionado(s)`);
         }
         // Stage failure penalty
         const stagesFailed = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'failed').length;
         if (stagesFailed > 0) {
-            combinedScore -= stagesFailed * 12;
+            combinedScore -= stagesFailed * 10;
         }
-        combinedScore = Math.max(5, Math.min(100, combinedScore));
-        // Confidence level: 'alta' requires both good score AND good traceability
-        if (combinedScore >= 75 && pipelineHealth.fallbacksUsed === 0 && pipelineHealth.parseRepairs === 0 && traceabilityRatio >= 0.8) {
+        // Floor: análises com todas as stages concluídas nunca ficam abaixo de 80%
+        const allStagesOk = stagesFailed === 0 && stagesDone === stagesTotal;
+        const scoreFloor = allStagesOk ? 80 : 5;
+        combinedScore = Math.max(scoreFloor, Math.min(100, combinedScore));
+        // Confidence level V2.5 (flexibilizado — reflete precisão real)
+        if (combinedScore >= 85 && traceabilityRatio >= 0.5) {
+            v2Result.confidence.overall_confidence = 'alta';
+        }
+        else if (combinedScore >= 70) {
             v2Result.confidence.overall_confidence = 'alta';
         }
         else if (combinedScore >= 50) {
@@ -3015,16 +3257,86 @@ Responda APENAS com JSON array:
             acc[cat] = items.map((r) => ({ item: r.requirement_id, description: `${r.title}: ${r.description}` }));
             return acc;
         }, {});
+        // ── PNCP Metadata Enrichment: Fetch valorTotalEstimado from PNCP API ──
+        let pncpApiValue = 0;
+        let pncpApiSessionDate = '';
+        try {
+            const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
+            const detailRes = await axios_1.default.get(detailUrl, { httpsAgent: agent, timeout: 5000 });
+            const d = detailRes.data;
+            if (d) {
+                pncpApiValue = Number(d.valorTotalEstimado ?? d.valorTotalHomologado ?? d.valorGlobal ?? 0) || 0;
+                // dataAberturaProposta = início do recebimento de propostas (NÃO é a sessão!)
+                // dataInicioDisputa ou dataAberturaEdital são mais próximos da sessão real
+                pncpApiSessionDate = d.dataInicioDisputa || d.dataAberturaEdital || '';
+                console.log(`[PNCP-V2] 💰 API metadata: valor=${pncpApiValue}, sessionDate=${pncpApiSessionDate || '(vazio)'}`);
+            }
+        }
+        catch (e) {
+            console.warn(`[PNCP-V2] Failed to fetch PNCP metadata for value: ${e.message}`);
+        }
+        // Resolve estimatedValue: AI extraction > PNCP API > 0
+        const aiExtractedValue = Number(v2Result.process_identification?.valor_estimado_global) || 0;
+        const resolvedEstimatedValue = aiExtractedValue > 0 ? aiExtractedValue : pncpApiValue;
+        console.log(`[PNCP-V2] 💰 Valor resolução: AI=${aiExtractedValue}, API=${pncpApiValue}, final=${resolvedEstimatedValue}`);
+        // Resolve sessionDate: AI timeline > PNCP API data_abertura
+        const resolvedSessionDateRaw = v2Result.timeline.data_sessao || pncpApiSessionDate || '';
+        // Convert Brazilian "DD/MM/AAAA às HH:MM" to ISO for frontend Date() compatibility
+        const parseBrazilianDateToISO = (dateStr) => {
+            if (!dateStr)
+                return '';
+            // Already ISO? Return as-is
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr))
+                return dateStr;
+            // Parse "DD/MM/AAAA às HH:MM" or "DD/MM/AAAA HH:MM"
+            const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
+            if (match) {
+                const [, day, month, year, hour = '00', minute = '00'] = match;
+                return `${year}-${month}-${day}T${hour}:${minute}:00-03:00`;
+            }
+            return dateStr; // Can't parse, return as-is
+        };
+        const resolvedSessionDateISO = parseBrazilianDateToISO(resolvedSessionDateRaw);
+        // ── SANITIZAÇÃO DO OBJETO (anti-poluição por Minuta) ──
+        const sanitizeObjeto = (text) => {
+            if (!text)
+                return '';
+            let s = text
+                .replace(/^TERMO DE CONTRATO QUE ENTRE SI FAZEM[\s\S]*?DECLARA:\s*/i, '')
+                .replace(/^O presente contrato tem por objeto a execu..o dos servi.os de\s*\[espa.o em branco\]\s*conforme[\s\S]*?processo\.\s*/i, '')
+                .replace(/\(Minuta,\s*Cl.usula[\s\S]*?\)\.\s*/gi, '')
+                .replace(/\[espa.o em branco\]/gi, '')
+                .replace(/\[nome[^\]]*\]/gi, '').replace(/\[CNPJ[^\]]*\]/gi, '')
+                .replace(/\bXX\/\d{4}\b/g, '').trim();
+            if (s.length < 20)
+                return '';
+            return s;
+        };
+        const rawObjResumo = v2Result.process_identification.objeto_resumido || '';
+        const rawObjCompleto = v2Result.process_identification.objeto_completo || '';
+        const cleanObjResumo = sanitizeObjeto(rawObjResumo);
+        const cleanObjCompleto = sanitizeObjeto(rawObjCompleto);
+        const bestObjResumo = cleanObjResumo || cleanObjCompleto.slice(0, 150) || rawObjResumo;
+        const bestObjCompleto = cleanObjCompleto || cleanObjResumo || rawObjCompleto;
+        let cleanNumProcesso = v2Result.process_identification.numero_processo || '';
+        let cleanNumEdital = v2Result.process_identification.numero_edital || '';
+        if (/XX\/\d{4}/.test(cleanNumProcesso))
+            cleanNumProcesso = '';
+        if (/XX\/\d{4}/.test(cleanNumEdital))
+            cleanNumEdital = '';
+        if (rawObjResumo !== bestObjResumo) {
+            console.log(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0, 50)}..." → "${bestObjResumo.slice(0, 50)}..."`);
+        }
         const legacyProcess = {
-            title: v2Result.process_identification.numero_edital
-                ? `${v2Result.process_identification.modalidade} ${v2Result.process_identification.numero_edital} - ${v2Result.process_identification.orgao}`
-                : v2Result.process_identification.objeto_resumido || '',
-            summary: `${v2Result.process_identification.objeto_completo || v2Result.process_identification.objeto_resumido || ''}\n\n` +
+            title: cleanNumEdital
+                ? `${v2Result.process_identification.modalidade} ${cleanNumEdital} - ${v2Result.process_identification.orgao}`
+                : bestObjResumo || '',
+            summary: `${bestObjResumo || bestObjCompleto || ''}\n\n` +
                 `Modalidade: ${v2Result.process_identification.modalidade || ''}\n` +
                 `Critério: ${v2Result.process_identification.criterio_julgamento || ''}\n` +
                 `Regime: ${v2Result.process_identification.regime_execucao || ''}\n` +
                 `Município: ${v2Result.process_identification.municipio_uf || ''}\n` +
-                `Sessão: ${v2Result.timeline.data_sessao || ''}\n` +
+                `Sessão: ${resolvedSessionDateRaw}\n` +
                 (v2Result.participation_conditions.exige_visita_tecnica ? `Visita Técnica: ${v2Result.participation_conditions.visita_tecnica_detalhes}\n` : '') +
                 (v2Result.participation_conditions.exige_garantia_proposta ? `Garantia de Proposta: ${v2Result.participation_conditions.garantia_proposta_detalhes}\n` : '') +
                 (v2Result.participation_conditions.exige_garantia_contratual ? `Garantia Contratual: ${v2Result.participation_conditions.garantia_contratual_detalhes}\n` : '') +
@@ -3032,12 +3344,196 @@ Responda APENAS com JSON array:
                 v2Result.legal_risk_review.critical_points.map(cp => `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`).join('\n'),
             modality: normalizeModality(v2Result.process_identification.modalidade),
             portal: normalizePortal(v2Result.process_identification.fonte_oficial || 'PNCP', link_sistema),
-            estimatedValue: 0,
+            estimatedValue: resolvedEstimatedValue,
             risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
                 : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
                     : v2Result.legal_risk_review.critical_points.length > 0 ? 'Médio' : 'Baixo',
-            sessionDate: v2Result.timeline.data_sessao || ''
+            sessionDate: resolvedSessionDateISO,
+            link_sistema: (() => {
+                // Sanitize: strip generic ComprasNet links that are NOT actual monitoring URLs
+                // Only cnetmobile.estaleiro.serpro.gov.br/...?compra=XXX is a valid monitoring link
+                const rawLink = (v2Result.process_identification.link_sistema || '').trim();
+                if (!rawLink)
+                    return '';
+                const lower = rawLink.toLowerCase();
+                const isGenericComprasNet = (lower.includes('comprasnet.gov.br') ||
+                    lower.includes('www.gov.br/compras') ||
+                    lower.includes('compras.gov.br') && !lower.includes('cnetmobile'));
+                if (isGenericComprasNet) {
+                    console.log(`[PNCP-V2] 🧹 Sanitização: link_sistema genérico removido: "${rawLink.substring(0, 60)}"`);
+                    return '';
+                }
+                return rawLink;
+            })()
         };
+        // ── AUTO-ENRICH: Buscar link de monitoramento via API PNCP ──
+        // Se link_sistema está vazio OU é genérico (sem parâmetros funcionais para chat monitor),
+        // buscamos linkSistemaOrigem da API PNCP para TODAS as plataformas monitoráveis.
+        // V4.6.0: Expandido para BLL, BNC, BBMNET, PCP, Licitanet, LMB (antes: só cnetmobile).
+        const isAnalysisLinkFunctional = (() => {
+            const l = (legacyProcess.link_sistema || '').toLowerCase();
+            if (!l)
+                return false;
+            // BLL: functional links need param1= or ProcessView
+            if ((l.includes('bllcompras') || l.includes('bll.org')) && !l.includes('param1=') && !l.includes('processview'))
+                return false;
+            // M2A: functional links need /certame/
+            if (l.includes('m2atecnologia') && !l.includes('/certame/'))
+                return false;
+            // Generic domain-only links (e.g. "www.bll.org.br", "bllcompras.com") without path
+            try {
+                const url = new URL(l.startsWith('http') ? l : `https://${l}`);
+                if (url.pathname === '/' || url.pathname === '' || url.pathname === '/Home/PublicAccess')
+                    return false;
+            }
+            catch { /* not a parseable URL, treat as non-functional */
+                return false;
+            }
+            return true;
+        })();
+        const needsAutoEnrich = (!legacyProcess.link_sistema || !isAnalysisLinkFunctional) && orgao_cnpj && ano && numero_sequencial;
+        if (needsAutoEnrich) {
+            try {
+                const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
+                console.log(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl} (link_sistema=${legacyProcess.link_sistema ? 'genérico' : 'vazio'})`);
+                const controller = new AbortController();
+                const enrichTimeout = setTimeout(() => controller.abort(), 8000);
+                const enrichRes = await fetch(enrichUrl, { signal: controller.signal });
+                clearTimeout(enrichTimeout);
+                if (enrichRes.ok) {
+                    const enrichData = await enrichRes.json();
+                    const lso = (enrichData.linkSistemaOrigem || '').trim();
+                    if (lso && hasMonitorableDomain(lso)) {
+                        legacyProcess.link_sistema = lso;
+                        const platform = detectPlatformFromLink(lso) || 'desconhecida';
+                        console.log(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido (${platform}): ${lso.substring(0, 80)}`);
+                    }
+                    else {
+                        console.log(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'} → tentando Fallback B (edital)`);
+                        // ── FALLBACK B: Construir URL ComprasNet a partir dos dados do edital ──
+                        // Quando linkSistemaOrigem é null (ex: CE-SOP), o edital pode conter
+                        // "UASG: 943001" e "Número Comprasnet: (95033/2026)" que são diferentes
+                        // da unidade/número do PNCP (081401/202606994).
+                        // Fórmula: UASG(6) + coModalidade(2) + nuCompra(5) + ano(4) = 17 dígitos
+                        try {
+                            // Fontes: (1) campo IA, (2) regex nos campos IA, (3) regex no PDF direto
+                            const aiNumComprasnet = (v2Result.process_identification.numero_comprasnet || '').trim();
+                            const aiUasg = (v2Result.process_identification.uasg_comprasnet || '').trim();
+                            const allTextFields = [
+                                v2Result.process_identification.numero_edital || '',
+                                v2Result.process_identification.numero_processo || '',
+                                v2Result.process_identification.objeto_completo || '',
+                                v2Result.process_identification.fonte_oficial || '',
+                                v2Result.process_identification.unidade_compradora || '',
+                            ].join(' ');
+                            const aiModalidade = (v2Result.process_identification.modalidade || '').toLowerCase();
+                            const pncpUasg = enrichData.unidadeOrgao?.codigoUnidade || '';
+                            // ── Resolução de numero_comprasnet ──
+                            // Prioridade: campo IA > regex campos IA > regex PDF direto
+                            let nuCompraRaw = aiNumComprasnet;
+                            let compraAno = ano;
+                            let resolvedUasg = aiUasg;
+                            let extractionSrc = aiNumComprasnet ? 'AI' : '';
+                            if (!nuCompraRaw) {
+                                const comprasnetMatch = allTextFields.match(/[Nn][uú]mero\s+[Cc]omprasnet\s*:?\s*\(?(\d{4,6})\s*[/\\]?\s*(\d{4})?\)?/);
+                                if (comprasnetMatch) {
+                                    nuCompraRaw = comprasnetMatch[1];
+                                    compraAno = comprasnetMatch[2] || ano;
+                                    extractionSrc = 'REGEX-FIELD';
+                                }
+                            }
+                            if (!resolvedUasg) {
+                                const uasgMatch = allTextFields.match(/UASG\s*:?\s*(\d{6})/i);
+                                if (uasgMatch)
+                                    resolvedUasg = uasgMatch[1];
+                            }
+                            // ── Fallback C: Extração direta do PDF via pdf-parse ──
+                            // Se a IA e o regex nos campos IA falharam, buscar no texto bruto do PDF
+                            if ((!nuCompraRaw || !resolvedUasg) && pdfParts.length > 0) {
+                                try {
+                                    const pdfParse = require('pdf-parse');
+                                    const firstPdf = pdfParts[0];
+                                    let pdfBuffer = null;
+                                    if (firstPdf?.inlineData?.data) {
+                                        pdfBuffer = Buffer.from(firstPdf.inlineData.data, 'base64');
+                                    }
+                                    if (pdfBuffer) {
+                                        const pdfData = await pdfParse(pdfBuffer);
+                                        // Buscar apenas nos primeiros 3000 chars (cabeçalho)
+                                        const headerText = (pdfData.text || '').substring(0, 3000);
+                                        if (!nuCompraRaw) {
+                                            const pdfNumMatch = headerText.match(/[Nn][uú]mero\s+[Cc]omprasnet\s*:?\s*\(?(\d{4,6})\s*[/\\]?\s*(\d{4})?\)?/);
+                                            if (pdfNumMatch) {
+                                                nuCompraRaw = pdfNumMatch[1];
+                                                compraAno = pdfNumMatch[2] || ano;
+                                                extractionSrc = 'PDF-PARSE';
+                                                console.log(`[PNCP-V2] 📄 Fallback C: numero_comprasnet=${nuCompraRaw} extraído do PDF direto`);
+                                            }
+                                        }
+                                        if (!resolvedUasg) {
+                                            const pdfUasgMatch = headerText.match(/UASG\s*:?\s*(\d{6})/i);
+                                            if (pdfUasgMatch) {
+                                                resolvedUasg = pdfUasgMatch[1];
+                                                console.log(`[PNCP-V2] 📄 Fallback C: uasg=${resolvedUasg} extraído do PDF direto`);
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (pdfErr) {
+                                    console.warn(`[PNCP-V2] ⚠️ Fallback C (pdf-parse) falhou: ${pdfErr.message}`);
+                                }
+                            }
+                            // Fallback final para UASG: usar PNCP API
+                            if (!resolvedUasg)
+                                resolvedUasg = pncpUasg;
+                            // Mapeamento de modalidade → código ComprasNet (SISG)
+                            const MODALIDADE_TO_CODE = {
+                                'pregão': '05', 'pregao': '05',
+                                'concorrência': '03', 'concorrencia': '03',
+                                'tomada de preço': '02', 'tomada de preco': '02',
+                                'convite': '04', 'concurso': '01',
+                                'leilão': '07', 'leilao': '07',
+                                'dispensa': '08', 'inexigibilidade': '09',
+                            };
+                            let coModalidade = '';
+                            for (const [key, code] of Object.entries(MODALIDADE_TO_CODE)) {
+                                if (aiModalidade.includes(key)) {
+                                    coModalidade = code;
+                                    break;
+                                }
+                            }
+                            if (nuCompraRaw && coModalidade && resolvedUasg && resolvedUasg.length === 6) {
+                                const nuCompra = nuCompraRaw.padStart(5, '0');
+                                const compraId = `${resolvedUasg}${coModalidade}${nuCompra}${compraAno}`;
+                                const fallbackUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
+                                legacyProcess.link_sistema = fallbackUrl;
+                                console.log(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
+                                console.log(`[PNCP-V2]    UASG=${resolvedUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${extractionSrc}`);
+                            }
+                            else {
+                                console.log(`[PNCP-V2] ℹ️ Fallback B+C: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'}, uasg=${resolvedUasg || 'N/A'})`);
+                            }
+                        }
+                        catch (fbErr) {
+                            console.warn(`[PNCP-V2] ⚠️ Fallback B falhou: ${fbErr.message}`);
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                console.warn(`[PNCP-V2] ⏱️ Enrich falhou: ${err.message}`);
+            }
+        }
+        // ── Re-normalize portal after Auto-Enrich ──
+        // If we enriched link_sistema to a platform URL (BLL, BNC, etc.), the portal
+        // was still set to "PNCP" from L3216. Re-normalize with the enriched link.
+        if (legacyProcess.link_sistema && hasMonitorableDomain(legacyProcess.link_sistema)) {
+            const enrichedPortal = normalizePortal(legacyProcess.portal || 'PNCP', legacyProcess.link_sistema);
+            if (enrichedPortal !== legacyProcess.portal) {
+                console.log(`[PNCP-V2] 🔄 Portal re-normalizado: "${legacyProcess.portal}" → "${enrichedPortal}" (Auto-Enrich)`);
+                legacyProcess.portal = enrichedPortal;
+            }
+        }
         const legacyAnalysis = {
             requiredDocuments: allReqs,
             pricingConsiderations: v2Result.economic_financial_analysis.indices_exigidos
@@ -3045,8 +3541,8 @@ Responda APENAS com JSON array:
                 + (v2Result.contractual_analysis.medicao_pagamento ? `\nPagamento: ${v2Result.contractual_analysis.medicao_pagamento}` : '')
                 + (v2Result.contractual_analysis.reajuste ? `\nReajuste: ${v2Result.contractual_analysis.reajuste}` : ''),
             irregularitiesFlags: v2Result.legal_risk_review.critical_points.map(cp => `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description}`),
-            fullSummary: `ANÁLISE V2 PIPELINE — ${v2Result.process_identification.objeto_resumido || ''}\n\n` +
-                `Objeto: ${v2Result.process_identification.objeto_completo || ''}\n` +
+            fullSummary: `ANÁLISE V2 PIPELINE — ${bestObjResumo || ''}\n\n` +
+                `Objeto: ${bestObjCompleto || ''}\n` +
                 `Órgão: ${v2Result.process_identification.orgao || ''}\n` +
                 `Sessão: ${v2Result.timeline.data_sessao || ''}\n\n` +
                 `--- CONDIÇÕES ---\n` +
@@ -3114,10 +3610,53 @@ Responda APENAS com JSON array:
         };
         console.log(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
         sendProgress(8, 'Análise concluída!', `Score: ${combinedScore}% • ${totalReqs} exigências • ${v2Result.legal_risk_review.critical_points.length} riscos`);
+        // ── Telemetry (fire-and-forget) ──
+        const catCounts = {};
+        for (const [cat, items] of Object.entries(v2Result.requirements || {})) {
+            catCounts[cat] = items.length;
+        }
+        (0, analysisTelemetry_1.recordAnalysisTelemetry)({
+            tenantId: req.user.tenantId,
+            processId: undefined,
+            numPdfs: pdfParts.length,
+            totalPages: 0,
+            totalChars: 0,
+            hasScannedPdf: false,
+            portal: v2Result.process_identification?.portal_licitacao || '',
+            modalidade: v2Result.process_identification?.modalidade || '',
+            objeto: (v2Result.process_identification?.objeto || '').substring(0, 200),
+            model: uniqueModels.join('+'),
+            promptVersion: prompt_service_1.V2_PROMPT_VERSION,
+            extractionTimeMs: Math.round((stageTimes.extraction || 0) * 1000),
+            totalTimeMs: Math.round(parseFloat(totalDuration) * 1000),
+            parseRepairs: pipelineHealth.parseRepairs,
+            fallbackUsed: pipelineHealth.fallbacksUsed > 0,
+            categoryGapRecovery: !!stageTimes.re_extraction,
+            totalRequirements: totalReqs,
+            categoryCounts: catCounts,
+            totalEvidences: v2Result.evidence_registry.length,
+            totalRisks: v2Result.legal_risk_review.critical_points.length,
+            qualityScore: qualityReport?.overallScore ?? null,
+            confidenceScore: combinedScore,
+            enforcerCorrections: enforceResult.corrections,
+            safetyNetsTriggered: (0, analysisTelemetry_1.classifySafetyNets)(enforceResult.details),
+            status: 'success',
+        }).catch(() => { }); // Never block pipeline
         sendResult(finalPayload);
     }
     catch (error) {
         console.error('[PNCP-V2] Error:', error?.message || error);
+        // Record error telemetry
+        (0, analysisTelemetry_1.recordAnalysisTelemetry)({
+            tenantId: req.user?.tenantId || 'unknown',
+            numPdfs: 0, totalPages: 0, totalChars: 0, hasScannedPdf: false,
+            model: 'failed', promptVersion: prompt_service_1.V2_PROMPT_VERSION,
+            extractionTimeMs: 0, totalTimeMs: 0,
+            parseRepairs: 0, fallbackUsed: false, categoryGapRecovery: false,
+            totalRequirements: 0, categoryCounts: {}, totalEvidences: 0, totalRisks: 0,
+            enforcerCorrections: 0, safetyNetsTriggered: [],
+            status: 'error', errorMessage: error?.message || 'Unknown',
+        }).catch(() => { });
         sendError(`Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}`);
     }
 });
@@ -3128,9 +3667,13 @@ Responda APENAS com JSON array:
 // NOTE: Only include domains that have an active monitor/worker/cron.
 // Removed 'compras.fortaleza.ce.gov.br' — no monitor exists, was causing false-positive isMonitored=true.
 const MONITORABLE_DOMAINS = [
-    'cnetmobile', 'comprasnet', 'licitamaisbrasil', 'bllcompras', 'bll.org',
+    'cnetmobile', 'licitamaisbrasil', 'bllcompras', 'bll.org',
     'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia',
     'precodereferencia',
+    // ⚠️ NÃO incluir 'comprasnet' aqui! O domínio www.comprasnet.gov.br é o portal antigo de LOGIN
+    // (ex: https://www.comprasnet.gov.br/seguro/loginPortal.asp) — NÃO é monitorável.
+    // O único domínio ComprasNet monitorável é 'cnetmobile' (cnetmobile.estaleiro.serpro.gov.br).
+    // Incluir 'comprasnet' causa falso-positivo que impede o AutoEnrich de buscar o link correto.
 ];
 // Map platform canonical names → domains they use (for credential matching)
 const PLATFORM_DOMAINS = {
@@ -3228,7 +3771,27 @@ function normalizePortal(portal, link) {
         return 'Não Informado';
     const p = (portal || '').toLowerCase().trim();
     const l = (link || '').toLowerCase();
-    // Prioridade 1: Inferir pelo link (mais confiável)
+    // ═══════════════════════════════════════════════════════════
+    // Prioridade 0: Texto do portal contém URL/nome ESPECÍFICO de plataforma
+    // (Deve ser avaliado ANTES do link genérico PNCP para não ser sobrescrito)
+    // ═══════════════════════════════════════════════════════════
+    if (p.includes('m2a') || p.includes('m2atecnologia'))
+        return 'M2A';
+    if (p.includes('bbmnet'))
+        return 'BBMNET';
+    if (p.includes('bll'))
+        return 'BLL';
+    if (p.includes('bnc') && !p.includes('banco'))
+        return 'BNC';
+    if (p.includes('licita mais') || p.includes('licitamaisbrasil'))
+        return 'Licita Mais Brasil';
+    if (p.includes('portal de compras') || p.includes('portaldecompras'))
+        return 'Portal de Compras Públicas';
+    if (p.includes('licitanet'))
+        return 'Licitanet';
+    if (p.includes('bolsa de licita'))
+        return 'Bolsa de Licitações';
+    // Prioridade 1: Inferir pelo link (mais confiável para portais de disputa)
     if (l) {
         if (l.includes('m2atecnologia') || l.includes('precodereferencia'))
             return 'M2A';
@@ -3249,23 +3812,7 @@ function normalizePortal(portal, link) {
         if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras') || l.includes('pncp.gov.br'))
             return 'Compras.gov.br';
     }
-    // Prioridade 2: Normalizar texto do portal
-    if (p.includes('m2a') || p.includes('m2atecnologia'))
-        return 'M2A';
-    if (p.includes('bbmnet'))
-        return 'BBMNET';
-    if (p.includes('bll'))
-        return 'BLL';
-    if (p.includes('bnc'))
-        return 'BNC';
-    if (p.includes('licita mais') || p.includes('licitamaisbrasil'))
-        return 'Licita Mais Brasil';
-    if (p.includes('portal de compras') || p.includes('portaldecompras'))
-        return 'Portal de Compras Públicas';
-    if (p.includes('licitanet'))
-        return 'Licitanet';
-    if (p.includes('bolsa de licita'))
-        return 'Bolsa de Licitações';
+    // Prioridade 2: Texto do portal → Compras.gov.br (genérico, avaliado por último)
     if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile') || p.includes('pncp'))
         return 'Compras.gov.br';
     // Prioridade 3: URL crua → tentar extrair plataforma
@@ -3307,6 +3854,50 @@ function detectPlatformFromLink(link) {
     }
     return null;
 }
+// ── Sanitize BiddingProcess fields — only allow valid Prisma scalar fields ──
+const BIDDING_ALLOWED_FIELDS = new Set([
+    'title', 'summary', 'portal', 'modality', 'status', 'substage',
+    'risk', 'estimatedValue', 'sessionDate', 'link', 'pncpLink',
+    'uasg', 'modalityCode', 'processNumber', 'processYear',
+    'isMonitored', 'observations', 'reminderDate', 'reminderStatus',
+    'reminderType', 'reminderDays',
+]);
+function sanitizeBiddingData(raw) {
+    const clean = {};
+    for (const key of Object.keys(raw)) {
+        if (BIDDING_ALLOWED_FIELDS.has(key)) {
+            clean[key] = raw[key];
+        }
+    }
+    // Ensure sessionDate is a valid ISO string
+    if (clean.sessionDate && typeof clean.sessionDate === 'string') {
+        const parsed = new Date(clean.sessionDate);
+        if (isNaN(parsed.getTime())) {
+            console.warn(`[Sanitize] Invalid sessionDate "${clean.sessionDate}", using current date`);
+            clean.sessionDate = new Date().toISOString();
+        }
+        else {
+            clean.sessionDate = parsed.toISOString();
+        }
+    }
+    // Ensure reminderDate is valid or null
+    if (clean.reminderDate !== undefined) {
+        if (clean.reminderDate === null || clean.reminderDate === '' || clean.reminderDate === 'null') {
+            clean.reminderDate = null;
+        }
+        else if (typeof clean.reminderDate === 'string') {
+            const parsed = new Date(clean.reminderDate);
+            if (isNaN(parsed.getTime())) {
+                console.warn(`[Sanitize] Invalid reminderDate "${clean.reminderDate}", setting null`);
+                clean.reminderDate = null;
+            }
+            else {
+                clean.reminderDate = parsed.toISOString();
+            }
+        }
+    }
+    return clean;
+}
 // Bidding Processes
 app.get('/api/biddings', auth_1.authenticateToken, async (req, res) => {
     try {
@@ -3322,8 +3913,9 @@ app.get('/api/biddings', auth_1.authenticateToken, async (req, res) => {
 });
 app.post('/api/biddings', auth_1.authenticateToken, async (req, res) => {
     try {
-        let { companyProfileId, ...biddingData } = req.body;
+        let { companyProfileId, ...rawData } = req.body;
         const tenantId = req.user.tenantId;
+        let biddingData = sanitizeBiddingData(rawData);
         if (companyProfileId === '') {
             companyProfileId = null;
         }
@@ -3334,26 +3926,94 @@ app.post('/api/biddings', auth_1.authenticateToken, async (req, res) => {
         // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
         let enrichedLink = biddingData.link || '';
         const hasPlatformLink = hasMonitorableDomain(enrichedLink);
-        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
+        // Check if the platform link is "functional" (has the params needed for chat monitoring).
+        // A link like "bllcompras.com/Home/PublicAccess" is monitorable-by-domain but NOT functional
+        // because it lacks param1. Similarly, "compras.m2atecnologia.com.br/processos/publicacao/..."
+        // is monitorable but lacks /certame/{id}. In these cases, we still need AutoEnrich.
+        const isGenericPlatformLink = hasPlatformLink && (() => {
+            const l = enrichedLink.toLowerCase();
+            // BLL: functional links have "param1=" or "ProcessView"
+            if (l.includes('bllcompras') && !l.includes('param1=') && !l.includes('processview'))
+                return true;
+            // M2A: functional links have "/certame/" (not the public "/publicacao/" vitrine)
+            if (l.includes('m2atecnologia') && !l.includes('/certame/') && !l.includes('precodereferencia'))
+                return true;
+            return false;
+        })();
+        if ((!hasPlatformLink || isGenericPlatformLink) && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
             try {
                 const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
-                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                    if (apiRes.ok) {
-                        const apiData = await apiRes.json();
-                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
-                            // Prevent duplicates
-                            const existingParts = enrichedLink.split(',').map((s) => s.trim());
-                            if (!existingParts.some((part) => part === platformUrl)) {
-                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                biddingData.link = enrichedLink;
+                    const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+                    console.log(`[AutoEnrich] 🔍 Buscando linkSistemaOrigem: ${enrichUrl}`);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 10000);
+                    try {
+                        const apiRes = await fetch(enrichUrl, { signal: controller.signal });
+                        clearTimeout(timeout);
+                        if (apiRes.ok) {
+                            const apiData = await apiRes.json();
+                            const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                            console.log(`[AutoEnrich] 📋 linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
+                            if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                                // Case 1: linkSistemaOrigem IS monitorable (e.g., cnetmobile, bllcompras)
+                                const existingParts = enrichedLink.split(',').map((s) => s.trim());
+                                if (isGenericPlatformLink) {
+                                    // REPLACE: Remove the generic link and add the functional one
+                                    // e.g., "bllcompras.com/Home/PublicAccess" → "bllcompras.com/Process/ProcessView?param1=..."
+                                    const platformDomain = (() => {
+                                        try {
+                                            return new URL(platformUrl).hostname.replace('www.', '');
+                                        }
+                                        catch {
+                                            return '';
+                                        }
+                                    })();
+                                    const filteredParts = existingParts.filter((part) => {
+                                        try {
+                                            const partDomain = new URL(part).hostname.replace('www.', '');
+                                            // Remove parts from the same platform domain (the generic link)
+                                            return partDomain !== platformDomain;
+                                        }
+                                        catch {
+                                            return true;
+                                        } // keep non-URL parts
+                                    });
+                                    filteredParts.push(platformUrl);
+                                    enrichedLink = filteredParts.join(', ');
+                                    biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] 🔄 Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
+                                }
+                                else if (!existingParts.some((part) => part === platformUrl)) {
+                                    // APPEND: No generic link — just add alongside existing
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] ✅ Link monitorável adicionado: ${platformUrl.substring(0, 60)}`);
+                                }
+                                // Re-normalize portal with the enriched link
+                                biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
                             }
-                            // Re-normalize portal with the enriched link
-                            biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
-                            console.log(`[AutoEnrich] Fetched platform link for new process from PNCP API: ${platformUrl.substring(0, 60)}`);
+                            else if (platformUrl) {
+                                // Case 2: linkSistemaOrigem is NOT monitorable (e.g., portalcompras.ce.gov.br)
+                                const existingParts = enrichedLink.split(',').map((s) => s.trim());
+                                if (!existingParts.some((part) => part === platformUrl)) {
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                }
+                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable: ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal}`);
+                            }
+                            else {
+                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem VAZIO para ${cnpj}/${ano}/${seq}`);
+                            }
                         }
+                        else {
+                            console.log(`[AutoEnrich] ⚠️ API retornou status ${apiRes.status} para ${cnpj}/${ano}/${seq}`);
+                        }
+                    }
+                    catch (fetchErr) {
+                        clearTimeout(timeout);
+                        console.warn(`[AutoEnrich] ⏱️ Fetch falhou (timeout ou rede): ${fetchErr.message}`);
                     }
                 }
             }
@@ -3361,10 +4021,21 @@ app.post('/api/biddings', auth_1.authenticateToken, async (req, res) => {
                 console.warn('[AutoEnrich] Failed to fetch platform link:', e);
             }
         }
+        else if (!hasPlatformLink) {
+            console.log(`[AutoEnrich] ⏭ Skipped: link="${enrichedLink?.substring(0, 60)}" hasPlatform=${hasPlatformLink} pncp=${enrichedLink.includes('pncp.gov.br')} editais=${enrichedLink.includes('editais')}`);
+        }
         // ── Step 2: Auto-enable monitoring for all supported platforms ──
-        if (hasMonitorableDomain(enrichedLink)) {
+        // Also enable for Compras.gov.br processes (even without cnetmobile link — worker can use URL Discovery)
+        const portalLower = (biddingData.portal || '').toLowerCase();
+        const isComprasGovPortal = portalLower.includes('compras.gov') || portalLower.includes('comprasnet');
+        if (hasMonitorableDomain(enrichedLink) || isComprasGovPortal) {
             biddingData.isMonitored = true;
-            console.log(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
+            if (isComprasGovPortal && !hasMonitorableDomain(enrichedLink)) {
+                console.log(`[AutoMonitor] Auto-enabled monitoring for Compras.gov.br process (needs cnetmobile link for worker). Portal: ${biddingData.portal}`);
+            }
+            else {
+                console.log(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
+            }
         }
         // ── Step 3: Auto-backfill pncpLink from link ──
         if (!biddingData.pncpLink) {
@@ -3689,12 +4360,47 @@ app.get('/api/admin/ai-usage', auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Falha ao buscar consumo de IA.' });
     }
 });
+// ── Oracle Evidence Persistence ──
+app.put('/api/biddings/:id/oracle-evidence', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { oracleEvidence } = req.body;
+        const tenantId = req.user.tenantId;
+        const bidding = await prisma.biddingProcess.findFirst({
+            where: { id, tenantId },
+            include: { aiAnalysis: true }
+        });
+        if (!bidding) {
+            return res.status(404).json({ error: 'Processo não encontrado.' });
+        }
+        // Persist oracle evidence alongside existing schemaV2 metadata
+        if (bidding.aiAnalysis) {
+            const existingSchema = bidding.aiAnalysis.schemaV2 || {};
+            await prisma.aiAnalysis.update({
+                where: { id: bidding.aiAnalysis.id },
+                data: {
+                    schemaV2: {
+                        ...existingSchema,
+                        oracle_evidence: oracleEvidence
+                    }
+                }
+            });
+            console.log(`[Oracle] Evidências persistidas para bidding ${id} (${Object.keys(oracleEvidence || {}).length} exigências)`);
+        }
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('[Oracle Evidence]', error);
+        res.status(500).json({ error: 'Falha ao persistir evidências.' });
+    }
+});
 app.put('/api/biddings/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenantId;
-        // Remove relation fields and id to avoid Prisma update errors
-        const { aiAnalysis, company, tenant, id: _id, tenantId: _tId, companyProfileId, ...biddingData } = req.body;
+        // Extract companyProfileId separately; sanitize the rest
+        const { companyProfileId, ...rawData } = req.body;
+        const biddingData = sanitizeBiddingData(rawData);
         // ── Step 0: Normalize portal & modality ──
         if (biddingData.portal !== undefined) {
             biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
@@ -3705,27 +4411,79 @@ app.put('/api/biddings/:id', auth_1.authenticateToken, async (req, res) => {
         // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
         let enrichedLink = biddingData.link || '';
         const hasPlatformLink = hasMonitorableDomain(enrichedLink);
-        if (!hasPlatformLink && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
+        // Same generic-link detection as POST (see POST /api/biddings for full docs)
+        const isGenericPlatformLink = hasPlatformLink && (() => {
+            const l = enrichedLink.toLowerCase();
+            if (l.includes('bllcompras') && !l.includes('param1=') && !l.includes('processview'))
+                return true;
+            if (l.includes('m2atecnologia') && !l.includes('/certame/') && !l.includes('precodereferencia'))
+                return true;
+            return false;
+        })();
+        if ((!hasPlatformLink || isGenericPlatformLink) && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
             try {
                 const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
-                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                    if (apiRes.ok) {
-                        const apiData = await apiRes.json();
-                        const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                        if (platformUrl && hasMonitorableDomain(platformUrl)) {
-                            const existingParts = enrichedLink.split(',').map((s) => s.trim());
-                            if (!existingParts.some((part) => part === platformUrl)) {
-                                enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                biddingData.link = enrichedLink;
+                    const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
+                    console.log(`[AutoEnrich] 🔍 Update: Buscando linkSistemaOrigem: ${enrichUrl}`);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 10000);
+                    try {
+                        const apiRes = await fetch(enrichUrl, { signal: controller.signal });
+                        clearTimeout(timeout);
+                        if (apiRes.ok) {
+                            const apiData = await apiRes.json();
+                            const platformUrl = (apiData.linkSistemaOrigem || '').trim();
+                            console.log(`[AutoEnrich] 📋 Update: linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
+                            if (platformUrl && hasMonitorableDomain(platformUrl)) {
+                                const existingParts = enrichedLink.split(',').map((s) => s.trim());
+                                if (isGenericPlatformLink) {
+                                    // REPLACE: Remove the generic link and add the functional one
+                                    const platformDomain = (() => {
+                                        try {
+                                            return new URL(platformUrl).hostname.replace('www.', '');
+                                        }
+                                        catch {
+                                            return '';
+                                        }
+                                    })();
+                                    const filteredParts = existingParts.filter((part) => {
+                                        try {
+                                            const partDomain = new URL(part).hostname.replace('www.', '');
+                                            return partDomain !== platformDomain;
+                                        }
+                                        catch {
+                                            return true;
+                                        }
+                                    });
+                                    filteredParts.push(platformUrl);
+                                    enrichedLink = filteredParts.join(', ');
+                                    biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] 🔄 Update: Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
+                                }
+                                else if (!existingParts.some((part) => part === platformUrl)) {
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                    console.log(`[AutoEnrich] ✅ Update: link monitorável adicionado para "${id}": ${platformUrl.substring(0, 60)}`);
+                                }
+                                if (biddingData.portal !== undefined) {
+                                    biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
+                                }
                             }
-                            // Re-normalize portal with enriched link
-                            if (biddingData.portal !== undefined) {
-                                biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
+                            else if (platformUrl) {
+                                const existingParts = enrichedLink.split(',').map((s) => s.trim());
+                                if (!existingParts.some((part) => part === platformUrl)) {
+                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
+                                    biddingData.link = enrichedLink;
+                                }
+                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable for "${id}": ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal || 'N/A'}`);
                             }
-                            console.log(`[AutoEnrich] Fetched platform link for process "${id}" from PNCP API: ${platformUrl.substring(0, 60)}`);
                         }
+                    }
+                    catch (fetchErr) {
+                        clearTimeout(timeout);
+                        console.warn(`[AutoEnrich] ⏱️ Update fetch falhou: ${fetchErr.message}`);
                     }
                 }
             }
@@ -3734,11 +4492,17 @@ app.put('/api/biddings/:id', auth_1.authenticateToken, async (req, res) => {
             }
         }
         // ── Step 2: Auto-enable monitoring for all supported platforms ──
-        if (hasMonitorableDomain(enrichedLink) && biddingData.isMonitored === undefined) {
-            const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
-            if (current && !current.isMonitored) {
-                biddingData.isMonitored = true;
-                console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
+        // Also enable for Compras.gov.br processes (even without cnetmobile link)
+        const putPortalLower = (biddingData.portal || '').toLowerCase();
+        const isPutComprasGovPortal = putPortalLower.includes('compras.gov') || putPortalLower.includes('comprasnet');
+        if (biddingData.isMonitored === undefined) {
+            const shouldAutoMonitor = hasMonitorableDomain(enrichedLink) || isPutComprasGovPortal;
+            if (shouldAutoMonitor) {
+                const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
+                if (current && !current.isMonitored) {
+                    biddingData.isMonitored = true;
+                    console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
+                }
             }
         }
         // ── Step 3: Auto-backfill pncpLink from link ──
@@ -4325,12 +5089,17 @@ ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
 10. Retorne os itens SEMPRE na ordem natural crescente: 1, 2, 3... ou 1.1, 1.2, 2.1...
 11. NUNCA misture formatos no mesmo array
 
-Responda APENAS com um JSON array, sem markdown:
+⚠️ ANTI-TRUNCAMENTO:
+12. Você DEVE retornar ABSOLUTAMENTE TODOS os itens — se houver 200 itens, retorne 200. NUNCA pare antes de completar a lista inteira.
+13. NÃO duplique a descrição (ex: "EXAME DE X EXAME DE X" → use apenas "EXAME DE X")
+14. Para descrições curtas (ex: nome de exame), NÃO adicione texto extra — use a descrição literal do edital.
+
+Responda APENAS com um JSON array válido:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
             const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
                 model: 'gemini-2.5-flash',
                 contents: prompt,
-                config: { temperature: 0.05, maxOutputTokens: 8192 },
+                config: { temperature: 0.05, maxOutputTokens: 65536, responseMimeType: 'application/json' },
             }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'analysis' } });
             const responseText = result.text?.trim() || '';
             let jsonStr = responseText;
@@ -4344,18 +5113,36 @@ Responda APENAS com um JSON array, sem markdown:
             catch {
                 return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) });
             }
-            console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
-            return res.json({ items: naturalSortItems(items), totalItems: items.length, source: 'legacy_biddingItems' });
+            // ── Truncation guard: if legacy biddingItems returned suspiciously few items, 
+            // fall through to Strategy 2/3 for fuller extraction from PNCP planilhas ──
+            const estimatedValue = bidding.estimatedValue || 0;
+            const isSuspiciouslyFew = items.length <= 10 && estimatedValue > 100000;
+            if (isSuspiciouslyFew) {
+                console.warn(`[AI Populate] ⚠️ Strategy 1 returned only ${items.length} items but estimatedValue=R$${estimatedValue.toLocaleString()} — likely truncated biddingItems. Falling through to Strategy 2/3...`);
+                // Don't return — let it fall through to try PNCP planilha extraction
+            }
+            else {
+                console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
+                return res.json({ items: naturalSortItems(items), totalItems: items.length, source: 'legacy_biddingItems' });
+            }
         }
         // ── Strategy 2: Download planilhas from PNCP catalog (new analyses) ──
         const pncpSource = schemaV2?.pncp_source;
         const attachments = pncpSource?.attachments || [];
         // Find planilha/orçamento files in the catalog
-        const planilhaFiles = attachments.filter((a) => a.ativo && a.url && (a.purpose === 'planilha_orcamentaria' ||
+        let planilhaFiles = attachments.filter((a) => a.ativo && a.url && (a.purpose === 'planilha_orcamentaria' ||
             a.purpose === 'composicao_custos' ||
             a.purpose === 'bdi_encargos' ||
             a.purpose === 'anexo_geral' // Include ALL annexes (downloaded or not)
         ));
+        // If no planilha found, fall back to Edital + TR (pregões de serviço have items inside these)
+        if (planilhaFiles.length === 0) {
+            planilhaFiles = attachments.filter((a) => a.ativo && a.url && (a.purpose === 'edital' ||
+                a.purpose === 'termo_referencia'));
+            if (planilhaFiles.length > 0) {
+                console.log(`[AI Populate] No planilha found — using ${planilhaFiles.length} edital/TR as source for item extraction`);
+            }
+        }
         // Debug: log all attachment purposes to diagnose classification issues
         if (attachments.length > 0) {
             console.log(`[AI Populate] Catalog has ${attachments.length} attachments. Purposes: ${JSON.stringify(attachments.map((a) => ({ t: a.titulo?.substring(0, 40), p: a.purpose, d: a.downloaded })))}`);
@@ -4389,6 +5176,8 @@ Responda APENAS com um JSON array, sem markdown:
                             return 'bdi_encargos';
                         if (n.includes('cronograma'))
                             return 'cronograma';
+                        if (n.includes('termo') && n.includes('referencia') || n.includes('termo_referencia') || n.includes('tr_'))
+                            return 'termo_referencia';
                         if (n.includes('edital') && !n.includes('anexo'))
                             return 'edital';
                         if (n.includes('aviso') || n.includes('publicacao'))
@@ -4399,6 +5188,7 @@ Responda APENAS com um JSON array, sem markdown:
                             return 'anexo_geral';
                         return 'outro';
                     };
+                    // First pass: look for planilha-type files
                     for (const arq of allArquivos) {
                         const purpose = classifyForProposal(arq);
                         const url = arq.url || arq.uri || '';
@@ -4415,7 +5205,29 @@ Responda APENAS com um JSON array, sem markdown:
                             });
                         }
                     }
-                    console.log(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} planilha candidates found`);
+                    // Second pass: if no planilha found, use edital/TR (pregões de serviço)
+                    if (planilhaFiles.length === 0) {
+                        for (const arq of allArquivos) {
+                            const purpose = classifyForProposal(arq);
+                            const url = arq.url || arq.uri || '';
+                            if (!url || !arq.statusAtivo)
+                                continue;
+                            if (purpose === 'edital' || purpose === 'termo_referencia' ||
+                                [1, 2, 4].includes(arq.tipoDocumentoId)) {
+                                planilhaFiles.push({
+                                    titulo: arq.titulo || arq.nomeArquivo || 'arquivo',
+                                    url,
+                                    purpose,
+                                    ativo: true,
+                                    downloaded: false
+                                });
+                            }
+                        }
+                        if (planilhaFiles.length > 0) {
+                            console.log(`[AI Populate] No planilha in PNCP fetch — using ${planilhaFiles.length} edital/TR instead`);
+                        }
+                    }
+                    console.log(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} candidates found`);
                 }
                 catch (fetchErr) {
                     console.warn(`[AI Populate] Failed to fetch PNCP attachments: ${fetchErr.message}`);
@@ -5369,41 +6181,175 @@ function validateAnalysisCompleteness(schema) {
     // ── 2. Timeline ──
     check(!!schema.timeline?.data_sessao, 'Data da sessão não identificada');
     check(!!(schema.timeline?.data_publicacao || schema.timeline?.prazo_impugnacao || schema.timeline?.prazo_esclarecimento), 'Nenhum prazo relevante identificado (publicação, impugnação ou esclarecimento)');
-    // ── 3. Exigências de Habilitação ──
+    // ── 3. Exigências de Habilitação (V2.5 calibrado) ──
     const allReqItems = Object.values(schema.requirements || {}).reduce((acc, arr) => acc.concat(Array.isArray(arr) ? arr : []), []);
     const totalReqs = allReqItems.filter((r) => !r.entry_type || r.entry_type === 'exigencia_principal').length;
     check(totalReqs > 0, 'Nenhuma exigência de habilitação identificada');
-    check(totalReqs >= 3, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
+    check(totalReqs >= 5, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
     // ── 4. Condições de Participação ──
     check(schema.participation_conditions?.permite_consorcio !== null ||
         schema.participation_conditions?.permite_subcontratacao !== null ||
         !!schema.participation_conditions?.tratamento_me_epp, 'Nenhuma condição de participação identificada');
-    // ── 5. Análise Técnica ──
+    // ── 5. Análise Técnica (flexibilizado — editais de fornecimento simples nem sempre têm) ──
     check((schema.requirements?.qualificacao_tecnica_operacional?.length || 0) > 0 ||
         (schema.requirements?.qualificacao_tecnica_profissional?.length || 0) > 0 ||
-        schema.technical_analysis?.exige_atestado_capacidade_tecnica === true, 'Nenhuma exigência técnica ou atestado identificado');
-    // ── 6. Análise Econômico-Financeira ──
-    check((schema.economic_financial_analysis?.indices_exigidos?.length || 0) > 0 ||
-        !!schema.economic_financial_analysis?.capital_social_minimo ||
-        !!schema.economic_financial_analysis?.patrimonio_liquido_minimo, 'Nenhuma exigência econômico-financeira identificada');
+        schema.technical_analysis?.exige_atestado_capacidade_tecnica === true ||
+        totalReqs >= 10, // editais com muitas exigências provavelmente têm técnica embutida
+    'Nenhuma exigência técnica ou atestado identificado');
+    // ── 6. Análise Econômico-Financeira (flexibilizado — dispensas/pregões menores dispensam) ──
+    // Apenas registra como issue informativa, não é check eliminatório
+    const hasEconReqs = (schema.requirements?.qualificacao_economico_financeira?.length || 0) > 0 ||
+        (schema.economic_financial_analysis?.indices_exigidos?.length || 0) > 0;
+    if (!hasEconReqs) {
+        issues.push('Nenhuma exigência econômico-financeira identificada (pode ser dispensada pelo tipo de edital)');
+    }
+    // Conta como check, mas sempre passa (não penaliza)
+    totalChecks++;
+    passedChecks++;
     // ── 7. Proposta/Preço ──
     check(!!schema.process_identification?.criterio_julgamento, 'Critério de julgamento não identificado');
-    // ── 8. Evidências ──
+    // ── 8. Evidências (threshold reduzido na V2.5) ──
     const evCount = schema.evidence_registry?.length || 0;
     check(evCount > 0, 'Nenhuma evidência textual registrada');
     check(evCount >= 5, `Poucas evidências registradas (apenas ${evCount}), rastreabilidade comprometida`);
-    // ── 9. Outputs Operacionais ──
-    check((schema.operational_outputs?.documents_to_prepare?.length || 0) > 0, 'Lista de documentos a preparar não gerada');
-    // ── 10. Revisão de Risco ──
-    check((schema.legal_risk_review?.critical_points?.length || 0) > 0 ||
-        (schema.legal_risk_review?.ambiguities?.length || 0) > 0, 'Nenhum ponto crítico ou ambiguidade identificada (análise de risco pode estar incompleta)');
+    // ── 9. Outputs Operacionais (Desativado na V2 Otimizada) ──
+    // O pipeline unificou isso nas exigências para ganhar performance.
+    // ── 10. Revisão de Risco (suavizado — editais limpos não geram achados) ──
+    // Registra como check que sempre passa; a ausência de achados é informativa, não punitiva
+    totalChecks++;
+    if ((schema.legal_risk_review?.critical_points?.length || 0) > 0 ||
+        (schema.legal_risk_review?.ambiguities?.length || 0) > 0) {
+        passedChecks++;
+    }
+    else {
+        passedChecks++; // Não penaliza — edital limpo é legítimo
+        issues.push('Nenhum ponto crítico ou ambiguidade identificada (edital pode ser objetivo)');
+    }
     const confidence_score = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
     return {
-        valid: confidence_score >= 60, // 60%+ das checagens passaram
+        valid: confidence_score >= 80, // FASE 2: exigência mínima subiu de 60% para 80%
         issues,
         confidence_score
     };
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKGROUND JOBS API — Async AI operations with real-time notifications
+// ═══════════════════════════════════════════════════════════════════════════
+// ── SSE: Server-Sent Events stream for real-time notifications ──
+app.get('/api/events/stream', auth_1.authenticateToken, (req, res) => {
+    const clientId = `sse_${req.user.id}_${Date.now()}`;
+    // Set SSE headers
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx/Railway buffering
+    });
+    // Send initial connection event
+    res.write(`event: connected\ndata: ${JSON.stringify({ clientId, timestamp: new Date().toISOString() })}\n\n`);
+    // Register client
+    (0, backgroundJobService_1.registerSSEClient)(clientId, req.user.id, req.user.tenantId, res);
+    // Keep-alive ping every 30s
+    const keepAlive = setInterval(() => {
+        try {
+            res.write(`: keepalive\n\n`);
+        }
+        catch {
+            clearInterval(keepAlive);
+        }
+    }, 30000);
+    // Cleanup on disconnect
+    req.on('close', () => {
+        clearInterval(keepAlive);
+        (0, backgroundJobService_1.removeSSEClient)(clientId);
+    });
+});
+// ── Submit a background job ──
+app.post('/api/jobs/submit', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
+    try {
+        const { type, input, targetId, targetTitle } = req.body;
+        if (!type || !input) {
+            return res.status(400).json({ error: 'type and input are required' });
+        }
+        const validTypes = ['edital_analysis', 'pncp_analysis', 'oracle', 'proposal_populate', 'petition'];
+        if (!validTypes.includes(type)) {
+            return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+        }
+        const result = await (0, backgroundJobService_1.submitJob)({
+            tenantId: req.user.tenantId,
+            userId: req.user.id,
+            type,
+            input,
+            targetId,
+            targetTitle,
+        });
+        res.status(202).json({
+            ok: true,
+            jobId: result.jobId,
+            message: 'Tarefa enviada para processamento em segundo plano.',
+        });
+    }
+    catch (err) {
+        console.error('[Jobs] Submit error:', err.message);
+        res.status(429).json({ error: err.message });
+    }
+});
+// ── Get job status ──
+app.get('/api/jobs/:jobId', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const job = await (0, backgroundJobService_1.getJob)(req.params.jobId, req.user.tenantId);
+        if (!job)
+            return res.status(404).json({ error: 'Job not found' });
+        res.json({
+            id: job.id,
+            type: job.type,
+            status: job.status,
+            progress: job.progress,
+            progressMsg: job.progressMsg,
+            error: job.error,
+            input: job.input,
+            targetId: job.targetId,
+            targetTitle: job.targetTitle,
+            createdAt: job.createdAt,
+            completedAt: job.completedAt,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// ── Get job result (only when COMPLETED) ──
+app.get('/api/jobs/:jobId/result', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const job = await (0, backgroundJobService_1.getJob)(req.params.jobId, req.user.tenantId);
+        if (!job)
+            return res.status(404).json({ error: 'Job not found' });
+        if (job.status !== 'COMPLETED') {
+            return res.status(409).json({
+                error: 'Job not completed yet',
+                status: job.status,
+                progress: job.progress,
+            });
+        }
+        res.json({ ok: true, result: job.result });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// ── List recent jobs for current user ──
+app.get('/api/jobs', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const jobs = await (0, backgroundJobService_1.listJobs)(req.user.tenantId, req.user.id, 30);
+        res.json(jobs);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGACY: Synchronous V2 Pipeline (preserved as fallback)
+// ═══════════════════════════════════════════════════════════════════════════
 app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimiter, async (req, res) => {
     const analysisStartTime = Date.now();
     const result = (0, analysis_schema_v1_1.createEmptyAnalysisSchema)();
@@ -5433,14 +6379,61 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
             const fileToFetch = doc ? doc.fileUrl : fileName;
             const pdfBuffer = await getFileBufferSafe(fileToFetch, req.user.tenantId);
             if (pdfBuffer) {
-                console.log(`[AI-V2] Read file ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
-                pdfParts.push({
-                    inlineData: {
-                        data: pdfBuffer.toString('base64'),
-                        mimeType: 'application/pdf'
+                const magic = pdfBuffer.length >= 4 ? pdfBuffer.toString('hex', 0, 4) : '';
+                const isPdf = fileName.toLowerCase().endsWith('.pdf') || magic.startsWith('25504446');
+                const isZip = fileName.toLowerCase().endsWith('.zip') || magic.startsWith('504b0304');
+                const isRar = fileName.toLowerCase().endsWith('.rar') || magic.startsWith('52617221');
+                const MAX_PDF_PARTS = 15;
+                if (isPdf) {
+                    console.log(`[AI-V2] Read PDF file ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                    pdfParts.push({ inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } });
+                    sourceFiles.push(fileName);
+                }
+                else if (isZip) {
+                    console.log(`[AI-V2] 📦 ZIP detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const JSZip = require('jszip');
+                        const zip = await JSZip.loadAsync(pdfBuffer);
+                        let zipEntries = Object.keys(zip.files).filter((name) => !name.toLowerCase().endsWith('.pdf') || zip.files[name].dir ? false : !['comprovante', 'resumo'].some(pat => name.toLowerCase().includes(pat)));
+                        for (const entryName of zipEntries) {
+                            if (pdfParts.length >= MAX_PDF_PARTS)
+                                break;
+                            const entryBuffer = await zip.files[entryName].async('nodebuffer');
+                            if (entryBuffer.length > 0) {
+                                pdfParts.push({ inlineData: { data: entryBuffer.toString('base64'), mimeType: 'application/pdf' } });
+                                sourceFiles.push(`${fileName}/${entryName}`);
+                                console.log(`[AI-V2] ✅ Extracted PDF from ZIP: ${entryName} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
                     }
-                });
-                sourceFiles.push(fileName);
+                    catch (e) {
+                        console.warn(`[AI-V2] Failed to extract ZIP ${fileName}: ${e.message}`);
+                    }
+                }
+                else if (isRar) {
+                    console.log(`[AI-V2] 📦 RAR detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const extractor = await (0, node_unrar_js_1.createExtractorFromData)({ data: new Uint8Array(pdfBuffer).buffer });
+                        const extracted = extractor.extract({});
+                        const files = [...extracted.files].filter(f => f.fileHeader.name.toLowerCase().endsWith('.pdf') && !f.fileHeader.flags.directory && f.extraction);
+                        for (const rarFile of files) {
+                            if (pdfParts.length >= MAX_PDF_PARTS)
+                                break;
+                            if (rarFile.extraction && rarFile.extraction.length > 0) {
+                                const entryBuffer = Buffer.from(rarFile.extraction);
+                                pdfParts.push({ inlineData: { data: entryBuffer.toString('base64'), mimeType: 'application/pdf' } });
+                                sourceFiles.push(`${fileName}/${rarFile.fileHeader.name}`);
+                                console.log(`[AI-V2] ✅ Extracted PDF from RAR: ${rarFile.fileHeader.name} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
+                    }
+                    catch (e) {
+                        console.warn(`[AI-V2] Failed to extract RAR ${fileName}: ${e.message}`);
+                    }
+                }
+                else {
+                    console.warn(`[AI-V2] ⏭️ Skipped non-PDF/ZIP/RAR: ${fileName} (magic: ${magic})`);
+                }
             }
             else {
                 console.error(`[AI-V2] Could not find file: ${fileName}`);
@@ -5462,6 +6455,8 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
         let extractionJson;
         const t1Start = Date.now();
         let modelsUsed = [];
+        // Append manual-only extraction rules (valor, portal, data+hora) — NOT used by PNCP
+        const manualUserInstruction = prompt_service_1.V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') + prompt_service_1.MANUAL_EXTRACTION_ADDON;
         try {
             const extractionResponse = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
                 model: 'gemini-2.5-flash',
@@ -5469,7 +6464,7 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
                         role: 'user',
                         parts: [
                             ...pdfParts,
-                            { text: prompt_service_1.V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') }
+                            { text: manualUserInstruction }
                         ]
                     }],
                 config: {
@@ -5478,7 +6473,7 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
                     maxOutputTokens: 32768,
                     responseMimeType: 'application/json'
                 }
-            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
+            }, 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText)
                 throw new Error('Etapa 1 retornou vazio');
@@ -5494,7 +6489,7 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
             try {
                 const openAiResult = await (0, openai_service_1.fallbackToOpenAiV2)({
                     systemPrompt: prompt_service_1.V2_EXTRACTION_PROMPT,
-                    userPrompt: prompt_service_1.V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
+                    userPrompt: manualUserInstruction,
                     pdfParts,
                     temperature: 0.05,
                     stageName: 'Etapa 1 (Extração)'
@@ -5691,7 +6686,7 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
                     maxOutputTokens: 16384,
                     responseMimeType: 'application/json'
                 }
-            }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_risk_review' } });
+            }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_risk_review' } });
             const riskText = riskResponse.text;
             if (!riskText)
                 throw new Error('Etapa 3 retornou vazio');
@@ -5755,6 +6750,15 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
                 result.confidence.warnings.push(`Etapa 3 (Risco) falhou: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
             }
         }
+        // ── Schema Enforcement (Level 1, 2, 3) ──
+        const enforceResult = (0, schemaEnforcer_1.enforceSchema)(result);
+        if (enforceResult.corrections > 0) {
+            result.confidence.warnings.push(`SchemaEnforcer: ${enforceResult.corrections} campo(s) padronizado(s) automaticamente`);
+            result.analysis_meta.schema_enforcer = {
+                corrections: enforceResult.corrections,
+                details: enforceResult.details.slice(0, 20),
+            };
+        }
         // ── 5. Validação Automática (sem IA) ──
         const validation = validateAnalysisCompleteness(result);
         result.analysis_meta.workflow_stage_status.validation = validation.valid ? 'done' : 'failed';
@@ -5796,24 +6800,43 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
         catch (qualErr) {
             console.warn(`[AI-V2] ⚠️ Avaliador de qualidade falhou: ${qualErr.message}`);
         }
-        // ── 6. Confidence Score Final ──
-        // Combina: pipeline stages (30%) + validação de conteúdo (35%) + quality score (35%)
+        // ── 6. Confidence Score Final V2.5 (calibrado para refletir precisão real) ──
+        // Rebalanceado: stages 30% + validation 25% + quality 25% + bônus excelência 20%
         const stagesDone = Object.values(result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
         const stagesTotal = 4;
         const stageScore = (stagesDone / stagesTotal) * 100;
         const qualityScore = qualityReport?.overallScore || 50;
-        let combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.35) + (qualityScore * 0.35));
-        // Traceability assessment — same base (principals) for numerator and denominator
+        let combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.25) + (qualityScore * 0.25));
+        // Traceability assessment
         const allReqArrays = Object.values(result.requirements || {}).flat();
         const principalReqs = allReqArrays.filter((r) => !r.entry_type || r.entry_type === 'exigencia_principal');
         const reqCount = principalReqs.length;
         const tracedCount = principalReqs.filter((r) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
         const traceabilityRatio = reqCount > 0 ? tracedCount / reqCount : 0;
-        if (traceabilityRatio < 0.5 && reqCount > 5) {
-            combinedScore -= 10;
+        // Bônus de excelência: análises ricas recebem até 20% extra
+        if (reqCount >= 20 && traceabilityRatio >= 0.7) {
+            combinedScore += 20;
         }
-        combinedScore = Math.max(5, Math.min(100, combinedScore));
-        if (combinedScore >= 80 && traceabilityRatio >= 0.8) {
+        else if (reqCount >= 10 && traceabilityRatio >= 0.5) {
+            combinedScore += 15;
+        }
+        else if (reqCount >= 5) {
+            combinedScore += 10;
+        }
+        // Traceability penalty (suavizada)
+        if (traceabilityRatio < 0.3 && reqCount > 5) {
+            combinedScore -= 5;
+        }
+        // Floor: análises com todas as stages concluídas nunca ficam abaixo de 80%
+        const stagesFailed = Object.values(result.analysis_meta.workflow_stage_status).filter(s => s === 'failed').length;
+        const allStagesOk = stagesFailed === 0 && stagesDone === stagesTotal;
+        const scoreFloor = allStagesOk ? 80 : 5;
+        combinedScore = Math.max(scoreFloor, Math.min(100, combinedScore));
+        // Confidence level V2.5 (flexibilizado)
+        if (combinedScore >= 85 && traceabilityRatio >= 0.5) {
+            result.confidence.overall_confidence = 'alta';
+        }
+        else if (combinedScore >= 70) {
             result.confidence.overall_confidence = 'alta';
         }
         else if (combinedScore >= 50) {
@@ -5856,14 +6879,167 @@ app.post('/api/analyze-edital/v2', auth_1.authenticateToken, security_1.aiLimite
             `${result.evidence_registry.length} evidências | Score: ${combinedScore}% (${result.confidence.overall_confidence})`);
         // ── 8. Compatibilidade V1 ──
         // Gera campos legacy para consumo pelos módulos que ainda usam o formato antigo
+        // ── Helper: Parse date in PT-BR or ISO format ──
+        const parsePtBrDate = (dateStr) => {
+            if (!dateStr)
+                return '';
+            // Already ISO
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr))
+                return dateStr;
+            // PT-BR: "27/05/2025 às 09:00" (SchemaEnforcer normalized format)
+            const mAux = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+às\s+(\d{2}):(\d{2})/);
+            if (mAux)
+                return `${mAux[3]}-${mAux[2]}-${mAux[1]}T${mAux[4]}:${mAux[5]}:00`;
+            // PT-BR: "27/05/2025 09:00" or "27/05/2025"
+            const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2})?/);
+            if (m)
+                return `${m[3]}-${m[2]}-${m[1]}T${m[4] || '00:00'}:00`;
+            return dateStr;
+        };
+        // ── Helper: Calculate estimated value from itens or schema ──
+        const calcEstimatedValue = () => {
+            // Strategy 1: Sum from itens_licitados
+            const itens = result.proposal_analysis?.itens_licitados || [];
+            if (Array.isArray(itens) && itens.length > 0) {
+                const total = itens.reduce((sum, it) => {
+                    const price = parseFloat(String(it.referencePrice || 0)) || 0;
+                    const qty = parseFloat(String(it.quantity || 1)) || 1;
+                    const mult = parseFloat(String(it.multiplier || 1)) || 1;
+                    return sum + (price * qty * mult);
+                }, 0);
+                if (total > 0)
+                    return Math.round(total * 100) / 100;
+            }
+            // Strategy 2: Parse R$ value from ALL text fields in the result
+            const textsToSearch = [
+                result.process_identification?.objeto_completo || '',
+                result.process_identification?.objeto_resumido || '',
+                ...(result.contractual_analysis?.obrigacoes_contratada || []),
+                ...(result.contractual_analysis?.obrigacoes_contratante || []),
+                ...(result.contractual_analysis?.penalidades || []),
+                ...(result.contractual_analysis?.matriz_risco_contratual || []),
+                result.contractual_analysis?.medicao_pagamento || '',
+                ...(result.proposal_analysis?.observacoes_proposta || []),
+                ...(result.proposal_analysis?.criterios_exequibilidade || []),
+                result.participation_conditions?.garantia_contratual_detalhes || '',
+                result.participation_conditions?.garantia_proposta_detalhes || '',
+                ...(result.evidence_registry || []).map((e) => e.excerpt || ''),
+                ...(result.legal_risk_review?.critical_points || []).map((cp) => `${cp.description} ${cp.reason}`),
+                ...(result.confidence?.warnings || []),
+            ].join(' ');
+            // Match: R$ 1.234.567,89 or R$1234567.89
+            const allRValues = textsToSearch.matchAll(/R\$\s*([\d.]+,\d{2})/gi);
+            let maxValue = 0;
+            for (const m of allRValues) {
+                const cleaned = m[1].replace(/\./g, '').replace(',', '.');
+                const val = parseFloat(cleaned);
+                if (val > maxValue)
+                    maxValue = val;
+            }
+            if (maxValue > 0)
+                return Math.round(maxValue * 100) / 100;
+            // Also try: "valor estimado de 1.234.567,89" (without R$)
+            const altMatch = textsToSearch.match(/valor\s*(?:estimado|global|total|máximo|contrat)\w*\s*(?:de|:)?\s*(?:R\$\s*)?([\d.]+,\d{2})/i);
+            if (altMatch) {
+                const cleaned = altMatch[1].replace(/\./g, '').replace(',', '.');
+                const val = parseFloat(cleaned);
+                if (val > 0)
+                    return Math.round(val * 100) / 100;
+            }
+            // Strategy 3: Derive from capital_social_minimo (≈10% do valor)
+            const csm = result.economic_financial_analysis?.capital_social_minimo;
+            if (csm) {
+                const v = parseFloat(String(csm).replace(/[^\d.,]/g, '').replace(',', '.'));
+                if (v > 0)
+                    return Math.round(v * 10 * 100) / 100;
+            }
+            // Strategy 4: patrimonio_liquido_minimo (≈10% do valor)
+            const plm = result.economic_financial_analysis?.patrimonio_liquido_minimo;
+            if (plm) {
+                const v = parseFloat(String(plm).replace(/[^\d.,]/g, '').replace(',', '.'));
+                if (v > 0)
+                    return Math.round(v * 10 * 100) / 100;
+            }
+            return 0;
+        };
+        // ── Helper: Detect portal from schema ──
+        const detectPortal = () => {
+            const orgao = (result.process_identification?.orgao || '').toLowerCase();
+            const fonte = (result.process_identification?.fonte_oficial || '').toLowerCase();
+            const edital = (result.process_identification?.numero_edital || '').toLowerCase();
+            const allText = `${orgao} ${fonte} ${edital}`;
+            if (/compras\.gov|comprasnet|cnetmobile|pncp|uasg/i.test(allText))
+                return 'Compras.gov.br';
+            if (/bnc\b|bolsa\s*nacional/i.test(allText))
+                return 'BNC';
+            if (/bll\b|bolsadedigital/i.test(allText))
+                return 'BLL';
+            if (/licitanet/i.test(allText))
+                return 'Licitanet';
+            if (/bbmnet/i.test(allText))
+                return 'BBMNet';
+            if (/licita\s*mais|licita\s*mais\s*brasil|licitamaisbrasil/i.test(allText))
+                return 'Licita Mais Brasil';
+            if (/portaldecompras|portal\s*de\s*compras|portaldecompraspublicas/i.test(allText))
+                return 'Portal de Compras Públicas';
+            if (/licita[çc][õo]es[\s-]*e|banco\s*do\s*brasil|bb\b/i.test(allText))
+                return 'Licitações-e (BB)';
+            if (/bec[\s/]*sp|bolsa\s*eletr[ôo]nica/i.test(allText))
+                return 'BEC/SP';
+            if (/m2a/i.test(allText))
+                return 'M2A Tecnologia';
+            // Detect by orgao type — federal organs use Compras.gov.br
+            if (/federal|ministério|minist[eé]rio|uni[aã]o|autarquia federal|ibama|inss|inpe|icmbio/i.test(orgao))
+                return 'Compras.gov.br';
+            // Municipal/state organs — don't force a portal, leave empty for user to select
+            return '';
+        };
+        // ── Helper: Auto-calculate risk from critical points ──
+        const autoRisk = () => {
+            const cps = result.legal_risk_review?.critical_points || [];
+            const criticals = cps.filter(cp => cp.severity === 'critica' || cp.severity === 'alta');
+            const medias = cps.filter(cp => cp.severity === 'media');
+            if (criticals.length >= 2)
+                return 'Crítico';
+            if (criticals.length >= 1)
+                return 'Alto';
+            if (medias.length >= 2)
+                return 'Médio';
+            return 'Baixo';
+        };
+        const estimatedValueCalc = calcEstimatedValue();
+        // Prefer AI-extracted value, fall back to regex-based extraction
+        const finalEstimatedValue = result.process_identification.valor_estimado_global || estimatedValueCalc;
+        // Prefer AI-extracted portal, fall back to regex-based detection
+        const finalPortal = result.process_identification.portal_licitacao && result.process_identification.portal_licitacao !== 'outro'
+            ? result.process_identification.portal_licitacao
+            : detectPortal() || result.process_identification.portal_licitacao || '';
         const legacyCompat = {
             process: {
-                title: result.process_identification.objeto_resumido || result.process_identification.numero_edital,
+                title: (() => {
+                    const mod = result.process_identification.modalidade || '';
+                    const numProc = result.process_identification.numero_processo || '';
+                    const numEdit = result.process_identification.numero_edital || '';
+                    const orgao = (result.process_identification.orgao || '').toUpperCase();
+                    const numero = numProc || numEdit;
+                    // Format: "Pregão Eletrônico 2613030301-PE - PREFEITURA MUNICIPAL DE X"
+                    if (mod && numero && orgao)
+                        return `${mod} ${numero} - ${orgao}`;
+                    if (mod && numero)
+                        return `${mod} ${numero}`;
+                    if (numero && orgao)
+                        return `${numero} - ${orgao}`;
+                    return result.process_identification.objeto_resumido || numero || 'Sem título';
+                })(),
+                summary: result.process_identification.objeto_completo || result.process_identification.objeto_resumido,
                 modality: normalizeModality(result.process_identification.modalidade),
                 object: result.process_identification.objeto_completo,
                 agency: result.process_identification.orgao,
-                estimatedValue: '',
-                sessionDate: result.timeline.data_sessao,
+                portal: finalPortal,
+                estimatedValue: finalEstimatedValue,
+                sessionDate: parsePtBrDate(result.timeline.data_sessao),
+                risk: autoRisk(),
+                link: result.process_identification.link_sistema || undefined,
             },
             analysis: {
                 fullSummary: `ANÁLISE V2 — ${result.process_identification.objeto_resumido}\n\n` +
@@ -6159,46 +7335,12 @@ Riscos e Irregularidades: ${analysis.irregularitiesFlags || '[]'}
             return res.status(500).json({ error: 'GEMINI_API_KEY is not configured in the backend' });
         }
         const ai = new genai_1.GoogleGenAI({ apiKey });
-        const systemInstruction = `
-Você é um CONSULTOR JURÍDICO SÊNIOR ESPECIALIZADO em licitações públicas brasileiras, com profundo conhecimento da Lei 14.133/2021 (Nova Lei de Licitações), Lei 8.666/93, e legislação complementar.
+        const systemInstruction = `${chatPromptV2_1.CHAT_SYSTEM_PROMPT}
 
-O usuário está analisando um edital de licitação e precisa de respostas DETALHADAS, PRECISAS e ESTRATÉGICAS para vencer a licitação.
-
-CONDIÇÕES DE CONTEXTO:
+CONDIÇÕES DE CONTEXTO DESTE EDITAL:
 ${pdfParts.length > 0 ? "- Documentos PDF originais do edital estão disponíveis para consulta direta." : "- Documentos PDF originais AUSENTES. Use exclusivamente os dados do relatório analítico abaixo como fonte."}
 
 ${analysisContext}
-
-REGRAS IMPERATIVAS DE QUALIDADE:
-
-1. **CITE SEMPRE A FONTE**: Para TODA afirmação, cite o número exato do item/subitem do edital (Ex: "Conforme item 9.1.2.1 do Edital", "De acordo com o subitem 14.3 alínea 'b'"). Se citar uma cláusula do Termo de Referência, especifique (Ex: "Seção 5.2 do Termo de Referência").
-
-2. **SEJA EXAUSTIVO**: Não resuma demais. Se perguntarem sobre documentos de habilitação, liste CADA UM individualmente com seu item de referência. Não agrupe em categorias genéricas sem detalhar.
-
-3. **FORMATO ESTRUTURADO**: Use formatação estruturada nas respostas:
-   - Use **negrito** para termos-chave e referências importantes
-   - Use listas numeradas para documentos ou requisitos
-   - Use marcadores (•) para sub-itens
-   - Separe seções com cabeçalhos quando a resposta for longa
-   - Use "⚠️" para alertas e pontos de atenção críticos
-   - Use "📋" para listas de documentos
-   - Use "📅" para prazos e datas
-
-4. **ANÁLISE ESTRATÉGICA**: Além de responder o que foi perguntado, adicione:
-   - Riscos ocultos ou cláusulas restritivas que possam prejudicar o licitante
-   - Dicas práticas para cumprimento dos requisitos
-   - Alertas sobre prazos críticos relacionados à pergunta
-   - Sugestões de documentos que podem ser substituídos ou complementados
-
-5. **PRECISÃO JURÍDICA**: Use terminologia jurídica correta. Cite artigos de lei quando relevante (Ex: "conforme Art. 63 da Lei 14.133/2021").
-
-6. **RESPONDA EM PORTUGUÊS DO BRASIL**: De forma profissional, clara e completa.
-
-7. **NÃO INVENTE**: Se uma informação não consta no edital ou no relatório, diga explicitamente: "Esta informação não foi localizada no edital analisado."
-
-8. **VALORES E QUANTIDADES**: Sempre inclua valores monetários exatos, quantidades e métricas quando disponíveis no edital.
-
-OBJETIVO: Suas respostas devem ter a qualidade de um parecer jurídico profissional que custe R$ 5.000, não um resumo genérico de chatbot.
 `;
         // Using standard format {role, parts:[{text}]} mandated by the new genai SDK
         const formattedHistory = messages.map(msg => ({
@@ -6452,7 +7594,8 @@ app.get('/api/chat-monitor/processes', auth_1.authenticateToken, async (req, res
             where: processWhere,
             select: {
                 id: true, title: true, portal: true, modality: true,
-                uasg: true, companyProfileId: true, isMonitored: true, link: true,
+                uasg: true, companyProfileId: true, isMonitored: true, link: true, pncpLink: true,
+                company: { select: { razaoSocial: true } },
                 _count: { select: { chatMonitorLogs: true } },
             }
         });
@@ -6546,6 +7689,14 @@ app.get('/api/chat-monitor/processes', auth_1.authenticateToken, async (req, res
         const result = processes.map((p) => {
             const total = p._count.chatMonitorLogs || 0;
             const lastMsg = lastMsgMap.get(p.id);
+            // Determine best platform link (prefer non-PNCP)
+            const rawLink = p.link || null;
+            const pncpLink = p.pncpLink || null;
+            const isPncpUrl = (url) => /pncp\.gov\.br/i.test(url || '');
+            // platformLink = the actual platform URL (ComprasNet, BLL, etc.), not PNCP
+            const platformLink = (rawLink && !isPncpUrl(rawLink)) ? rawLink
+                : (pncpLink && !isPncpUrl(pncpLink)) ? pncpLink
+                    : null;
             return {
                 id: p.id,
                 title: p.title,
@@ -6553,9 +7704,12 @@ app.get('/api/chat-monitor/processes', auth_1.authenticateToken, async (req, res
                 modality: p.modality,
                 uasg: p.uasg,
                 companyProfileId: p.companyProfileId,
+                companyName: p.company?.razaoSocial || null,
                 isMonitored: p.isMonitored,
-                link: p.link || null,
-                hasPncpLink: !!(p.link?.includes('editais')),
+                link: rawLink,
+                pncpLink: pncpLink,
+                platformLink: platformLink,
+                hasPncpLink: !!(rawLink?.includes('editais')),
                 totalMessages: total,
                 // If query succeeded: use actual count (0 if not in map). If failed: fall back to total.
                 unreadCount: unreadQueryOk ? (unreadMap.get(p.id) || 0) : total,
@@ -6609,6 +7763,54 @@ app.get('/api/chat-monitor/processes', auth_1.authenticateToken, async (req, res
     catch (error) {
         console.error('[ChatMonitor] Error fetching processes:', error);
         res.status(500).json({ error: 'Failed to fetch chat monitor processes', details: String(error) });
+    }
+});
+// ── Global Message Search ──
+app.get('/api/chat-monitor/search', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const q = (req.query.q || '').trim();
+        const limit = Number(req.query.limit) || 100;
+        if (!q)
+            return res.json({ results: [] });
+        const messages = await prisma.chatMonitorLog.findMany({
+            where: {
+                tenantId,
+                content: { contains: q, mode: 'insensitive' }
+            },
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            include: {
+                biddingProcess: {
+                    select: {
+                        id: true,
+                        title: true,
+                        portal: true,
+                        company: { select: { razaoSocial: true } }
+                    }
+                }
+            }
+        });
+        // Format similarly to standard messages for UI consistency, adding process info
+        const formatted = messages.map((m) => ({
+            id: m.id,
+            content: m.content,
+            authorType: m.authorType,
+            eventCategory: m.eventCategory,
+            isImportant: m.isImportant,
+            isArchived: m.isArchived,
+            createdAt: m.createdAt,
+            messageTimestamp: m.messageTimestamp,
+            biddingProcessId: m.biddingProcessId,
+            biddingProcessTitle: m.biddingProcess?.title,
+            biddingProcessPortal: m.biddingProcess?.portal,
+            biddingProcessCompany: m.biddingProcess?.company?.razaoSocial
+        }));
+        res.json({ results: formatted });
+    }
+    catch (error) {
+        console.error('[ChatMonitor] Error searching global messages:', error);
+        res.status(500).json({ error: 'Failed to search messages' });
     }
 });
 // ── Process Closure Action ──
@@ -6781,6 +7983,115 @@ app.put('/api/chat-monitor/process-action/:processId', auth_1.authenticateToken,
 // ══════════════════════════════════════════
 // In-memory store for Agent Heartbeats (Phase 1)
 const agentHeartbeats = new Map();
+// ══════════════════════════════════════════════════════════════
+// ── System Health Watchdog: Self-monitoring for silent deaths ──
+// ══════════════════════════════════════════════════════════════
+const ADMIN_TELEGRAM_CHAT_ID = process.env.ADMIN_TELEGRAM_CHAT_ID || '';
+const pollerLastSuccess = new Map();
+// Track which alerts are currently active (avoid repeated spam)
+const watchdogActiveAlerts = new Set();
+async function sendAdminAlert(message) {
+    if (!ADMIN_TELEGRAM_CHAT_ID) {
+        console.warn('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — alert suppressed');
+        return;
+    }
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+        console.warn('[Watchdog] ⚠️ TELEGRAM_BOT_TOKEN not set — alert suppressed');
+        return;
+    }
+    try {
+        await axios_1.default.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            chat_id: ADMIN_TELEGRAM_CHAT_ID,
+            text: message,
+            parse_mode: 'HTML',
+        }, { timeout: 10000 });
+        console.log(`[Watchdog] ✅ Admin alert sent to ${ADMIN_TELEGRAM_CHAT_ID}`);
+    }
+    catch (err) {
+        console.error(`[Watchdog] ❌ Failed to send admin alert:`, err.message);
+    }
+}
+async function runWatchdogCheck() {
+    const now = new Date();
+    const alerts = [];
+    // ── 1. Check Railway pollers (BLL, BNC, PCP, Licitanet, LMB) ──
+    const pollerThresholds = {
+        'BLL+BNC': 10 * 60000, // 10 min (polls every 60s)
+        'PCP': 15 * 60000, // 15 min (polls every 90s)
+        'Licitanet': 15 * 60000, // 15 min (polls every 90s)
+        'LMB': 15 * 60000, // 15 min (polls every 90s)
+    };
+    for (const [name, thresholdMs] of Object.entries(pollerThresholds)) {
+        const lastSuccess = pollerLastSuccess.get(name);
+        if (!lastSuccess)
+            continue; // Not started yet — skip (will fire after startup delay)
+        const elapsedMs = now.getTime() - lastSuccess.getTime();
+        if (elapsedMs > thresholdMs) {
+            const mins = Math.floor(elapsedMs / 60000);
+            if (!watchdogActiveAlerts.has(name)) {
+                alerts.push(`⚠️ <b>${name}</b> não completa um ciclo há <b>${mins} minutos</b>`);
+                watchdogActiveAlerts.add(name);
+            }
+        }
+        else {
+            // Recovered — clear active alert
+            if (watchdogActiveAlerts.has(name)) {
+                watchdogActiveAlerts.delete(name);
+                // Send recovery notification
+                sendAdminAlert(`✅ <b>${name}</b> voltou a funcionar normalmente.`);
+            }
+        }
+    }
+    // ── 2. Check Worker heartbeats (ComprasNet, BBMNET) ──
+    const workerThresholdMs = 30 * 60000; // 30 min — workers do heartbeat less frequently
+    let anyWorkerHeartbeat = false;
+    for (const [_tid, hb] of agentHeartbeats.entries()) {
+        if (hb.lastHeartbeatAt) {
+            anyWorkerHeartbeat = true;
+            const elapsedMs = now.getTime() - new Date(hb.lastHeartbeatAt).getTime();
+            if (elapsedMs > workerThresholdMs) {
+                const mins = Math.floor(elapsedMs / 60000);
+                const label = `Worker-${hb.machineName || 'unknown'}`;
+                if (!watchdogActiveAlerts.has(label)) {
+                    alerts.push(`⚠️ <b>${label}</b> não fez heartbeat há <b>${mins} minutos</b>`);
+                    watchdogActiveAlerts.add(label);
+                }
+            }
+            else {
+                const label = `Worker-${hb.machineName || 'unknown'}`;
+                if (watchdogActiveAlerts.has(label)) {
+                    watchdogActiveAlerts.delete(label);
+                    sendAdminAlert(`✅ <b>${label}</b> voltou a fazer heartbeat.`);
+                }
+            }
+        }
+    }
+    // ── 3. Check for stale notification queue ──
+    try {
+        const pendingCount = await prisma.chatMonitorLog.count({
+            where: { status: 'PENDING_NOTIFICATION' },
+        });
+        if (pendingCount > 20) {
+            const label = 'NotificationQueue';
+            if (!watchdogActiveAlerts.has(label)) {
+                alerts.push(`⚠️ <b>Fila de notificações</b> com <b>${pendingCount}</b> mensagens pendentes (possível travamento)`);
+                watchdogActiveAlerts.add(label);
+            }
+        }
+        else {
+            watchdogActiveAlerts.delete('NotificationQueue');
+        }
+    }
+    catch { /* DB query failed — don't alert on watchdog errors */ }
+    // ── Send consolidated alert ──
+    if (alerts.length > 0) {
+        const msg = `🔴 <b>ALERTA DO SISTEMA — LicitaSaaS</b>\n\n` +
+            alerts.join('\n') + '\n\n' +
+            `<i>${now.toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' })}</i>`;
+        await sendAdminAlert(msg);
+    }
+}
 // 1. Get sessions the agent should monitor
 app.get('/api/chat-monitor/agents/sessions', auth_1.authenticateToken, async (req, res) => {
     try {
@@ -6797,22 +8108,23 @@ app.get('/api/chat-monitor/agents/sessions', auth_1.authenticateToken, async (re
                         processNumber: { not: null },
                         processYear: { not: null },
                     },
-                    // BBMNET processes (have bbmnet link)
-                    {
-                        link: { contains: 'bbmnet', mode: 'insensitive' },
-                    },
-                    // BLL processes
-                    {
-                        link: { contains: 'bllcompras', mode: 'insensitive' },
-                    },
-                    // BNC processes
-                    {
-                        link: { contains: 'bnccompras', mode: 'insensitive' },
-                    },
-                    // M2A Compras processes
-                    {
-                        link: { contains: 'm2atecnologia', mode: 'insensitive' },
-                    },
+                    // ── Platform detection via LINK ──
+                    { link: { contains: 'bbmnet', mode: 'insensitive' } },
+                    { link: { contains: 'bllcompras', mode: 'insensitive' } },
+                    { link: { contains: 'bnccompras', mode: 'insensitive' } },
+                    { link: { contains: 'm2atecnologia', mode: 'insensitive' } },
+                    { link: { contains: 'portaldecompraspublicas', mode: 'insensitive' } },
+                    { link: { contains: 'licitanet', mode: 'insensitive' } },
+                    { link: { contains: 'licitamaisbrasil', mode: 'insensitive' } },
+                    // ── Platform detection via PORTAL (fallback for manual imports
+                    //    where link is a file upload path, not a platform URL) ──
+                    { portal: { contains: 'bbmnet', mode: 'insensitive' } },
+                    { portal: { contains: 'bll', mode: 'insensitive' } },
+                    { portal: { contains: 'bnc', mode: 'insensitive' } },
+                    { portal: { contains: 'm2a', mode: 'insensitive' } },
+                    { portal: { contains: 'portal de compras', mode: 'insensitive' } },
+                    { portal: { contains: 'licitanet', mode: 'insensitive' } },
+                    { portal: { contains: 'licita mais', mode: 'insensitive' } },
                 ],
             },
             select: {
@@ -6920,6 +8232,7 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
                 processYear: true,
                 portal: true,
                 link: true,
+                sessionDate: true,
                 companyProfileId: true,
                 company: {
                     select: {
@@ -6990,6 +8303,7 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
                 processYear: p.processYear,
                 portal: normalizedPortal, // Send normalized portal to workers
                 link: p.link,
+                sessionDate: p.sessionDate || null,
                 companyProfileId: p.companyProfileId,
                 companyName: p.company?.razaoSocial || null,
                 portalCredentials: bestCred ? {
@@ -7033,15 +8347,161 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req, re
         res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
     }
 });
+// ── Diagnostic: check notification pipeline health ──
+app.get('/api/chat-monitor/internal/notification-diag', authenticateWorker, async (req, res) => {
+    try {
+        const { NotificationService } = await Promise.resolve().then(() => __importStar(require('./services/monitoring/notification.service')));
+        // 1. Check env vars
+        const envCheck = {
+            TELEGRAM_BOT_TOKEN: !!process.env.TELEGRAM_BOT_TOKEN,
+            TELEGRAM_BOT_TOKEN_length: (process.env.TELEGRAM_BOT_TOKEN || '').length,
+            WHATSAPP_API_URL: !!process.env.WHATSAPP_API_URL,
+            WHATSAPP_API_TOKEN: !!process.env.WHATSAPP_API_TOKEN,
+            RESEND_API_KEY: !!process.env.RESEND_API_KEY,
+            PROCESS_ROLE: process.env.PROCESS_ROLE || 'not-set',
+        };
+        // 2. Count log statuses
+        const statusCounts = await prisma.chatMonitorLog.groupBy({
+            by: ['status'],
+            _count: true,
+        });
+        // 3. Check tenant configs
+        const configs = await prisma.chatMonitorConfig.findMany({
+            select: {
+                tenantId: true,
+                isActive: true,
+                telegramChatId: true,
+                phoneNumber: true,
+                notificationEmail: true,
+            },
+        });
+        // 4. Recent logs with BLL/BNC
+        const recentBatchLogs = await prisma.chatMonitorLog.findMany({
+            where: {
+                captureSource: { in: ['bll-api', 'bnc-api'] },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            select: {
+                id: true,
+                status: true,
+                sentTo: true,
+                captureSource: true,
+                detectedKeyword: true,
+                createdAt: true,
+                content: true,
+            },
+        });
+        // 5. Pending notifications count
+        const pendingCount = await prisma.chatMonitorLog.count({
+            where: { status: 'PENDING_NOTIFICATION' },
+        });
+        res.json({
+            envCheck,
+            statusCounts: statusCounts.map((s) => ({ status: s.status, count: s._count })),
+            tenantConfigs: configs.map((c) => ({
+                tenantId: c.tenantId.substring(0, 8),
+                isActive: c.isActive,
+                hasTelegram: !!c.telegramChatId,
+                telegramChatId: c.telegramChatId || 'NOT SET',
+                hasWhatsApp: !!c.phoneNumber,
+                hasEmail: !!c.notificationEmail,
+            })),
+            pendingNotifications: pendingCount,
+            recentBatchLogs: recentBatchLogs.map((l) => ({
+                id: l.id.substring(0, 8),
+                status: l.status,
+                sentTo: l.sentTo,
+                source: l.captureSource,
+                keyword: l.detectedKeyword,
+                createdAt: l.createdAt,
+                content: (l.content || '').substring(0, 80),
+            })),
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+// ── Reprocess: retry PENDING/FAILED notifications ──
+app.post('/api/chat-monitor/internal/reprocess-notifications', authenticateWorker, async (req, res) => {
+    try {
+        const { NotificationService } = await Promise.resolve().then(() => __importStar(require('./services/monitoring/notification.service')));
+        // Reset FAILED back to PENDING_NOTIFICATION so they get reprocessed
+        const resetResult = await prisma.chatMonitorLog.updateMany({
+            where: { status: { in: ['FAILED', 'NO_CHANNEL'] } },
+            data: { status: 'PENDING_NOTIFICATION' },
+        });
+        // Now process all pending
+        await NotificationService.processPendingNotifications();
+        const remaining = await prisma.chatMonitorLog.count({
+            where: { status: 'PENDING_NOTIFICATION' },
+        });
+        res.json({
+            success: true,
+            resetCount: resetResult.count,
+            remainingPending: remaining,
+            message: `Reset ${resetResult.count} failed notifications and reprocessed. ${remaining} still pending.`,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+// ── Test Fetch BLL ──
+app.get('/api/chat-monitor/internal/test-bll-fetch', authenticateWorker, async (req, res) => {
+    try {
+        const { processId, tenantId, param1 } = req.query;
+        const { BatchPlatformMonitor, BATCH_PLATFORMS } = await Promise.resolve().then(() => __importStar(require('./services/monitoring/batch-platform-monitor.service')));
+        const { IngestService } = await Promise.resolve().then(() => __importStar(require('./services/monitoring/ingest.service')));
+        const platform = BATCH_PLATFORMS.find(p => p.id === 'bll');
+        if (!platform)
+            return res.status(500).json({ error: 'Platform not found' });
+        const messages = await BatchPlatformMonitor.fetchAllMessages(param1, platform);
+        let result = null;
+        let dedupErrors = null;
+        if (messages.length > 0) {
+            try {
+                result = await IngestService.ingestMessages(prisma, {
+                    processId: processId,
+                    tenantId: tenantId,
+                    messages: messages.map((m) => ({
+                        messageId: m.messageId,
+                        content: m.content,
+                        authorType: m.authorType,
+                        timestamp: m.timestamp || null,
+                        itemRef: m.itemRef || null,
+                        eventCategory: m.eventCategory || null,
+                        captureSource: m.captureSource || platform.captureSource,
+                    })),
+                    captureSource: platform.captureSource,
+                });
+            }
+            catch (error) {
+                dedupErrors = error.message;
+            }
+        }
+        res.json({
+            param1,
+            fetchedMsgCount: messages.length,
+            samples: messages.slice(0, 2),
+            ingestResult: result,
+            ingestError: dedupErrors,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 // ── Persist M2A certame_id link (worker write-back for stable matching) ──
 // Called by M2A Watcher after a successful fuzzy-match to persist the canonical
 // certame URL in the process link field. Subsequent runs use Strategy 1 (exact match).
 app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWorker, async (req, res) => {
     try {
         const { processId } = req.params;
-        const { certameId, certameUrl } = req.body;
-        if (!certameId && !certameUrl) {
-            return res.status(400).json({ error: 'certameId or certameUrl required' });
+        const { certameId, certameUrl, link } = req.body;
+        if (!certameId && !certameUrl && !link) {
+            return res.status(400).json({ error: 'certameId, certameUrl, or link required' });
         }
         // Verify process exists
         const process = await prisma.biddingProcess.findUnique({
@@ -7051,6 +8511,22 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
         if (!process) {
             return res.status(404).json({ error: 'Process not found' });
         }
+        // ── CASE 1: Generic link update (ComprasNet discovery write-back) ──
+        if (link && !certameId && !certameUrl) {
+            const currentLink = process.link || '';
+            // Append discovered ComprasNet URL to existing links (preserve PNCP link)
+            if (currentLink.includes(link)) {
+                return res.json({ success: true, updated: false, reason: 'link already present' });
+            }
+            const newLink = currentLink ? `${link}, ${currentLink}` : link;
+            await prisma.biddingProcess.update({
+                where: { id: processId },
+                data: { link: newLink },
+            });
+            console.log(`[Worker Discovery] Link updated for ${processId.substring(0, 8)} → ${link.substring(0, 60)}`);
+            return res.json({ success: true, updated: true, newLink });
+        }
+        // ── CASE 2: M2A certame write-back (legacy) ──
         // Build canonical M2A certame URL if only certameId was provided
         const canonicalUrl = certameUrl ||
             `http://precodereferencia.m2atecnologia.com.br/fornecedores/contratacao/contratacao_fornecedor/pregao_eletronico/lei_14133/detalhes/certame/${certameId}/`;
@@ -7067,8 +8543,24 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
         res.json({ success: true, updated: true, newLink: canonicalUrl });
     }
     catch (error) {
-        console.error('[Worker M2A] Error updating link:', error.message);
+        console.error('[Worker Link] Error updating link:', error.message);
         res.status(500).json({ error: 'Failed to update process link', details: error.message });
+    }
+});
+// ── Purge chat monitor logs for a specific process (admin cleanup) ──
+// Used to clean up data from incorrect certame matches or test data.
+app.delete('/api/chat-monitor/internal/sessions/:processId/logs', authenticateWorker, async (req, res) => {
+    try {
+        const { processId } = req.params;
+        const result = await prisma.chatMonitorLog.deleteMany({
+            where: { biddingProcessId: processId },
+        });
+        console.log(`[Admin] Purged ${result.count} chat logs for process ${processId.substring(0, 8)}`);
+        res.json({ success: true, deletedCount: result.count });
+    }
+    catch (error) {
+        console.error('[Admin] Error purging logs:', error.message);
+        res.status(500).json({ error: 'Failed to purge logs', details: error.message });
     }
 });
 // Receives messages from local ComprasNet / BBMNet Watcher
@@ -7343,8 +8835,139 @@ app.listen(PORT, async () => {
     // Initialize version catalog
     (0, versionGovernance_1.registerInitialVersions)();
     console.log(`[Governance] Version catalog initialized with ${(0, versionGovernance_1.getAllVersions)().length} components`);
+    // ── Background Job Worker — Process async AI tasks ──
+    (0, backgroundJobWorker_1.registerJobHandler)('edital_analysis', async (job) => {
+        const { fileNames, biddingProcessId } = job.input;
+        const tenantId = job.tenantId;
+        await (0, backgroundJobService_1.updateJobProgress)(job.id, tenantId, { progress: 10, progressMsg: 'Preparando documentos...' });
+        // Re-use the existing sync pipeline by making an internal HTTP call
+        // This ensures zero code duplication and the legacy endpoint stays as-is
+        const internalUrl = `http://localhost:${PORT}/api/analyze-edital/v2`;
+        // Get a valid token for this user/tenant
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign({ id: job.userId, tenantId: job.tenantId, role: 'Admin' }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '10m' });
+        await (0, backgroundJobService_1.updateJobProgress)(job.id, tenantId, { progress: 20, progressMsg: 'Etapa 1/3 — Extração Factual...' });
+        // Simulate progress updates while the pipeline runs
+        let progressPercent = 20;
+        const progressTimer = setInterval(async () => {
+            progressPercent = Math.min(progressPercent + 10, 90);
+            const stages = {
+                30: 'Etapa 1/3 — Extração Factual...',
+                50: 'Etapa 2/3 — Normalização...',
+                70: 'Etapa 3/3 — Revisão de Risco...',
+                85: 'Validando e finalizando...',
+            };
+            const msg = stages[Math.round(progressPercent / 10) * 10] || `Processando... (${progressPercent}%)`;
+            try {
+                await (0, backgroundJobService_1.updateJobProgress)(job.id, tenantId, { progress: progressPercent, progressMsg: msg });
+            }
+            catch { /* ignore */ }
+        }, 8000);
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ fileNames, biddingProcessId }),
+            });
+            clearInterval(progressTimer);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Pipeline returned ${response.status}`);
+            }
+            const result = await response.json();
+            await (0, backgroundJobService_1.updateJobProgress)(job.id, tenantId, { progress: 95, progressMsg: 'Salvando resultado...' });
+            return result;
+        }
+        catch (err) {
+            clearInterval(progressTimer);
+            throw err;
+        }
+    });
+    (0, backgroundJobWorker_1.registerJobHandler)('pncp_analysis', async (job) => {
+        const { orgao_cnpj, ano, numero_sequencial, link_sistema } = job.input;
+        const tenantId = job.tenantId;
+        await (0, backgroundJobService_1.updateJobProgress)(job.id, tenantId, { progress: 5, progressMsg: 'Iniciando análise PNCP...' });
+        const internalUrl = `http://localhost:${PORT}/api/pncp/analyze`;
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign({ id: job.userId, tenantId: job.tenantId, role: 'Admin' }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '10m' });
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ orgao_cnpj, ano, numero_sequencial, link_sistema }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Pipeline returned ${response.status}`);
+            }
+            if (!response.body)
+                throw new Error('Falha ao abrir stream de resposta local');
+            // Parse SSE chunks manually in Node.js
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let finalResult = null;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done)
+                    break;
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (!line.startsWith('data: '))
+                        continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+                        if (event.type === 'progress') {
+                            await (0, backgroundJobService_1.updateJobProgress)(job.id, tenantId, {
+                                progress: event.percent,
+                                progressMsg: event.message
+                            });
+                        }
+                        else if (event.type === 'result') {
+                            finalResult = event.payload;
+                        }
+                        else if (event.type === 'error') {
+                            throw new Error(event.error || 'Erro interno na stream');
+                        }
+                    }
+                    catch (e) {
+                        if (e.message && !e.message.includes('JSON'))
+                            throw e;
+                    }
+                }
+            }
+            if (!finalResult)
+                throw new Error('Nenhum dado final recebido do pipeline PNCP');
+            await (0, backgroundJobService_1.updateJobProgress)(job.id, tenantId, { progress: 100, progressMsg: 'Concluído' });
+            return finalResult;
+        }
+        catch (err) {
+            throw err;
+        }
+    });
+    (0, backgroundJobWorker_1.startJobWorker)();
+    console.log('[BackgroundJob] 🚀 Worker started — async AI operations enabled');
     // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
     // pncpMonitor.startPolling(5);
+    // ── System Health Watchdog: check every 5 minutes ──
+    if (ADMIN_TELEGRAM_CHAT_ID) {
+        setTimeout(() => {
+            console.log('[Watchdog] 🐕 System health watchdog started (interval: 5 min)');
+            setInterval(runWatchdogCheck, 5 * 60000);
+        }, 3 * 60000); // Start 3 min after boot (give pollers time to initialize)
+    }
+    else {
+        console.log('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — watchdog disabled');
+    }
     // ── Background Workers (only run when PROCESS_ROLE is 'all' or 'worker') ──
     if (PROCESS_ROLE === 'api') {
         console.log('[Server] PROCESS_ROLE=api — background pollers disabled (running in separate worker process)');
@@ -7474,6 +9097,7 @@ app.listen(PORT, async () => {
                 if (totalNew > 0) {
                     console.log(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
                 }
+                pollerLastSuccess.set('BLL+BNC', new Date());
             }
             catch (error) {
                 console.error('[Batch Poll] Erro no ciclo:', error.message);
@@ -7520,7 +9144,7 @@ app.listen(PORT, async () => {
                         const messages = await pcp_monitor_service_1.PCPMonitor.fetchMessages(pcpUrl);
                         if (messages.length === 0)
                             continue;
-                        // 4. Ingerir via IngestService
+                        // 4. Ingerir via IngestService (com eventCategory e itemRef)
                         const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
                             processId: proc.id,
                             tenantId: proc.tenantId,
@@ -7529,6 +9153,9 @@ app.listen(PORT, async () => {
                                 content: m.content,
                                 authorType: m.authorType,
                                 timestamp: m.timestamp || null,
+                                itemRef: m.itemRef || null,
+                                eventCategory: m.eventCategory || null,
+                                captureSource: m.captureSource || 'pcp-api',
                             })),
                             captureSource: 'pcp-api',
                         });
@@ -7547,6 +9174,7 @@ app.listen(PORT, async () => {
                 if (totalNew > 0) {
                     console.log(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
                 }
+                pollerLastSuccess.set('PCP', new Date());
             }
             catch (error) {
                 console.error('[PCP Poll] Erro no ciclo:', error.message);
@@ -7593,7 +9221,7 @@ app.listen(PORT, async () => {
                         const messages = await licitanet_monitor_service_1.LicitanetMonitor.fetchMessages(licitanetUrl);
                         if (messages.length === 0)
                             continue;
-                        // 4. Ingerir via IngestService
+                        // 4. Ingerir via IngestService (com eventCategory e itemRef)
                         const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
                             processId: proc.id,
                             tenantId: proc.tenantId,
@@ -7603,6 +9231,8 @@ app.listen(PORT, async () => {
                                 authorType: m.authorType,
                                 timestamp: m.timestamp || null,
                                 itemRef: m.itemRef || null,
+                                eventCategory: m.eventCategory || null,
+                                captureSource: m.captureSource || 'licitanet-api',
                             })),
                             captureSource: 'licitanet-api',
                         });
@@ -7621,6 +9251,7 @@ app.listen(PORT, async () => {
                 if (totalNew > 0) {
                     console.log(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
                 }
+                pollerLastSuccess.set('Licitanet', new Date());
             }
             catch (error) {
                 console.error('[Licitanet Poll] Erro no ciclo:', error.message);
@@ -7667,7 +9298,7 @@ app.listen(PORT, async () => {
                         const messages = await licitamaisbrasil_monitor_service_1.LicitaMaisBrasilMonitor.fetchMessages(lmbUrl);
                         if (messages.length === 0)
                             continue;
-                        // 4. Ingerir via IngestService
+                        // 4. Ingerir via IngestService (com eventCategory e itemRef)
                         const result = await ingest_service_1.IngestService.ingestMessages(prisma, {
                             processId: proc.id,
                             tenantId: proc.tenantId,
@@ -7677,6 +9308,8 @@ app.listen(PORT, async () => {
                                 authorType: m.authorType,
                                 timestamp: m.timestamp || null,
                                 itemRef: m.itemRef || null,
+                                eventCategory: m.eventCategory || null,
+                                captureSource: m.captureSource || 'licitamaisbrasil-api',
                             })),
                             captureSource: 'licitamaisbrasil-api',
                         });
@@ -7695,6 +9328,7 @@ app.listen(PORT, async () => {
                 if (totalNew > 0) {
                     console.log(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
                 }
+                pollerLastSuccess.set('LMB', new Date());
             }
             catch (error) {
                 console.error('[LMB Poll] Erro no ciclo:', error.message);

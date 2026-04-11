@@ -6510,7 +6510,7 @@ app.post('/api/jobs/submit', authenticateToken, aiLimiter, async (req: any, res)
             return res.status(400).json({ error: 'type and input are required' });
         }
 
-        const validTypes = ['edital_analysis', 'oracle', 'proposal_populate', 'petition'];
+        const validTypes = ['edital_analysis', 'pncp_analysis', 'oracle', 'proposal_populate', 'petition'];
         if (!validTypes.includes(type)) {
             return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
         }
@@ -6548,6 +6548,7 @@ app.get('/api/jobs/:jobId', authenticateToken, async (req: any, res) => {
             progress: job.progress,
             progressMsg: job.progressMsg,
             error: job.error,
+            input: job.input,
             targetId: job.targetId,
             targetTitle: job.targetTitle,
             createdAt: job.createdAt,
@@ -9251,6 +9252,80 @@ app.listen(PORT, async () => {
             return result;
         } catch (err) {
             clearInterval(progressTimer);
+            throw err;
+        }
+    });
+
+    registerJobHandler('pncp_analysis', async (job: any) => {
+        const { orgao_cnpj, ano, numero_sequencial, link_sistema } = job.input;
+        const tenantId = job.tenantId;
+
+        await updateJobProgress(job.id, tenantId, { progress: 5, progressMsg: 'Iniciando análise PNCP...' });
+
+        const internalUrl = `http://localhost:${PORT}/api/pncp/analyze`;
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign(
+            { id: job.userId, tenantId: job.tenantId, role: 'Admin' },
+            process.env.JWT_SECRET || 'default-secret',
+            { expiresIn: '10m' }
+        );
+
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ orgao_cnpj, ano, numero_sequencial, link_sistema }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Pipeline returned ${response.status}`);
+            }
+
+            if (!response.body) throw new Error('Falha ao abrir stream de resposta local');
+
+            // Parse SSE chunks manually in Node.js
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let finalResult: any = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+                        if (event.type === 'progress') {
+                            await updateJobProgress(job.id, tenantId, {
+                                progress: event.percent,
+                                progressMsg: event.message
+                            });
+                        } else if (event.type === 'result') {
+                            finalResult = event.payload;
+                        } else if (event.type === 'error') {
+                            throw new Error(event.error || 'Erro interno na stream');
+                        }
+                    } catch (e: any) {
+                        if (e.message && !e.message.includes('JSON')) throw e;
+                    }
+                }
+            }
+
+            if (!finalResult) throw new Error('Nenhum dado final recebido do pipeline PNCP');
+            
+            await updateJobProgress(job.id, tenantId, { progress: 100, progressMsg: 'Concluído' });
+            return finalResult;
+        } catch (err) {
             throw err;
         }
     });

@@ -36,8 +36,8 @@ class NotificationService {
             }
         }
         else {
-            console.log(`[Notification][MOCK] WhatsApp message para ${phone}: ${message.substring(0, 80)}...`);
-            return true; // Mock success
+            console.log(`[Notification][MOCK] ⚠️ WhatsApp NÃO enviado (WHATSAPP_API_URL/TOKEN não configurados) para ${phone}`);
+            return false;
         }
     }
     /**
@@ -98,8 +98,8 @@ class NotificationService {
             }
         }
         else {
-            console.log(`[Notification][MOCK] Telegram message para ${chatId}: ${message.substring(0, 80)}...`);
-            return true; // Mock success
+            console.log(`[Notification][MOCK] ⚠️ Telegram NÃO enviado (TELEGRAM_BOT_TOKEN não configurado) para ${chatId}`);
+            return false;
         }
     }
     /**
@@ -151,8 +151,8 @@ class NotificationService {
             }
         }
         else {
-            console.log(`[Notification][MOCK] Email message para ${toEmail}: subject="${subject}"`);
-            return true; // Mock success
+            console.log(`[Notification][MOCK] ⚠️ Email NÃO enviado (RESEND_API_KEY não configurado) para ${toEmail}`);
+            return false;
         }
     }
     /**
@@ -203,7 +203,9 @@ class NotificationService {
             const pendingLogs = await prisma_1.prisma.chatMonitorLog.findMany({
                 where: { status: 'PENDING_NOTIFICATION' },
                 include: {
-                    biddingProcess: true,
+                    biddingProcess: {
+                        include: { company: true }
+                    },
                     tenant: {
                         include: {
                             chatMonitorConfig: true
@@ -255,11 +257,21 @@ class NotificationService {
                 else if (link.includes('m2atecnologia') || link.includes('precodereferencia')) {
                     platformName = 'M2A';
                 }
+                const companyName = log.biddingProcess.company?.razaoSocial;
+                const rawLink = log.biddingProcess.link || '';
+                const pncpLink = log.biddingProcess.pncpLink || '';
+                const isPncpUrl = (url) => /pncp\.gov\.br/i.test(url || '');
+                // Prefer the actual platform link (ComprasNet, BLL, etc.), not PNCP
+                const processLink = (rawLink && !isPncpUrl(rawLink)) ? rawLink
+                    : (pncpLink && !isPncpUrl(pncpLink)) ? pncpLink
+                        : null;
                 const message = `🚨 <b>ALERTA DE CHAT - ${platformName}</b>\n\n` +
                     `<b>Processo:</b> ${log.biddingProcess.title}\n` +
+                    (companyName ? `<b>Empresa:</b> ${companyName}\n` : '') +
                     timestampLine +
                     `<b>Palavra-chave:</b> ${log.detectedKeyword}\n` +
                     `<b>Mensagem:</b> ${log.content}\n\n` +
+                    (processLink ? `🔗 <a href="${processLink}">Acessar Plataforma</a>\n\n` : '') +
                     `<i>Verifique agora no LicitaSaaS!</i>`;
                 const sentChannels = [];
                 let anySuccess = false;

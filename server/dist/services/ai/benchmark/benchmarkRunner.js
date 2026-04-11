@@ -84,12 +84,12 @@ function evaluateAgainstBenchmark(caseId, analysisOutput) {
     }
     // Calcular score total (ponderado conforme manifest)
     const scoring = benchmarkManifest.scoring;
-    const totalScore = Math.round((tipoCorrect ? scoring.tipoObjetoCorrect : 0) +
-        (categoriesFoundPct / 100 * scoring.categoriesFoundPct) +
-        (keyReqsPct / 100 * scoring.keyRequirementsFoundPct) +
-        (criticalPct / 100 * scoring.criticalPointsFoundPct) +
-        (minReqsMet ? scoring.minRequirementsMet : 0) +
-        (minEvidenceMet ? scoring.minEvidenceMet : 0));
+    const totalScore = Math.round((tipoCorrect ? (scoring.tipoObjetoCorrect || scoring.tipo_objeto_correct || 10) : 0) +
+        (categoriesFoundPct / 100 * (scoring.categoriesFoundPct || scoring.categories_found_pct || 25)) +
+        (keyReqsPct / 100 * (scoring.keyRequirementsFoundPct || scoring.key_requirements_found_pct || 30)) +
+        (criticalPct / 100 * (scoring.criticalPointsFoundPct || scoring.critical_points_found_pct || 20)) +
+        (minReqsMet ? (scoring.minRequirementsMet || scoring.min_requirements_met || 10) : 0) +
+        (minEvidenceMet ? (scoring.minEvidenceMet || scoring.min_evidence_met || 5) : 0));
     return {
         caseId: benchCase.id,
         caseName: benchCase.name,

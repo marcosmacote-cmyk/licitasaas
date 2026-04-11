@@ -9,7 +9,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 // Middleware de Autenticação
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    // Support token via query param for SSE (EventSource doesn't support custom headers)
+    const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
     if (!token)
         return res.status(401).json({ error: 'Token não fornecido' });
     jsonwebtoken_1.default.verify(token, JWT_SECRET, (err, decoded) => {

@@ -52,7 +52,7 @@ function App() {
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [pncpUnreadCount, setPncpUnreadCount] = useState(0);
   const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string; specialFilter?: string; targetProcessId?: string } | null>(null);
-  const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string; hubOriginId?: string } | null>(null);
+  const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string; hubOriginId?: string; action?: string; jobId?: string } | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -383,9 +383,14 @@ function App() {
               <button className="icon-btn" onClick={toggleTheme} title="Alternar Tema">
                 {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </button>
-              <NotificationCenter onNavigateToProcess={(processId) => {
-                setModuleContext({ processId });
-                setActiveTab('bidding');
+              <NotificationCenter onNavigateToProcess={(processId, type, jobId) => {
+                if (type === 'pncp_analysis') {
+                  setModuleContext({ action: 'open_pncp_job', jobId });
+                  setActiveTab('opportunities');
+                } else {
+                  setModuleContext({ processId });
+                  setActiveTab('bidding');
+                }
               }} />
 
               <div style={{ width: '1px', height: '24px', background: 'var(--color-border)', margin: '0 var(--space-2)' }} />
@@ -433,7 +438,7 @@ function App() {
                 }
                 setActiveTab(tab as AppTab); 
             }} />}
-          {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} />}
+          {activeTab === 'opportunities' && <PncpPage companies={companies} onRefresh={refreshData} items={items} initialContext={moduleContext} onContextConsumed={() => setModuleContext(null)} />}
           {activeTab === 'bidding' && <BiddingPage items={items} setItems={setItems} companies={companies} initialFilter={navFilter} onFilterConsumed={() => setNavFilter(null)}
              autoOpenProcessId={moduleContext?.processId} onAutoOpenConsumed={() => setModuleContext(null)}
              onNavigateToModule={(module, processId) => {

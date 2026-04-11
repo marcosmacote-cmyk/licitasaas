@@ -11,10 +11,12 @@ interface Props {
     companies: CompanyProfile[];
     onRefresh?: () => Promise<void>;
     items?: BiddingProcess[];
+    initialContext?: any;
+    onContextConsumed?: () => void;
 }
 
-export function PncpPage({ companies, onRefresh, items = [] }: Props) {
-    const p = usePncpPage({ companies, onRefresh, items });
+export function PncpPage({ companies, onRefresh, items = [], initialContext, onContextConsumed }: Props) {
+    const p = usePncpPage({ companies, onRefresh, items, initialContext, onContextConsumed });
     const [favListMenu, setFavListMenu] = useState<string | null>(null);
     const [searchListMenu, setSearchListMenu] = useState<string | null>(null);
     const [searchChipMenu, setSearchChipMenu] = useState<string | null>(null);
@@ -901,7 +903,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                                     title="Analisar edital com IA (busca PDFs do PNCP automaticamente)"
                                                 >
                                                     {p.analyzingItemId === item.id ? (
-                                                        <><Loader2 size={14} className="spinner" /> {p.analysisProgress ? `${p.analysisProgress.percent}%` : 'Analisando...'}</>
+                                                        <><Loader2 size={14} className="spinner" /> Enviando...</>
                                                     ) : (
                                                         <><Brain size={14} /> Analisar com IA</>
                                                     )}
@@ -919,51 +921,7 @@ export function PncpPage({ companies, onRefresh, items = [] }: Props) {
                                             </div>
                                         </td>
                                     </tr>
-                                    {/* ── AI Analysis Progress Bar (inline under analyzing row) ── */}
-                                    {p.analyzingItemId === item.id && p.analysisProgress && (
-                                        <tr>
-                                            <td colSpan={6} style={{ padding: 0, border: 'none' }}>
-                                                <div style={{
-                                                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%)',
-                                                    borderBottom: '1px solid rgba(99,102,241,0.15)',
-                                                    padding: '10px 16px',
-                                                    display: 'flex', alignItems: 'center', gap: '12px',
-                                                    animation: 'fadeIn 0.3s ease',
-                                                }}>
-                                                    <Loader2 size={16} className="spinner" style={{ color: 'var(--color-ai)', flexShrink: 0 }} />
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                                            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                                                                {p.analysisProgress!.message}
-                                                            </span>
-                                                            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
-                                                                Etapa {p.analysisProgress!.step}/{p.analysisProgress!.total}
-                                                            </span>
-                                                        </div>
-                                                        {/* Progress bar */}
-                                                        <div style={{
-                                                            width: '100%', height: '6px',
-                                                            background: 'rgba(99,102,241,0.12)',
-                                                            borderRadius: '3px', overflow: 'hidden',
-                                                        }}>
-                                                            <div style={{
-                                                                width: `${p.analysisProgress!.percent}%`,
-                                                                height: '100%',
-                                                                background: 'linear-gradient(90deg, var(--color-primary), var(--color-ai))',
-                                                                borderRadius: '3px',
-                                                                transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                            }} />
-                                                        </div>
-                                                        {p.analysisProgress!.detail && (
-                                                            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '3px', display: 'block' }}>
-                                                                {p.analysisProgress!.detail}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
+                                    {/* ── AI Analysis Progress Bar removed since it's background now ── */}
                                 </React.Fragment>)
                             })
                         )}

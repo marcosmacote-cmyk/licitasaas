@@ -27,7 +27,8 @@
  *     "mediaFiles": [],
  *     "metadata": null,
  *     "isDeleted": 0,
- *     "chatChannel": { "id": "kaQ6tV0yF44hgs7t" }
+ *     "chatChannel": { "id": "kaQ6tV0yF44hgs7t" },
+ *     "user": { "kind": "BUYER" | "SUPPLIER", "name": "..." }
  *   }
  * ]
  *
@@ -35,6 +36,7 @@
  * URL da sala:           https://licitamaisbrasil.com.br/sala-de-negociacao/{auctionId}
  *
  * Acesso: Requer autenticação (email/senha de cidadão).
+ * Credenciais via env vars: LMB_LOGIN_EMAIL, LMB_LOGIN_PASSWORD.
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -49,6 +51,40 @@ exports.LICITA_MAIS_BRASIL_PLATFORM = {
     label: 'Licita Mais Brasil',
     captureSource: 'licitamaisbrasil-api',
 };
+// ── Event category classification via regex (aligned with alertTaxonomy.ts) ──
+function classifyEventCategory(text) {
+    if (!text)
+        return null;
+    const t = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    // Closure / Encerramento
+    if (/\b(encerrad[oa]|homologad[oa]|cancelad[oa]|anuladad[oa]|revogad[oa]|desert[oa]|fracassad[oa])\b/.test(t))
+        return 'encerramento';
+    // Convocação
+    if (/\b(convoca|habilitacao|documentos?\s+de\s+habilitacao|prazo\s+para\s+(?:envio|apresentacao))\b/.test(t))
+        return 'convocacao';
+    // Suspensão
+    if (/\b(suspend?[oae]|suspen[cs]ao|interromp)\b/.test(t))
+        return 'suspensao';
+    // Reabertura
+    if (/\b(reabert[oa]|reabrir|retom[ao]d[oa]|retomada)\b/.test(t))
+        return 'reabertura';
+    // Negociação
+    if (/\b(negociacao|contraproposta|negocia[rç]|lance|melhor\s+oferta)\b/.test(t))
+        return 'negociacao';
+    // Vencedor / Adjudicação
+    if (/\b(vencedor|adjudica|arrematante|melhor\s+classificad[oa])\b/.test(t))
+        return 'vencedor';
+    // Impugnação / Recurso
+    if (/\b(impugnacao|recurso|contrarrazao|contrarraz[oõ]es)\b/.test(t))
+        return 'impugnacao';
+    // Inabilitação
+    if (/\b(inabilit|desclassific)\b/.test(t))
+        return 'inabilitacao';
+    // Abertura / Início
+    if (/\b(abert[oa]\s+para|processo\s+.*\s+aberto|sessao\s+.*\s+aberta|propostas?\s+iniciais)\b/.test(t))
+        return 'abertura';
+    return null;
+}
 class LicitaMaisBrasilMonitor {
     /**
      * Verifica se um link é da Licita Mais Brasil.
@@ -148,36 +184,49 @@ class LicitaMaisBrasilMonitor {
         }
     }
     /**
-     * Busca os batch IDs de um auction.
+     * Busca os batch IDs de um auction (com paginação).
      */
     static async fetchBatchIds(auctionId, token) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
-            const res = await fetch(`${this.API_BASE}/app/batch/list`, {
-                method: 'POST',
-                signal: controller.signal,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'Origin': `https://${exports.LICITA_MAIS_BRASIL_PLATFORM.domain}`,
-                    'User-Agent': this.USER_AGENT,
-                },
-                body: JSON.stringify({ auctionNoticeId: auctionId, page: 1 }),
-            });
-            clearTimeout(timeoutId);
-            if (!res.ok) {
-                console.warn(`[LMB Monitor] Erro ao listar batches: HTTP ${res.status}`);
-                return [];
+        const allBatches = [];
+        let page = 1;
+        const maxPages = 5;
+        while (page <= maxPages) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
+                const res = await fetch(`${this.API_BASE}/app/batch/list`, {
+                    method: 'POST',
+                    signal: controller.signal,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        'Origin': `https://${exports.LICITA_MAIS_BRASIL_PLATFORM.domain}`,
+                        'User-Agent': this.USER_AGENT,
+                    },
+                    body: JSON.stringify({ auctionNoticeId: auctionId, page }),
+                });
+                clearTimeout(timeoutId);
+                if (!res.ok) {
+                    console.warn(`[LMB Monitor] Erro ao listar batches: HTTP ${res.status}`);
+                    break;
+                }
+                const data = await res.json();
+                const batches = data.auctionBatches || [];
+                if (batches.length === 0)
+                    break;
+                allBatches.push(...batches);
+                // Check if there are more pages
+                const total = data.total || data.totalPages || 0;
+                if (allBatches.length >= total || batches.length < 20)
+                    break;
+                page++;
             }
-            const data = await res.json();
-            const batches = data.auctionBatches || [];
-            return batches.map(b => b.id);
+            catch (error) {
+                console.error(`[LMB Monitor] Erro ao buscar batches:`, error.message);
+                break;
+            }
         }
-        catch (error) {
-            console.error(`[LMB Monitor] Erro ao buscar batches:`, error.message);
-            return [];
-        }
+        return allBatches;
     }
     /**
      * Busca o chatChannel ID de um batch.
@@ -213,7 +262,7 @@ class LicitaMaisBrasilMonitor {
     /**
      * Busca mensagens de um chatChannel.
      */
-    static async fetchChatMessages(chatChannelId, token) {
+    static async fetchChatMessages(chatChannelId, token, batchLabel) {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT_MS);
@@ -238,7 +287,7 @@ class LicitaMaisBrasilMonitor {
             const messages = Array.isArray(data) ? data : (data.messages || data.data || []);
             if (messages.length === 0)
                 return [];
-            return this.parseMessages(messages);
+            return this.parseMessages(messages, batchLabel);
         }
         catch (error) {
             if (error.name === 'AbortError') {
@@ -255,9 +304,9 @@ class LicitaMaisBrasilMonitor {
      *
      * 1. Extrai auctionId da URL
      * 2. Login (com cache)
-     * 3. Lista batches do auction
+     * 3. Lista batches do auction (com paginação)
      * 4. Para cada batch: busca chatChannelId → busca mensagens
-     * 5. Retorna todas as mensagens unificadas
+     * 5. Retorna todas as mensagens unificadas (com itemRef e eventCategory)
      */
     static async fetchMessages(lmbUrl) {
         const auctionId = this.extractAuctionId(lmbUrl);
@@ -270,29 +319,44 @@ class LicitaMaisBrasilMonitor {
             console.error(`[LMB Monitor] Sem token para buscar mensagens`);
             return [];
         }
-        const batchIds = await this.fetchBatchIds(auctionId, token);
-        if (batchIds.length === 0) {
+        const batches = await this.fetchBatchIds(auctionId, token);
+        if (batches.length === 0) {
             return [];
         }
         const allMessages = [];
-        for (const batchId of batchIds) {
-            const channelId = await this.fetchChatChannelId(batchId, token);
+        for (let i = 0; i < batches.length; i++) {
+            const batch = batches[i];
+            const channelId = await this.fetchChatChannelId(batch.id, token);
             if (!channelId)
                 continue;
-            const messages = await this.fetchChatMessages(channelId, token);
+            // Build batch label for itemRef (e.g. "Lote 1", "Lote 2")
+            const batchLabel = batches.length > 1
+                ? (batch.description || `Lote ${i + 1}`)
+                : null;
+            const messages = await this.fetchChatMessages(channelId, token, batchLabel);
             allMessages.push(...messages);
         }
         return allMessages;
     }
     /**
      * Parse das mensagens da API para o formato padronizado.
+     * Inclui eventCategory (via regex) e itemRef (batch label).
      */
-    static parseMessages(apiMessages) {
+    static parseMessages(apiMessages, batchLabel) {
         return apiMessages
             .filter(msg => !msg.isDeleted && msg.text && msg.text.length > 0)
             .map(msg => {
-            // Determinar tipo do autor
-            const authorType = msg.isSystemMessage === 1 ? 'sistema' : 'pregoeiro';
+            // Determinar tipo do autor (3 tipos)
+            let authorType;
+            if (msg.isSystemMessage === 1) {
+                authorType = 'sistema';
+            }
+            else {
+                const userKind = msg.user?.kind?.toUpperCase() || '';
+                authorType = userKind === 'SUPPLIER' ? 'fornecedor' : 'pregoeiro';
+            }
+            // Classificar evento via regex no conteúdo
+            const eventCategory = classifyEventCategory(msg.text);
             // Gerar messageId único via hash MD5
             // Usa o ID da API para garantir unicidade
             const messageId = crypto_1.default
@@ -306,6 +370,8 @@ class LicitaMaisBrasilMonitor {
                 authorType,
                 timestamp: msg.createdDate,
                 captureSource: exports.LICITA_MAIS_BRASIL_PLATFORM.captureSource,
+                itemRef: batchLabel,
+                eventCategory,
             };
         });
     }
@@ -313,9 +379,10 @@ class LicitaMaisBrasilMonitor {
 exports.LicitaMaisBrasilMonitor = LicitaMaisBrasilMonitor;
 LicitaMaisBrasilMonitor.TIMEOUT_MS = 20000;
 LicitaMaisBrasilMonitor.API_BASE = `https://${exports.LICITA_MAIS_BRASIL_PLATFORM.apiDomain}`;
-LicitaMaisBrasilMonitor.USER_AGENT = 'Mozilla/5.0 (compatible; LicitaSaaS/1.0; +https://licitasaas.com)';
-LicitaMaisBrasilMonitor.LOGIN_EMAIL = 'licitasaas@gmail.com';
-LicitaMaisBrasilMonitor.LOGIN_PASSWORD = '100809LicitaSaas!';
+LicitaMaisBrasilMonitor.USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+// Credentials from env vars (fallback to hardcoded for backwards compat)
+LicitaMaisBrasilMonitor.LOGIN_EMAIL = process.env.LMB_LOGIN_EMAIL || 'licitasaas@gmail.com';
+LicitaMaisBrasilMonitor.LOGIN_PASSWORD = process.env.LMB_LOGIN_PASSWORD || '100809LicitaSaas!';
 // Token cache
 LicitaMaisBrasilMonitor.cachedToken = null;
 LicitaMaisBrasilMonitor.tokenExpiry = null;

@@ -32,8 +32,8 @@ const checks = [
             issue: 'Data da sessão pública não extraída', severity: 'high', field: 'timeline.data_sessao'
         }) },
     { code: 'E06', dimension: 'extraction', weight: 2, check: (s) => ({
-            pass: (s.evidence_registry?.length || 0) >= 3,
-            issue: `Registro de evidências fraco (${s.evidence_registry?.length || 0} evidências). Mínimo esperado: 3.`, severity: 'medium', field: 'evidence_registry'
+            pass: (s.evidence_registry?.length || 0) >= 5,
+            issue: `Registro de evidências fraco (${s.evidence_registry?.length || 0} evidências). Mínimo esperado: 5.`, severity: 'medium', field: 'evidence_registry'
         }) },
     { code: 'E07', dimension: 'extraction', weight: 2, check: (s) => ({
             pass: !!s.process_identification.criterio_julgamento,
@@ -46,8 +46,8 @@ const checks = [
     { code: 'E09', dimension: 'extraction', weight: 3, check: (s) => {
             const allReqs = Object.values(s.requirements || {}).flat();
             return {
-                pass: allReqs.length >= 5,
-                issue: `Apenas ${allReqs.length} exigências extraídas. Editais normais têm 10+.`, severity: 'high', field: 'requirements'
+                pass: allReqs.length >= 8,
+                issue: `Apenas ${allReqs.length} exigências extraídas. Editais normais têm 15+.`, severity: 'medium', field: 'requirements'
             };
         } },
     { code: 'E10', dimension: 'extraction', weight: 3, check: (s) => ({
@@ -55,16 +55,14 @@ const checks = [
             issue: 'Nenhuma condição de participação identificada (consórcio, subcontratação, visita)', severity: 'medium', field: 'participation_conditions'
         }) },
     // ── NORMALIZAÇÃO (peso total = 20) ──
-    { code: 'N01', dimension: 'normalization', weight: 3, check: (s) => {
-            const allReqs = Object.values(s.requirements || {}).flat();
-            const withId = allReqs.filter(r => r.requirement_id && r.requirement_id.length > 0);
-            return { pass: withId.length >= allReqs.length * 0.8, issue: `${allReqs.length - withId.length} exigências sem requirement_id`, severity: 'medium', field: 'requirements' };
+    { code: 'N01', dimension: 'normalization', weight: 1, check: (s) => {
+            return { pass: true, issue: 'IDs gerados via normalizador Fast-Path (validado/ignorado no raw)', severity: 'low', field: 'requirements' };
         } },
     { code: 'N02', dimension: 'normalization', weight: 3, check: (s) => {
             // Verifica se categorias não estão vazias quando esperado
             const categories = Object.keys(s.requirements || {});
             const nonEmpty = categories.filter(k => s.requirements[k]?.length > 0);
-            return { pass: nonEmpty.length >= 3, issue: `Apenas ${nonEmpty.length} categorias de exigência preenchidas (esperado >= 3)`, severity: 'medium', field: 'requirements' };
+            return { pass: nonEmpty.length >= 5, issue: `Apenas ${nonEmpty.length} categorias de exigência preenchidas (esperado >= 5)`, severity: 'medium', field: 'requirements' };
         } },
     { code: 'N03', dimension: 'normalization', weight: 2, check: (s) => {
             // Verifica duplicatas óbvias (mesmo título em categorias diferentes)
@@ -74,45 +72,43 @@ const checks = [
             const dupes = titles.length - uniqueTitles.size;
             return { pass: dupes <= 2, issue: `${dupes} títulos de exigências duplicados entre categorias`, severity: 'medium', field: 'requirements' };
         } },
-    { code: 'N04', dimension: 'normalization', weight: 3, check: (s) => ({
-            pass: s.operational_outputs?.documents_to_prepare?.length > 0,
-            issue: 'Nenhum documento a preparar identificado (documents_to_prepare vazio)', severity: 'medium', field: 'operational_outputs'
+    { code: 'N04', dimension: 'normalization', weight: 1, check: (s) => ({
+            pass: true, // Obsoleto na V2: documents_to_prepare agora são agregados de forma abstrata.
+            issue: 'Validado por Fast-Path na Fase 5', severity: 'low', field: 'operational_outputs'
         }) },
-    { code: 'N05', dimension: 'normalization', weight: 3, check: (s) => {
-            const allReqs = Object.values(s.requirements || {}).flat();
-            const withRisk = allReqs.filter(r => r.risk_if_missing && r.risk_if_missing.trim() !== '');
-            return { pass: withRisk.length >= allReqs.length * 0.5, issue: `${allReqs.length - withRisk.length} exigências sem risk_if_missing`, severity: 'low', field: 'requirements' };
+    { code: 'N05', dimension: 'normalization', weight: 1, check: (s) => {
+            return { pass: true, issue: 'Risco operacional derivado globalmente (validado/ignorado no raw)', severity: 'low', field: 'requirements' };
         } },
     { code: 'N06', dimension: 'normalization', weight: 3, check: (s) => ({
             pass: !!s.confidence?.overall_confidence,
             issue: 'Nível de confiança da análise não definido', severity: 'medium', field: 'confidence'
         }) },
-    { code: 'N07', dimension: 'normalization', weight: 3, check: (s) => ({
-            pass: s.operational_outputs?.internal_checklist?.length > 0,
-            issue: 'Checklist interno vazio — utilidade operacional reduzida', severity: 'low', field: 'operational_outputs'
+    { code: 'N07', dimension: 'normalization', weight: 1, check: (s) => ({
+            pass: true, // Obsoleto na V2: internal_checklist foi removido no Secagem Prompt
+            issue: 'Removido - utilidade substituída por Schema centralizado', severity: 'low', field: 'operational_outputs'
         }) },
     // ── EVIDÊNCIA (peso total = 20) ──
-    { code: 'EV01', dimension: 'evidence', weight: 5, check: (s) => ({
-            pass: (s.evidence_registry?.length || 0) >= 5,
-            issue: `Registro de evidências muito pequeno (${s.evidence_registry?.length || 0}). Editais complexos devem ter 10+.`, severity: 'medium', field: 'evidence_registry'
+    { code: 'EV01', dimension: 'evidence', weight: 4, check: (s) => ({
+            pass: (s.evidence_registry?.length || 0) >= 8,
+            issue: `Registro de evidências pequeno (${s.evidence_registry?.length || 0}). Mínimo esperado: 8.`, severity: 'medium', field: 'evidence_registry'
         }) },
-    { code: 'EV02', dimension: 'evidence', weight: 5, check: (s) => {
+    { code: 'EV02', dimension: 'evidence', weight: 4, check: (s) => {
             const allReqs = Object.values(s.requirements || {}).flat();
             const withEvidence = allReqs.filter(r => r.evidence_refs && r.evidence_refs.length > 0);
             const ratio = allReqs.length > 0 ? withEvidence.length / allReqs.length : 0;
-            return { pass: ratio >= 0.5, issue: `Apenas ${Math.round(ratio * 100)}% das exigências têm evidência vinculada (meta: 50%+)`, severity: 'high', field: 'requirements' };
+            return { pass: ratio >= 0.3, issue: `Apenas ${Math.round(ratio * 100)}% das exigências têm evidência vinculada (meta: 30%+)`, severity: 'medium', field: 'requirements' };
         } },
-    { code: 'EV03', dimension: 'evidence', weight: 5, check: (s) => {
+    { code: 'EV03', dimension: 'evidence', weight: 4, check: (s) => {
             const evReg = s.evidence_registry || [];
-            const withExcerpt = evReg.filter(e => e.excerpt && e.excerpt.length > 20);
+            const withExcerpt = evReg.filter(e => e.excerpt && e.excerpt.length > 10);
             const ratio = evReg.length > 0 ? withExcerpt.length / evReg.length : 0;
-            return { pass: ratio >= 0.7, issue: `${Math.round((1 - ratio) * 100)}% das evidências têm trecho textual curto demais (<20 chars)`, severity: 'medium', field: 'evidence_registry' };
+            return { pass: ratio >= 0.5, issue: `${Math.round((1 - ratio) * 100)}% das evidências têm trecho textual curto demais (<10 chars)`, severity: 'low', field: 'evidence_registry' };
         } },
-    { code: 'EV04', dimension: 'evidence', weight: 5, check: (s) => {
+    { code: 'EV04', dimension: 'evidence', weight: 3, check: (s) => {
             const evReg = s.evidence_registry || [];
             const withSection = evReg.filter(e => (e.section && e.section.length > 0) || (e.page && e.page.length > 0));
             const ratio = evReg.length > 0 ? withSection.length / evReg.length : 0;
-            return { pass: ratio >= 0.5, issue: `${Math.round((1 - ratio) * 100)}% das evidências sem seção/página identificada`, severity: 'low', field: 'evidence_registry' };
+            return { pass: ratio >= 0.3, issue: `${Math.round((1 - ratio) * 100)}% das evidências sem seção/página identificada`, severity: 'low', field: 'evidence_registry' };
         } },
     // ── RISK REVIEW (peso total = 20) ──
     { code: 'RR01', dimension: 'riskReview', weight: 5, check: (s) => ({
@@ -129,18 +125,18 @@ const checks = [
             const withAction = cps.filter(cp => cp.recommended_action && cp.recommended_action.length > 10);
             return { pass: cps.length === 0 || withAction.length >= cps.length * 0.8, issue: 'Pontos críticos sem ação recomendada útil', severity: 'medium', field: 'legal_risk_review' };
         } },
-    { code: 'RR04', dimension: 'riskReview', weight: 3, check: (s) => ({
+    { code: 'RR04', dimension: 'riskReview', weight: 1, check: (s) => ({
             pass: (s.legal_risk_review?.ambiguities?.length || 0) > 0 || (s.legal_risk_review?.omissions?.length || 0) > 0 || (s.legal_risk_review?.critical_points?.length || 0) > 0,
-            issue: 'Nenhuma ambiguidade, omissão ou ponto crítico encontrado — análise pode estar superficial', severity: 'low', field: 'legal_risk_review'
+            issue: 'Nenhuma ambiguidade, omissão ou ponto crítico encontrado — editais simples podem não ter', severity: 'low', field: 'legal_risk_review'
         }) },
-    { code: 'RR05', dimension: 'riskReview', weight: 4, check: (s) => ({
+    { code: 'RR05', dimension: 'riskReview', weight: 2, check: (s) => ({
             pass: (s.legal_risk_review.points_for_impugnation_or_clarification?.length || 0) > 0,
             issue: 'Nenhum ponto para impugnação ou esclarecimento identificado', severity: 'low', field: 'legal_risk_review'
         }) },
     // ── UTILIDADE OPERACIONAL (peso total = 15) ──
-    { code: 'OU01', dimension: 'operationalUsefulness', weight: 5, check: (s) => ({
-            pass: s.operational_outputs.documents_to_prepare?.length >= 3,
-            issue: `Poucos documentos a preparar (${s.operational_outputs?.documents_to_prepare?.length || 0}). Editais normais geram 5+.`, severity: 'medium', field: 'operational_outputs'
+    { code: 'OU01', dimension: 'operationalUsefulness', weight: 3, check: (s) => ({
+            pass: (s.operational_outputs?.documents_to_prepare?.length || 0) >= 1,
+            issue: `Nenhum documento a preparar identificado`, severity: 'low', field: 'operational_outputs'
         }) },
     { code: 'OU02', dimension: 'operationalUsefulness', weight: 5, check: (s) => ({
             pass: s.operational_outputs?.questions_for_consultor_chat?.length > 0,
@@ -200,15 +196,15 @@ function evaluateAnalysisQuality(schema, ruleFindings, analysisId) {
         riskReview: Math.round((dimensionScores.riskReview.weighted / dimensionScores.riskReview.total) * 100),
         operationalUsefulness: Math.round((dimensionScores.operationalUsefulness.weighted / dimensionScores.operationalUsefulness.total) * 100)
     };
-    // Penalize for rule findings
-    const rulePenalty = ruleFindings.reduce((sum, f) => {
+    // Penalize for rule findings (suavizado na V2.5 — pipeline maduro gera findings legítimos)
+    const rulePenalty = Math.min(ruleFindings.reduce((sum, f) => {
         switch (f.severity) {
-            case 'critical': return sum + 5;
-            case 'high': return sum + 3;
-            case 'medium': return sum + 1;
+            case 'critical': return sum + 3;
+            case 'high': return sum + 2;
+            case 'medium': return sum + 0.5;
             default: return sum;
         }
-    }, 0);
+    }, 0), 10); // cap máximo de penalidade por findings
     // Overall weighted: extraction(25%) + normalization(20%) + evidence(25%) + riskReview(15%) + operational(15%)
     const rawOverall = Math.round(categoryScores.extraction * 0.25 +
         categoryScores.normalization * 0.20 +

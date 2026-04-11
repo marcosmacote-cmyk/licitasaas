@@ -25,7 +25,7 @@ interface NotificationItem {
 }
 
 interface NotificationCenterProps {
-    onNavigateToProcess?: (processId: string) => void;
+    onNavigateToProcess?: (processId: string, type: string, jobId: string) => void;
 }
 
 const JOB_TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
@@ -213,7 +213,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
         );
 
         if (notif.status === 'completed' && notif.targetId && onNavigateToProcess) {
-            onNavigateToProcess(notif.targetId);
+            onNavigateToProcess(notif.targetId, notif.type, notif.jobId);
             setIsOpen(false);
         }
     };
