@@ -238,10 +238,40 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
         return `${Math.floor(diffMin / 1440)}d`;
     };
 
+    const activeJobs = notifications.filter(n => n.status === 'processing' || n.status === 'queued');
+
     return (
-        <div ref={dropdownRef} style={{ position: 'relative' }}>
-            {/* Bell Button */}
-            <button
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {activeJobs.length > 0 && (
+                <button
+                    onClick={() => setIsOpen(true)}
+                    style={{
+                        background: 'rgba(99,102,241,0.1)',
+                        border: '1px solid rgba(99,102,241,0.2)',
+                        padding: '6px 12px',
+                        borderRadius: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        color: 'var(--color-primary)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 0 10px rgba(99,102,241,0.15)'
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.15)')}
+                    onMouseOut={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
+                    title="Ver processos em andamento"
+                >
+                    <Loader2 size={14} className="spin" />
+                    <span>Processando ({activeJobs.length})</span>
+                </button>
+            )}
+
+            <div ref={dropdownRef} style={{ position: 'relative' }}>
+                {/* Bell Button */}
+                <button
                 onClick={() => { setIsOpen(!isOpen); if (!isOpen) markAllRead(); }}
                 style={{
                     background: 'none',
@@ -408,6 +438,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
                     )}
                 </div>
             )}
+            </div>
 
             <style>{`
                 @keyframes pulse {
