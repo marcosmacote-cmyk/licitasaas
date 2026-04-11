@@ -571,6 +571,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
 
     // ── CLEANUP 4: Cross-category dedup (DC items that duplicate RFT) ──
     // "Declaração de não emprego de menor" frequently appears in both RFT and DC
+    // F3-04: Also normalize "reserva de cargos PCD" stochasticity — always DC, never RFT
     if (schema.requirements) {
         const rftItems = (schema.requirements as any).regularidade_fiscal_trabalhista;
         const dcItems = (schema.requirements as any).documentos_complementares;
@@ -607,6 +608,44 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                 correct('DC↔RFT', `${beforeLen - deduped.length} item(ns) duplicado(s)`, `removido(s) de DC (já presente em RFT)`);
             }
         }
+
+        // F3-04: Migrate "reserva de cargos PCD/reabilitado" from RFT to DC if present in RFT
+        // This declaration is stochastically placed in RFT or DC between runs. Force to DC for consistency.
+        if (Array.isArray(rftItems) && rftItems.length > 0) {
+            const dcItems2 = (schema.requirements as any).documentos_complementares || [];
+            const RESERVA_PATTERN = /reserva\s+de\s+cargos|pessoa\s+com\s+defici[êe]ncia.*reabilitad|defici[êe]ncia.*previd[êe]ncia/i;
+            const toMigrate: any[] = [];
+            const rftCleaned = rftItems.filter((r: any) => {
+                const text = `${r.title || ''} ${r.description || ''}`;
+                if (RESERVA_PATTERN.test(text)) {
+                    toMigrate.push(r);
+                    return false;
+                }
+                return true;
+            });
+            if (toMigrate.length > 0) {
+                // Check not already in DC
+                const dcTitles = new Set(dcItems2.map((d: any) => `${d.title || ''}`.toLowerCase().substring(0, 30)));
+                for (const item of toMigrate) {
+                    const titleNorm = `${item.title || ''}`.toLowerCase().substring(0, 30);
+                    if (!dcTitles.has(titleNorm)) {
+                        item.phase = 'habilitacao';
+                        item.entry_type = 'declaracao';
+                        dcItems2.push(item);
+                    }
+                }
+                (schema.requirements as any).regularidade_fiscal_trabalhista = rftCleaned;
+                (schema.requirements as any).documentos_complementares = dcItems2;
+                // Renumber both
+                rftCleaned.forEach((r: any, idx: number) => {
+                    r.requirement_id = `RFT-${String(idx + 1).padStart(2, '0')}`;
+                });
+                dcItems2.forEach((r: any, idx: number) => {
+                    r.requirement_id = `DC-${String(idx + 1).padStart(2, '0')}`;
+                });
+                correct('RFT→DC', `${toMigrate.length} declaração(ões) de reserva de cargos`, 'migrada(s) de RFT para DC (classificação determinística)');
+            }
+        }
     }
 
     // ── CLEANUP 5: PC Anti-Pollution — Remove generic clauses + migrate fiscal items ──
@@ -614,9 +653,10 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
     // PC contains only legitimate desclassification-eligible proposal requirements.
     if (schema.requirements) {
         const pcItems = (schema.requirements as any).proposta_comercial;
-        if (Array.isArray(pcItems) && pcItems.length > 8) {
+        if (Array.isArray(pcItems) && pcItems.length > 4) {
             // Part A: Remove or demote generic universal clauses that every edital has
             const GENERIC_PC_PATTERNS = [
+                // Original generic patterns
                 /sem\s+(custos?\s+financeiro|custo\s+financeiro)/i,
                 /pre[çc]o.*n[ãa]o\s+(superior|acima|exceder)/i,
                 /pre[çc]o.*n[ãa]o\s+(irris[óo]rio|zero|zerado)/i,
@@ -631,6 +671,19 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                 /pre[çc]os?\s+de\s+(exclusiva\s+)?responsabilidade/i,
                 /n[ãa]o\s+dev(em?|erá)\s+conter\s+nenhuma\s+identifica[çc][ãa]o/i,
                 /sem\s+identifica[çc][ãa]o\s+d[aoe]\s+empresa/i,
+                // F3-01: Desclassification RULE patterns (not actionable documents)
+                /v[íi]cios?\s+insan[áa]ve(l|is)/i,
+                /condi[çc][õo]es?\s+ilega(l|is)/i,
+                /desconformidade\s+insan[áa]vel/i,
+                /manifestamente\s+inex[ei]qu[íi]ve(l|is)/i,
+                /demonstra[çc][ãa]o\s+de\s+exequibilidade/i,
+                /conformidade\s+com\s+(as\s+)?especifica[çc][õo]es\s+t[ée]cnicas/i,
+                /desclassificad[ao]s?.*identifi(car|que)/i,
+                /n[ãa]o\s+obede(cer|cerem).*especifica[çc][õo]es/i,
+                // F3-06: Platform noise (BBMNet/ComprasNet form fields)
+                /preencher\s+o\s+campo.*marca/i,
+                /preencher\s+o\s+campo.*fabricante/i,
+                /preencher\s+o\s+campo.*quantidade/i,
             ];
 
             let removedGeneric = 0;
@@ -1173,6 +1226,31 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                 evidence_refs: [],
             }];
             correct('habilitacao_juridica', '[] (vazia)', 'injetado HJ-01: Ato constitutivo');
+        }
+
+        // F3-02: Inject HJ consórcio item when consórcio is PERMITTED but no HJ item mentions it
+        if (schema.participation_conditions?.permite_consorcio === true) {
+            const hjItems = (schema.requirements as any).habilitacao_juridica || [];
+            const hasConsorcioHJ = hjItems.some((r: any) => {
+                const text = `${r.title || ''} ${r.description || ''}`.toLowerCase();
+                return /cons[óo]rcio/.test(text);
+            });
+            if (!hasConsorcioHJ && hjItems.length > 0) {
+                const hjSourceRef = hjItems.find((r: any) => r.source_ref && r.source_ref !== 'referência não localizada')?.source_ref || 'Edital, seção de habilitação jurídica';
+                hjItems.push({
+                    requirement_id: `HJ-${String(hjItems.length + 1).padStart(2, '0')}`,
+                    title: 'Compromisso de constituição de consórcio',
+                    description: 'Comprovação de compromisso público ou particular de constituição de consórcio, subscrito pelos consorciados, em se tratando de consórcio',
+                    obligation_type: 'condicional',
+                    entry_type: 'exigencia_principal',
+                    phase: 'habilitacao',
+                    applies_to: 'consorcio',
+                    risk_if_missing: 'inabilitacao',
+                    source_ref: `${hjSourceRef} (safety-net — consórcio permitido)`,
+                    evidence_refs: [],
+                });
+                correct('HJ', 'consórcio permitido mas sem item HJ', 'injetado: Compromisso de constituição de consórcio');
+            }
         }
     }
 
