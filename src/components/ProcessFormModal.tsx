@@ -227,8 +227,9 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                 const isM2A = link.includes('m2atecnologia') || portal.includes('M2A');
                                 const isBBMNet = link.includes('bbmnet') || portal.includes('BBMNet');
                                 const isLicitaMaisBrasil = link.includes('licitamaisbrasil') || portal.includes('Licita Mais Brasil');
+                                const isPCP = link.includes('portaldecompraspublicas') || portal.includes('portal de compras');
                                 
-                                const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet || isLicitaMaisBrasil;
+                                const isMonitorable = isComprasNet || isBLL || isBNC || isM2A || isBBMNet || isLicitaMaisBrasil || isPCP;
                                 
                                 const validLinksExt = link.split(',').filter(l => !l.includes('supabase.co'));
                                 const hasComprasNetLink = validLinksExt.some(l => l.includes('cnetmobile') || l.includes('comprasnet'));
@@ -250,6 +251,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             if (isM2A && (cp.includes('m2a') || cu.includes('m2a'))) score++;
                                             if (isBBMNet && (cp.includes('bbmnet') || cu.includes('bbmnet'))) score++;
                                             if (isLicitaMaisBrasil && (cp.includes('licita mais') || cu.includes('licitamaisbrasil'))) score++;
+                                            if (isPCP && (cp.includes('portal de compras') || cp.includes('pcp') || cu.includes('portaldecompraspublicas'))) score++;
                                             return score;
                                         });
                                         hasCredentials = Math.max(...scored) > 0;
@@ -271,7 +273,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                     ? needsComprasNetLink ? '#f59e0b' : '#22c55e'
                                     : isOtherPlatform ? '#6366f1' : '#6b7280';
 
-                                const platformLabel = isComprasNet ? 'ComprasNet' : isBLL ? 'BLL' : isBNC ? 'BNC' : isM2A ? 'M2A' : isBBMNet ? 'BBMNet' : isLicitaMaisBrasil ? 'Licita Mais Brasil' : '';
+                                const platformLabel = isComprasNet ? 'ComprasNet' : isBLL ? 'BLL' : isBNC ? 'BNC' : isM2A ? 'M2A' : isBBMNet ? 'BBMNet' : isLicitaMaisBrasil ? 'Licita Mais Brasil' : isPCP ? 'Portal de Compras Públicas' : '';
                                 const title = isMonitorable
                                     ? needsComprasNetLink
                                         ? 'Link do ComprasNet necessário'
@@ -308,7 +310,7 @@ export function ProcessFormModal({ initialData, companies, onClose, onSave, onRe
                                             <CheckCircle size={11} color="#22c55e" /> Detectado para {platformLabel}. O chat será monitorado.
                                           </span>
                                     : isOtherPlatform
-                                        ? <span>Monitoramento apenas para ComprasNet, BLL, BNC, M2A, BBMNet e Licita Mais Brasil.</span>
+                                        ? <span>Monitoramento apenas para ComprasNet, BLL, BNC, M2A, BBMNet, Licita Mais Brasil e Portal de Compras Públicas.</span>
                                         : <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                                             <AlertTriangle size={11} color="#9ca3af" /> Adicione o portal correto para ativar o monitoramento
                                           </span>;
