@@ -574,6 +574,52 @@ app.get('/api/admin/capture-golden/:processId', authenticateToken, requireSuperA
     }
 });
 
+// ── Golden Dataset: Search processes by title (to find processId) ──
+app.get('/api/admin/golden-search', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const q = (req.query.q || '').toString().trim();
+        if (!q || q.length < 3) {
+            return res.status(400).json({ error: 'Busca precisa de pelo menos 3 caracteres. Use ?q=macau' });
+        }
+        const processes = await prisma.biddingProcess.findMany({
+            where: {
+                tenantId: req.user.tenantId,
+                title: { contains: q, mode: 'insensitive' },
+            },
+            select: {
+                id: true,
+                title: true,
+                portal: true,
+                modality: true,
+                estimatedValue: true,
+                sessionDate: true,
+                aiAnalysis: { select: { id: true, overallConfidence: true, analyzedAt: true } },
+            },
+            orderBy: { sessionDate: 'desc' },
+            take: 10,
+        });
+        res.json({
+            ok: true,
+            query: q,
+            found: processes.length,
+            processes: processes.map(p => ({
+                processId: p.id,
+                title: p.title,
+                portal: p.portal,
+                modality: p.modality,
+                estimatedValue: p.estimatedValue,
+                sessionDate: p.sessionDate,
+                hasAnalysis: !!p.aiAnalysis,
+                analysisConfidence: p.aiAnalysis?.overallConfidence || null,
+                captureUrl: p.aiAnalysis ? `/api/admin/capture-golden/${p.id}` : null,
+            })),
+        });
+    } catch (e: any) {
+        console.error('[Admin] Golden search error:', e?.message);
+        res.status(500).json({ error: 'Falha na busca.' });
+    }
+});
+
 // Team & Users Management
 app.use('/api/team', teamRoutes);
 
