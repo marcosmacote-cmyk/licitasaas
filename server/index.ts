@@ -6517,7 +6517,7 @@ app.post('/api/jobs/submit', authenticateToken, aiLimiter, async (req: any, res)
 
         const result = await submitJob({
             tenantId: req.user.tenantId,
-            userId: req.user.id,
+            userId: req.user.userId,
             type,
             input,
             targetId,
