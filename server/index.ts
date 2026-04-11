@@ -1716,6 +1716,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
     const TOTAL_STEPS = 8;
     const sendProgress = (step: number, message: string, detail?: string) => {
         try {
+            if (res.writableEnded || res.destroyed) return;
             res.write(`data: ${JSON.stringify({
                 type: 'progress', step, total: TOTAL_STEPS, message, detail,
                 percent: Math.round((step / TOTAL_STEPS) * 100)
@@ -1724,12 +1725,16 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
     };
     const sendError = (error: string, details?: string) => {
         try {
+            clearInterval(sseKeepAlive);
+            if (res.writableEnded || res.destroyed) return;
             res.write(`data: ${JSON.stringify({ type: 'error', error, details })}\n\n`);
             res.end();
         } catch (_) { /* connection closed */ }
     };
     const sendResult = (payload: any) => {
         try {
+            clearInterval(sseKeepAlive);
+            if (res.writableEnded || res.destroyed) return;
             res.write(`data: ${JSON.stringify({ type: 'result', payload })}\n\n`);
             res.end();
         } catch (_) { /* connection closed */ }
@@ -1738,6 +1743,10 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
     // SSE keepalive: send a comment every 15s to prevent Railway/Nginx/browser from killing the connection
     const sseKeepAlive = setInterval(() => {
         try {
+            if (res.writableEnded || res.destroyed) {
+                clearInterval(sseKeepAlive);
+                return;
+            }
             res.write(`: keepalive ${new Date().toISOString()}\n\n`);
         } catch (_) {
             clearInterval(sseKeepAlive);
