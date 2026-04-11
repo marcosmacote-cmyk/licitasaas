@@ -946,7 +946,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 targetId: `pncp_${item.id}`,
                 targetTitle: `Análise PNCP: ${item.orgao_nome || item.numero_sequencial}`
             });
-            toast.success('🧠 Análise enviada para processamento! Você será notificado quando concluir.');
+            toast.success('Análise enviada para processamento! Você será notificado quando concluir.');
         } catch (e: any) {
             toast.error(`Erro ao enviar análise IA: ${e.message}`);
         } finally {

@@ -54,7 +54,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
 
             if (event.type === 'job_completed') {
                 // Show toast notification
-                toast.success(`✅ ${config.label} concluída: ${title}`);
+                toast.success(`${config.label} concluída: ${title}`);
 
                 // Request browser notification permission
                 if ('Notification' in window && Notification.permission === 'granted') {
@@ -91,7 +91,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
             }
 
             if (event.type === 'job_failed') {
-                toast.error(`⚠️ ${config.label} falhou: ${event.error || 'Erro desconhecido'}`);
+                toast.error(`${config.label} falhou: ${event.error || 'Erro desconhecido'}`);
 
                 if (existing >= 0) {
                     const updated = [...prev];
@@ -144,7 +144,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
             }
 
             if (event.type === 'job_queued') {
-                toast.info(`🧠 ${config.label} iniciada: ${title}`);
+                toast.info(`${config.label} iniciada: ${title}`);
 
                 return [{
                     id: `notif_${Date.now()}`,
