@@ -1,0 +1,242 @@
+{
+  "version": "2.0.0",
+  "description": "Golden Dataset — Anotações humanas para 8 editais reais auditados. Cada caso define o expected para validação automática de regressão.",
+  "created_at": "2026-04-11",
+  "prompt_version": "v3.0.0",
+  "total_cases": 8,
+  "annotator": "marcos",
+  "cases": [
+    {
+      "id": "golden-001",
+      "name": "Aquiraz — Manutenção Predial + Subestações",
+      "orgao": "Prefeitura de Aquiraz/CE",
+      "processo": "01.005/2026-CE",
+      "modalidade": "Concorrência Eletrônica",
+      "portal": "BLL",
+      "tipo_objeto": "obra_engenharia",
+      "valor_estimado": 15853870.78,
+      "audit_score": 9.3,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 5, "max_count": 10, "must_contain_keywords": ["ato constitutivo", "consórcio"] },
+          "regularidade_fiscal_trabalhista": { "min_count": 8, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT", "conjunta", "estadual", "municipal"] },
+          "qualificacao_economico_financeira": { "min_count": 5, "max_count": 12, "must_contain_keywords": ["balanço", "falência", "LC", "LG"] },
+          "qualificacao_tecnica_operacional": { "min_count": 5, "max_count": 12, "must_contain_keywords": ["atestado", "CREA"] },
+          "qualificacao_tecnica_profissional": { "min_count": 2, "max_count": 6, "must_contain_keywords": ["engenheiro", "responsável técnico"] },
+          "proposta_comercial": { "min_count": 2, "max_count": 8, "must_not_contain_keywords": ["vícios insanáveis", "inexequíveis", "desclassificada"] },
+          "documentos_complementares": { "min_count": 3, "max_count": 10 }
+        },
+        "participation_conditions": {
+          "permite_consorcio": true,
+          "permite_subcontratacao": true,
+          "exige_visita_tecnica": true,
+          "exige_garantia_proposta": true
+        },
+        "min_total_requirements": 30,
+        "min_evidences": 25,
+        "min_risks": 4,
+        "must_detect_risks": ["desconto", "25%"]
+      }
+    },
+    {
+      "id": "golden-002",
+      "name": "Pacatuba — Resíduos Sólidos + Aterro Sanitário",
+      "orgao": "Prefeitura de Pacatuba/CE",
+      "processo": "05.001/2026-CE",
+      "modalidade": "Concorrência Eletrônica",
+      "portal": "BLL",
+      "tipo_objeto": "servico_comum",
+      "valor_estimado": 18122574.12,
+      "audit_score": 9.2,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 5, "max_count": 10 },
+          "regularidade_fiscal_trabalhista": { "min_count": 8, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT"] },
+          "qualificacao_economico_financeira": { "min_count": 5, "max_count": 12, "must_contain_keywords": ["balanço", "falência"] },
+          "qualificacao_tecnica_operacional": { "min_count": 5, "max_count": 15, "must_contain_keywords": ["coleta", "transporte", "m³"] },
+          "qualificacao_tecnica_profissional": { "min_count": 2, "max_count": 8 },
+          "proposta_comercial": { "min_count": 2, "max_count": 8, "must_not_contain_keywords": ["vícios insanáveis", "inexequíveis"] },
+          "documentos_complementares": { "min_count": 3, "max_count": 10 }
+        },
+        "participation_conditions": {
+          "permite_consorcio": false,
+          "permite_subcontratacao": true,
+          "exige_visita_tecnica": false,
+          "exige_garantia_proposta": true
+        },
+        "min_total_requirements": 30,
+        "min_evidences": 25,
+        "min_risks": 3
+      }
+    },
+    {
+      "id": "golden-003",
+      "name": "Itaitinga — Transporte Escolar/Universitário",
+      "orgao": "Município de Itaitinga/CE",
+      "processo": "PE 12.004/2026",
+      "modalidade": "Pregão Eletrônico",
+      "portal": "BNC",
+      "tipo_objeto": "servico_comum",
+      "valor_estimado": 5937254.40,
+      "audit_score": 8.8,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 5, "max_count": 10 },
+          "regularidade_fiscal_trabalhista": { "min_count": 8, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT"] },
+          "qualificacao_economico_financeira": { "min_count": 5, "max_count": 12, "must_contain_keywords": ["balanço"] },
+          "qualificacao_tecnica_operacional": { "min_count": 4, "max_count": 12, "must_contain_keywords": ["km", "transporte"] },
+          "qualificacao_tecnica_profissional": { "min_count": 1, "max_count": 6, "must_contain_keywords": ["motorista"] },
+          "proposta_comercial": { "min_count": 2, "max_count": 8 },
+          "documentos_complementares": { "min_count": 3, "max_count": 10 }
+        },
+        "participation_conditions": {
+          "permite_consorcio": false,
+          "permite_subcontratacao": false,
+          "exige_garantia_proposta": true
+        },
+        "min_total_requirements": 28,
+        "min_evidences": 20,
+        "min_risks": 4,
+        "must_detect_risks": ["garantia", "0.5%", "Art. 58"]
+      }
+    },
+    {
+      "id": "golden-004",
+      "name": "Quixelô — Fardamentos Escolares",
+      "orgao": "Município de Quixelô/CE",
+      "processo": "PE 2026.01.29.1",
+      "modalidade": "Pregão Eletrônico",
+      "portal": "M2A",
+      "tipo_objeto": "fornecimento",
+      "valor_estimado": 691011.72,
+      "audit_score": 8.3,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 5, "max_count": 10 },
+          "regularidade_fiscal_trabalhista": { "min_count": 8, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT"] },
+          "qualificacao_economico_financeira": { "min_count": 4, "max_count": 12, "must_contain_keywords": ["falência"] },
+          "proposta_comercial": { "min_count": 2, "max_count": 8, "must_not_contain_keywords": ["vícios insanáveis", "inexequíveis", "desclassificada"] },
+          "documentos_complementares": { "min_count": 3, "max_count": 10 }
+        },
+        "min_total_requirements": 20,
+        "min_evidences": 15,
+        "min_risks": 4,
+        "must_detect_risks": ["Adidas"]
+      }
+    },
+    {
+      "id": "golden-005",
+      "name": "Crato — Drenagem Canal Rio Granjeiro",
+      "orgao": "Município de Crato/CE",
+      "processo": "92261/2026",
+      "modalidade": "Concorrência Eletrônica",
+      "portal": "PNCP",
+      "tipo_objeto": "obra_engenharia",
+      "valor_estimado": 30821465.62,
+      "audit_score": 7.5,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 3, "max_count": 10 },
+          "regularidade_fiscal_trabalhista": { "min_count": 6, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT"] },
+          "qualificacao_economico_financeira": { "min_count": 4, "max_count": 12, "must_contain_keywords": ["falência"] },
+          "qualificacao_tecnica_operacional": { "min_count": 3, "max_count": 12, "must_contain_keywords": ["drenagem"] },
+          "proposta_comercial": { "min_count": 2, "max_count": 8 },
+          "documentos_complementares": { "min_count": 2, "max_count": 10 }
+        },
+        "participation_conditions": {
+          "permite_consorcio": true,
+          "permite_subcontratacao": false,
+          "exige_visita_tecnica": true
+        },
+        "min_total_requirements": 20,
+        "min_evidences": 15,
+        "min_risks": 5,
+        "must_detect_risks": ["TR", "Anexo I", "Matriz de Riscos"]
+      }
+    },
+    {
+      "id": "golden-006",
+      "name": "Macau/RN — Limpeza Pública",
+      "orgao": "Prefeitura Municipal de Macau/RN",
+      "processo": "014/2026",
+      "modalidade": "Pregão Eletrônico",
+      "portal": "Portal de Compras Públicas",
+      "tipo_objeto": "servico_comum",
+      "valor_estimado": 9773746.08,
+      "audit_score": 9.0,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 5, "max_count": 10 },
+          "regularidade_fiscal_trabalhista": { "min_count": 8, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT", "conjunta"] },
+          "qualificacao_economico_financeira": { "min_count": 5, "max_count": 12, "must_contain_keywords": ["balanço", "falência", "LC", "LG"] },
+          "qualificacao_tecnica_operacional": { "min_count": 5, "max_count": 12, "must_contain_keywords": ["varrição", "CREA"] },
+          "qualificacao_tecnica_profissional": { "min_count": 1, "max_count": 6 },
+          "proposta_comercial": { "min_count": 2, "max_count": 8, "must_not_contain_keywords": ["vícios insanáveis", "inexequíveis"] },
+          "documentos_complementares": { "min_count": 3, "max_count": 10 }
+        },
+        "participation_conditions": {
+          "permite_consorcio": false,
+          "permite_subcontratacao": false,
+          "exige_garantia_proposta": true
+        },
+        "min_total_requirements": 30,
+        "min_evidences": 30,
+        "min_risks": 4
+      }
+    },
+    {
+      "id": "golden-007",
+      "name": "Morada Nova — ETA (Pré-Qualificação)",
+      "orgao": "Município de Morada Nova/CE",
+      "processo": "30.003/2026",
+      "modalidade": "Concorrência Eletrônica",
+      "portal": "BBMNet",
+      "tipo_objeto": "obra_engenharia",
+      "valor_estimado": 21437000.00,
+      "audit_score": 7.0,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 3, "max_count": 15 },
+          "regularidade_fiscal_trabalhista": { "min_count": 6, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT"] },
+          "qualificacao_economico_financeira": { "min_count": 4, "max_count": 12, "must_contain_keywords": ["falência"] },
+          "proposta_comercial": { "min_count": 2, "max_count": 8 },
+          "documentos_complementares": { "min_count": 2, "max_count": 10 }
+        },
+        "min_total_requirements": 15,
+        "min_evidences": 10,
+        "min_risks": 3
+      }
+    },
+    {
+      "id": "golden-008",
+      "name": "Maracanaú Viária — Malha Viária + Asfalto",
+      "orgao": "Prefeitura de Maracanaú/CE",
+      "processo": "2026/001",
+      "modalidade": "Concorrência Eletrônica",
+      "portal": "BLL",
+      "tipo_objeto": "obra_engenharia",
+      "valor_estimado": 25000000.00,
+      "audit_score": 9.1,
+      "expected": {
+        "categories": {
+          "habilitacao_juridica": { "min_count": 5, "max_count": 10 },
+          "regularidade_fiscal_trabalhista": { "min_count": 8, "max_count": 15, "must_contain_keywords": ["FGTS", "CNDT"] },
+          "qualificacao_economico_financeira": { "min_count": 5, "max_count": 12, "must_contain_keywords": ["balanço", "falência"] },
+          "qualificacao_tecnica_operacional": { "min_count": 5, "max_count": 15, "must_contain_keywords": ["asfalto", "m²"] },
+          "qualificacao_tecnica_profissional": { "min_count": 2, "max_count": 6 },
+          "proposta_comercial": { "min_count": 2, "max_count": 8 },
+          "documentos_complementares": { "min_count": 3, "max_count": 10 }
+        },
+        "participation_conditions": {
+          "permite_consorcio": true,
+          "permite_subcontratacao": true,
+          "exige_visita_tecnica": true,
+          "exige_garantia_proposta": true
+        },
+        "min_total_requirements": 35,
+        "min_evidences": 25,
+        "min_risks": 4
+      }
+    }
+  ]
+}

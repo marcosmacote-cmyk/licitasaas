@@ -538,6 +538,42 @@ app.get('/api/admin/pipeline-health', authenticateToken, requireSuperAdmin, asyn
     }
 });
 
+// ── Golden Dataset Snapshot Capture ──
+app.get('/api/admin/capture-golden/:processId', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const { processId } = req.params;
+        const analysis = await prisma.aiAnalysis.findFirst({
+            where: { biddingProcessId: processId },
+            select: { schemaV2: true, modelUsed: true, promptVersion: true, pipelineDurationS: true, overallConfidence: true, analyzedAt: true },
+        });
+        if (!analysis || !analysis.schemaV2) {
+            return res.status(404).json({ error: 'Análise não encontrada ou sem schemaV2.' });
+        }
+        const process = await prisma.biddingProcess.findUnique({
+            where: { id: processId },
+            select: { title: true, modality: true, processNumber: true, estimatedValue: true, portal: true },
+        });
+        res.json({
+            ok: true,
+            snapshot: analysis.schemaV2,
+            meta: {
+                processId,
+                process: process || {},
+                modelUsed: analysis.modelUsed,
+                promptVersion: analysis.promptVersion,
+                pipelineDurationS: analysis.pipelineDurationS,
+                overallConfidence: analysis.overallConfidence,
+                analyzedAt: analysis.analyzedAt,
+                capturedAt: new Date().toISOString(),
+            },
+            instructions: 'Save the "snapshot" field as golden/<id>.snapshot.json in the benchmark directory.',
+        });
+    } catch (e: any) {
+        console.error('[Admin] Capture golden error:', e?.message);
+        res.status(500).json({ error: 'Falha ao capturar snapshot.' });
+    }
+});
+
 // Team & Users Management
 app.use('/api/team', teamRoutes);
 
