@@ -684,6 +684,19 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                 /preencher\s+o\s+campo.*marca/i,
                 /preencher\s+o\s+campo.*fabricante/i,
                 /preencher\s+o\s+campo.*quantidade/i,
+                // F3-01 V2: Universal formatting/quantitative rules (from golden snapshot audit)
+                /formato\s+d[eoa]s?\s+valores.*casas?\s+decima(l|is)/i,
+                /duas\s+casas\s+decima(l|is)/i,
+                /proibi[çc][ãa]o\s+de\s+diverg[êe]ncia/i,
+                /quantitativo\s+n[ãa]o\s+inferior\s+ao\s+m[áa]ximo/i,
+                /inclus[ãa]o\s+de\s+todos\s+os\s+custos/i,
+                /proposta.*sem\s+identifica[çc][ãa]o/i,
+                /redu[çc][ãa]o\s+de\s+pre[çc]o.*sem\s+disputa/i,
+                /conformidade\s+d[ao]\s+proposta\s+inicial/i,
+                /proposta\s+final.*assinada/i,
+                /prazo\s+de\s+envio\s+d[ae]\s+proposta\s+final/i,
+                /formaliza[çc][ãa]o\s+d[ae]\s+proposta/i,
+                /proposta\s+em\s+papel\s+timbrado/i,
             ];
 
             let removedGeneric = 0;
