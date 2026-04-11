@@ -37,6 +37,7 @@ import { matchCompanyToEdital, calculateParticipationScore, generateActionPlan }
 import { buildHybridContext } from "./services/ai/strategy/companyAwareContext";
 import { generateCompanyInsights, recordMatchHistory } from "./services/ai/strategy/companyLearningInsights";
 import { pncpMonitor } from "./services/monitoring/pncp-monitor.service";
+import { recordAnalysisTelemetry, getPipelineHealth, classifySafetyNets } from "./services/ai/telemetry/analysisTelemetry";
 import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "./services/monitoring/alertTaxonomy";
 import { NotificationService } from "./services/monitoring/notification.service";
 import { startOpportunityScanner } from "./services/monitoring/opportunity-scanner.service";
@@ -522,6 +523,18 @@ app.get('/api/admin/ai-usage/:tenantId', authenticateToken, requireSuperAdmin, a
     } catch (e: any) {
         console.error('[Admin] AI usage drill-down error:', e?.message);
         res.status(500).json({ error: 'Falha ao buscar consumo de IA do tenant.' });
+    }
+});
+
+// ── Pipeline Health Dashboard (Telemetry) ──
+app.get('/api/admin/pipeline-health', authenticateToken, requireSuperAdmin, async (req: any, res) => {
+    try {
+        const days = parseInt(req.query.days || '7');
+        const health = await getPipelineHealth(days);
+        res.json({ ok: true, ...health });
+    } catch (e: any) {
+        console.error('[Admin] Pipeline health error:', e?.message);
+        res.status(500).json({ error: 'Falha ao buscar métricas do pipeline.' });
     }
 });
 
@@ -3607,10 +3620,55 @@ Responda APENAS com JSON array:
 
         console.log(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
         sendProgress(8, 'Análise concluída!', `Score: ${combinedScore}% • ${totalReqs} exigências • ${v2Result.legal_risk_review.critical_points.length} riscos`);
+
+        // ── Telemetry (fire-and-forget) ──
+        const catCounts: Record<string, number> = {};
+        for (const [cat, items] of Object.entries(v2Result.requirements || {})) {
+            catCounts[cat] = (items as any[]).length;
+        }
+        recordAnalysisTelemetry({
+            tenantId: req.user.tenantId,
+            processId: undefined,
+            numPdfs: pdfParts.length,
+            totalPages: 0,
+            totalChars: 0,
+            hasScannedPdf: false,
+            portal: v2Result.process_identification?.portal_licitacao || '',
+            modalidade: v2Result.process_identification?.modalidade || '',
+            objeto: (v2Result.process_identification?.objeto || '').substring(0, 200),
+            model: uniqueModels.join('+'),
+            promptVersion: V2_PROMPT_VERSION,
+            extractionTimeMs: Math.round((stageTimes.extraction || 0) * 1000),
+            totalTimeMs: Math.round(parseFloat(totalDuration) * 1000),
+            parseRepairs: pipelineHealth.parseRepairs,
+            fallbackUsed: pipelineHealth.fallbacksUsed > 0,
+            categoryGapRecovery: !!stageTimes.re_extraction,
+            totalRequirements: totalReqs,
+            categoryCounts: catCounts,
+            totalEvidences: v2Result.evidence_registry.length,
+            totalRisks: v2Result.legal_risk_review.critical_points.length,
+            qualityScore: qualityReport?.overallScore ?? null,
+            confidenceScore: combinedScore,
+            enforcerCorrections: enforceResult.corrections,
+            safetyNetsTriggered: classifySafetyNets(enforceResult.details),
+            status: 'success',
+        }).catch(() => {}); // Never block pipeline
+
         sendResult(finalPayload);
 
     } catch (error: any) {
         console.error('[PNCP-V2] Error:', error?.message || error);
+        // Record error telemetry
+        recordAnalysisTelemetry({
+            tenantId: req.user?.tenantId || 'unknown',
+            numPdfs: 0, totalPages: 0, totalChars: 0, hasScannedPdf: false,
+            model: 'failed', promptVersion: V2_PROMPT_VERSION,
+            extractionTimeMs: 0, totalTimeMs: Date.now() - (analysisStartTime || Date.now()),
+            parseRepairs: 0, fallbackUsed: false, categoryGapRecovery: false,
+            totalRequirements: 0, categoryCounts: {}, totalEvidences: 0, totalRisks: 0,
+            enforcerCorrections: 0, safetyNetsTriggered: [],
+            status: 'error', errorMessage: error?.message || 'Unknown',
+        }).catch(() => {});
         sendError(`Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}`);
     }
 });

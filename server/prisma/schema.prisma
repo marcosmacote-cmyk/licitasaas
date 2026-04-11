@@ -437,3 +437,50 @@ model AiUsageLog {
   @@index([tenantId, createdAt])
   @@index([operation])
 }
+
+// ── Telemetria de Pipeline de Análise IA ──
+model AiAnalysisTelemetry {
+  id              String   @id @default(uuid())
+  tenantId        String
+  processId       String?  // biddingProcessId if available
+  timestamp       DateTime @default(now())
+  
+  // Input metrics
+  numPdfs         Int      @default(0)
+  totalPages      Int      @default(0)
+  totalChars      Int      @default(0)
+  hasScannedPdf   Boolean  @default(false)
+  portal          String?
+  modalidade      String?
+  objeto          String?  // Truncated to 200 chars
+  
+  // Extraction metrics
+  model           String   // 'gemini-2.5-flash', 'gpt-4o-mini', 'gpt-4o'
+  promptVersion   String
+  extractionTimeMs Int     @default(0)
+  totalTimeMs     Int      @default(0)
+  parseRepairs    Int      @default(0)
+  fallbackUsed    Boolean  @default(false)
+  categoryGapRecovery Boolean @default(false)
+  
+  // Output metrics
+  totalRequirements Int    @default(0)
+  categoryCounts  Json?    // { "HJ": 5, "RFT": 11, ... }
+  totalEvidences  Int      @default(0)
+  totalRisks      Int      @default(0)
+  qualityScore    Float?
+  confidenceScore Float?
+  
+  // SchemaEnforcer metrics
+  enforcerCorrections Int  @default(0)
+  safetyNetsTriggered Json? // ["RFT_CND", "QEF_BALANCO", ...]
+  
+  // Result
+  status          String   @default("success") // success | partial | error
+  errorMessage    String?
+  
+  @@index([tenantId, timestamp])
+  @@index([status])
+  @@index([qualityScore])
+}
+
