@@ -27,6 +27,7 @@ model Tenant {
   pncpFavoriteLists      PncpFavoriteList[]
   pncpFavoriteItems      PncpFavoriteItem[]
   insightHistories       CompanyInsightHistory[]
+  backgroundJobs         BackgroundJob[]
 }
 
 model User {
@@ -482,5 +483,29 @@ model AiAnalysisTelemetry {
   @@index([tenantId, timestamp])
   @@index([status])
   @@index([qualityScore])
+}
+
+model BackgroundJob {
+  id          String   @id @default(uuid())
+  tenantId    String
+  userId      String
+  type        String   // edital_analysis | oracle | proposal_populate | petition
+  status      String   @default("QUEUED") // QUEUED | PROCESSING | COMPLETED | FAILED
+  progress    Int      @default(0) // 0-100
+  progressMsg String?  // "Etapa 2/3 — Normalização"
+  input       Json     // Payload original (fileNames, processId, etc.)
+  result      Json?    // Resultado quando COMPLETED
+  error       String?  // Mensagem de erro quando FAILED
+  targetId    String?  // biddingProcessId — para vincular ao recurso
+  targetTitle String?  // "Pregão 014/2026 - Macau" — para notificação legível
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([userId, status])
+  @@index([status, createdAt])
 }
 

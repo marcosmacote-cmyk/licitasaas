@@ -46,6 +46,8 @@ import { PCPMonitor } from "./services/monitoring/pcp-monitor.service";
 import { LicitanetMonitor } from "./services/monitoring/licitanet-monitor.service";
 import { LicitaMaisBrasilMonitor } from "./services/monitoring/licitamaisbrasil-monitor.service";
 import { IngestService } from "./services/monitoring/ingest.service";
+import { submitJob, getJob, listJobs, registerSSEClient, removeSSEClient, updateJobProgress, completeJob, failJob } from "./services/backgroundJobService";
+import { registerJobHandler, startJobWorker } from "./services/backgroundJobWorker";
 import express from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
@@ -6461,6 +6463,133 @@ function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolea
     };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKGROUND JOBS API — Async AI operations with real-time notifications
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── SSE: Server-Sent Events stream for real-time notifications ──
+app.get('/api/events/stream', authenticateToken, (req: any, res) => {
+    const clientId = `sse_${req.user.id}_${Date.now()}`;
+
+    // Set SSE headers
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx/Railway buffering
+    });
+
+    // Send initial connection event
+    res.write(`event: connected\ndata: ${JSON.stringify({ clientId, timestamp: new Date().toISOString() })}\n\n`);
+
+    // Register client
+    registerSSEClient(clientId, req.user.id, req.user.tenantId, res);
+
+    // Keep-alive ping every 30s
+    const keepAlive = setInterval(() => {
+        try {
+            res.write(`: keepalive\n\n`);
+        } catch {
+            clearInterval(keepAlive);
+        }
+    }, 30000);
+
+    // Cleanup on disconnect
+    req.on('close', () => {
+        clearInterval(keepAlive);
+        removeSSEClient(clientId);
+    });
+});
+
+// ── Submit a background job ──
+app.post('/api/jobs/submit', authenticateToken, aiLimiter, async (req: any, res) => {
+    try {
+        const { type, input, targetId, targetTitle } = req.body;
+
+        if (!type || !input) {
+            return res.status(400).json({ error: 'type and input are required' });
+        }
+
+        const validTypes = ['edital_analysis', 'oracle', 'proposal_populate', 'petition'];
+        if (!validTypes.includes(type)) {
+            return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+        }
+
+        const result = await submitJob({
+            tenantId: req.user.tenantId,
+            userId: req.user.id,
+            type,
+            input,
+            targetId,
+            targetTitle,
+        });
+
+        res.status(202).json({
+            ok: true,
+            jobId: result.jobId,
+            message: 'Tarefa enviada para processamento em segundo plano.',
+        });
+    } catch (err: any) {
+        console.error('[Jobs] Submit error:', err.message);
+        res.status(429).json({ error: err.message });
+    }
+});
+
+// ── Get job status ──
+app.get('/api/jobs/:jobId', authenticateToken, async (req: any, res) => {
+    try {
+        const job = await getJob(req.params.jobId, req.user.tenantId);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+
+        res.json({
+            id: job.id,
+            type: job.type,
+            status: job.status,
+            progress: job.progress,
+            progressMsg: job.progressMsg,
+            error: job.error,
+            targetId: job.targetId,
+            targetTitle: job.targetTitle,
+            createdAt: job.createdAt,
+            completedAt: job.completedAt,
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Get job result (only when COMPLETED) ──
+app.get('/api/jobs/:jobId/result', authenticateToken, async (req: any, res) => {
+    try {
+        const job = await getJob(req.params.jobId, req.user.tenantId);
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+        if (job.status !== 'COMPLETED') {
+            return res.status(409).json({
+                error: 'Job not completed yet',
+                status: job.status,
+                progress: job.progress,
+            });
+        }
+        res.json({ ok: true, result: job.result });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── List recent jobs for current user ──
+app.get('/api/jobs', authenticateToken, async (req: any, res) => {
+    try {
+        const jobs = await listJobs(req.user.tenantId, req.user.id, 30);
+        res.json(jobs);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGACY: Synchronous V2 Pipeline (preserved as fallback)
+// ═══════════════════════════════════════════════════════════════════════════
+
 app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any, res) => {
     const analysisStartTime = Date.now();
     const result = createEmptyAnalysisSchema();
@@ -9060,6 +9189,74 @@ app.listen(PORT, async () => {
     // Initialize version catalog
     registerInitialVersions();
     console.log(`[Governance] Version catalog initialized with ${getAllVersions().length} components`);
+
+    // ── Background Job Worker — Process async AI tasks ──
+    registerJobHandler('edital_analysis', async (job: any) => {
+        const { fileNames, biddingProcessId } = job.input;
+        const tenantId = job.tenantId;
+
+        await updateJobProgress(job.id, tenantId, { progress: 10, progressMsg: 'Preparando documentos...' });
+
+        // Re-use the existing sync pipeline by making an internal HTTP call
+        // This ensures zero code duplication and the legacy endpoint stays as-is
+        const internalUrl = `http://localhost:${PORT}/api/analyze-edital/v2`;
+
+        // Get a valid token for this user/tenant
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign(
+            { id: job.userId, tenantId: job.tenantId, role: 'Admin' },
+            process.env.JWT_SECRET || 'default-secret',
+            { expiresIn: '10m' }
+        );
+
+        await updateJobProgress(job.id, tenantId, { progress: 20, progressMsg: 'Etapa 1/3 — Extração Factual...' });
+
+        // Simulate progress updates while the pipeline runs
+        let progressPercent = 20;
+        const progressTimer = setInterval(async () => {
+            progressPercent = Math.min(progressPercent + 10, 90);
+            const stages: Record<number, string> = {
+                30: 'Etapa 1/3 — Extração Factual...',
+                50: 'Etapa 2/3 — Normalização...',
+                70: 'Etapa 3/3 — Revisão de Risco...',
+                85: 'Validando e finalizando...',
+            };
+            const msg = stages[Math.round(progressPercent / 10) * 10] || `Processando... (${progressPercent}%)`;
+            try {
+                await updateJobProgress(job.id, tenantId, { progress: progressPercent, progressMsg: msg });
+            } catch { /* ignore */ }
+        }, 8000);
+
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ fileNames, biddingProcessId }),
+            });
+
+            clearInterval(progressTimer);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Pipeline returned ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            await updateJobProgress(job.id, tenantId, { progress: 95, progressMsg: 'Salvando resultado...' });
+
+            return result;
+        } catch (err) {
+            clearInterval(progressTimer);
+            throw err;
+        }
+    });
+
+    startJobWorker();
+    console.log('[BackgroundJob] 🚀 Worker started — async AI operations enabled');
     
     // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
     // pncpMonitor.startPolling(5);

@@ -11,7 +11,8 @@ export interface AuthenticatedRequest extends Request {
 // Middleware de Autenticação
 export const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    // Support token via query param for SSE (EventSource doesn't support custom headers)
+    const token = (authHeader && authHeader.split(' ')[1]) || (req.query.token as string);
 
     if (!token) return res.status(401).json({ error: 'Token não fornecido' });
 

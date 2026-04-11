@@ -238,190 +238,158 @@ export function useProcessForm({ initialData, companies, onClose, onSave, onNavi
         }
 
         try {
-            setIsCheckingAi(true);
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/analyze-edital/v2`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+            // ── Background Job Mode: submit and let user navigate freely ──
+            const { submitBackgroundJob } = await import('./useSSE');
+            const pdfFiles = fileNames.filter(f => f.includes('.pdf') || f.includes('/uploads/'));
+            
+            await submitBackgroundJob({
+                type: 'edital_analysis',
+                input: {
+                    fileNames: pdfFiles,
+                    biddingProcessId: initialData?.id,
                 },
-                body: JSON.stringify({ fileNames: fileNames.filter(f => f.includes('.pdf') || f.includes('/uploads/')) })
+                targetId: initialData?.id,
+                targetTitle: initialData?.title || formData.title || 'Análise de Edital',
             });
 
-            if (!res.ok) {
-                const errorLog = await res.json();
-                throw new Error(errorLog.error || "Falha na análise");
-            }
+            toast.success('🧠 Análise enviada para processamento! Você será notificado quando concluir.');
+            // User can now close the form and navigate freely
+        } catch (e: any) {
+            // Fallback to sync if background fails
+            console.warn('[AI Extract] Background submit failed, falling back to sync:', e.message);
+            try {
+                setIsCheckingAi(true);
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE_URL}/api/analyze-edital/v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fileNames: fileNames.filter(f => f.includes('.pdf') || f.includes('/uploads/')) })
+                });
 
-            const aiData = await res.json();
-
-            // ═══ Apply AI data with full fallbacks (same quality as handleQuickAiFileChange) ═══
-            const schema = aiData.schemaV2;
-            const proc = aiData.process || {};
-
-            const summary = proc.summary || proc.object || schema?.process_identification?.objeto_completo || schema?.process_identification?.objeto_resumido || '';
-
-            let title = proc.title || '';
-            if (!title && schema?.process_identification) {
-                const mod = schema.process_identification.modalidade || '';
-                const numProc = schema.process_identification.numero_processo || '';
-                const numEdit = schema.process_identification.numero_edital || '';
-                const orgao = (schema.process_identification.orgao || '').toUpperCase();
-                const numero = numProc || numEdit;
-                if (mod && numero && orgao) title = `${mod} ${numero} - ${orgao}`;
-                else if (mod && numero) title = `${mod} ${numero}`;
-                else if (numero && orgao) title = `${numero} - ${orgao}`;
-                else title = schema.process_identification.objeto_resumido || numero || '';
-            }
-
-            const modality = proc.modality || schema?.process_identification?.modalidade || '';
-
-            // Portal: proc → schema portal_licitacao → links_uteis → fonte_oficial → orgao
-            let portal = proc.portal || '';
-            if (!portal && schema?.process_identification?.portal_licitacao && schema.process_identification.portal_licitacao !== 'outro') {
-                portal = schema.process_identification.portal_licitacao;
-            }
-            if (!portal && schema?.process_identification?.links_uteis) {
-                const links = Array.isArray(schema.process_identification.links_uteis)
-                    ? schema.process_identification.links_uteis.join(' ')
-                    : String(schema.process_identification.links_uteis || '');
-                if (/licitamaisbrasil/i.test(links)) portal = 'Licita Mais Brasil';
-                else if (/compras\.gov|comprasnet|cnetmobile|pncp/i.test(links)) portal = 'Compras.gov.br';
-                else if (/bll/i.test(links)) portal = 'BLL';
-                else if (/bnc/i.test(links)) portal = 'BNC';
-                else if (/m2a/i.test(links)) portal = 'M2A Tecnologia';
-                else if (/bbmnet/i.test(links)) portal = 'BBMNet';
-                else if (/licitanet/i.test(links)) portal = 'Licitanet';
-                else if (/portaldecompras|portal de compras/i.test(links)) portal = 'Portal de Compras Públicas';
-            }
-            if (!portal && schema?.process_identification?.fonte_oficial) {
-                const fonte = schema.process_identification.fonte_oficial.toLowerCase();
-                if (/licitamaisbrasil/i.test(fonte)) portal = 'Licita Mais Brasil';
-                else if (/compras\.gov|comprasnet|pncp/i.test(fonte)) portal = 'Compras.gov.br';
-            }
-            if (!portal && schema?.process_identification?.orgao) {
-                const orgao = schema.process_identification.orgao.toLowerCase();
-                if (orgao.includes('federal') || orgao.includes('ministério')) portal = 'Compras.gov.br';
-            }
-            // Priority 4: Use fonte_oficial as free-text portal (portais estaduais/municipais)
-            if (!portal && schema?.process_identification?.fonte_oficial) {
-                const fonte = schema.process_identification.fonte_oficial.trim();
-                if (fonte && fonte !== 'outro' && fonte !== 'Não informado') portal = fonte;
-            }
-
-            // Value: schema → proc → itens
-            let estimatedValue = 0;
-            if (schema?.process_identification?.valor_estimado_global) {
-                estimatedValue = parseFloat(String(schema.process_identification.valor_estimado_global)) || 0;
-            }
-            if (!estimatedValue && proc.estimatedValue) {
-                estimatedValue = parseFloat(String(proc.estimatedValue).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
-            }
-            if (!estimatedValue && schema?.proposal_analysis?.itens_licitados) {
-                const itens = schema.proposal_analysis.itens_licitados;
-                if (Array.isArray(itens) && itens.length > 0) {
-                    estimatedValue = itens.reduce((sum: number, it: any) => {
-                        const price = parseFloat(String(it.referencePrice || 0)) || 0;
-                        const qty = parseFloat(String(it.quantity || 1)) || 1;
-                        const mult = parseFloat(String(it.multiplier || 1)) || 1;
-                        return sum + (price * qty * mult);
-                    }, 0);
-                    estimatedValue = Math.round(estimatedValue * 100) / 100;
+                if (!res.ok) {
+                    const errorLog = await res.json();
+                    throw new Error(errorLog.error || "Falha na análise");
                 }
-            }
 
-            // Session date (with "às" support)
-            let formattedSessionDate = formData.sessionDate;
-            const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
-            if (rawDate) {
-                const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(?:às\s*)?(\d{2}):(\d{2})/);
-                if (ptBrMatch) {
-                    formattedSessionDate = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4]}:${ptBrMatch[5]}`;
-                } else {
-                    const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-                    if (isoMatch) {
-                        formattedSessionDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
+                const aiData = await res.json();
+
+                const schema = aiData.schemaV2;
+                const proc = aiData.process || {};
+
+                const summary = proc.summary || proc.object || schema?.process_identification?.objeto_completo || schema?.process_identification?.objeto_resumido || '';
+
+                let title = proc.title || '';
+                if (!title && schema?.process_identification) {
+                    const mod = schema.process_identification.modalidade || '';
+                    const numProc = schema.process_identification.numero_processo || '';
+                    const numEdit = schema.process_identification.numero_edital || '';
+                    const orgao = (schema.process_identification.orgao || '').toUpperCase();
+                    const numero = numProc || numEdit;
+                    if (mod && numero && orgao) title = `${mod} ${numero} - ${orgao}`;
+                    else if (mod && numero) title = `${mod} ${numero}`;
+                    else if (numero && orgao) title = `${numero} - ${orgao}`;
+                    else title = schema.process_identification.objeto_resumido || numero || '';
+                }
+
+                const modality = proc.modality || schema?.process_identification?.modalidade || '';
+
+                let portal = proc.portal || '';
+                if (!portal && schema?.process_identification?.portal_licitacao && schema.process_identification.portal_licitacao !== 'outro') {
+                    portal = schema.process_identification.portal_licitacao;
+                }
+
+                let estimatedValue = 0;
+                if (schema?.process_identification?.valor_estimado_global) {
+                    estimatedValue = parseFloat(String(schema.process_identification.valor_estimado_global)) || 0;
+                }
+                if (!estimatedValue && proc.estimatedValue) {
+                    estimatedValue = parseFloat(String(proc.estimatedValue).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+                }
+
+                let formattedSessionDate = formData.sessionDate;
+                const rawDate = proc.sessionDate || schema?.timeline?.data_sessao || schema?.timeline?.data_abertura_propostas || '';
+                if (rawDate) {
+                    const ptBrMatch = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(?:às\s*)?(\d{2}):(\d{2})/);
+                    if (ptBrMatch) {
+                        formattedSessionDate = `${ptBrMatch[3]}-${ptBrMatch[2]}-${ptBrMatch[1]}T${ptBrMatch[4]}:${ptBrMatch[5]}`;
                     } else {
-                        const d = new Date(rawDate);
-                        if (!isNaN(d.getTime())) {
-                            const pad = (n: number) => String(n).padStart(2, '0');
-                            formattedSessionDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                        const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                        if (isoMatch) {
+                            formattedSessionDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
                         }
                     }
                 }
-            }
 
-            // Auto-risk from critical_points (severity in PT)
-            let risk = proc.risk || 'Baixo';
-            if (schema?.legal_risk_review?.critical_points) {
-                const criticals = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'critica' || cp.severity === 'alta');
-                const medias = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'media');
-                if (criticals.length >= 2) risk = 'Crítico';
-                else if (criticals.length >= 1) risk = 'Alto';
-                else if (medias.length >= 2) risk = 'Médio';
-            }
-
-            // Auto-reminder: 24h before session (local time, no UTC)
-            let reminderDate = '';
-            if (formattedSessionDate) {
-                const parts = formattedSessionDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-                if (parts) {
-                    const yr = parseInt(parts[1]), mo = parseInt(parts[2]) - 1, dy = parseInt(parts[3]);
-                    const hr = parseInt(parts[4]), mn = parseInt(parts[5]);
-                    const dt = new Date(yr, mo, dy, hr, mn);
-                    dt.setHours(dt.getHours() - 24);
-                    const pad = (n: number) => String(n).padStart(2, '0');
-                    reminderDate = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+                let risk = proc.risk || 'Baixo';
+                if (schema?.legal_risk_review?.critical_points) {
+                    const criticals = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'critica' || cp.severity === 'alta');
+                    const medias = schema.legal_risk_review.critical_points.filter((cp: any) => cp.severity === 'media');
+                    if (criticals.length >= 2) risk = 'Crítico';
+                    else if (criticals.length >= 1) risk = 'Alto';
+                    else if (medias.length >= 2) risk = 'Médio';
                 }
+
+                let reminderDate = '';
+                if (formattedSessionDate) {
+                    const parts = formattedSessionDate.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+                    if (parts) {
+                        const yr = parseInt(parts[1]), mo = parseInt(parts[2]) - 1, dy = parseInt(parts[3]);
+                        const hr = parseInt(parts[4]), mn = parseInt(parts[5]);
+                        const dt = new Date(yr, mo, dy, hr, mn);
+                        dt.setHours(dt.getHours() - 24);
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        reminderDate = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+                    }
+                }
+
+                const extractedLink = proc.link || schema?.process_identification?.link_sistema;
+
+                setFormData(prev => ({
+                    ...prev,
+                    title: title || prev.title,
+                    summary: summary || prev.summary,
+                    modality: modality || prev.modality,
+                    portal: portal || prev.portal,
+                    estimatedValue: estimatedValue || prev.estimatedValue,
+                    sessionDate: formattedSessionDate,
+                    risk: risk as any,
+                    reminderDate: reminderDate || prev.reminderDate,
+                    reminderType: reminderDate ? 'once' : prev.reminderType,
+                    link: extractedLink && !prev.link?.includes(extractedLink) 
+                        ? (prev.link ? `${prev.link}, ${extractedLink}` : extractedLink) 
+                        : prev.link,
+                }));
+                if (aiData.analysis) {
+                    const analysisObj: AiAnalysis = {
+                        id: uuidv4(),
+                        biddingProcessId: '',
+                        requiredDocuments: JSON.stringify(aiData.analysis.requiredDocuments || []),
+                        biddingItems: aiData.analysis.biddingItems || '',
+                        pricingConsiderations: aiData.analysis.pricingConsiderations || '',
+                        irregularitiesFlags: JSON.stringify(aiData.analysis.irregularitiesFlags || []),
+                        fullSummary: aiData.analysis.fullSummary || '',
+                        deadlines: JSON.stringify(aiData.analysis.deadlines || []),
+                        penalties: aiData.analysis.penalties || '',
+                        qualificationRequirements: aiData.analysis.qualificationRequirements || '',
+                        sourceFileNames: JSON.stringify(fileNames),
+                        schemaV2: aiData.schemaV2 || null,
+                        promptVersion: aiData._prompt_version || null,
+                        modelUsed: aiData._model_used || null,
+                        pipelineDurationS: aiData._pipeline_duration_s || null,
+                        overallConfidence: aiData._overall_confidence || null,
+                        analyzedAt: new Date().toISOString()
+                    };
+                    setAiAnalysisData(analysisObj);
+                    toast.success('Campos extraídos com sucesso via IA! Confira o Relatório Analítico.');
+                }
+            } catch (syncErr: any) {
+                toast.error(`Erro na Extração IA: ${syncErr.message}`);
+            } finally {
+                setIsCheckingAi(false);
             }
-
-            console.log(`[AI Extract] sessionDate=${formattedSessionDate}, reminderDate=${reminderDate}, value=${estimatedValue}, portal=${portal}`);
-
-            const extractedLink = proc.link || schema?.process_identification?.link_sistema;
-
-            setFormData(prev => ({
-                ...prev,
-                title: title || prev.title,
-                summary: summary || prev.summary,
-                modality: modality || prev.modality,
-                portal: portal || prev.portal,
-                estimatedValue: estimatedValue || prev.estimatedValue,
-                sessionDate: formattedSessionDate,
-                risk: risk as any,
-                reminderDate: reminderDate || prev.reminderDate,
-                reminderType: reminderDate ? 'once' : prev.reminderType,
-                link: extractedLink && !prev.link?.includes(extractedLink) 
-                    ? (prev.link ? `${prev.link}, ${extractedLink}` : extractedLink) 
-                    : prev.link,
-            }));
-            if (aiData.analysis) {
-                const analysisObj: AiAnalysis = {
-                    id: uuidv4(),
-                    biddingProcessId: '',
-                    requiredDocuments: JSON.stringify(aiData.analysis.requiredDocuments || []),
-                    biddingItems: aiData.analysis.biddingItems || '',
-                    pricingConsiderations: aiData.analysis.pricingConsiderations || '',
-                    irregularitiesFlags: JSON.stringify(aiData.analysis.irregularitiesFlags || []),
-                    fullSummary: aiData.analysis.fullSummary || '',
-                    deadlines: JSON.stringify(aiData.analysis.deadlines || []),
-                    penalties: aiData.analysis.penalties || '',
-                    qualificationRequirements: aiData.analysis.qualificationRequirements || '',
-                    sourceFileNames: JSON.stringify(fileNames),
-                    schemaV2: aiData.schemaV2 || null,
-                    promptVersion: aiData._prompt_version || null,
-                    modelUsed: aiData._model_used || null,
-                    pipelineDurationS: aiData._pipeline_duration_s || null,
-                    overallConfidence: aiData._overall_confidence || null,
-                    analyzedAt: new Date().toISOString()
-                };
-                setAiAnalysisData(analysisObj);
-                toast.success('Campos extraídos com sucesso via IA! Confira o Relatório Analítico.');
-            }
-        } catch (e: any) {
-            toast.error(`Erro na Extração IA: ${e.message}`);
-        } finally {
-            setIsCheckingAi(false);
         }
     };
 

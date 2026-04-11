@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Building2,
   Settings,
-  Bell,
   Sun,
   Moon,
   Loader2,
@@ -26,6 +25,7 @@ import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui';
+import NotificationCenter from './components/NotificationCenter';
 
 // Lazy imports — pages loaded on demand
 const PncpPage = lazy(() => import('./components/PncpPage').then(m => ({ default: m.PncpPage })));
@@ -383,18 +383,10 @@ function App() {
               <button className="icon-btn" onClick={toggleTheme} title="Alternar Tema">
                 {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </button>
-              <button className="icon-btn" style={{ position: 'relative' }}>
-                <Bell size={18} />
-                {alertCount > 0 && (
-                  <span style={{
-                    position: 'absolute', top: 4, right: 4,
-                    width: 7, height: 7,
-                    background: 'var(--color-danger)',
-                    borderRadius: '50%',
-                    border: '2px solid var(--color-bg-surface)'
-                  }} />
-                )}
-              </button>
+              <NotificationCenter onNavigateToProcess={(processId) => {
+                setModuleContext({ processId });
+                setActiveTab('bidding');
+              }} />
 
               <div style={{ width: '1px', height: '24px', background: 'var(--color-border)', margin: '0 var(--space-2)' }} />
 
