@@ -1,0 +1,2441 @@
+{
+  "timeline": {
+    "data_sessao": "28/04/2026 às 10:30",
+    "outros_prazos": [],
+    "prazo_amostra": null,
+    "prazo_recurso": "3 (três) dias úteis, contados da data de intimação ou de lavratura da ata.",
+    "data_publicacao": "07/04/2026",
+    "prazo_impugnacao": "Até 23/04/2026",
+    "prazo_contrarrazoes": "3 (três) dias úteis, contados da data da intimação pessoal ou da divulgação da interposição do recurso",
+    "prazo_envio_proposta": "28/04/2026 às 09:00",
+    "prazo_esclarecimento": "Até 23/04/2026",
+    "prazo_envio_habilitacao": "02 (duas) horas, prorrogável por igual período, contado da solicitação do Pregoeiro."
+  },
+  "confidence": {
+    "warnings": [
+      "2 anexo(s) ignorado(s) por limite de tamanho: MODELO_DE_PROPOSTA_DE_PRECO (excluído: template/padrão), MINUTA_DE_CONTRATO_ (excluído: template/padrão)",
+      "SchemaEnforcer: 10 campo(s) padronizado(s) automaticamente"
+    ],
+    "traceability": {
+      "total_requirements": 41,
+      "traced_requirements": 41,
+      "evidence_registry_count": 88,
+      "traceability_percentage": 100
+    },
+    "pipeline_health": {
+      "parseRepairs": 0,
+      "stagesFailed": 0,
+      "fallbacksUsed": 0
+    },
+    "missing_sections": [],
+    "score_percentage": 99,
+    "overall_confidence": "alta",
+    "section_confidence": {
+      "risk_review": "alta"
+    }
+  },
+  "pncp_source": {
+    "analyzed_at": "2026-04-11T00:51:56.699Z",
+    "attachments": [
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/1",
+        "ativo": true,
+        "titulo": "EDITAL",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 1,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/8",
+        "ativo": true,
+        "titulo": "MODELO_DE_PROPOSTA_DE_PRECO",
+        "purpose": "anexo_geral",
+        "downloaded": false,
+        "sequencial": 8,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/4",
+        "ativo": true,
+        "titulo": "ETP",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 4,
+        "tipoDocumentoId": 7,
+        "tipoDocumentoDescricao": "Estudo Técnico Preliminar"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/5",
+        "ativo": true,
+        "titulo": "MAPA_DAS_ROTAS_01",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 5,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/7",
+        "ativo": true,
+        "titulo": "RELATORIO_GEO",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 7,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/2",
+        "ativo": true,
+        "titulo": "MINUTA_DE_CONTRATO_",
+        "purpose": "minuta_contrato",
+        "downloaded": false,
+        "sequencial": 2,
+        "tipoDocumentoId": 3,
+        "tipoDocumentoDescricao": "Minuta do Contrato"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/3",
+        "ativo": true,
+        "titulo": "TR",
+        "purpose": "termo_referencia",
+        "downloaded": true,
+        "sequencial": 3,
+        "tipoDocumentoId": 4,
+        "tipoDocumentoDescricao": "Termo de Referência"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/6",
+        "ativo": true,
+        "titulo": "MAPA_DAS_ROTAS_02",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 6,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/9",
+        "ativo": true,
+        "titulo": "ROTA_COMPLETO_compressed135",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 9,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/41563628000182/compras/2026/27/arquivos/10",
+        "ativo": true,
+        "titulo": "ROTA_COMPLETO_compressed3669",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 10,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      }
+    ],
+    "link_sistema": "https://pncp.gov.br/app/editais/41563628000182/2026/27",
+    "discarded_files": [
+      "MODELO_DE_PROPOSTA_DE_PRECO (excluído: template/padrão)",
+      "MINUTA_DE_CONTRATO_ (excluído: template/padrão)"
+    ],
+    "downloaded_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/1f017052-898d-4004-bd85-dc8cecccad21",
+      "9f7a7155-be67-4470-8952-eb947fd97931/b287d344-1a0f-4776-9eab-6928d4fdfe27",
+      "9f7a7155-be67-4470-8952-eb947fd97931/cc8e6a1d-31a2-4a32-84c8-6748d5faf466",
+      "9f7a7155-be67-4470-8952-eb947fd97931/9416324e-ae4f-4b77-b760-ac2845023cb6",
+      "9f7a7155-be67-4470-8952-eb947fd97931/3af01a8b-3886-4d14-be7b-86d551f011ad",
+      "9f7a7155-be67-4470-8952-eb947fd97931/6fbf2f7c-5d51-4f4a-acc7-14d06255133e",
+      "9f7a7155-be67-4470-8952-eb947fd97931/a7ff1665-fbd4-4e8a-a83a-478d900db558",
+      "9f7a7155-be67-4470-8952-eb947fd97931/f3a4e1f7-d06d-4fc6-9bb9-726af311cc1f"
+    ]
+  },
+  "requirements": {
+    "proposta_comercial": [
+      {
+        "phase": "proposta",
+        "title": "Preenchimento do Valor Unitário",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 5.1.1",
+        "description": "Preencher o campo 'Valor unitário do item' no sistema eletrônico.",
+        "evidence_refs": [
+          "EV-31"
+        ],
+        "requirement_id": "PC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Indicação de Marca na Proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 5.1.2",
+        "description": "Preencher o campo 'Marca (quando for o caso)' no sistema eletrônico.",
+        "evidence_refs": [
+          "EV-32"
+        ],
+        "requirement_id": "PC-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Indicação de Fabricante na Proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 5.1.3",
+        "description": "Preencher o campo 'Fabricante (quando for o caso)' no sistema eletrônico.",
+        "evidence_refs": [
+          "EV-33"
+        ],
+        "requirement_id": "PC-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Preenchimento da Quantidade do Item",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 5.1.4",
+        "description": "Preencher o campo 'Quantidade' no sistema eletrônico.",
+        "evidence_refs": [
+          "EV-34"
+        ],
+        "requirement_id": "PC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Descrição Detalhada do Objeto na Proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 5.1.5",
+        "description": "A proposta deve conter descrição detalhada do objeto, similar ao TR, incluindo modelo, prazo de validade/garantia, registro no órgão competente (se aplicável).",
+        "evidence_refs": [
+          "EV-35"
+        ],
+        "requirement_id": "PC-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta Final em Papel Timbrado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 6.20.4",
+        "description": "Apresentar proposta final em papel timbrado da empresa, conforme modelo anexo, após negociação e redefinição de valores.",
+        "evidence_refs": [
+          "EV-36"
+        ],
+        "requirement_id": "PC-06",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Planilha de Composição de Custos",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 6.20.4",
+        "description": "Apresentar planilha de composição de custos, acompanhando a proposta final.",
+        "evidence_refs": [
+          "EV-37"
+        ],
+        "requirement_id": "PC-07",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Prazo de Validade da Proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 5.5.1",
+        "description": "A proposta deve ter prazo de validade mínimo de 90 dias, a contar da data de sua apresentação.",
+        "evidence_refs": [
+          "EV-38"
+        ],
+        "requirement_id": "PC-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      }
+    ],
+    "habilitacao_juridica": [
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição no Registro Público de Empresas Mercantis (Empresário Individual)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.4.1",
+        "description": "Inscrição no Registro Público de Empresas Mercantis, a cargo da Junta Comercial da respectiva sede.",
+        "evidence_refs": [
+          "EV-01"
+        ],
+        "requirement_id": "HJ-01",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Ato Constitutivo, Estatuto ou Contrato Social (Sociedade Empresária)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.4.2",
+        "description": "Inscrição do ato constitutivo, estatuto ou contrato social no Registro Público de Empresas Mercantis, a cargo da Junta Comercial da respectiva sede.",
+        "evidence_refs": [
+          "EV-02"
+        ],
+        "requirement_id": "HJ-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Documento Comprobatório de Administradores (Sociedade Empresária)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.4.2",
+        "description": "Documento comprobatório de seus administradores, acompanhando o ato constitutivo, estatuto ou contrato social.",
+        "evidence_refs": [
+          "EV-03"
+        ],
+        "requirement_id": "HJ-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição do Ato Constitutivo da Filial/Sucursal/Agência",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.4.3",
+        "description": "Inscrição do ato constitutivo da filial, sucursal ou agência da sociedade simples ou empresária, respectivamente, no Registro Civil das Pessoas Jurídicas ou no Registro Público de Empresas Mercantis onde opera.",
+        "evidence_refs": [
+          "EV-04"
+        ],
+        "requirement_id": "HJ-04",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Averbação no Registro da Matriz (Filial/Sucursal/Agência)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.4.3",
+        "description": "Averbação no Registro onde tem sede a matriz, para filial, sucursal ou agência de sociedade simples ou empresária.",
+        "evidence_refs": [
+          "EV-05"
+        ],
+        "requirement_id": "HJ-05",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Documento de Identificação com foto do(s) administrador(es)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.4.4",
+        "description": "Documento de Identificação com foto do(s) administrador(es).",
+        "evidence_refs": [
+          "EV-06"
+        ],
+        "requirement_id": "HJ-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Documentos Societários com Alterações ou Consolidação",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.4.5",
+        "description": "Os documentos apresentados deverão estar acompanhados de todas as alterações ou da consolidação respectiva.",
+        "evidence_refs": [
+          "EV-07"
+        ],
+        "requirement_id": "HJ-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "documentos_complementares": [
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de Conhecimento e Aceite das Condições do Edital",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.3.1",
+        "description": "Declaração de que está ciente e concorda com as condições do edital e anexos, e que a proposta compreende integralidade dos custos trabalhistas e cumpre requisitos de habilitação.",
+        "evidence_refs": [
+          "EV-39"
+        ],
+        "requirement_id": "DC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de Não Emprego de Menores",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.3.2",
+        "description": "Declaração de que não emprega menor de 18 anos em trabalho noturno, perigoso ou insalubre e não emprega menor de 16 anos, salvo aprendiz a partir de 14 anos.",
+        "evidence_refs": [
+          "EV-40"
+        ],
+        "requirement_id": "DC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de Inexistência de Trabalho Degradante ou Forçado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.3.3",
+        "description": "Declaração de que não possui empregados executando trabalho degradante ou forçado.",
+        "evidence_refs": [
+          "EV-41"
+        ],
+        "requirement_id": "DC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de Cumprimento de Reserva de Cargos para PCD",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.3.4",
+        "description": "Declaração de que cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social.",
+        "evidence_refs": [
+          "EV-42"
+        ],
+        "requirement_id": "DC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de Cumprimento da Exigência de Garantia de Participação",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.3.5",
+        "description": "Declaração de que cumpre a exigência da Garantia de Participação, conforme art. 58 da Lei 14.133/2021, em caso de exigência no Termo de Referência.",
+        "evidence_refs": [
+          "EV-43"
+        ],
+        "requirement_id": "DC-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de Enquadramento como ME/EPP",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4",
+        "description": "Declaração de que cumpre os requisitos do artigo 3º da Lei Complementar nº 123/2006, estando apto a usufruir do tratamento favorecido.",
+        "evidence_refs": [
+          "EV-44"
+        ],
+        "requirement_id": "DC-06",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "regularidade_fiscal_trabalhista": [
+      {
+        "phase": "habilitacao",
+        "title": "Prova de Inscrição no CNPJ ou CPF",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.1",
+        "description": "Prova de inscrição no Cadastro Nacional de Pessoas Jurídicas ou no Cadastro de Pessoas Físicas, conforme o caso.",
+        "evidence_refs": [
+          "EV-08"
+        ],
+        "requirement_id": "RFT-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição estadual no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.1",
+        "description": "Prova de inscrição no cadastro de contribuintes estadual, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição municipal no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.1",
+        "description": "Prova de inscrição no cadastro de contribuintes municipal, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de Regularidade Fiscal perante a Fazenda Nacional (RFB/PGFN)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.2",
+        "description": "Prova de regularidade fiscal perante a Fazenda Nacional, mediante apresentação de certidão expedida conjuntamente pela Secretaria da Receita Federal do Brasil (RFB) e pela Procuradoria-Geral da Fazenda Nacional (PGFN), referente a todos os créditos tributários federais e à Dívida Ativa da União (DAU) por elas administrados, inclusive aqueles relativos à Seguridade Social.",
+        "evidence_refs": [
+          "EV-09"
+        ],
+        "requirement_id": "RFT-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de Regularidade com o FGTS",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.3",
+        "description": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS).",
+        "evidence_refs": [
+          "EV-10"
+        ],
+        "requirement_id": "RFT-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de Inexistência de Débitos Trabalhistas (CNDT)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.4",
+        "description": "Prova de inexistência de débitos inadimplidos perante a Justiça do Trabalho, mediante a apresentação de certidão negativa ou positiva com efeito de negativa.",
+        "evidence_refs": [
+          "EV-11"
+        ],
+        "requirement_id": "RFT-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "CND Estadual (Fazenda Estadual)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.1 (safety-net — verificar edital)",
+        "description": "Prova de regularidade para com a Fazenda Estadual do domicílio ou sede do licitante",
+        "evidence_refs": [],
+        "requirement_id": "RFT-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "CND Municipal (Fazenda Municipal)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.5.1 (safety-net — verificar edital)",
+        "description": "Prova de regularidade para com a Fazenda Municipal do domicílio ou sede do licitante",
+        "evidence_refs": [],
+        "requirement_id": "RFT-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_operacional": [
+      {
+        "phase": "habilitacao",
+        "title": "Atestado de Capacidade Técnica Geral da Empresa",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.7.1",
+        "description": "Comprovação de aptidão para execução de serviço de complexidade operacional equivalente ou superior ao objeto, por meio de certidões ou atestados de PJ de direito público ou privado.",
+        "evidence_refs": [
+          "EV-23"
+        ],
+        "requirement_id": "QTO-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado de Execução de Transporte Escolar (180.924 KM)",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.7.1.1.b",
+        "description": "Comprovação de execução de contrato(s) de Serviço de Transporte Escolar, com quantitativo mínimo de 180.924 KM (equivalente a 30% do total a ser contratado).",
+        "evidence_refs": [
+          "EV-24"
+        ],
+        "requirement_id": "QTO-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado de Execução de Serviços Similares (mínimo 2 anos)",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.7.1.3",
+        "description": "Comprovação de execução de serviços similares ao objeto da licitação, em períodos sucessivos ou não, por um prazo mínimo de 02 (dois) anos.",
+        "evidence_refs": [
+          "EV-25"
+        ],
+        "requirement_id": "QTO-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Apresentação de Atestados por Matriz ou Filial",
+        "parent_id": "QTO-01",
+        "applies_to": "licitante",
+        "entry_type": "observacao",
+        "source_ref": "TR, item 8.7.2",
+        "description": "Os atestados de capacidade técnica poderão ser apresentados em nome da matriz ou de qualquer filial do fornecedor.",
+        "evidence_refs": [
+          "EV-26"
+        ],
+        "requirement_id": "QTO-04",
+        "obligation_type": "informativo",
+        "risk_if_missing": "informativo"
+      }
+    ],
+    "qualificacao_economico_financeira": [
+      {
+        "phase": "habilitacao",
+        "title": "Certidão Negativa de Falência",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.6.1",
+        "description": "Certidão negativa de falência expedida pelo distribuidor da sede do fornecedor.",
+        "evidence_refs": [
+          "EV-15"
+        ],
+        "requirement_id": "QEF-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certidão Negativa de Insolvência Civil (Sociedade Simples)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.6.1.1",
+        "description": "Certidão negativa de insolvência civil expedida pelo distribuidor do domicílio ou sede do licitante, caso se trate de sociedade simples, desde que admitida a sua participação na licitação.",
+        "evidence_refs": [
+          "EV-16"
+        ],
+        "requirement_id": "QEF-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Balanço Patrimonial e Demonstrações Contábeis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.6.2",
+        "description": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais, já exigíveis e apresentados na forma da lei, em conformidade com o regime societário do participante.",
+        "evidence_refs": [
+          "EV-17"
+        ],
+        "requirement_id": "QEF-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Comprovação de Capital Social Mínimo",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.6.2.2",
+        "description": "Comprovação de capital social de 10% (dez por cento) do valor estimado da contratação.",
+        "evidence_refs": [
+          "EV-18"
+        ],
+        "requirement_id": "QEF-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de Atendimento aos Índices Econômicos",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.6.2.3",
+        "description": "O atendimento dos índices econômicos previstos neste item deverá ser atestado mediante declaração assinada por profissional habilitado da área contábil, apresentada pelo fornecedor.",
+        "evidence_refs": [
+          "EV-19"
+        ],
+        "requirement_id": "QEF-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Comprovação de Publicação do Balanço Patrimonial (Sociedades por Ações)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.6.4",
+        "description": "No caso das sociedades por ações, deverá ainda, ser apresentado comprovação de publicação do balanço patrimonial na forma da Lei Federal nº 6.404/76.",
+        "evidence_refs": [
+          "EV-20"
+        ],
+        "requirement_id": "QEF-06",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Garantia de Manutenção da Proposta",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.8.1.2",
+        "description": "Garantia de manutenção da proposta, correspondente a 1% (um por cento) do valor estimado da licitação, ou seja, de R$ 63.323,40 (Sessenta e Três Mil, Trezentos e Vinte e Três Reais e Quarenta Centavos).",
+        "evidence_refs": [
+          "EV-21"
+        ],
+        "requirement_id": "QEF-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Modalidades de Garantia de Proposta",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "TR, item 8.8.3",
+        "description": "A garantia de proposta poderá ser apresentada nas modalidades de caução em dinheiro ou em títulos da dívida pública, seguro-garantia reconhecido pela SUSEP, ou fiança bancária.",
+        "evidence_refs": [
+          "EV-22"
+        ],
+        "requirement_id": "QEF-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_profissional": [
+      {
+        "phase": "habilitacao",
+        "title": "Qualificações do Motorista para Transporte Escolar",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "ETP, item 5",
+        "description": "O motorista responsável pelo transporte escolar deve atender aos seguintes requisitos:",
+        "evidence_refs": [
+          "EV-27",
+          "EV-28",
+          "EV-29",
+          "EV-30"
+        ],
+        "requirement_id": "QTP-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Idade mínima de 21 anos",
+        "parent_id": "QTP-01",
+        "applies_to": "profissional_tecnico",
+        "entry_type": "subitem",
+        "source_ref": "ETP, item 5",
+        "description": "O motorista deve possuir idade superior a 21 anos.",
+        "evidence_refs": [
+          "EV-27"
+        ],
+        "requirement_id": "QTP-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Habilitação Categoria D ou superior",
+        "parent_id": "QTP-01",
+        "applies_to": "profissional_tecnico",
+        "entry_type": "subitem",
+        "source_ref": "ETP, item 5",
+        "description": "O motorista deve ser habilitado na categoria 'D' ou superior.",
+        "evidence_refs": [
+          "EV-28"
+        ],
+        "requirement_id": "QTP-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Sem infrações graves/gravíssimas ou reincidência em médias",
+        "parent_id": "QTP-01",
+        "applies_to": "profissional_tecnico",
+        "entry_type": "subitem",
+        "source_ref": "ETP, item 5",
+        "description": "O motorista não deve ter cometido infração grave ou gravíssima, nem ser reincidente em infrações médias nos últimos 12 meses.",
+        "evidence_refs": [
+          "EV-29"
+        ],
+        "requirement_id": "QTP-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Curso especializado para transporte escolar",
+        "parent_id": "QTP-01",
+        "applies_to": "profissional_tecnico",
+        "entry_type": "subitem",
+        "source_ref": "ETP, item 5",
+        "description": "Aprovação em curso especializado para condutores de transporte escolar, conforme regulamentação do CONTRAN, comprovado por certificação válida de instituição reconhecida.",
+        "evidence_refs": [
+          "EV-30"
+        ],
+        "requirement_id": "QTP-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ]
+  },
+  "analysis_meta": {
+    "model_used": "gemini-2.5-flash",
+    "analysis_id": "pncp_1775868383687_c79ea",
+    "source_type": "pncp_download",
+    "stage_times": {
+      "extraction": 301.583,
+      "risk_review": 21.206,
+      "normalization": 25.511
+    },
+    "generated_at": "2026-04-11T00:46:23.687Z",
+    "source_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/1f017052-898d-4004-bd85-dc8cecccad21",
+      "9f7a7155-be67-4470-8952-eb947fd97931/b287d344-1a0f-4776-9eab-6928d4fdfe27",
+      "9f7a7155-be67-4470-8952-eb947fd97931/cc8e6a1d-31a2-4a32-84c8-6748d5faf466",
+      "9f7a7155-be67-4470-8952-eb947fd97931/9416324e-ae4f-4b77-b760-ac2845023cb6",
+      "9f7a7155-be67-4470-8952-eb947fd97931/3af01a8b-3886-4d14-be7b-86d551f011ad",
+      "9f7a7155-be67-4470-8952-eb947fd97931/6fbf2f7c-5d51-4f4a-acc7-14d06255133e",
+      "9f7a7155-be67-4470-8952-eb947fd97931/a7ff1665-fbd4-4e8a-a83a-478d900db558",
+      "9f7a7155-be67-4470-8952-eb947fd97931/f3a4e1f7-d06d-4fc6-9bb9-726af311cc1f"
+    ],
+    "rule_findings": [
+      {
+        "code": "R18",
+        "message": "Garantia de proposta exigida (1% (um por cento) do valor estimado da licitação, ou seja, de R$ 63.323,40 (Sessenta e Três Mil, Trezentos e Vinte e Três Reais e Quarenta Centavos) junto à Prefeitura Municipal de Itaitinga/CE (Agência: 3880-6; Conta Corrente: 22925-3; Banco do Brasil). Modalidades aceitas: caução em dinheiro ou em títulos da dívida pública; seguro-garantia reconhecido pela SUSEP; fiança bancária. (TR, item 8.8.1.2, 8.8.3, page 14-15)) — QEF-08. Requisito de habilitação: ausência = inabilitação imediata. Exige modalidade correta (seguro-garantia, fiança bancária ou caução) e upload no prazo.",
+        "category": "economico_financeira",
+        "severity": "high",
+        "affectedFields": [
+          "participation_conditions.exige_garantia_proposta",
+          "requirements.qualificacao_economico_financeira.QEF-08"
+        ],
+        "recommendation": "Confirmar modalidade aceita, valor exato, e prazo de validade. Providenciar documento junto à seguradora/banco com antecedência."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Prazo Curto para Envio de Habilitação\" (media) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R11",
+        "message": "46 exigências sem indicação se são obrigatórias ou não.",
+        "category": "normalizacao",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements"
+        ],
+        "recommendation": "Na maioria dos editais, exigências de habilitação são obrigatórias por padrão."
+      },
+      {
+        "code": "R19",
+        "message": "1 parcela(s) de maior relevância identificadas. Verificar se os quantitativos mínimos correspondem ao percentual legalmente aceito (normalmente ≤50% do item relevante).",
+        "category": "qualificacao_tecnica",
+        "severity": "medium",
+        "affectedFields": [
+          "technical_analysis.parcelas_relevantes"
+        ],
+        "recommendation": "Comparar quantitativos com o orçamento e verificar se estão restritos às parcelas de maior relevância."
+      },
+      {
+        "code": "R12",
+        "message": "44 evidências no registry sem referência de nenhuma exigência ou ponto crítico.",
+        "category": "evidencia",
+        "severity": "low",
+        "affectedFields": [
+          "evidence_registry"
+        ]
+      },
+      {
+        "code": "R13",
+        "message": "Subcontratação permitida mas sem limites/condições claramente identificados.",
+        "category": "participacao",
+        "severity": "low",
+        "affectedFields": [
+          "participation_conditions.permite_subcontratacao"
+        ],
+        "recommendation": "Verificar no edital os percentuais e condições para subcontratação."
+      }
+    ],
+    "prompt_version": "v4.8.0",
+    "quality_report": {
+      "summary": "Quality: 96.5% | Extract: 100% | Norm: 100% | Evidence: 100% | Risk: 100% | Ops: 100% | 0 issues, 6 rule findings",
+      "issueCount": 0,
+      "overallScore": 96.5,
+      "categoryScores": {
+        "evidence": 100,
+        "extraction": 100,
+        "riskReview": 100,
+        "normalization": 100,
+        "operationalUsefulness": 100
+      }
+    },
+    "discarded_files": [
+      "MODELO_DE_PROPOSTA_DE_PRECO (excluído: template/padrão)",
+      "MINUTA_DE_CONTRATO_ (excluído: template/padrão)"
+    ],
+    "schema_enforcer": {
+      "details": [
+        "timeline.data_sessao: \"28/04/2026 10:30\" → \"28/04/2026 às 10:30\"",
+        "timeline.prazo_envio_proposta: \"28/04/2026 09:00\" → \"28/04/2026 às 09:00\"",
+        "participation_conditions.exige_amostra: \"null\" → \"false (default conservador)\"",
+        "RFT: \"IE/IM fora de posição\" → \"reordenado: CNPJ → IE → IM → CNDs (Regra de Ouro)\"",
+        "RFT: \"2 doc(s) ausente(s)\" → \"injetado(s): CND Estadual (Fazenda Estadual), CND Municipal (Fazenda Municipal)\""
+      ],
+      "corrections": 10
+    },
+    "analysis_version": "1.0",
+    "models_per_stage": {
+      "extraction": "gemini-2.5-flash",
+      "risk_review": "gemini-2.5-flash",
+      "normalization": "gemini-2.5-flash"
+    },
+    "workflow_stage_status": {
+      "extraction": "done",
+      "validation": "done",
+      "risk_review": "done",
+      "normalization": "done"
+    }
+  },
+  "evidence_registry": [
+    {
+      "page": "11",
+      "excerpt": "Empresário individual: inscrição no Registro Público de Empresas Mercantis, a cargo da Junta Comercial da respectiva sede;",
+      "section": "8.4.1",
+      "evidence_id": "EV-01",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "11",
+      "excerpt": "Sociedade empresária, sociedade limitada unipessoal – SLU ou sociedade identificada como empresa individual de responsabilidade limitada - EIRELI: inscrição do ato constitutivo, estatuto ou contrato social no Registro Público de Empresas Mercantis, a cargo da Junta Comercial da respectiva sede,",
+      "section": "8.4.2",
+      "evidence_id": "EV-02",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "11",
+      "excerpt": "acompanhada de documento comprobatório de seus administradores;",
+      "section": "8.4.2",
+      "evidence_id": "EV-03",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "11",
+      "excerpt": "Filial, sucursal ou agência de sociedade simples ou empresária: inscrição do ato constitutivo da filial, sucursal ou agência da sociedade simples ou empresária,",
+      "section": "8.4.3",
+      "evidence_id": "EV-04",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "11",
+      "excerpt": "com averbação no Registro onde tem sede a matriz;",
+      "section": "8.4.3",
+      "evidence_id": "EV-05",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "11",
+      "excerpt": "Documento de Identificação com foto do(s) administrador(es);",
+      "section": "8.4.4",
+      "evidence_id": "EV-06",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "11",
+      "excerpt": "Os documentos apresentados deverão estar acompanhados de todas as alterações ou da consolidação respectiva.",
+      "section": "8.4.5",
+      "evidence_id": "EV-07",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "11",
+      "excerpt": "Prova de inscrição no Cadastro Nacional de Pessoas Jurídicas ou no Cadastro de Pessoas Físicas, conforme o caso;",
+      "section": "8.5.1",
+      "evidence_id": "EV-08",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Regularidade Fiscal, Social e Trabalhista"
+    },
+    {
+      "page": "11",
+      "excerpt": "Prova de regularidade fiscal perante a Fazenda Nacional, mediante apresentação de certidão expedida conjuntamente pela Secretaria da Receita Federal do Brasil (RFB) e pela Procuradoria-Geral da Fazenda Nacional (PGFN), referente a todos os créditos tributários federais e à Dívida Ativa da União (DAU) por elas administrados, inclusive aqueles relativos à Seguridade Social,",
+      "section": "8.5.2",
+      "evidence_id": "EV-09",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Regularidade Fiscal, Social e Trabalhista"
+    },
+    {
+      "page": "12",
+      "excerpt": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS);",
+      "section": "8.5.3",
+      "evidence_id": "EV-10",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Regularidade Fiscal, Social e Trabalhista"
+    },
+    {
+      "page": "12",
+      "excerpt": "Prova de inexistência de débitos inadimplidos perante a Justiça do Trabalho, mediante a apresentação de certidão negativa ou positiva com efeito de negativa,",
+      "section": "8.5.4",
+      "evidence_id": "EV-11",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Regularidade Fiscal, Social e Trabalhista"
+    },
+    {
+      "page": "12",
+      "excerpt": "Prova de inscrição no cadastro de contribuintes Estadual e/ou Municipal relativo ao domicílio ou sede do fornecedor, pertinente ao seu ramo de atividade e compatível com o objeto contratual;",
+      "section": "8.5.5",
+      "evidence_id": "EV-12",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Regularidade Fiscal, Social e Trabalhista"
+    },
+    {
+      "page": "12",
+      "excerpt": "Prova de regularidade com a Fazenda Estadual e Municipal do domicílio ou sede do fornecedor, relativa à atividade em cujo exercício contrata ou concorre;",
+      "section": "8.5.6",
+      "evidence_id": "EV-13",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Regularidade Fiscal, Social e Trabalhista"
+    },
+    {
+      "page": "12",
+      "excerpt": "Caso o fornecedor seja considerado isento dos tributos Estadual ou Municipal relacionados ao objeto contratual, deverá comprovar tal condição mediante a apresentação de declaração da Fazenda respectiva do seu domicílio ou sede, ou outra equivalente, na forma da lei.",
+      "section": "8.5.7",
+      "evidence_id": "EV-14",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Regularidade Fiscal, Social e Trabalhista"
+    },
+    {
+      "page": "12",
+      "excerpt": "certidão negativa de falência expedida pelo distribuidor da sede do fornecedor",
+      "section": "8.6.1",
+      "evidence_id": "EV-15",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "12",
+      "excerpt": "Certidão negativa de insolvência civil expedida pelo distribuidor do domicílio ou sede do licitante, caso se trate de sociedade simples, desde que admitida a sua participação na licitação",
+      "section": "8.6.1.1",
+      "evidence_id": "EV-16",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "12",
+      "excerpt": "balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais, já exigíveis e apresentados na forma da lei, em conformidade com o regime societário do participante,",
+      "section": "8.6.2",
+      "evidence_id": "EV-17",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "13",
+      "excerpt": "Comprovação de capital social de 10% (dez por cento) do valor estimado da contratação;",
+      "section": "8.6.2.2",
+      "evidence_id": "EV-18",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "13",
+      "excerpt": "O atendimento dos índices econômicos previstos neste item deverá ser atestado mediante declaração assinada por profissional habilitado da área contábil, apresentada pelo fornecedor.",
+      "section": "8.6.2.3",
+      "evidence_id": "EV-19",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "13",
+      "excerpt": "No caso das sociedades por ações, deverá ainda, ser apresentado comprovação de publicação do balanço patrimonial na forma da Lei Federal nº 6.404/76;",
+      "section": "8.6.4",
+      "evidence_id": "EV-20",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "14",
+      "excerpt": "Caberá aos licitantes comprovarem garantia de manutenção da proposta, correspondente a 1% (um por cento) do valor estimado da licitação, ou seja, de R$ 63.323,40 (Sessenta e Três Mil, Trezentos e Vinte e Três Reais e Quarenta Centavos)",
+      "section": "8.8.1.2",
+      "evidence_id": "EV-21",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "14",
+      "excerpt": "Serão aceitas as seguintes modalidades de garantia, por opção do licitante: a) caução em dinheiro ou em títulos da dívida pública emitidos sob a forma escritural, mediante registro em sistema centralizado de liquidação e de custódia autorizado pelo Banco Central do Brasil, e avaliados por seus valores econômicos, conforme definido pelo Ministério da Economia; b) seguro-garantia reconhecido pela SUSEP; ou c) fiança bancária emitida por banco ou instituição financeira devidamente autorizada a operar no País pelo Banco Central do Brasil.",
+      "section": "8.8.3",
+      "evidence_id": "EV-22",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "13",
+      "excerpt": "Comprovação de aptidão para execução de serviço de complexidade operacional equivalente ou superior com o objeto desta contratação, ou com o item/lote pertinente, por meio da apresentação de certidões ou atestados, por pessoas jurídicas de direito público ou privado.",
+      "section": "8.7.1",
+      "evidence_id": "EV-23",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Técnica Operacional"
+    },
+    {
+      "page": "13",
+      "excerpt": "Comprovação que já executou contrato(s) com um mínimo de 30% (trinta por cento) do quantitativo a ser contratado:",
+      "section": "8.7.1.1.b",
+      "evidence_id": "EV-24",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Técnica Operacional"
+    },
+    {
+      "page": "14",
+      "excerpt": "Comprovação de que o licitante tenha executado serviços similares ao objeto da licitação, em períodos sucessivos ou não, por um prazo mínimo de 02 (dois) anos.",
+      "section": "8.7.1.3",
+      "evidence_id": "EV-25",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Técnica Operacional"
+    },
+    {
+      "page": "14",
+      "excerpt": "Os atestados de capacidade técnica poderão ser apresentados em nome da matriz ou da filial do fornecedor.",
+      "section": "8.7.2",
+      "evidence_id": "EV-26",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Qualificação Técnica Operacional"
+    },
+    {
+      "page": "2",
+      "excerpt": "Possuir idade superior a 21 anos;",
+      "section": "5",
+      "evidence_id": "EV-27",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Qualificação Técnica Profissional"
+    },
+    {
+      "page": "3",
+      "excerpt": "Estar habilitado na categoria \"D\" ou superior;",
+      "section": "5",
+      "evidence_id": "EV-28",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Qualificação Técnica Profissional"
+    },
+    {
+      "page": "3",
+      "excerpt": "Não ter cometido infração grave ou gravíssima, nem ser reincidente em infrações médias nos últimos 12 meses;",
+      "section": "5",
+      "evidence_id": "EV-29",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Qualificação Técnica Profissional"
+    },
+    {
+      "page": "3",
+      "excerpt": "Ter sido aprovado em curso especializado para condutores de transporte escolar, nos termos da regulamentação do CONTRAN. A exigência do Curso de Formação de Condutores de Transporte Escolar deverá ser comprovada mediante certificação válida emitida por instituição reconhecida pelo órgão executivo de trânsito competente.",
+      "section": "5",
+      "evidence_id": "EV-30",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Qualificação Técnica Profissional"
+    },
+    {
+      "page": "4",
+      "excerpt": "Valor unitário do item;",
+      "section": "5.1.1",
+      "evidence_id": "EV-31",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "Marca (quando for o caso);",
+      "section": "5.1.2",
+      "evidence_id": "EV-32",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "Fabricante (quando for o caso);",
+      "section": "5.1.3",
+      "evidence_id": "EV-33",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "Quantidade;",
+      "section": "5.1.4",
+      "evidence_id": "EV-34",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "Descrição detalhada do objeto, contendo as informações similares à especificação do Termo de Referência: indicando, no que for aplicável, o modelo, prazo de validade ou de garantia, número do registro ou inscrição do bem no órgão competente, quando for o caso;",
+      "section": "5.1.5",
+      "evidence_id": "EV-35",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "6",
+      "excerpt": "envie a proposta final em papel timbrado da empresa conforme modelo em anexo,",
+      "section": "6.20.4",
+      "evidence_id": "EV-36",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "7",
+      "excerpt": "acompanhada de planilha de composição de custos,",
+      "section": "6.20.4",
+      "evidence_id": "EV-37",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "O prazo de validade da proposta não será inferior a 90 (noventa) dias, a contar da data de sua apresentação.",
+      "section": "5.5.1",
+      "evidence_id": "EV-38",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "3",
+      "excerpt": "está ciente e concorda com as condições contidas no edital e seus anexos, bem como de que a proposta apresentada compreende a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição Federal, nas leis trabalhistas, nas normas infralegais, nas convenções coletivas de trabalho e nos termos de ajustamento de conduta vigentes na data de sua entrega em definitivo e que cumpre plenamente os requisitos de habilitação definidos no instrumento convocatório;",
+      "section": "4.3.1",
+      "evidence_id": "EV-39",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "3",
+      "excerpt": "não emprega menor de 18 anos em trabalho noturno, perigoso ou insalubre e não emprega menor de 16 anos, salvo menor, a partir de 14 anos, na condição de aprendiz, nos termos do artigo 7°, XXXIII, da Constituição;",
+      "section": "4.3.2",
+      "evidence_id": "EV-40",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "3",
+      "excerpt": "não possui empregados executando trabalho degradante ou forçado, observando o disposto nos incisos III e IV do art. 1º e no inciso III do art. 5º da Constituição Federal;",
+      "section": "4.3.3",
+      "evidence_id": "EV-41",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "3",
+      "excerpt": "cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social, previstas em lei e em outras normas específicas;",
+      "section": "4.3.4",
+      "evidence_id": "EV-42",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "3",
+      "excerpt": "cumpre à exigência da Garantia de Participação, conforme art. 58 da Lei 14.133, de 2021, em caso de exigência da garantia no Termo de Referência (Anexo I).",
+      "section": "4.3.5",
+      "evidence_id": "EV-43",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "3",
+      "excerpt": "O fornecedor enquadrado como microempresa, empresa de pequeno porte deverá declarar, ainda, em campo próprio do sistema eletrônico, que cumpre os requisitos estabelecidos no artigo 3º da Lei Complementar nº 123, de 2006, estando apto a usufruir do tratamento favorecido estabelecido em seus arts. 42 a 49, observado o disposto nos § 1º ao 3º do art. 4º, da Lei n.º 14.133, de 2021.",
+      "section": "4.4",
+      "evidence_id": "EV-44",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "12",
+      "excerpt": "Itaitinga/CE, 07 de abril de 2026",
+      "section": "12.11",
+      "evidence_id": "EV-45",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Data de Publicação"
+    },
+    {
+      "page": "1",
+      "excerpt": "O objeto da presente licitação é a \"CONTRATAÇÃO DE SERVIÇO DE LOCAÇÃO DE VEÍCULOS DESTINADOS AO TRANSPORTE ESCOLAR E UNIVERSITÁRIO, PARA ATENDER AS DEMANDAS DA SECRETARIA MUNICIPAL DE EDUCAÇÃO DE ITAITINGA - CE\", conforme condições, quantidades e exigências estabelecidas neste Edital e seus anexos.",
+      "section": "Preâmbulo",
+      "evidence_id": "EV-46",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Objeto Completo"
+    },
+    {
+      "page": "2",
+      "excerpt": "fica vedada a participação de empresas em consórcio, por não se mostrar necessária nem vantajosa à Administração, nos termos do art. 15 da Lei nº 14.133/2021.",
+      "section": "3.4.9.1",
+      "evidence_id": "EV-47",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Condições de Participação"
+    },
+    {
+      "page": "2",
+      "excerpt": "O licitante contratado poderá subcontratar parte da frota total de veículos necessária à execução das rotas contratadas. Ao celebrar com o terceiro a quem subcontratar, o contrato com inteira obediência aos termos do Contrato original firmado com a Prefeitura Municipal de Itaitinga-CE e sob a sua inteira e exclusiva responsabilidade e não poderá ultrapassar de 30% (trinta por cento).",
+      "section": "4.1.a",
+      "evidence_id": "EV-48",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Condições de Participação"
+    },
+    {
+      "page": "3",
+      "excerpt": "Não há necessidade de realização de avaliação prévia do local de execução dos serviços.",
+      "section": "4.5",
+      "evidence_id": "EV-49",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Condições de Participação"
+    },
+    {
+      "page": "3",
+      "excerpt": "Será exigida a garantia da contratação de que tratam os arts. 96 e seguintes da Lei nº 14.133, de 2021, no percentual e condições descritas nas cláusulas do contrato.",
+      "section": "4.3",
+      "evidence_id": "EV-50",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Condições de Participação"
+    },
+    {
+      "page": "2",
+      "excerpt": "Será concedido tratamento favorecido para as microempresas e empresas de pequeno porte, para o agricultor familiar, o produtor rural pessoa física e para o microempreendedor individual - MEI, nos limites previstos da Lei Complementar nº 123, de 2006 e do Decreto n.º 8.538, de 2015.",
+      "section": "3.3",
+      "evidence_id": "EV-51",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Condições de Participação"
+    },
+    {
+      "page": "2",
+      "excerpt": "Não poderão disputar esta licitação: 3.4.1. aquele que não atenda às condições deste Edital e seu(s) anexo(s); 3.4.2. autor do anteprojeto, do projeto básico ou do projeto executivo, pessoa física ou jurídica, quando a licitação versar sobre serviços ou fornecimento de bens a ele relacionados; 3.4.3. empresa, isoladamente ou em consórcio, responsável pela elaboração do projeto básico ou do projeto executivo, ou empresa da qual o autor do projeto seja dirigente, gerente, controlador, acionista ou detentor de mais de 5% (cinco por cento) do capital com direito a voto, responsável técnico ou subcontratado, quando a licitação versar sobre serviços ou fornecimento de bens a ela necessários; 3.4.4. pessoa física ou jurídica que se encontre, ao tempo da licitação, impossibilitada de participar da licitação em decorrência de sanção que lhe foi imposta; 3.4.5. aquele que mantenha vínculo de natureza técnica, comercial, econômica, financeira, trabalhista ou civil com dirigente do órgão ou entidade contratante ou com agente público que desempenhe função na licitação ou atue na fiscalização ou na gestão do contrato, ou que deles seja cônjuge, companheiro ou parente em linha reta, colateral ou por afinidade, até o terceiro grau; 3.4.6. empresas controladoras, controladas ou coligadas, nos termos da Lei nº 6.404, de 15 de dezembro de 1976, concorrendo entre si; 3.4.7. pessoa física ou jurídica que, nos 5 (cinco) anos anteriores à divulgação do edital, tenha sido condenada judicialmente, com trânsito em julgado, por exploração de trabalho infantil, por submissão de trabalhadores a condições análogas às de escravo ou por contratação de adolescentes nos casos vedados pela legislação trabalhista; 3.4.8. agente público do órgão ou entidade licitante; 3.4.9. pessoas jurídicas reunidas em consórcio; 3.4.10. Organizações da Sociedade Civil de Interesse Público - OSCIP, atuando nessa condição; 3.4.11. Não poderá participar, direta ou indiretamente, da licitação ou da execução do contrato agente público do órgão ou entidade contratante, devendo ser observadas as situações que possam configurar conflito de interesses no exercício ou após o exercício do cargo ou emprego, nos termos da legislação que disciplina a matéria, conforme § 1º do art. 9º da Lei nº 14.133, de 2021.",
+      "section": "3.4",
+      "evidence_id": "EV-52",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Condições de Participação"
+    },
+    {
+      "page": "14",
+      "excerpt": "SERVIÇO DE TRANSPORTE ESCOLAR",
+      "section": "Parcela Relevante",
+      "evidence_id": "EV-53",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Parcelas Relevantes"
+    },
+    {
+      "page": "12",
+      "excerpt": "índices de Liquidez Geral (L.G), Liquidez Corrente (LC), e Solvência Geral (SG) superiores a 1 (um)",
+      "section": "8.6.2.1",
+      "evidence_id": "EV-54",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Índices Contábeis"
+    },
+    {
+      "page": "1",
+      "excerpt": "TRANSPORTES PARA ROTAS ESCOLARES - TRANSPORTE ESCOLAR: TIPO DE VEÍCULO: Ônibus até no máximo de 15 anos de uso, sem ar condicionado, com cinto de segurança, capacidade de 36 a 50 lugares (bancos não acolchoados) com faixa horizontal nome ESCOLAR (dentro das especificações da legislação vigente). O veículo deverá vir acompanhado de motorista habilitado com Curso de Formação de Condutores Escolares, Manutenção e Combustível por conta da Contratada. Turno: Manhã e Tarde.",
+      "section": "1",
+      "evidence_id": "EV-55",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Itens Licitados"
+    },
+    {
+      "page": "1",
+      "excerpt": "KM",
+      "section": "1",
+      "evidence_id": "EV-56",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Itens Licitados"
+    },
+    {
+      "page": "1",
+      "excerpt": "603.080",
+      "section": "1",
+      "evidence_id": "EV-57",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Itens Licitados"
+    },
+    {
+      "page": "1",
+      "excerpt": "R$ 10,50",
+      "section": "1",
+      "evidence_id": "EV-58",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Itens Licitados"
+    },
+    {
+      "page": "4",
+      "excerpt": "Início da execução do objeto: 15 (quinze) dias, a contar da assinatura do contrato;",
+      "section": "5.1.1",
+      "evidence_id": "EV-59",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Prazo de Execução"
+    },
+    {
+      "page": "1",
+      "excerpt": "O prazo de vigência da contratação é de 12 (doze) meses, contados da assinatura do contrato, prorrogável por até 05 (cinco) anos,",
+      "section": "1.3",
+      "evidence_id": "EV-60",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Prazo de Vigência"
+    },
+    {
+      "page": "9",
+      "excerpt": "A CONTRATANTE pagará à CONTRATADA pelos fornecimentos, em até 30 (trinta) dias consecutivos, após a apresentação da Nota Fiscal/Fatura correspondente,",
+      "section": "7.2",
+      "evidence_id": "EV-61",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Medição e Pagamento"
+    },
+    {
+      "page": "16",
+      "excerpt": "Advertência pela falta do subitem 11.1.1 deste Termo de Referência, quando não se justificar a imposição de penalidade mais grave, bem como, quando verificadas pequenas irregularidades, para as quais haja concorrido, sem prejuízo da aplicação de eventuais penas previstas em lei, tais como: a.1. Fumar no interior do veículo; a.2. Permitir a atividade de vendedores ambulantes no interior do veículo; a.3. Motorista estacionar o veículo fora dos locais determinados, bem como permitir o embarque e desembarque de alunos fora dos locais pré-determinados; a.4. Motorista colocar o veículo em movimento com a porta aberta; a.5. Permitir a entrada de pessoas estranhas ao transporte efetuado; a.6. Executar transporte de passageiros não autorizados pela Contratante; a.7. Destratar passageiros ou manter comportamento inconveniente quando em serviço; a.8. Operar veículo em desacordo com as especificações definidas nos atos regulamentares emitidos pelos órgãos de trânsito; a.9. Não comunicar à Prefeitura qualquer tipo de ocorrência estranha na execução dos serviços; a.10. Não dar atendimento adequado, bem como auxílio aos alunos possuidores de necessidades especiais; a.11. Motorista dirigir o veículo de forma perigosa, comprometendo a segurança e conforto dos passageiros; a.12. Colocar em operação veículo que não apresente condições de segurança; a.13. Não atender a solicitação da Prefeitura para retirar de circulação veículo em condições consideradas inadequadas.",
+      "section": "11.2.a",
+      "evidence_id": "EV-62",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Penalidades"
+    },
+    {
+      "page": "17",
+      "excerpt": "Multa, calculada na forma do contrato, com base no total do valor da contratação realizada de forma direta e será aplicada ao responsável por qualquer das infrações administrativas previstas no item 11.1 deste Termo de Referência, no percentual de até 10% (dez por cento), na hipótese de cometimento das infrações previstas nos itens 11.1.1 a 11.1.7, e até 20% (vinte por cento), se cometidas infrações previstas nos itens 11.1.8 a 11.1.12;",
+      "section": "11.2.b",
+      "evidence_id": "EV-63",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Penalidades"
+    },
+    {
+      "page": "17",
+      "excerpt": "Impedimento de licitar e contratar no âmbito da Administração Pública direta e indireta do ente federativo que tiver aplicado a sanção, pelo prazo máximo de 03 (três) anos, nos casos dos subitens 11.1.2 a 11.1.7 deste Termo de Referência, quando não se justificar a imposição de penalidade mais grave;",
+      "section": "11.2.c",
+      "evidence_id": "EV-64",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Penalidades"
+    },
+    {
+      "page": "17",
+      "excerpt": "Declaração de inidoneidade para licitar ou contratar, que impedirá o responsável de licitar ou contratar no âmbito da Administração Pública direta e indireta de todos os entes federativos, pelo prazo mínimo de 03 (três) anos e máximo de 06 (seis) anos, nos casos dos subitens 11.1.2 a 11.1.12 deste Termo de Referência;",
+      "section": "11.2.d",
+      "evidence_id": "EV-65",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Penalidades"
+    },
+    {
+      "page": "2",
+      "excerpt": "A contratada deverá manter programa de manutenção preventiva e corretiva da frota, assegurando condições adequadas de funcionamento, confiabilidade mecânica e disponibilidade contínua dos veículos durante toda a vigência contratual,",
+      "section": "4",
+      "evidence_id": "EV-66",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "2",
+      "excerpt": "Cada veículo deverá estar acompanhado de motorista que atenda integralmente às exigências do art. 138 do Lei nº 9.503/1997,",
+      "section": "5",
+      "evidence_id": "EV-67",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "3",
+      "excerpt": "A contratada deverá cumprir rigorosamente os itinerários, rotas e horários definidos pela Secretaria Municipal de Educação, assegurando regularidade, pontualidade e continuidade do serviço,",
+      "section": "6",
+      "evidence_id": "EV-68",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "3",
+      "excerpt": "Quando tecnicamente demandado, deverão ser disponibilizados veículos adaptados para o transporte de pessoas com deficiência ou mobilidade reduzida, observando as normas de acessibilidade vigentes e os princípios da inclusão e igualdade de acesso ao serviço público.",
+      "section": "7",
+      "evidence_id": "EV-69",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "3",
+      "excerpt": "A contratada deverá apresentar plano de contingência contemplando: Substituição imediata de veículos em caso de falhas mecânicas; Atendimento a situações emergenciais; Garantia de continuidade do serviço sem prejuízo aos estudantes.",
+      "section": "8",
+      "evidence_id": "EV-70",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "7",
+      "excerpt": "A contratada deverá cobrir eventuais danos, furtos, roubos, incêndios, avarias em qualquer do(s) veículos e seus acessórios, inclusive de terceiros, por dolo ou culpa de seus motoristas, bem como por falha ou defeito mecânico;",
+      "section": "5.5.6.1",
+      "evidence_id": "EV-71",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "7",
+      "excerpt": "A contratada deverá manter os veículos sempre limpos, revisados e em perfeito estado de conservação e funcionamento;",
+      "section": "5.5.7.1",
+      "evidence_id": "EV-72",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "7",
+      "excerpt": "Responder pela segurança total do transporte, sendo de sua responsabilidade qualquer dano ocorrido com os passageiros durante o percurso.",
+      "section": "5.5.8",
+      "evidence_id": "EV-73",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "6",
+      "excerpt": "Mensalmente, a Contratada deve encaminhar relatório à Contratante constando o número de deslocamentos realizados em cada linha, a quilometragem percorrida, a quantidade de alunos transportados por deslocamento, a relação de alunos transportados por deslocamento, e o relato de quaisquer ocorrências atípicas.",
+      "section": "5.3.10",
+      "evidence_id": "EV-74",
+      "document_name": "Termo de Referência",
+      "document_type": "tr",
+      "normalized_topic": "Obrigações da Contratada"
+    },
+    {
+      "page": "2",
+      "excerpt": "Os veículos disponibilizados deverão: Estar devidamente licenciados e registrados; Possuir vistoria válida emitida pelo órgão executivo de trânsito competente; Atender às exigências específicas para transporte escolar previstas nos arts. 136 a 139 do Lei nº 9.503/1997; Possuir equipamentos obrigatórios e itens de segurança em perfeito funcionamento; Contar com cobertura de seguro contra acidentes pessoais de passageiros e responsabilidade civil.",
+      "section": "3",
+      "evidence_id": "EV-75",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Exigências Técnicas Específicas"
+    },
+    {
+      "page": "2",
+      "excerpt": "A contratada deverá manter programa de manutenção preventiva e corretiva da frota, assegurando condições adequadas de funcionamento, confiabilidade mecânica e disponibilidade contínua dos veículos durante toda a vigência contratual,",
+      "section": "4",
+      "evidence_id": "EV-76",
+      "document_name": "Estudo Técnico Preliminar",
+      "document_type": "etp",
+      "normalized_topic": "Exigências Técnicas Específicas"
+    },
+    {
+      "page": "7",
+      "excerpt": "contiver vícios insanáveis;",
+      "section": "7.6.1",
+      "evidence_id": "EV-77",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Critérios de Desclassificação da Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "identifique o licitante;",
+      "section": "7.6.2",
+      "evidence_id": "EV-78",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Critérios de Desclassificação da Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "não obedecer às especificações técnicas contidas no Termo de Referência;",
+      "section": "7.6.3",
+      "evidence_id": "EV-79",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Critérios de Desclassificação da Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "apresentar preços inexequíveis ou permanecerem acima do preço máximo definido para a contratação;",
+      "section": "7.6.4",
+      "evidence_id": "EV-80",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Critérios de Desclassificação da Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "não tiverem sua exequibilidade demonstrada, quando exigido pela Administração;",
+      "section": "7.6.5",
+      "evidence_id": "EV-81",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Critérios de Desclassificação da Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "apresentar desconformidade com quaisquer outras exigências deste Edital ou seus anexos, desde que insanável.",
+      "section": "7.6.6",
+      "evidence_id": "EV-82",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Critérios de Desclassificação da Proposta"
+    },
+    {
+      "page": "7",
+      "excerpt": "No caso de bens e serviços em geral, é indício de inexequibilidade das propostas valores inferiores a 50% (cinquenta por cento) do valor orçado pela Administração.",
+      "section": "7.7",
+      "evidence_id": "EV-83",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Critérios de Exequibilidade"
+    },
+    {
+      "page": "4",
+      "excerpt": "O valor final mínimo parametrizado no sistema poderá ser alterado pelo fornecedor durante a fase de disputa, sendo vedado: 4.10.1. valor superior a lance já registrado pelo fornecedor no sistema, quando adotado o critério de julgamento por menor preço;",
+      "section": "4.10",
+      "evidence_id": "EV-84",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Observações da Proposta"
+    },
+    {
+      "page": "5",
+      "excerpt": "O lance deverá ser ofertado pelo Valor Global.",
+      "section": "6.5",
+      "evidence_id": "EV-85",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Observações da Proposta"
+    },
+    {
+      "page": "5",
+      "excerpt": "O intervalo mínimo de diferença de valores entre os lances, que incidirá tanto em relação aos lances intermediários quanto em relação à proposta que cobrir a melhor oferta deverá ser de R$ 100,00 (Cem Reais).",
+      "section": "6.8",
+      "evidence_id": "EV-86",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Observações da Proposta"
+    },
+    {
+      "page": "5",
+      "excerpt": "Não serão aceitos dois ou mais lances de mesmo valor, prevalecendo aquele que for recebido e registrado em primeiro lugar.",
+      "section": "6.13",
+      "evidence_id": "EV-87",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Observações da Proposta"
+    },
+    {
+      "page": "8",
+      "excerpt": "Erros no preenchimento da planilha não constituem motivo para a desclassificação da proposta. A planilha poderá ser ajustada pelo fornecedor, no prazo indicado pelo sistema, desde que não haja majoração do preço e que se comprove que este é o bastante para arcar com todos os custos da contratação; 7.9.1. O ajuste de que trata este dispositivo se limita a sanar erros ou falhas que não alterem a substância das propostas;",
+      "section": "7.9",
+      "evidence_id": "EV-88",
+      "document_name": "Edital de Pregão Eletrônico",
+      "document_type": "edital",
+      "normalized_topic": "Observações da Proposta"
+    }
+  ],
+  "legal_risk_review": {
+    "omissions": [],
+    "ambiguities": [
+      "A exigência de 'Declaração de Atendimento aos Índices Econômicos' (TR, item 8.6.2.3) além do balanço patrimonial (TR, item 8.6.2) pode gerar dúvida se a declaração é complementar ou se substitui a comprovação via balanço. No entanto, a descrição sugere que é um atestado do atendimento, não uma substituição."
+    ],
+    "critical_points": [
+      {
+        "title": "Garantia de Proposta Acima do Limite Legal",
+        "reason": "Violação do limite legal para garantia de proposta, podendo restringir a competitividade.",
+        "category": "economico_financeira",
+        "severity": "critica",
+        "source_ref": "TR, item 8.8.1.2",
+        "description": "A garantia de proposta é de 1% (R$ 63.323,40), excedendo o limite de 0,5% previsto no Art. 58, § 2º da Lei 14.133/2021.",
+        "evidence_refs": [
+          "EV-21"
+        ],
+        "recommended_action": "Avaliar impugnação do edital para adequação ao limite legal de 0,5%."
+      },
+      {
+        "title": "Omissão de Cláusulas de Reajuste/Repactuação",
+        "reason": "Risco de desequilíbrio econômico-financeiro do contrato a longo prazo, em desacordo com Art. 135 da Lei 14.133/2021.",
+        "category": "contratual",
+        "severity": "alta",
+        "source_ref": "contractual_analysis.reajuste | contractual_analysis.repactuacao",
+        "description": "O edital não prevê cláusulas de reajuste ou repactuação para contrato de 12 meses prorrogável por até 5 anos.",
+        "evidence_refs": [
+          "EV-60"
+        ],
+        "recommended_action": "Solicitar esclarecimento sobre a previsão de reajuste/repactuação ou avaliar impugnação."
+      },
+      {
+        "title": "Prazo Curto para Envio de Habilitação",
+        "reason": "Exige que toda a documentação de habilitação esteja pronta e digitalizada para upload imediato, sob risco de inabilitação.",
+        "category": "prazo",
+        "severity": "media",
+        "source_ref": "timeline.prazo_envio_habilitacao",
+        "description": "Prazo de 2 horas, prorrogável por igual período, para envio dos documentos de habilitação após solicitação do Pregoeiro.",
+        "evidence_refs": [],
+        "recommended_action": "Preparar e organizar todos os documentos de habilitação com antecedência para upload rápido."
+      },
+      {
+        "title": "Balanço Patrimonial de 2 Exercícios Sociais",
+        "reason": "Embora não seja ilegal, a Lei 14.133/2021 (Art. 69, I) geralmente exige o último exercício, tornando esta exigência mais onerosa.",
+        "category": "economico_financeira",
+        "severity": "baixa",
+        "source_ref": "TR, item 8.6.2",
+        "description": "Exigência de balanço patrimonial e demonstrações contábeis dos 2 (dois) últimos exercícios sociais.",
+        "evidence_refs": [
+          "EV-17"
+        ],
+        "recommended_action": "Assegurar a disponibilidade e conformidade dos balanços dos dois últimos exercícios sociais."
+      }
+    ],
+    "inconsistencies": [],
+    "possible_restrictive_clauses": [
+      "A vedação de consórcio (Edital, item 3.4.9.1) é justificada pela Administração como 'não necessária nem vantajosa', mas pode ser questionada se o objeto ou sua complexidade justificassem a união de empresas, embora para locação de veículos seja menos provável."
+    ],
+    "points_for_impugnation_or_clarification": [
+      "Recomenda-se impugnar a exigência de garantia de proposta de 1% do valor estimado (TR, item 8.8.1.2), pois excede o limite legal de 0,5% estabelecido no Art. 58, § 2º da Lei 14.133/2021.",
+      "Recomenda-se solicitar esclarecimento sobre a ausência de cláusulas de reajuste ou repactuação para um contrato de serviço continuado de 12 meses prorrogável por até 5 anos, conforme previsto no Art. 135 da Lei 14.133/2021."
+    ]
+  },
+  "proposal_analysis": {
+    "itens_licitados": [
+      {
+        "unit": "KM",
+        "quantity": 603080,
+        "itemNumber": "1",
+        "multiplier": 1,
+        "description": "TRANSPORTES PARA ROTAS ESCOLARES - TRANSPORTE ESCOLAR: TIPO DE VEÍCULO: Ônibus até no máximo de 15 anos de uso, sem ar condicionado, com cinto de segurança, capacidade de 36 a 50 lugares (bancos não acolchoados) com faixa horizontal nome ESCOLAR (dentro das especificações da legislação vigente). O veículo deverá vir acompanhado de motorista habilitado com Curso de Formação de Condutores Escolares, Manutenção e Combustível por conta da Contratada. Turno: Manhã e Tarde.",
+        "referencePrice": 10.5,
+        "multiplierLabel": ""
+      }
+    ],
+    "exige_cronograma": false,
+    "criterios_desempate": [],
+    "exige_carta_proposta": true,
+    "exige_composicao_bdi": true,
+    "observacoes_proposta": [
+      {
+        "descricao": "O valor final mínimo parametrizado no sistema poderá ser alterado pelo fornecedor durante a fase de disputa, sendo vedado valor superior a lance já registrado pelo fornecedor no sistema, quando adotado o critério de julgamento por menor preço.",
+        "source_ref": "Edital, item 4.10, 4.10.1",
+        "evidence_refs": [
+          "EV-84"
+        ]
+      },
+      {
+        "descricao": "O lance deverá ser ofertado pelo Valor Global.",
+        "source_ref": "Edital, item 6.5",
+        "evidence_refs": [
+          "EV-85"
+        ]
+      },
+      {
+        "descricao": "O intervalo mínimo de diferença de valores entre os lances, que incidirá tanto em relação aos lances intermediários quanto em relação à proposta que cobrir a melhor oferta deverá ser de R$ 100,00 (Cem Reais).",
+        "source_ref": "Edital, item 6.8",
+        "evidence_refs": [
+          "EV-86"
+        ]
+      },
+      {
+        "descricao": "Não serão aceitos dois ou mais lances de mesmo valor, prevalecendo aquele que for recebido e registrado em primeiro lugar.",
+        "source_ref": "Edital, item 6.13",
+        "evidence_refs": [
+          "EV-87"
+        ]
+      },
+      {
+        "descricao": "Erros no preenchimento da planilha não constituem motivo para a desclassificação da proposta. A planilha poderá ser ajustada pelo fornecedor, no prazo indicado pelo sistema, desde que não haja majoração do preço e que se comprove que este é o bastante para arcar com todos os custos da contratação; O ajuste de que trata este dispositivo se limita a sanar erros ou falhas que não alterem a substância das propostas.",
+        "source_ref": "Edital, item 7.9, 7.9.1",
+        "evidence_refs": [
+          "EV-88"
+        ]
+      }
+    ],
+    "criterios_exequibilidade": [
+      {
+        "descricao": "É indício de inexequibilidade das propostas valores inferiores a 50% (cinquenta por cento) do valor orçado pela Administração.",
+        "source_ref": "Edital, item 7.7",
+        "evidence_refs": [
+          "EV-83"
+        ]
+      }
+    ],
+    "exige_declaracao_fabricante": false,
+    "exige_planilha_orcamentaria": true,
+    "exige_marca_modelo_fabricante": true,
+    "criterios_desclassificacao_proposta": [
+      {
+        "descricao": "Proposta contiver vícios insanáveis.",
+        "source_ref": "Edital, item 7.6.1",
+        "evidence_refs": [
+          "EV-77"
+        ]
+      },
+      {
+        "descricao": "Proposta identifique o licitante.",
+        "source_ref": "Edital, item 7.6.2",
+        "evidence_refs": [
+          "EV-78"
+        ]
+      },
+      {
+        "descricao": "Proposta não obedecer às especificações técnicas contidas no Termo de Referência.",
+        "source_ref": "Edital, item 7.6.3",
+        "evidence_refs": [
+          "EV-79"
+        ]
+      },
+      {
+        "descricao": "Proposta apresentar preços inexequíveis ou permanecerem acima do preço máximo definido para a contratação.",
+        "source_ref": "Edital, item 7.6.4",
+        "evidence_refs": [
+          "EV-80"
+        ]
+      },
+      {
+        "descricao": "Proposta não tiver sua exequibilidade demonstrada, quando exigido pela Administração.",
+        "source_ref": "Edital, item 7.6.5",
+        "evidence_refs": [
+          "EV-81"
+        ]
+      },
+      {
+        "descricao": "Proposta apresentar desconformidade com quaisquer outras exigências deste Edital ou seus anexos, desde que insanável.",
+        "source_ref": "Edital, item 7.6.6",
+        "evidence_refs": [
+          "EV-82"
+        ]
+      }
+    ],
+    "exige_catalogo_ficha_tecnica_manual": true
+  },
+  "technical_analysis": {
+    "exige_art": false,
+    "exige_cat": false,
+    "exige_rrt": false,
+    "parcelas_relevantes": [
+      {
+        "item": "Serviço de Transporte Escolar",
+        "tipo": "operacional",
+        "unidade": "KM",
+        "descricao": "Comprovação que já executou contrato(s) com um mínimo de 30% (trinta por cento) do quantitativo a ser contratado de Serviço de Transporte Escolar.",
+        "evidence_refs": [
+          "EV-24",
+          "EV-53"
+        ],
+        "percentual_minimo": "30%",
+        "quantitativo_minimo": "180.924"
+      }
+    ],
+    "exige_registro_conselho": false,
+    "exige_acervo_profissional": false,
+    "exige_responsavel_tecnico": true,
+    "registro_conselho_detalhes": [],
+    "responsavel_tecnico_detalhes": [
+      {
+        "descricao": "Motorista com idade superior a 21 anos.",
+        "source_ref": "ETP, item 5",
+        "evidence_refs": [
+          "EV-27"
+        ]
+      },
+      {
+        "descricao": "Motorista habilitado na categoria 'D' ou superior.",
+        "source_ref": "ETP, item 5",
+        "evidence_refs": [
+          "EV-28"
+        ]
+      },
+      {
+        "descricao": "Motorista que não tenha cometido infração grave ou gravíssima, nem seja reincidente em infrações médias nos últimos 12 meses.",
+        "source_ref": "ETP, item 5",
+        "evidence_refs": [
+          "EV-29"
+        ]
+      },
+      {
+        "descricao": "Motorista aprovado em curso especializado para condutores de transporte escolar, com certificação válida emitida por instituição reconhecida pelo órgão executivo de trânsito competente.",
+        "source_ref": "ETP, item 5",
+        "evidence_refs": [
+          "EV-30"
+        ]
+      }
+    ],
+    "exigencias_tecnicas_especificas": [
+      {
+        "descricao": "Veículos (ônibus) com no máximo 15 anos de uso, sem ar condicionado, com cinto de segurança, capacidade de 36 a 50 lugares (bancos não acolchoados) e faixa horizontal nome ESCOLAR (dentro das especificações da legislação vigente).",
+        "source_ref": "TR, item 1",
+        "evidence_refs": [
+          "EV-55"
+        ]
+      },
+      {
+        "descricao": "Veículos devidamente licenciados e registrados; Possuir vistoria válida emitida pelo órgão executivo de trânsito competente; Atender às exigências específicas para transporte escolar previstas nos arts. 136 a 139 do Lei nº 9.503/1997; Possuir equipamentos obrigatórios e itens de segurança em perfeito funcionamento; Contar com cobertura de seguro contra acidentes pessoais de passageiros e responsabilidade civil.",
+        "source_ref": "ETP, item 3",
+        "evidence_refs": [
+          "EV-75"
+        ]
+      },
+      {
+        "descricao": "Manter programa de manutenção preventiva e corretiva da frota, assegurando condições adequadas de funcionamento, confiabilidade mecânica e disponibilidade contínua dos veículos durante toda a vigência contratual.",
+        "source_ref": "ETP, item 4",
+        "evidence_refs": [
+          "EV-76"
+        ]
+      }
+    ],
+    "exige_atestado_capacidade_tecnica": true,
+    "exige_comprovacao_parcelas_relevantes": true
+  },
+  "operational_outputs": {
+    "proposal_routes": [],
+    "declaration_routes": [],
+    "internal_checklist": [],
+    "documents_to_prepare": [
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição no Registro Público de Empresas Mercantis (Empresário Individual)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ato Constitutivo, Estatuto ou Contrato Social (Sociedade Empresária)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Documento Comprobatório de Administradores (Sociedade Empresária)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição do Ato Constitutivo da Filial/Sucursal/Agência",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Averbação no Registro da Matriz (Filial/Sucursal/Agência)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Documento de Identificação com foto do(s) administrador(es)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Documentos Societários com Alterações ou Consolidação",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de Inscrição no CNPJ ou CPF",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de Regularidade Fiscal perante a Fazenda Nacional (RFB/PGFN)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de Regularidade com o FGTS",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de Inexistência de Débitos Trabalhistas (CNDT)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição estadual no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição municipal no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão Negativa de Falência",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão Negativa de Insolvência Civil (Sociedade Simples)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Balanço Patrimonial e Demonstrações Contábeis",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Comprovação de Capital Social Mínimo",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Declaração de Atendimento aos Índices Econômicos",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Comprovação de Publicação do Balanço Patrimonial (Sociedades por Ações)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Garantia de Manutenção da Proposta",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Modalidades de Garantia de Proposta",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Verificar modelo padrão do edital, se houver.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Conhecimento e Aceite das Condições do Edital",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Conforme Art. 7º, XXXIII da CF/88.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Não Emprego de Menores",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Verificar modelo padrão do edital, se houver.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Inexistência de Trabalho Degradante ou Forçado",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Art. 93 da Lei nº 8.213/91.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Cumprimento de Reserva de Cargos para PCD",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Apresentar somente se a garantia de participação for exigida no Termo de Referência. A garantia em si (se exigida) é QEF.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Cumprimento da Exigência de Garantia de Participação",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Apresentar somente se a empresa for ME/EPP e desejar usufruir dos benefícios da LC 123/2006.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Enquadramento como ME/EPP",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Comprovar aptidão geral para o objeto da contratação.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica Geral da Empresa",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Comprovar execução de serviço de transporte escolar com quantitativo mínimo de 180.924 KM.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "critica",
+        "document_name": "Atestado de Capacidade Técnica - Transporte Escolar (180.924 KM)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Comprovar execução de serviços similares por período mínimo de 02 anos.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica - Serviços Similares (2 anos)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Assegurar que a descrição do objeto na proposta eletrônica ou anexo seja detalhada e compatível com o Termo de Referência, incluindo informações de modelo, garantia e registros.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Proposta de Preços Detalhada",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Preparar modelo de proposta em papel timbrado para preenchimento após negociação, conforme anexo do edital.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Proposta Final (após negociação)",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Elaborar planilha de composição de custos detalhada para apresentação junto à proposta final, se for o licitante vencedor.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Planilha de Composição de Custos",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Assegurar que a proposta eletrônica ou o documento anexo declare expressamente o prazo de validade de no mínimo 90 dias.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Declaração de Validade da Proposta",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Incluir CNH (comprovar idade mínima de 21 anos e categoria 'D' ou superior), Certidão de Prontuário de Condutor (verificar histórico de infrações) e Certificado de Curso de Transporte Escolar (válido e reconhecido pelo CONTRAN).",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "Documentação do Motorista para Transporte Escolar",
+        "responsible_area": "administrativo"
+      }
+    ],
+    "proposal_inputs_needed": [],
+    "possible_petition_routes": [
+      "Impugnação do Edital referente à exigência de garantia de proposta (TR, item 8.8.1.2) por violação do Art. 58, § 2º da Lei 14.133/2021.",
+      "Pedido de Esclarecimento sobre a ausência de previsão de reajuste/repactuação contratual para serviço continuado."
+    ],
+    "technical_documents_needed": [],
+    "questions_for_consultor_chat": [
+      "Qual a estratégia para lidar com a exigência de garantia de proposta de 1% do valor estimado, considerando o limite legal de 0,5%?",
+      "Como a ausência de cláusulas de reajuste ou repactuação pode impactar a exequibilidade do contrato a longo prazo e quais ações podem ser tomadas?",
+      "A declaração de atendimento aos índices econômicos (QEF-05) é um documento complementar ou substitui a análise dos índices no balanço (QEF-03)?"
+    ]
+  },
+  "contractual_analysis": {
+    "reajuste": null,
+    "penalidades": [
+      {
+        "descricao": "Advertência por inexecução parcial do contrato (subitem 11.1.1) ou pequenas irregularidades, como: Fumar no interior do veículo; Permitir atividade de vendedores ambulantes; Estacionar veículo fora dos locais determinados; Permitir embarque/desembarque de alunos fora dos locais pré-determinados; Colocar veículo em movimento com porta aberta; Permitir entrada de pessoas estranhas; Executar transporte de passageiros não autorizados; Destratar passageiros; Operar veículo em desacordo com especificações; Não comunicar ocorrências; Não dar atendimento adequado a alunos com necessidades especiais; Dirigir veículo de forma perigosa; Colocar em operação veículo sem condições de segurança; Não atender solicitação de retirada de veículo inadequado.",
+        "source_ref": "TR, item 11.2.a",
+        "evidence_refs": [
+          "EV-62"
+        ]
+      },
+      {
+        "descricao": "Multa calculada sobre o valor total da contratação: até 10% para infrações dos itens 11.1.1 a 11.1.7; até 20% para infrações dos itens 11.1.8 a 11.1.12. O valor da multa poderá ser descontado das faturas devidas ou aplicada isoladamente/juntamente com outras penalidades.",
+        "source_ref": "TR, item 11.2.b",
+        "evidence_refs": [
+          "EV-63"
+        ]
+      },
+      {
+        "descricao": "Impedimento de licitar e contratar no âmbito da Administração Pública direta e indireta do ente federativo que aplicou a sanção, pelo prazo máximo de 03 (três) anos, para infrações dos subitens 11.1.2 a 11.1.7, quando não se justificar penalidade mais grave.",
+        "source_ref": "TR, item 11.2.c",
+        "evidence_refs": [
+          "EV-64"
+        ]
+      },
+      {
+        "descricao": "Declaração de inidoneidade para licitar ou contratar, impedindo o responsável de licitar ou contratar no âmbito de todos os entes federativos, pelo prazo mínimo de 03 (três) anos e máximo de 06 (seis) anos, para infrações dos subitens 11.1.2 a 11.1.12.",
+        "source_ref": "TR, item 11.2.d",
+        "evidence_refs": [
+          "EV-65"
+        ]
+      }
+    ],
+    "repactuacao": null,
+    "prazo_execucao": "15 (quinze) dias, a contar da assinatura do contrato",
+    "prazo_vigencia": "12 (doze) meses, contados da assinatura do contrato, prorrogável por até 05 (cinco) anos",
+    "medicao_pagamento": "Pagamento em até 30 (trinta) dias consecutivos, após a apresentação da Nota Fiscal/Fatura correspondente e aceitabilidade dos produtos, condicionada à comprovação da regularidade fiscal.",
+    "obrigacoes_contratada": [
+      {
+        "descricao": "Manter programa de manutenção preventiva e corretiva da frota, assegurando condições adequadas de funcionamento, confiabilidade mecânica e disponibilidade contínua dos veículos durante toda a vigência contratual.",
+        "source_ref": "ETP, item 4",
+        "evidence_refs": [
+          "EV-66"
+        ]
+      },
+      {
+        "descricao": "Cada veículo deverá estar acompanhado de motorista que atenda integralmente às exigências do art. 138 do Lei nº 9.503/1997.",
+        "source_ref": "ETP, item 5",
+        "evidence_refs": [
+          "EV-67"
+        ]
+      },
+      {
+        "descricao": "Cumprir rigorosamente os itinerários, rotas e horários definidos pela Secretaria Municipal de Educação, assegurando regularidade, pontualidade e continuidade do serviço.",
+        "source_ref": "ETP, item 6",
+        "evidence_refs": [
+          "EV-68"
+        ]
+      },
+      {
+        "descricao": "Disponibilizar veículos adaptados para o transporte de pessoas com deficiência ou mobilidade reduzida, observando as normas de acessibilidade vigentes e os princípios da inclusão e igualdade de acesso ao serviço público (quando tecnicamente demandado).",
+        "source_ref": "ETP, item 7",
+        "evidence_refs": [
+          "EV-69"
+        ]
+      },
+      {
+        "descricao": "Apresentar plano de contingência contemplando: Substituição imediata de veículos em caso de falhas mecânicas; Atendimento a situações emergenciais; Garantia de continuidade do serviço sem prejuízo aos estudantes.",
+        "source_ref": "ETP, item 8",
+        "evidence_refs": [
+          "EV-70"
+        ]
+      },
+      {
+        "descricao": "Cobrir eventuais danos, furtos, roubos, incêndios, avarias em qualquer do(s) veículos e seus acessórios, inclusive de terceiros, por dolo ou culpa de seus motoristas, bem como por falha ou defeito mecânico.",
+        "source_ref": "TR, item 5.5.6.1",
+        "evidence_refs": [
+          "EV-71"
+        ]
+      },
+      {
+        "descricao": "Manter os veículos sempre limpos, revisados e em perfeito estado de conservação e funcionamento.",
+        "source_ref": "TR, item 5.5.7.1",
+        "evidence_refs": [
+          "EV-72"
+        ]
+      },
+      {
+        "descricao": "Responder pela segurança total do transporte, sendo de sua responsabilidade qualquer dano ocorrido com os passageiros durante o percurso.",
+        "source_ref": "TR, item 5.5.8",
+        "evidence_refs": [
+          "EV-73"
+        ]
+      },
+      {
+        "descricao": "Encaminhar relatório mensal à Contratante constando o número de deslocamentos realizados em cada linha, a quilometragem percorrida, a quantidade de alunos transportados por deslocamento, a relação de alunos transportados por deslocamento, e o relato de quaisquer ocorrências atípicas.",
+        "source_ref": "TR, item 5.3.10",
+        "evidence_refs": [
+          "EV-74"
+        ]
+      }
+    ],
+    "obrigacoes_contratante": [],
+    "matriz_risco_contratual": []
+  },
+  "process_identification": {
+    "orgao": "MUNICÍPIO DE ITAITINGA - CE",
+    "modalidade": "Pregão Eletrônico",
+    "tipo_objeto": "locacao",
+    "link_sistema": "https://bbmnet.com.br/",
+    "municipio_uf": "Itaitinga/CE",
+    "fonte_oficial": null,
+    "forma_disputa": "Aberto",
+    "numero_edital": "12.16.03/2026",
+    "numero_processo": "41563628000182-0-000008/2026",
+    "objeto_completo": "CONTRATAÇÃO DE SERVIÇO DE LOCAÇÃO DE VEÍCULOS DESTINADOS AO TRANSPORTE ESCOLAR E UNIVERSITÁRIO, PARA ATENDER AS DEMANDAS DA SECRETARIA MUNICIPAL DE EDUCAÇÃO DE ITAITINGA - CE",
+    "objeto_resumido": "Contratação de serviço de locação de veículos para transporte escolar e universitário.",
+    "regime_execucao": "Empreitada por Preço Global",
+    "uasg_comprasnet": "",
+    "numero_comprasnet": "",
+    "unidade_compradora": "SECRETARIA MUNICIPAL DE EDUCAÇÃO DE ITAITINGA/CE",
+    "criterio_julgamento": "Menor Preço Global"
+  },
+  "participation_conditions": {
+    "exige_amostra": false,
+    "amostra_detalhes": null,
+    "outras_condicoes": [],
+    "permite_consorcio": false,
+    "tratamento_me_epp": "Será concedido tratamento favorecido para as microempresas e empresas de pequeno porte, para o agricultor familiar, o produtor rural pessoa física e para o microempreendedor individual - MEI, nos limites previstos da Lei Complementar nº 123, de 2006 e do Decreto n.º 8.538, de 2015. (Edital, item 3.3, page 2)",
+    "consorcio_detalhes": "É vedada a participação de empresas em consórcio, por não se mostrar necessária nem vantajosa à Administração, nos termos do art. 15 da Lei nº 14.133/2021.",
+    "exige_visita_tecnica": false,
+    "participacao_restrita": "Empresas que não atendam às condições do Edital e anexos; Autor do anteprojeto, projeto básico ou projeto executivo; Empresa responsável pela elaboração do projeto básico ou executivo, ou empresa da qual o autor do projeto seja dirigente, gerente, controlador, acionista ou detentor de mais de 5% do capital com direito a voto, responsável técnico ou subcontratado; Pessoa física ou jurídica impossibilitada de participar por sanção; Pessoa com vínculo técnico, comercial, econômico, financeiro, trabalhista ou civil com dirigente do órgão ou agente público que desempenhe função na licitação ou fiscalização do contrato, ou que deles seja cônjuge, companheiro ou parente até o terceiro grau; Empresas controladoras, controladas ou coligadas concorrendo entre si; Pessoa física ou jurídica condenada judicialmente por exploração de trabalho infantil, submissão a trabalho análogo à escravo ou contratação de adolescentes em casos vedados; Agente público do órgão ou entidade licitante; Pessoas jurídicas reunidas em consórcio; Organizações da Sociedade Civil de Interesse Público (OSCIP) atuando nessa condição; Agente público do órgão ou entidade contratante, direta ou indiretamente. (Edital, item 3.4, page 2)",
+    "permite_subcontratacao": true,
+    "exige_garantia_proposta": true,
+    "subcontratacao_detalhes": "É admitida a subcontratação parcial do objeto, nas seguintes condições: a) O licitante contratado poderá subcontratar parte da frota total de veículos necessária à execução das rotas contratadas. Ao celebrar com o terceiro a quem subcontratar, o contrato com inteira obediência aos termos do Contrato original firmado com a Prefeitura Municipal de Itaitinga-CE e sob a sua inteira e exclusiva responsabilidade e não poderá ultrapassar de 30% (trinta por cento). (TR, item 4.1.a, page 2)",
+    "visita_tecnica_detalhes": "Não há necessidade de realização de avaliação prévia do local de execução dos serviços. (TR, item 4.5, page 3)",
+    "exige_garantia_contratual": true,
+    "garantia_proposta_detalhes": "1% (um por cento) do valor estimado da licitação, ou seja, de R$ 63.323,40 (Sessenta e Três Mil, Trezentos e Vinte e Três Reais e Quarenta Centavos) junto à Prefeitura Municipal de Itaitinga/CE (Agência: 3880-6; Conta Corrente: 22925-3; Banco do Brasil). Modalidades aceitas: caução em dinheiro ou em títulos da dívida pública; seguro-garantia reconhecido pela SUSEP; fiança bancária. (TR, item 8.8.1.2, 8.8.3, page 14-15)",
+    "garantia_contratual_detalhes": "Percentual e condições descritas nas cláusulas do contrato. (TR, item 4.3, page 3)"
+  },
+  "economic_financial_analysis": {
+    "exige_balanco": true,
+    "exige_indices": true,
+    "indices_exigidos": [
+      {
+        "indice": "LG",
+        "operador": ">=",
+        "evidence_refs": [
+          "EV-54"
+        ],
+        "valor_referencia": "1.0",
+        "formula_ou_descricao": "(Ativo Circulante + Realizável a Longo Prazo) / (Passivo Circulante + Exigível a Longo Prazo)"
+      },
+      {
+        "indice": "LC",
+        "operador": ">=",
+        "evidence_refs": [
+          "EV-54"
+        ],
+        "valor_referencia": "1.0",
+        "formula_ou_descricao": "Ativo Circulante / Passivo Circulante"
+      },
+      {
+        "indice": "SG",
+        "operador": ">=",
+        "evidence_refs": [
+          "EV-54"
+        ],
+        "valor_referencia": "1.0",
+        "formula_ou_descricao": "Ativo Total / (Passivo Circulante + Exigível a Longo Prazo)"
+      }
+    ],
+    "outras_exigencias_ef": [],
+    "capital_social_minimo": "10% do valor estimado da contratação",
+    "patrimonio_liquido_minimo": null,
+    "exige_garantias_adicionais": true,
+    "exige_capital_social_minimo": true,
+    "exige_patrimonio_liquido_minimo": null
+  }
+}

@@ -1,0 +1,2230 @@
+{
+  "timeline": {
+    "data_sessao": "14/04/2026 às 09:00",
+    "outros_prazos": [
+      {
+        "data": "10 minutos após a declaração de arrematantes ou término da fase de habilitação",
+        "descricao": "Prazo para intenção de recurso"
+      }
+    ],
+    "prazo_amostra": null,
+    "prazo_recurso": "5 dias úteis após a declaração de arrematantes ou término da fase de habilitação",
+    "data_publicacao": "26/03/2026",
+    "prazo_impugnacao": "09/04/2026 às 23:59",
+    "prazo_contrarrazoes": null,
+    "prazo_envio_proposta": "14/04/2026 às 07:00",
+    "prazo_esclarecimento": "09/04/2026 às 23:59",
+    "prazo_envio_habilitacao": "14/04/2026 às 07:00"
+  },
+  "confidence": {
+    "warnings": [
+      "SchemaEnforcer: 9 campo(s) padronizado(s) automaticamente"
+    ],
+    "traceability": {
+      "total_requirements": 40,
+      "traced_requirements": 40,
+      "evidence_registry_count": 69,
+      "traceability_percentage": 100
+    },
+    "pipeline_health": {
+      "parseRepairs": 0,
+      "stagesFailed": 0,
+      "fallbacksUsed": 0
+    },
+    "missing_sections": [],
+    "score_percentage": 99,
+    "overall_confidence": "alta",
+    "section_confidence": {
+      "risk_review": "alta"
+    }
+  },
+  "pncp_source": {
+    "analyzed_at": "2026-04-11T16:49:26.961Z",
+    "attachments": [
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/1",
+        "ativo": true,
+        "titulo": "EDITAL_LIMPEZA_URBANA_ATUALIZADA_EM_26-03-2026.pdf",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 1,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/5",
+        "ativo": true,
+        "titulo": "PLANILHAS_ATUALIZADAS.pdf",
+        "purpose": "planilha_orcamentaria",
+        "downloaded": true,
+        "sequencial": 5,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/3",
+        "ativo": true,
+        "titulo": "ETP.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 3,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/10",
+        "ativo": true,
+        "titulo": "Pedidos_de_Impugna__o_-_IMPUGNA__O_e_anexos.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 10,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/2",
+        "ativo": true,
+        "titulo": "DFD.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 2,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/4",
+        "ativo": true,
+        "titulo": "PARECER_JURIDICO.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 4,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/6",
+        "ativo": true,
+        "titulo": "PROJETO_BAASICO_ATUALIZADO_03-2026.pdf",
+        "purpose": "projeto_engenharia",
+        "downloaded": true,
+        "sequencial": 6,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/7",
+        "ativo": true,
+        "titulo": "TERMO_DE_REFER_NCIA_-_SERVI_OS_DE_VARRI__O_E_LIMPEZA.pdf",
+        "purpose": "termo_referencia",
+        "downloaded": true,
+        "sequencial": 7,
+        "tipoDocumentoId": 4,
+        "tipoDocumentoDescricao": "Termo de Referência"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/8",
+        "ativo": true,
+        "titulo": "RESPOSTAS_AO_QUESTIONAMENTO_POPULAR.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 8,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/9",
+        "ativo": true,
+        "titulo": "Pedidos_de_Impugna__o_-_IMPUGNA__O_-_MACAU.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 9,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/11",
+        "ativo": true,
+        "titulo": "Pedidos_de_Impugna__o_-_IMPUGNA__O_LIMPAFACIL_-_MACAU.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 11,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      },
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/08184434000109/compras/2026/13/arquivos/12",
+        "ativo": true,
+        "titulo": "Pedidos_de_Impugna__o_-_IMPUGAN__O_DE_MACAU.pdf",
+        "purpose": "anexo_geral",
+        "downloaded": true,
+        "sequencial": 12,
+        "tipoDocumentoId": 16,
+        "tipoDocumentoDescricao": "Outros Documentos"
+      }
+    ],
+    "link_sistema": "https://pncp.gov.br/app/editais/08184434000109/2026/13",
+    "discarded_files": [],
+    "downloaded_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/b39a3ebb-6657-4dfc-a5c9-3c533ae54889.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/bd232a94-2657-4a86-9d62-f3ce3ffdde7c.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/c22ef407-1fc6-496f-920c-bcd44d6a100e.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/cadb7bf8-9234-411c-944a-0cf6e5cc3eaa.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/4498eca2-5af2-4a83-a977-b66ccfb463b4.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/b2cfbac9-1424-43b7-8b13-7812325cc70a.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/2d36c25b-5ba2-40f8-9c73-e3166fcc71f3.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/ab9cf447-caa5-4518-8446-b7b5f5af749e.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/347dd9d7-ed12-4b35-8a15-2d5a69cb64bd.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/c4b2e3ef-d5cd-43ef-bd0a-3ab7d7f45d6c.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/823bd266-bdde-4995-83b0-abdb32d625d2.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/d2c9a0ee-293f-44fb-9c0f-81d08644d9ae.pdf"
+    ]
+  },
+  "requirements": {
+    "proposta_comercial": [
+      {
+        "phase": "proposta",
+        "title": "Valor unitário e total",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 9.1.1",
+        "description": "Valor unitário e total para cada item ou lote, em moeda corrente nacional.",
+        "evidence_refs": [
+          "EV-PC-01"
+        ],
+        "requirement_id": "PC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Marca do item ofertado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 9.1.2",
+        "description": "Marca de cada item ofertado, quando for o caso.",
+        "evidence_refs": [
+          "EV-PC-02"
+        ],
+        "requirement_id": "PC-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Fabricante do item ofertado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 9.1.3",
+        "description": "Fabricante de cada item ofertado, quando for o caso.",
+        "evidence_refs": [
+          "EV-PC-03"
+        ],
+        "requirement_id": "PC-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Descrição do objeto na proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 9.1.4",
+        "description": "Descrição do objeto, contendo informações similares à especificação do Termo de Referência.",
+        "evidence_refs": [
+          "EV-PC-04"
+        ],
+        "requirement_id": "PC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      }
+    ],
+    "habilitacao_juridica": [
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição no Registro Público de Empresas Mercantis (Empresário Individual)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.1",
+        "description": "No caso de empresário individual: inscrição no Registro Público de Empresas Mercantis, a cargo da Junta Comercial da respectiva sede.",
+        "evidence_refs": [
+          "EV-HJ-01"
+        ],
+        "requirement_id": "HJ-01",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certificado da Condição de Microempreendedor Individual (MEI)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.2",
+        "description": "Em se tratando de microempreendedor individual - MEI: Certificado da Condição de Microempreendedor Individual - CCMEI, cuja aceitação ficará condicionada à verificação da autenticidade no sítio: www.portaldoempreendedor.gov.br.",
+        "evidence_refs": [
+          "EV-HJ-02"
+        ],
+        "requirement_id": "HJ-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Ato constitutivo, estatuto ou contrato social (Sociedade Empresária/EIRELI)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.3",
+        "description": "No caso de sociedade empresária ou empresa individual de responsabilidade limitada - EIRELI: ato constitutivo, estatuto ou contrato social em vigor, devidamente registrado na Junta Comercial da respectiva sede, acompanhado de documento comprobatório de seus administradores.",
+        "evidence_refs": [
+          "EV-HJ-03"
+        ],
+        "requirement_id": "HJ-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição no Registro Público de Empresas Mercantis (Sucursal, Filial ou Agência)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.4",
+        "description": "Inscrição no Registro Público de Empresas Mercantis onde opera, com averbação no Registro onde tem sede a matriz, no caso de ser o participante sucursal, filial ou agência.",
+        "evidence_refs": [
+          "EV-HJ-04"
+        ],
+        "requirement_id": "HJ-04",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas (Sociedade Simples)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.5",
+        "description": "No caso de sociedade simples: inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas do local de sua sede, acompanhada de prova da indicação dos seus administradores.",
+        "evidence_refs": [
+          "EV-HJ-05"
+        ],
+        "requirement_id": "HJ-05",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Ata de fundação e estatuto social (Cooperativa)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.6",
+        "description": "No caso de cooperativa: ata de fundação e estatuto social em vigor, com a ata da assembleia que o aprovou, devidamente arquivado na Junta Comercial ou inscrito no Registro Civil das Pessoas Jurídicas da respectiva sede, bem como o registro de que trata o art. 107 da Lei nº 5.764, de 1971.",
+        "evidence_refs": [
+          "EV-HJ-06"
+        ],
+        "requirement_id": "HJ-06",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Decreto de autorização (Empresa ou Sociedade Estrangeira)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.7",
+        "description": "No caso de empresa ou sociedade estrangeira em funcionamento no País: decreto de autorização.",
+        "evidence_refs": [
+          "EV-HJ-07"
+        ],
+        "requirement_id": "HJ-07",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Documentos societários com alterações ou consolidação",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.1.8",
+        "description": "Os documentos acima deverão estar acompanhados de todas as alterações ou da consolidação respectiva.",
+        "evidence_refs": [
+          "EV-HJ-08"
+        ],
+        "requirement_id": "HJ-08",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "documentos_complementares": [
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de ciência e concordância com o edital",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.3.1",
+        "description": "Declaração de que está ciente e concorda com as condições do edital e anexos, que a proposta compreende a integralidade dos custos trabalhistas e que cumpre os requisitos de habilitação.",
+        "evidence_refs": [
+          "EV-DC-01"
+        ],
+        "requirement_id": "DC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de não emprego de menores",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.3.2",
+        "description": "Declaração de que não emprega menor de 18 anos em trabalho noturno, perigoso ou insalubre, e não emprega menor de 16 anos, salvo aprendiz a partir de 14 anos (Art. 7°, XXXIII, CF).",
+        "evidence_refs": [
+          "EV-DC-02"
+        ],
+        "requirement_id": "DC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de não trabalho degradante ou forçado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.3.3",
+        "description": "Declaração de que não possui, em sua cadeia produtiva, empregados executando trabalho degradante ou forçado (Art. 1º, III e IV, e Art. 5º, III, CF).",
+        "evidence_refs": [
+          "EV-DC-03"
+        ],
+        "requirement_id": "DC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de cumprimento de requisitos para cooperativas",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.4",
+        "description": "Licitante organizado em cooperativa deve declarar que cumpre os requisitos do Art. 16 da Lei 14.133/2021, em campo próprio do sistema eletrônico.",
+        "evidence_refs": [
+          "EV-DC-04"
+        ],
+        "requirement_id": "DC-04",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de cumprimento de requisitos para ME/EPP",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 8.5",
+        "description": "Fornecedor ME/EPP ou cooperativa deve declarar que cumpre os requisitos do Art. 3º da LC 123/2006 e está apto ao tratamento favorecido (Art. 42 a 49), conforme Art. 4º, §§ 1º a 3º da Lei 14.133/2021.",
+        "evidence_refs": [
+          "EV-DC-05"
+        ],
+        "requirement_id": "DC-05",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "regularidade_fiscal_trabalhista": [
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade fiscal perante a Fazenda Nacional (Certidão Conjunta RFB/PGFN)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.2",
+        "description": "Prova de regularidade fiscal perante a Fazenda Nacional, mediante apresentação de certidão expedida conjuntamente pela Secretaria da Receita Federal do Brasil (RFB) e pela Procuradoria-Geral da Fazenda Nacional (PGFN), referente a todos os créditos tributários federais e à Dívida Ativa da União (DAU) por elas administrados, inclusive aqueles relativos à Seguridade Social.",
+        "evidence_refs": [
+          "EV-RFT-02"
+        ],
+        "requirement_id": "RFT-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.3",
+        "description": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS).",
+        "evidence_refs": [
+          "EV-RFT-03"
+        ],
+        "requirement_id": "RFT-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de inexistência de débitos inadimplidos perante a justiça do trabalho (CNDT)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.4",
+        "description": "Prova de inexistência de débitos inadimplidos perante a justiça do trabalho, mediante a apresentação de certidão negativa ou positiva com efeito de negativa.",
+        "evidence_refs": [
+          "EV-RFT-04"
+        ],
+        "requirement_id": "RFT-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade junto à Fazenda Estadual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.5",
+        "description": "Prova de regularidade junto à Fazenda Estadual, através da Certidão Negativa conjunta junto aos Tributos Estaduais, emitida pela Secretaria da Fazenda Estadual onde a empresa for sediada.",
+        "evidence_refs": [
+          "EV-RFT-05"
+        ],
+        "requirement_id": "RFT-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade junto à Fazenda Municipal",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.6",
+        "description": "Prova de regularidade junto à Fazenda Municipal, através da Certidão Negativa junto aos Tributos Municipais, emitida pela Secretaria da Fazenda Municipal onde a empresa for sediada.",
+        "evidence_refs": [
+          "EV-RFT-06"
+        ],
+        "requirement_id": "RFT-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de isenção de tributos estaduais",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.7",
+        "description": "Caso o licitante seja considerado isento dos tributos estaduais relacionados ao objeto licitatório, deverá comprovar tal condição mediante declaração da Fazenda Estadual do seu domicílio ou sede, ou outra equivalente, na forma da lei.",
+        "evidence_refs": [
+          "EV-RFT-07"
+        ],
+        "requirement_id": "RFT-07",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certidão de idoneidade referente a possíveis penalidades administrativas",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.11",
+        "description": "Deverá o licitante apresentar e anexar certidão de idoneidade referente a possíveis penalidades administrativas, emitido pela Prefeitura Municipal de Macau (Secretaria Municipal de Administração Planejamento e Desenvolvimento) em até 48 horas que antecedem a licitação retirada na forma presencial ou solicitada via email no endereço macau.cpl2@gmail.com.",
+        "evidence_refs": [
+          "EV-RFT-08"
+        ],
+        "requirement_id": "RFT-08",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de inscrição no CNPJ",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.1",
+        "description": "Comprovação de inscrição e situação cadastral no Cadastro Nacional da Pessoa Jurídica (CNPJ)",
+        "requirement_id": "RFT-CNPJ",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição estadual no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.1",
+        "description": "Prova de inscrição no cadastro de contribuintes estadual, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-IE",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição municipal no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4.1",
+        "description": "Prova de inscrição no cadastro de contribuintes municipal, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-IM",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_operacional": [
+      {
+        "phase": "habilitacao",
+        "title": "Registro da empresa no CREA/CRA",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4",
+        "description": "Comprovação de registro ou inscrição da empresa licitante no CREA e/ou CRA, conforme áreas de atuação do Projeto Básico, em plena validade.",
+        "evidence_refs": [
+          "EV-QTO-01"
+        ],
+        "requirement_id": "QTO-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado QTO: Varrição Manual de Vias e Logradouros",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4, p.5",
+        "description": "Atestado de capacidade técnica, registrado no CREA/CRA, em nome da licitante, comprovando execução de Varrição Manual de Vias e Logradouros Públicos.",
+        "evidence_refs": [
+          "EV-QTO-02"
+        ],
+        "requirement_id": "QTO-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado QTO: Capinação ou Roço Mecanizado",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4, p.5",
+        "description": "Atestado de capacidade técnica, registrado no CREA/CRA, em nome da licitante, comprovando execução de Capinação ou Roço Mecanizado.",
+        "evidence_refs": [
+          "EV-QTO-05"
+        ],
+        "requirement_id": "QTO-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Atestado QTO: Coleta Manual de Resíduos Volumosos",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4, p.5",
+        "description": "Atestado de capacidade técnica, registrado no CREA/CRA, em nome da licitante, comprovando execução de Coleta Manual de Resíduos Volumosos.",
+        "evidence_refs": [
+          "EV-QTO-06"
+        ],
+        "requirement_id": "QTO-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_economico_financeira": [
+      {
+        "phase": "habilitacao",
+        "title": "Certidão Negativa de Falência",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.5",
+        "description": "Certidão Negativa de Falência expedida pelo distribuidor da sede do fornecedor, datado dos últimos 30 (trinta) dias, ou que esteja dentro do prazo de validade expresso na própria Certidão.",
+        "evidence_refs": [
+          "EV-QEF-01"
+        ],
+        "requirement_id": "QEF-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Balanço Patrimonial e Demonstrações Contábeis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.5",
+        "description": "Balanço Patrimonial, Demonstrações de Resultado de Exercício e demais demonstrações contábeis dos 02 (dois) últimos exercícios sociais, anos 2023 e 2024, comprovando: O balanço patrimonial e as demonstrações contábeis deverão esta assinada por Contador ou por outro profissional equivalente, devidamente registrado no Conselho Regional de Contabilidade; É admissível o balanço intermediário, se decorrer de lei ou contrato social/estatuto social.",
+        "evidence_refs": [
+          "EV-QEF-02"
+        ],
+        "requirement_id": "QEF-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Índice de Liquidez Corrente (LC)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.5",
+        "description": "Índice de Liquidez Corrente – calculado pela fórmula abaixo, julgada habilitada a empresa que obtiver a pontuação final maior ou igual que 1,0 (um virgula zero).",
+        "evidence_refs": [
+          "EV-QEF-03"
+        ],
+        "requirement_id": "QEF-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Índice de Liquidez Geral (LG)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.5",
+        "description": "Índice de Liquidez Geral – calculado pela fórmula abaixo, julgada habilitada a empresa que obtiver a pontuação final maior ou igual que 1,0 (um virgula zero).",
+        "evidence_refs": [
+          "EV-QEF-04"
+        ],
+        "requirement_id": "QEF-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Índice de Endividamento Total (ET)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.5",
+        "description": "Índice de Endividamento Total – calculado pela fórmula abaixo, julgada habilitada a empresa que obtiver a pontuação igual ou menor que 1,0 (um virgula zero).",
+        "evidence_refs": [
+          "EV-QEF-05"
+        ],
+        "requirement_id": "QEF-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Capital Circulante Líquido (CCL)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.5",
+        "description": "Capital Circulante Líquido – calculado pela formula abaixo, julgada habilitada a empresa que obtiver a pontuação igual ou superior a 16,66% (dezesseis virgula e sessenta e seis centésimos por cento) do valor estimado da contratação.",
+        "evidence_refs": [
+          "EV-QEF-06"
+        ],
+        "requirement_id": "QEF-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de compromissos e patrimônio líquido",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.5",
+        "description": "Declaração do Fornecedor, acompanhada da relação de compromissos assumidos, de que um doze avos dos contratos firmados com a Administração Pública e/ou com a inciativa privada vigentes na data apresentação da proposta não é superior ao patrimônio líquido do interessado, observados os seguintes requisitos: a declaração deve ser acompanhada da Demonstração do Resultado do Exercício (DRE), relativa ao último exercício social; e caso a diferença entre a declaração e a receita bruta discriminada na Demonstração do Resultado do Exercício (DRE) apresentada seja superior a 10% (dez por cento), para mais ou para menos, o fornecedor deverá apresentar justificativas.",
+        "evidence_refs": [
+          "EV-QEF-07"
+        ],
+        "requirement_id": "QEF-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_profissional": [
+      {
+        "phase": "habilitacao",
+        "title": "Registro do Responsável Técnico no CREA/CRA",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4",
+        "description": "Comprovação de registro ou inscrição do(s) responsável(is) técnico(s) no CREA e/ou CRA, conforme as áreas de atuação previstas no Projeto Básico, em plena validade.",
+        "evidence_refs": [
+          "EV-QTP-01"
+        ],
+        "requirement_id": "QTP-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Comprovação de vínculo do RT com a licitante",
+        "parent_id": null,
+        "applies_to": "profissional_tecnico",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 4.4, p.5",
+        "description": "Comprovação de vínculo do(s) responsável(is) técnico(s) com a licitante, por meio de cópia da CTPS, Contrato de Prestação de Serviço ou Contrato Social.",
+        "evidence_refs": [
+          "EV-QTP-02"
+        ],
+        "requirement_id": "QTP-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ]
+  },
+  "analysis_meta": {
+    "model_used": "gemini-2.5-flash",
+    "analysis_id": "pncp_1775925808803_2ojs88",
+    "source_type": "pncp_download",
+    "stage_times": {
+      "extraction": 319.316,
+      "risk_review": 37.348,
+      "normalization": 21.695
+    },
+    "generated_at": "2026-04-11T16:43:28.803Z",
+    "source_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/b39a3ebb-6657-4dfc-a5c9-3c533ae54889.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/bd232a94-2657-4a86-9d62-f3ce3ffdde7c.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/c22ef407-1fc6-496f-920c-bcd44d6a100e.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/cadb7bf8-9234-411c-944a-0cf6e5cc3eaa.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/4498eca2-5af2-4a83-a977-b66ccfb463b4.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/b2cfbac9-1424-43b7-8b13-7812325cc70a.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/2d36c25b-5ba2-40f8-9c73-e3166fcc71f3.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/ab9cf447-caa5-4518-8446-b7b5f5af749e.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/347dd9d7-ed12-4b35-8a15-2d5a69cb64bd.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/c4b2e3ef-d5cd-43ef-bd0a-3ab7d7f45d6c.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/823bd266-bdde-4995-83b0-abdb32d625d2.pdf",
+      "9f7a7155-be67-4470-8952-eb947fd97931/d2c9a0ee-293f-44fb-9c0f-81d08644d9ae.pdf"
+    ],
+    "rule_findings": [
+      {
+        "code": "R17",
+        "message": "Exigência de comprovação de vínculo do responsável técnico (QTP-02). Formas aceitas: CTPS, contrato social, contrato de prestação de serviços. Verificar se o edital restringe as formas admissíveis.",
+        "category": "qualificacao_tecnica",
+        "severity": "high",
+        "affectedFields": [
+          "requirements.qualificacao_tecnica_profissional.QTP-02"
+        ],
+        "recommendation": "Verificar antecipadamente que a forma de vínculo do RT atende aos termos do edital. Se restrito a CTPS, preparar documentação comprobatória junto ao RH."
+      },
+      {
+        "code": "R18",
+        "message": "Garantia de proposta exigida (1% do valor estimado da contratação (R$ 97.737,46), nas modalidades de Caução em Dinheiro, Fiança Bancária ou Seguro Garantia (Edital, item 9.7.3, 9.7.4, 9.7.6, 9.7.8)). Requisito de habilitação: ausência = inabilitação imediata. Exige modalidade correta (seguro-garantia, fiança bancária ou caução) e upload no prazo.",
+        "category": "economico_financeira",
+        "severity": "high",
+        "affectedFields": [
+          "participation_conditions.exige_garantia_proposta"
+        ],
+        "recommendation": "Confirmar modalidade aceita, valor exato, e prazo de validade. Providenciar documento junto à seguradora/banco com antecedência."
+      },
+      {
+        "code": "R11",
+        "message": "40 exigências sem indicação se são obrigatórias ou não.",
+        "category": "normalizacao",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements"
+        ],
+        "recommendation": "Na maioria dos editais, exigências de habilitação são obrigatórias por padrão."
+      },
+      {
+        "code": "R19",
+        "message": "8 parcela(s) de maior relevância identificadas. Verificar se os quantitativos mínimos correspondem ao percentual legalmente aceito (normalmente ≤50% do item relevante).",
+        "category": "qualificacao_tecnica",
+        "severity": "medium",
+        "affectedFields": [
+          "technical_analysis.parcelas_relevantes"
+        ],
+        "recommendation": "Comparar quantitativos com o orçamento e verificar se estão restritos às parcelas de maior relevância."
+      },
+      {
+        "code": "R12",
+        "message": "22 evidências no registry sem referência de nenhuma exigência ou ponto crítico.",
+        "category": "evidencia",
+        "severity": "low",
+        "affectedFields": [
+          "evidence_registry"
+        ]
+      }
+    ],
+    "prompt_version": "v4.8.0",
+    "quality_report": {
+      "summary": "Quality: 95% | Extract: 100% | Norm: 100% | Evidence: 100% | Risk: 100% | Ops: 100% | 0 issues, 5 rule findings",
+      "issueCount": 0,
+      "overallScore": 95,
+      "categoryScores": {
+        "evidence": 100,
+        "extraction": 100,
+        "riskReview": 100,
+        "normalization": 100,
+        "operationalUsefulness": 100
+      }
+    },
+    "schema_enforcer": {
+      "details": [
+        "qualificacao_tecnica_operacional: \"5 exigência(s) duplicada(s)\" → \"removida(s) — de 9 para 4 itens\"",
+        "timeline.data_sessao: \"14/04/2026 09:00\" → \"14/04/2026 às 09:00\"",
+        "timeline.prazo_impugnacao: \"09/04/2026 23:59\" → \"09/04/2026 às 23:59\"",
+        "timeline.prazo_esclarecimento: \"09/04/2026 23:59\" → \"09/04/2026 às 23:59\"",
+        "timeline.prazo_envio_proposta: \"14/04/2026 07:00\" → \"14/04/2026 às 07:00\"",
+        "timeline.prazo_envio_habilitacao: \"14/04/2026 07:00\" → \"14/04/2026 às 07:00\"",
+        "participation_conditions.permite_consorcio: \"null\" → \"false (default conservador)\"",
+        "participation_conditions.permite_subcontratacao: \"null\" → \"false (default conservador)\"",
+        "participation_conditions.exige_visita_tecnica: \"null\" → \"false (default conservador)\""
+      ],
+      "corrections": 9
+    },
+    "analysis_version": "1.0",
+    "models_per_stage": {
+      "extraction": "gemini-2.5-flash",
+      "risk_review": "gemini-2.5-flash",
+      "normalization": "gemini-2.5-flash"
+    },
+    "workflow_stage_status": {
+      "extraction": "done",
+      "validation": "done",
+      "risk_review": "done",
+      "normalization": "done"
+    }
+  },
+  "evidence_registry": [
+    {
+      "page": "2",
+      "excerpt": "No caso de empresário individual: inscrição no Registro Público de Empresas Mercantis",
+      "section": "4.1.1",
+      "evidence_id": "EV-HJ-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Em se tratando de microempreendedor individual - MEI: Certificado da Condição de Microempreendedor Individual - CCMEI",
+      "section": "4.1.2",
+      "evidence_id": "EV-HJ-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "No caso de sociedade empresária ou empresa individual de responsabilidade limitada - EIRELI: ato constitutivo, estatuto ou contrato social em vigor, devidamente registrado na Junta Comercial",
+      "section": "4.1.3",
+      "evidence_id": "EV-HJ-03",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Inscrição no Registro Público de Empresas Mercantis onde opera, com averbação no Registro onde tem sede a matriz",
+      "section": "4.1.4",
+      "evidence_id": "EV-HJ-04",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "No caso de sociedade simples: inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas do local de sua sede",
+      "section": "4.1.5",
+      "evidence_id": "EV-HJ-05",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "No caso de cooperativa: ata de fundação e estatuto social em vigor, com a ata da assembleia que o aprovou",
+      "section": "4.1.6",
+      "evidence_id": "EV-HJ-06",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "No caso de empresa ou sociedade estrangeira em funcionamento no País: decreto de autorização",
+      "section": "4.1.7",
+      "evidence_id": "EV-HJ-07",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Os documentos acima deverão estar acompanhados de todas as alterações ou da consolidação respectiva",
+      "section": "4.1.8",
+      "evidence_id": "EV-HJ-08",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Prova de inscrição no cadastro de contribuintes federal, estadual e municipal relativo ao domicílio sede do licitante",
+      "section": "4.4.1",
+      "evidence_id": "EV-RFT-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Prova de regularidade fiscal perante a Fazenda Nacional, mediante apresentação de certidão expedida conjuntamente pela Secretaria da Receita Federal do Brasil (RFB) e pela Procuradoria-Geral da Fazenda Nacional (PGFN)",
+      "section": "4.4.2",
+      "evidence_id": "EV-RFT-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS)",
+      "section": "4.4.3",
+      "evidence_id": "EV-RFT-03",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Prova de inexistência de débitos inadimplidos perante a justiça do trabalho, mediante a apresentação de certidão negativa ou positiva com efeito de negativa",
+      "section": "4.4.4",
+      "evidence_id": "EV-RFT-04",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Prova de regularidade junto à Fazenda Estadual, através da Certidão Negativa conjunta junto aos Tributos Estaduais",
+      "section": "4.4.5",
+      "evidence_id": "EV-RFT-05",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Prova de regularidade junto à Fazenda Municipal, através da Certidão Negativa junto aos Tributos Municipais",
+      "section": "4.4.6",
+      "evidence_id": "EV-RFT-06",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Caso o licitante seja considerado isento dos tributos estaduais relacionados ao objeto licitatório, deverá comprovar tal condição mediante declaração da Fazenda Estadual",
+      "section": "4.4.7",
+      "evidence_id": "EV-RFT-07",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "2",
+      "excerpt": "Deverá o licitante apresentar e anexar certidão de idoneidade referente a possiveis penalidades admnistrativas, emitido pela Prefeitura Municipal de Macau",
+      "section": "4.4.11",
+      "evidence_id": "EV-RFT-08",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Certidão Negativa de Falência expedida pelo distribuidor da sede do fornecedor",
+      "section": "4.5",
+      "evidence_id": "EV-QEF-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "Balanço Patrimonial, Demonstrações de Resultado de Exercício e demais demonstrações contábeis dos 02 (dois) últimos exercícios sociais, anos 2023 e 2024",
+      "section": "4.5",
+      "evidence_id": "EV-QEF-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "I - Índice de Liquidez Corrente – calculado pela fórmula abaixo, julgada habilitada a empresa que obtiver a pontuação final maior ou igual que 1,0 (um virgula zero)",
+      "section": "4.5",
+      "evidence_id": "EV-QEF-03",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "II - Índice de Liquidez Geral – calculado pela fórmula abaixo, julgada habilitada a empresa que obtiver a pontuação final maior ou igual que 1,0 (um virgula zero)",
+      "section": "4.5",
+      "evidence_id": "EV-QEF-04",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "III - Índice de Endividamento Total - calculado pela fórmula abaixo, julgada habilitada a empresa que obtiver a pontuação igual ou menor que 1,0 (um virgula zero)",
+      "section": "4.5",
+      "evidence_id": "EV-QEF-05",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "IV - Capital Circulante Líquido - calculado pela formula abaixo, julgada habilitada a empresa que obtiver a pontuação igual ou superior a 16,66% (dezesseis virgula e sessenta e seis centésimos por cento) do valor estimado da contratação",
+      "section": "4.5",
+      "evidence_id": "EV-QEF-06",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Declaração do Fornecedor, acompanhada da relação de compromissos assumidos, de que um doze avos dos contratos firmados com a Administração Pública e/ou com a inciativa privada vigentes na data apresentação da proposta não é superior ao patrimônio líquido do interessado",
+      "section": "4.5",
+      "evidence_id": "EV-QEF-07",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Registro ou inscrição da empresa licitante [...] no CREA (Conselho Regional de Engenharia e Agronomia) e/ou CRA (Conselho Regional de Administração)",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "VARRIÇÃO MANUAL DE VIAS E LOGRADOUROS PÚBLICOS",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "LIMPEZA DE SARJETAS",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-03",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "CAPINAÇÃO MANUAL",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-04",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "CAPINAÇÃO OU ROÇO MECANIZADO",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-05",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "COLETA MANUAL DE RESIDUOS VOLUMOSOS",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-06",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "COLETA MANUAL DE PODAÇÃO",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-07",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "COLETA MECANIZADA DE RESÍDUOS VOLUMOSOS",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-08",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "CAIAÇÃO OU PINTURA DE MEIO-FIO",
+      "section": "4.4",
+      "evidence_id": "EV-QTO-09",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "4",
+      "excerpt": "Registro ou inscrição [...] do(s) seu(s) responsável(is) técnico(s) no CREA (Conselho Regional de Engenharia e Agronomia) e/ou CRA (Conselho Regional de Administração)",
+      "section": "4.4",
+      "evidence_id": "EV-QTP-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "5",
+      "excerpt": "A comprovação de pertencer ao quadro permanente será formalizada por meio de um dos seguintes documentos: Cópia da Carteira Profissional (CTPS); Contrato de Prestação de Serviço; Contrato social",
+      "section": "4.4",
+      "evidence_id": "EV-QTP-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Valor unitário e total para cada item ou lote de itens (conforme o caso), em moeda corrente nacional",
+      "section": "9.1.1",
+      "evidence_id": "EV-PC-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Marca de cada item ofertado, quando for o caso",
+      "section": "9.1.2",
+      "evidence_id": "EV-PC-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Fabricante de cada item ofertado, quando for o caso",
+      "section": "9.1.3",
+      "evidence_id": "EV-PC-03",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "Descrição do objeto, contendo as informações similares à especificação do Termo de Referência",
+      "section": "9.1.4",
+      "evidence_id": "EV-PC-04",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Está ciente e concorda com as condições contidas no edital e seus anexos, bem como de que a proposta apresentada compreende a integralidade dos custos para atendimento dos direitos trabalhistas",
+      "section": "8.3.1",
+      "evidence_id": "EV-DC-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Não emprega menor de 18 anos em trabalho noturno, perigoso ou insalubre e não emprega menor de 16 anos",
+      "section": "8.3.2",
+      "evidence_id": "EV-DC-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Não possui, em sua cadeia produtiva, empregados executando trabalho degradante ou forçado",
+      "section": "8.3.3",
+      "evidence_id": "EV-DC-03",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "O licitante organizado em cooperativa deverá declarar, ainda, em campo próprio do sistema eletrônico, que cumpre os requisitos estabelecidos no artigo 16 da Lei Federal nº 14.133, de 2021",
+      "section": "8.4",
+      "evidence_id": "EV-DC-04",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "7",
+      "excerpt": "O fornecedor enquadrado como microempresa, empresa de pequeno porte ou sociedade cooperativa deverá declarar, ainda, em campo próprio do sistema eletrônico, que cumpre os requisitos estabelecidos no artigo 3º da Lei Complementar nº 123, de 2006",
+      "section": "8.5",
+      "evidence_id": "EV-DC-05",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "Será desclassificada a proposta que identifique o licitante",
+      "section": "10.2.1",
+      "evidence_id": "EV-PC-05",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "10",
+      "excerpt": "Será desclassificada a proposta vencedora que: Se enquadrarem nos casos previstos no Art. 59, da Lei Federal nº 14.133/21",
+      "section": "11.7.1",
+      "evidence_id": "EV-PC-06",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "No caso de bens e serviços em geral, é indício de inexequibilidade das propostas valores inferiores a 50% (cinquenta por cento) do valor orçado pela Administração",
+      "section": "9.7",
+      "evidence_id": "EV-PC-07",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "No caso de serviços de engenharia, serão consideradas inexequíveis as propostas cujos valores forem inferiores a 75% (setenta e cinco por cento) do valor orçado pela Administração",
+      "section": "9.7.1",
+      "evidence_id": "EV-PC-08",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "11",
+      "excerpt": "Caso o Termo de Referência exija a apresentação de amostra, o licitante classificado em primeiro lugar deverá apresentá-la, conforme disciplinado no Termo de Referência, sob pena de não aceitação da proposta",
+      "section": "11.12",
+      "evidence_id": "EV-PC-09",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "11",
+      "excerpt": "No caso de não haver entrega da amostra ou ocorrer atraso na entrega, sem justificativa aceita pelo Pregoeiro, ou havendo entrega de amostra fora das especificações previstas neste Edital, a proposta do licitante será recusada",
+      "section": "11.15",
+      "evidence_id": "EV-PC-10",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "Juntamente com a HABILITAÇÃO o licitante devera anexar garantia proposta como requisito de habilitaçao no montante de 1%, do valor estimado da contratação",
+      "section": "9.7.3",
+      "evidence_id": "EV-PI-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "CAUÇÃO EM DINHEIRO- A licitante fará comprovação junto a tesouraria, mediante a comprovação de deposito em dinheiro, em Documento de Arrecadação Municipal-DAM, ou conta bancaria em nome da Prefeitura Municipal de Macau",
+      "section": "9.7.4",
+      "evidence_id": "EV-PI-02",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "FIANÇA BANCARIA- A licitante entregara o documento original fornecido pela instituição que a concedeu na qual constara: PREFEITURA MUNICIPAL DE MACAU",
+      "section": "9.7.6",
+      "evidence_id": "EV-PI-03",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "8",
+      "excerpt": "SEGURTO GARANTIA- Através de apolice em nome da Prefeitura Municipal de Macau R/N, constando garantia para participar do Pregão 007/2026, acompanhado de comprovante de pagamento",
+      "section": "9.7.8",
+      "evidence_id": "EV-PI-04",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "1",
+      "excerpt": "Será concedido tratamento favorecido para as microempresas, empresas de pequeno porte e microempreendedores individuais nos termos do artigo 16 da Lei Federal nº 14.133, de 2021 e da Lei Complementar nº 123, de 2006",
+      "section": "3.2",
+      "evidence_id": "EV-PI-05",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Os licitantes que não atendam às condições deste Edital e seu(s) anexo(s)",
+      "section": "7.1.1",
+      "evidence_id": "EV-PI-06",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Os licitantes que se enquadrem no Art. 14, da Lei Federal nº 14.133/21",
+      "section": "7.1.2",
+      "evidence_id": "EV-PI-07",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Os atentes públicos de órgão ou da entidade licitante ou contratante, nos termos do § 1º do art. 9° da Lei Federal n.º 14.133, de 2021",
+      "section": "7.1.3",
+      "evidence_id": "EV-PI-08",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "6",
+      "excerpt": "Não será admitida a participação de empresas suspensas ou impedidas de licitar com qualquer órgão ou entidade da Administração Pública Federal, Estadual e Municipal",
+      "section": "7.1.4",
+      "evidence_id": "EV-PI-09",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    },
+    {
+      "page": "3",
+      "excerpt": "equipe mínima: 1 administrador, 1 engenheiro, 1 auxiliar de escritório, 1 auxiliar de serviços gerais, 3 encarregados, 8 motoristas II, 2 operadores de equipamentos e 61 agentes de limpeza com adicional de insalubridade de 40%",
+      "section": "5",
+      "evidence_id": "EV-TA-01",
+      "document_name": "Estudo Técnico Preliminar – ETP N° 16/2026",
+      "document_type": "etp"
+    },
+    {
+      "page": "3",
+      "excerpt": "dimensionamento mínimo de equipamentos, com previsão de caminhões basculantes, caminhões carroceria, trator com carroção, motocicletas, veículo leve, retroescavadeira, roçadeiras costais e carrinhos lutocar",
+      "section": "5",
+      "evidence_id": "EV-TA-02",
+      "document_name": "Estudo Técnico Preliminar – ETP N° 16/2026",
+      "document_type": "etp"
+    },
+    {
+      "page": "3",
+      "excerpt": "Os veículos e equipamentos não poderão operar com mais de 6 (seis) anos de fabricação",
+      "section": "5",
+      "evidence_id": "EV-TA-03",
+      "document_name": "Estudo Técnico Preliminar – ETP N° 16/2026",
+      "document_type": "etp"
+    },
+    {
+      "page": "1",
+      "excerpt": "TOTAL PARA 12 MESES R$ 9 773 746,08",
+      "section": "TOTAL PARA 12 MESES",
+      "evidence_id": "EV-PA-01",
+      "document_name": "Planilha Orçamentária",
+      "document_type": "planilha"
+    },
+    {
+      "page": "14",
+      "excerpt": "O prazo de vigência deste Termo de Contrato é aquele fixado no Termo de Referência",
+      "section": "2.1",
+      "evidence_id": "EV-CA-01",
+      "document_name": "ANEXO IV – MINUTA DO CONTRATO ADMINISTRATIVO",
+      "document_type": "minuta"
+    },
+    {
+      "page": "15",
+      "excerpt": "As regras acerca do reajuste do valor contratual são as estabelecidas no Termo de Referência",
+      "section": "6.1",
+      "evidence_id": "EV-CA-02",
+      "document_name": "ANEXO IV – MINUTA DO CONTRATO ADMINISTRATIVO",
+      "document_type": "minuta"
+    },
+    {
+      "page": "15",
+      "excerpt": "Não haverá exigência de garantia de execução para a presente contratação",
+      "section": "7.1",
+      "evidence_id": "EV-CA-03",
+      "document_name": "ANEXO IV – MINUTA DO CONTRATO ADMINISTRATIVO",
+      "document_type": "minuta"
+    },
+    {
+      "page": "15",
+      "excerpt": "As obrigações da CONTRATANTE e da CONTRATADA são aquelas previstas no Termo de Referência",
+      "section": "10.1",
+      "evidence_id": "EV-CA-04",
+      "document_name": "ANEXO IV – MINUTA DO CONTRATO ADMINISTRATIVO",
+      "document_type": "minuta"
+    },
+    {
+      "page": "15",
+      "excerpt": "As sanções referentes à execução do contrato são aquelas previstas no Termo de Referência",
+      "section": "11.1",
+      "evidence_id": "EV-CA-05",
+      "document_name": "ANEXO IV – MINUTA DO CONTRATO ADMINISTRATIVO",
+      "document_type": "minuta"
+    },
+    {
+      "page": "14",
+      "excerpt": "O prazo para pagamento e demais condições a ele referentes encontram-se no Termo de Referência",
+      "section": "5.1",
+      "evidence_id": "EV-CA-06",
+      "document_name": "ANEXO IV – MINUTA DO CONTRATO ADMINISTRATIVO",
+      "document_type": "minuta"
+    },
+    {
+      "page": "7",
+      "excerpt": "O prazo de validade da proposta não será inferior a 60 (sessenta) dias, a contar da data de sua apresentação",
+      "section": "9.5",
+      "evidence_id": "EV-OC-01",
+      "document_name": "Edital de Licitação Nº 014/2026",
+      "document_type": "edital"
+    }
+  ],
+  "legal_risk_review": {
+    "omissions": [
+      "O Termo de Referência (TR) não foi fornecido na análise, sendo que o edital remete a ele para informações cruciais como prazo de execução, vigência, reajuste, pagamento, penalidades, obrigações contratuais e detalhes da exigência de amostra (Minuta do Contrato, itens 2.1, 5.1, 6.1, 10.1, 11.1; Edital, item 11.12).",
+      "O Projeto Básico não foi fornecido na análise, sendo que o edital remete a ele para as 'áreas de atuação previstas' que justificam os registros no CREA e/ou CRA para a empresa e o RT (Edital, item 4.4).",
+      "Não há Matriz de Riscos Contratuais no edital ou anexos. Embora o valor seja ligeiramente inferior a R$ 10 milhões, a natureza de serviço de engenharia e o valor expressivo justificariam sua inclusão para alocação de riscos (Art. 103, § 3º, Lei 14.133/2021)."
+    ],
+    "ambiguities": [
+      "A ausência de quantitativos mínimos para os atestados de capacidade técnica operacional (Edital, item 4.4, p.5) gera ambiguidade na avaliação da aptidão técnica.",
+      "A exigência de Balanço Patrimonial dos '02 (dois) últimos exercícios sociais, anos 2023 e 2024' (Edital, item 4.5) é ambígua, pois, em 2026, os últimos dois exercícios encerrados seriam 2024 e 2025."
+    ],
+    "critical_points": [
+      {
+        "title": "Certidão de Idoneidade Local Restritiva",
+        "reason": "Viola o princípio da isonomia e competitividade (Art. 37, XXI, CF; Art. 9º, Lei 14.133/2021) ao dificultar a participação de licitantes de outras localidades.",
+        "category": "habilitacao",
+        "severity": "critica",
+        "source_ref": "Edital, item 4.4.11",
+        "description": "Exigência de certidão de idoneidade emitida pela Prefeitura de Macau em até 48h antes da licitação, com retirada presencial ou via e-mail. Restringe a competitividade.",
+        "evidence_refs": [
+          "EV-RFT-08"
+        ],
+        "recommended_action": "Avaliar impugnação do edital ou solicitar esclarecimento sobre formas alternativas de comprovação para licitantes de fora do município."
+      },
+      {
+        "title": "Atestados de Capacidade Técnica sem Quantitativo Mínimo",
+        "reason": "A ausência de quantitativos mínimos gera subjetividade na avaliação da aptidão técnica e pode levar a decisões arbitrárias de inabilitação ou favorecimento.",
+        "category": "tecnica",
+        "severity": "alta",
+        "source_ref": "Edital, item 4.4, p.5",
+        "description": "Atestados de capacidade técnica operacional para diversas parcelas (Varrição, Limpeza, Capinação, Coleta, Caiação) não especificam quantitativos mínimos.",
+        "evidence_refs": [
+          "EV-QTO-02",
+          "EV-QTO-03",
+          "EV-QTO-04",
+          "EV-QTO-05",
+          "EV-QTO-06",
+          "EV-QTO-07",
+          "EV-QTO-08",
+          "EV-QTO-09"
+        ],
+        "recommended_action": "Solicitar esclarecimento para que a Administração defina os quantitativos mínimos exigidos para cada parcela relevante do objeto."
+      },
+      {
+        "title": "Exigência de Balanço Patrimonial de Exercícios Incorretos",
+        "reason": "Pode gerar inabilitação por erro na interpretação do ano fiscal. A Lei 14.133/2021 (Art. 69, I) refere-se ao último exercício social encerrado.",
+        "category": "economico_financeira",
+        "severity": "media",
+        "source_ref": "Edital, item 4.5",
+        "description": "Exigência de Balanço Patrimonial dos exercícios de 2023 e 2024. Considerando o ano de 2026, os últimos dois exercícios sociais encerrados seriam 2024 e 2025.",
+        "evidence_refs": [
+          "EV-QEF-02"
+        ],
+        "recommended_action": "Solicitar esclarecimento para confirmar quais exercícios sociais devem ser apresentados (2024 e 2025 ou 2023 e 2024)."
+      },
+      {
+        "title": "Capital Circulante Líquido (CCL) Elevado",
+        "reason": "O percentual pode ser considerado excessivo e restritivo à competitividade, caso não haja justificativa técnica e econômica robusta no processo (Art. 69, § 1º, Lei 14.133/2021).",
+        "category": "economico_financeira",
+        "severity": "alta",
+        "source_ref": "Edital, item 4.5",
+        "description": "Exigência de Capital Circulante Líquido (CCL) igual ou superior a 16,66% do valor estimado da contratação (aprox. R$ 1.628.300,00).",
+        "evidence_refs": [
+          "EV-QEF-06",
+          "EV-PA-01"
+        ],
+        "recommended_action": "Avaliar a viabilidade de atendimento do índice. Caso seja desproporcional, considerar pedido de esclarecimento ou impugnação."
+      },
+      {
+        "title": "Idade Máxima de Veículos e Equipamentos",
+        "reason": "Cláusula potencialmente restritiva à competitividade, pois exclui equipamentos mais antigos, mas que podem estar em perfeito estado de funcionamento, sem justificativa técnica clara.",
+        "category": "tecnica",
+        "severity": "alta",
+        "source_ref": "Estudo Técnico Preliminar – ETP N° 16/2026, seção 5",
+        "description": "Veículos e equipamentos não poderão operar com mais de 6 (seis) anos de fabricação.",
+        "evidence_refs": [
+          "EV-TA-03"
+        ],
+        "recommended_action": "Verificar a justificativa no ETP/Projeto Básico. Se ausente ou frágil, considerar pedido de esclarecimento ou impugnação."
+      },
+      {
+        "title": "Exigência de CREA e CRA para Empresa e RT",
+        "reason": "A exigência de ambos os registros (CREA e CRA) para a empresa e RT pode ser restritiva se o Projeto Básico não justificar claramente a necessidade de ambas as áreas para a totalidade dos serviços de limpeza pública.",
+        "category": "tecnica",
+        "severity": "media",
+        "source_ref": "Edital, item 4.4",
+        "description": "Exigência de registro no CREA e/ou CRA para a empresa e o(s) responsável(is) técnico(s), 'conforme as áreas de atuação previstas no Projeto Básico'.",
+        "evidence_refs": [
+          "EV-QTO-01",
+          "EV-QTP-01"
+        ],
+        "recommended_action": "Analisar o Projeto Básico para entender a justificativa. Caso a exigência seja desproporcional, solicitar esclarecimento sobre a aplicabilidade de ambos os conselhos."
+      },
+      {
+        "title": "Critério de Inexequibilidade para Serviços de Engenharia",
+        "reason": "É um critério objetivo de desclassificação. A proposta deve ser elaborada com atenção para não incorrer em inexequibilidade, mesmo que justificada.",
+        "category": "proposta",
+        "severity": "media",
+        "source_ref": "Edital, item 9.7.1",
+        "description": "Propostas com valores inferiores a 75% do valor orçado pela Administração (R$ 7.330.309,56) serão consideradas inexequíveis.",
+        "evidence_refs": [
+          "EV-PC-08",
+          "EV-PA-01"
+        ],
+        "recommended_action": "Elaborar a proposta de preços com rigor, garantindo que o valor final esteja acima do limite de 75% do valor estimado, ou preparar justificativas robustas caso o preço seja inferior."
+      },
+      {
+        "title": "Exigência de Amostra sem Detalhes no TR",
+        "reason": "A ausência do Termo de Referência impede o conhecimento das especificações e prazos para a amostra, gerando alto risco de desclassificação.",
+        "category": "proposta",
+        "severity": "alta",
+        "source_ref": "Edital, item 11.12, 11.15",
+        "description": "O edital exige apresentação de amostra 'conforme disciplinado no Termo de Referência', sob pena de recusa da proposta, mas o TR não foi fornecido na análise.",
+        "evidence_refs": [
+          "EV-PC-09",
+          "EV-PC-10"
+        ],
+        "recommended_action": "Solicitar imediatamente o Termo de Referência para verificar as exigências detalhadas da amostra e planejar sua apresentação."
+      }
+    ],
+    "inconsistencies": [],
+    "possible_restrictive_clauses": [
+      "A exigência de 'Certidão de idoneidade referente a possíveis penalidades administrativas, emitido pela Prefeitura Municipal de Macau (Secretaria Municipal de Administração Planejamento e Desenvolvimento) em até 48 horas que antecedem a licitação retirada na forma presencial ou solicitada via email no endereço macau.cpl2@gmail.com' (Edital, item 4.4.11) é altamente restritiva, violando o caráter competitivo do certame.",
+      "A exigência de 'Capital Circulante Líquido – calculado pela formula abaixo, julgada habilitada a empresa que obtiver a pontuação igual ou superior a 16,66% (dezesseis virgula e sessenta e seis centésimos por cento) do valor estimado da contratação' (Edital, item 4.5) pode ser restritiva se não houver justificativa técnica e econômica para um percentual tão elevado.",
+      "A condição de que 'Os veículos e equipamentos não poderão operar com mais de 6 (seis) anos de fabricação' (ETP, seção 5) é restritiva, pois impede a participação de empresas com equipamentos mais antigos, mas plenamente funcionais, sem justificativa técnica clara."
+    ],
+    "points_for_impugnation_or_clarification": [
+      "Recomenda-se impugnar o item 4.4.11 do Edital, referente à certidão de idoneidade local, por restrição indevida à competitividade e violação do Art. 37, XXI, da Constituição Federal e Art. 9º da Lei 14.133/2021.",
+      "Recomenda-se solicitar esclarecimento sobre a ausência de quantitativos mínimos nos atestados de capacidade técnica operacional (Edital, item 4.4, p.5), visando garantir a objetividade na avaliação e a isonomia entre os licitantes.",
+      "Recomenda-se solicitar esclarecimento sobre quais exercícios sociais devem ser apresentados para o Balanço Patrimonial (2023/2024 ou 2024/2025), conforme item 4.5 do Edital.",
+      "Recomenda-se solicitar esclarecimento sobre a justificativa técnica para a exigência de idade máxima de 6 anos para veículos e equipamentos (ETP, seção 5), e, se a justificativa for frágil, considerar impugnação por restrição à competitividade.",
+      "Recomenda-se solicitar o Termo de Referência e o Projeto Básico, pois são documentos essenciais para a compreensão das exigências técnicas e contratuais, e sua omissão prejudica a elaboração da proposta e habilitação."
+    ]
+  },
+  "proposal_analysis": {
+    "itens_licitados": [
+      {
+        "unit": "Km",
+        "quantity": 270.76,
+        "itemNumber": "1.1",
+        "multiplier": 12,
+        "description": "Varrição manual de vias pavimentadas e logradouros públicos",
+        "referencePrice": 229.96,
+        "multiplierLabel": "Meses"
+      },
+      {
+        "unit": "H",
+        "quantity": 660,
+        "itemNumber": "1.2",
+        "multiplier": 12,
+        "description": "Limpeza de locais públicos como praças, feiras e mercados públicos, cemitérios, faixa de praias, sistema de drenagem (Corregos, caixa de inspeção, sargetas e boca de lobo), carpina manual e mecanizada e outros serviços",
+        "referencePrice": 244.59,
+        "multiplierLabel": "Meses"
+      },
+      {
+        "unit": "M3",
+        "quantity": 443.98,
+        "itemNumber": "1.3",
+        "multiplier": 12,
+        "description": "Coleta manual com caçamba basculante 6 m3 para resíduos volumosos e poda",
+        "referencePrice": 253.55,
+        "multiplierLabel": "Meses"
+      },
+      {
+        "unit": "M3",
+        "quantity": 443.98,
+        "itemNumber": "1.4",
+        "multiplier": 12,
+        "description": "Coleta mecanizada com caçamba basculante 12m3 para resíduos volumosos e poda",
+        "referencePrice": 432.98,
+        "multiplierLabel": "Meses"
+      },
+      {
+        "unit": "M2",
+        "quantity": 1800,
+        "itemNumber": "1.5",
+        "multiplier": 12,
+        "description": "Caiação em meio fio",
+        "referencePrice": 116.96,
+        "multiplierLabel": "Meses"
+      },
+      {
+        "unit": "un",
+        "quantity": 426,
+        "itemNumber": "1.6",
+        "multiplier": 12,
+        "description": "Poda de arvores, exceto remoção de entulho",
+        "referencePrice": 97.51,
+        "multiplierLabel": "Meses"
+      },
+      {
+        "unit": "Mês",
+        "quantity": 1,
+        "itemNumber": "1.7",
+        "multiplier": 12,
+        "description": "Administração Local",
+        "referencePrice": 33911.74,
+        "multiplierLabel": "Meses"
+      }
+    ],
+    "exige_cronograma": null,
+    "criterios_desempate": [],
+    "exige_carta_proposta": null,
+    "exige_composicao_bdi": null,
+    "observacoes_proposta": [],
+    "criterios_exequibilidade": [
+      "Indício de inexequibilidade para bens e serviços em geral: valores inferiores a 50% do valor orçado pela Administração (Edital, item 9.7, 11.8).",
+      "Indício de inexequibilidade para serviços de engenharia: valores inferiores a 75% do valor orçado pela Administração (Edital, item 9.7.1, 9.7.2)."
+    ],
+    "exige_declaracao_fabricante": null,
+    "exige_planilha_orcamentaria": true,
+    "exige_marca_modelo_fabricante": true,
+    "criterios_desclassificacao_proposta": [
+      "Proposta que identifique o licitante (Edital, item 10.2.1).",
+      "Proposta vencedora que se enquadre nos casos previstos no Art. 59 da Lei Federal nº 14.133/21 (Edital, item 11.7.1).",
+      "Não apresentação de amostra conforme disciplinado no Termo de Referência (Edital, item 11.12).",
+      "Não entrega da amostra ou atraso na entrega sem justificativa aceita pelo Pregoeiro (Edital, item 11.15).",
+      "Entrega de amostra fora das especificações previstas no Edital (Edital, item 11.15)."
+    ],
+    "exige_catalogo_ficha_tecnica_manual": null
+  },
+  "technical_analysis": {
+    "exige_art": null,
+    "exige_cat": null,
+    "exige_rrt": null,
+    "parcelas_relevantes": [
+      {
+        "item": "VARRIÇÃO MANUAL DE VIAS E LOGRADOUROS PÚBLICOS",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de VARRIÇÃO MANUAL DE VIAS E LOGRADOUROS PÚBLICOS.",
+        "evidence_refs": [
+          "EV-QTO-02"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      },
+      {
+        "item": "LIMPEZA DE SARJETAS",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de LIMPEZA DE SARJETAS.",
+        "evidence_refs": [
+          "EV-QTO-03"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      },
+      {
+        "item": "CAPINAÇÃO MANUAL",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de CAPINAÇÃO MANUAL.",
+        "evidence_refs": [
+          "EV-QTO-04"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      },
+      {
+        "item": "CAPINAÇÃO OU ROÇO MECANIZADO",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de CAPINAÇÃO OU ROÇO MECANIZADO.",
+        "evidence_refs": [
+          "EV-QTO-05"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      },
+      {
+        "item": "COLETA MANUAL DE RESIDUOS VOLUMOSOS",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de COLETA MANUAL DE RESIDUOS VOLUMOSOS.",
+        "evidence_refs": [
+          "EV-QTO-06"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      },
+      {
+        "item": "COLETA MANUAL DE PODAÇÃO",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de COLETA MANUAL DE PODAÇÃO.",
+        "evidence_refs": [
+          "EV-QTO-07"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      },
+      {
+        "item": "COLETA MECANIZADA DE RESÍDUOS VOLUMOSOS",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de COLETA MECANIZADA DE RESÍDUOS VOLUMOSOS.",
+        "evidence_refs": [
+          "EV-QTO-08"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      },
+      {
+        "item": "CAIAÇÃO OU PINTURA DE MEIO-FIO",
+        "tipo": "operacional",
+        "unidade": "não informado",
+        "descricao": "Atestado(s) ou Certidão(ões) comprovando aptidão para execução de CAIAÇÃO OU PINTURA DE MEIO-FIO.",
+        "evidence_refs": [
+          "EV-QTO-09"
+        ],
+        "percentual_minimo": null,
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      }
+    ],
+    "exige_registro_conselho": true,
+    "exige_acervo_profissional": null,
+    "exige_responsavel_tecnico": true,
+    "registro_conselho_detalhes": [
+      {
+        "descricao": "Registro ou inscrição da empresa licitante no CREA (Conselho Regional de Engenharia e Agronomia) e/ou CRA (Conselho Regional de Administração).",
+        "evidence_refs": [
+          "EV-QTO-01"
+        ]
+      },
+      {
+        "descricao": "Registro ou inscrição do(s) responsável(is) técnico(s) no CREA (Conselho Regional de Engenharia e Agronomia) e/ou CRA (Conselho Regional de Administração).",
+        "evidence_refs": [
+          "EV-QTP-01"
+        ]
+      }
+    ],
+    "responsavel_tecnico_detalhes": [
+      {
+        "descricao": "Registro ou inscrição do(s) responsável(is) técnico(s) no CREA (Conselho Regional de Engenharia e Agronomia) e/ou CRA (Conselho Regional de Administração), conforme as áreas de atuação previstas no Projeto Básico, em plena validade.",
+        "evidence_refs": [
+          "EV-QTP-01"
+        ]
+      },
+      {
+        "descricao": "Comprovação de vínculo do responsável técnico com a empresa por meio de CTPS, Contrato de Prestação de Serviço ou Contrato Social (para sócio RT).",
+        "evidence_refs": [
+          "EV-QTP-02"
+        ]
+      }
+    ],
+    "exigencias_tecnicas_especificas": [
+      {
+        "descricao": "Disponibilização de equipe mínima: 1 administrador, 1 engenheiro, 1 auxiliar de escritório, 1 auxiliar de serviços gerais, 3 encarregados, 8 motoristas II, 2 operadores de equipamentos e 61 agentes de limpeza com adicional de insalubridade de 40%.",
+        "evidence_refs": [
+          "EV-TA-01"
+        ]
+      },
+      {
+        "descricao": "Disponibilização de dimensionamento mínimo de equipamentos, com previsão de caminhões basculantes, caminhões carroceria, trator com carroção, motocicletas, veículo leve, retroescavadeira, roçadeiras costais e carrinhos lutocar.",
+        "evidence_refs": [
+          "EV-TA-02"
+        ]
+      },
+      {
+        "descricao": "Veículos e equipamentos não poderão operar com mais de 6 (seis) anos de fabricação.",
+        "evidence_refs": [
+          "EV-TA-03"
+        ]
+      }
+    ],
+    "exige_atestado_capacidade_tecnica": true,
+    "exige_comprovacao_parcelas_relevantes": true
+  },
+  "operational_outputs": {
+    "proposal_routes": [],
+    "declaration_routes": [],
+    "internal_checklist": [],
+    "documents_to_prepare": [
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição no Registro Público de Empresas Mercantis (Empresário Individual)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Certificado da Condição de Microempreendedor Individual (MEI)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ato constitutivo, estatuto ou contrato social (Sociedade Empresária/EIRELI)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição no Registro Público de Empresas Mercantis (Sucursal, Filial ou Agência)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição do ato constitutivo no Registro Civil das Pessoas Jurídicas (Sociedade Simples)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ata de fundação e estatuto social (Cooperativa)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Decreto de autorização (Empresa ou Sociedade Estrangeira)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Documentos societários com alterações ou consolidação",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade fiscal perante a Fazenda Nacional (Certidão Conjunta RFB/PGFN)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade com o Fundo de Garantia do Tempo de Serviço (FGTS)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de inexistência de débitos inadimplidos perante a justiça do trabalho (CNDT)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade junto à Fazenda Estadual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade junto à Fazenda Municipal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Declaração de isenção de tributos estaduais",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Certidão de idoneidade referente a possíveis penalidades administrativas",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de inscrição no CNPJ",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição estadual no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição municipal no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão Negativa de Falência",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Balanço Patrimonial e Demonstrações Contábeis",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Índice de Liquidez Corrente (LC)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Índice de Liquidez Geral (LG)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Índice de Endividamento Total (ET)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Capital Circulante Líquido (CCL)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Declaração de compromissos e patrimônio líquido",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Incluir valores unitários e totais, marca e fabricante (se aplicável), e descrição do objeto similar ao TR.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Proposta Comercial",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Verificar validade e compatibilidade do registro do RT com as áreas de atuação do Projeto Básico.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "Certidão de Registro Profissional (CREA/CRA)",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Preparar cópia da CTPS, contrato de prestação de serviço ou contrato social, conforme o tipo de vínculo do RT com a empresa.",
+        "category": "qualificacao_tecnica_profissional",
+        "priority": "alta",
+        "document_name": "Comprovante de Vínculo do Responsável Técnico",
+        "responsible_area": "administrativo"
+      },
+      {
+        "notes": "Conferir integralidade dos custos trabalhistas e requisitos de habilitação.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de ciência e concordância com o edital",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Conforme Art. 7°, XXXIII, da Constituição Federal.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de não emprego de menores",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme Art. 1º, III e IV, e Art. 5º, III, da Constituição Federal.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de não trabalho degradante ou forçado",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Apresentar apenas se a licitante for uma cooperativa, conforme Art. 16 da Lei 14.133/2021.",
+        "category": "documentos_complementares",
+        "priority": "media",
+        "document_name": "Declaração de cumprimento de requisitos para cooperativas",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Apresentar se a licitante for ME/EPP ou cooperativa, conforme Art. 3º da LC 123/2006 e Art. 4º da Lei 14.133/2021.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de cumprimento de requisitos para ME/EPP",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Comprovar registro ou inscrição da empresa no conselho competente (CREA e/ou CRA) conforme as áreas de atuação do Projeto Básico, em plena validade.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Certificado de Registro no CREA/CRA da empresa",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Varrição Manual de Vias e Logradouros Públicos.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Varrição Manual",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Limpeza de Sarjetas.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Limpeza de Sarjetas",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Capinação Manual.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Capinação Manual",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Capinação ou Roço Mecanizado.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Capinação/Roço Mecanizado",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Coleta Manual de Resíduos Volumosos.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Coleta Manual de Resíduos Volumosos",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Coleta Manual de Podação.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Coleta Manual de Podação",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Coleta Mecanizada de Resíduos Volumosos.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Coleta Mecanizada de Resíduos Volumosos",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Atestado registrado no CREA/CRA, em nome da licitante, comprovando execução de Caiação ou Pintura de Meio-Fio.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado de Capacidade Técnica para Caiação ou Pintura de Meio-Fio",
+        "responsible_area": "licitacoes"
+      }
+    ],
+    "proposal_inputs_needed": [],
+    "possible_petition_routes": [
+      "Impugnação do item 4.4.11 do Edital por restrição à competitividade (certidão de idoneidade local) – tese: Art. 37, XXI, CF c/c Art. 9º da Lei 14.133/2021.",
+      "Impugnação da exigência de idade máxima para veículos/equipamentos (ETP, seção 5) se não houver justificativa técnica robusta – tese: Art. 37, XXI, CF c/c Art. 9º da Lei 14.133/2021.",
+      "Pedido de esclarecimento sobre a ausência de quantitativos mínimos nos atestados de capacidade técnica (Edital, item 4.4, p.5) – tese: Art. 67, II, Lei 14.133/2021 e princípio da objetividade."
+    ],
+    "technical_documents_needed": [],
+    "questions_for_consultor_chat": [
+      "O edital permite a apresentação de atestados de capacidade técnica sem quantitativos mínimos? Como a Administração avaliará a aptidão sem essa informação?",
+      "Qual o ano fiscal de referência para o balanço patrimonial? Devo apresentar 2024 e 2025, ou 2023 e 2024 conforme o edital?",
+      "Existe alguma justificativa técnica para a exigência de veículos e equipamentos com no máximo 6 anos de fabricação?",
+      "O Termo de Referência detalha as especificações da amostra? Qual o prazo e local de entrega?",
+      "A exigência de registro no CREA e CRA para a empresa e RT é cumulativa? Qual a justificativa para ambos os conselhos para este objeto?"
+    ]
+  },
+  "contractual_analysis": {
+    "reajuste": "As regras acerca do reajuste do valor contratual são as estabelecidas no Termo de Referência, anexo ao Edital (Minuta do Contrato, item 6.1).",
+    "penalidades": [
+      {
+        "descricao": "As sanções referentes à execução do contrato são aquelas previstas no Termo de Referência, anexo ao Edital (Minuta do Contrato, item 11.1).",
+        "source_ref": "Minuta do Contrato, item 11.1"
+      }
+    ],
+    "repactuacao": null,
+    "prazo_execucao": "Conforme Termo de Referência, anexo ao Edital (Minuta do Contrato, item 2.1).",
+    "prazo_vigencia": "Conforme Termo de Referência, anexo ao Edital (Minuta do Contrato, item 2.1).",
+    "medicao_pagamento": "O prazo para pagamento e demais condições a ele referentes encontram-se no Termo de Referência, anexo ao Edital (Minuta do Contrato, item 5.1).",
+    "obrigacoes_contratada": [
+      {
+        "descricao": "As obrigações da CONTRATADA são aquelas previstas no Termo de Referência, anexo ao Edital (Minuta do Contrato, item 10.1).",
+        "source_ref": "Minuta do Contrato, item 10.1"
+      }
+    ],
+    "obrigacoes_contratante": [
+      {
+        "descricao": "As obrigações da CONTRATANTE são aquelas previstas no Termo de Referência, anexo ao Edital (Minuta do Contrato, item 10.1).",
+        "source_ref": "Minuta do Contrato, item 10.1"
+      }
+    ],
+    "matriz_risco_contratual": []
+  },
+  "process_identification": {
+    "orgao": "PREFEITURA MUNICIPAL DE MACAU",
+    "modalidade": "PREGÃO ELETRÔNICO - SRP",
+    "tipo_objeto": "servico_comum_engenharia",
+    "link_sistema": "www.portaldecompraspublicas.com.br",
+    "municipio_uf": "Macau/RN",
+    "fonte_oficial": "www.portaldecompraspublicas.com.br",
+    "forma_disputa": "ABERTO",
+    "numero_edital": "014/2026",
+    "numero_processo": "02008.000038/2026",
+    "objeto_completo": "O objeto da presente licitação é o Registro de preço para futura e eventual contratação de empresa especializada para execução de serviços de limpeza pública em vias e áreas diversas do município de Macau/RN.",
+    "objeto_resumido": "Registro de preço para contratação de empresa especializada para execução de serviços de limpeza pública em vias e áreas diversas do município de Macau/RN.",
+    "regime_execucao": "empreitada por preço unitário",
+    "uasg_comprasnet": "",
+    "numero_comprasnet": "",
+    "unidade_compradora": "SECRETARIA MUNICIPAL DE SERVIÇOS PÚBLICOS",
+    "criterio_julgamento": "Menor Valor por ITEM/GLOBAL"
+  },
+  "participation_conditions": {
+    "exige_amostra": true,
+    "amostra_detalhes": "O licitante classificado em primeiro lugar deverá apresentar amostra, conforme disciplinado no Termo de Referência, sob pena de não aceitação da proposta (Edital, item 11.12). A não entrega ou entrega fora das especificações resultará em recusa da proposta (Edital, item 11.15).",
+    "outras_condicoes": [
+      {
+        "data": "A proposta não será inferior a 60 (sessenta) dias, a contar da data de sua apresentação (Edital, item 9.5).",
+        "descricao": "Prazo de validade da proposta"
+      }
+    ],
+    "permite_consorcio": false,
+    "tratamento_me_epp": "Sim, será concedido tratamento favorecido para microempresas, empresas de pequeno porte e microempreendedores individuais nos termos do artigo 16 da Lei Federal nº 14.133/2021 e da Lei Complementar nº 123/2006. Existência de restrição fiscal/trabalhista não impede a declaração de vencedora, com prazo de 5 dias úteis para regularização (Edital, item 3.2, 4.4.8, 4.4.9, 4.4.10, 8.5, 10.17).",
+    "consorcio_detalhes": null,
+    "exige_visita_tecnica": false,
+    "participacao_restrita": "Licitantes que não atendam às condições deste Edital e seus anexos (Edital, item 7.1.1); Licitantes enquadrados no Art. 14 da Lei Federal nº 14.133/2021 (Edital, item 7.1.2); Agentes públicos de órgão ou da entidade licitante ou contratante (Edital, item 7.1.3); Empresas suspensas ou impedidas de licitar com qualquer órgão ou entidade da Administração Pública Federal, Estadual e Municipal (Edital, item 7.1.4).",
+    "permite_subcontratacao": false,
+    "exige_garantia_proposta": true,
+    "subcontratacao_detalhes": null,
+    "visita_tecnica_detalhes": null,
+    "exige_garantia_contratual": false,
+    "garantia_proposta_detalhes": "1% do valor estimado da contratação (R$ 97.737,46), nas modalidades de Caução em Dinheiro, Fiança Bancária ou Seguro Garantia (Edital, item 9.7.3, 9.7.4, 9.7.6, 9.7.8)",
+    "garantia_contratual_detalhes": "Não haverá exigência de garantia de execução para a presente contratação (Minuta do Contrato, item 7.1)"
+  },
+  "economic_financial_analysis": {
+    "exige_balanco": true,
+    "exige_indices": true,
+    "indices_exigidos": [
+      {
+        "indice": "LC",
+        "operador": ">=",
+        "evidence_refs": [
+          "EV-QEF-03"
+        ],
+        "valor_referencia": "1.0",
+        "formula_ou_descricao": "Liquidez Corrente = Ativo Circulante / Passivo Circulante"
+      },
+      {
+        "indice": "LG",
+        "operador": ">=",
+        "evidence_refs": [
+          "EV-QEF-04"
+        ],
+        "valor_referencia": "1.0",
+        "formula_ou_descricao": "Liquidez Geral = (Ativo Circulante + Realizável a Longo Prazo) / (Passivo Circulante + Exigível a Longo Prazo)"
+      },
+      {
+        "indice": "ET",
+        "operador": "<=",
+        "evidence_refs": [
+          "EV-QEF-05"
+        ],
+        "valor_referencia": "1.0",
+        "formula_ou_descricao": "Endividamento Total = (Passivo Circulante + Exigível a Longo Prazo) / Ativo Total"
+      },
+      {
+        "indice": "CCL",
+        "operador": ">=",
+        "evidence_refs": [
+          "EV-QEF-06"
+        ],
+        "valor_referencia": "16.66% do valor estimado da contratação",
+        "formula_ou_descricao": "Capital Circulante Líquido = Ativo Circulante - Passivo Circulante"
+      }
+    ],
+    "outras_exigencias_ef": [],
+    "capital_social_minimo": null,
+    "patrimonio_liquido_minimo": "Declaração de que um doze avos dos contratos firmados com a Administração Pública e/ou com a iniciativa privada vigentes na data de apresentação da proposta não é superior ao patrimônio líquido do interessado (Edital, item 4.5).",
+    "exige_garantias_adicionais": null,
+    "exige_capital_social_minimo": null,
+    "exige_patrimonio_liquido_minimo": true
+  }
+}

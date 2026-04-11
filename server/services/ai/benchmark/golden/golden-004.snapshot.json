@@ -1,0 +1,1731 @@
+{
+  "timeline": {
+    "data_sessao": "22/04/2026 às 08:00",
+    "outros_prazos": [
+      {
+        "data": "15 minutos",
+        "descricao": "Etapa inicial de envio de lances"
+      },
+      {
+        "data": "5 (cinco) dias úteis, prorrogável por igual período",
+        "descricao": "Prazo para regularização fiscal e trabalhista para ME/EPP"
+      },
+      {
+        "data": "5 (cinco) dias úteis, prorrogável uma vez por igual período",
+        "descricao": "Prazo para assinatura do contrato"
+      }
+    ],
+    "prazo_amostra": "4 (quatro) dias",
+    "prazo_recurso": "3 (três) dias úteis",
+    "data_publicacao": "31/03/2026",
+    "prazo_impugnacao": "até 3 (três) dias úteis anteriores à data fixada para abertura das propostas",
+    "prazo_contrarrazoes": "igual prazo",
+    "prazo_envio_proposta": "22/04/2026 às 08:00",
+    "prazo_esclarecimento": "até 3 (três) dias úteis anteriores à data fixada para abertura das propostas",
+    "prazo_envio_habilitacao": "após solicitação do(a) Pregoeiro(a), por meio do sistema eletrônico, no prazo de 2 (duas) horas, podendo ser prorrogado, por igual período"
+  },
+  "confidence": {
+    "warnings": [
+      "SchemaEnforcer: 12 campo(s) padronizado(s) automaticamente"
+    ],
+    "traceability": {
+      "total_requirements": 30,
+      "traced_requirements": 30,
+      "evidence_registry_count": 39,
+      "traceability_percentage": 100
+    },
+    "pipeline_health": {
+      "parseRepairs": 0,
+      "stagesFailed": 0,
+      "fallbacksUsed": 0
+    },
+    "missing_sections": [],
+    "score_percentage": 99,
+    "overall_confidence": "alta",
+    "section_confidence": {
+      "risk_review": "alta"
+    }
+  },
+  "pncp_source": {
+    "analyzed_at": "2026-04-09T11:53:22.452Z",
+    "attachments": [
+      {
+        "url": "https://pncp.gov.br/pncp-api/v1/orgaos/06742480000142/compras/2026/28/arquivos/1",
+        "ativo": true,
+        "titulo": "EDITAL",
+        "purpose": "edital",
+        "downloaded": true,
+        "sequencial": 1,
+        "tipoDocumentoId": 2,
+        "tipoDocumentoDescricao": "Edital"
+      }
+    ],
+    "link_sistema": "https://pncp.gov.br/app/editais/06742480000142/2026/28",
+    "discarded_files": [],
+    "downloaded_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/34d35c6c-44d3-4446-a2a5-d4bc7d8d6a2e"
+    ]
+  },
+  "requirements": {
+    "proposta_comercial": [
+      {
+        "phase": "proposta",
+        "title": "Especificação do objeto por lote",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.2.a",
+        "description": "Indicação da especificação do objeto licitado com todos os itens, por lote, conforme ANEXO I - TERMO DE REFERÊNCIA, preservando o sigilo do proponente.",
+        "evidence_refs": [
+          "EV-PC-01"
+        ],
+        "requirement_id": "PC-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Preço unitário e global do lote",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.2.b",
+        "description": "Preço unitário de cada item e global do lote cotado, em algarismos, com no máximo 2 (duas) casas decimais.",
+        "evidence_refs": [
+          "EV-PC-02"
+        ],
+        "requirement_id": "PC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Prazo de validade da proposta",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.2.c",
+        "description": "Prazo de validade da proposta não inferior a 60 (sessenta) dias, a contar da data de sua apresentação.",
+        "evidence_refs": [
+          "EV-PC-03"
+        ],
+        "requirement_id": "PC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "desclassificacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Proposta final ajustada e detalhada (Vencedor)",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.1",
+        "description": "Proposta final em via única original, com preços ajustados ao menor lance (Anexo II), assinada pelo representante legal, clara, sem emendas/rasuras, contendo especificações técnicas, quantitativos, indicação da MARCA dos itens ou 'Próprio(a)' para serviços.",
+        "evidence_refs": [
+          "EV-PC-04"
+        ],
+        "requirement_id": "PC-04",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "desclassificacao"
+      }
+    ],
+    "habilitacao_juridica": [
+      {
+        "phase": "habilitacao",
+        "title": "Ato constitutivo, estatuto ou contrato social",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.1",
+        "description": "Ato constitutivo, estatuto ou contrato social em vigor e seus aditivos, devidamente registrado na Junta Comercial da sede do Licitante, em se tratando de sociedades comerciais, e, no caso de sociedades por ações, acompanhada de documentos de eleição de seus administradores.",
+        "evidence_refs": [
+          "EV-HJ-01"
+        ],
+        "requirement_id": "HJ-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Registro comercial de empresa individual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.2",
+        "description": "Registro comercial e seus aditivos, no caso de empresa individual, devidamente registrado na Junta Comercial da sede do Licitante.",
+        "evidence_refs": [
+          "EV-HJ-02"
+        ],
+        "requirement_id": "HJ-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição do ato constitutivo de sociedades civis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.3",
+        "description": "Inscrição do ato constitutivo, no caso de sociedades civis, acompanhadas de prova de diretoria em exercício.",
+        "evidence_refs": [
+          "EV-HJ-03"
+        ],
+        "requirement_id": "HJ-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Decreto de autorização para empresa estrangeira",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.4",
+        "description": "Decreto de autorização, em se tratando de empresa ou sociedade estrangeira em funcionamento no País, e ato de registro ou autorização para funcionamento expedido pelo órgão competente, quando a atividade assim o exigir.",
+        "evidence_refs": [
+          "EV-HJ-04"
+        ],
+        "requirement_id": "HJ-04",
+        "obligation_type": "empresa_estrangeira",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Comprovação de compromisso de consórcio",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.5",
+        "description": "Comprovação de compromisso público ou particular de constituição de consórcio, subscrito pelos consorciados em se tratando de empresas organizadas sob esta forma, devendo ser realizada a indicação da empresa líder, que será responsável por sua representação perante a Administração e apresentar declaração formal de responsabilidade solidária dos integrantes pelos atos praticados em consórcio, devidamente assinado por todos os representantes legais das empresas que farão parte da composição.",
+        "evidence_refs": [
+          "EV-HJ-05"
+        ],
+        "requirement_id": "HJ-05",
+        "obligation_type": "consorcio",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "documentos_complementares": [
+      {
+        "phase": "proposta",
+        "title": "Declaração de ME/EPP ou cooperativa",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 7.3",
+        "description": "Declaração de que o licitante se enquadra como microempresa (ME), empresa de pequeno porte (EPP) ou cooperativa, fazendo jus ao tratamento diferenciado da LC 123/2006.",
+        "evidence_refs": [
+          "EV-DC-01"
+        ],
+        "requirement_id": "DC-01",
+        "obligation_type": "me_epp",
+        "risk_if_missing": "informativo"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de integralidade dos custos trabalhistas",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.17; Anexo III, item a",
+        "description": "Declaração de que a proposta econômica compreende a integralidade dos custos para atendimento dos direitos trabalhistas (CF, leis, normas, CCTs e TACs).",
+        "evidence_refs": [
+          "EV-DC-02",
+          "EV-DC-06"
+        ],
+        "requirement_id": "DC-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de não emprego de menores",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.18; Anexo III, item b",
+        "description": "Declaração de que não emprega menores de 18 anos em trabalho noturno/perigoso/insalubre, e menores de 16 anos em qualquer trabalho, salvo aprendiz a partir de 14 anos (Art. 7º, XXXIII, CF).",
+        "evidence_refs": [
+          "EV-DC-03",
+          "EV-DC-07"
+        ],
+        "requirement_id": "DC-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de reserva de cargos para PCD e reabilitados",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.19; Anexo III, item c",
+        "description": "Declaração de que cumpre as exigências legais de reserva de cargos para pessoa com deficiência (PCD) e reabilitado da Previdência Social.",
+        "evidence_refs": [
+          "EV-DC-04",
+          "EV-DC-08"
+        ],
+        "requirement_id": "DC-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Declaração de atendimento aos requisitos de habilitação",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.20; Anexo III, item d",
+        "description": "Declaração de que atende aos requisitos de habilitação e que responderá pela veracidade das informações prestadas.",
+        "evidence_refs": [
+          "EV-DC-05",
+          "EV-DC-09"
+        ],
+        "requirement_id": "DC-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Formato das declarações",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "documento_complementar",
+        "source_ref": "Anexo III",
+        "description": "As declarações devem ser apresentadas preferencialmente em papel timbrado do proponente, com local, data, assinatura e carimbo CNPJ.",
+        "evidence_refs": [
+          "EV-DC-10"
+        ],
+        "requirement_id": "DC-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "regularidade_fiscal_trabalhista": [
+      {
+        "phase": "habilitacao",
+        "title": "Prova de inscrição no CNPJ",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.7",
+        "description": "Prova de inscrição no Cadastro Nacional da Pessoa Jurídica - CNPJ.",
+        "evidence_refs": [
+          "EV-RFT-01"
+        ],
+        "requirement_id": "RFT-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição estadual no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.7",
+        "description": "Prova de inscrição no cadastro de contribuintes estadual, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-02",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Inscrição municipal no cadastro de contribuintes",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.7",
+        "description": "Prova de inscrição no cadastro de contribuintes municipal, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade",
+        "requirement_id": "RFT-03",
+        "obligation_type": "se_aplicavel",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Fazenda Federal",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.9",
+        "description": "Prova de regularidade perante a Fazenda Federal.",
+        "evidence_refs": [
+          "EV-RFT-03"
+        ],
+        "requirement_id": "RFT-04",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade relativa à Seguridade Social",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.12",
+        "description": "Prova de regularidade relativa à Seguridade Social.",
+        "evidence_refs": [
+          "EV-RFT-06"
+        ],
+        "requirement_id": "RFT-05",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade relativa ao FGTS",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.13",
+        "description": "Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço - FGTS.",
+        "evidence_refs": [
+          "EV-RFT-07"
+        ],
+        "requirement_id": "RFT-06",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Prova de regularidade perante a Justiça do Trabalho",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.14",
+        "description": "Prova de regularidade perante a Justiça do Trabalho.",
+        "evidence_refs": [
+          "EV-RFT-08"
+        ],
+        "requirement_id": "RFT-07",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_tecnica_operacional": [
+      {
+        "phase": "habilitacao",
+        "title": "Atestado de Capacidade Técnica da Empresa",
+        "parent_id": null,
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.6",
+        "description": "Comprovação de aptidão para desempenho de atividade pertinente e compatível em características, quantidades e prazos com o objeto da licitação, mediante atestado(s) fornecido(s) por pessoa(s) jurídica(s) de direito público ou privado.",
+        "evidence_refs": [
+          "EV-QTO-01"
+        ],
+        "requirement_id": "QTO-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      }
+    ],
+    "qualificacao_economico_financeira": [
+      {
+        "phase": "habilitacao",
+        "title": "Balanço patrimonial e demonstrações contábeis",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.15 e 12.1.15.1",
+        "description": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais. A documentação exigida acima estará restrita ao último exercício social, no caso de empresas constituídas há menos de dois anos.",
+        "evidence_refs": [
+          "EV-QEF-01",
+          "EV-QEF-02"
+        ],
+        "requirement_id": "QEF-01",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "habilitacao",
+        "title": "Certidão negativa de feitos sobre falência",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 12.1.16",
+        "description": "Certidão negativa de feitos sobre falência expedida pelo distribuidor da sede do licitante.",
+        "evidence_refs": [
+          "EV-QEF-03"
+        ],
+        "requirement_id": "QEF-02",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Garantia de proposta",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.2 e 11.2.2",
+        "description": "Prova de garantia da proposta, no montante estipulado em 1% (um por cento), do valor estimado para a contratação, nos termos do Artigo 58 da Lei Federal nº 14.133/2021. Modalidades: caução em dinheiro ou em títulos da dívida pública; seguro-garantia; fiança bancária; título de capitalização.",
+        "evidence_refs": [
+          "EV-QEF-04",
+          "EV-QEF-05"
+        ],
+        "requirement_id": "QEF-03",
+        "obligation_type": "obrigatoria_universal",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Comprovante de depósito bancário (caução em dinheiro)",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.2.3",
+        "description": "Comprovante de DEPÓSITO BANCÁRIO (com a identificação do depositante/licitante) a ser feito em nome da Prefeitura Municipal de Quixelô, Conta Corrente n° 120.584-6, Agência nº 0122-8 Banco do Brasil, sendo que depósitos efetuados em caixas de autoatendimento, só serão validados após sua compensação.",
+        "evidence_refs": [
+          "EV-QEF-06"
+        ],
+        "requirement_id": "QEF-04",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Apólice de seguro-garantia",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.2.4",
+        "description": "Comprovação da apólice ou de documento hábil expedido pela seguradora, cuja vigência será de no mínimo, 60 (sessenta) dias, contados a partir da data do recebimento dos envelopes.",
+        "evidence_refs": [
+          "EV-QEF-07"
+        ],
+        "requirement_id": "QEF-05",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "proposta",
+        "title": "Fiança bancária",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 11.2.5",
+        "description": "Documento original fornecido pela instituição que a concede, do qual deverá obrigatoriamente, constar: Beneficiário: Prefeitura Municipal de Quixelô.",
+        "evidence_refs": [
+          "EV-QEF-08"
+        ],
+        "requirement_id": "QEF-06",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "inabilitacao"
+      },
+      {
+        "phase": "contratacao",
+        "title": "Garantia contratual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 18.8; Minuta do Contrato, item 12.1",
+        "description": "Garantia contratual correspondente a 5% (cinco por cento) do valor do(s) Contrato(s), em uma das modalidades previstas no art. 96 da Lei 14.133/2021, à escolha da licitante vencedora: a) caução em dinheiro ou títulos da dívida pública; b) seguro-garantia; c) fiança bancária.",
+        "evidence_refs": [
+          "EV-QEF-09",
+          "EV-QEF-10"
+        ],
+        "requirement_id": "QEF-07",
+        "obligation_type": "vencedor",
+        "risk_if_missing": "penalidade"
+      },
+      {
+        "phase": "contratacao",
+        "title": "Depósito de caução em dinheiro para garantia contratual",
+        "applies_to": "licitante",
+        "entry_type": "exigencia_principal",
+        "source_ref": "Edital, item 18.9",
+        "description": "Em se tratando de garantia prestada por meio de caução em dinheiro, o depósito deverá ser feito, Conta Corrente nº 120.584-6, Agência nº 0122-8 - Banco do Brasil.",
+        "evidence_refs": [
+          "EV-QEF-11"
+        ],
+        "requirement_id": "QEF-08",
+        "obligation_type": "alternativa",
+        "risk_if_missing": "penalidade"
+      }
+    ],
+    "qualificacao_tecnica_profissional": []
+  },
+  "analysis_meta": {
+    "model_used": "gemini-2.5-flash",
+    "analysis_id": "pncp_1775735351648_hbl8nt",
+    "source_type": "pncp_download",
+    "stage_times": {
+      "extraction": 208.376,
+      "risk_review": 40.898,
+      "normalization": 18.193
+    },
+    "generated_at": "2026-04-09T11:49:11.648Z",
+    "source_files": [
+      "9f7a7155-be67-4470-8952-eb947fd97931/34d35c6c-44d3-4446-a2a5-d4bc7d8d6a2e"
+    ],
+    "rule_findings": [
+      {
+        "code": "R18",
+        "message": "Garantia de proposta exigida (1% (um por cento) do valor estimado para a contratação, nos termos do Artigo 58 da Lei Federal nº 14.133/2021. Modalidades: caução em dinheiro ou em títulos da dívida pública; seguro-garantia; fiança bancária; título de capitalização. (Edital, item 11.2 e 11.2.2)) — QEF-03. Requisito de habilitação: ausência = inabilitação imediata. Exige modalidade correta (seguro-garantia, fiança bancária ou caução) e upload no prazo.",
+        "category": "economico_financeira",
+        "severity": "high",
+        "affectedFields": [
+          "participation_conditions.exige_garantia_proposta",
+          "requirements.qualificacao_economico_financeira.QEF-03"
+        ],
+        "recommendation": "Confirmar modalidade aceita, valor exato, e prazo de validade. Providenciar documento junto à seguradora/banco com antecedência."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Prazo Curto para Apresentação de Amostras\" (media) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Amostra sem Critérios Objetivos de Aceitação\" (alta) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Desclassificação por Item com Preço Acima do Estimado\" (critica) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R06",
+        "message": "Ponto crítico \"Prazo de Execução Contratual Curto\" (media) sem evidência textual que o sustente.",
+        "category": "risk_review",
+        "severity": "medium",
+        "affectedFields": [
+          "legal_risk_review.critical_points"
+        ],
+        "recommendation": "Vincular trecho do edital que fundamenta o risco."
+      },
+      {
+        "code": "R11",
+        "message": "31 exigências sem indicação se são obrigatórias ou não.",
+        "category": "normalizacao",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements"
+        ],
+        "recommendation": "Na maioria dos editais, exigências de habilitação são obrigatórias por padrão."
+      },
+      {
+        "code": "R19",
+        "message": "1 parcela(s) de maior relevância identificadas. Verificar se os quantitativos mínimos correspondem ao percentual legalmente aceito (normalmente ≤50% do item relevante).",
+        "category": "qualificacao_tecnica",
+        "severity": "medium",
+        "affectedFields": [
+          "technical_analysis.parcelas_relevantes"
+        ],
+        "recommendation": "Comparar quantitativos com o orçamento e verificar se estão restritos às parcelas de maior relevância."
+      },
+      {
+        "code": "R21",
+        "message": "Proposta exige documentos assinados/rubricados (PC-04). Ausência de assinatura é causa frequente de desclassificação.",
+        "category": "proposta",
+        "severity": "medium",
+        "affectedFields": [
+          "requirements.proposta_comercial.PC-04"
+        ],
+        "recommendation": "Listar todos os documentos da proposta que exigem assinatura. Preparar checklist de conferência antes do envio."
+      }
+    ],
+    "prompt_version": "v4.2.0",
+    "quality_report": {
+      "summary": "Quality: 94.5% | Extract: 100% | Norm: 100% | Evidence: 100% | Risk: 100% | Ops: 100% | 0 issues, 8 rule findings",
+      "issueCount": 0,
+      "overallScore": 94.5,
+      "categoryScores": {
+        "evidence": 100,
+        "extraction": 100,
+        "riskReview": 100,
+        "normalization": 100,
+        "operationalUsefulness": 100
+      }
+    },
+    "schema_enforcer": {
+      "details": [
+        "regularidade_fiscal_trabalhista: \"2 exigência(s) duplicada(s)\" → \"removida(s) — de 9 para 7 itens\"",
+        "modalidade: \"PREGÃO ELETRÔNICO\" → \"Pregão Eletrônico\"",
+        "timeline.data_sessao: \"22/04/2026 08:00\" → \"22/04/2026 às 08:00\"",
+        "timeline.prazo_envio_proposta: \"22/04/2026 08:00\" → \"22/04/2026 às 08:00\"",
+        "participation_conditions.exige_visita_tecnica: \"null\" → \"false (default conservador)\"",
+        "RFT: \"IE/IM fora de posição\" → \"reordenado: CNPJ → IE → IM → CNDs (Regra de Ouro)\""
+      ],
+      "corrections": 12
+    },
+    "analysis_version": "1.0",
+    "models_per_stage": {
+      "extraction": "gemini-2.5-flash",
+      "risk_review": "gemini-2.5-flash",
+      "normalization": "gemini-2.5-flash"
+    },
+    "workflow_stage_status": {
+      "extraction": "done",
+      "validation": "done",
+      "risk_review": "done",
+      "normalization": "done"
+    }
+  },
+  "evidence_registry": [
+    {
+      "page": "9",
+      "excerpt": "Ato constitutivo, estatuto ou contrato social em vigor e seus aditivos, devidamente registrado na Junta Comercial da sede do Licitante, em se tratando de sociedades comerciais, e, no caso de sociedades por ações, acompanhada de documentos de eleição de seus administradores;",
+      "section": "12.1.1",
+      "evidence_id": "EV-HJ-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "Registro comercial e seus aditivos, no caso de empresa individual, devidamente registrado na Junta Comercial da sede do Licitante;",
+      "section": "12.1.2",
+      "evidence_id": "EV-HJ-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "Inscrição do ato constitutivo, no caso de sociedades civis, acompanhadas de prova de diretoria em exercício;",
+      "section": "12.1.3",
+      "evidence_id": "EV-HJ-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "Decreto de autorização, em se tratando de empresa ou sociedade estrangeira em funcionamento no País, e ato de registro ou autorização para funcionamento expedido pelo órgão competente, quando a atividade assim o exigir;",
+      "section": "12.1.4",
+      "evidence_id": "EV-HJ-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "Comprovação de compromisso público ou particular de constituição de consórcio, subscrito pelos consorciados em se tratando de empresas organizadas sob esta forma, devendo ser realizada a indicação da empresa lider, que será responsável por sua representação perante a Administração e apresentar declaração formal de responsabilidade solidária dos integrantes pelos atos praticados em consórcio, devidamente assinado por todos os representantes legais das empresas que farão parte da composição;",
+      "section": "12.1.5",
+      "evidence_id": "EV-HJ-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Habilitação Jurídica"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de inscrição no Cadastro Nacional da Pessoa Jurídica - CNPJ;",
+      "section": "12.1.7",
+      "evidence_id": "EV-RFT-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "9",
+      "excerpt": "Prova de inscrição no Cadastro de Contribuintes Estadual e/ou Municipal, se houver, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade e compatível com o objeto contratual,",
+      "section": "12.1.8",
+      "evidence_id": "EV-RFT-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "10",
+      "excerpt": "Prova de regularidade perante a Fazenda Federal;",
+      "section": "12.1.9",
+      "evidence_id": "EV-RFT-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "10",
+      "excerpt": "Prova de regularidade perante a Fazenda Estadual;",
+      "section": "12.1.10",
+      "evidence_id": "EV-RFT-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "10",
+      "excerpt": "Prova de regularidade perante a Fazenda Municipal;",
+      "section": "12.1.11",
+      "evidence_id": "EV-RFT-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "10",
+      "excerpt": "Prova de regularidade relativa à Seguridade Social;",
+      "section": "12.1.12",
+      "evidence_id": "EV-RFT-06",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "10",
+      "excerpt": "Prova de regularidade relativa ao Fundo de Garantia por Tempo de Serviço - FGTS;",
+      "section": "12.1.13",
+      "evidence_id": "EV-RFT-07",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "10",
+      "excerpt": "Prova de regularidade perante a Justiça do Trabalho;",
+      "section": "12.1.14",
+      "evidence_id": "EV-RFT-08",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Regularidade Fiscal e Trabalhista"
+    },
+    {
+      "page": "10",
+      "excerpt": "Balanço patrimonial, demonstração de resultado de exercício e demais demonstrações contábeis dos 2 (dois) últimos exercícios sociais;",
+      "section": "12.1.15",
+      "evidence_id": "EV-QEF-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "10",
+      "excerpt": "A documentação exigida acima estará restrita ao último exercício social, no caso de empresas constituídas há menos de dois anos;",
+      "section": "12.1.15.1",
+      "evidence_id": "EV-QEF-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "10",
+      "excerpt": "Certidão negativa de feitos sobre falência expedida pelo distribuidor da sede do licitante;",
+      "section": "12.1.16",
+      "evidence_id": "EV-QEF-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "7",
+      "excerpt": "Juntamente com a proposta de preços a licitante deverá apresentar a prova de garantia da mesma, no montante estipulado em 1% (um por cento), do valor estimado para a contratação, nos termos do Artigo 58 da Lei Federal nº 14.133/2021.",
+      "section": "11.2",
+      "evidence_id": "EV-QEF-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "7",
+      "excerpt": "A licitante poderá optar por uma das seguintes modalidades de garantia:",
+      "section": "11.2.2",
+      "evidence_id": "EV-QEF-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "7",
+      "excerpt": "Optando por caução em dinheiro, o licitante deverá apresentar o comprovante de DEPÓSITO BANCÁRIO, (com a identificação do depositante/licitante) a ser feito em nome da Prefeitura Municipal de Quixelô, Conta Corrente n° 120.584-6, Agência nº 0122-8 Banco do Brasil, sendo que depósitos efetuados em caixas de autoatendimento, só serão validados após sua compensação.",
+      "section": "11.2.3",
+      "evidence_id": "EV-QEF-06",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "7",
+      "excerpt": "Caso a modalidade de garantia seja seguro garantia, o licitante deverá fazer a comprovação da apólice ou de documento hábil expedido pela seguradora, cuja vigência será de no mínimo, 60 (sessenta) dias contados a partir da data do recebimento dos envelopes.",
+      "section": "11.2.4",
+      "evidence_id": "EV-QEF-07",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "7",
+      "excerpt": "Caso a modalidade de garantia escolhida seja a fiança bancária, o licitante entregará o documento original fornecido pela instituição que a concede, do qual deverá obrigatoriamente, constar: Beneficiário: Prefeitura Municipal de Quixelô.",
+      "section": "11.2.5",
+      "evidence_id": "EV-QEF-08",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "15",
+      "excerpt": "Para a Contratação do objeto desta licitação, será exigida da(s) proponente(s) vencedora(s), a título de garantia contratual correspondente a 5% (cinco por cento) do valor do(s) Contrato(s), em uma das modalidades previstas no art. 96 da Lei 14.133/2021, à escolha da licitante vencedora:",
+      "section": "18.8",
+      "evidence_id": "EV-QEF-09",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "66",
+      "excerpt": "A contratação conta com garantia de execução, nos moldes do art. 96, da Lei nº 14.133/2021, em valor correspondente a 5% (cinco por cento) do valor total do contrato.",
+      "section": "12.1",
+      "evidence_id": "EV-QEF-10",
+      "document_name": "ANEXO IV - MINUTA DO CONTRATO",
+      "document_type": "minuta",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "15",
+      "excerpt": "Em se tratando de garantia prestada por meio de caução em dinheiro, o depósito deverá ser feito, Conta Corrente nº 120.584-6, Agência nº 0122-8 - Banco do Brasil",
+      "section": "18.9",
+      "evidence_id": "EV-QEF-11",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Econômico-Financeira"
+    },
+    {
+      "page": "9",
+      "excerpt": "Comprovação de aptidão para desempenho de atividade pertinente e compatível em características, quantidades e prazos com o objeto da licitação, sendo esta feita mediante a apresentação de atestado(s), fornecido(s) por pessoa(s) jurídica(s) de direito público ou privado;",
+      "section": "12.1.6",
+      "evidence_id": "EV-QTO-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Qualificação Técnica Operacional"
+    },
+    {
+      "page": "4",
+      "excerpt": "Indicação em cada lote da especificação do objeto licitado com todos seus itens, de acordo com o disposto no ANEXO I - TERMO DE REFERÊNCIA deste Edital, para que seja preservado o sigilo do proponente;",
+      "section": "7.2.a",
+      "evidence_id": "EV-PC-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "Preço unitário de cada item e global do lote cotado, em algarismos, com no máximo 2 (duas) casas decimais;",
+      "section": "7.2.b",
+      "evidence_id": "EV-PC-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "Prazo de validade da proposta, que não poderá ser inferior a 60 (sessenta) dias, a contar da data de sua apresentação;",
+      "section": "7.2.c",
+      "evidence_id": "EV-PC-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "7",
+      "excerpt": "A proposta final deverá ser apresentada em via única original, com os preços ajustados ao menor lance, nos termos do Anexo II - Proposta de preços deste edital, assinada pelo representante legal do licitante, em linguagem clara e concisa, sem emendas, rasuras ou entrelinhas, com as especificações técnicas, quantitativos, devendo ser devendo ser indicada a MARCA dos itens propostos e quando se tratar de prestação de serviço, inserir o termo \"Próprio(a)\" e demais informações relativas ao produto/serviço ofertado.",
+      "section": "11.1",
+      "evidence_id": "EV-PC-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Proposta Comercial"
+    },
+    {
+      "page": "4",
+      "excerpt": "O licitante deverá informar a condição de microempresa (ME) ou empresa de pequeno porte (EPP) que faz jus ao tratamento diferenciado da Lei Complementar n° 123, de 2006, ou cooperativa de que trata o artigo 34 da Lei n.º 11.488, de 2007, no ato do encaminhamento da proposta, por intermédio de funcionalidade disponível no sistema eletrônico do site https://www.comprasquixelo.com.br.",
+      "section": "7.3",
+      "evidence_id": "EV-DC-01",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "10",
+      "excerpt": "Declaração de que suas propostas econômicas compreendem a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição Federal, nas leis trabalhistas, nas normas infralegais, nas convenções coletivas de trabalho e nos termos de ajustamento de conduta vigentes na data de entrega das propostas;",
+      "section": "12.1.17",
+      "evidence_id": "EV-DC-02",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "10",
+      "excerpt": "Declaração de que não possui em seu quadro de pessoal, empregados menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre e menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz a partir de 14 (quatorze) anos, nos termos do inciso XXXIII, do Art. 7º da Constituição Federal;",
+      "section": "12.1.18",
+      "evidence_id": "EV-DC-03",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "10",
+      "excerpt": "Declaração de que cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social, previstas em lei e em outras normas específicas;",
+      "section": "12.1.19",
+      "evidence_id": "EV-DC-04",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "10",
+      "excerpt": "Declaração de que atende aos requisitos de habilitação, e que responderá pela veracidade das informações prestadas, na forma da lei;",
+      "section": "12.1.20",
+      "evidence_id": "EV-DC-05",
+      "document_name": "Edital Convocatório Pregão Eletrônico n.º 2026.03.31.1",
+      "document_type": "edital",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "59",
+      "excerpt": "A proposta econômica compreende a integralidade dos custos para atendimento dos direitos trabalhistas assegurados na Constituição Federal, nas leis trabalhistas, nas normas infralegais, nas convenções coletivas de trabalho e nos termos de ajustamento de conduta vigentes;",
+      "section": "item a",
+      "evidence_id": "EV-DC-06",
+      "document_name": "ANEXO III - DECLARAÇÕES",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "59",
+      "excerpt": "Não possui em seu quadro de pessoal, empregados menores de 18 (dezoito) anos em trabalho noturno, perigoso ou insalubre e menores de 16 (dezesseis) anos em qualquer trabalho, salvo na condição de aprendiz a partir de 14 (quatorze) anos, nos termos do inciso XXXIII, do Art. 7º da Constituição Federal;",
+      "section": "item b",
+      "evidence_id": "EV-DC-07",
+      "document_name": "ANEXO III - DECLARAÇÕES",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "59",
+      "excerpt": "Cumpre as exigências de reserva de cargos para pessoa com deficiência e para reabilitado da Previdência Social, previstas em lei e em outras normas específicas;",
+      "section": "item c",
+      "evidence_id": "EV-DC-08",
+      "document_name": "ANEXO III - DECLARAÇÕES",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "59",
+      "excerpt": "Atende aos requisitos de habilitação, e que responderá pela veracidade das informações prestadas, na forma da lei.",
+      "section": "item d",
+      "evidence_id": "EV-DC-09",
+      "document_name": "ANEXO III - DECLARAÇÕES",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares"
+    },
+    {
+      "page": "59",
+      "excerpt": "(PREFERENCIALMENTE EM PAPEL TIMBRADO DO PROPONENTE)",
+      "section": "Instrução Geral",
+      "evidence_id": "EV-DC-10",
+      "document_name": "ANEXO III - DECLARAÇÕES",
+      "document_type": "anexo",
+      "normalized_topic": "Documentos Complementares"
+    }
+  ],
+  "legal_risk_review": {
+    "omissions": [
+      "O edital e a minuta contratual omitem as cláusulas de penalidades aplicáveis em caso de descumprimento contratual, o que é essencial para a segurança jurídica das partes. (Minuta do Contrato, seção 'penalidades')",
+      "O edital e a minuta contratual omitem as obrigações detalhadas da Contratada e da Contratante, informações cruciais para a execução do contrato. (Minuta do Contrato, seções 'obrigacoes_contratada' e 'obrigacoes_contratante')"
+    ],
+    "ambiguities": [
+      "A exigência de atestado de capacidade técnica (QTO-01) é ambígua por não definir quantitativos mínimos ou percentuais para a comprovação de aptidão, deixando margem para interpretação subjetiva da Administração. (Edital, item 12.1.6)",
+      "Os critérios de aprovação das amostras não são objetivos, apenas mencionando 'laudo de aprovação ou não', o que pode gerar incerteza e subjetividade na avaliação. (Edital, item 17.1.1)"
+    ],
+    "critical_points": [
+      {
+        "title": "Garantia de Proposta de 1% do Valor Estimado",
+        "reason": "Embora legal (Art. 58, §2º Lei 14.133/2021), representa um custo de participação mais elevado para o licitante.",
+        "category": "economico_financeira",
+        "severity": "media",
+        "source_ref": "Edital, item 11.2",
+        "description": "Exigência de garantia de proposta de 1% do valor estimado, superior ao usual 0,5%, demandando maior capital inicial.",
+        "evidence_refs": [
+          "EV-QEF-04"
+        ],
+        "recommended_action": "Provisionar o valor da garantia de proposta ou avaliar modalidade de menor custo (seguro-garantia)."
+      },
+      {
+        "title": "Atestado de Capacidade Técnica sem Quantitativo Mínimo",
+        "reason": "A ausência de quantitativos mínimos para comprovação de aptidão pode levar a interpretações discricionárias da Administração, violando o Art. 67, §1º da Lei 14.133/2021.",
+        "category": "tecnica",
+        "severity": "alta",
+        "source_ref": "Edital, item 12.1.6",
+        "description": "Atestado de capacidade técnica (QTO-01) não especifica quantitativos mínimos, gerando subjetividade na avaliação.",
+        "evidence_refs": [
+          "EV-QTO-01"
+        ],
+        "recommended_action": "Solicitar esclarecimento sobre os quantitativos mínimos exigidos para o atestado de capacidade técnica."
+      },
+      {
+        "title": "Prazo Curto para Apresentação de Amostras",
+        "reason": "O curto prazo pode inviabilizar a obtenção e entrega de amostras, especialmente se houver necessidade de fabricação ou logística complexa.",
+        "category": "prazo",
+        "severity": "media",
+        "source_ref": "Edital, item 17.1",
+        "description": "Prazo de 4 dias para entrega das amostras após convocação, o que pode ser exíguo para produtos específicos.",
+        "evidence_refs": [],
+        "recommended_action": "Preparar as amostras com antecedência ou solicitar prorrogação do prazo, se necessário."
+      },
+      {
+        "title": "Amostra sem Critérios Objetivos de Aceitação",
+        "reason": "A falta de critérios claros para as amostras pode levar a decisões arbitrárias e inabilitação/desclassificação injustificada, contrariando o princípio da objetividade.",
+        "category": "proposta",
+        "severity": "alta",
+        "source_ref": "Edital, item 17.1.1",
+        "description": "O edital não detalha critérios objetivos para aprovação ou reprovação das amostras, permitindo subjetividade na avaliação.",
+        "evidence_refs": [],
+        "recommended_action": "Solicitar esclarecimento sobre os critérios técnicos específicos para avaliação e aceitação das amostras."
+      },
+      {
+        "title": "Desclassificação por Item com Preço Acima do Estimado",
+        "reason": "Critério de desclassificação excessivamente rigoroso que pode eliminar propostas vantajosas, violando o princípio da economicidade e competitividade. A Lei 14.133/2021 foca na exequibilidade global da proposta.",
+        "category": "proposta",
+        "severity": "critica",
+        "source_ref": "Edital, item 11.14.6",
+        "description": "Proposta será desclassificada se qualquer item do lote tiver valor superior ao estimado, mesmo que o lote total seja competitivo.",
+        "evidence_refs": [],
+        "recommended_action": "Revisar a precificação de cada item individualmente para garantir que nenhum exceda o valor estimado da Administração. Avaliar impugnação do item."
+      },
+      {
+        "title": "Prazo de Execução Contratual Curto",
+        "reason": "O curto prazo de execução pode gerar atrasos e penalidades, especialmente para fornecimentos que demandam fabricação sob demanda.",
+        "category": "contratual",
+        "severity": "media",
+        "source_ref": "contractual_analysis.prazo_execucao",
+        "description": "Prazo de execução de 15 dias a partir da Ordem de Compra pode ser insuficiente para confecção e entrega de grandes volumes.",
+        "evidence_refs": [],
+        "recommended_action": "Avaliar a capacidade de produção e logística para cumprir o prazo. Considerar solicitar esclarecimento sobre flexibilidade."
+      }
+    ],
+    "inconsistencies": [],
+    "possible_restrictive_clauses": [
+      "A exigência de 'indicação da MARCA dos itens propostos' (Edital, item 11.1) combinada com as especificações detalhadas dos itens licitados, como 'VIÉS DA ADIDAS' (Itens 5-8, 18-26), pode ser restritiva se não houver previsão expressa de aceitação de produtos 'ou similar/equivalente', direcionando para marcas específicas. (Art. 41, I da Lei 14.133/2021)",
+      "A vedação de subcontratação do objeto contratual (TR, item 6.5) pode ser restritiva à competitividade, especialmente se o objeto for complexo ou demandar especialidades que o licitante principal não possua integralmente."
+    ],
+    "points_for_impugnation_or_clarification": [
+      "Recomenda-se solicitar esclarecimento sobre os quantitativos mínimos exigidos para o atestado de capacidade técnica (Edital, item 12.1.6), ou impugnar por violação do Art. 67, §1º da Lei 14.133/2021, que exige que as exigências sejam limitadas às parcelas de maior relevância e valor significativo.",
+      "Recomenda-se solicitar esclarecimento sobre a aceitação de produtos 'ou similar/equivalente' para os itens que parecem direcionar a marca (Edital, item 11.1 e descrições dos itens), ou impugnar por restrição à competitividade (Art. 41, I da Lei 14.133/2021).",
+      "Recomenda-se solicitar esclarecimento sobre os critérios objetivos de avaliação das amostras (Edital, item 17.1.1) para evitar subjetividade na análise.",
+      "Recomenda-se impugnar o critério de desclassificação de propostas que contenham 'item com valor superior ao estimado pela Administração' (Edital, item 11.14.6), por ser excessivamente restritivo e violar o princípio da competitividade e da exequibilidade da proposta global (Art. 41, I e Art. 59, I da Lei 14.133/2021)."
+    ]
+  },
+  "proposal_analysis": {
+    "itens_licitados": [
+      {
+        "unit": "UND",
+        "quantity": 228,
+        "itemNumber": "1",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR REGATA, INFANTO JUVENIL (TAMANHO 2 ANOS). ESPECIFICAÇÕES: CAMISETA REGATA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA E CAVAS COM ACABAMENTO EM VIÉS DE RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 32,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 312,
+        "itemNumber": "2",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR REGATA, INFANTO JUVENIL (TAMANHO 3 anos). ESPECIFICAÇÕES: CAMISETA REGATA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA E CAVAS COM ACABAMENTO EM VIÉS DE RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 32,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 362,
+        "itemNumber": "3",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR REGATA, INFANTO JUVENIL (TAMANHO 4 anos). ESPECIFICAÇÕES: CAMISETA REGATA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA E CAVAS COM ACABAMENTO EM VIÉS DE RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 32,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 410,
+        "itemNumber": "4",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR REGATA, INFANTO JUVENIL (TAMANHO 5 anos). ESPECIFICAÇÕES: CAMISETA REGATA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA E CAVAS COM ACABAMENTO EM VIÉS DE RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 32.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 228,
+        "itemNumber": "5",
+        "multiplier": 1,
+        "description": "BERMUDA ESCOLAR INFANTO JUVENIL. (TAMANHOS 2 ANOS). ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 34,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 312,
+        "itemNumber": "6",
+        "multiplier": 1,
+        "description": "BERMUDA ESCOLAR INFANTO JUVENIL. (TAMANHOS 3 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 34,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 362,
+        "itemNumber": "7",
+        "multiplier": 1,
+        "description": "BERMUDA ESCOLAR INFANTO JUVENIL. (TAMANHOS 4 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 34,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 410,
+        "itemNumber": "8",
+        "multiplier": 1,
+        "description": "BERMUDA ESCOLAR INFANTO JUVENIL. (TAMANHOS 5 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 34.6,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 362,
+        "itemNumber": "9",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 6 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 34.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 432,
+        "itemNumber": "10",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 7 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 34.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 430,
+        "itemNumber": "11",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 8 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 34.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 328,
+        "itemNumber": "12",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 9 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 34.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 422,
+        "itemNumber": "13",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 10 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 34.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 436,
+        "itemNumber": "14",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 11 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 36,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 376,
+        "itemNumber": "15",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 12 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 36,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 442,
+        "itemNumber": "16",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 13 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 36,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 458,
+        "itemNumber": "17",
+        "multiplier": 1,
+        "description": "CAMISA ESCOLAR ENSINO FUNDAMENTAL, COM MANGA. (TAMANHOS 14 anos) ESPECIFICAÇÕES: CAMISETA COM MANGA E GOLA REDONDA CONFECCIONADA EM MALHA PP 100% POLIÉSTER NA COR BRANCA, COM GRAMATURA MÍNIMA DE 160 G/M², CONFECCIONADA EM OVERLOK PONTO CADEIA. GOLA EM RIBANA, COLOCADAS EM APARELHO NA MÁQUINA GALONEIRA. FRENTE E COSTA COM SUBLIMAÇÃO TOTAL NAS CORES CONFORME LAYOUT EM ANEXO. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DA INSCRIÇÃO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 36,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 362,
+        "itemNumber": "18",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 6 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 39.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 432,
+        "itemNumber": "19",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 7 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 39.8,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 430,
+        "itemNumber": "20",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 8 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 42,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 328,
+        "itemNumber": "21",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 9 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 42,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 422,
+        "itemNumber": "22",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 10 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 42,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 436,
+        "itemNumber": "23",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 11 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 47,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 376,
+        "itemNumber": "24",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 12 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 47,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 442,
+        "itemNumber": "25",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 13 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 47,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 458,
+        "itemNumber": "26",
+        "multiplier": 1,
+        "description": "CALÇA ESCOLAR ENSINO FUNDAMENTAL. (TAMANHOS 14 anos) ESPECIFICAÇÕES: CONFECCIONADA EM HELANCA COLEGIAL, 100% POLIÉSTER, NA COR AZUL ROYAL, NA CINTURA DEVERÁ POSSUIR ELÁSTICO COM LARGURA DE 40 MM, EMBUTIDO E REBATIDO NA MÁQUINA ELASTICIDADEIRA COM QUATRO AGULHAS, NAS LATERAIS DAS PERNAS DEVERÁ CONTER UM VIÉS EM POLIÉSTER NA COR AZUL BEBÊ COM 1 CM, COLOCADO EM APARELHO TIPO VIÉS DA ADIDAS. A BERMUDA DEVERÁ SER TODA COSTURADA COM MÁQUINA OVERLOK DE DUAS AGULHAS, PONTO EM CADEIA. AS BARRAS DAS PERNAS DEVEM SER REBATIDAS COM LARGURA DE 2,0 CM. NA PARTE INTERNA DEVE CONTER UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, O NÚMERO DO CNPJ DO FABRICANTE, O SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 47,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "UND",
+        "quantity": 500,
+        "itemNumber": "27",
+        "multiplier": 1,
+        "description": "CAMISA EJA COM MANGA, NOS TAMANHOS P, M, G, GG E EG. ESPECIFICAÇÕES: CAMISA MODELO GOLA POLO, CONFECCIONADA EM MALHA 100% POLIÉSTER, COM GRAMATURA DE 160 G/M², NA COR BRANCA. MANGA BRANCA COM SUBLIMAÇÃO, ABERTURA FRONTAL COM TRÊS BOTÕES E GOLA POLO NA COR AZUL (TURQUESA). FRENTE E COSTAS COM SUBLIMAÇÃO CONFORME O LAYOUT. A CAMISA DEVE SER CONFECCIONADA EM MÁQUINA OVERLOCK, COM PONTO CADEIA ABANHADA EM MÁQUINA GALONEIRA, COM 2 CM. NO MEIO DA PARTE TRASEIRA INTERNA DA GOLA DEVE SER COSTURADA UMA ETIQUETA COM O INDICATIVO DO TAMANHO DA PEÇA, COMPOSIÇÃO DO TECIDO, RAZÃO SOCIAL DO FABRICANTE, NÚMERO DE INSCRIÇÃO DO CNPJ DO FABRICANTE, SÍMBOLO INDICATIVO DO TIPO DE LAVAGEM A SER EXECUTADA NA PEÇA E O PAÍS ONDE A PEÇA FOI FABRICADA.",
+        "referencePrice": 48,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "PAR",
+        "quantity": 656,
+        "itemNumber": "1",
+        "multiplier": 1,
+        "description": "SANDÁLIA INFANTIL ANATÔMICA DE 0 A 6 ANOS. DESCRIÇÃO TÉCNICA: CONFECCIONADA EM PVC (CLORETO DE POLIVINILA) 100% VIRGEM, COM DUREZA DE 60%. NA COR PRETA COM BRILHO, MODELO UNISSEX. FORMADO POR DUAS TIRAS, UMA PRINCIPAL FRONTAL NA PROTEÇÃO DOS DEDOS QUE CONTA COM UMA ETIQUETA RESINADA DA LOGOMARCA DO MUNICÍPIO, CONFECCIONADA EM PVC 100% VIRGEM; A OUTRA TIRA É TAMBÉM EM PVC 100% VIRGEM NA COR PRETA (BRILHOSA) COM VELCRO DE ALTA ADERÊNCIA NAS LATERAIS EXTERNAS PARA AJUSTE AO PÉ DA CRIANÇA, ENQUANTO A PALMILHA TAMBÉM É CONFECCIONADA EM PVC VIRGEM NA COR PRETA, OFERECENDO O CONFORTO E DURABILIDADE, SENDO IMPERMEÁVEL E ANTIDERRAPANTE, CURVATURA PROJETADA PARA ACOMODAR A SOLA DO PÉ, GARANTINDO CONFORTO E ESTABILIDADE, BASE ÚNICA SEM DIVISÕES. TEXTURA INTERNA LEVEMENTE POROSA PARA EVITAR ESCORREGAMENTO DO PÉ. BORDAS ARREDONDADAS PARA EVITAR ATRITO E DESCONFORTO. DIMENSÕES VARIÁVEIS CONFORME O TAMANHO DA PEÇA. O MODELO É TIPO PAPETE, COM FECHO EM VELCRO AJUSTÁVEL NA PARTE DO TORNOZELO, PROPORCIONANDO O MELHOR ENCAIXE. FORMA DE ENTREGA: PEÇAS EMBALADAS INDIVIDUALMENTE EM SACO PLÁSTICO; SEM FALHAS, MANCHAS, OU DIFERENÇA DE TONALIDADE, E ACABAMENTO UNIFORME E PADRÃO EM TODAS AS PEÇAS. TAMANHOS: CONFORME GRADE APRESENTADA PELA SECRETAIRA MUNICIPAL D EDUCAÇÃO. CONFECÇÃO DA PEÇA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 89,
+        "multiplierLabel": ""
+      },
+      {
+        "unit": "PAR",
+        "quantity": 1843,
+        "itemNumber": "2",
+        "multiplier": 1,
+        "description": "TÊNIS INFANTIL-JUVENIL. 07 A 16 ANOS. DESCRIÇÃO TÉCNICA: MODELO VULCANIZADO, TIPO ALLSTAR, COM CABEDAL, CONFECCIONADO EM LONA PANAMÁ, 100% POLIÉSTER, COMPOSTO POR GÁSPEA E LINGUETA. O ATACADOR É 100% POLIÉSTER E OS ILHOSES SÃO DE ALUMÍNIO, NA COR VERDE-LIMÃO, GARANTINDO DURABILIDADE. A LINHA DE COSTURA É EM NYLON 40, NA COR PRETA, PROPORCIONANDO UM ACABAMENTO ROBUSTO E RESISTENTE. A DE IMPACTO. O SOLADO É DE BORRACHA, NA COR BRANCA, COM DESENHO ANTIDERRAPANTE E EM FORMATO DE QUADRADOS PARA MAIOR SEGURANÇA. NA LATERAL EXTERNA, É APLICADA A LOGOMARCA INSTITUCIONAL DO GOVERNO MUNICIPAL, ASSOCIADA À SECRETARIA DE EDUCAÇÃO - SEMED, DE TAMANHO PROPORCIONAL AO TAMANHO DA PEÇA. CARACTERÍSTICA DO MATERIAL: LONA PANAMA DUBLADA: TECIDO 100% POLIÉSTER NA COR PRETA, COM ESPESSURA DE 90 MM E GRAMATURA ENTRE 440 A 450 G/M². APRESENTA ALONGAMENTO MÍNIMO DE 20%, RESISTÊNCIA MÉDIA AO RASGAMENTO CONTÍNUO DE 40 N E RESISTÊNCIA À TRAÇÃO DE 130 N/CM. FORRO INTERNO DO CABEDAL: SARJA 100% ALGODÃO NA COR NATURAL COM GRAMATURA DE 220G/M². ATACADOR: COMPOSTO 100% POLIÉSTER COM RESISTÊNCIA À TRAÇÃO DE 413 N E RESISTÊNCIA Á FRICÇÃO DE ATÉ 5.000 GIROS SEM DANOS. LINHA DE COSTURA NA COR PRETA 40, RESISTÊNCIA E TRAÇÃO DE 2.500 KG/F E ALONGAMENTO ENTRE 20 E 22%. BORRACHAS: COMPOSTAS ESPECIALMENTE PARA CALÇADOS ESPORTIVOS, COM RESISTÊNCIA À ABRASÃO DE 180 A 220 SHORE. CADARÇOS: COR BRANCA. FORMA DE ENTREGA: PEÇAS EMBALADAS EM PARES EM SACO PLÁSTICO; SEM FALHAS, MANCHAS, COSTURAS SOLTAS OU DIFERENÇA DE TONALIDADE E ACABAMENTO UNIFORME E PADRÃO EM TODAS AS PEÇAS. TAMANHOS: CONFORME GRADE APRESENTADA PELA SECRETAIRA MUNICIPAL D EDUCAÇÃO. CONFECÇÃO DA PEÇA, CONFORME LAYOUT EM ANEXO.",
+        "referencePrice": 125,
+        "multiplierLabel": ""
+      }
+    ],
+    "exige_cronograma": null,
+    "criterios_desempate": [],
+    "exige_carta_proposta": true,
+    "exige_composicao_bdi": null,
+    "observacoes_proposta": [
+      "Nos valores propostos estarão inclusos todos os custos operacionais, encargos previdenciários, trabalhistas, tributários, comerciais e quaisquer outros que incidam direta ou indiretamente no fornecimento dos itens/prestação de serviço. (Edital, item 7.9)",
+      "Os preços, tanto na proposta inicial, quanto na etapa de lances, serão de exclusiva responsabilidade do licitante, não lhe assistindo o direito de pleitear qualquer alteração sob alegação de erro, omissão ou qualquer outro pretexto. (Edital, item 7.10)"
+    ],
+    "criterios_exequibilidade": [
+      "Será considerado indício de inexequibilidade das propostas, valores inferiores a 50% (cinquenta por cento) do valor orçado pela Administração, nos termos da Instrução Normativa SEGES/ME n° 73/2022. (Edital, item 11.15)"
+    ],
+    "exige_declaracao_fabricante": null,
+    "exige_planilha_orcamentaria": true,
+    "exige_marca_modelo_fabricante": true,
+    "criterios_desclassificacao_proposta": [
+      "Propostas que identifiquem o licitante, assim como quando não forem atribuídos valores a algum dos itens componentes do respectivo lote. (Edital, item 8.5)",
+      "Propostas que contiverem vícios insanáveis e/ou condições ilegais. (Edital, item 11.14.1)",
+      "Propostas que não obedecerem às especificações técnicas contidas no Termo de Referência. (Edital, item 11.14.2)",
+      "Propostas que apresentarem preços manifestamente inexequíveis ou permanecerem acima do preço máximo definido para a contratação. (Edital, item 11.14.3)",
+      "Propostas que não tiverem sua exequibilidade demonstrada, quando exigido pela Administração. (Edital, item 11.14.4)",
+      "Propostas que apresentarem desconformidade com quaisquer outras exigências deste Edital ou seus anexos, desde que insanável. (Edital, item 11.14.5)",
+      "Propostas que contiverem para o lote item com valor superior ao estimado pela Administração, independentemente do valor total do lote, devendo o licitante, readequar o valor do lote aos valores constantes no mapa de preços emitido pela plataforma eletrônica. (Edital, item 11.14.6)"
+    ],
+    "exige_catalogo_ficha_tecnica_manual": null
+  },
+  "technical_analysis": {
+    "exige_art": null,
+    "exige_cat": null,
+    "exige_rrt": null,
+    "parcelas_relevantes": [
+      {
+        "item": "Objeto da licitação",
+        "tipo": "operacional",
+        "unidade": "UN",
+        "descricao": "Comprovação de aptidão para desempenho de atividade pertinente e compatível em características, quantidades e prazos com o objeto da licitação (confecção de fardamentos e calçados escolares).",
+        "evidence_refs": [
+          "EV-QTO-01"
+        ],
+        "percentual_minimo": "não informado",
+        "quantitativo_minimo": "sem quantitativo mínimo definido"
+      }
+    ],
+    "exige_registro_conselho": null,
+    "exige_acervo_profissional": null,
+    "exige_responsavel_tecnico": null,
+    "registro_conselho_detalhes": [],
+    "responsavel_tecnico_detalhes": [],
+    "exigencias_tecnicas_especificas": [],
+    "exige_atestado_capacidade_tecnica": true,
+    "exige_comprovacao_parcelas_relevantes": true
+  },
+  "operational_outputs": {
+    "proposal_routes": [],
+    "declaration_routes": [],
+    "internal_checklist": [],
+    "documents_to_prepare": [
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Ato constitutivo, estatuto ou contrato social",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Registro comercial de empresa individual",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Inscrição do ato constitutivo de sociedades civis",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Decreto de autorização para empresa estrangeira",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "habilitacao_juridica",
+        "priority": "critica",
+        "document_name": "Comprovação de compromisso de consórcio",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de inscrição no CNPJ",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Federal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Estadual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Fazenda Municipal",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade relativa à Seguridade Social",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade relativa ao FGTS",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Prova de regularidade perante a Justiça do Trabalho",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição estadual no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "regularidade_fiscal_trabalhista",
+        "priority": "critica",
+        "document_name": "Inscrição municipal no cadastro de contribuintes",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Balanço patrimonial e demonstrações contábeis",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Certidão negativa de feitos sobre falência",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Garantia de proposta",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Comprovante de depósito bancário (caução em dinheiro)",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Apólice de seguro-garantia",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "critica",
+        "document_name": "Fiança bancária",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "alta",
+        "document_name": "Garantia contratual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "",
+        "category": "qualificacao_economico_financeira",
+        "priority": "alta",
+        "document_name": "Depósito de caução em dinheiro para garantia contratual",
+        "responsible_area": "contabil"
+      },
+      {
+        "notes": "Preparar atestado(s) que comprovem aptidão e compatibilidade com o objeto da licitação em características, quantidades e prazos.",
+        "category": "qualificacao_tecnica_operacional",
+        "priority": "alta",
+        "document_name": "Atestado(s) de Capacidade Técnica",
+        "responsible_area": "engenharia"
+      },
+      {
+        "notes": "Preparar a proposta com a especificação completa do objeto para cada lote, conforme Termo de Referência (Anexo I).",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Proposta Comercial Detalhada por Lote",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Elaborar planilha com preços unitários e globais para cada item e lote, com no máximo duas casas decimais.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Planilha de Preços por Lote",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Incluir na proposta declaração de validade mínima de 60 dias a partir da data de apresentação.",
+        "category": "proposta_comercial",
+        "priority": "alta",
+        "document_name": "Declaração de Validade da Proposta",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Para o licitante vencedor, apresentar proposta final em via única original, com preços ajustados ao menor lance, assinada, sem rasuras, com especificações técnicas, quantitativos e indicação de marca/serviço 'Próprio(a)'.",
+        "category": "proposta_comercial",
+        "priority": "critica",
+        "document_name": "Proposta Final Ajustada",
+        "responsible_area": "comercial"
+      },
+      {
+        "notes": "Conforme modelo do edital, se aplicável.",
+        "category": "documentos_complementares",
+        "priority": "media",
+        "document_name": "Declaração de Enquadramento como ME/EPP ou Cooperativa",
+        "responsible_area": "licitacoes"
+      },
+      {
+        "notes": "Conforme modelo do Anexo III, item 'a'.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Integralidade dos Custos Trabalhistas",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme modelo do Anexo III, item 'b'.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Não Emprego de Menores",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme modelo do Anexo III, item 'c'.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Cumprimento de Reserva de Cargos (PCD/Reabilitados)",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Conforme modelo do Anexo III, item 'd'.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declaração de Atendimento aos Requisitos de Habilitação",
+        "responsible_area": "juridico"
+      },
+      {
+        "notes": "Assegurar que todas as declarações sigam o formato exigido: preferencialmente em papel timbrado, com local, data, assinatura e carimbo CNPJ.",
+        "category": "documentos_complementares",
+        "priority": "alta",
+        "document_name": "Declarações conforme modelo do Anexo III (formato)",
+        "responsible_area": "administrativo"
+      }
+    ],
+    "proposal_inputs_needed": [],
+    "possible_petition_routes": [
+      "Impugnação do Edital, item 12.1.6 (Atestado de Capacidade Técnica sem quantitativo mínimo) por ambiguidade e potencial restrição à competitividade, com base no Art. 67, §1º da Lei 14.133/2021.",
+      "Impugnação do Edital, item 11.14.6 (Desclassificação por item com valor superior ao estimado) por excessiva restrição à competitividade e violação do princípio da exequibilidade da proposta global, com base no Art. 41, I e Art. 59, I da Lei 14.133/2021."
+    ],
+    "technical_documents_needed": [],
+    "questions_for_consultor_chat": [
+      "O edital permite a apresentação de atestados de capacidade técnica com quantitativos parciais ou somatórios de atestados para atingir a compatibilidade?",
+      "Quais são os critérios objetivos e mensuráveis que serão utilizados para a avaliação das amostras?",
+      "É possível apresentar produtos de marcas diferentes das que parecem ser sugeridas pelas especificações detalhadas, desde que atendam às características técnicas?",
+      "Há um mapa de preços detalhado por item disponível para consulta, além do valor global estimado?",
+      "Quais são as penalidades contratuais aplicáveis e as obrigações detalhadas da contratada e contratante, uma vez que não constam no edital/minuta?"
+    ]
+  },
+  "contractual_analysis": {
+    "reajuste": "Os preços inicialmente contratados são fixos e irreajustáveis no prazo de um ano contado da data do orçamento estimado. Após o interregno de um ano, os preços iniciais poderão ser reajustados, mediante a aplicação, pelo contratante, do IPCA (Índice de Preços ao Consumidor Amplo), exclusivamente para as obrigações iniciadas e concluídas após a ocorrência da anualidade. Nos reajustes subsequentes ao primeiro, o interregno mínimo de um ano será contado a partir dos efeitos financeiros do último reajuste. O reajuste será realizado por apostilamento, conforme previsão do Art. 136, da Lei 14.133/2021.",
+    "penalidades": [],
+    "repactuacao": null,
+    "prazo_execucao": "15 (quinze) dias, a contar do recebimento da respectiva Ordem de Compra.",
+    "prazo_vigencia": "12 (doze) meses, contados a partir da data de sua assinatura",
+    "medicao_pagamento": "O pagamento será realizado através de ordem bancária, para crédito em banco, agência e conta corrente indicados pela contratada.",
+    "obrigacoes_contratada": [],
+    "obrigacoes_contratante": [],
+    "matriz_risco_contratual": []
+  },
+  "process_identification": {
+    "orgao": "PREFEITURA MUNICIPAL DE QUIXELÔ/CE",
+    "modalidade": "Pregão Eletrônico",
+    "tipo_objeto": "fornecimento",
+    "link_sistema": "https://www.comprasquixelo.com.br",
+    "municipio_uf": "Quixelô/CE",
+    "fonte_oficial": "Lei n.º 14.133, de 01 de abril de 2021",
+    "forma_disputa": "ABERTO E FECHADO",
+    "numero_edital": "2026.03.31.1",
+    "numero_processo": "",
+    "objeto_completo": "Contratação de empresa especializada na confecção de fardamentos e calçados escolares dos alunos da rede pública de ensino do município de Quixelô/CE.",
+    "objeto_resumido": "Contratação de empresa especializada na confecção de fardamentos e calçados escolares.",
+    "regime_execucao": "bens comuns",
+    "uasg_comprasnet": "",
+    "numero_comprasnet": "",
+    "unidade_compradora": "Prefeitura Municipal de Quixelô",
+    "criterio_julgamento": "MENOR PREÇO (POR LOTE)"
+  },
+  "participation_conditions": {
+    "exige_amostra": true,
+    "amostra_detalhes": "Amostra(s) dos produtos referentes aos itens do(s) LOTE(S) por ele(s) arrematado(s), para a competente análise da Secretaria/Órgão Municipal Contratante, a qual emitirá laudo de aprovação ou não do referido produto. Deverá(ão) ser(em) entregue(s) em até 04 (quatro) dias, a contar da sua convocação, na sede da Secretaria/Órgão contratante ou em local definido pela mesma, em dias úteis, nos horários de 08h00min à 11h00min. Em caso de não aprovação, o licitante vencedora deverá proceder com a substituição do mesmo, uma única vez, no prazo não superior a 04 (quatro) dias. (Edital, item 17.1, 17.1.1, 17.1.2; TR, item 6.9.1, 6.9.2, 6.9.3)",
+    "outras_condicoes": [
+      {
+        "descricao": "Todos os processos envolvidos na execução desse objeto, sejam de extração, fabricação, utilização ou descarte de materiais e serviços devem estar revestidos da preocupação com a sustentabilidade ambiental e totalmente de acordo com as imposições normativas editadas pelos órgãos de proteção ao meio ambiente.",
+        "source_ref": "TR, item 6.3.1"
+      }
+    ],
+    "permite_consorcio": true,
+    "tratamento_me_epp": "Será garantido aos licitantes enquadrados como microempresas, empresas de pequeno porte e as cooperativas, que se enquadrem nos termos do art. 34, da Lei Federal n.º 11.488/2007, como critério de desempate, preferência de contratação, o previsto na Lei Complementar n° 123/2006, em seu Capítulo V - DO ACESSO AOS MERCADOS / DAS AQUISIÇÕES PÚBLICAS. Tratando-se de microempresas e empresas de pequeno porte deverão declarar no Portal de Compras do Município (Sistema GM Tecnologia) no site https://www.comprasquixelo.com.br, o exercício da preferência prevista na Lei Complementar nº 123/2006.",
+    "consorcio_detalhes": "Será admitida para efeito de habilitação técnica, a apresentação dos quantitativos de cada consorciado e, para efeito de habilitação econômico-financeira, o somatório dos valores de cada consorciado; Para participantes em forma de consórcio, será acrescido 10% (dez por cento) sobre o valor exigido de licitante individual para fins de habilitação econômico-financeira; O acréscimo previsto no item anterior não se aplica aos consórcios compostos, em sua totalidade, de microempresas e pequenas empresas, assim definidas em lei; Em caso de ser declarado vencedor, o consórcio deverá, antes da celebração do contrato, promover a constituição e o registro do consórcio, nos termos do compromisso público ou particular de constituição de consórcio, subscrito pelos consorciados; A substituição de consorciado deverá ser expressamente autorizada pelo órgão contratante e deverá ser apresentada a comprovação de que a nova empresa do consórcio possui, no mínimo, os mesmos quantitativos para efeito de habilitação técnica e os mesmos valores para efeito de qualificação econômico-financeira apresentados pela empresa substituída, para fins de habilitação do consórcio no processo licitatório que originou o contrato.",
+    "exige_visita_tecnica": false,
+    "participacao_restrita": "Aquele que não atenda às condições deste edital e seu(s) anexo(s); Autor do anteprojeto, do projeto básico ou do projeto executivo, pessoa física ou jurídica; Empresa, isoladamente ou em consórcio, responsável pela elaboração do projeto básico ou do projeto executivo, ou empresa da qual o autor do projeto seja dirigente, gerente, controlador, acionista ou detentor de mais de 5% (cinco por cento) do capital com direito a voto, responsável técnico ou subcontratado; Pessoa física ou jurídica que se encontre, ao tempo desta licitação, impossibilitada de participar em decorrência de sanção que lhe foi imposta; Aquele que mantenha vínculo de natureza técnica, comercial, econômica, financeira, trabalhista ou civil com dirigente do órgão ou entidade contratante ou com agente público que desempenhe função na licitação ou atue na fiscalização ou na gestão do contrato, ou que deles seja cônjuge, companheiro ou parente em linha reta, colateral ou por afinidade, até o terceiro grau; Empresas controladoras, controladas ou coligadas, nos termos da Lei n.º 6.404, de 15 de dezembro de 1976, concorrendo entre si; Pessoa física ou jurídica que, nos 5 (cinco) anos anteriores à divulgação deste edital, tenha sido condenada judicialmente, com trânsito em julgado, por exploração de trabalho infantil, por submissão de trabalhadores a condições análogas às de escravo ou por contratação de adolescentes nos casos vedados pela legislação trabalhista; Agente público do órgão ou entidade contratante.",
+    "permite_subcontratacao": false,
+    "exige_garantia_proposta": true,
+    "subcontratacao_detalhes": "Não será admitida a subcontratação do objeto contratual. (TR, item 6.5)",
+    "visita_tecnica_detalhes": null,
+    "exige_garantia_contratual": true,
+    "garantia_proposta_detalhes": "1% (um por cento) do valor estimado para a contratação, nos termos do Artigo 58 da Lei Federal nº 14.133/2021. Modalidades: caução em dinheiro ou em títulos da dívida pública; seguro-garantia; fiança bancária; título de capitalização. (Edital, item 11.2 e 11.2.2)",
+    "garantia_contratual_detalhes": "5% (cinco por cento) do valor global da contratação, conforme os arts. 96 e seguintes da Lei nº 14.133/2021. As regras detalhadas sobre a garantia exigida serão especificadas na Minuta Contratual. (TR, item 6.6, 5.6.1)"
+  },
+  "economic_financial_analysis": {
+    "exige_balanco": true,
+    "exige_indices": null,
+    "indices_exigidos": [],
+    "outras_exigencias_ef": [],
+    "capital_social_minimo": "",
+    "patrimonio_liquido_minimo": "",
+    "exige_garantias_adicionais": true,
+    "exige_capital_social_minimo": null,
+    "exige_patrimonio_liquido_minimo": null
+  }
+}
