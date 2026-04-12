@@ -31,9 +31,8 @@ interface Props {
 
 export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onClick, onDoubleClick, onDelete, onToggleMonitor, cardFields, compactMode, highlightExpiring }: Props) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-        id: item.id,
+        id: isOverlay ? `${item.id}-overlay-ghost` : item.id,
         data: item,
-        disabled: isOverlay, // CRITICAL: Stop DragOverlay from overwriting the source node's physics coordinates
     });
 
     // Single-click → Hub, distinguishing from double-click and drag
