@@ -143,11 +143,14 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
                         />
                     );
                 })}
-
-                <DragOverlay dropAnimation={null}>
-                    {activeItem ? <KanbanItemVisual item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} onToggleMonitor={onToggleMonitor} cardFields={cardFields} compactMode={compactMode} highlightExpiring={highlightExpiring} /> : null}
-                </DragOverlay>
             </div>
+
+            {/* CRITICAL: DragOverlay MUST be OUTSIDE the scrolling .kanban-board container.
+                If placed inside, the container's horizontal scroll offset gets applied twice,
+                causing the ghost card to appear one column to the right of its origin. */}
+            <DragOverlay dropAnimation={null}>
+                {activeItem ? <KanbanItemVisual item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} onToggleMonitor={onToggleMonitor} cardFields={cardFields} compactMode={compactMode} highlightExpiring={highlightExpiring} /> : null}
+            </DragOverlay>
         </DndContext>
     );
 }
