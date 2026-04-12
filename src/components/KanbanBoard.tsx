@@ -7,7 +7,6 @@ import {
     useSensor,
     useSensors,
     DragOverlay,
-    MeasuringStrategy,
 } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import {
@@ -109,11 +108,6 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
         <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
-            measuring={{
-                droppable: {
-                    strategy: MeasuringStrategy.Always,
-                },
-            }}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
