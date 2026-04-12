@@ -488,6 +488,8 @@ textarea:focus-visible {
   align-items: flex-start;
   margin-bottom: var(--space-6);
   gap: var(--space-5);
+  position: relative;
+  z-index: 50;
 }
 
 .page-title {
