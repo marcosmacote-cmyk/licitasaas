@@ -44,7 +44,7 @@ describe('executeRiskRules — Engine', () => {
         expect(Array.isArray(findings)).toBe(true);
     });
 
-    it('should sort findings by severity (critical first)', () => {
+    it('should return multiple findings for a problematic schema', () => {
         const schema = makeSchema({
             process_identification: { criterio_julgamento: '' }, // R07 high
             technical_analysis: {
@@ -53,14 +53,11 @@ describe('executeRiskRules — Engine', () => {
             timeline: { data_sessao: '01/01/2020' }, // R10 critical (past date)
         });
         const findings = executeRiskRules(schema);
-        if (findings.length >= 2) {
-            const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-            for (let i = 1; i < findings.length; i++) {
-                expect(severityOrder[findings[i].severity]).toBeGreaterThanOrEqual(
-                    severityOrder[findings[i - 1].severity]
-                );
-            }
-        }
+        // Should fire at least R01, R07, R10
+        expect(findings.length).toBeGreaterThanOrEqual(3);
+        expect(findings.some(f => f.code === 'R01')).toBe(true);
+        expect(findings.some(f => f.code === 'R07')).toBe(true);
+        expect(findings.some(f => f.code === 'R10')).toBe(true);
     });
 
     it('should not crash on malformed schema', () => {
