@@ -17,7 +17,7 @@ import {
 import React from 'react';
 
 import { KanbanColumn } from './KanbanColumn';
-import { KanbanItem } from './KanbanCard';
+import { KanbanItem, KanbanItemVisual } from './KanbanCard';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../types';
 import { COLUMNS } from '../types';
 import { resolveStage } from '../governance';
@@ -150,8 +150,8 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
                     );
                 })}
 
-                <DragOverlay>
-                    {activeItem ? <KanbanItem item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} onToggleMonitor={onToggleMonitor} cardFields={cardFields} compactMode={compactMode} highlightExpiring={highlightExpiring} /> : null}
+                <DragOverlay dropAnimation={null}>
+                    {activeItem ? <KanbanItemVisual item={activeItem} isOverlay hasAnalysis={analyses.some(a => a.biddingProcessId === activeItem.id)} companies={companies} onDelete={onDeleteProcess} onToggleMonitor={onToggleMonitor} cardFields={cardFields} compactMode={compactMode} highlightExpiring={highlightExpiring} /> : null}
                 </DragOverlay>
             </div>
         </DndContext>

@@ -29,12 +29,8 @@ interface Props {
     highlightExpiring?: boolean;
 }
 
-export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onClick, onDoubleClick, onDelete, onToggleMonitor, cardFields, compactMode, highlightExpiring }: Props) {
-    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-        id: isOverlay ? `${item.id}-overlay-ghost` : item.id,
-        data: item,
-    });
-
+// ═══ THE PURE VISUAL CARD (Safe for DragOverlay) ═══
+export function KanbanItemVisual({ item, isOverlay, hasAnalysis, companies, onViewAnalysis, onClick, onDoubleClick, onDelete, onToggleMonitor, cardFields, compactMode, highlightExpiring, innerRef, attributes, listeners, isDragging }: Props & { innerRef?: any, attributes?: any, listeners?: any, isDragging?: boolean }) {
     // Single-click → Hub, distinguishing from double-click and drag
     const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const handleClick = (e: React.MouseEvent) => {
@@ -121,14 +117,11 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
     return (
         <div
             ref={(node) => {
-                // Ensure only the REAL node is registered as a draggable drop zone, NOT the overlay ghost
-                if (!isOverlay) {
-                    setNodeRef(node);
-                }
+                if (innerRef) innerRef(node);
                 cardElRef.current = node;
             }}
-            {...(isOverlay ? {} : attributes)}
-            {...(isOverlay ? {} : listeners)}
+            {...attributes}
+            {...listeners}
             className="kanban-card"
             style={style}
             onClick={handleClick}
@@ -265,5 +258,24 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
                 </>
             )}
         </div>
+    );
+}
+
+// ═══ THE DRAGGABLE WRAPPER (Used in actual columns) ═══
+export function KanbanItem({ item, ...props }: Props) {
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+        id: item.id,
+        data: item,
+    });
+
+    return (
+        <KanbanItemVisual
+            item={item}
+            {...props}
+            innerRef={setNodeRef}
+            attributes={attributes}
+            listeners={listeners}
+            isDragging={isDragging}
+        />
     );
 }
