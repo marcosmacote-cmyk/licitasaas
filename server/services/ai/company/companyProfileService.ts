@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../../../lib/logger';
 const prisma = new PrismaClient();
 
 // ── Tipos do Perfil ──
@@ -106,9 +107,9 @@ export async function createOrUpdateProfile(profile: CompanyLicitationProfile): 
                 historicalPerformance: profile.historicalPerformance as any
             }
         });
-        console.log(`[CompanyProfile] Saved profile to DB for ${profile.corporateData.legalName} (${profile.companyId})`);
+        logger.info(`[CompanyProfile] Saved profile to DB for ${profile.corporateData.legalName} (${profile.companyId})`);
     } catch(e) {
-        console.error(`[CompanyProfile] Error saving profile to DB for ${profile.companyId}`, e);
+        logger.error(`[CompanyProfile] Error saving profile to DB for ${profile.companyId}`, e);
     }
     
     return profile;

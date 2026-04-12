@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import axios from 'axios';
 import { NotificationService } from './notification.service';
+import { logger } from '../../lib/logger';
 
 // ── Helpers ──
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -22,7 +23,7 @@ async function fetchWithRetry(url: string, maxRetries = 3, initialDelayMs = 1000
         throw error;
       }
       const delay = initialDelayMs * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-      console.warn(`[PncpMonitor] ⚠️ Tentativa ${attempt}/${maxRetries} falhou (${error.message}). Retentando em ${delay}ms...`);
+      logger.warn(`[PncpMonitor] ⚠️ Tentativa ${attempt}/${maxRetries} falhou (${error.message}). Retentando em ${delay}ms...`);
       await sleep(delay);
     }
   }
@@ -38,11 +39,11 @@ export class PncpMonitorService {
   private alertsDetected = 0;
 
   constructor() {
-    console.log('[PncpMonitor] Service initialized.');
+    logger.info('[PncpMonitor] Service initialized.');
   }
 
   async startPolling(intervalMinutes: number = 5) {
-    console.log(`[PncpMonitor] Starting polling every ${intervalMinutes} minutes.`);
+    logger.info(`[PncpMonitor] Starting polling every ${intervalMinutes} minutes.`);
     setInterval(() => this.pollMonitoredProcesses(), intervalMinutes * 60 * 1000);
     // Priming run
     this.pollMonitoredProcesses();
@@ -65,7 +66,7 @@ export class PncpMonitorService {
     this.alertsDetected = 0;
 
     try {
-      console.log('[PncpMonitor] Polling started...');
+      logger.info('[PncpMonitor] Polling started...');
       
       const monitoredProcesses = await prisma.biddingProcess.findMany({
         where: { 
@@ -78,7 +79,7 @@ export class PncpMonitorService {
       });
 
       this.processedCount = monitoredProcesses.length;
-      console.log(`[PncpMonitor] Found ${monitoredProcesses.length} monitored processes.`);
+      logger.info(`[PncpMonitor] Found ${monitoredProcesses.length} monitored processes.`);
 
       for (const process of monitoredProcesses) {
         await this.checkProcessMessages(process);
@@ -89,12 +90,12 @@ export class PncpMonitorService {
 
       this.lastPollStatus = 'success';
     } catch (error) {
-      console.error('[PncpMonitor] Polling error:', error);
+      logger.error('[PncpMonitor] Polling error:', error);
       this.lastPollStatus = 'error';
     } finally {
       this.isProcessing = false;
       this.lastPollTime = new Date();
-      console.log(`[PncpMonitor] Polling cycle finished. Alerts: ${this.alertsDetected}`);
+      logger.info(`[PncpMonitor] Polling cycle finished. Alerts: ${this.alertsDetected}`);
     }
   }
 
@@ -107,7 +108,7 @@ export class PncpMonitorService {
       const urlToMatch = process.pncpLink || process.link || '';
       const pncpMatch = urlToMatch.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
       if (!pncpMatch) {
-        console.log(`[PncpMonitor] ⏭️ "${shortTitle}" — nenhum link PNCP válido. pncpLink: "${process.pncpLink || 'NULL'}", link: "${process.link || 'NULL'}"`);
+        logger.info(`[PncpMonitor] ⏭️ "${shortTitle}" — nenhum link PNCP válido. pncpLink: "${process.pncpLink || 'NULL'}", link: "${process.link || 'NULL'}"`);
         return;
       }
 
@@ -117,11 +118,11 @@ export class PncpMonitorService {
           where: { id: process.id },
           data: { pncpLink: process.link } as any
         }).catch(() => {});
-        console.log(`[PncpMonitor] 📌 Auto-preenchido pncpLink para "${shortTitle}"`);
+        logger.info(`[PncpMonitor] 📌 Auto-preenchido pncpLink para "${shortTitle}"`);
       }
 
       const [_, cnpj, ano, sequencial] = pncpMatch;
-      console.log(`[PncpMonitor] 🔍 Verificando "${shortTitle}" — CNPJ: ${cnpj}, Ano: ${ano}, Seq: ${sequencial}`);
+      logger.info(`[PncpMonitor] 🔍 Verificando "${shortTitle}" — CNPJ: ${cnpj}, Ano: ${ano}, Seq: ${sequencial}`);
       
       // Fetch messages with retry and backoff
       const allMessages: any[] = [];
@@ -156,36 +157,36 @@ export class PncpMonitorService {
             
             // Only log on first occurrence, then silently skip
             if (failures === 1) {
-              console.warn(`[PncpMonitor] ⚠️ "${shortTitle}" — 404 no endpoint de mensagens PNCP. Será ignorado no polling PNCP.`);
+              logger.warn(`[PncpMonitor] ⚠️ "${shortTitle}" — 404 no endpoint de mensagens PNCP. Será ignorado no polling PNCP.`);
             }
             
             // After 3 consecutive 404s, just skip silently (do NOT disable isMonitored — 
             // it would also disable ComprasNet Chat monitoring which shares this flag)
             if (failures >= 3 && failures % 10 === 0) {
-              console.log(`[PncpMonitor] ⏭️ "${shortTitle}" — ${failures} falhas 404 consecutivas no PNCP. Ignorando silenciosamente.`);
+              logger.info(`[PncpMonitor] ⏭️ "${shortTitle}" — ${failures} falhas 404 consecutivas no PNCP. Ignorando silenciosamente.`);
             }
             return;
           }
           
           // Other errors (500, timeout, etc.) — log as error
-          console.error(`[PncpMonitor] ❌ Erro ao verificar "${shortTitle}": ${fetchErr.message}`);
+          logger.error(`[PncpMonitor] ❌ Erro ao verificar "${shortTitle}": ${fetchErr.message}`);
           return;
         }
       }
       
       if (allMessages.length === 0) {
-        console.log(`[PncpMonitor] 📭 "${shortTitle}" — PNCP retornou 0 mensagens.`);
+        logger.info(`[PncpMonitor] 📭 "${shortTitle}" — PNCP retornou 0 mensagens.`);
         return;
       }
 
-      console.log(`[PncpMonitor] 📨 "${shortTitle}" — ${allMessages.length} mensagens obtidas da API PNCP.`);
+      logger.info(`[PncpMonitor] 📨 "${shortTitle}" — ${allMessages.length} mensagens obtidas da API PNCP.`);
 
       const config = await prisma.chatMonitorConfig.findUnique({
         where: { tenantId: process.tenantId }
       });
 
       if (!config || !config.isActive) {
-        console.log(`[PncpMonitor] ⏸️ "${shortTitle}" — Config desativada ou inexistente. Skipping.`);
+        logger.info(`[PncpMonitor] ⏸️ "${shortTitle}" — Config desativada ou inexistente. Skipping.`);
         return;
       }
 
@@ -208,7 +209,7 @@ export class PncpMonitorService {
         const detectedKeyword = keywords.find(k => content.includes(k)) || null;
 
         if (detectedKeyword) {
-          console.log(`[PncpMonitor] 🚨 KEYWORD "${detectedKeyword}" in "${shortTitle}"`);
+          logger.info(`[PncpMonitor] 🚨 KEYWORD "${detectedKeyword}" in "${shortTitle}"`);
           this.alertsDetected++;
         }
 
@@ -239,10 +240,10 @@ export class PncpMonitorService {
         newCount++;
       }
 
-      console.log(`[PncpMonitor] ✅ "${shortTitle}" — ${newCount} novas mensagens capturadas (${existingLogs.length} já existiam).`);
+      logger.info(`[PncpMonitor] ✅ "${shortTitle}" — ${newCount} novas mensagens capturadas (${existingLogs.length} já existiam).`);
 
     } catch (error: any) {
-      console.error(`[PncpMonitor] ❌ Error checking "${shortTitle}":`, error.message);
+      logger.error(`[PncpMonitor] ❌ Error checking "${shortTitle}":`, error.message);
     }
   }
 }

@@ -10,6 +10,7 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const benchmarkManifest = require('./benchmarkManifest.json');
 import { AnalysisSchemaV1 } from '../analysis-schema-v1';
+import { logger } from '../../../lib/logger';
 
 export interface BenchmarkResult {
   caseId: string;
@@ -46,7 +47,7 @@ export function evaluateAgainstBenchmark(
 ): BenchmarkResult | null {
   const benchCase = (benchmarkManifest as any).cases.find((c: any) => c.id === caseId);
   if (!benchCase) {
-    console.warn(`[Benchmark] Case ${caseId} not found in manifest`);
+    logger.warn(`[Benchmark] Case ${caseId} not found in manifest`);
     return null;
   }
 
@@ -180,13 +181,13 @@ export function generateBenchmarkSummary(results: BenchmarkResult[]): BenchmarkS
     ? Math.round(results.reduce((sum, r) => sum + r.scores.criticalPointsFoundPct, 0) / totalCases)
     : 0;
 
-  console.log(`\n[Benchmark] ══════════════ SUMÁRIO ══════════════`);
-  console.log(`[Benchmark] Cases: ${totalCases} | Score Médio: ${averageScore}%`);
-  console.log(`[Benchmark] Tipo Objeto: ${tipoObjetoAccuracy}% | Categorias: ${categoryAccuracy}% | Exigências: ${requirementAccuracy}% | Críticos: ${criticalPointAccuracy}%`);
+  logger.info(`\n[Benchmark] ══════════════ SUMÁRIO ══════════════`);
+  logger.info(`[Benchmark] Cases: ${totalCases} | Score Médio: ${averageScore}%`);
+  logger.info(`[Benchmark] Tipo Objeto: ${tipoObjetoAccuracy}% | Categorias: ${categoryAccuracy}% | Exigências: ${requirementAccuracy}% | Críticos: ${criticalPointAccuracy}%`);
   for (const r of results) {
-    console.log(`[Benchmark]   ${r.caseId}: ${r.totalScore}% — ${r.caseName}${r.details.length > 0 ? ' ⚠️' : ' ✅'}`);
+    logger.info(`[Benchmark]   ${r.caseId}: ${r.totalScore}% — ${r.caseName}${r.details.length > 0 ? ' ⚠️' : ' ✅'}`);
   }
-  console.log(`[Benchmark] ═══════════════════════════════════\n`);
+  logger.info(`[Benchmark] ═══════════════════════════════════\n`);
 
   return { totalCases, averageScore, tipoObjetoAccuracy, categoryAccuracy, requirementAccuracy, criticalPointAccuracy, results };
 }

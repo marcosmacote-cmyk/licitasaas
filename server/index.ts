@@ -139,7 +139,7 @@ async function getFileBufferSafe(fileNameOrUrl: string, tenantId?: string): Prom
         // Try Storage Service first
         return await storageService.getFileBuffer(fileNameOrUrl);
     } catch (err) {
-        console.warn(`[Storage] StorageService failed for ${fileNameOrUrl}, trying fallbacks...`);
+        logger.warn(`[Storage] StorageService failed for ${fileNameOrUrl}, trying fallbacks...`);
 
         // 1. Local disk fallback (legacy or local mode)
         const pureName = path.basename(fileNameOrUrl).split('?')[0];
@@ -175,7 +175,7 @@ if (!fs.existsSync(uploadDir)) {
 
 // Gemini Setup (lazy - don't crash if key missing)
 const apiKey = process.env.GEMINI_API_KEY || '';
-console.log('Gemini API Key present:', !!apiKey);
+logger.info('Gemini API Key present:', !!apiKey);
 let genAI: GoogleGenAI | null = null;
 if (apiKey) {
     genAI = new GoogleGenAI({
@@ -205,14 +205,14 @@ app.get('/uploads/:filename', async (req, res, next) => {
         });
 
         if (doc && doc.fileContent) {
-            console.log(`[Persistence] Recovering ${filename} from database to disk...`);
+            logger.info(`[Persistence] Recovering ${filename} from database to disk...`);
             fs.writeFileSync(filePath, doc.fileContent);
             return res.sendFile(filePath);
         }
 
         next();
     } catch (error) {
-        console.error(`[Persistence] Error during file recovery:`, error);
+        logger.error(`[Persistence] Error during file recovery:`, error);
         next();
     }
 });
@@ -236,13 +236,13 @@ app.post('/api/admin/backup', authenticateToken, requireSuperAdmin, async (req: 
         // Run async (don't block response)
         runBackup().then(result => {
             if (result.success) {
-                console.log(`[Backup] ✅ Manual backup completed: ${result.fileName} (${result.sizeKB}KB)`);
+                logger.info(`[Backup] ✅ Manual backup completed: ${result.fileName} (${result.sizeKB}KB)`);
             } else {
-                console.error(`[Backup] ❌ Manual backup failed: ${result.error}`);
+                logger.error(`[Backup] ❌ Manual backup failed: ${result.error}`);
             }
         });
     } catch (error: any) {
-        console.error('[Backup] Failed to start backup:', error);
+        logger.error('[Backup] Failed to start backup:', error);
         res.status(500).json({ error: 'Failed to start backup' });
     }
 });
@@ -312,8 +312,23 @@ app.get('/api/admin/tenants', authenticateToken, requireSuperAdmin, async (req: 
             }
         })));
     } catch (error: any) {
-        console.error('[Admin] Erro ao listar tenants:', error?.message);
+        logger.error('[Admin] Erro ao listar tenants:', error?.message);
         res.status(500).json({ error: 'Erro ao listar organizações' });
+    }
+});
+
+// Sprint 5: Audit Log List (Admin-only, mas para o próprio Tenant)
+app.get('/api/admin/audit-logs', authenticateToken, requireAdmin, async (req: any, res) => {
+    try {
+        const { AuditLogService } = await import('./services/auditLog.service');
+        const limit = parseInt(req.query.limit) || 100;
+        const offset = parseInt(req.query.offset) || 0;
+        
+        const result = await AuditLogService.getLogs(req.user.tenantId, limit, offset);
+        res.json(result);
+    } catch (error: any) {
+        logger.error('[AuditLog] Erro ao buscar logs:', error);
+        res.status(500).json({ error: 'Erro ao buscar histórico de auditoria' });
     }
 });
 
@@ -363,7 +378,7 @@ app.post('/api/admin/onboard', authenticateToken, requireSuperAdmin, async (req:
             return { tenant, admin };
         });
 
-        console.log(`[Onboard] ✅ Novo cliente: "${razaoSocial}" (${rootCnpj}) → Admin: ${adminEmail}`);
+        logger.info(`[Onboard] ✅ Novo cliente: "${razaoSocial}" (${rootCnpj}) → Admin: ${adminEmail}`);
 
         res.status(201).json({
             message: `Cliente "${razaoSocial}" provisionado com sucesso!`,
@@ -382,7 +397,7 @@ app.post('/api/admin/onboard', authenticateToken, requireSuperAdmin, async (req:
             instructions: 'Envie o e-mail e senha ao cliente. Ele pode alterar a senha após o primeiro login.',
         });
     } catch (error: any) {
-        console.error('[Onboard] Erro ao provisionar cliente:', error?.message);
+        logger.error('[Onboard] Erro ao provisionar cliente:', error?.message);
         res.status(500).json({ error: 'Erro ao provisionar novo cliente' });
     }
 });
@@ -445,7 +460,7 @@ app.get('/api/admin/ai-quotas', authenticateToken, requireSuperAdmin, async (req
 
         res.json(result);
     } catch (error: any) {
-        console.error('[Admin] Erro ao listar cotas de IA:', error?.message);
+        logger.error('[Admin] Erro ao listar cotas de IA:', error?.message);
         res.status(500).json({ error: 'Erro ao listar cotas de IA' });
     }
 });
@@ -485,11 +500,11 @@ app.put('/api/admin/ai-quotas/:tenantId', authenticateToken, requireSuperAdmin, 
         invalidateTenantQuotaCache(tenantId);
 
         const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { razaoSocial: true } });
-        console.log(`[Admin] Cotas de IA atualizadas para "${tenant?.razaoSocial || tenantId}": hard=${hardLimit}, soft=${conf.aiQuota.softLimit}`);
+        logger.info(`[Admin] Cotas de IA atualizadas para "${tenant?.razaoSocial || tenantId}": hard=${hardLimit}, soft=${conf.aiQuota.softLimit}`);
 
         res.json({ ok: true, aiQuota: conf.aiQuota });
     } catch (error: any) {
-        console.error('[Admin] Erro ao atualizar cota de IA:', error?.message);
+        logger.error('[Admin] Erro ao atualizar cota de IA:', error?.message);
         res.status(500).json({ error: 'Erro ao atualizar cota de IA' });
     }
 });
@@ -500,7 +515,7 @@ app.post('/api/admin/ai-quotas/:tenantId/reset', authenticateToken, requireSuper
         const { tenantId } = req.params;
         const { invalidateTenantQuotaCache } = await import('./lib/aiUsageTracker');
         invalidateTenantQuotaCache(tenantId);
-        console.log(`[Admin] Cache de cota de IA resetado para tenant ${tenantId}`);
+        logger.info(`[Admin] Cache de cota de IA resetado para tenant ${tenantId}`);
         res.json({ ok: true, message: 'Cache limpo. Limites serão reavaliados na próxima chamada de IA.' });
     } catch (error: any) {
         res.status(500).json({ error: 'Erro ao resetar cache' });
@@ -524,7 +539,7 @@ app.get('/api/admin/ai-usage/:tenantId', authenticateToken, requireSuperAdmin, a
 
         res.json({ ok: true, tenant, ...summary, daily, quota });
     } catch (e: any) {
-        console.error('[Admin] AI usage drill-down error:', e?.message);
+        logger.error('[Admin] AI usage drill-down error:', e?.message);
         res.status(500).json({ error: 'Falha ao buscar consumo de IA do tenant.' });
     }
 });
@@ -536,7 +551,7 @@ app.get('/api/admin/pipeline-health', authenticateToken, requireSuperAdmin, asyn
         const health = await getPipelineHealth(days);
         res.json({ ok: true, ...health });
     } catch (e: any) {
-        console.error('[Admin] Pipeline health error:', e?.message);
+        logger.error('[Admin] Pipeline health error:', e?.message);
         res.status(500).json({ error: 'Falha ao buscar métricas do pipeline.' });
     }
 });
@@ -572,7 +587,7 @@ app.get('/api/admin/capture-golden/:processId', authenticateToken, requireSuperA
             instructions: 'Save the "snapshot" field as golden/<id>.snapshot.json in the benchmark directory.',
         });
     } catch (e: any) {
-        console.error('[Admin] Capture golden error:', e?.message);
+        logger.error('[Admin] Capture golden error:', e?.message);
         res.status(500).json({ error: 'Falha ao capturar snapshot.' });
     }
 });
@@ -618,7 +633,7 @@ app.get('/api/admin/golden-search', authenticateToken, requireSuperAdmin, async 
             })),
         });
     } catch (e: any) {
-        console.error('[Admin] Golden search error:', e?.message);
+        logger.error('[Admin] Golden search error:', e?.message);
         res.status(500).json({ error: 'Falha na busca.' });
     }
 });
@@ -867,7 +882,7 @@ app.post('/api/generate-declaration', authenticateToken, async (req: any, res) =
         // ── Step 1: Receber request ──
         const { biddingProcessId, companyId, declarationType, issuerType, customPrompt, style: requestedStyle } = req.body;
         const style: DeclarationStyle = (['objetiva', 'formal', 'robusta'].includes(requestedStyle) ? requestedStyle : 'objetiva') as DeclarationStyle;
-        console.log(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} BID:${biddingProcessId}`);
+        logger.info(`[Declaration v5] Step 1: "${declarationType}" (${issuerType || 'company'}) style=${style} BID:${biddingProcessId}`);
 
         if (!biddingProcessId || !companyId || !declarationType) {
             return res.status(400).json({ error: 'Missing required parameters' });
@@ -919,7 +934,7 @@ app.post('/api/generate-declaration', authenticateToken, async (req: any, res) =
 
         // ── Step 4: Classificar família (precisa ser ANTES do facts) ──
         const family = classifyFamily(declarationType);
-        console.log(`[Declaration v5] Step 4: Family → ${family}`);
+        logger.info(`[Declaration v5] Step 4: Family → ${family}`);
 
         const facts: AuthoritativeFacts = {
             orgaoLicitante: orgaoName,
@@ -944,7 +959,7 @@ app.post('/api/generate-declaration', authenticateToken, async (req: any, res) =
             hasDivergence,
         };
 
-        console.log(`[Declaration v5] Step 3: Facts → org="${orgaoName}" div=${hasDivergence} rep="${representanteName}"`);
+        logger.info(`[Declaration v5] Step 3: Facts → org="${orgaoName}" div=${hasDivergence} rep="${representanteName}"`);
 
 
         // ── Step 5: Contexto específico ──
@@ -1004,7 +1019,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
         }
 
         // ── Step 7: Chamar IA ──
-        console.log(`[Declaration v5] Step 7: Calling Gemini (attempt 1)...`);
+        logger.info(`[Declaration v5] Step 7: Calling Gemini (attempt 1)...`);
         const result = await callGeminiWithRetry(genAI.models, {
             model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -1028,12 +1043,12 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
         // ── Step 8.5: Title validation & auto-fix (v8) ──
         const titleResult = validateAndFixTitle(finalTitle, declarationType);
         if (titleResult.fixed) {
-            console.log(`[Declaration v8] Title fixed: "${finalTitle}" → "${titleResult.title}"`);
+            logger.info(`[Declaration v8] Title fixed: "${finalTitle}" → "${titleResult.title}"`);
             finalTitle = titleResult.title;
         }
 
         // ── Step 9: Validação pós-geração ──
-        console.log(`[Declaration v8] Step 9: Validating...`);
+        logger.info(`[Declaration v8] Step 9: Validating...`);
         let issues = validateDeclaration(finalText, facts);
 
         // Adicionar issue de título se houver
@@ -1046,7 +1061,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
 
         // ── Step 10: Repair automático via IA (se critical) ──
         if (hasCriticalIssues(issues)) {
-            console.log(`[Declaration v5] Step 10: ${issues.filter(i => i.severity === 'critical').length} critical issues. Repair via IA...`);
+            logger.info(`[Declaration v5] Step 10: ${issues.filter(i => i.severity === 'critical').length} critical issues. Repair via IA...`);
             attempts = 2;
 
             const aiCallFn = createGeminiRepairFn(genAI.models, callGeminiWithRetry, 'gemini-2.5-flash', { tenantId: req.user.tenantId, operation: 'repair_declaration', metadata: { docType: 'declaration' } });
@@ -1065,7 +1080,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
 
         // ── Step 11/12: Quality Report + Resposta ──
         const qualityReport = calculateQualityReport(issues, corrections, family, attempts);
-        console.log(`[Declaration v5] ${summarizeReport(qualityReport)}`);
+        logger.info(`[Declaration v5] ${summarizeReport(qualityReport)}`);
 
         if (qualityReport.grade === 'D' && qualityReport.contaminationDetected) {
             return res.json({
@@ -1083,7 +1098,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
         });
 
     } catch (error: any) {
-        console.error("[Declaration v5] Fatal error:", error);
+        logger.error("[Declaration v5] Fatal error:", error);
         handleApiError(res, error, 'generate-declaration');
     }
 });
@@ -1098,7 +1113,7 @@ app.get('/api/pncp/searches', authenticateToken, async (req: any, res) => {
         });
         res.json(searches);
     } catch (error) {
-        console.error("Fetch saved searches error:", error);
+        logger.error("Fetch saved searches error:", error);
         res.status(500).json({ error: 'Failed to fetch saved searches' });
     }
 });
@@ -1111,7 +1126,7 @@ app.post('/api/pncp/searches', authenticateToken, async (req: any, res) => {
         });
         res.json(search);
     } catch (error) {
-        console.error("Create saved search error:", error);
+        logger.error("Create saved search error:", error);
         res.status(500).json({ error: 'Failed to create saved search' });
     }
 });
@@ -1125,7 +1140,7 @@ app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) =>
         });
         res.json({ success: true });
     } catch (error) {
-        console.error("Delete saved search error:", error);
+        logger.error("Delete saved search error:", error);
         res.status(500).json({ error: 'Failed to delete saved search' });
     }
 });
@@ -1149,7 +1164,7 @@ app.put('/api/pncp/searches/:id', authenticateToken, async (req: any, res) => {
         });
         res.json({ success: true });
     } catch (error) {
-        console.error("Update saved search error:", error);
+        logger.error("Update saved search error:", error);
         res.status(500).json({ error: 'Failed to update saved search' });
     }
 });
@@ -1166,7 +1181,7 @@ app.put('/api/pncp/searches/list/rename', authenticateToken, async (req: any, re
         });
         res.json({ success: true });
     } catch (error) {
-        console.error("Rename search list error:", error);
+        logger.error("Rename search list error:", error);
         res.status(500).json({ error: 'Failed to rename list' });
     }
 });
@@ -1184,7 +1199,7 @@ app.delete('/api/pncp/searches/list/:name', authenticateToken, async (req: any, 
         });
         res.json({ success: true });
     } catch (error) {
-        console.error("Delete search list error:", error);
+        logger.error("Delete search list error:", error);
         res.status(500).json({ error: 'Failed to delete list' });
     }
 });
@@ -1244,12 +1259,12 @@ app.post('/api/pncp/scanner/toggle', authenticateToken, async (req: any, res) =>
 app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res) => {
     try {
         const { runOpportunityScan } = await import('./services/monitoring/opportunity-scanner.service');
-        console.log(`[OpportunityScanner] Manual scan triggered by tenant ${req.user.tenantId}`);
+        logger.info(`[OpportunityScanner] Manual scan triggered by tenant ${req.user.tenantId}`);
         // Run async — don't block the response
-        runOpportunityScan(req.user.tenantId).catch(err => console.error('[OpportunityScanner] Manual scan error:', err));
+        runOpportunityScan(req.user.tenantId).catch(err => logger.error('[OpportunityScanner] Manual scan error:', err));
         res.json({ success: true, message: 'Varredura de oportunidades iniciada. Você receberá notificações se houver novos editais.' });
     } catch (error) {
-        console.error("Manual scan trigger error:", error);
+        logger.error("Manual scan trigger error:", error);
         res.status(500).json({ error: 'Failed to trigger scan' });
     }
 });
@@ -1299,7 +1314,7 @@ app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, r
 
         res.json({ items, total, page, pageSize });
     } catch (error) {
-        console.error("Scanner opportunities error:", error);
+        logger.error("Scanner opportunities error:", error);
         res.status(500).json({ error: 'Failed to list scanner opportunities' });
     }
 });
@@ -1324,7 +1339,7 @@ app.patch('/api/pncp/scanner/opportunities/mark-viewed', authenticateToken, asyn
 
         res.json({ success: true });
     } catch (error) {
-        console.error("Mark viewed error:", error);
+        logger.error("Mark viewed error:", error);
         res.status(500).json({ error: 'Failed to mark as viewed' });
     }
 });
@@ -1354,7 +1369,7 @@ app.get('/api/pncp/favorites', authenticateToken, async (req: any, res) => {
         });
         res.json({ lists });
     } catch (error) {
-        console.error("Fetch favorites error:", error);
+        logger.error("Fetch favorites error:", error);
         res.status(500).json({ error: 'Failed to fetch favorites' });
     }
 });
@@ -1372,7 +1387,7 @@ app.post('/api/pncp/favorites/lists', authenticateToken, async (req: any, res) =
         });
         res.json(list);
     } catch (error) {
-        console.error("Create fav list error:", error);
+        logger.error("Create fav list error:", error);
         res.status(500).json({ error: 'Failed to create list' });
     }
 });
@@ -1389,7 +1404,7 @@ app.put('/api/pncp/favorites/lists/:id', authenticateToken, async (req: any, res
         });
         res.json({ success: true });
     } catch (error) {
-        console.error("Rename fav list error:", error);
+        logger.error("Rename fav list error:", error);
         res.status(500).json({ error: 'Failed to rename list' });
     }
 });
@@ -1416,7 +1431,7 @@ app.delete('/api/pncp/favorites/lists/:id', authenticateToken, async (req: any, 
         await prisma.pncpFavoriteList.deleteMany({ where: { id: listId, tenantId } });
         res.json({ success: true });
     } catch (error) {
-        console.error("Delete fav list error:", error);
+        logger.error("Delete fav list error:", error);
         res.status(500).json({ error: 'Failed to delete list' });
     }
 });
@@ -1434,7 +1449,7 @@ app.post('/api/pncp/favorites/items', authenticateToken, async (req: any, res) =
         });
         res.json(item);
     } catch (error) {
-        console.error("Add fav item error:", error);
+        logger.error("Add fav item error:", error);
         res.status(500).json({ error: 'Failed to add favorite' });
     }
 });
@@ -1446,7 +1461,7 @@ app.delete('/api/pncp/favorites/items/:id', authenticateToken, async (req: any, 
         await prisma.pncpFavoriteItem.deleteMany({ where: { id: req.params.id, tenantId } });
         res.json({ success: true });
     } catch (error) {
-        console.error("Remove fav item error:", error);
+        logger.error("Remove fav item error:", error);
         res.status(500).json({ error: 'Failed to remove favorite' });
     }
 });
@@ -1459,7 +1474,7 @@ app.delete('/api/pncp/favorites/items/by-pncp/:pncpId', authenticateToken, async
         await prisma.pncpFavoriteItem.deleteMany({ where: { tenantId, pncpId } });
         res.json({ success: true });
     } catch (error) {
-        console.error("Remove fav by pncpId error:", error);
+        logger.error("Remove fav by pncpId error:", error);
         res.status(500).json({ error: 'Failed to remove favorite' });
     }
 });
@@ -1498,7 +1513,7 @@ app.post('/api/pncp/favorites/import', authenticateToken, async (req: any, res) 
 
         res.json({ success: true, imported, listsCreated: listMap.size });
     } catch (error) {
-        console.error("Import favorites error:", error);
+        logger.error("Import favorites error:", error);
         res.status(500).json({ error: 'Failed to import favorites' });
     }
 });
@@ -1509,10 +1524,10 @@ app.post('/api/pncp/scanner/reset', authenticateToken, async (req: any, res) => 
         const deleted = await prisma.opportunityScannerLog.deleteMany({
             where: { tenantId: req.user.tenantId }
         });
-        console.log(`[OpportunityScanner] 🔄 Histórico de dedup resetado para tenant ${req.user.tenantId} (${deleted.count} registros removidos)`);
+        logger.info(`[OpportunityScanner] 🔄 Histórico de dedup resetado para tenant ${req.user.tenantId} (${deleted.count} registros removidos)`);
         res.json({ success: true, deleted: deleted.count, message: `Histórico limpo. ${deleted.count} registros removidos. Próxima varredura reenviará notificações.` });
     } catch (error) {
-        console.error("Scanner reset error:", error);
+        logger.error("Scanner reset error:", error);
         res.status(500).json({ error: 'Failed to reset scanner history' });
     }
 });
@@ -1529,14 +1544,14 @@ app.post('/api/internal/scanner/reset-and-scan', async (req: any, res) => {
     try {
         const tenantId = req.body?.tenantId || '9f7a7155-be67-4470-8952-eb947fd97931';
         const deleted = await prisma.opportunityScannerLog.deleteMany({ where: { tenantId } });
-        console.log(`[OpportunityScanner] 🔄 Internal reset: ${deleted.count} registros removidos para tenant ${tenantId}`);
+        logger.info(`[OpportunityScanner] 🔄 Internal reset: ${deleted.count} registros removidos para tenant ${tenantId}`);
         
         const { runOpportunityScan } = await import('./services/monitoring/opportunity-scanner.service');
-        runOpportunityScan().catch(err => console.error('[OpportunityScanner] Scan error:', err));
+        runOpportunityScan().catch(err => logger.error('[OpportunityScanner] Scan error:', err));
         
         res.json({ success: true, deleted: deleted.count, message: `Reset OK (${deleted.count} removed). Scan triggered.` });
     } catch (error: any) {
-        console.error("Internal reset error:", error);
+        logger.error("Internal reset error:", error);
         handleApiError(res, error, 'scanner-reset');
     }
 });
@@ -1633,7 +1648,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
 
         const agent = new https.Agent({ rejectUnauthorized: false });
         const startTime = Date.now();
-        console.log(`[PNCP] START GET ${urlsToFetch.length} url(s) in batches...`);
+        logger.info(`[PNCP] START GET ${urlsToFetch.length} url(s) in batches...`);
 
         let rawItems: any[] = [];
         const chunkSize = 60;
@@ -1654,7 +1669,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
                     const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
                     rawItems = rawItems.concat(items);
                 } else {
-                    console.error('[PNCP] Request failed:', res.reason?.message);
+                    logger.error('[PNCP] Request failed:', res.reason?.message);
                 }
             });
         }
@@ -1786,14 +1801,14 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         }));
 
         const endTime = Date.now();
-        console.log(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults}, Page ${pagina}: items ${startIdx}-${startIdx + hydratedPageItems.length}`);
+        logger.info(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults}, Page ${pagina}: items ${startIdx}-${startIdx + hydratedPageItems.length}`);
 
         res.json({
             items: hydratedPageItems,
             total: totalResults
         });
     } catch (error: any) {
-        console.error("PNCP search error:", error?.message || error);
+        logger.error("PNCP search error:", error?.message || error);
         handleApiError(res, error, 'pncp-search');
     }
 });
@@ -1866,15 +1881,15 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         // 1. Fetch edital attachments from PNCP API (correct endpoint: /api/pncp/v1/)
         sendProgress(1, 'Buscando documentos no PNCP...', 'Consultando lista de anexos do edital');
         const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}/arquivos`;
-        console.log(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
+        logger.info(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
 
         let arquivos: any[] = [];
         try {
             const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 10000 } as any);
             arquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
-            console.log(`[PNCP-AI] Found ${arquivos.length} attachments`);
+            logger.info(`[PNCP-AI] Found ${arquivos.length} attachments`);
         } catch (e: any) {
-            console.warn(`[PNCP-AI] Failed to fetch attachments: ${e.message}`);
+            logger.warn(`[PNCP-AI] Failed to fetch attachments: ${e.message}`);
         }
 
         // 2. Sort to prioritize: Edital (tipoDocumentoId=2) > Termo de Referência (4) > Others
@@ -1975,7 +1990,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             // Rule 1: Exclude by explicit pattern match
             const isExcludedByPattern = EXCLUDE_PATTERNS.some(pat => name.includes(pat));
             if (isExcludedByPattern) {
-                console.log(`[PNCP-AI] 🚫 Excluído (template/padrão): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                logger.info(`[PNCP-AI] 🚫 Excluído (template/padrão): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
                 discardedFiles.push(`${arq.titulo} (excluído: template/padrão)`);
                 return false;
             }
@@ -1986,7 +2001,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             const isGenericAnexo = /^anexo[_\s]+(i|ii|iii|iv|v|vi|vii|viii|ix|x|[0-9])/.test(name);
 
             if (isOutros && isGenericAnexo && !hasEssentialKeyword) {
-                console.log(`[PNCP-AI] 🚫 Excluído (anexo genérico/projeto): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                logger.info(`[PNCP-AI] 🚫 Excluído (anexo genérico/projeto): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
                 discardedFiles.push(`${arq.titulo} (excluído: anexo genérico)`);
                 return false;
             }
@@ -2034,9 +2049,9 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             acc[a.purpose] = (acc[a.purpose] || 0) + 1;
             return acc;
         }, {} as Record<string, number>);
-        console.log(`[PNCP-AI] 📋 Catálogo completo: ${pncpAttachments.length} arquivos — ${JSON.stringify(purposeCounts)}`);
+        logger.info(`[PNCP-AI] 📋 Catálogo completo: ${pncpAttachments.length} arquivos — ${JSON.stringify(purposeCounts)}`);
 
-        console.log(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
+        logger.info(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
         sendProgress(2, 'Baixando documentos...', `${filteredArquivos.length} arquivos relevantes de ${arquivos.length} total`);
 
         // Sort by priority: Edital > TR > Orçamento > Cronograma > rest
@@ -2063,7 +2078,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             try {
                 dlIndex++;
                 sendProgress(2, `Baixando documento ${dlIndex}/${filteredArquivos.length}...`, `"${fileName}"`);
-                console.log(`[PNCP-AI] Downloading: "${fileName}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId}) from ${fileUrl}`);
+                logger.info(`[PNCP-AI] Downloading: "${fileName}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId}) from ${fileUrl}`);
                 const fileRes = await axios.get(fileUrl, {
                     httpsAgent: agent,
                     timeout: 90000,
@@ -2087,7 +2102,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                     if (!pdfPartsFull) {
                     if (bufferSizeKB > MAX_INLINE_FILE_KB) {
                         // Large PDF: use Gemini Files API (supports up to 50MB, works with scanned PDFs)
-                        console.log(`[PNCP-AI] ⚡ Arquivo grande (${Math.round(bufferSizeKB)}KB > ${MAX_INLINE_FILE_KB}KB). Usando Gemini Files API para upload...`);
+                        logger.info(`[PNCP-AI] ⚡ Arquivo grande (${Math.round(bufferSizeKB)}KB > ${MAX_INLINE_FILE_KB}KB). Usando Gemini Files API para upload...`);
                         try {
                             const apiKey = process.env.GEMINI_API_KEY;
                             if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
@@ -2102,18 +2117,18 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             try { fs.unlinkSync(tempFilePath); } catch (_e) {}
                             if (uploadedFile && uploadedFile.uri) {
                                 pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                console.log(`[PNCP-AI] ✅ Upload via Files API concluído: ${uploadedFile.name} (URI: ${uploadedFile.uri})`);
+                                logger.info(`[PNCP-AI] ✅ Upload via Files API concluído: ${uploadedFile.name} (URI: ${uploadedFile.uri})`);
                             } else {
-                                console.warn(`[PNCP-AI] ⚠️ Files API não retornou URI para ${fileName}`);
+                                logger.warn(`[PNCP-AI] ⚠️ Files API não retornou URI para ${fileName}`);
                             }
                         } catch (e: any) {
-                            console.warn(`[PNCP-AI] ⚠️ Falha no upload via Files API para ${fileName}:`, e.message);
+                            logger.warn(`[PNCP-AI] ⚠️ Falha no upload via Files API para ${fileName}:`, e.message);
                         }
                         totalPdfSizeAccum += 1; // Files API handles storage; minimal budget impact
                     } else {
                         // Budget check: if inline budget exceeded, use Files API as fallback
                         if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                            console.log(`[PNCP-AI] ⚡ Orçamento inline de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Enviando "${fileName}" via Files API...`);
+                            logger.info(`[PNCP-AI] ⚡ Orçamento inline de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Enviando "${fileName}" via Files API...`);
                             try {
                                 const apiKey = process.env.GEMINI_API_KEY;
                                 if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
@@ -2127,10 +2142,10 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                 try { fs.unlinkSync(tempPath); } catch (_e) {}
                                 if (uploadedFile && uploadedFile.uri) {
                                     pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                    console.log(`[PNCP-AI] ✅ Overflow via Files API: ${uploadedFile.name}`);
+                                    logger.info(`[PNCP-AI] ✅ Overflow via Files API: ${uploadedFile.name}`);
                                 }
                             } catch (e: any) {
-                                console.warn(`[PNCP-AI] ⚠️ Files API overflow falhou para ${fileName}:`, e.message);
+                                logger.warn(`[PNCP-AI] ⚠️ Files API overflow falhou para ${fileName}:`, e.message);
                                 discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
                             }
                             totalPdfSizeAccum += 1;
@@ -2140,7 +2155,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                         }
                     }
                     } else {
-                        console.log(`[PNCP-AI] 📁 Salvando "${fileName}" (${Math.round(bufferSizeKB)}KB) apenas no storage (limite de ${MAX_PDF_PARTS} docs para IA atingido)`);
+                        logger.info(`[PNCP-AI] 📁 Salvando "${fileName}" (${Math.round(bufferSizeKB)}KB) apenas no storage (limite de ${MAX_PDF_PARTS} docs para IA atingido)`);
                     }
                     
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
@@ -2155,27 +2170,27 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                         } as any, req.user.tenantId);
                         storageFileName = up.fileName;
                     } catch (e) {
-                        console.error(`[PNCP-AI] Erro upload PDF Storage:`, e);
+                        logger.error(`[PNCP-AI] Erro upload PDF Storage:`, e);
                     }
 
                     // Note: pdfParts is pushed either as text or inlineData above
 
                     downloadedFiles.push(storageFileName);
-                    console.log(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${storageFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                    logger.info(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${storageFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
                 } else if (isZip) {
-                    console.log(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    logger.info(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
                         const zip = await JSZip.loadAsync(buffer);
                         let zipEntries = Object.keys(zip.files).filter((name: string) => {
                             if (!name.toLowerCase().endsWith('.pdf') || zip.files[name].dir) return false;
                             const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                             const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
-                            if (excluded) { console.log(`[PNCP-AI] 🚫 ZIP: Excluído "${name}" (padrão filtrado)`); discardedFiles.push(`${name} (ZIP, filtrado)`); }
+                            if (excluded) { logger.info(`[PNCP-AI] 🚫 ZIP: Excluído "${name}" (padrão filtrado)`); discardedFiles.push(`${name} (ZIP, filtrado)`); }
                             return !excluded;
                         });
                         // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
                         zipEntries.sort((a, b) => archivePriorityScore(a) - archivePriorityScore(b));
-                        console.log(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s) (sorted): ${zipEntries.join(', ')}`);
+                        logger.info(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s) (sorted): ${zipEntries.join(', ')}`);
 
                         for (const entryName of zipEntries) {
                             const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
@@ -2185,7 +2200,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             
                             if (!pdfPartsFull) {
                                 if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                    console.log(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                    logger.info(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
                                     try {
                                         const apiKey = process.env.GEMINI_API_KEY;
                                         if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
@@ -2199,16 +2214,16 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                         try { fs.unlinkSync(tempPath); } catch (_e) {}
                                         if (uploadedFile && uploadedFile.uri) {
                                             pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                            console.log(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
+                                            logger.info(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
                                         }
                                     } catch (e: any) {
-                                        console.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
+                                        logger.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
                                     }
                                     totalPdfSizeAccum += 1;
                                 } else {
                                     if (pdfBuffer.length > 0) {
                                         if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                            console.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                            logger.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
                                         } else {
                                             totalPdfSizeAccum += entrySizeKB;
                                             pdfParts.push({
@@ -2218,7 +2233,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                     }
                                 }
                             } else {
-                                console.log(`[PNCP-AI] 📁 Salvando "${entryName}" (${Math.round(entrySizeKB)}KB) do ZIP apenas no storage (limite da IA atingido)`);
+                                logger.info(`[PNCP-AI] 📁 Salvando "${entryName}" (${Math.round(entrySizeKB)}KB) do ZIP apenas no storage (limite da IA atingido)`);
                             }
 
                             if (pdfBuffer.length > 0) {
@@ -2234,17 +2249,17 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                     } as any, req.user.tenantId);
                                     storageFileName = up.fileName;
                                 } catch (e) {
-                                    console.error(`[PNCP-AI] Erro upload ZIP-PDF Storage:`, e);
+                                    logger.error(`[PNCP-AI] Erro upload ZIP-PDF Storage:`, e);
                                 }
                                 downloadedFiles.push(storageFileName);
-                                console.log(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${storageFileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                                logger.info(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${storageFileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }
                     } catch (zipErr: any) {
-                        console.warn(`[PNCP-AI] Failed to extract ZIP ${fileName}: ${zipErr.message}`);
+                        logger.warn(`[PNCP-AI] Failed to extract ZIP ${fileName}: ${zipErr.message}`);
                     }
                 } else if (isRar) {
-                    console.log(`[PNCP-AI] 📦 RAR detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    logger.info(`[PNCP-AI] 📦 RAR detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
                         const extractor = await createExtractorFromData({ data: new Uint8Array(buffer).buffer });
                         const extracted = extractor.extract({});
@@ -2254,12 +2269,12 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                             if (f.fileHeader.flags.directory || !f.extraction) return false;
                             const n = f.fileHeader.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                             const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
-                            if (excluded) { console.log(`[PNCP-AI] 🚫 RAR: Excluído "${f.fileHeader.name}" (padrão filtrado)`); discardedFiles.push(`${f.fileHeader.name} (RAR, filtrado)`); }
+                            if (excluded) { logger.info(`[PNCP-AI] 🚫 RAR: Excluído "${f.fileHeader.name}" (padrão filtrado)`); discardedFiles.push(`${f.fileHeader.name} (RAR, filtrado)`); }
                             return !excluded;
                         });
                         // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
                         pdfFiles.sort((a, b) => archivePriorityScore(a.fileHeader.name) - archivePriorityScore(b.fileHeader.name));
-                        console.log(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s) (sorted): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+                        logger.info(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s) (sorted): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
 
                         for (const rarFile of pdfFiles) {
                             const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
@@ -2270,7 +2285,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                 
                                 if (!pdfPartsFull) {
                                     if (entrySizeKB > MAX_SINGLE_FILE_KB) {
-                                        console.log(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                        logger.info(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
                                         try {
                                             const apiKey = process.env.GEMINI_API_KEY;
                                             if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
@@ -2284,15 +2299,15 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                             try { fs.unlinkSync(tempPath); } catch (_e) {}
                                             if (uploadedFile && uploadedFile.uri) {
                                                 pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
-                                                console.log(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
+                                                logger.info(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
                                             }
                                         } catch (e: any) {
-                                            console.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
+                                            logger.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
                                         }
                                         totalPdfSizeAccum += 1;
                                     } else {
                                         if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
-                                            console.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
+                                            logger.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
                                         } else {
                                             totalPdfSizeAccum += entrySizeKB;
                                             pdfParts.push({
@@ -2301,7 +2316,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                         }
                                     }
                                 } else {
-                                    console.log(`[PNCP-AI] 📁 Salvando "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB) do RAR apenas no storage (limite da IA atingido)`);
+                                    logger.info(`[PNCP-AI] 📁 Salvando "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB) do RAR apenas no storage (limite da IA atingido)`);
                                 }
 
                                 const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
@@ -2316,20 +2331,20 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                                     } as any, req.user.tenantId);
                                     storageFileName = up.fileName;
                                 } catch (e) {
-                                    console.error(`[PNCP-AI] Erro upload RAR-PDF Storage:`, e);
+                                    logger.error(`[PNCP-AI] Erro upload RAR-PDF Storage:`, e);
                                 }
                                 downloadedFiles.push(storageFileName);
-                                console.log(`[PNCP-AI] ✅ Extracted from RAR: ${rarFile.fileHeader.name} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                                logger.info(`[PNCP-AI] ✅ Extracted from RAR: ${rarFile.fileHeader.name} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }
                     } catch (rarErr: any) {
-                        console.warn(`[PNCP-AI] Failed to extract RAR ${fileName}: ${rarErr.message}`);
+                        logger.warn(`[PNCP-AI] Failed to extract RAR ${fileName}: ${rarErr.message}`);
                     }
                 } else {
-                    console.log(`[PNCP-AI] ⏭️ Skipped non-PDF/non-ZIP/non-RAR: ${fileName} (first bytes: ${buffer[0].toString(16)} ${buffer[1].toString(16)})`);
+                    logger.info(`[PNCP-AI] ⏭️ Skipped non-PDF/non-ZIP/non-RAR: ${fileName} (first bytes: ${buffer[0].toString(16)} ${buffer[1].toString(16)})`);
                 }
             } catch (dlErr: any) {
-                console.warn(`[PNCP-AI] Failed to download ${fileName}: ${dlErr.message}`);
+                logger.warn(`[PNCP-AI] Failed to download ${fileName}: ${dlErr.message}`);
             }
         }
 
@@ -2353,7 +2368,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             normQtp: 'gemini-2.5-flash',             // Etapa 2 QTP: needs full Flash for Rule 18 (CAT explosion)
             riskReview: 'gemini-2.5-flash',          // Etapa 3: text-only risk analysis — upgraded from flash-lite (better critical_points)
         };
-        console.log(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
+        logger.info(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
 
         sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
 
@@ -2380,7 +2395,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             stagesFailed: 0,
         };
 
-        console.log(`[PNCP-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${downloadedFiles.join(', ')})`);
+        logger.info(`[PNCP-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${downloadedFiles.join(', ')})`);
 
         // ── Stage 1: Factual Extraction (with PDFs) ──
         // Log diagnostic info about PDFs being sent
@@ -2399,7 +2414,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             return sum;
         }, 0) / 1024;
         sendProgress(4, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${pdfParts.length} PDFs (${Math.round(totalPdfSizeKB)}KB inline)`);
-        console.log(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} partes, ${Math.round(totalPdfSizeKB)}KB inline — ${pdfSizes.join(', ')})...`);
+        logger.info(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} partes, ${Math.round(totalPdfSizeKB)}KB inline — ${pdfSizes.join(', ')})...`);
         let extractionJson: any;
         const t1Start = Date.now();
 
@@ -2428,11 +2443,11 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
             modelsUsed.push(PIPELINE_MODELS.extraction);
             stageTimes.extraction = (Date.now() - t1Start) / 1000;
-            console.log(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
+            logger.info(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         } catch (err: any) {
             const errMsg = err?.message || String(err);
             const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
-            console.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
+            logger.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
             pipelineHealth.fallbacksUsed++;
             try {
                 const openAiResult = await fallbackToOpenAiV2({
@@ -2448,9 +2463,9 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                 v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
                 modelsUsed.push(openAiResult.model);
                 stageTimes.extraction = (Date.now() - t1Start) / 1000;
-                console.log(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
+                logger.info(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
             } catch (openAiErr: any) {
-                console.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
+                logger.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
                 // User-friendly error message that distinguishes service overload from document issues
                 if (isServiceOverload) {
                     throw new Error(`A IA está temporariamente sobrecarregada (5 tentativas em ~90s). ` +
@@ -2473,7 +2488,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
 
         // Diagnostic: check itens_licitados extraction
         const extractedItens = v2Result.proposal_analysis?.itens_licitados || [];
-        console.log(`[PNCP-V2] 📋 itens_licitados: ${Array.isArray(extractedItens) ? extractedItens.length : 0} itens extraídos pela Etapa 1`);
+        logger.info(`[PNCP-V2] 📋 itens_licitados: ${Array.isArray(extractedItens) ? extractedItens.length : 0} itens extraídos pela Etapa 1`);
 
         // ── MANDATORY RFT COMPLETENESS INJECTION ──
         // The AI model consistently omits "obvious" fiscal documents (CNPJ, inscrições).
@@ -2518,7 +2533,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         if (injectedCount > 0) {
             (extractionJson.requirements as any).regularidade_fiscal_trabalhista = rftItems;
             (v2Result.requirements as any).regularidade_fiscal_trabalhista = rftItems;
-            console.log(`[PNCP-V2] 🔧 RFT completude: +${injectedCount} doc(s) injetado(s) (CNPJ/inscrições omitidos pela IA)`);
+            logger.info(`[PNCP-V2] 🔧 RFT completude: +${injectedCount} doc(s) injetado(s) (CNPJ/inscrições omitidos pela IA)`);
         }
 
         // ── M3: DEDUP — remove generic "estadual ou municipal" if IE/IM are separate ──
@@ -2536,7 +2551,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             if (dedupedRft.length < beforeLen) {
                 (extractionJson.requirements as any).regularidade_fiscal_trabalhista = dedupedRft;
                 (v2Result.requirements as any).regularidade_fiscal_trabalhista = dedupedRft;
-                console.log(`[PNCP-V2] 🧹 Dedup IE/IM: removido(s) ${beforeLen - dedupedRft.length} item(ns) genérico(s) (IE+IM separados existem)`);
+                logger.info(`[PNCP-V2] 🧹 Dedup IE/IM: removido(s) ${beforeLen - dedupedRft.length} item(ns) genérico(s) (IE+IM separados existem)`);
             }
         }
 
@@ -2551,9 +2566,9 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
             const catCounts = Object.entries(extractionJson.requirements)
                 .map(([cat, items]: [string, any]) => `${cat}: ${Array.isArray(items) ? items.length : 0}`)
                 .join(' | ');
-            console.log(`[PNCP-V2] 📋 Exigências por categoria: ${catCounts}`);
+            logger.info(`[PNCP-V2] 📋 Exigências por categoria: ${catCounts}`);
         }
-        console.log(`[PNCP-V2] 📊 Extração: ${extractedReqs} exigências, ${extractedEvidence} evidências, processo=${hasProcessId}`);
+        logger.info(`[PNCP-V2] 📊 Extração: ${extractedReqs} exigências, ${extractedEvidence} evidências, processo=${hasProcessId}`);
 
         // ── ANTI-HALLUCINATION GATE (V4.7.1) ──
         // Detect when the AI generates template/example data from prompt examples
@@ -2592,8 +2607,8 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         }
 
         if (hallucinationSignals.length > 0) {
-            console.error(`[PNCP-V2] 🚨 ALUCINAÇÃO DETECTADA: ${hallucinationSignals.join(', ')}`);
-            console.error(`[PNCP-V2] 🚨 A IA gerou dados de TEMPLATE em vez de ler o PDF real. Abortando análise.`);
+            logger.error(`[PNCP-V2] 🚨 ALUCINAÇÃO DETECTADA: ${hallucinationSignals.join(', ')}`);
+            logger.error(`[PNCP-V2] 🚨 A IA gerou dados de TEMPLATE em vez de ler o PDF real. Abortando análise.`);
             v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
             return sendError(
                 'Alucinação detectada — a IA não conseguiu ler os documentos',
@@ -2607,7 +2622,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         const MIN_REQUIREMENTS = 3;
         const MIN_EVIDENCE = 1;
         if (extractedReqs < MIN_REQUIREMENTS && extractedEvidence < MIN_EVIDENCE && !hasProcessId) {
-            console.error(`[PNCP-V2] ❌ FALHA FACTUAL DURA: ${extractedReqs} exigências (mín: ${MIN_REQUIREMENTS}), ${extractedEvidence} evidências (mín: ${MIN_EVIDENCE}), sem identificação do processo`);
+            logger.error(`[PNCP-V2] ❌ FALHA FACTUAL DURA: ${extractedReqs} exigências (mín: ${MIN_REQUIREMENTS}), ${extractedEvidence} evidências (mín: ${MIN_EVIDENCE}), sem identificação do processo`);
             v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
             const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
             return sendError(
@@ -2620,7 +2635,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
 
         // Soft warning: Low quality extraction (still continues)
         if (extractedReqs < MIN_REQUIREMENTS || extractedEvidence < MIN_EVIDENCE) {
-            console.warn(`[PNCP-V2] ⚠️ Extração abaixo do ideal: ${extractedReqs} exigências, ${extractedEvidence} evidências — pipeline continua com degradação`);
+            logger.warn(`[PNCP-V2] ⚠️ Extração abaixo do ideal: ${extractedReqs} exigências, ${extractedEvidence} evidências — pipeline continua com degradação`);
             v2Result.confidence.warnings.push(`Extração com qualidade reduzida: ${extractedReqs} exigências, ${extractedEvidence} evidências`);
             if (extractedReqs < MIN_REQUIREMENTS) {
                 v2Result.confidence.warnings.push(`Extração retornou apenas ${extractedReqs} exigência(s) — possível truncamento ou PDF protegido`);
@@ -2631,7 +2646,7 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         const detectedObjectType = v2Result.process_identification?.tipo_objeto || 'outro';
         const domainReinforcement = getDomainRoutingInstruction(detectedObjectType);
         if (domainReinforcement) {
-            console.log(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
+            logger.info(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
         }
 
         // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION (V4.7.0) ──
@@ -2661,10 +2676,10 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         const shouldReExtract = missingCategories.length > 0 && (hasTruncationSignal || hasCriticalGap || rftOnlyInjected);
 
         if (shouldReExtract) {
-            console.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')} ` +
+            logger.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')} ` +
                 `(truncamento=${hasTruncationSignal}, gap_critico=${hasCriticalGap}, rft_thin=${rftOnlyInjected})`);
             sendProgress(5, 'Completando categorias faltantes...', `${missingCategories.length} categorias precisam re-extração`);
-            console.log(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
+            logger.info(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
 
             const missingCatLabels: Record<string, string> = {
                 'qualificacao_tecnica_operacional': 'Qualificação Técnica Operacional (atestados da empresa, parcelas relevantes, visita técnica)',
@@ -2744,7 +2759,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                                     (extractionJson.requirements as any)[cat] = items;
                                     (v2Result.requirements as any)[cat] = items;
                                     reExtractedCount += (items as any[]).length;
-                                    console.log(`[PNCP-V2] ✅ Re-extração ${cat}: +${(items as any[]).length} itens`);
+                                    logger.info(`[PNCP-V2] ✅ Re-extração ${cat}: +${(items as any[]).length} itens`);
                                 } else if (cat === 'regularidade_fiscal_trabalhista' && rftOnlyInjected) {
                                     // RFT had only injected items — merge real CNDs from re-extraction
                                     const newItems = (items as any[]).filter((item: any) => {
@@ -2757,7 +2772,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                                         (extractionJson.requirements as any).regularidade_fiscal_trabalhista = existing;
                                         (v2Result.requirements as any).regularidade_fiscal_trabalhista = existing;
                                         reExtractedCount += newItems.length;
-                                        console.log(`[PNCP-V2] ✅ Re-extração RFT (CNDs): +${newItems.length} itens adicionais`);
+                                        logger.info(`[PNCP-V2] ✅ Re-extração RFT (CNDs): +${newItems.length} itens adicionais`);
                                     }
                                 }
                             }
@@ -2774,24 +2789,24 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
 
                     const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
                     stageTimes.re_extraction = parseFloat(reDuration);
-                    console.log(`[PNCP-V2] ✅ Re-extração concluída em ${reDuration}s: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
+                    logger.info(`[PNCP-V2] ✅ Re-extração concluída em ${reDuration}s: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
                     if (reExtractedCount > 0) {
                         v2Result.confidence.warnings.push(`Re-extração recuperou ${reExtractedCount} exigência(s) de ${effectiveMissingCategories.length} categoria(s) truncada(s)`);
                     }
                 }
             } catch (reErr: any) {
                 const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
-                console.warn(`[PNCP-V2] ⚠️ Re-extração falhou em ${reDuration}s: ${reErr.message}. Continuando com dados parciais.`);
+                logger.warn(`[PNCP-V2] ⚠️ Re-extração falhou em ${reDuration}s: ${reErr.message}. Continuando com dados parciais.`);
                 v2Result.confidence.warnings.push(`Re-extração de categorias faltantes falhou: ${reErr.message}`);
                 pipelineHealth.fallbacksUsed++;
             }
         } else if (missingCategories.length > 0) {
-            console.log(`[PNCP-V2] ℹ️ ${missingCategories.length} categorias vazias (${missingCategories.join(', ')}) — sem sinal de truncamento, mantendo extração original`);
+            logger.info(`[PNCP-V2] ℹ️ ${missingCategories.length} categorias vazias (${missingCategories.join(', ')}) — sem sinal de truncamento, mantendo extração original`);
         }
 
         // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
         sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
-        console.log(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
+        logger.info(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
         let normalizationJson: any = {};
         const extractionJsonCompact = JSON.stringify(extractionJson);  // Compact — saves ~20-30% tokens
         const t2t3Start = Date.now();
@@ -2852,7 +2867,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                                 notes: ''
                             });
                         });
-                        console.log(`[PNCP-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side, 0 API calls)`);
+                        logger.info(`[PNCP-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side, 0 API calls)`);
                         return { cat: cat.key, success: true, fastPath: true };
                     }
 
@@ -2895,11 +2910,11 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                             if (Array.isArray(data.documents_to_prepare)) {
                                 mergedDocs.push(...data.documents_to_prepare);
                             }
-                            console.log(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens (${normModel})`);
+                            logger.info(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens (${normModel})`);
                             return { cat: cat.key, success: true };
                         } catch (geminiErr: any) {
                             // Per-block fallback to OpenAI
-                            console.warn(`[PNCP-V2] ⚠️ Norm ${cat.prefix} Gemini falhou: ${geminiErr.message}. Fallback OpenAI...`);
+                            logger.warn(`[PNCP-V2] ⚠️ Norm ${cat.prefix} Gemini falhou: ${geminiErr.message}. Fallback OpenAI...`);
                             usedFallback = true;
                             try {
                                 const oaiResult = await fallbackToOpenAiV2({
@@ -2922,11 +2937,11 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                                 if (Array.isArray(data.documents_to_prepare)) {
                                     mergedDocs.push(...data.documents_to_prepare);
                                 }
-                                console.log(`[PNCP-V2] ✅ Norm ${cat.prefix} via OpenAI: ${(data.items || []).length} itens`);
+                                logger.info(`[PNCP-V2] ✅ Norm ${cat.prefix} via OpenAI: ${(data.items || []).length} itens`);
                                 return { cat: cat.key, success: true, fallback: true };
                             } catch (oaiErr: any) {
                                 // Both failed — keep original extraction data
-                                console.error(`[PNCP-V2] ❌ Norm ${cat.prefix} falhou (ambos): ${oaiErr.message}`);
+                                logger.error(`[PNCP-V2] ❌ Norm ${cat.prefix} falhou (ambos): ${oaiErr.message}`);
                                 mergedRequirements[cat.key] = items;
                                 totalNormalized += items.length;
                                 categoriesFailed++;
@@ -2943,7 +2958,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
                 const fastPathCount = results.filter(r => r.status === 'fulfilled' && r.value?.fastPath).length;
                 const aiNormCount = successCount - fastPathCount;
-                console.log(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${NORM_CATEGORIES.length - categoriesSkipped} OK (⚡${fastPathCount} fast + 🤖${aiNormCount} AI), ${categoriesFailed} falhas`);
+                logger.info(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${NORM_CATEGORIES.length - categoriesSkipped} OK (⚡${fastPathCount} fast + 🤖${aiNormCount} AI), ${categoriesFailed} falhas`);
 
                 // Build merged normalization result
                 const json = {
@@ -2984,10 +2999,10 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     const parseR = robustJsonParseDetailed(riskText, 'PNCP-V2-RiskReview');
                     const json = parseR.data;
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
-                    console.log(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
+                    logger.info(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
                     return { json, model: PIPELINE_MODELS.riskReview, repaired: parseR.repaired, fallback: false };
                 } catch (err: any) {
-                    console.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+                    logger.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
                     const openAiResult = await fallbackToOpenAiV2({
                         systemPrompt: V2_RISK_REVIEW_PROMPT,
                         userPrompt: riskUserInstruction,
@@ -2998,7 +3013,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                     const parseROai = robustJsonParseDetailed(openAiResult.text, 'PNCP-V2-RiskReview-OpenAI');
                     const json = parseROai.data;
                     stageTimes.risk_review = (Date.now() - t3Start) / 1000;
-                    console.log(`[PNCP-V2] ✅ Etapa 3 via OpenAI em ${stageTimes.risk_review.toFixed(1)}s`);
+                    logger.info(`[PNCP-V2] ✅ Etapa 3 via OpenAI em ${stageTimes.risk_review.toFixed(1)}s`);
                     return { json, model: openAiResult.model, repaired: parseROai.repaired, fallback: true };
                 }
             })(),
@@ -3009,7 +3024,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
             (async () => {
                 const currentItens = v2Result.proposal_analysis?.itens_licitados || [];
                 if (Array.isArray(currentItens) && currentItens.length > 0) {
-                    console.log(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — itens_licitados já tem ${currentItens.length} itens`);
+                    logger.info(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — itens_licitados já tem ${currentItens.length} itens`);
                     return { items: currentItens, skipped: true };
                 }
 
@@ -3024,11 +3039,11 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 );
 
                 if (planilhaAttachments.length === 0) {
-                    console.log(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — sem planilhas no catálogo`);
+                    logger.info(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — sem planilhas no catálogo`);
                     return { items: [], skipped: true };
                 }
 
-                console.log(`[PNCP-V2] 📋 Etapa 1.5: Extraindo itens de ${planilhaAttachments.length} PDF(s) em paralelo...`);
+                logger.info(`[PNCP-V2] 📋 Etapa 1.5: Extraindo itens de ${planilhaAttachments.length} PDF(s) em paralelo...`);
                 const t15Start = Date.now();
 
                 try {
@@ -3047,7 +3062,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                         maxContentLength: 50 * 1024 * 1024 // 50MB max
                     } as any);
                     const pdfBuffer = Buffer.from(pdfResp.data as ArrayBuffer);
-                    console.log(`[PNCP-V2] 📋 Etapa 1.5: PDF "${target.titulo}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                    logger.info(`[PNCP-V2] 📋 Etapa 1.5: PDF "${target.titulo}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
 
                     const itemExtractionPrompt = `Você é um extrator de itens de planilhas orçamentárias de licitações brasileiras.
 
@@ -3095,17 +3110,17 @@ Responda APENAS com JSON array:
                     items = items.filter((it: any) => it.description && it.description.trim().length > 5);
                     
                     const elapsed = ((Date.now() - t15Start) / 1000).toFixed(1);
-                    console.log(`[PNCP-V2] ✅ Etapa 1.5 em ${elapsed}s — ${items.length} itens extraídos de "${target.titulo}"`);
+                    logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${elapsed}s — ${items.length} itens extraídos de "${target.titulo}"`);
                     
                     return { items, skipped: false, source: target.titulo, elapsed };
                 } catch (err: any) {
-                    console.warn(`[PNCP-V2] ⚠️ Etapa 1.5 falhou: ${err.message}`);
+                    logger.warn(`[PNCP-V2] ⚠️ Etapa 1.5 falhou: ${err.message}`);
                     return { items: [], skipped: false, error: err.message };
                 }
             })()
         ]);
 
-        console.log(`[PNCP-V2] Etapas 2+3 paralelas concluídas em ${((Date.now() - t2t3Start) / 1000).toFixed(1)}s`);
+        logger.info(`[PNCP-V2] Etapas 2+3 paralelas concluídas em ${((Date.now() - t2t3Start) / 1000).toFixed(1)}s`);
 
         // Process normalization result
         if (normSettled.status === 'fulfilled') {
@@ -3115,7 +3130,7 @@ Responda APENAS com JSON array:
             if (normSettled.value.repaired) pipelineHealth.parseRepairs++;
             if (normSettled.value.fallback) pipelineHealth.fallbacksUsed++;
         } else {
-            console.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
+            logger.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
             v2Result.analysis_meta.workflow_stage_status.normalization = 'failed';
             v2Result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${normSettled.reason?.message || 'erro desconhecido'}`);
             stageTimes.normalization = stageTimes.normalization || 0;
@@ -3152,7 +3167,7 @@ Responda APENAS com JSON array:
                 v2Result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
             }
         } else {
-            console.error(`[PNCP-V2] ❌ Etapa 3 falhou — continuando sem revisão de risco`);
+            logger.error(`[PNCP-V2] ❌ Etapa 3 falhou — continuando sem revisão de risco`);
             v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
             v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${riskSettled.reason?.message || 'erro desconhecido'}`);
             stageTimes.risk_review = stageTimes.risk_review || 0;
@@ -3165,10 +3180,10 @@ Responda APENAS com JSON array:
                 if (!v2Result.proposal_analysis) v2Result.proposal_analysis = {} as any;
                 v2Result.proposal_analysis.itens_licitados = extractedItems;
                 stageTimes.item_extraction = parseFloat(itemsSettled.value.elapsed || '0');
-                console.log(`[PNCP-V2] ✅ Etapa 1.5 merge: ${extractedItems.length} itens → proposal_analysis.itens_licitados`);
+                logger.info(`[PNCP-V2] ✅ Etapa 1.5 merge: ${extractedItems.length} itens → proposal_analysis.itens_licitados`);
             }
         } else if (itemsSettled.status === 'rejected') {
-            console.warn(`[PNCP-V2] ⚠️ Etapa 1.5 rejected: ${itemsSettled.reason?.message || 'erro'}`);
+            logger.warn(`[PNCP-V2] ⚠️ Etapa 1.5 rejected: ${itemsSettled.reason?.message || 'erro'}`);
         }
 
         // ── Schema Sanitization: Safe defaults for all arrays/collections ──
@@ -3227,7 +3242,7 @@ Responda APENAS com JSON array:
                 (v2Result.analysis_meta as any).rule_findings = ruleFindings;
             }
         } catch (ruleErr: any) {
-            console.warn(`[PNCP-V2] Motor de regras falhou: ${ruleErr.message}`);
+            logger.warn(`[PNCP-V2] Motor de regras falhou: ${ruleErr.message}`);
         }
 
         // ── Quality Evaluator ──
@@ -3241,7 +3256,7 @@ Responda APENAS com JSON array:
                 summary: qualityReport.summary
             };
         } catch (qualErr: any) {
-            console.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
+            logger.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
         }
 
         // ── Confidence Score V2.5 (calibrado para refletir precisão real) ──
@@ -3332,7 +3347,7 @@ Responda APENAS com JSON array:
         const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
         const totalReqs = Object.values(v2Result.requirements).reduce((sum, arr) => sum + arr.length, 0);
         sendProgress(7, 'Validando completude da análise...', `${totalReqs} exigências, ${v2Result.evidence_registry.length} evidências`);
-        console.log(`[PNCP-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
+        logger.info(`[PNCP-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
             `Modelos: ${uniqueModels.join('+')} | ` +
             `${totalReqs} exigências | ${v2Result.legal_risk_review.critical_points.length} riscos | ` +
             `${v2Result.evidence_registry.length} evidências | Score: ${combinedScore}% (${v2Result.confidence.overall_confidence})`);
@@ -3356,16 +3371,16 @@ Responda APENAS com JSON array:
                 // dataAberturaProposta = início do recebimento de propostas (NÃO é a sessão!)
                 // dataInicioDisputa ou dataAberturaEdital são mais próximos da sessão real
                 pncpApiSessionDate = d.dataInicioDisputa || d.dataAberturaEdital || '';
-                console.log(`[PNCP-V2] 💰 API metadata: valor=${pncpApiValue}, sessionDate=${pncpApiSessionDate || '(vazio)'}`);
+                logger.info(`[PNCP-V2] 💰 API metadata: valor=${pncpApiValue}, sessionDate=${pncpApiSessionDate || '(vazio)'}`);
             }
         } catch (e: any) {
-            console.warn(`[PNCP-V2] Failed to fetch PNCP metadata for value: ${e.message}`);
+            logger.warn(`[PNCP-V2] Failed to fetch PNCP metadata for value: ${e.message}`);
         }
 
         // Resolve estimatedValue: AI extraction > PNCP API > 0
         const aiExtractedValue = Number(v2Result.process_identification?.valor_estimado_global) || 0;
         const resolvedEstimatedValue = aiExtractedValue > 0 ? aiExtractedValue : pncpApiValue;
-        console.log(`[PNCP-V2] 💰 Valor resolução: AI=${aiExtractedValue}, API=${pncpApiValue}, final=${resolvedEstimatedValue}`);
+        logger.info(`[PNCP-V2] 💰 Valor resolução: AI=${aiExtractedValue}, API=${pncpApiValue}, final=${resolvedEstimatedValue}`);
 
         // Resolve sessionDate: AI timeline > PNCP API data_abertura
         const resolvedSessionDateRaw = v2Result.timeline.data_sessao || pncpApiSessionDate || '';
@@ -3409,7 +3424,7 @@ Responda APENAS com JSON array:
         if (/XX\/\d{4}/.test(cleanNumProcesso)) cleanNumProcesso = '';
         if (/XX\/\d{4}/.test(cleanNumEdital)) cleanNumEdital = '';
         if (rawObjResumo !== bestObjResumo) {
-            console.log(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
+            logger.info(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
         }
 
 
@@ -3449,7 +3464,7 @@ Responda APENAS com JSON array:
                     lower.includes('compras.gov.br') && !lower.includes('cnetmobile')
                 );
                 if (isGenericComprasNet) {
-                    console.log(`[PNCP-V2] 🧹 Sanitização: link_sistema genérico removido: "${rawLink.substring(0, 60)}"`);
+                    logger.info(`[PNCP-V2] 🧹 Sanitização: link_sistema genérico removido: "${rawLink.substring(0, 60)}"`);
                     return '';
                 }
                 return rawLink;
@@ -3478,7 +3493,7 @@ Responda APENAS com JSON array:
         if (needsAutoEnrich) {
             try {
                 const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
-                console.log(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl} (link_sistema=${legacyProcess.link_sistema ? 'genérico' : 'vazio'})`);
+                logger.info(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl} (link_sistema=${legacyProcess.link_sistema ? 'genérico' : 'vazio'})`);
                 const controller = new AbortController();
                 const enrichTimeout = setTimeout(() => controller.abort(), 8000);
                 const enrichRes = await fetch(enrichUrl, { signal: controller.signal });
@@ -3489,9 +3504,9 @@ Responda APENAS com JSON array:
                     if (lso && hasMonitorableDomain(lso)) {
                         legacyProcess.link_sistema = lso;
                         const platform = detectPlatformFromLink(lso) || 'desconhecida';
-                        console.log(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido (${platform}): ${lso.substring(0, 80)}`);
+                        logger.info(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido (${platform}): ${lso.substring(0, 80)}`);
                     } else {
-                        console.log(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'} → tentando Fallback B (edital)`);
+                        logger.info(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'} → tentando Fallback B (edital)`);
 
                         // ── FALLBACK B: Construir URL ComprasNet a partir dos dados do edital ──
                         // Quando linkSistemaOrigem é null (ex: CE-SOP), o edital pode conter
@@ -3556,19 +3571,19 @@ Responda APENAS com JSON array:
                                                 nuCompraRaw = pdfNumMatch[1];
                                                 compraAno = pdfNumMatch[2] || ano;
                                                 extractionSrc = 'PDF-PARSE';
-                                                console.log(`[PNCP-V2] 📄 Fallback C: numero_comprasnet=${nuCompraRaw} extraído do PDF direto`);
+                                                logger.info(`[PNCP-V2] 📄 Fallback C: numero_comprasnet=${nuCompraRaw} extraído do PDF direto`);
                                             }
                                         }
                                         if (!resolvedUasg) {
                                             const pdfUasgMatch = headerText.match(/UASG\s*:?\s*(\d{6})/i);
                                             if (pdfUasgMatch) {
                                                 resolvedUasg = pdfUasgMatch[1];
-                                                console.log(`[PNCP-V2] 📄 Fallback C: uasg=${resolvedUasg} extraído do PDF direto`);
+                                                logger.info(`[PNCP-V2] 📄 Fallback C: uasg=${resolvedUasg} extraído do PDF direto`);
                                             }
                                         }
                                     }
                                 } catch (pdfErr: any) {
-                                    console.warn(`[PNCP-V2] ⚠️ Fallback C (pdf-parse) falhou: ${pdfErr.message}`);
+                                    logger.warn(`[PNCP-V2] ⚠️ Fallback C (pdf-parse) falhou: ${pdfErr.message}`);
                                 }
                             }
                             
@@ -3596,18 +3611,18 @@ Responda APENAS com JSON array:
                                 const fallbackUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
                                 
                                 legacyProcess.link_sistema = fallbackUrl;
-                                console.log(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
-                                console.log(`[PNCP-V2]    UASG=${resolvedUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${extractionSrc}`);
+                                logger.info(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
+                                logger.info(`[PNCP-V2]    UASG=${resolvedUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${extractionSrc}`);
                             } else {
-                                console.log(`[PNCP-V2] ℹ️ Fallback B+C: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'}, uasg=${resolvedUasg || 'N/A'})`);
+                                logger.info(`[PNCP-V2] ℹ️ Fallback B+C: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'}, uasg=${resolvedUasg || 'N/A'})`);
                             }
                         } catch (fbErr: any) {
-                            console.warn(`[PNCP-V2] ⚠️ Fallback B falhou: ${fbErr.message}`);
+                            logger.warn(`[PNCP-V2] ⚠️ Fallback B falhou: ${fbErr.message}`);
                         }
                     }
                 }
             } catch (err: any) {
-                console.warn(`[PNCP-V2] ⏱️ Enrich falhou: ${err.message}`);
+                logger.warn(`[PNCP-V2] ⏱️ Enrich falhou: ${err.message}`);
             }
         }
 
@@ -3617,7 +3632,7 @@ Responda APENAS com JSON array:
         if (legacyProcess.link_sistema && hasMonitorableDomain(legacyProcess.link_sistema)) {
             const enrichedPortal = normalizePortal(legacyProcess.portal || 'PNCP', legacyProcess.link_sistema);
             if (enrichedPortal !== legacyProcess.portal) {
-                console.log(`[PNCP-V2] 🔄 Portal re-normalizado: "${legacyProcess.portal}" → "${enrichedPortal}" (Auto-Enrich)`);
+                logger.info(`[PNCP-V2] 🔄 Portal re-normalizado: "${legacyProcess.portal}" → "${enrichedPortal}" (Auto-Enrich)`);
                 legacyProcess.portal = enrichedPortal;
             }
         }
@@ -3703,7 +3718,7 @@ Responda APENAS com JSON array:
             _requirement_count: totalReqs
         };
 
-        console.log(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
+        logger.info(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
         sendProgress(8, 'Análise concluída!', `Score: ${combinedScore}% • ${totalReqs} exigências • ${v2Result.legal_risk_review.critical_points.length} riscos`);
 
         // ── Telemetry (fire-and-forget) ──
@@ -3742,7 +3757,7 @@ Responda APENAS com JSON array:
         sendResult(finalPayload);
 
     } catch (error: any) {
-        console.error('[PNCP-V2] Error:', error?.message || error);
+        logger.error('[PNCP-V2] Error:', error?.message || error);
         // Record error telemetry
         recordAnalysisTelemetry({
             tenantId: req.user?.tenantId || 'unknown',
@@ -3951,7 +3966,7 @@ function sanitizeBiddingData(raw: Record<string, any>): Record<string, any> {
     if (clean.sessionDate && typeof clean.sessionDate === 'string') {
         const parsed = new Date(clean.sessionDate);
         if (isNaN(parsed.getTime())) {
-            console.warn(`[Sanitize] Invalid sessionDate "${clean.sessionDate}", using current date`);
+            logger.warn(`[Sanitize] Invalid sessionDate "${clean.sessionDate}", using current date`);
             clean.sessionDate = new Date().toISOString();
         } else {
             clean.sessionDate = parsed.toISOString();
@@ -3964,7 +3979,7 @@ function sanitizeBiddingData(raw: Record<string, any>): Record<string, any> {
         } else if (typeof clean.reminderDate === 'string') {
             const parsed = new Date(clean.reminderDate);
             if (isNaN(parsed.getTime())) {
-                console.warn(`[Sanitize] Invalid reminderDate "${clean.reminderDate}", setting null`);
+                logger.warn(`[Sanitize] Invalid reminderDate "${clean.reminderDate}", setting null`);
                 clean.reminderDate = null;
             } else {
                 clean.reminderDate = parsed.toISOString();
@@ -4024,7 +4039,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
                     const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
-                    console.log(`[AutoEnrich] 🔍 Buscando linkSistemaOrigem: ${enrichUrl}`);
+                    logger.info(`[AutoEnrich] 🔍 Buscando linkSistemaOrigem: ${enrichUrl}`);
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 10000);
                     try {
@@ -4033,7 +4048,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                         if (apiRes.ok) {
                             const apiData = await apiRes.json();
                             const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                            console.log(`[AutoEnrich] 📋 linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
+                            logger.info(`[AutoEnrich] 📋 linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
                             if (platformUrl && hasMonitorableDomain(platformUrl)) {
                                 // Case 1: linkSistemaOrigem IS monitorable (e.g., cnetmobile, bllcompras)
                                 const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
@@ -4054,12 +4069,12 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                                     filteredParts.push(platformUrl);
                                     enrichedLink = filteredParts.join(', ');
                                     biddingData.link = enrichedLink;
-                                    console.log(`[AutoEnrich] 🔄 Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
+                                    logger.info(`[AutoEnrich] 🔄 Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
                                 } else if (!existingParts.some((part: string) => part === platformUrl)) {
                                     // APPEND: No generic link — just add alongside existing
                                     enrichedLink = `${enrichedLink}, ${platformUrl}`;
                                     biddingData.link = enrichedLink;
-                                    console.log(`[AutoEnrich] ✅ Link monitorável adicionado: ${platformUrl.substring(0, 60)}`);
+                                    logger.info(`[AutoEnrich] ✅ Link monitorável adicionado: ${platformUrl.substring(0, 60)}`);
                                 }
                                 // Re-normalize portal with the enriched link
                                 biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
@@ -4070,23 +4085,23 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
                                     enrichedLink = `${enrichedLink}, ${platformUrl}`;
                                     biddingData.link = enrichedLink;
                                 }
-                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable: ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal}`);
+                                logger.info(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable: ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal}`);
                             } else {
-                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem VAZIO para ${cnpj}/${ano}/${seq}`);
+                                logger.info(`[AutoEnrich] ⚠️ linkSistemaOrigem VAZIO para ${cnpj}/${ano}/${seq}`);
                             }
                         } else {
-                            console.log(`[AutoEnrich] ⚠️ API retornou status ${apiRes.status} para ${cnpj}/${ano}/${seq}`);
+                            logger.info(`[AutoEnrich] ⚠️ API retornou status ${apiRes.status} para ${cnpj}/${ano}/${seq}`);
                         }
                     } catch (fetchErr: any) {
                         clearTimeout(timeout);
-                        console.warn(`[AutoEnrich] ⏱️ Fetch falhou (timeout ou rede): ${fetchErr.message}`);
+                        logger.warn(`[AutoEnrich] ⏱️ Fetch falhou (timeout ou rede): ${fetchErr.message}`);
                     }
                 }
             } catch (e) {
-                console.warn('[AutoEnrich] Failed to fetch platform link:', e);
+                logger.warn('[AutoEnrich] Failed to fetch platform link:', e);
             }
         } else if (!hasPlatformLink) {
-            console.log(`[AutoEnrich] ⏭ Skipped: link="${enrichedLink?.substring(0, 60)}" hasPlatform=${hasPlatformLink} pncp=${enrichedLink.includes('pncp.gov.br')} editais=${enrichedLink.includes('editais')}`);
+            logger.info(`[AutoEnrich] ⏭ Skipped: link="${enrichedLink?.substring(0, 60)}" hasPlatform=${hasPlatformLink} pncp=${enrichedLink.includes('pncp.gov.br')} editais=${enrichedLink.includes('editais')}`);
         }
 
         // ── Step 2: Auto-enable monitoring for all supported platforms ──
@@ -4096,9 +4111,9 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         if (hasMonitorableDomain(enrichedLink) || isComprasGovPortal) {
             biddingData.isMonitored = true;
             if (isComprasGovPortal && !hasMonitorableDomain(enrichedLink)) {
-                console.log(`[AutoMonitor] Auto-enabled monitoring for Compras.gov.br process (needs cnetmobile link for worker). Portal: ${biddingData.portal}`);
+                logger.info(`[AutoMonitor] Auto-enabled monitoring for Compras.gov.br process (needs cnetmobile link for worker). Portal: ${biddingData.portal}`);
             } else {
-                console.log(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
+                logger.info(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
             }
         }
 
@@ -4114,7 +4129,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         });
         res.json(bidding);
     } catch (error) {
-        console.error("Create bidding error:", error);
+        logger.error("Create bidding error:", error);
         handleApiError(res, error, 'create-bidding');
     }
 });
@@ -4174,7 +4189,7 @@ app.post('/api/backfill-platform-links', authenticateToken, async (req: any, res
                         where: { id: proc.id },
                         data: { link: unique.join(', ') }
                     });
-                    console.log(`[Backfill] 🧹 ${proc.id.slice(0,8)}: cleaned ${parts.length - unique.length} duplicate links`);
+                    logger.info(`[Backfill] 🧹 ${proc.id.slice(0,8)}: cleaned ${parts.length - unique.length} duplicate links`);
                 }
             }
 
@@ -4188,7 +4203,7 @@ app.post('/api/backfill-platform-links', authenticateToken, async (req: any, res
                         data: { portal: normalized }
                     });
                     portalNormalized++;
-                    console.log(`[Backfill] 🏷️ ${proc.id.slice(0,8)}: portal "${proc.portal}" → "${normalized}"`);
+                    logger.info(`[Backfill] 🏷️ ${proc.id.slice(0,8)}: portal "${proc.portal}" → "${normalized}"`);
                 }
             }
 
@@ -4201,7 +4216,7 @@ app.post('/api/backfill-platform-links', authenticateToken, async (req: any, res
                 const [, cnpj, ano, seq] = match;
                 try {
                     const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                    if (!apiRes.ok) { console.log(`[Backfill] ${proc.id.slice(0,8)}: API ${apiRes.status}`); continue; }
+                    if (!apiRes.ok) { logger.info(`[Backfill] ${proc.id.slice(0,8)}: API ${apiRes.status}`); continue; }
                     const data = await apiRes.json();
                     const lso = (data.linkSistemaOrigem || '').trim();
 
@@ -4223,23 +4238,23 @@ app.post('/api/backfill-platform-links', authenticateToken, async (req: any, res
                                 data: updateData
                             });
                             updated++;
-                            console.log(`[Backfill] ✅ ${proc.id.slice(0,8)}: ${detectedPlatform || 'platform'} link added (${lso.substring(0,60)})`);
+                            logger.info(`[Backfill] ✅ ${proc.id.slice(0,8)}: ${detectedPlatform || 'platform'} link added (${lso.substring(0,60)})`);
                         }
                     } else if (lso) {
-                        console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: non-monitorable link (${lso.substring(0,60)})`);
+                        logger.info(`[Backfill] ⏭ ${proc.id.slice(0,8)}: non-monitorable link (${lso.substring(0,60)})`);
                     } else {
                         noLinkAvailable++;
-                        console.log(`[Backfill] ⏭ ${proc.id.slice(0,8)}: linkSistemaOrigem empty`);
+                        logger.info(`[Backfill] ⏭ ${proc.id.slice(0,8)}: linkSistemaOrigem empty`);
                     }
                     await new Promise(r => setTimeout(r, 300));
                 } catch (e) {
-                    console.log(`[Backfill] ❌ ${proc.id.slice(0,8)}: ${e}`);
+                    logger.info(`[Backfill] ❌ ${proc.id.slice(0,8)}: ${e}`);
                 }
             }
-            console.log(`[Backfill] ✅ Complete: ${updated} enriched, ${portalNormalized} portals normalized, ${noLinkAvailable} empty, ${processes.length} total`);
+            logger.info(`[Backfill] ✅ Complete: ${updated} enriched, ${portalNormalized} portals normalized, ${noLinkAvailable} empty, ${processes.length} total`);
         })();
     } catch (error) {
-        console.error('[Backfill] Error:', error);
+        logger.error('[Backfill] Error:', error);
         handleApiError(res, error, 'backfill');
     }
 });
@@ -4273,10 +4288,10 @@ app.post('/api/admin/normalize-portals', authenticateToken, async (req: any, res
             }
         }
 
-        console.log(`[NormalizePortals] ${updated}/${allProcesses.length} portals normalized for tenant ${req.user.tenantId}`);
+        logger.info(`[NormalizePortals] ${updated}/${allProcesses.length} portals normalized for tenant ${req.user.tenantId}`);
         res.json({ message: `${updated} portals normalized`, total: allProcesses.length, updated, changes });
     } catch (error) {
-        console.error('[NormalizePortals] Error:', error);
+        logger.error('[NormalizePortals] Error:', error);
         res.status(500).json({ error: 'Failed to normalize portals' });
     }
 });
@@ -4318,7 +4333,7 @@ app.post('/api/admin/normalize-all', authenticateToken, async (req: any, res) =>
             }
         }
 
-        console.log(`[NormalizeAll] tenant=${req.user.tenantId} | portals: ${portalUpdated}, modalities: ${modalityUpdated} / ${allProcesses.length} total`);
+        logger.info(`[NormalizeAll] tenant=${req.user.tenantId} | portals: ${portalUpdated}, modalities: ${modalityUpdated} / ${allProcesses.length} total`);
         res.json({
             message: `Normalização concluída: ${portalUpdated} portais + ${modalityUpdated} modalidades atualizadas`,
             total: allProcesses.length,
@@ -4326,7 +4341,7 @@ app.post('/api/admin/normalize-all', authenticateToken, async (req: any, res) =>
             portalChanges, modalityChanges
         });
     } catch (error) {
-        console.error('[NormalizeAll] Error:', error);
+        logger.error('[NormalizeAll] Error:', error);
         res.status(500).json({ error: 'Failed to normalize data' });
     }
 });
@@ -4408,7 +4423,7 @@ app.get('/api/admin/monitoring-audit', authenticateToken, async (req: any, res) 
             issues
         });
     } catch (e) {
-        console.error('[MonitoringAudit]', e);
+        logger.error('[MonitoringAudit]', e);
         res.status(500).json({ error: 'Falha na auditoria.' });
     }
 });
@@ -4429,7 +4444,7 @@ app.get('/api/admin/ai-usage', authenticateToken, async (req: any, res) => {
 
         res.json({ ok: true, ...summary, daily, quota });
     } catch (e: any) {
-        console.error('[AiUsage]', e);
+        logger.error('[AiUsage]', e);
         res.status(500).json({ error: 'Falha ao buscar consumo de IA.' });
     }
 });
@@ -4462,12 +4477,12 @@ app.put('/api/biddings/:id/oracle-evidence', authenticateToken, async (req: any,
                     }
                 }
             });
-            console.log(`[Oracle] Evidências persistidas para bidding ${id} (${Object.keys(oracleEvidence || {}).length} exigências)`);
+            logger.info(`[Oracle] Evidências persistidas para bidding ${id} (${Object.keys(oracleEvidence || {}).length} exigências)`);
         }
 
         res.json({ success: true });
     } catch (error: any) {
-        console.error('[Oracle Evidence]', error);
+        logger.error('[Oracle Evidence]', error);
         res.status(500).json({ error: 'Falha ao persistir evidências.' });
     }
 });
@@ -4507,7 +4522,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                 if (pncpMatch) {
                     const [, cnpj, ano, seq] = pncpMatch;
                     const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
-                    console.log(`[AutoEnrich] 🔍 Update: Buscando linkSistemaOrigem: ${enrichUrl}`);
+                    logger.info(`[AutoEnrich] 🔍 Update: Buscando linkSistemaOrigem: ${enrichUrl}`);
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 10000);
                     try {
@@ -4516,7 +4531,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                         if (apiRes.ok) {
                             const apiData = await apiRes.json();
                             const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                            console.log(`[AutoEnrich] 📋 Update: linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
+                            logger.info(`[AutoEnrich] 📋 Update: linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
                             if (platformUrl && hasMonitorableDomain(platformUrl)) {
                                 const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
                                 
@@ -4534,11 +4549,11 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                                     filteredParts.push(platformUrl);
                                     enrichedLink = filteredParts.join(', ');
                                     biddingData.link = enrichedLink;
-                                    console.log(`[AutoEnrich] 🔄 Update: Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
+                                    logger.info(`[AutoEnrich] 🔄 Update: Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
                                 } else if (!existingParts.some((part: string) => part === platformUrl)) {
                                     enrichedLink = `${enrichedLink}, ${platformUrl}`;
                                     biddingData.link = enrichedLink;
-                                    console.log(`[AutoEnrich] ✅ Update: link monitorável adicionado para "${id}": ${platformUrl.substring(0, 60)}`);
+                                    logger.info(`[AutoEnrich] ✅ Update: link monitorável adicionado para "${id}": ${platformUrl.substring(0, 60)}`);
                                 }
                                 if (biddingData.portal !== undefined) {
                                     biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
@@ -4549,16 +4564,16 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                                     enrichedLink = `${enrichedLink}, ${platformUrl}`;
                                     biddingData.link = enrichedLink;
                                 }
-                                console.log(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable for "${id}": ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal || 'N/A'}`);
+                                logger.info(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable for "${id}": ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal || 'N/A'}`);
                             }
                         }
                     } catch (fetchErr: any) {
                         clearTimeout(timeout);
-                        console.warn(`[AutoEnrich] ⏱️ Update fetch falhou: ${fetchErr.message}`);
+                        logger.warn(`[AutoEnrich] ⏱️ Update fetch falhou: ${fetchErr.message}`);
                     }
                 }
             } catch (e) {
-                console.warn('[AutoEnrich] Failed to fetch platform link:', e);
+                logger.warn('[AutoEnrich] Failed to fetch platform link:', e);
             }
         }
 
@@ -4572,7 +4587,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
                 const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
                 if (current && !current.isMonitored) {
                     biddingData.isMonitored = true;
-                    console.log(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
+                    logger.info(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
                 }
             }
         }
@@ -4596,7 +4611,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         });
         res.json(bidding);
     } catch (error) {
-        console.error("Update bidding error:", error);
+        logger.error("Update bidding error:", error);
         handleApiError(res, error, 'update-bidding');
     }
 });
@@ -4613,7 +4628,7 @@ app.delete('/api/biddings/:id', authenticateToken, async (req: any, res) => {
             res.status(404).json({ error: 'Bidding not found or unauthorized' });
         }
     } catch (error) {
-        console.error("Delete bidding error:", error);
+        logger.error("Delete bidding error:", error);
         res.status(500).json({ error: 'Failed to delete bidding' });
     }
 });
@@ -4669,7 +4684,7 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
 
         const mergedPayload = { ...payload, ...v2Fields };
 
-        console.log(`[Analysis] Upserting analysis for process ${mergedPayload.biddingProcessId}. Payload summary length: ${mergedPayload.fullSummary?.length || 0}. Files: ${mergedPayload.sourceFileNames}. V2: ${!!v2Fields.schemaV2}`);
+        logger.info(`[Analysis] Upserting analysis for process ${mergedPayload.biddingProcessId}. Payload summary length: ${mergedPayload.fullSummary?.length || 0}. Files: ${mergedPayload.sourceFileNames}. V2: ${!!v2Fields.schemaV2}`);
 
         const analysis = await prisma.aiAnalysis.upsert({
             where: {
@@ -4680,30 +4695,30 @@ app.post('/api/analysis', authenticateToken, async (req: any, res) => {
         });
 
         // Debug log to confirm what was actually saved
-        console.log(`[Analysis] SUCCESS for ${payload.biddingProcessId}. Saved sourceFiles: ${analysis.sourceFileNames?.substring(0, 100)}`);
+        logger.info(`[Analysis] SUCCESS for ${payload.biddingProcessId}. Saved sourceFiles: ${analysis.sourceFileNames?.substring(0, 100)}`);
 
         // Fire & Forget Indexing -> Vector Database para RAG
         if (payload.biddingProcessId && payload.sourceFileNames) {
             try {
                 const parsedFileNames = JSON.parse(payload.sourceFileNames);
                 if (Array.isArray(parsedFileNames) && parsedFileNames.length > 0) {
-                    console.log(`[Background RAG] Disparando indexação assíncrona para ${payload.biddingProcessId}...`);
+                    logger.info(`[Background RAG] Disparando indexação assíncrona para ${payload.biddingProcessId}...`);
                     fetchPdfPartsForProcess(payload.biddingProcessId, parsedFileNames, req.user.tenantId)
                         .then(pdfParts => {
                             if (pdfParts && pdfParts.length > 0) {
                                 return indexDocumentChunks(payload.biddingProcessId, pdfParts);
                             }
                         })
-                        .catch(err => console.error(`[Background RAG] Erro interno: ${err.message}`));
+                        .catch(err => logger.error(`[Background RAG] Erro interno: ${err.message}`));
                 }
             } catch (e) {
-                console.warn(`[Background RAG] Não foi possível mapear sourceFileNames para o processo ${payload.biddingProcessId}`);
+                logger.warn(`[Background RAG] Não foi possível mapear sourceFileNames para o processo ${payload.biddingProcessId}`);
             }
         }
 
         res.json(analysis);
     } catch (error) {
-        console.error("Create analysis error:", error);
+        logger.error("Create analysis error:", error);
         res.status(500).json({ error: 'Failed to save AI analysis' });
     }
 });
@@ -4746,7 +4761,7 @@ app.get('/api/analysis/:processId', authenticateToken, async (req: any, res) => 
             biddingItems: analysis.biddingItems,
         });
     } catch (error: any) {
-        console.error("Get analysis error:", error);
+        logger.error("Get analysis error:", error);
         res.status(500).json({ error: 'Failed to fetch analysis' });
     }
 });
@@ -4809,7 +4824,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req: an
             documentId: document.id
         });
     } catch (error) {
-        console.error("Upload error:", error);
+        logger.error("Upload error:", error);
         res.status(500).json({ error: 'File upload failed' });
     }
 });
@@ -4829,7 +4844,7 @@ app.get('/api/proposals/:biddingId', authenticateToken, async (req: any, res) =>
         });
         res.json(proposals);
     } catch (error: any) {
-        console.error('[Proposals] GET error:', error.message);
+        logger.error('[Proposals] GET error:', error.message);
         res.status(500).json({ error: 'Failed to fetch proposals' });
     }
 });
@@ -4844,7 +4859,7 @@ app.get('/api/proposals/detail/:id', authenticateToken, async (req: any, res) =>
         if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
         res.json(proposal);
     } catch (error: any) {
-        console.error('[Proposals] GET detail error:', error.message);
+        logger.error('[Proposals] GET detail error:', error.message);
         res.status(500).json({ error: 'Failed to fetch proposal' });
     }
 });
@@ -4881,10 +4896,10 @@ app.post('/api/proposals', authenticateToken, async (req: any, res) => {
             },
             include: { items: true, company: true },
         });
-        console.log(`[Proposals] Created proposal ${proposal.id} v${proposal.version} for bidding ${biddingProcessId}`);
+        logger.info(`[Proposals] Created proposal ${proposal.id} v${proposal.version} for bidding ${biddingProcessId}`);
         res.status(201).json(proposal);
     } catch (error: any) {
-        console.error('[Proposals] POST error:', error.message);
+        logger.error('[Proposals] POST error:', error.message);
         res.status(500).json({ error: 'Failed to create proposal' });
     }
 });
@@ -4933,7 +4948,7 @@ app.put('/api/proposals/:id', authenticateToken, async (req: any, res) => {
 
         res.json(updated);
     } catch (error: any) {
-        console.error('[Proposals] PUT error:', error.message);
+        logger.error('[Proposals] PUT error:', error.message);
         res.status(500).json({ error: 'Failed to update proposal' });
     }
 });
@@ -4949,7 +4964,7 @@ app.delete('/api/proposals/:id', authenticateToken, async (req: any, res) => {
         await prisma.priceProposal.delete({ where: { id: req.params.id } });
         res.json({ success: true });
     } catch (error: any) {
-        console.error('[Proposals] DELETE error:', error.message);
+        logger.error('[Proposals] DELETE error:', error.message);
         res.status(500).json({ error: 'Failed to delete proposal' });
     }
 });
@@ -5029,10 +5044,10 @@ app.post('/api/proposals/:id/items', authenticateToken, async (req: any, res) =>
         const adjustedTotalValue = allItems.reduce((sum: number, it: any) => sum + (it.adjustedTotalPrice || 0), 0);
         await prisma.priceProposal.update({ where: { id: proposalId }, data: { totalValue, ...(adjustedTotalValue > 0 ? { adjustedTotalValue } : {}) } });
 
-        console.log(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}${adjustedTotalValue > 0 ? `, adjusted: R$ ${adjustedTotalValue.toFixed(2)}` : ''}`);
+        logger.info(`[Proposals] Added ${created.length} items to proposal ${proposalId}, rounding: ${useRounding}, total: R$ ${totalValue.toFixed(2)}${adjustedTotalValue > 0 ? `, adjusted: R$ ${adjustedTotalValue.toFixed(2)}` : ''}`);
         res.json({ items: created, totalValue });
     } catch (error: any) {
-        console.error('[Proposals] POST items error:', error.message);
+        logger.error('[Proposals] POST items error:', error.message);
         res.status(500).json({ error: 'Failed to add items' });
     }
 });
@@ -5089,7 +5104,7 @@ app.put('/api/proposals/:id/items/:itemId', authenticateToken, async (req: any, 
 
         res.json({ item: updated, totalValue });
     } catch (error: any) {
-        console.error('[Proposals] PUT item error:', error.message);
+        logger.error('[Proposals] PUT item error:', error.message);
         res.status(500).json({ error: 'Failed to update item' });
     }
 });
@@ -5113,7 +5128,7 @@ app.delete('/api/proposals/:id/items/:itemId', authenticateToken, async (req: an
 
         res.json({ success: true, totalValue });
     } catch (error: any) {
-        console.error('[Proposals] DELETE item error:', error.message);
+        logger.error('[Proposals] DELETE item error:', error.message);
         res.status(500).json({ error: 'Failed to delete item' });
     }
 });
@@ -5158,7 +5173,7 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req: any, res) 
         // ── Strategy 0: Structured items from V2 analysis (FASTEST — no AI call needed) ──
         const itensLicitados = schemaV2?.proposal_analysis?.itens_licitados;
         if (Array.isArray(itensLicitados) && itensLicitados.length > 0) {
-            console.log(`[AI Populate] ✅ Strategy 0: Using ${itensLicitados.length} pre-extracted items from schemaV2`);
+            logger.info(`[AI Populate] ✅ Strategy 0: Using ${itensLicitados.length} pre-extracted items from schemaV2`);
             // Normalize items format
             const items = itensLicitados.map((it: any, idx: number) => ({
                 itemNumber: it.itemNumber || String(idx + 1),
@@ -5177,7 +5192,7 @@ app.post('/api/proposals/ai-populate', authenticateToken, async (req: any, res) 
         // Below 200 chars is likely observacoes_proposta garbage, skip to Strategy 2/3
         const hasRealBiddingItems = biddingItems && biddingItems.trim().length >= 200;
         if (hasRealBiddingItems) {
-            console.log(`[AI Populate] Using legacy biddingItems (${biddingItems.length} chars)`);
+            logger.info(`[AI Populate] Using legacy biddingItems (${biddingItems.length} chars)`);
 
             const prompt = `Você é um especialista em licitações brasileiras. Analise os ITENS LICITADOS abaixo e extraia uma lista estruturada para uma proposta de preços.
 
@@ -5233,10 +5248,10 @@ Responda APENAS com um JSON array válido:
             const estimatedValue = bidding.estimatedValue || 0;
             const isSuspiciouslyFew = items.length <= 10 && estimatedValue > 100000;
             if (isSuspiciouslyFew) {
-                console.warn(`[AI Populate] ⚠️ Strategy 1 returned only ${items.length} items but estimatedValue=R$${estimatedValue.toLocaleString()} — likely truncated biddingItems. Falling through to Strategy 2/3...`);
+                logger.warn(`[AI Populate] ⚠️ Strategy 1 returned only ${items.length} items but estimatedValue=R$${estimatedValue.toLocaleString()} — likely truncated biddingItems. Falling through to Strategy 2/3...`);
                 // Don't return — let it fall through to try PNCP planilha extraction
             } else {
-                console.log(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
+                logger.info(`[AI Populate] Extracted ${items.length} items (legacy mode)`);
                 return res.json({ items: naturalSortItems(items), totalItems: items.length, source: 'legacy_biddingItems' });
             }
         }
@@ -5264,21 +5279,21 @@ Responda APENAS com um JSON array válido:
                 )
             );
             if (planilhaFiles.length > 0) {
-                console.log(`[AI Populate] No planilha found — using ${planilhaFiles.length} edital/TR as source for item extraction`);
+                logger.info(`[AI Populate] No planilha found — using ${planilhaFiles.length} edital/TR as source for item extraction`);
             }
         }
         
         // Debug: log all attachment purposes to diagnose classification issues
         if (attachments.length > 0) {
-            console.log(`[AI Populate] Catalog has ${attachments.length} attachments. Purposes: ${JSON.stringify(attachments.map((a: any) => ({ t: a.titulo?.substring(0, 40), p: a.purpose, d: a.downloaded })))}`);
+            logger.info(`[AI Populate] Catalog has ${attachments.length} attachments. Purposes: ${JSON.stringify(attachments.map((a: any) => ({ t: a.titulo?.substring(0, 40), p: a.purpose, d: a.downloaded })))}`);
         }
 
         // ── Strategy 3: No catalog? Fetch attachments from PNCP API on the fly ──
         const pncpUrl = bidding.pncpLink || bidding.link || '';
-        console.log(`[AI Populate] Strategy check: planilhaFiles=${planilhaFiles.length}, attachments=${attachments.length}, pncpUrl=${pncpUrl}, hasBiddingItems=${!!(biddingItems && biddingItems.trim().length >= 10)}`);
+        logger.info(`[AI Populate] Strategy check: planilhaFiles=${planilhaFiles.length}, attachments=${attachments.length}, pncpUrl=${pncpUrl}, hasBiddingItems=${!!(biddingItems && biddingItems.trim().length >= 10)}`);
         
         if (planilhaFiles.length === 0 && pncpUrl) {
-            console.log(`[AI Populate] No planilha in catalog (${attachments.length} total attachments). Fetching from PNCP: ${pncpUrl}`);
+            logger.info(`[AI Populate] No planilha in catalog (${attachments.length} total attachments). Fetching from PNCP: ${pncpUrl}`);
             
             // Parse URL to extract CNPJ/ano/sequencial
             // Formats: .../editais/CNPJ/ANO/SEQ or .../orgaos/CNPJ/compras/ANO/SEQ
@@ -5292,7 +5307,7 @@ Responda APENAS com um JSON array válido:
                     const agent2 = new (require('https').Agent)({ rejectUnauthorized: false });
                     const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent2, timeout: 10000 } as any);
                     const allArquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
-                    console.log(`[AI Populate] PNCP returned ${allArquivos.length} attachments`);
+                    logger.info(`[AI Populate] PNCP returned ${allArquivos.length} attachments`);
 
                     // Classify and filter for planilha-type files
                     const classifyForProposal = (arq: any): string => {
@@ -5345,12 +5360,12 @@ Responda APENAS com um JSON array válido:
                             }
                         }
                         if (planilhaFiles.length > 0) {
-                            console.log(`[AI Populate] No planilha in PNCP fetch — using ${planilhaFiles.length} edital/TR instead`);
+                            logger.info(`[AI Populate] No planilha in PNCP fetch — using ${planilhaFiles.length} edital/TR instead`);
                         }
                     }
-                    console.log(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} candidates found`);
+                    logger.info(`[AI Populate] After PNCP fetch: ${planilhaFiles.length} candidates found`);
                 } catch (fetchErr: any) {
-                    console.warn(`[AI Populate] Failed to fetch PNCP attachments: ${fetchErr.message}`);
+                    logger.warn(`[AI Populate] Failed to fetch PNCP attachments: ${fetchErr.message}`);
                 }
             }
         }
@@ -5365,7 +5380,7 @@ Responda APENAS com um JSON array válido:
             });
         }
 
-        console.log(`[AI Populate] Found ${planilhaFiles.length} planilha candidates in PNCP catalog`);
+        logger.info(`[AI Populate] Found ${planilhaFiles.length} planilha candidates in PNCP catalog`);
 
         // Download planilha PDFs on demand
         const pdfParts: any[] = [];
@@ -5374,7 +5389,7 @@ Responda APENAS com um JSON array válido:
 
         for (const pf of planilhaFiles.slice(0, 5)) { // Max 5 files
             try {
-                console.log(`[AI Populate] Downloading: "${pf.titulo}" (${pf.purpose}) from ${pf.url}`);
+                logger.info(`[AI Populate] Downloading: "${pf.titulo}" (${pf.purpose}) from ${pf.url}`);
                 const fileRes = await axios.get(pf.url, {
                     httpsAgent: agent,
                     timeout: 60000,
@@ -5392,12 +5407,12 @@ Responda APENAS com um JSON array válido:
                         inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' }
                     });
                     downloadedNames.push(pf.titulo);
-                    console.log(`[AI Populate] ✅ PDF: ${pf.titulo} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                    logger.info(`[AI Populate] ✅ PDF: ${pf.titulo} (${(buffer.length / 1024).toFixed(0)} KB)`);
                 } else {
-                    console.log(`[AI Populate] ⚠️ Not a PDF: ${pf.titulo} — skipping`);
+                    logger.info(`[AI Populate] ⚠️ Not a PDF: ${pf.titulo} — skipping`);
                 }
             } catch (err: any) {
-                console.warn(`[AI Populate] ⚠️ Failed to download ${pf.titulo}: ${err.message}`);
+                logger.warn(`[AI Populate] ⚠️ Failed to download ${pf.titulo}: ${err.message}`);
             }
         }
 
@@ -5436,7 +5451,7 @@ ${pricingInfo ? `INFORMAÇÕES ADICIONAIS DE PREÇO:\n${pricingInfo}\n` : ''}
 Responda APENAS com um JSON array válido:
 [{"itemNumber":"1.1","description":"Descrição completa do serviço incluindo grupo","unit":"M²","quantity":100,"multiplier":1,"multiplierLabel":"","referencePrice":45.67}]`;
 
-        console.log(`[AI Populate] Sending ${pdfParts.length} PDFs to Gemini for item extraction...`);
+        logger.info(`[AI Populate] Sending ${pdfParts.length} PDFs to Gemini for item extraction...`);
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
             contents: [{
@@ -5454,7 +5469,7 @@ Responda APENAS com um JSON array válido:
         }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'pdf_extraction' } });
 
         const responseText = result.text?.trim() || '';
-        console.log(`[AI Populate] Response length: ${responseText.length} chars (first 300): ${responseText.substring(0, 300)}`);
+        logger.info(`[AI Populate] Response length: ${responseText.length} chars (first 300): ${responseText.substring(0, 300)}`);
 
         let items: any[];
         try {
@@ -5471,7 +5486,7 @@ Responda APENAS com um JSON array válido:
             }
         }
 
-        console.log(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
+        logger.info(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
         res.json({ 
             items: naturalSortItems(items), 
             totalItems: items.length, 
@@ -5479,7 +5494,7 @@ Responda APENAS com um JSON array válido:
             planilhas: downloadedNames
         });
     } catch (error: any) {
-        console.error('[AI Populate] Error:', error.message);
+        logger.error('[AI Populate] Error:', error.message);
         res.status(500).json({ error: 'AI populate failed: ' + (error.message || 'Unknown') });
     }
 });
@@ -5515,7 +5530,7 @@ app.post('/api/proposals/ai-composition', authenticateToken, async (req: any, re
         const objeto = processId?.objeto_completo || processId?.objeto || bidding.summary || '';
 
         const t0 = Date.now();
-        console.log(`[AI Composition] Generating compositions for ${items.length} item(s), bidding: ${biddingProcessId}`);
+        logger.info(`[AI Composition] Generating compositions for ${items.length} item(s), bidding: ${biddingProcessId}`);
 
         // Build items context
         const itemsContext = items.map((it: any, idx: number) => 
@@ -5602,7 +5617,7 @@ IMPORTANTE:
 
         const responseText = result.text?.trim() || '';
         const duration = Date.now() - t0;
-        console.log(`[AI Composition] Response: ${responseText.length} chars in ${duration}ms`);
+        logger.info(`[AI Composition] Response: ${responseText.length} chars in ${duration}ms`);
 
         let compositions: any[];
         try {
@@ -5693,18 +5708,18 @@ IMPORTANTE:
                 }
 
                 const adjustedTotal = comp.lines.reduce((s: number, l: any) => s + (l.totalValue || 0), 0);
-                console.log(`[AI Composition] Item ${idx + 1}: ajustado ${currentTotal.toFixed(2)} → ${adjustedTotal.toFixed(2)} (alvo: ${targetPrice.toFixed(2)}, diff original: ${diff.toFixed(2)})`);
+                logger.info(`[AI Composition] Item ${idx + 1}: ajustado ${currentTotal.toFixed(2)} → ${adjustedTotal.toFixed(2)} (alvo: ${targetPrice.toFixed(2)}, diff original: ${diff.toFixed(2)})`);
             }
         }
 
-        console.log(`[AI Composition] ✅ Generated ${compositions.length} compositions with ${compositions.reduce((s: number, c: any) => s + (c.lines?.length || 0), 0)} total lines in ${duration}ms`);
+        logger.info(`[AI Composition] ✅ Generated ${compositions.length} compositions with ${compositions.reduce((s: number, c: any) => s + (c.lines?.length || 0), 0)} total lines in ${duration}ms`);
         res.json({ 
             compositions, 
             totalItems: compositions.length,
             durationMs: duration,
         });
     } catch (error: any) {
-        console.error('[AI Composition] Error:', error.message);
+        logger.error('[AI Composition] Error:', error.message);
         res.status(500).json({ error: 'AI composition failed: ' + (error.message || 'Unknown') });
     }
 });
@@ -5712,7 +5727,7 @@ IMPORTANTE:
 // POST AI Letter — DEPRECATED, replaced by /api/proposals/ai-letter-blocks (Fase 2)
 // Kept as stub returning 410 Gone for any remaining clients
 app.post('/api/proposals/ai-letter', authenticateToken, async (req: any, res) => {
-    console.warn('[AI Letter] DEPRECATED endpoint called. Use /api/proposals/ai-letter-blocks instead.');
+    logger.warn('[AI Letter] DEPRECATED endpoint called. Use /api/proposals/ai-letter-blocks instead.');
     res.status(410).json({
         error: 'Este endpoint foi descontinuado. Use /api/proposals/ai-letter-blocks para geração controlada por blocos.',
         migration: 'POST /api/proposals/ai-letter-blocks',
@@ -5758,7 +5773,7 @@ app.post('/api/proposals/ai-letter-blocks', authenticateToken, async (req: any, 
         const contractCond = schemaV2?.contract_conditions || {};
 
         const t0 = Date.now();
-        console.log(`[AI Letter Blocks] Generating ${requestedBlocks.length} block(s) for bidding ${biddingProcessId}`);
+        logger.info(`[AI Letter Blocks] Generating ${requestedBlocks.length} block(s) for bidding ${biddingProcessId}`);
 
         // ── Build prompts for each requested block ──
         const blockPromises: Promise<{ blockId: string; content: string; durationMs: number }>[] = [];
@@ -5892,10 +5907,10 @@ REGRAS CRÍTICAS:
         }
 
         const totalMs = Date.now() - t0;
-        console.log(`[AI Letter Blocks] Completed in ${totalMs}ms — blocks: ${Object.keys(blocks).join(', ')} | timings: ${JSON.stringify(timings)}`);
+        logger.info(`[AI Letter Blocks] Completed in ${totalMs}ms — blocks: ${Object.keys(blocks).join(', ')} | timings: ${JSON.stringify(timings)}`);
 
         if (errors.length > 0) {
-            console.warn(`[AI Letter Blocks] ${errors.length} block(s) failed:`, errors);
+            logger.warn(`[AI Letter Blocks] ${errors.length} block(s) failed:`, errors);
         }
 
         res.json({
@@ -5906,7 +5921,7 @@ REGRAS CRÍTICAS:
         });
 
     } catch (error: any) {
-        console.error('[AI Letter Blocks] Error:', error.message);
+        logger.error('[AI Letter Blocks] Error:', error.message);
         res.status(500).json({ error: 'AI block generation failed: ' + (error.message || 'Unknown') });
     }
 });
@@ -5924,7 +5939,7 @@ app.post('/api/dossier/ai-match', authenticateToken, async (req: any, res) => {
             return res.status(400).json({ error: 'documents array is required' });
         }
 
-        console.log(`[Dossier AI Match] ${requirements.length} requirements × ${documents.length} docs for tenant ${req.user.tenantId}`);
+        logger.info(`[Dossier AI Match] ${requirements.length} requirements × ${documents.length} docs for tenant ${req.user.tenantId}`);
 
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
@@ -6006,7 +6021,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
         }, 3, { tenantId: req.user.tenantId, operation: 'dossier_match' });
 
         const responseText = result.text?.trim() || '';
-        console.log(`[Dossier AI Match] Raw response (first 500 chars): ${responseText.substring(0, 500)}`);
+        logger.info(`[Dossier AI Match] Raw response (first 500 chars): ${responseText.substring(0, 500)}`);
 
         // Parse JSON from response (handle markdown code blocks)
         let jsonStr = responseText;
@@ -6019,7 +6034,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
         try {
             matchResults = JSON.parse(jsonStr);
         } catch (parseErr) {
-            console.error('[Dossier AI Match] Failed to parse JSON:', responseText.substring(0, 500));
+            logger.error('[Dossier AI Match] Failed to parse JSON:', responseText.substring(0, 500));
             return res.status(500).json({ error: 'AI returned invalid JSON', raw: responseText.substring(0, 200) });
         }
 
@@ -6046,7 +6061,7 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
 
             matches[reqText] = [documents[docIdx].id];
             const reason = m.m || m.reason || '';
-            console.log(`[Dossier AI Match] ✅ R${reqIdx} → DOC[${docIdx}] "${documents[docIdx].docType}" | ${reason}`);
+            logger.info(`[Dossier AI Match] ✅ R${reqIdx} → DOC[${docIdx}] "${documents[docIdx].docType}" | ${reason}`);
         }
 
         const matchCount = Object.keys(matches).length;
@@ -6054,12 +6069,12 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
             const d = m.d ?? m.docIndex;
             return d === null || d === undefined || d === 'SKIP' || d === -1;
         }).length;
-        console.log(`[Dossier AI Match] Result: ${matchCount} matched, ${skipped} skipped, ${requirements.length - matchCount - skipped} unhandled`);
+        logger.info(`[Dossier AI Match] Result: ${matchCount} matched, ${skipped} skipped, ${requirements.length - matchCount - skipped} unhandled`);
 
         res.json({ matches, matchCount, totalRequirements: requirements.length });
 
     } catch (error: any) {
-        console.error('[Dossier AI Match] Error:', error?.message || error);
+        logger.error('[Dossier AI Match] Error:', error?.message || error);
         res.status(500).json({ error: 'AI matching failed: ' + (error?.message || 'Unknown error') });
     }
 });
@@ -6093,7 +6108,7 @@ app.post('/api/analyze-edital', authenticateToken, aiLimiter, async (req: any, r
             const belongsToTenant = doc || fileName.startsWith(`${req.user.tenantId}_`) || fileName.includes(`${req.user.tenantId}/`);
 
             if (!belongsToTenant) {
-                console.warn(`[AI] Unauthorized access attempt to file: ${fileName} by tenant: ${req.user.tenantId}`);
+                logger.warn(`[AI] Unauthorized access attempt to file: ${fileName} by tenant: ${req.user.tenantId}`);
                 continue;
             }
 
@@ -6101,7 +6116,7 @@ app.post('/api/analyze-edital', authenticateToken, aiLimiter, async (req: any, r
             const pdfBuffer = await getFileBufferSafe(fileToFetch, req.user.tenantId);
 
             if (pdfBuffer) {
-                console.log(`[AI] Read file ${fileName} (${pdfBuffer.length} bytes)`);
+                logger.info(`[AI] Read file ${fileName} (${pdfBuffer.length} bytes)`);
                 pdfParts.push({
                     inlineData: {
                         data: pdfBuffer.toString('base64'),
@@ -6109,12 +6124,12 @@ app.post('/api/analyze-edital', authenticateToken, aiLimiter, async (req: any, r
                     }
                 });
             } else {
-                console.error(`[AI] Could not find file anywhere: ${fileName}`);
+                logger.error(`[AI] Could not find file anywhere: ${fileName}`);
             }
         }
 
         if (pdfParts.length === 0) {
-            console.warn(`[AI] No valid files found for analysis among: ${fileNames.join(', ')}`);
+            logger.warn(`[AI] No valid files found for analysis among: ${fileNames.join(', ')}`);
             return res.status(400).json({
                 error: 'Nenhum arquivo válido encontrado para análise no servidor.',
                 details: `Foram processados ${fileNames.length} arquivos, mas nenhum pôde ser resgatado do armazenamento. Verifique se o bucket do Supabase está correto.`
@@ -6124,7 +6139,7 @@ app.post('/api/analyze-edital', authenticateToken, aiLimiter, async (req: any, r
         // 2. Setup Gemini AI
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
-            console.error(`[AI] GEMINI_API_KEY is missing!`);
+            logger.error(`[AI] GEMINI_API_KEY is missing!`);
             return res.status(500).json({ error: 'GEMINI_API_KEY is not configured in the backend' });
         }
         const ai = new GoogleGenAI({ apiKey });
@@ -6132,7 +6147,7 @@ app.post('/api/analyze-edital', authenticateToken, aiLimiter, async (req: any, r
         // 3. System Prompt & Strict JSON Schema Definition (Enhanced with precision rules)
         const systemInstruction = ANALYZE_EDITAL_SYSTEM_PROMPT;
 
-        console.log(`[AI] Calling Gemini API(${pdfParts.length} PDF parts)...`);
+        logger.info(`[AI] Calling Gemini API(${pdfParts.length} PDF parts)...`);
         let response: any;
         const startTime = Date.now();
 
@@ -6156,39 +6171,39 @@ app.post('/api/analyze-edital', authenticateToken, aiLimiter, async (req: any, r
                 }
             }, 3, { tenantId: req.user.tenantId, operation: 'oracle_analysis' });
         } catch (geminiError: any) {
-            console.warn(`[AI] Gemini falhou: ${geminiError.message}. Realizando Fallback automático para OpenAI (gpt-4o-mini)...`);
+            logger.warn(`[AI] Gemini falhou: ${geminiError.message}. Realizando Fallback automático para OpenAI (gpt-4o-mini)...`);
             try {
                 response = await fallbackToOpenAi(pdfParts, systemInstruction, USER_ANALYSIS_INSTRUCTION);
             } catch (openAiError: any) {
-                console.error(`[AI] Fallback via OpenAI também falhou: ${openAiError.message}`);
+                logger.error(`[AI] Fallback via OpenAI também falhou: ${openAiError.message}`);
                 throw new Error(`As duas IAs falharam. Gemini: ${geminiError.message} | OpenAI: ${openAiError.message}`);
             }
         }
         const duration = (Date.now() - startTime) / 1000;
-        console.log(`[AI] Gemini responded in ${duration.toFixed(1)} s`);
+        logger.info(`[AI] Gemini responded in ${duration.toFixed(1)} s`);
 
         const rawText = response.text;
         if (!rawText) {
-            console.error(`[AI] Empty response text from Gemini.`);
+            logger.error(`[AI] Empty response text from Gemini.`);
             throw new Error("A IA não retornou nenhum texto.");
         }
 
-        console.log(`[AI] Raw response length: ${rawText.length} `);
+        logger.info(`[AI] Raw response length: ${rawText.length} `);
 
         // ---- Robust JSON extraction and repair ----
         const finalPayload = robustJsonParse(rawText, 'AI-Edital');
 
-        console.log(`[AI] Successfully parsed JSON. Top-level keys: ${Object.keys(finalPayload).join(', ')}`);
+        logger.info(`[AI] Successfully parsed JSON. Top-level keys: ${Object.keys(finalPayload).join(', ')}`);
         if (finalPayload.process) {
-            console.log(`[AI] process keys: ${Object.keys(finalPayload.process).join(', ')}`);
+            logger.info(`[AI] process keys: ${Object.keys(finalPayload.process).join(', ')}`);
         }
         if (finalPayload.analysis) {
-            console.log(`[AI] analysis keys: ${Object.keys(finalPayload.analysis).join(', ')}`);
+            logger.info(`[AI] analysis keys: ${Object.keys(finalPayload.analysis).join(', ')}`);
         }
         res.json(finalPayload);
 
     } catch (error: any) {
-        console.error("AI Analysis Error (FULL):", JSON.stringify({ message: error?.message, status: error?.status, code: error?.code, stack: error?.stack?.substring(0, 500) }));
+        logger.error("AI Analysis Error (FULL):", JSON.stringify({ message: error?.message, status: error?.status, code: error?.code, stack: error?.stack?.substring(0, 500) }));
         const logMsg = `[${new Date().toISOString()}] AI Error: ${error?.message || String(error)}\nStatus: ${error?.status}\nCode: ${error?.code}\nStack: ${error?.stack || 'No stack'}\n\n`;
         fs.appendFileSync(path.join(uploadDir, 'debug-analysis.log'), logMsg);
 
@@ -6511,7 +6526,7 @@ app.post('/api/jobs/submit', authenticateToken, aiLimiter, async (req: any, res)
             return res.status(400).json({ error: 'type and input are required' });
         }
 
-        const validTypes = ['edital_analysis', 'pncp_analysis', 'oracle', 'proposal_populate', 'petition'];
+        const validTypes = ['edital_analysis', 'pncp_analysis', 'oracle', 'proposal_populate', 'petition', 'declaration'];
         if (!validTypes.includes(type)) {
             return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
         }
@@ -6619,7 +6634,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
 
             const belongsToTenant = doc || fileName.startsWith(`${req.user.tenantId}_`) || fileName.includes(`${req.user.tenantId}/`);
             if (!belongsToTenant) {
-                console.warn(`[AI-V2] Unauthorized access attempt to file: ${fileName}`);
+                logger.warn(`[AI-V2] Unauthorized access attempt to file: ${fileName}`);
                 continue;
             }
 
@@ -6634,11 +6649,11 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 const MAX_PDF_PARTS = 15;
 
                 if (isPdf) {
-                    console.log(`[AI-V2] Read PDF file ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                    logger.info(`[AI-V2] Read PDF file ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
                     pdfParts.push({ inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } });
                     sourceFiles.push(fileName);
                 } else if (isZip) {
-                    console.log(`[AI-V2] 📦 ZIP detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    logger.info(`[AI-V2] 📦 ZIP detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
                         const JSZip = require('jszip');
                         const zip = await JSZip.loadAsync(pdfBuffer);
@@ -6649,12 +6664,12 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                             if (entryBuffer.length > 0) {
                                 pdfParts.push({ inlineData: { data: entryBuffer.toString('base64'), mimeType: 'application/pdf' } });
                                 sourceFiles.push(`${fileName}/${entryName}`);
-                                console.log(`[AI-V2] ✅ Extracted PDF from ZIP: ${entryName} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
+                                logger.info(`[AI-V2] ✅ Extracted PDF from ZIP: ${entryName} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }
-                    } catch (e: any) { console.warn(`[AI-V2] Failed to extract ZIP ${fileName}: ${e.message}`); }
+                    } catch (e: any) { logger.warn(`[AI-V2] Failed to extract ZIP ${fileName}: ${e.message}`); }
                 } else if (isRar) {
-                    console.log(`[AI-V2] 📦 RAR detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    logger.info(`[AI-V2] 📦 RAR detected: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
                     try {
                         const extractor = await createExtractorFromData({ data: new Uint8Array(pdfBuffer).buffer });
                         const extracted = extractor.extract({});
@@ -6665,15 +6680,15 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                                 const entryBuffer = Buffer.from(rarFile.extraction);
                                 pdfParts.push({ inlineData: { data: entryBuffer.toString('base64'), mimeType: 'application/pdf' } });
                                 sourceFiles.push(`${fileName}/${rarFile.fileHeader.name}`);
-                                console.log(`[AI-V2] ✅ Extracted PDF from RAR: ${rarFile.fileHeader.name} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
+                                logger.info(`[AI-V2] ✅ Extracted PDF from RAR: ${rarFile.fileHeader.name} (${(entryBuffer.length / 1024).toFixed(0)} KB)`);
                             }
                         }
-                    } catch (e: any) { console.warn(`[AI-V2] Failed to extract RAR ${fileName}: ${e.message}`); }
+                    } catch (e: any) { logger.warn(`[AI-V2] Failed to extract RAR ${fileName}: ${e.message}`); }
                 } else {
-                    console.warn(`[AI-V2] ⏭️ Skipped non-PDF/ZIP/RAR: ${fileName} (magic: ${magic})`);
+                    logger.warn(`[AI-V2] ⏭️ Skipped non-PDF/ZIP/RAR: ${fileName} (magic: ${magic})`);
                 }
             } else {
-                console.error(`[AI-V2] Could not find file: ${fileName}`);
+                logger.error(`[AI-V2] Could not find file: ${fileName}`);
             }
         }
 
@@ -6690,10 +6705,10 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
         }
         const ai = new GoogleGenAI({ apiKey });
 
-        console.log(`[AI-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${sourceFiles.join(', ')})`);
+        logger.info(`[AI-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${sourceFiles.join(', ')})`);
 
         // ── 2. Etapa 1: Extração Factual ──
-        console.log(`[AI-V2] ── Etapa 1/3: Extração Factual...`);
+        logger.info(`[AI-V2] ── Etapa 1/3: Extração Factual...`);
         let extractionJson: any;
         const t1Start = Date.now();
 
@@ -6725,12 +6740,12 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             extractionJson = robustJsonParse(extractionText, 'V2-Extraction');
             result.analysis_meta.workflow_stage_status.extraction = 'done';
             modelsUsed.push('gemini-2.5-flash');
-            console.log(`[AI-V2] ✅ Etapa 1 concluída em ${((Date.now() - t1Start) / 1000).toFixed(1)}s — ` +
+            logger.info(`[AI-V2] ✅ Etapa 1 concluída em ${((Date.now() - t1Start) / 1000).toFixed(1)}s — ` +
                 `${(extractionJson.evidence_registry || []).length} evidências, ` +
                 `${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
 
         } catch (err: any) {
-            console.warn(`[AI-V2] ⚠️ Etapa 1 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+            logger.warn(`[AI-V2] ⚠️ Etapa 1 Gemini falhou: ${err.message}. Tentando OpenAI...`);
 
             try {
                 const openAiResult = await fallbackToOpenAiV2({
@@ -6746,10 +6761,10 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 extractionJson = robustJsonParse(openAiResult.text, 'V2-Extraction-OpenAI');
                 result.analysis_meta.workflow_stage_status.extraction = 'done';
                 modelsUsed.push(openAiResult.model);
-                console.log(`[AI-V2] ✅ Etapa 1 concluída via OpenAI em ${((Date.now() - t1Start) / 1000).toFixed(1)}s`);
+                logger.info(`[AI-V2] ✅ Etapa 1 concluída via OpenAI em ${((Date.now() - t1Start) / 1000).toFixed(1)}s`);
 
             } catch (openAiErr: any) {
-                console.error(`[AI-V2] ❌ Etapa 1 falhou (Gemini + OpenAI): ${openAiErr.message}`);
+                logger.error(`[AI-V2] ❌ Etapa 1 falhou (Gemini + OpenAI): ${openAiErr.message}`);
                 result.analysis_meta.workflow_stage_status.extraction = 'failed';
                 result.confidence.warnings.push(`Etapa 1 (Extração) falhou em ambos os modelos: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
                 result.confidence.overall_confidence = 'baixa';
@@ -6773,11 +6788,11 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
         const detectedObjectType = result.process_identification?.tipo_objeto || 'outro';
         const domainReinforcement = getDomainRoutingInstruction(detectedObjectType);
         if (domainReinforcement) {
-            console.log(`[AI-V2] 🎯 Roteamento por tipo: ${detectedObjectType} — reforço aplicado nas Etapas 2 e 3`);
+            logger.info(`[AI-V2] 🎯 Roteamento por tipo: ${detectedObjectType} — reforço aplicado nas Etapas 2 e 3`);
         }
 
         // ── 3. Etapa 2: Normalização por Categoria (paralela) ──
-        console.log(`[AI-V2] ── Etapa 2/3: Normalização por Categoria...`);
+        logger.info(`[AI-V2] ── Etapa 2/3: Normalização por Categoria...`);
         let normalizationJson: any = {};
         const t2Start = Date.now();
 
@@ -6821,7 +6836,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                             notes: ''
                         });
                     });
-                    console.log(`[AI-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side)`);
+                    logger.info(`[AI-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side)`);
                     return { success: true, fastPath: true };
                 }
 
@@ -6854,7 +6869,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                         if (Array.isArray(data.documents_to_prepare)) mergedDocs.push(...data.documents_to_prepare);
                         return { success: true };
                     } catch (gErr: any) {
-                        console.warn(`[AI-V2] ⚠️ Norm ${cat.prefix} Gemini falhou. Fallback OpenAI...`);
+                        logger.warn(`[AI-V2] ⚠️ Norm ${cat.prefix} Gemini falhou. Fallback OpenAI...`);
                         try {
                             const oai = await fallbackToOpenAiV2({ systemPrompt, userPrompt, temperature: 0.1, stageName: `Norm-${cat.prefix}` });
                             if (!oai.text) throw new Error('OpenAI vazio');
@@ -6887,13 +6902,13 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             };
             result.analysis_meta.workflow_stage_status.normalization = 'done';
             modelsUsed.push('gemini-2.5-flash');
-            console.log(`[AI-V2] ✅ Etapa 2 em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ${totalNormalized} itens, ${categoriesFailed} falhas`);
+            logger.info(`[AI-V2] ✅ Etapa 2 em ${((Date.now() - t2Start) / 1000).toFixed(1)}s — ${totalNormalized} itens, ${categoriesFailed} falhas`);
 
             if (categoriesFailed > 0) {
                 result.confidence.warnings.push(`${categoriesFailed} categoria(s) não normalizada(s)`);
             }
         } catch (err: any) {
-            console.error(`[AI-V2] ❌ Etapa 2 falhou: ${err.message}`);
+            logger.error(`[AI-V2] ❌ Etapa 2 falhou: ${err.message}`);
             result.analysis_meta.workflow_stage_status.normalization = 'failed';
             result.confidence.warnings.push(`Etapa 2 falhou: ${err.message}`);
         }
@@ -6910,7 +6925,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
         }
 
         // ── 4. Etapa 3: Revisão de Risco ──
-        console.log(`[AI-V2] ── Etapa 3/3: Revisão de Risco...`);
+        logger.info(`[AI-V2] ── Etapa 3/3: Revisão de Risco...`);
         const t3Start = Date.now();
 
         try {
@@ -6939,7 +6954,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             const riskJson = robustJsonParse(riskText, 'V2-RiskReview');
             result.analysis_meta.workflow_stage_status.risk_review = 'done';
             modelsUsed.push('gemini-2.5-flash');
-            console.log(`[AI-V2] ✅ Etapa 3 concluída em ${((Date.now() - t3Start) / 1000).toFixed(1)}s — ` +
+            logger.info(`[AI-V2] ✅ Etapa 3 concluída em ${((Date.now() - t3Start) / 1000).toFixed(1)}s — ` +
                 `${(riskJson.legal_risk_review?.critical_points || []).length} pontos críticos`);
 
             // Merge risk review
@@ -6959,7 +6974,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
             }
 
         } catch (err: any) {
-            console.warn(`[AI-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+            logger.warn(`[AI-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
 
             try {
                 const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
@@ -6979,7 +6994,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 const riskJson = robustJsonParse(openAiResult.text, 'V2-RiskReview-OpenAI');
                 result.analysis_meta.workflow_stage_status.risk_review = 'done';
                 modelsUsed.push(openAiResult.model);
-                console.log(`[AI-V2] ✅ Etapa 3 concluída via OpenAI em ${((Date.now() - t3Start) / 1000).toFixed(1)}s`);
+                logger.info(`[AI-V2] ✅ Etapa 3 concluída via OpenAI em ${((Date.now() - t3Start) / 1000).toFixed(1)}s`);
 
                 if (riskJson.legal_risk_review) result.legal_risk_review = riskJson.legal_risk_review;
                 if (riskJson.operational_outputs_risk) {
@@ -6995,7 +7010,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 }
 
             } catch (openAiErr: any) {
-                console.error(`[AI-V2] ❌ Etapa 3 falhou (Gemini + OpenAI): ${openAiErr.message}`);
+                logger.error(`[AI-V2] ❌ Etapa 3 falhou (Gemini + OpenAI): ${openAiErr.message}`);
                 result.analysis_meta.workflow_stage_status.risk_review = 'failed';
                 result.confidence.warnings.push(`Etapa 3 (Risco) falhou: Gemini: ${err.message} | OpenAI: ${openAiErr.message}`);
             }
@@ -7018,9 +7033,9 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
         result.analysis_meta.workflow_stage_status.validation = validation.valid ? 'done' : 'failed';
         if (validation.issues.length > 0) {
             result.confidence.warnings.push(...validation.issues);
-            console.log(`[AI-V2] ⚠️ Validação: ${validation.confidence_score}% (${validation.issues.length} problemas: ${validation.issues.join('; ')})`);
+            logger.info(`[AI-V2] ⚠️ Validação: ${validation.confidence_score}% (${validation.issues.length} problemas: ${validation.issues.join('; ')})`);
         } else {
-            console.log(`[AI-V2] ✅ Validação: ${validation.confidence_score}% — todas as checagens passaram`);
+            logger.info(`[AI-V2] ✅ Validação: ${validation.confidence_score}% — todas as checagens passaram`);
         }
 
         // ── 5.5. Motor de Regras de Domínio ──
@@ -7034,9 +7049,9 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                     result.confidence.warnings.push(`Motor de regras: ${criticalFindings.length} findings críticos/altos`);
                 }
             }
-            console.log(`[AI-V2] 🔧 Motor de Regras: ${ruleFindings.length} findings`);
+            logger.info(`[AI-V2] 🔧 Motor de Regras: ${ruleFindings.length} findings`);
         } catch (ruleErr: any) {
-            console.warn(`[AI-V2] ⚠️ Motor de regras falhou: ${ruleErr.message}`);
+            logger.warn(`[AI-V2] ⚠️ Motor de regras falhou: ${ruleErr.message}`);
         }
 
         // ── 5.6. Avaliador de Qualidade ──
@@ -7049,9 +7064,9 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
                 issueCount: qualityReport.issues.length,
                 summary: qualityReport.summary
             };
-            console.log(`[AI-V2] 📊 Qualidade: ${qualityReport.overallScore}% | ${qualityReport.summary}`);
+            logger.info(`[AI-V2] 📊 Qualidade: ${qualityReport.overallScore}% | ${qualityReport.summary}`);
         } catch (qualErr: any) {
-            console.warn(`[AI-V2] ⚠️ Avaliador de qualidade falhou: ${qualErr.message}`);
+            logger.warn(`[AI-V2] ⚠️ Avaliador de qualidade falhou: ${qualErr.message}`);
         }
 
         // ── 6. Confidence Score Final V2.5 (calibrado para refletir precisão real) ──
@@ -7121,15 +7136,15 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
         if (biddingProcessId && pdfParts.length > 0) {
             try {
                 await indexDocumentChunks(biddingProcessId, pdfParts);
-                console.log(`[AI-V2] 🔗 RAG indexado para processo ${biddingProcessId}`);
+                logger.info(`[AI-V2] 🔗 RAG indexado para processo ${biddingProcessId}`);
             } catch (ragErr: any) {
-                console.warn(`[AI-V2] RAG indexação falhou: ${ragErr.message}`);
+                logger.warn(`[AI-V2] RAG indexação falhou: ${ragErr.message}`);
             }
         }
 
         const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
         const totalReqs = Object.values(result.requirements).reduce((sum, arr) => sum + arr.length, 0);
-        console.log(`[AI-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
+        logger.info(`[AI-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
             `Modelos: ${uniqueModels.join('+')} | ` +
             `${totalReqs} exigências | ${result.legal_risk_review.critical_points.length} riscos | ` +
             `${result.evidence_registry.length} evidências | Score: ${combinedScore}% (${result.confidence.overall_confidence})`);
@@ -7326,7 +7341,7 @@ app.post('/api/analyze-edital/v2', authenticateToken, aiLimiter, async (req: any
         });
 
     } catch (error: any) {
-        console.error(`[AI-V2] ERRO FATAL:`, error?.message || error);
+        logger.error(`[AI-V2] ERRO FATAL:`, error?.message || error);
         const logMsg = `[${new Date().toISOString()}] V2 Pipeline Error: ${error?.message || String(error)}\n${error?.stack || ''}\n\n`;
         fs.appendFileSync(path.join(uploadDir, 'debug-analysis.log'), logMsg);
         res.status(500).json({
@@ -7342,7 +7357,7 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
         const { biddingProcessId, companyId, templateType, userContext, attachments } = req.body;
         const tenantId = req.user.tenantId;
 
-        console.log(`[Petition] Generating ${templateType} for process ${biddingProcessId} with ${attachments?.length || 0} attachments`);
+        logger.info(`[Petition] Generating ${templateType} for process ${biddingProcessId} with ${attachments?.length || 0} attachments`);
 
 
         const bidding = await prisma.biddingProcess.findUnique({
@@ -7376,7 +7391,7 @@ ${buildModuleContext(aiAnalysis.schemaV2, 'petition')}
 
 Resumo Executivo: ${aiAnalysis.fullSummary || 'N/A'}
 `.trim();
-                console.log(`[Petition] Using buildModuleContext('petition') for generation`);
+                logger.info(`[Petition] Using buildModuleContext('petition') for generation`);
             } else {
                 biddingAnalysisText = `
 Resumo do Edital (Card): ${bidding.summary || 'Não disponível'}
@@ -7462,7 +7477,7 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
 
         res.json({ text: result.text });
     } catch (error: any) {
-        console.error('[Petition] Error:', error.message);
+        logger.error('[Petition] Error:', error.message);
         res.status(500).json({ error: 'Erro ao gerar petição: ' + (error.message || 'Unknown error') });
     }
 });
@@ -7473,7 +7488,7 @@ app.post('/api/analyze-edital/chat', authenticateToken, aiLimiter, async (req: a
         const traceLog = (msg: string) => {
             const timestamp = new Date().toISOString();
             fs.appendFileSync(path.join(uploadDir, 'chat-trace.log'), `[${timestamp}] ${msg}\n`);
-            console.log(msg);
+            logger.info(msg);
         };
 
         let { fileNames, biddingProcessId, messages } = req.body;
@@ -7646,7 +7661,7 @@ ${analysisContext}
 
         res.json({ text: chatResult.text });
     } catch (error: any) {
-        console.error("AI Chat Error:", error?.message || error);
+        logger.error("AI Chat Error:", error?.message || error);
         res.status(500).json({ error: 'Failed to answer via AI chat' });
     }
 });
@@ -7749,7 +7764,7 @@ app.post('/api/chat-monitor/config', authenticateToken, async (req: any, res) =>
         });
         res.json(config);
     } catch (error: any) {
-        console.error('[ChatMonitor Config POST] Error saving config:', error?.message || error);
+        logger.error('[ChatMonitor Config POST] Error saving config:', error?.message || error);
         res.status(500).json({ error: 'Failed to save chat monitor config', detail: error?.message });
     }
 });
@@ -7812,7 +7827,7 @@ app.post('/api/chat-monitor/test', authenticateToken, async (req: any, res) => {
                 : 'Teste de notificação enviado! Verifique seus canais.'
         });
     } catch (error: any) {
-        console.error('[ChatMonitor] Test notification error:', error.message);
+        logger.error('[ChatMonitor] Test notification error:', error.message);
         res.status(500).json({ error: 'Falha ao enviar teste de notificação.' });
     }
 });
@@ -7903,7 +7918,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
             `, tenantId, processIds);
             lastMsgMap = new Map(lastMessages.map((m: any) => [m.biddingProcessId, m]));
         } catch (e) {
-            console.log('[ChatMonitor] Raw query failed, skipping last messages:', e);
+            logger.info('[ChatMonitor] Raw query failed, skipping last messages:', e);
         }
 
         // Step 3: Safely get unread counts
@@ -8042,7 +8057,7 @@ app.get('/api/chat-monitor/processes', authenticateToken, async (req: any, res) 
 
         res.json(filtered);
     } catch (error) {
-        console.error('[ChatMonitor] Error fetching processes:', error);
+        logger.error('[ChatMonitor] Error fetching processes:', error);
         res.status(500).json({ error: 'Failed to fetch chat monitor processes', details: String(error) });
     }
 });
@@ -8093,7 +8108,7 @@ app.get('/api/chat-monitor/search', authenticateToken, async (req: any, res) => 
 
         res.json({ results: formatted });
     } catch (error) {
-        console.error('[ChatMonitor] Error searching global messages:', error);
+        logger.error('[ChatMonitor] Error searching global messages:', error);
         res.status(500).json({ error: 'Failed to search messages' });
     }
 });
@@ -8123,7 +8138,7 @@ app.post('/api/chat-monitor/process-close/:processId', authenticateToken, async 
                 where: { id: processId, tenantId },
                 data: { isMonitored: false },
             });
-            console.log(`[ChatMonitor] Process ${processId} monitoring stopped (status unchanged)`);
+            logger.info(`[ChatMonitor] Process ${processId} monitoring stopped (status unchanged)`);
             return res.json({
                 success: true,
                 action,
@@ -8147,7 +8162,7 @@ app.post('/api/chat-monitor/process-close/:processId', authenticateToken, async 
             data: { isArchived: true },
         });
 
-        console.log(`[ChatMonitor] Process ${processId} closed with action: ${action}`);
+        logger.info(`[ChatMonitor] Process ${processId} closed with action: ${action}`);
 
         res.json({
             success: true,
@@ -8158,7 +8173,7 @@ app.post('/api/chat-monitor/process-close/:processId', authenticateToken, async 
                 : `Processo movido para "${statusMap[action]}" e arquivado do monitoramento`,
         });
     } catch (error: any) {
-        console.error('[ChatMonitor] Error closing process:', error?.message || error);
+        logger.error('[ChatMonitor] Error closing process:', error?.message || error);
         res.status(500).json({ error: 'Failed to close process', detail: error?.message });
     }
 });
@@ -8199,7 +8214,7 @@ app.get('/api/chat-monitor/messages/:processId', authenticateToken, async (req: 
             pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
         });
     } catch (error) {
-        console.error('[ChatMonitor] Error fetching messages:', error);
+        logger.error('[ChatMonitor] Error fetching messages:', error);
         res.status(500).json({ error: 'Failed to fetch messages' });
     }
 });
@@ -8290,12 +8305,12 @@ const watchdogActiveAlerts = new Set<string>();
 
 async function sendAdminAlert(message: string) {
     if (!ADMIN_TELEGRAM_CHAT_ID) {
-        console.warn('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — alert suppressed');
+        logger.warn('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — alert suppressed');
         return;
     }
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
-        console.warn('[Watchdog] ⚠️ TELEGRAM_BOT_TOKEN not set — alert suppressed');
+        logger.warn('[Watchdog] ⚠️ TELEGRAM_BOT_TOKEN not set — alert suppressed');
         return;
     }
     try {
@@ -8304,9 +8319,9 @@ async function sendAdminAlert(message: string) {
             text: message,
             parse_mode: 'HTML',
         }, { timeout: 10000 });
-        console.log(`[Watchdog] ✅ Admin alert sent to ${ADMIN_TELEGRAM_CHAT_ID}`);
+        logger.info(`[Watchdog] ✅ Admin alert sent to ${ADMIN_TELEGRAM_CHAT_ID}`);
     } catch (err: any) {
-        console.error(`[Watchdog] ❌ Failed to send admin alert:`, err.message);
+        logger.error(`[Watchdog] ❌ Failed to send admin alert:`, err.message);
     }
 }
 
@@ -8440,7 +8455,7 @@ app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any,
         });
         res.json(processes);
     } catch (error: any) {
-        console.error('[Agent /sessions] Error:', error.message);
+        logger.error('[Agent /sessions] Error:', error.message);
         res.status(500).json({ error: 'Failed to fetch agent sessions' });
     }
 });
@@ -8628,10 +8643,10 @@ app.get('/api/chat-monitor/internal/all-sessions', authenticateWorker, async (re
             };
         });
 
-        console.log(`[Worker] Returning ${enriched.length} monitored processes across all tenants (${enriched.filter((p: any) => p.portalCredentials).length} with credentials)`);
+        logger.info(`[Worker] Returning ${enriched.length} monitored processes across all tenants (${enriched.filter((p: any) => p.portalCredentials).length} with credentials)`);
         res.json(enriched);
     } catch (error: any) {
-        console.error('[Worker /all-sessions] Error:', error.message);
+        logger.error('[Worker /all-sessions] Error:', error.message);
         res.status(500).json({ error: 'Failed to fetch all sessions' });
     }
 });
@@ -8657,10 +8672,10 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
             processId, tenantId, messages, captureSource: 'server-worker'
         });
 
-        console.log(`[Worker Ingest] ${result.created} msgs saved for ${processId.substring(0, 8)} (tenant ${tenantId.substring(0, 8)}, ${result.alerts} alerts)`);
+        logger.info(`[Worker Ingest] ${result.created} msgs saved for ${processId.substring(0, 8)} (tenant ${tenantId.substring(0, 8)}, ${result.alerts} alerts)`);
         res.json(result);
     } catch (error: any) {
-        console.error('[Worker Ingest] Error:', error.message);
+        logger.error('[Worker Ingest] Error:', error.message);
         handleApiError(res, error, 'worker-ingest');
     }
 });
@@ -8858,7 +8873,7 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
                 where: { id: processId },
                 data: { link: newLink },
             });
-            console.log(`[Worker Discovery] Link updated for ${processId.substring(0, 8)} → ${link.substring(0, 60)}`);
+            logger.info(`[Worker Discovery] Link updated for ${processId.substring(0, 8)} → ${link.substring(0, 60)}`);
             return res.json({ success: true, updated: true, newLink });
         }
 
@@ -8878,10 +8893,10 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
             data: { link: canonicalUrl },
         });
 
-        console.log(`[Worker M2A] Link updated for ${processId.substring(0, 8)} → certame/${certameId}`);
+        logger.info(`[Worker M2A] Link updated for ${processId.substring(0, 8)} → certame/${certameId}`);
         res.json({ success: true, updated: true, newLink: canonicalUrl });
     } catch (error: any) {
-        console.error('[Worker Link] Error updating link:', error.message);
+        logger.error('[Worker Link] Error updating link:', error.message);
         handleApiError(res, error, 'update-process-link');
     }
 });
@@ -8894,10 +8909,10 @@ app.delete('/api/chat-monitor/internal/sessions/:processId/logs', authenticateWo
         const result = await prisma.chatMonitorLog.deleteMany({
             where: { biddingProcessId: processId },
         });
-        console.log(`[Admin] Purged ${result.count} chat logs for process ${processId.substring(0, 8)}`);
+        logger.info(`[Admin] Purged ${result.count} chat logs for process ${processId.substring(0, 8)}`);
         res.json({ success: true, deletedCount: result.count });
     } catch (error: any) {
-        console.error('[Admin] Error purging logs:', error.message);
+        logger.error('[Admin] Error purging logs:', error.message);
         handleApiError(res, error, 'purge-logs');
     }
 });
@@ -8924,10 +8939,10 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
             processId, tenantId, messages, captureSource: 'local-watcher'
         });
 
-        console.log(`[Ingest] ${result.created} msgs saved for process ${processId.substring(0, 8)}... (${result.alerts} alerts)`);
+        logger.info(`[Ingest] ${result.created} msgs saved for process ${processId.substring(0, 8)}... (${result.alerts} alerts)`);
         res.json(result);
     } catch (error: any) {
-        console.error('[Ingest] Error:', error.message);
+        logger.error('[Ingest] Error:', error.message);
         handleApiError(res, error, 'ingest-messages');
     }
 });
@@ -8957,7 +8972,7 @@ if (process.env.NODE_ENV === 'production') {
 // Função de Auto-Setup para o primeiro acesso e Recuperação de Dados
 async function runAutoSetup() {
     try {
-        console.log('🔍 Verificando integridade dos dados e tenants...');
+        logger.info('🔍 Verificando integridade dos dados e tenants...');
 
         // 1. Garantir que o Tenant Padrão existe (usando rootCnpj como chave estável)
         let tenant = await prisma.tenant.findUnique({
@@ -8965,7 +8980,7 @@ async function runAutoSetup() {
         });
 
         if (!tenant) {
-            console.log('🏗️ Criando Tenant Principal...');
+            logger.info('🏗️ Criando Tenant Principal...');
             tenant = await prisma.tenant.create({
                 data: {
                     razaoSocial: 'LicitaSaaS Brasil',
@@ -8981,7 +8996,7 @@ async function runAutoSetup() {
         });
 
         if (!admin) {
-            console.log('🏗️ Criando Usuário Administrador...');
+            logger.info('🏗️ Criando Usuário Administrador...');
             const salt = await bcrypt.genSalt(10);
             const passwordHash = await bcrypt.hash('admin123', salt);
             await prisma.user.create({
@@ -8994,7 +9009,7 @@ async function runAutoSetup() {
                 }
             });
         } else if (admin.tenantId !== tenant.id) {
-            console.log('🏗️ Atualizando Tenant do Administrador para o ID estável...');
+            logger.info('🏗️ Atualizando Tenant do Administrador para o ID estável...');
             await prisma.user.update({
                 where: { email: adminEmail },
                 data: { tenantId: tenant.id }
@@ -9003,7 +9018,7 @@ async function runAutoSetup() {
 
         // Removing bad "Modulo de Restauracao" that was moving data to other users
     } catch (error) {
-        console.error('❌ Erro no runAutoSetup:', error);
+        logger.error('❌ Erro no runAutoSetup:', error);
     }
 }
 
@@ -9179,17 +9194,49 @@ app.get('/api/company/:companyId/insights', authenticateToken, async (req: any, 
     }
 });
 
+// GET /api/admin/health — Healthcheck for background workers
+app.get('/api/admin/health', authenticateToken, async (req: any, res: any) => {
+    try {
+        if (req.user.role !== 'Admin') {
+            return res.status(403).json({ error: 'Acesso negado' });
+        }
+        
+        const queuedJobs = await prisma.backgroundJob.count({ where: { status: 'QUEUED' } });
+        const runningJobs = await prisma.backgroundJob.count({ where: { status: 'PROCESSING' } });
+        const errorJobs = await prisma.backgroundJob.count({ 
+            where: { 
+                status: 'FAILED',
+                createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+            } 
+        });
+
+        res.json({
+            status: 'ok',
+            worker: {
+                active: true,
+                queuedJobs,
+                runningJobs,
+                errorJobs24h: errorJobs
+            },
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        });
+    } catch (err: any) {
+        handleApiError(res, err, 'healthcheck');
+    }
+});
+
 // ── Global Error Handler (must be LAST middleware before listen) ──
 app.use(globalErrorHandler as any);
 
 app.listen(PORT, async () => {
-    console.log(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
-    console.log(`Upload directory: ${uploadDir}`);
+    logger.info(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
+    logger.info(`Upload directory: ${uploadDir}`);
     await runAutoSetup();
 
     // Initialize version catalog
     registerInitialVersions();
-    console.log(`[Governance] Version catalog initialized with ${getAllVersions().length} components`);
+    logger.info(`[Governance] Version catalog initialized with ${getAllVersions().length} components`);
 
     // ── Background Job Worker — Process async AI tasks ──
     registerJobHandler('edital_analysis', async (job: any) => {
@@ -9330,8 +9377,172 @@ app.listen(PORT, async () => {
         }
     });
 
+    registerJobHandler('oracle', async (job: any) => {
+        const tenantId = job.tenantId;
+        await updateJobProgress(job.id, tenantId, { progress: 10, progressMsg: 'Iniciando verificação de compatibilidade no Oráculo...' });
+
+        const internalUrl = `http://localhost:${PORT}/api/technical-certificates/compare`;
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign(
+            { id: job.userId, tenantId: job.tenantId, role: 'Admin' },
+            process.env.JWT_SECRET || 'default-secret',
+            { expiresIn: '10m' }
+        );
+
+        let progressPercent = 10;
+        const progressTimer = setInterval(async () => {
+            progressPercent = Math.min(progressPercent + 15, 95);
+            await updateJobProgress(job.id, tenantId, { progress: progressPercent, progressMsg: 'Analisando acervos contra exigências...' }).catch(() => {});
+        }, 3000);
+
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(job.input),
+            });
+            clearInterval(progressTimer);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Oráculo retornou ${response.status}`);
+            }
+
+            await updateJobProgress(job.id, tenantId, { progress: 100, progressMsg: 'Concluído' });
+            return await response.json();
+        } finally {
+            clearInterval(progressTimer);
+        }
+    });
+
+    registerJobHandler('proposal_populate', async (job: any) => {
+        const tenantId = job.tenantId;
+        await updateJobProgress(job.id, tenantId, { progress: 10, progressMsg: 'Iniciando preenchimento da proposta...' });
+
+        const internalUrl = `http://localhost:${PORT}/api/proposals/ai-populate`;
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign(
+            { id: job.userId, tenantId: job.tenantId, role: 'Admin' },
+            process.env.JWT_SECRET || 'default-secret',
+            { expiresIn: '10m' }
+        );
+
+        let progressPercent = 10;
+        const progressTimer = setInterval(async () => {
+            progressPercent = Math.min(progressPercent + 10, 95);
+            await updateJobProgress(job.id, tenantId, { progress: progressPercent, progressMsg: 'Extraindo e preenchendo itens comerciais...' }).catch(() => {});
+        }, 4000);
+
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(job.input),
+            });
+            clearInterval(progressTimer);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Preenchimento retornou ${response.status}`);
+            }
+
+            await updateJobProgress(job.id, tenantId, { progress: 100, progressMsg: 'Concluído' });
+            return await response.json();
+        } finally {
+            clearInterval(progressTimer);
+        }
+    });
+
+    registerJobHandler('petition', async (job: any) => {
+        const tenantId = job.tenantId;
+        await updateJobProgress(job.id, tenantId, { progress: 10, progressMsg: 'Preparando contexto da petição...' });
+
+        const internalUrl = `http://localhost:${PORT}/api/petitions/generate`;
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign(
+            { id: job.userId, tenantId: job.tenantId, role: 'Admin' },
+            process.env.JWT_SECRET || 'default-secret',
+            { expiresIn: '10m' }
+        );
+
+        let progressPercent = 10;
+        const progressTimer = setInterval(async () => {
+            progressPercent = Math.min(progressPercent + 20, 95);
+            await updateJobProgress(job.id, tenantId, { progress: progressPercent, progressMsg: 'Redigindo fundamentação e documentos...' }).catch(() => {});
+        }, 6000);
+
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(job.input),
+            });
+            clearInterval(progressTimer);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Geração de petição retornou ${response.status}`);
+            }
+
+            await updateJobProgress(job.id, tenantId, { progress: 100, progressMsg: 'Concluído' });
+            return await response.json();
+        } finally {
+            clearInterval(progressTimer);
+        }
+    });
+
+    registerJobHandler('declaration', async (job: any) => {
+        const tenantId = job.tenantId;
+        await updateJobProgress(job.id, tenantId, { progress: 10, progressMsg: 'Iniciando geração de declaração...' });
+
+        const internalUrl = `http://localhost:${PORT}/api/generate-declaration`;
+        const jwt = require('jsonwebtoken');
+        const internalToken = jwt.sign(
+            { id: job.userId, tenantId: job.tenantId, role: 'Admin' },
+            process.env.JWT_SECRET || 'default-secret',
+            { expiresIn: '10m' }
+        );
+
+        let progressPercent = 10;
+        const progressTimer = setInterval(async () => {
+            progressPercent = Math.min(progressPercent + 25, 95);
+            await updateJobProgress(job.id, tenantId, { progress: progressPercent, progressMsg: 'Formatando declarações jurídicas...' }).catch(() => {});
+        }, 3000);
+
+        try {
+            const response = await fetch(internalUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${internalToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(job.input),
+            });
+            clearInterval(progressTimer);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Geração de declaração retornou ${response.status}`);
+            }
+
+            await updateJobProgress(job.id, tenantId, { progress: 100, progressMsg: 'Concluído' });
+            return await response.json();
+        } finally {
+            clearInterval(progressTimer);
+        }
+    });
+
     startJobWorker();
-    console.log('[BackgroundJob] 🚀 Worker started — async AI operations enabled');
+    logger.info('[BackgroundJob] 🚀 Worker started — async AI operations enabled');
     
     // PNCP Monitor disabled — ComprasNet Watcher handles all chat monitoring
     // pncpMonitor.startPolling(5);
@@ -9339,16 +9550,16 @@ app.listen(PORT, async () => {
     // ── System Health Watchdog: check every 5 minutes ──
     if (ADMIN_TELEGRAM_CHAT_ID) {
         setTimeout(() => {
-            console.log('[Watchdog] 🐕 System health watchdog started (interval: 5 min)');
+            logger.info('[Watchdog] 🐕 System health watchdog started (interval: 5 min)');
             setInterval(runWatchdogCheck, 5 * 60_000);
         }, 3 * 60_000); // Start 3 min after boot (give pollers time to initialize)
     } else {
-        console.log('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — watchdog disabled');
+        logger.info('[Watchdog] ⚠️ ADMIN_TELEGRAM_CHAT_ID not set — watchdog disabled');
     }
 
     // ── Background Workers (only run when PROCESS_ROLE is 'all' or 'worker') ──
     if (PROCESS_ROLE === 'api') {
-        console.log('[Server] PROCESS_ROLE=api — background pollers disabled (running in separate worker process)');
+        logger.info('[Server] PROCESS_ROLE=api — background pollers disabled (running in separate worker process)');
     } else {
 
     // ── One-time backfill: fetch ComprasNet links for existing processes ──
@@ -9363,11 +9574,11 @@ app.listen(PORT, async () => {
             });
 
             if (processes.length === 0) {
-                console.log('[Backfill] All processes already have ComprasNet links or no PNCP links found.');
+                logger.info('[Backfill] All processes already have ComprasNet links or no PNCP links found.');
                 return;
             }
 
-            console.log(`[Backfill] Found ${processes.length} processes with PNCP links missing ComprasNet. Fetching...`);
+            logger.info(`[Backfill] Found ${processes.length} processes with PNCP links missing ComprasNet. Fetching...`);
             let updated = 0;
 
             for (const proc of processes) {
@@ -9394,7 +9605,7 @@ app.listen(PORT, async () => {
                             }
                         });
                         updated++;
-                        console.log(`[Backfill] ✅ Updated process ${proc.id.slice(0, 8)} with ComprasNet link`);
+                        logger.info(`[Backfill] ✅ Updated process ${proc.id.slice(0, 8)} with ComprasNet link`);
                     }
 
                     // Rate limit: 500ms between API calls to avoid hammering PNCP
@@ -9404,9 +9615,9 @@ app.listen(PORT, async () => {
                 }
             }
 
-            console.log(`[Backfill] Done. Updated ${updated}/${processes.length} processes with ComprasNet links.`);
+            logger.info(`[Backfill] Done. Updated ${updated}/${processes.length} processes with ComprasNet links.`);
         } catch (e) {
-            console.error('[Backfill] Error:', e);
+            logger.error('[Backfill] Error:', e);
         }
     })();
 
@@ -9472,7 +9683,7 @@ app.listen(PORT, async () => {
                     });
 
                     if (result.created > 0) {
-                        console.log(`[${platform.label} Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        logger.info(`[${platform.label} Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                         totalNew += result.created;
                         totalAlerts += result.alerts;
                     }
@@ -9480,22 +9691,22 @@ app.listen(PORT, async () => {
                     // Gentil com a API: 1s entre processos
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err: any) {
-                    console.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    logger.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
             }
 
             if (totalNew > 0) {
-                console.log(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
+                logger.info(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
             }
             pollerLastSuccess.set('BLL+BNC', new Date());
         } catch (error: any) {
-            console.error('[Batch Poll] Erro no ciclo:', error.message);
+            logger.error('[Batch Poll] Erro no ciclo:', error.message);
         }
     }
 
     // Iniciar polling com delay de 30s para não sobrecarregar startup
     setTimeout(() => {
-        console.log(`[Batch Poll] 🚀 Monitor BLL+BNC iniciado (intervalo: ${BATCH_POLL_INTERVAL_MS / 1000}s)`);
+        logger.info(`[Batch Poll] 🚀 Monitor BLL+BNC iniciado (intervalo: ${BATCH_POLL_INTERVAL_MS / 1000}s)`);
         pollBatchProcesses();
         setInterval(pollBatchProcesses, BATCH_POLL_INTERVAL_MS);
     }, 30_000);
@@ -9557,7 +9768,7 @@ app.listen(PORT, async () => {
                     });
 
                     if (result.created > 0) {
-                        console.log(`[PCP Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        logger.info(`[PCP Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                         totalNew += result.created;
                         totalAlerts += result.alerts;
                     }
@@ -9565,22 +9776,22 @@ app.listen(PORT, async () => {
                     // Gentil com o servidor: 2s entre processos (HTML é mais pesado)
                     await new Promise(r => setTimeout(r, 2000));
                 } catch (err: any) {
-                    console.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    logger.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
             }
 
             if (totalNew > 0) {
-                console.log(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
+                logger.info(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
             }
             pollerLastSuccess.set('PCP', new Date());
         } catch (error: any) {
-            console.error('[PCP Poll] Erro no ciclo:', error.message);
+            logger.error('[PCP Poll] Erro no ciclo:', error.message);
         }
     }
 
     // Iniciar polling PCP com delay de 45s (após BLL+BNC)
     setTimeout(() => {
-        console.log(`[PCP Poll] 🚀 Monitor Portal de Compras Públicas iniciado (intervalo: ${PCP_POLL_INTERVAL_MS / 1000}s)`);
+        logger.info(`[PCP Poll] 🚀 Monitor Portal de Compras Públicas iniciado (intervalo: ${PCP_POLL_INTERVAL_MS / 1000}s)`);
         pollPCPProcesses();
         setInterval(pollPCPProcesses, PCP_POLL_INTERVAL_MS);
     }, 45_000);
@@ -9642,7 +9853,7 @@ app.listen(PORT, async () => {
                     });
 
                     if (result.created > 0) {
-                        console.log(`[Licitanet Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        logger.info(`[Licitanet Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                         totalNew += result.created;
                         totalAlerts += result.alerts;
                     }
@@ -9650,22 +9861,22 @@ app.listen(PORT, async () => {
                     // Gentil com o servidor: 1s entre processos (API JSON é leve)
                     await new Promise(r => setTimeout(r, 1000));
                 } catch (err: any) {
-                    console.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    logger.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
             }
 
             if (totalNew > 0) {
-                console.log(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
+                logger.info(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
             }
             pollerLastSuccess.set('Licitanet', new Date());
         } catch (error: any) {
-            console.error('[Licitanet Poll] Erro no ciclo:', error.message);
+            logger.error('[Licitanet Poll] Erro no ciclo:', error.message);
         }
     }
 
     // Iniciar polling Licitanet com delay de 60s (após PCP)
     setTimeout(() => {
-        console.log(`[Licitanet Poll] 🚀 Monitor Licitanet iniciado (intervalo: ${LICITANET_POLL_INTERVAL_MS / 1000}s)`);
+        logger.info(`[Licitanet Poll] 🚀 Monitor Licitanet iniciado (intervalo: ${LICITANET_POLL_INTERVAL_MS / 1000}s)`);
         pollLicitanetProcesses();
         setInterval(pollLicitanetProcesses, LICITANET_POLL_INTERVAL_MS);
     }, 60_000);
@@ -9727,7 +9938,7 @@ app.listen(PORT, async () => {
                     });
 
                     if (result.created > 0) {
-                        console.log(`[LMB Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                        logger.info(`[LMB Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                         totalNew += result.created;
                         totalAlerts += result.alerts;
                     }
@@ -9735,22 +9946,22 @@ app.listen(PORT, async () => {
                     // Gentil com o servidor: 1.5s entre processos (API autenticada)
                     await new Promise(r => setTimeout(r, 1500));
                 } catch (err: any) {
-                    console.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                    logger.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
                 }
             }
 
             if (totalNew > 0) {
-                console.log(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
+                logger.info(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
             }
             pollerLastSuccess.set('LMB', new Date());
         } catch (error: any) {
-            console.error('[LMB Poll] Erro no ciclo:', error.message);
+            logger.error('[LMB Poll] Erro no ciclo:', error.message);
         }
     }
 
     // Iniciar polling LMB com delay de 75s (após Licitanet)
     setTimeout(() => {
-        console.log(`[LMB Poll] 🚀 Monitor Licita Mais Brasil iniciado (intervalo: ${LMB_POLL_INTERVAL_MS / 1000}s)`);
+        logger.info(`[LMB Poll] 🚀 Monitor Licita Mais Brasil iniciado (intervalo: ${LMB_POLL_INTERVAL_MS / 1000}s)`);
         pollLMBProcesses();
         setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
     }, 75_000);
@@ -9762,7 +9973,7 @@ app.listen(PORT, async () => {
 if (PROCESS_ROLE !== 'api') {
     startOpportunityScanner(4);
 } else {
-    console.log('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
+    logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
 }
 
 // Keep event loop alive (required in this environment)

@@ -2,6 +2,7 @@ import axios from 'axios';
 import https from 'https';
 import { prisma } from '../../lib/prisma';
 import { NotificationService } from '../monitoring/notification.service';
+import { logger } from '../../lib/logger';
 
 /**
  * PNCP Opportunity Scanner — Monitora automaticamente pesquisas salvas
@@ -69,11 +70,11 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<any |
         } catch (err: any) {
             const isLast = attempt === retries;
             if (isLast) {
-                console.warn(`[OpportunityScanner] ❌ Falha após ${retries} tentativas: ${err.message}`);
+                logger.warn(`[OpportunityScanner] ❌ Falha após ${retries} tentativas: ${err.message}`);
                 return null;
             }
             const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-            console.warn(`[OpportunityScanner] ⚠️ Tentativa ${attempt}/${retries} falhou (${err.message}). Retentando em ${backoffMs / 1000}s...`);
+            logger.warn(`[OpportunityScanner] ⚠️ Tentativa ${attempt}/${retries} falhou (${err.message}). Retentando em ${backoffMs / 1000}s...`);
             await new Promise(r => setTimeout(r, backoffMs));
         }
     }
@@ -312,11 +313,11 @@ async function cleanupOldDedupRecords(): Promise<number> {
         });
         
         if (result.count > 0) {
-            console.log(`[OpportunityScanner] 🧹 Limpeza automática: ${result.count} registros com >${DEDUP_EXPIRY_DAYS} dias removidos`);
+            logger.info(`[OpportunityScanner] 🧹 Limpeza automática: ${result.count} registros com >${DEDUP_EXPIRY_DAYS} dias removidos`);
         }
         return result.count;
     } catch (error: any) {
-        console.error(`[OpportunityScanner] ⚠️ Erro na limpeza automática:`, error.message);
+        logger.error(`[OpportunityScanner] ⚠️ Erro na limpeza automática:`, error.message);
         return 0;
     }
 }
@@ -358,7 +359,7 @@ async function saveScanResults(tenantId: string, results: SearchScanResult[], to
             });
         }
     } catch (error: any) {
-        console.error(`[OpportunityScanner] Erro ao salvar resultados do scan:`, error.message);
+        logger.error(`[OpportunityScanner] Erro ao salvar resultados do scan:`, error.message);
     }
 }
 
@@ -440,11 +441,11 @@ export async function runOpportunityScan(targetTenantId?: string) {
         });
 
         if (searches.length === 0) {
-            console.log(`[OpportunityScanner] ⚠️ Nenhuma pesquisa salva encontrada.`);
+            logger.info(`[OpportunityScanner] ⚠️ Nenhuma pesquisa salva encontrada.`);
             return;
         }
 
-        console.log(`[OpportunityScanner] 🔍 Iniciando varredura de ${searches.length} pesquisas salvas...`);
+        logger.info(`[OpportunityScanner] 🔍 Iniciando varredura de ${searches.length} pesquisas salvas...`);
 
         // Fetch GlobalConfigs to check if scanner is disabled
         const tenantIds = Array.from(new Set(searches.map(s => s.tenantId)));
@@ -496,7 +497,7 @@ export async function runOpportunityScan(targetTenantId?: string) {
                         states: search.states,
                     });
 
-                    console.log(`[OpportunityScanner] 📋 "${search.name}": ${results.length} resultados encontrados na API PNCP`);
+                    logger.info(`[OpportunityScanner] 📋 "${search.name}": ${results.length} resultados encontrados na API PNCP`);
 
                     // Filtrar apenas resultados novos (não notificados anteriormente — via DB)
                     const newResults: PncpSearchResult[] = [];
@@ -523,7 +524,7 @@ export async function runOpportunityScan(targetTenantId?: string) {
                     });
 
                     if (newResults.length > 0) {
-                        console.log(`[OpportunityScanner] ✅ "${search.name}": ${newResults.length} novos resultados`);
+                        logger.info(`[OpportunityScanner] ✅ "${search.name}": ${newResults.length} novos resultados`);
                         totalNewResults += newResults.length;
                         tenantTotalNew += newResults.length;
 
@@ -594,15 +595,15 @@ export async function runOpportunityScan(targetTenantId?: string) {
                                 }
                             }
                         } catch (error: any) {
-                            console.error(`[OpportunityScanner] Erro ao enviar e-mail para tenant ${tenantId}:`, error.message);
+                            logger.error(`[OpportunityScanner] Erro ao enviar e-mail para tenant ${tenantId}:`, error.message);
                         }
 
-                        console.log(`[OpportunityScanner] 📤 "${search.name}" → ${newResults.length} oportunidades notificadas`);
+                        logger.info(`[OpportunityScanner] 📤 "${search.name}" → ${newResults.length} oportunidades notificadas`);
                     } else {
-                        console.log(`[OpportunityScanner] ⏩ "${search.name}": 0 novos (já notificados)`);
+                        logger.info(`[OpportunityScanner] ⏩ "${search.name}": 0 novos (já notificados)`);
                     }
                 } catch (err: any) {
-                    console.warn(`[OpportunityScanner] ❌ Erro na pesquisa "${search.name}": ${err.message}`);
+                    logger.warn(`[OpportunityScanner] ❌ Erro na pesquisa "${search.name}": ${err.message}`);
                     scanResults.push({
                         searchId: search.id,
                         searchName: search.name,
@@ -626,13 +627,13 @@ export async function runOpportunityScan(targetTenantId?: string) {
         }
 
         if (totalNewResults > 0) {
-            console.log(`[OpportunityScanner] ✅ Varredura concluída: ${totalNewResults} novas oportunidades encontradas e notificadas globalmente`);
+            logger.info(`[OpportunityScanner] ✅ Varredura concluída: ${totalNewResults} novas oportunidades encontradas e notificadas globalmente`);
         } else {
-            console.log(`[OpportunityScanner] ✅ Varredura concluída: nenhuma nova oportunidade (todos já notificados)`);
+            logger.info(`[OpportunityScanner] ✅ Varredura concluída: nenhuma nova oportunidade (todos já notificados)`);
         }
 
     } catch (error: any) {
-        console.error(`[OpportunityScanner] ❌ Erro fatal:`, error.message);
+        logger.error(`[OpportunityScanner] ❌ Erro fatal:`, error.message);
     }
 }
 
@@ -643,11 +644,11 @@ export async function runOpportunityScan(targetTenantId?: string) {
 export function startOpportunityScanner(intervalHours: number = 4) {
     const intervalMs = intervalHours * 60 * 60 * 1000;
     
-    console.log(`[OpportunityScanner] 🚀 Scanner de Oportunidades PNCP iniciado (intervalo: ${intervalHours}h)`);
+    logger.info(`[OpportunityScanner] 🚀 Scanner de Oportunidades PNCP iniciado (intervalo: ${intervalHours}h)`);
 
     // Primeira execução: aguardar 2 minutos após boot (dar tempo para o sistema estabilizar)
     setTimeout(() => {
-        console.log(`[OpportunityScanner] Executando primeira varredura...`);
+        logger.info(`[OpportunityScanner] Executando primeira varredura...`);
         runOpportunityScan();
     }, 2 * 60 * 1000);
 

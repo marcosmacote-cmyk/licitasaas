@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import OpenAI from "openai";
+import { logger } from '../../lib/logger';
 const pdfParse = require("pdf-parse");
 
 const prisma = new PrismaClient();
@@ -46,7 +47,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 // Extrai texto físico dos PDFs e indexa tudo no banco de dados
 export async function indexDocumentChunks(biddingProcessId: string, pdfParts: any[]) {
     try {
-        console.log(`[RAG] Iniciando indexação para o processo: ${biddingProcessId}`);
+        logger.info(`[RAG] Iniciando indexação para o processo: ${biddingProcessId}`);
         // 1. Extrair texto de todas as partes PDF usando pdf-parse
         let fullExtractedText = "";
         for (let i = 0; i < pdfParts.length; i++) {
@@ -57,19 +58,19 @@ export async function indexDocumentChunks(biddingProcessId: string, pdfParts: an
                     const data = await pdfParse(buffer);
                     fullExtractedText += `\n--- Documento ${i + 1} ---\n` + data.text;
                 } catch (err: any) {
-                    console.warn(`[RAG] Falha ao extrair texto do PDF ${i + 1} para indexação: ${err.message}`);
+                    logger.warn(`[RAG] Falha ao extrair texto do PDF ${i + 1} para indexação: ${err.message}`);
                 }
             }
         }
 
         if (!fullExtractedText.trim()) {
-            console.warn(`[RAG] Nenhum texto legível encontrado nos PDFs para o processo ${biddingProcessId}.`);
+            logger.warn(`[RAG] Nenhum texto legível encontrado nos PDFs para o processo ${biddingProcessId}.`);
             return;
         }
 
         // 2. Quebrar o texto em blocos menores (chunks) compatíveis
         const chunks = chunkText(fullExtractedText, 800);
-        console.log(`[RAG] Texto dividido em ${chunks.length} chunks. Gerando embeddings...`);
+        logger.info(`[RAG] Texto dividido em ${chunks.length} chunks. Gerando embeddings...`);
 
         // Deleta chunks anteriores caso estejamos re-analisando o edital
         await prisma.documentChunk.deleteMany({
@@ -98,9 +99,9 @@ export async function indexDocumentChunks(biddingProcessId: string, pdfParts: an
                 });
             }
         }
-        console.log(`[RAG] Concluída a indexação de ${chunks.length} chunks com sucesso para o processo ${biddingProcessId}.`);
+        logger.info(`[RAG] Concluída a indexação de ${chunks.length} chunks com sucesso para o processo ${biddingProcessId}.`);
     } catch (error: any) {
-        console.error(`[RAG] Erro catastrófico ao indexar documentos:`, error.message);
+        logger.error(`[RAG] Erro catastrófico ao indexar documentos:`, error.message);
     }
 }
 
@@ -152,7 +153,7 @@ export async function searchSimilarChunks(biddingProcessId: string, query: strin
         // Retornar os TopK
         return scoredChunks.slice(0, topK);
     } catch (error: any) {
-        console.error(`[RAG] Erro ao buscar similaridade em memória: ${error.message}`);
+        logger.error(`[RAG] Erro ao buscar similaridade em memória: ${error.message}`);
         return [];
     }
 }

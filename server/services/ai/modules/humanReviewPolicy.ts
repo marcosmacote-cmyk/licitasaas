@@ -9,6 +9,7 @@
  */
 
 import { ModuleName } from './moduleContextContracts';
+import { logger } from '../../../lib/logger';
 
 export interface HumanReviewDecision {
     reviewStatus: 'not_needed' | 'recommended' | 'required';
@@ -194,7 +195,7 @@ export function evaluateHumanReview(
     else if (recommendedCount === 1) riskLevel = 'low';
 
     if (triggeredReasons.length > 0) {
-        console.log(`[HumanReview] ${moduleName}: ${maxLevel} (risk: ${riskLevel}) — ${triggeredReasons.join('; ')}`);
+        logger.info(`[HumanReview] ${moduleName}: ${maxLevel} (risk: ${riskLevel}) — ${triggeredReasons.join('; ')}`);
     }
 
     return {

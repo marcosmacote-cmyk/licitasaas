@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 /**
  * ══════════════════════════════════════════════════════════════════
  *  Regression Runner + Promotion Gate
@@ -62,7 +63,7 @@ export function registerVersion(entry: VersionEntry): VersionEntry {
     entry.createdAt = entry.createdAt || new Date().toISOString();
     entry.status = entry.status || 'experimental';
     versionStore.push(entry);
-    console.log(`[Version] Registered: ${entry.componentName}@${entry.version} (${entry.status}) — ${entry.changeDescription}`);
+    logger.info(`[Version] Registered: ${entry.componentName}@${entry.version} (${entry.status}) — ${entry.changeDescription}`);
     return entry;
 }
 
@@ -113,7 +114,7 @@ export function runRegression(
     };
 
     regressionStore.push(result);
-    console.log(`[Regression] ${componentName}: ${candidateVersion} vs ${baselineVersion} — ${passed}/${testResults.length} passed (delta: ${deltaScore > 0 ? '+' : ''}${deltaScore})`);
+    logger.info(`[Regression] ${componentName}: ${candidateVersion} vs ${baselineVersion} — ${passed}/${testResults.length} passed (delta: ${deltaScore > 0 ? '+' : ''}${deltaScore})`);
 
     return result;
 }
@@ -198,7 +199,7 @@ export function evaluatePromotion(
         }
     }
 
-    console.log(`[Promotion] ${componentName}${isCritical ? ' [CRITICAL]' : ''}: ${candidateVersion} — ${decision.toUpperCase()} — ${reason}`);
+    logger.info(`[Promotion] ${componentName}${isCritical ? ' [CRITICAL]' : ''}: ${candidateVersion} — ${decision.toUpperCase()} — ${reason}`);
 
     return promotionDecision;
 }

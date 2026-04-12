@@ -37,6 +37,7 @@
 
 import * as cheerio from 'cheerio';
 import crypto from 'crypto';
+import { logger } from '../../lib/logger';
 
 export const PCP_PLATFORM = {
     id: 'pcp' as const,
@@ -167,23 +168,23 @@ export class PCPMonitor {
             clearTimeout(timeoutId);
 
             if (!res.ok) {
-                console.warn(`[PCP Monitor] HTTP ${res.status} para ${processUrl.substring(0, 60)}...`);
+                logger.warn(`[PCP Monitor] HTTP ${res.status} para ${processUrl.substring(0, 60)}...`);
                 return [];
             }
 
             const html = await res.text();
 
             if (!html.includes('timeline-item')) {
-                console.warn(`[PCP Monitor] Nenhuma timeline encontrada em ${processUrl.substring(0, 60)}...`);
+                logger.warn(`[PCP Monitor] Nenhuma timeline encontrada em ${processUrl.substring(0, 60)}...`);
                 return [];
             }
 
             return this.parseMessages(html);
         } catch (error: any) {
             if (error.name === 'AbortError') {
-                console.warn(`[PCP Monitor] Timeout (${this.TIMEOUT_MS}ms) para ${processUrl.substring(0, 60)}...`);
+                logger.warn(`[PCP Monitor] Timeout (${this.TIMEOUT_MS}ms) para ${processUrl.substring(0, 60)}...`);
             } else {
-                console.error(`[PCP Monitor] Erro ao buscar mensagens:`, error.message);
+                logger.error(`[PCP Monitor] Erro ao buscar mensagens:`, error.message);
             }
             return [];
         }

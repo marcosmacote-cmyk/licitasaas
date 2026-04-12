@@ -11,6 +11,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../../../lib/logger';
 
 const prisma = new PrismaClient();
 
@@ -115,10 +116,10 @@ export async function recordAnalysisTelemetry(input: TelemetryInput): Promise<vo
                 errorMessage: input.errorMessage || null,
             }
         });
-        console.log(`[Telemetry] ✅ Recorded | Quality: ${input.qualityScore ?? '-'}% | Reqs: ${input.totalRequirements} | Enforcer: ${input.enforcerCorrections} corrections | Status: ${input.status}`);
+        logger.info(`[Telemetry] ✅ Recorded | Quality: ${input.qualityScore ?? '-'}% | Reqs: ${input.totalRequirements} | Enforcer: ${input.enforcerCorrections} corrections | Status: ${input.status}`);
     } catch (err: any) {
         // Telemetry must never crash the pipeline
-        console.error(`[Telemetry] ⚠️ Failed to record (non-blocking): ${err.message}`);
+        logger.error(`[Telemetry] ⚠️ Failed to record (non-blocking): ${err.message}`);
     }
 }
 

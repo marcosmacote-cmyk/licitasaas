@@ -23,6 +23,7 @@
  */
 
 import { enforceSchema } from '../schemaEnforcer';
+import { logger } from '../../../lib/logger';
 
 interface TestCase {
     name: string;
@@ -439,8 +440,8 @@ tests.push({
 // RUNNER
 // ═══════════════════════════════════════════════════════════════
 
-console.log(`\n🧪 SCHEMA ENFORCER GOLDEN DATASET TEST — V4.9.1`);
-console.log(`${'═'.repeat(60)}\n`);
+logger.info(`\n🧪 SCHEMA ENFORCER GOLDEN DATASET TEST — V4.9.1`);
+logger.info(`${'═'.repeat(60)}\n`);
 
 let totalAssertions = 0;
 let passedAssertions = 0;
@@ -454,33 +455,33 @@ for (const test of tests) {
     // Run enforcer — returns { schema, corrections, details }
     const { schema: result } = enforceSchema(input as any);
 
-    console.log(`\n📋 ${test.name}`);
-    console.log(`   ${test.description}`);
+    logger.info(`\n📋 ${test.name}`);
+    logger.info(`   ${test.description}`);
 
     for (const assertion of test.assertions) {
         totalAssertions++;
         const { pass, detail } = assertion(result);
         if (pass) {
             passedAssertions++;
-            console.log(`   ✅ ${detail}`);
+            logger.info(`   ✅ ${detail}`);
         } else {
             if (test.severity === 'critical') failedCritical++;
             else failedWarning++;
-            console.log(`   ${test.severity === 'critical' ? '❌' : '⚠️'} ${detail}`);
+            logger.info(`   ${test.severity === 'critical' ? '❌' : '⚠️'} ${detail}`);
         }
     }
 }
 
-console.log(`\n${'═'.repeat(60)}`);
-console.log(`TOTAL: ${tests.length} tests | ${totalAssertions} assertions | ✅ ${passedAssertions} passed | ❌ ${failedCritical} critical | ⚠️ ${failedWarning} warnings`);
+logger.info(`\n${'═'.repeat(60)}`);
+logger.info(`TOTAL: ${tests.length} tests | ${totalAssertions} assertions | ✅ ${passedAssertions} passed | ❌ ${failedCritical} critical | ⚠️ ${failedWarning} warnings`);
 
 if (failedCritical > 0) {
-    console.log(`\n🚨 ${failedCritical} CRITICAL FAILURE(S) — SchemaEnforcer safety-nets broken!`);
+    logger.info(`\n🚨 ${failedCritical} CRITICAL FAILURE(S) — SchemaEnforcer safety-nets broken!`);
     process.exit(1);
 } else if (failedWarning > 0) {
-    console.log(`\n⚠️ ${failedWarning} warning(s) — review manually.`);
+    logger.info(`\n⚠️ ${failedWarning} warning(s) — review manually.`);
     process.exit(0);
 } else {
-    console.log(`\n✅ ALL GOLDEN TESTS PASSED — SchemaEnforcer integrity confirmed.`);
+    logger.info(`\n✅ ALL GOLDEN TESTS PASSED — SchemaEnforcer integrity confirmed.`);
     process.exit(0);
 }

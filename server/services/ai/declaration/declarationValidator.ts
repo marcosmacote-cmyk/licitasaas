@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 /**
  * ══════════════════════════════════════════════════════════════════
  *  Declaration Validator — Validação Pós-Geração (v3.0.0)
@@ -428,7 +429,7 @@ export function validateDeclaration(
             }
         } catch (err) {
             // Regra com erro interno — registra como minor para não bloquear
-            console.error(`[DeclarationValidator] Rule ${rule.code} threw:`, err);
+            logger.error(`[DeclarationValidator] Rule ${rule.code} threw:`, err);
             issues.push({
                 code: rule.code,
                 severity: 'minor',
@@ -445,7 +446,7 @@ export function validateDeclaration(
     const criticalCount = issues.filter(i => i.severity === 'critical').length;
     const majorCount = issues.filter(i => i.severity === 'major').length;
     const minorCount = issues.filter(i => i.severity === 'minor').length;
-    console.log(`[DeclarationValidator] ${issues.length} issues: ${criticalCount} critical, ${majorCount} major, ${minorCount} minor`);
+    logger.info(`[DeclarationValidator] ${issues.length} issues: ${criticalCount} critical, ${majorCount} major, ${minorCount} minor`);
 
     return issues;
 }

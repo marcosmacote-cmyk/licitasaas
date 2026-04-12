@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 /**
  * ══════════════════════════════════════════════════════════════════
  *  Feedback Schemas & Service — Captura Estruturada de Feedback
@@ -56,7 +57,7 @@ export function submitFeedback(feedback: AIExecutionFeedback): AIExecutionFeedba
     feedback.reviewedAt = feedback.reviewedAt || new Date().toISOString();
     feedbackStore.push(feedback);
 
-    console.log(`[Feedback] ${feedback.moduleName}: ${feedback.verdict} | Issues: ${feedback.issueTypes.join(', ')} | By: ${feedback.reviewedBy || 'anonymous'}`);
+    logger.info(`[Feedback] ${feedback.moduleName}: ${feedback.verdict} | Issues: ${feedback.issueTypes.join(', ')} | By: ${feedback.reviewedBy || 'anonymous'}`);
 
     return feedback;
 }

@@ -8,6 +8,7 @@
  */
 
 import { getProfile, CompanyLicitationProfile } from '../company/companyProfileService';
+import { logger } from '../../../lib/logger';
 
 export interface CompanyInsight {
     insightId: string;
@@ -73,7 +74,7 @@ export async function recordMatchHistory(companyId: string, processId: string, s
             create: { tenantId, config: JSON.stringify(config) }
         });
     } catch (e) {
-        console.error('[LearningInsights] Failed to save history', e);
+        logger.error('[LearningInsights] Failed to save history', e);
     }
 }
 
@@ -91,7 +92,7 @@ export async function generateCompanyInsights(companyId: string): Promise<Compan
             }
         }
     } catch (e) {
-        console.error('[LearningInsights] Failed to load history', e);
+        logger.error('[LearningInsights] Failed to load history', e);
     }
 
     const insights: CompanyInsight[] = [];
@@ -246,7 +247,7 @@ export async function generateCompanyInsights(companyId: string): Promise<Compan
         readinessProfile
     };
 
-    console.log(`[CompanyInsights] ${companyId}: ${insights.length} insights (${report.summary.weaknesses} weaknesses, ${report.summary.strengths} strengths)`);
+    logger.info(`[CompanyInsights] ${companyId}: ${insights.length} insights (${report.summary.weaknesses} weaknesses, ${report.summary.strengths} strengths)`);
     return report;
 }
 

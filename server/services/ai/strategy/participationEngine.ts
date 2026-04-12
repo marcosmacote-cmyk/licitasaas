@@ -12,6 +12,7 @@
  */
 
 import { getProfile, getCompanyDocuments, CompanyLicitationProfile, DocumentRecord } from '../company/companyProfileService';
+import { logger } from '../../../lib/logger';
 
 // ── Matching Schema ──
 
@@ -140,7 +141,7 @@ export async function matchCompanyToEdital(companyId: string, schemaV2: any, pro
         strategicNotes, hardBlocks
     };
 
-    console.log(`[Matching] ${companyId} × ${processId}: Doc=${documentaryFit.score}% Tech=${technicalFit.score}% EF=${economicFinancialFit.score}% Prop=${proposalFit.score}% HardBlocks=${hardBlocks.length}`);
+    logger.info(`[Matching] ${companyId} × ${processId}: Doc=${documentaryFit.score}% Tech=${technicalFit.score}% EF=${economicFinancialFit.score}% Prop=${proposalFit.score}% HardBlocks=${hardBlocks.length}`);
     return result;
 }
 
@@ -261,7 +262,7 @@ export function calculateParticipationScore(matchResult: CompanyEditalMatchResul
         }
     };
 
-    console.log(`[Score] ${matchResult.companyId}: ${overallScore}% → ${recommendation} (path: ${decisionPath})`);
+    logger.info(`[Score] ${matchResult.companyId}: ${overallScore}% → ${recommendation} (path: ${decisionPath})`);
     return assessment;
 }
 
@@ -386,7 +387,7 @@ export function generateActionPlan(matchResult: CompanyEditalMatchResult, assess
         disqualificationRisks
     };
 
-    console.log(`[ActionPlan] ${matchResult.companyId}: ${criticalPendingItems.length} pendências | ${disqualificationRisks.length} riscos desclass. | ${assessment.recommendation}`);
+    logger.info(`[ActionPlan] ${matchResult.companyId}: ${criticalPendingItems.length} pendências | ${disqualificationRisks.length} riscos desclass. | ${assessment.recommendation}`);
     return plan;
 }
 

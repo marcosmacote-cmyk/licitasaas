@@ -9,6 +9,7 @@
 
 import { getAllFeedback, getFeedbackForGoldenConversion, markAsConvertedToGolden, FeedbackModuleName } from './feedbackService';
 import { generateModuleMetrics } from './operationalMetrics';
+import { logger } from '../../../lib/logger';
 
 // ── Tipos ──
 
@@ -138,7 +139,7 @@ export function generateImprovementInsights(periodDays = 30): ImprovementReport 
         goldenCaseCandidates: goldenCandidates.length
     };
 
-    console.log(`[Insights] Generated ${insights.length} insights (${report.summary.criticalInsights} critical, ${report.summary.highInsights} high) | ${goldenCandidates.length} golden case candidates`);
+    logger.info(`[Insights] Generated ${insights.length} insights (${report.summary.criticalInsights} critical, ${report.summary.highInsights} high) | ${goldenCandidates.length} golden case candidates`);
 
     return report;
 }
@@ -177,7 +178,7 @@ export function convertFeedbackToGoldenCases(): Array<{
         markAsConvertedToGolden(fb.feedbackId);
     }
 
-    console.log(`[GoldenCases] Converted ${converted.length} feedbacks to golden cases`);
+    logger.info(`[GoldenCases] Converted ${converted.length} feedbacks to golden cases`);
     return converted;
 }
 

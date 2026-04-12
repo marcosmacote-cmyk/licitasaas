@@ -8,6 +8,7 @@
  */
 
 import { AnalysisSchemaV1 } from './analysis-schema-v1';
+import { logger } from '../../lib/logger';
 
 export interface RuleFinding {
   code: string;
@@ -480,7 +481,7 @@ export function executeRiskRules(schema: AnalysisSchemaV1): RuleFinding[] {
       const result = rule.fn(schema);
       findings.push(...result);
     } catch (err: any) {
-      console.warn(`[RiskRules] Regra ${rule.name} falhou: ${err.message}`);
+      logger.warn(`[RiskRules] Regra ${rule.name} falhou: ${err.message}`);
     }
   }
 
@@ -488,7 +489,7 @@ export function executeRiskRules(schema: AnalysisSchemaV1): RuleFinding[] {
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
   findings.sort((a, b) => (severityOrder[a.severity] || 3) - (severityOrder[b.severity] || 3));
 
-  console.log(`[RiskRules] ${findings.length} findings (${findings.filter(f => f.severity === 'critical').length} critical, ${findings.filter(f => f.severity === 'high').length} high)`);
+  logger.info(`[RiskRules] ${findings.length} findings (${findings.filter(f => f.severity === 'critical').length} critical, ${findings.filter(f => f.severity === 'high').length} high)`);
 
   return findings;
 }

@@ -48,6 +48,7 @@
  */
 
 import crypto from 'crypto';
+import { logger } from '../../lib/logger';
 
 export const LICITANET_PLATFORM = {
     id: 'licitanet' as const,
@@ -173,7 +174,7 @@ export class LicitanetMonitor {
                 clearTimeout(timeoutId);
 
                 if (!res.ok) {
-                    console.warn(`[Licitanet Monitor] HTTP ${res.status} para sessão ${sessionId} (tab=${tab}, page=${page})`);
+                    logger.warn(`[Licitanet Monitor] HTTP ${res.status} para sessão ${sessionId} (tab=${tab}, page=${page})`);
                     break;
                 }
 
@@ -190,9 +191,9 @@ export class LicitanetMonitor {
                 page++;
             } catch (error: any) {
                 if (error.name === 'AbortError') {
-                    console.warn(`[Licitanet Monitor] Timeout (${this.TIMEOUT_MS}ms) tab=${tab} para sessão ${sessionId}`);
+                    logger.warn(`[Licitanet Monitor] Timeout (${this.TIMEOUT_MS}ms) tab=${tab} para sessão ${sessionId}`);
                 } else {
-                    console.error(`[Licitanet Monitor] Erro ao buscar tab=${tab}:`, error.message);
+                    logger.error(`[Licitanet Monitor] Erro ao buscar tab=${tab}:`, error.message);
                 }
                 break;
             }
@@ -210,7 +211,7 @@ export class LicitanetMonitor {
     static async fetchMessages(sessionUrl: string): Promise<LicitanetMessage[]> {
         const sessionId = this.extractSessionId(sessionUrl);
         if (!sessionId) {
-            console.warn(`[Licitanet Monitor] Não foi possível extrair sessionId de: ${sessionUrl.substring(0, 60)}...`);
+            logger.warn(`[Licitanet Monitor] Não foi possível extrair sessionId de: ${sessionUrl.substring(0, 60)}...`);
             return [];
         }
 

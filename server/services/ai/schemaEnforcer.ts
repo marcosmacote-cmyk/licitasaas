@@ -21,6 +21,7 @@
  */
 
 import type { AnalysisSchemaV1 } from './analysis-schema-v1';
+import { logger } from '../../lib/logger';
 
 // ── Tipos ──
 
@@ -1320,17 +1321,17 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
     // ═══════════════════════════════════════════
 
     if (corrections > 0) {
-        console.log(`[SchemaEnforcer] ✅ ${corrections} correção(ões) aplicada(s):`);
+        logger.info(`[SchemaEnforcer] ✅ ${corrections} correção(ões) aplicada(s):`);
         // Log first 10 details max
         const logDetails = details.slice(0, 10);
         for (const d of logDetails) {
-            console.log(`[SchemaEnforcer]   → ${d}`);
+            logger.info(`[SchemaEnforcer]   → ${d}`);
         }
         if (details.length > 10) {
-            console.log(`[SchemaEnforcer]   ... e mais ${details.length - 10} correção(ões)`);
+            logger.info(`[SchemaEnforcer]   ... e mais ${details.length - 10} correção(ões)`);
         }
     } else {
-        console.log(`[SchemaEnforcer] ✅ Nenhuma correção necessária — schema já padronizado`);
+        logger.info(`[SchemaEnforcer] ✅ Nenhuma correção necessária — schema já padronizado`);
     }
 
     return { schema, corrections, details };

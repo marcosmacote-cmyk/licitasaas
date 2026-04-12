@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { prisma } from '../../lib/prisma';
 import { Resend } from 'resend';
+import { logger } from '../../lib/logger';
 
 export class NotificationService {
   /**
@@ -10,7 +11,7 @@ export class NotificationService {
   static async sendWhatsApp(tenantId: string, phone: string, message: string): Promise<boolean> {
     if (!phone) return false;
     
-    console.log(`[Notification] Sending WhatsApp to ${phone} for tenant ${tenantId}`);
+    logger.info(`[Notification] Sending WhatsApp to ${phone} for tenant ${tenantId}`);
     
     const whatsappApiUrl = process.env.WHATSAPP_API_URL;
     const whatsappApiToken = process.env.WHATSAPP_API_TOKEN;
@@ -24,14 +25,14 @@ export class NotificationService {
           headers: { 'apikey': whatsappApiToken },
           timeout: 10000
         });
-        console.log(`[Notification] ✅ WhatsApp enviado com sucesso para ${phone}`);
+        logger.info(`[Notification] ✅ WhatsApp enviado com sucesso para ${phone}`);
         return true;
       } catch (error: any) {
-        console.error(`[Notification] ❌ WhatsApp falhou para ${phone}:`, error.message);
+        logger.error(`[Notification] ❌ WhatsApp falhou para ${phone}:`, error.message);
         return false;
       }
     } else {
-      console.log(`[Notification][MOCK] ⚠️ WhatsApp NÃO enviado (WHATSAPP_API_URL/TOKEN não configurados) para ${phone}`);
+      logger.info(`[Notification][MOCK] ⚠️ WhatsApp NÃO enviado (WHATSAPP_API_URL/TOKEN não configurados) para ${phone}`);
       return false;
     }
   }
@@ -43,7 +44,7 @@ export class NotificationService {
   static async sendTelegram(tenantId: string, chatId: string, message: string): Promise<boolean> {
     if (!chatId) return false;
 
-    console.log(`[Notification] Sending Telegram to ${chatId} for tenant ${tenantId} (${message.length} chars)`);
+    logger.info(`[Notification] Sending Telegram to ${chatId} for tenant ${tenantId} (${message.length} chars)`);
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (botToken) {
@@ -54,7 +55,7 @@ export class NotificationService {
         // Split long messages into chunks
         if (message.length > MAX_LEN) {
           const chunks = this.splitMessage(message, MAX_LEN);
-          console.log(`[Notification] Mensagem dividida em ${chunks.length} partes (total: ${message.length} chars)`);
+          logger.info(`[Notification] Mensagem dividida em ${chunks.length} partes (total: ${message.length} chars)`);
           for (const chunk of chunks) {
             await axios.post(url, {
               chat_id: chatId,
@@ -71,11 +72,11 @@ export class NotificationService {
             parse_mode: 'HTML'
           }, { timeout: 15000 });
         }
-        console.log(`[Notification] ✅ Telegram enviado com sucesso para ${chatId}`);
+        logger.info(`[Notification] ✅ Telegram enviado com sucesso para ${chatId}`);
         return true;
       } catch (error: any) {
         const detail = error.response?.data?.description || error.message;
-        console.error(`[Notification] ❌ Telegram falhou para ${chatId}: ${detail}`);
+        logger.error(`[Notification] ❌ Telegram falhou para ${chatId}: ${detail}`);
         // If HTML parse error, retry without parse_mode
         if (detail?.includes('parse') || detail?.includes('HTML')) {
           try {
@@ -83,16 +84,16 @@ export class NotificationService {
             const plainMsg = message.replace(/<[^>]*>/g, '');
             const truncated = plainMsg.length > 4000 ? plainMsg.substring(0, 3997) + '...' : plainMsg;
             await axios.post(url, { chat_id: chatId, text: truncated }, { timeout: 15000 });
-            console.log(`[Notification] ✅ Telegram enviado (fallback plain text) para ${chatId}`);
+            logger.info(`[Notification] ✅ Telegram enviado (fallback plain text) para ${chatId}`);
             return true;
           } catch (e2: any) {
-            console.error(`[Notification] ❌ Telegram fallback também falhou:`, e2.response?.data?.description || e2.message);
+            logger.error(`[Notification] ❌ Telegram fallback também falhou:`, e2.response?.data?.description || e2.message);
           }
         }
         return false;
       }
     } else {
-      console.log(`[Notification][MOCK] ⚠️ Telegram NÃO enviado (TELEGRAM_BOT_TOKEN não configurado) para ${chatId}`);
+      logger.info(`[Notification][MOCK] ⚠️ Telegram NÃO enviado (TELEGRAM_BOT_TOKEN não configurado) para ${chatId}`);
       return false;
     }
   }
@@ -125,7 +126,7 @@ export class NotificationService {
   static async sendEmail(tenantId: string, toEmail: string, subject: string, htmlMessage: string): Promise<boolean> {
     if (!toEmail) return false;
 
-    console.log(`[Notification] Sending Email to ${toEmail} for tenant ${tenantId}`);
+    logger.info(`[Notification] Sending Email to ${toEmail} for tenant ${tenantId}`);
 
     const resendApiKey = process.env.RESEND_API_KEY;
     if (resendApiKey) {
@@ -137,14 +138,14 @@ export class NotificationService {
           subject: subject,
           html: htmlMessage,
         });
-        console.log(`[Notification] ✅ Email enviado com sucesso para ${toEmail}`);
+        logger.info(`[Notification] ✅ Email enviado com sucesso para ${toEmail}`);
         return true;
       } catch (error: any) {
-        console.error(`[Notification] ❌ Email falhou para ${toEmail}:`, error.message);
+        logger.error(`[Notification] ❌ Email falhou para ${toEmail}:`, error.message);
         return false;
       }
     } else {
-      console.log(`[Notification][MOCK] ⚠️ Email NÃO enviado (RESEND_API_KEY não configurado) para ${toEmail}`);
+      logger.info(`[Notification][MOCK] ⚠️ Email NÃO enviado (RESEND_API_KEY não configurado) para ${toEmail}`);
       return false;
     }
   }
@@ -216,7 +217,7 @@ export class NotificationService {
       });
 
       if (pendingLogs.length > 0) {
-        console.log(`[Notification] Processando ${pendingLogs.length} notificações pendentes...`);
+        logger.info(`[Notification] Processando ${pendingLogs.length} notificações pendentes...`);
       }
 
       for (const log of pendingLogs) {
@@ -315,13 +316,13 @@ export class NotificationService {
         });
 
         if (anySuccess) {
-          console.log(`[Notification] ✅ Log ${log.id} notificado via: ${sentChannels.join(', ')}`);
+          logger.info(`[Notification] ✅ Log ${log.id} notificado via: ${sentChannels.join(', ')}`);
         } else {
-          console.warn(`[Notification] ⚠️ Log ${log.id}: nenhum canal de notificação entregou com sucesso.`);
+          logger.warn(`[Notification] ⚠️ Log ${log.id}: nenhum canal de notificação entregou com sucesso.`);
         }
       }
     } catch (error) {
-      console.error(`[Notification] Process error:`, error);
+      logger.error(`[Notification] Process error:`, error);
     }
   }
 }

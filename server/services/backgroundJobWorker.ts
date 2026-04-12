@@ -11,6 +11,7 @@
  */
 
 import { pickNextJob, updateJobProgress, completeJob, failJob, cleanupStalledJobs } from './backgroundJobService';
+import { logger } from '../lib/logger';
 
 // ═══════════════════════════════════════════
 // Worker State
@@ -33,7 +34,7 @@ const handlers: Record<string, JobHandler> = {};
  */
 export function registerJobHandler(type: string, handler: JobHandler): void {
     handlers[type] = handler;
-    console.log(`[JobWorker] Handler registered: ${type}`);
+    logger.info(`[JobWorker] Handler registered: ${type}`);
 }
 
 // ═══════════════════════════════════════════
@@ -49,7 +50,7 @@ async function processNextJob(): Promise<void> {
 
         isProcessing = true;
         const startTime = Date.now();
-        console.log(`[JobWorker] Processing job ${job.id} (type=${job.type})`);
+        logger.info(`[JobWorker] Processing job ${job.id} (type=${job.type})`);
 
         const handler = handlers[job.type];
         if (!handler) {
@@ -62,14 +63,14 @@ async function processNextJob(): Promise<void> {
             // Execute the handler — it calls updateJobProgress internally
             const result = await handler(job);
             const durationS = ((Date.now() - startTime) / 1000).toFixed(1);
-            console.log(`[JobWorker] Job ${job.id} completed in ${durationS}s`);
+            logger.info(`[JobWorker] Job ${job.id} completed in ${durationS}s`);
             await completeJob(job.id, job.tenantId, result);
         } catch (err: any) {
-            console.error(`[JobWorker] Job ${job.id} failed:`, err.message);
+            logger.error(`[JobWorker] Job ${job.id} failed:`, err.message);
             await failJob(job.id, job.tenantId, err.message || 'Unknown error');
         }
     } catch (err: any) {
-        console.error(`[JobWorker] Loop error:`, err.message);
+        logger.error(`[JobWorker] Loop error:`, err.message);
     } finally {
         isProcessing = false;
     }
@@ -81,11 +82,11 @@ async function processNextJob(): Promise<void> {
  */
 export function startJobWorker(): void {
     if (workerIntervalId) {
-        console.warn('[JobWorker] Already running');
+        logger.warn('[JobWorker] Already running');
         return;
     }
 
-    console.log('[JobWorker] 🚀 Starting background job worker (poll every 3s)');
+    logger.info('[JobWorker] 🚀 Starting background job worker (poll every 3s)');
     workerIntervalId = setInterval(processNextJob, 3000);
 
     // Cleanup stalled jobs every 2 minutes
@@ -93,7 +94,7 @@ export function startJobWorker(): void {
         try {
             await cleanupStalledJobs();
         } catch (err: any) {
-            console.warn('[JobWorker] Cleanup error:', err.message);
+            logger.warn('[JobWorker] Cleanup error:', err.message);
         }
     }, 2 * 60 * 1000);
 
@@ -113,5 +114,5 @@ export function stopJobWorker(): void {
         clearInterval(cleanupIntervalId);
         cleanupIntervalId = null;
     }
-    console.log('[JobWorker] Stopped');
+    logger.info('[JobWorker] Stopped');
 }

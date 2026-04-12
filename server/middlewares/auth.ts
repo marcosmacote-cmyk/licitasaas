@@ -39,3 +39,22 @@ export const requireSuperAdmin = (req: AuthenticatedRequest, res: Response, next
     }
     next();
 };
+
+/**
+ * Sprint 5.3: RBAC Granular Middleware
+ * Permite o acesso se a role do usuário for uma das listadas.
+ * 'SUPER_ADMIN' sempre tem permissão suprema de acesso.
+ */
+export const requireAnyRole = (allowedRoles: string[]) => {
+    return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const userRole = (req.user?.role || '').toUpperCase();
+        if (userRole === 'SUPER_ADMIN') return next();
+
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({ 
+                error: `Acesso negado (RBAC). Requer uma das roles: ${allowedRoles.join(', ')}` 
+            });
+        }
+        next();
+    };
+};

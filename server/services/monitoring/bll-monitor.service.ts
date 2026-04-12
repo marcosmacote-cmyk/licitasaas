@@ -15,6 +15,7 @@
 
 import * as cheerio from 'cheerio';
 import crypto from 'crypto';
+import { logger } from '../../lib/logger';
 
 export interface BLLMessage {
     messageId: string;
@@ -84,7 +85,7 @@ export class BLLMonitor {
             clearTimeout(timeoutId);
 
             if (!res.ok) {
-                console.warn(`[BLLMonitor] HTTP ${res.status} para param1=${param1.substring(0, 20)}...`);
+                logger.warn(`[BLLMonitor] HTTP ${res.status} para param1=${param1.substring(0, 20)}...`);
                 return [];
             }
 
@@ -98,9 +99,9 @@ export class BLLMonitor {
             return this.parseMessages(html);
         } catch (error: any) {
             if (error.name === 'AbortError') {
-                console.warn(`[BLLMonitor] Timeout (${this.TIMEOUT_MS}ms) para param1=${param1.substring(0, 20)}...`);
+                logger.warn(`[BLLMonitor] Timeout (${this.TIMEOUT_MS}ms) para param1=${param1.substring(0, 20)}...`);
             } else {
-                console.error(`[BLLMonitor] Erro ao buscar mensagens:`, error.message);
+                logger.error(`[BLLMonitor] Erro ao buscar mensagens:`, error.message);
             }
             return [];
         }

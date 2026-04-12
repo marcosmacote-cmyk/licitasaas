@@ -28,6 +28,7 @@ model Tenant {
   pncpFavoriteItems      PncpFavoriteItem[]
   insightHistories       CompanyInsightHistory[]
   backgroundJobs         BackgroundJob[]
+  auditLogs              AuditLog[]
 }
 
 model User {
@@ -36,11 +37,16 @@ model User {
   name                      String
   email                     String  @unique
   passwordHash              String
-  role                      String  @default("Analista")
+  role                      String  @default("ANALISTA") // ADMIN, GERENTE, ANALISTA, VISUALIZADOR
   isActive                  Boolean @default(true)
   opportunityScannerEnabled Boolean @default(true)
 
+  totpSecret                String?
+  is2faEnabled              Boolean @default(false)
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  sessions UserSession[]
+  auditLogs AuditLog[]
 }
 
 model CompanyProfile {
@@ -508,4 +514,40 @@ model BackgroundJob {
   @@index([userId, status])
   @@index([status, createdAt])
 }
+
+// ── SPRINT 5: Enterprise (Auth Avançada e Audit Log) ──
+
+model UserSession {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  device    String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  userId      String?
+  action      String   // ex: LOGIN, UPDATE_PROCESS, DELETE_USER
+  entityType  String   // ex: BiddingProcess, User
+  entityId    String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entityType, entityId])
+}
+
 

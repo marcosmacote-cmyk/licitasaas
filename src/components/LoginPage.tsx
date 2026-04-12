@@ -12,24 +12,40 @@ export function LoginPage({ onLoginSuccess }: Props) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Sprint 5: 2FA States
+    const [requires2fa, setRequires2fa] = useState(false);
+    const [tempToken, setTempToken] = useState('');
+    const [totpCode, setTotpCode] = useState('');
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            const endpoint = requires2fa ? '/api/auth/2fa/verify' : '/api/auth/login-v2';
+            const payload = requires2fa 
+                ? { tempToken, code: totpCode }
+                : { email, password };
+
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify(payload),
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
-                onLoginSuccess(data.user);
+                if (data.requires2fa) {
+                    setRequires2fa(true);
+                    setTempToken(data.tempToken);
+                    setError('');
+                } else {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    onLoginSuccess(data.user);
+                }
             } else {
                 setError(data.error || 'Falha ao realizar login');
             }
@@ -54,35 +70,59 @@ export function LoginPage({ onLoginSuccess }: Props) {
                 <form onSubmit={handleSubmit} className="login-form">
                     {error && <div className="login-error">{error}</div>}
 
-                    <div className="login-input-group">
-                        <label className="login-label">E-mail</label>
-                        <div className="login-input-wrapper">
-                            <Mail size={18} className="login-icon" />
-                            <input
-                                type="email"
-                                required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="login-input"
-                                placeholder="seu@email.com"
-                            />
-                        </div>
-                    </div>
+                    {requires2fa ? (
+                        <>
+                            <div className="login-input-group">
+                                <label className="login-label" style={{ textAlign: 'center', width: '100%', marginBottom: 'var(--space-3)', color: 'var(--color-primary)' }}>
+                                    Autenticação em Duas Etapas Exigida
+                                </label>
+                                <div className="login-input-wrapper">
+                                    <Lock size={18} className="login-icon" />
+                                    <input
+                                        type="text"
+                                        required
+                                        value={totpCode}
+                                        onChange={(e) => setTotpCode(e.target.value.replace(/[^0-9]/g, '').substring(0, 6))}
+                                        className="login-input"
+                                        placeholder="Código de 6 dígitos"
+                                        style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '18px' }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="login-input-group">
+                                <label className="login-label">E-mail</label>
+                                <div className="login-input-wrapper">
+                                    <Mail size={18} className="login-icon" />
+                                    <input
+                                        type="email"
+                                        required
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="login-input"
+                                        placeholder="seu@email.com"
+                                    />
+                                </div>
+                            </div>
 
-                    <div className="login-input-group">
-                        <label className="login-label">Senha</label>
-                        <div className="login-input-wrapper">
-                            <Lock size={18} className="login-icon" />
-                            <input
-                                type="password"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="login-input"
-                                placeholder="••••••••"
-                            />
-                        </div>
-                    </div>
+                            <div className="login-input-group">
+                                <label className="login-label">Senha</label>
+                                <div className="login-input-wrapper">
+                                    <Lock size={18} className="login-icon" />
+                                    <input
+                                        type="password"
+                                        required
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="login-input"
+                                        placeholder="••••••••"
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     <button type="submit" disabled={isLoading} className="login-button">
                         {isLoading ? (
@@ -97,9 +137,15 @@ export function LoginPage({ onLoginSuccess }: Props) {
                 </form>
 
                 <div className="login-footer">
-                    <p className="login-footer-text">
-                        Esqueceu sua senha? <a href="#" className="login-link">Contate o suporte</a>
-                    </p>
+                    {requires2fa ? (
+                        <p className="login-footer-text">
+                            <a href="#" className="login-link" onClick={() => { setRequires2fa(false); setTotpCode(''); }}>Voltar ao Início</a>
+                        </p>
+                    ) : (
+                        <p className="login-footer-text">
+                            Esqueceu sua senha? <a href="#" className="login-link">Contate o suporte</a>
+                        </p>
+                    )}
                 </div>
             </div>
         </div>

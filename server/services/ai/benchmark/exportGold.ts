@@ -12,11 +12,12 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from '../../../lib/logger';
 
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl || dbUrl.includes('localhost')) {
-    console.error(`\n❌ DATABASE_URL aponta para localhost ou não está definida.`);
-    console.error(`   Uso: DATABASE_URL="postgresql://..." npx tsx exportGold.ts\n`);
+    logger.error(`\n❌ DATABASE_URL aponta para localhost ou não está definida.`);
+    logger.error(`   Uso: DATABASE_URL="postgresql://..." npx tsx exportGold.ts\n`);
     process.exit(1);
 }
 
@@ -30,10 +31,10 @@ async function main() {
     const limitIdx = args.indexOf('--limit');
     const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1]) || 25 : 25;
 
-    console.log(`\n${'═'.repeat(60)}`);
-    console.log(`📦  GOLD DATASET EXPORTER`);
-    console.log(`${'═'.repeat(60)}\n`);
-    console.log(`⏳ Conectando ao banco de produção...`);
+    logger.info(`\n${'═'.repeat(60)}`);
+    logger.info(`📦  GOLD DATASET EXPORTER`);
+    logger.info(`${'═'.repeat(60)}\n`);
+    logger.info(`⏳ Conectando ao banco de produção...`);
 
     const analyses = await prisma.aiAnalysis.findMany({
         where: { schemaV2: { not: null } },
@@ -47,12 +48,12 @@ async function main() {
     });
 
     if (analyses.length === 0) {
-        console.log('⚠️ Nenhuma análise com schemaV2 encontrada.');
+        logger.info('⚠️ Nenhuma análise com schemaV2 encontrada.');
         await prisma.$disconnect();
         return;
     }
 
-    console.log(`✅ ${analyses.length} análises com schemaV2 encontradas:\n`);
+    logger.info(`✅ ${analyses.length} análises com schemaV2 encontradas:\n`);
 
     const typeDistribution: Record<string, number> = {};
     const candidates: any[] = [];
@@ -85,18 +86,18 @@ async function main() {
         });
 
         const icon = a.overallConfidence === 'alta' ? '🟢' : a.overallConfidence === 'media' ? '🟡' : '🔴';
-        console.log(
+        logger.info(
             `  ${String(i + 1).padStart(2)}. ${icon} [${tipoObjeto}] ${(bp?.title || '').slice(0, 65)}` +
             `\n      ${bp?.portal} | ${bp?.modality} | ${allReqs.length} exig. | ${risks.length} riscos | ${evidence.length} evid. | v${a.promptVersion || 'N/A'}\n`
         );
     }
 
-    console.log(`${'─'.repeat(60)}`);
-    console.log(`📊 Distribuição: ${Object.entries(typeDistribution).map(([k, v]) => `${k}(${v})`).join(', ')}`);
-    console.log(`📊 Total: ${candidates.length}\n`);
+    logger.info(`${'─'.repeat(60)}`);
+    logger.info(`📊 Distribuição: ${Object.entries(typeDistribution).map(([k, v]) => `${k}(${v})`).join(', ')}`);
+    logger.info(`📊 Total: ${candidates.length}\n`);
 
     if (!shouldSave) {
-        console.log(`Para salvar, rode com --save\n`);
+        logger.info(`Para salvar, rode com --save\n`);
         await prisma.$disconnect();
         return;
     }
@@ -119,13 +120,13 @@ async function main() {
 
     for (const c of candidates) {
         if ((manifest.cases || []).some((mc: any) => mc.source?.processId === c.processId)) {
-            console.log(`  ⏭ ${c.title.slice(0, 50)} — já exportado`);
+            logger.info(`  ⏭ ${c.title.slice(0, 50)} — já exportado`);
             continue;
         }
 
         const caseId = `real-${String(nextNum).padStart(3, '0')}`;
         fs.writeFileSync(path.join(GOLD_DIR, `gold-${caseId}.json`), JSON.stringify(c.schemaV2, null, 2));
-        console.log(`  ✅ gold-${caseId}.json — [${c.tipoObjeto}] ${c.title.slice(0, 50)}`);
+        logger.info(`  ✅ gold-${caseId}.json — [${c.tipoObjeto}] ${c.title.slice(0, 50)}`);
 
         let pncpRef: any = null;
         if (c.pncpLink) {
@@ -154,9 +155,9 @@ async function main() {
     manifest.total_cases = manifest.cases.length;
     manifest.updated_at = new Date().toISOString().split('T')[0];
     fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2));
-    console.log(`\n📋 Manifest: ${manifest.cases.length} casos (+${newCount} novos)`);
-    console.log(`\n✅ Agora rode: npx tsx server/services/ai/benchmark/runAll.ts --save\n`);
+    logger.info(`\n📋 Manifest: ${manifest.cases.length} casos (+${newCount} novos)`);
+    logger.info(`\n✅ Agora rode: npx tsx server/services/ai/benchmark/runAll.ts --save\n`);
     await prisma.$disconnect();
 }
 
-main().catch(async (e) => { console.error(`\n❌ ${e.message}`); await prisma.$disconnect(); process.exit(1); });
+main().catch(async (e) => { logger.error(`\n❌ ${e.message}`); await prisma.$disconnect(); process.exit(1); });

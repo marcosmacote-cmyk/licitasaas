@@ -5,6 +5,7 @@
  */
 
 import { getFeedbackStats, getAllFeedback, FeedbackModuleName } from './feedbackService';
+import { logger } from '../../../lib/logger';
 
 export interface ModuleOperationalMetrics {
     moduleName: string;
@@ -157,7 +158,7 @@ export function generateSystemReport(periodDays = 30): SystemOperationalReport {
         }
     };
 
-    console.log(`[Metrics] System Report: ${globalStats.total} feedbacks | Approval: ${globalStats.approvalRate}% | Worst: ${worstModule?.moduleName} (${worstModule?.rejectionRate}% rejection)`);
+    logger.info(`[Metrics] System Report: ${globalStats.total} feedbacks | Approval: ${globalStats.approvalRate}% | Worst: ${worstModule?.moduleName} (${worstModule?.rejectionRate}% rejection)`);
 
     return report;
 }

@@ -23,6 +23,7 @@ import { PrismaClient } from '@prisma/client';
 import { createDetectorFromConfig } from './keywordDetector';
 import { DedupService } from './dedup.service';
 import { NotificationService } from './notification.service';
+import { logger } from '../../lib/logger';
 
 // ── Types ──
 
@@ -155,7 +156,7 @@ export class IngestService {
             try {
                 await NotificationService.processPendingNotifications();
             } catch (notifErr: any) {
-                console.error(`[IngestService] ⚠️ Notification processing failed (${alerts} alerts):`, notifErr.message || notifErr);
+                logger.error(`[IngestService] ⚠️ Notification processing failed (${alerts} alerts):`, notifErr.message || notifErr);
             }
         }
 

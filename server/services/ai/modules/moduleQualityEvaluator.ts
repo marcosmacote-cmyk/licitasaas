@@ -5,6 +5,7 @@
  */
 
 import { ModuleName } from './moduleContextContracts';
+import { logger } from '../../../lib/logger';
 
 export interface ModuleQualityIssue {
     code: string;
@@ -138,7 +139,7 @@ export function evaluateModuleQuality(
     const overallScore = totalWeight > 0 ? Math.round((totalPassed / totalWeight) * 100) : 0;
     const summary = `[${moduleName}] Quality: ${overallScore}% | ${Object.entries(dimensions).map(([k, v]) => `${k}: ${v}%`).join(' | ')} | ${issues.length} issues`;
 
-    console.log(`[ModuleQuality] ${summary}`);
+    logger.info(`[ModuleQuality] ${summary}`);
 
     return {
         moduleName,

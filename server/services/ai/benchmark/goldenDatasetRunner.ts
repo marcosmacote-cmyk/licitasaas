@@ -23,6 +23,7 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { enforceSchema } from '../schemaEnforcer';
+import { logger } from '../../../lib/logger';
 
 // ── Types ──
 
@@ -237,14 +238,14 @@ function validateAnnotationOnly(annotation: GoldenAnnotation): TestResult {
 
 // ── Main ──
 
-console.log(`\n🧪 GOLDEN DATASET RUNNER — V5.0`);
-console.log(`════════════════════════════════════════════════════════════`);
+logger.info(`\n🧪 GOLDEN DATASET RUNNER — V5.0`);
+logger.info(`════════════════════════════════════════════════════════════`);
 
 const annotations = loadAnnotations();
 const snapshotsDir = readdirSync(GOLDEN_DIR).filter(f => f.endsWith('.snapshot.json'));
 const snapshotCount = snapshotsDir.length;
 
-console.log(`\n📂 Loaded ${annotations.length} annotations, ${snapshotCount} snapshots\n`);
+logger.info(`\n📂 Loaded ${annotations.length} annotations, ${snapshotCount} snapshots\n`);
 
 const results: TestResult[] = [];
 
@@ -258,10 +259,10 @@ for (const annotation of annotations) {
         result = validateAnnotationOnly(annotation);
     }
 
-    console.log(`\n📋 ${annotation.id}: ${annotation.name}`);
-    console.log(`   Mode: ${result.mode} | Score auditado: ${annotation.audit_score}/10`);
+    logger.info(`\n📋 ${annotation.id}: ${annotation.name}`);
+    logger.info(`   Mode: ${result.mode} | Score auditado: ${annotation.audit_score}/10`);
     for (const detail of result.details) {
-        console.log(detail);
+        logger.info(detail);
     }
 
     results.push(result);
@@ -275,22 +276,22 @@ const totalWarnings = results.reduce((s, r) => s + r.warnings, 0);
 const snapshotTests = results.filter(r => r.mode === 'snapshot').length;
 const annotationOnlyTests = results.filter(r => r.mode === 'annotation_only').length;
 
-console.log(`\n════════════════════════════════════════════════════════════`);
-console.log(`TOTAL: ${results.length} cases | ${totalAssertions} assertions | ✅ ${totalPassed} passed | ❌ ${totalFailed} critical | ⚠️ ${totalWarnings} warnings`);
-console.log(`MODE: ${snapshotTests} with snapshots, ${annotationOnlyTests} annotation-only`);
+logger.info(`\n════════════════════════════════════════════════════════════`);
+logger.info(`TOTAL: ${results.length} cases | ${totalAssertions} assertions | ✅ ${totalPassed} passed | ❌ ${totalFailed} critical | ⚠️ ${totalWarnings} warnings`);
+logger.info(`MODE: ${snapshotTests} with snapshots, ${annotationOnlyTests} annotation-only`);
 
 if (snapshotTests === 0) {
-    console.log(`\n📌 No snapshots found. To capture snapshots:`);
-    console.log(`   1. Analyze editais in production`);
-    console.log(`   2. GET /api/admin/capture-golden/:processId`);
-    console.log(`   3. Save response as golden/<id>.snapshot.json`);
+    logger.info(`\n📌 No snapshots found. To capture snapshots:`);
+    logger.info(`   1. Analyze editais in production`);
+    logger.info(`   2. GET /api/admin/capture-golden/:processId`);
+    logger.info(`   3. Save response as golden/<id>.snapshot.json`);
 }
 
 if (totalFailed > 0) {
-    console.log(`\n❌ ${totalFailed} CRITICAL failure(s) — review before deploying.`);
+    logger.info(`\n❌ ${totalFailed} CRITICAL failure(s) — review before deploying.`);
     process.exit(1);
 } else if (totalWarnings > 0) {
-    console.log(`\n⚠️ ${totalWarnings} warning(s) — review manually.`);
+    logger.info(`\n⚠️ ${totalWarnings} warning(s) — review manually.`);
 } else {
-    console.log(`\n✅ ALL TESTS PASSED`);
+    logger.info(`\n✅ ALL TESTS PASSED`);
 }

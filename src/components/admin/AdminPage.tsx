@@ -3,6 +3,7 @@ import { Building2, Plus, Users, Briefcase, Loader2, CheckCircle2, Copy, Externa
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui';
 import { AiQuotaManager } from './AiQuotaManager';
+import { AuditLogViewer } from './AuditLogViewer';
 
 interface TenantInfo {
     id: string;
@@ -285,6 +286,11 @@ export function AdminPage() {
                     {/* ═══ AI Quota Management ═══ */}
                     <div style={{ marginTop: 'var(--space-6)', borderRadius: 'var(--radius-xl)', background: 'var(--color-bg-surface)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
                         <AiQuotaManager />
+                    </div>
+
+                    {/* ═══ Audit Log Viewer ═══ */}
+                    <div style={{ marginTop: 'var(--space-6)', padding: 'var(--space-6)', borderRadius: 'var(--radius-xl)', background: 'var(--color-bg-surface)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                        <AuditLogViewer />
                     </div>
                 </main>
             </div>

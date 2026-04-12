@@ -9,6 +9,7 @@
 
 import { AnalysisSchemaV1 } from './analysis-schema-v1';
 import { RuleFinding } from './riskRulesEngine';
+import { logger } from '../../lib/logger';
 
 // ── Tipos ──
 
@@ -266,7 +267,7 @@ export function evaluateAnalysisQuality(
 
   const summary = `Quality: ${overallScore}% | Extract: ${categoryScores.extraction}% | Norm: ${categoryScores.normalization}% | Evidence: ${categoryScores.evidence}% | Risk: ${categoryScores.riskReview}% | Ops: ${categoryScores.operationalUsefulness}% | ${issues.length} issues, ${ruleFindings.length} rule findings`;
 
-  console.log(`[QualityEval] ${summary}`);
+  logger.info(`[QualityEval] ${summary}`);
 
   return {
     analysisId: analysisId || 'unknown',

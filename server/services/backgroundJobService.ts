@@ -15,6 +15,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 const prisma = new PrismaClient();
 
@@ -68,7 +69,7 @@ const sseClients: Map<string, SSEClient> = new Map();
  */
 export function registerSSEClient(clientId: string, userId: string, tenantId: string, res: any): void {
     sseClients.set(clientId, { userId, tenantId, res });
-    console.log(`[SSE] Client registered: ${clientId} (user=${userId}, tenant=${tenantId}). Total: ${sseClients.size}`);
+    logger.info(`[SSE] Client registered: ${clientId} (user=${userId}, tenant=${tenantId}). Total: ${sseClients.size}`);
 }
 
 /**
@@ -76,7 +77,7 @@ export function registerSSEClient(clientId: string, userId: string, tenantId: st
  */
 export function removeSSEClient(clientId: string): void {
     sseClients.delete(clientId);
-    console.log(`[SSE] Client removed: ${clientId}. Total: ${sseClients.size}`);
+    logger.info(`[SSE] Client removed: ${clientId}. Total: ${sseClients.size}`);
 }
 
 /**
@@ -91,13 +92,13 @@ function pushEventToTenant(tenantId: string, event: JobEvent): void {
                 client.res.write(eventData);
                 sent++;
             } catch (err) {
-                console.warn(`[SSE] Failed to send to ${clientId}, removing client`);
+                logger.warn(`[SSE] Failed to send to ${clientId}, removing client`);
                 sseClients.delete(clientId);
             }
         }
     }
     if (sent > 0) {
-        console.log(`[SSE] Pushed ${event.type} for job ${event.jobId} to ${sent} client(s)`);
+        logger.info(`[SSE] Pushed ${event.type} for job ${event.jobId} to ${sent} client(s)`);
     }
 }
 
@@ -120,7 +121,7 @@ export async function submitJob(submission: JobSubmission): Promise<{ jobId: str
             }
         });
         if (existing) {
-            console.log(`[BackgroundJob] Duplicate prevented: ${submission.type} for ${submission.targetId} already ${existing.status}`);
+            logger.info(`[BackgroundJob] Duplicate prevented: ${submission.type} for ${submission.targetId} already ${existing.status}`);
             return { jobId: existing.id };
         }
     }
@@ -149,7 +150,7 @@ export async function submitJob(submission: JobSubmission): Promise<{ jobId: str
         }
     });
 
-    console.log(`[BackgroundJob] Created: ${job.id} (type=${job.type}, target=${job.targetId})`);
+    logger.info(`[BackgroundJob] Created: ${job.id} (type=${job.type}, target=${job.targetId})`);
 
     // Push SSE event
     pushEventToTenant(submission.tenantId, {
@@ -207,7 +208,7 @@ export async function completeJob(jobId: string, tenantId: string, result: any):
         }
     });
 
-    console.log(`[BackgroundJob] Completed: ${jobId} (type=${job.type})`);
+    logger.info(`[BackgroundJob] Completed: ${jobId} (type=${job.type})`);
 
     pushEventToTenant(tenantId, {
         type: 'job_completed',
@@ -234,7 +235,7 @@ export async function failJob(jobId: string, tenantId: string, error: string): P
         }
     });
 
-    console.log(`[BackgroundJob] Failed: ${jobId} — ${error}`);
+    logger.info(`[BackgroundJob] Failed: ${jobId} — ${error}`);
 
     pushEventToTenant(tenantId, {
         type: 'job_failed',
@@ -334,7 +335,7 @@ export async function cleanupStalledJobs(): Promise<number> {
     });
 
     if (stalled.count > 0 || old.count > 0) {
-        console.log(`[BackgroundJob] Cleanup: ${stalled.count} stalled, ${old.count} old deleted`);
+        logger.info(`[BackgroundJob] Cleanup: ${stalled.count} stalled, ${old.count} old deleted`);
     }
 
     return stalled.count + old.count;

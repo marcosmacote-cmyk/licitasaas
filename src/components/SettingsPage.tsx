@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Settings, Bell, User, Globe, Clock, Check, Phone, Send, Mail, Loader2, CheckCircle, XCircle, Radar, Info, Cpu } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { AiUsageDashboard } from './settings/AiUsageDashboard';
+import { SecuritySettings } from './settings/SecuritySettings';
 
 export function SettingsPage() {
     const [notifEnabled, setNotifEnabled] = useState(true);
@@ -154,6 +156,11 @@ export function SettingsPage() {
                         <SettingsField label="Organização" value={user.tenantName || 'LicitaSaaS Brasil'} />
                         <SettingsField label="Função" value={user.role === 'admin' ? 'Administrador' : 'Operador'} />
                     </div>
+                </SettingsSection>
+
+                {/* ── Segurança e 2FA ── */}
+                <SettingsSection icon={<ShieldAlert size={20} />} title="Segurança da Conta" description="Gerencie a autenticação em duas etapas e configurações de acesso.">
+                    <SecuritySettings />
                 </SettingsSection>
 
                 {/* ── Notificações (expanded) ── */}

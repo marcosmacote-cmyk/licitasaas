@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 /**
  * ══════════════════════════════════════════════════════════════════
  *  Prompt Regression Check — Verificação estática de regressões
@@ -35,8 +36,8 @@ function check(name: string, pass: boolean, detail: string, severity: 'critical'
 // INVARIANTES DO PROMPT COMPARTILHADO (NÃO devem ser violados)
 // ══════════════════════════════════════════════════════════════════
 
-console.log(`\n🔍 PROMPT REGRESSION CHECK — v${V2_PROMPT_VERSION}`);
-console.log(`═══════════════════════════════════════════════\n`);
+logger.info(`\n🔍 PROMPT REGRESSION CHECK — v${V2_PROMPT_VERSION}`);
+logger.info(`═══════════════════════════════════════════════\n`);
 
 // 1. prompt NÃO deve conter regras de valor/portal/data que pertencem ao manual
 check(
@@ -198,9 +199,9 @@ check(
 // RELATÓRIO
 // ══════════════════════════════════════════════════════════════════
 
-console.log(`\n${'═'.repeat(60)}`);
-console.log(`📊 RESULTADOS`);
-console.log(`${'═'.repeat(60)}\n`);
+logger.info(`\n${'═'.repeat(60)}`);
+logger.info(`📊 RESULTADOS`);
+logger.info(`${'═'.repeat(60)}\n`);
 
 const passed = results.filter(r => r.pass);
 const failed = results.filter(r => !r.pass);
@@ -209,26 +210,26 @@ const warningFails = failed.filter(r => r.severity === 'warning');
 
 for (const r of results) {
     const icon = r.pass ? '✅' : (r.severity === 'critical' ? '❌' : '⚠️');
-    console.log(`${icon} ${r.name}`);
+    logger.info(`${icon} ${r.name}`);
     if (!r.pass) {
-        console.log(`   └→ ${r.detail}`);
+        logger.info(`   └→ ${r.detail}`);
     }
 }
 
-console.log(`\n${'═'.repeat(60)}`);
-console.log(`TOTAL: ${results.length} checks | ✅ ${passed.length} passed | ❌ ${criticalFails.length} critical | ⚠️ ${warningFails.length} warnings`);
+logger.info(`\n${'═'.repeat(60)}`);
+logger.info(`TOTAL: ${results.length} checks | ✅ ${passed.length} passed | ❌ ${criticalFails.length} critical | ⚠️ ${warningFails.length} warnings`);
 
 if (criticalFails.length > 0) {
-    console.log(`\n🚨 REGRESSÃO CRÍTICA DETECTADA — ${criticalFails.length} falha(s) crítica(s)!`);
-    console.log(`   Ações imediatas necessárias:`);
+    logger.info(`\n🚨 REGRESSÃO CRÍTICA DETECTADA — ${criticalFails.length} falha(s) crítica(s)!`);
+    logger.info(`   Ações imediatas necessárias:`);
     for (const f of criticalFails) {
-        console.log(`   • ${f.name}: ${f.detail}`);
+        logger.info(`   • ${f.name}: ${f.detail}`);
     }
     process.exit(1);
 } else if (warningFails.length > 0) {
-    console.log(`\n⚠️ ${warningFails.length} warning(s) detectado(s) — revisar manualmente.`);
+    logger.info(`\n⚠️ ${warningFails.length} warning(s) detectado(s) — revisar manualmente.`);
     process.exit(0);
 } else {
-    console.log(`\n✅ PROMPT ÍNTEGRO — Nenhuma regressão detectada.`);
+    logger.info(`\n✅ PROMPT ÍNTEGRO — Nenhuma regressão detectada.`);
     process.exit(0);
 }

@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { logger } from '../../lib/logger';
 
 import { prisma } from '../../lib/prisma';
 import { trackAiUsage, AiUsageContext } from '../../lib/aiUsageTracker';
@@ -72,7 +73,7 @@ function getCircuitState(model: string): CircuitState {
 function recordSuccess(model: string): void {
     const state = getCircuitState(model);
     if (state.consecutiveFailures > 0 || state.isOpen) {
-        console.log(`[Gemini] 🟢 Circuit CLOSED para '${model}' — modelo respondeu com sucesso`);
+        logger.info(`[Gemini] 🟢 Circuit CLOSED para '${model}' — modelo respondeu com sucesso`);
     }
     state.consecutiveFailures = 0;
     state.isOpen = false;
@@ -84,7 +85,7 @@ function recordFailure503(model: string): void {
     state.lastFailureTime = Date.now();
     if (state.consecutiveFailures >= CIRCUIT_OPEN_THRESHOLD && !state.isOpen) {
         state.isOpen = true;
-        console.warn(`[Gemini] 🔴 Circuit OPEN para '${model}' — ${state.consecutiveFailures} falhas 503 consecutivas. Pulando para fallback por ${CIRCUIT_RESET_MS / 1000}s.`);
+        logger.warn(`[Gemini] 🔴 Circuit OPEN para '${model}' — ${state.consecutiveFailures} falhas 503 consecutivas. Pulando para fallback por ${CIRCUIT_RESET_MS / 1000}s.`);
     }
 }
 
@@ -95,7 +96,7 @@ function shouldSkipModel(model: string): boolean {
     // Half-open: after CIRCUIT_RESET_MS, allow ONE probe attempt
     const elapsed = Date.now() - state.lastFailureTime;
     if (elapsed >= CIRCUIT_RESET_MS) {
-        console.log(`[Gemini] 🟡 Circuit HALF-OPEN para '${model}' — tentando 1 chamada de teste após ${(elapsed / 1000).toFixed(0)}s`);
+        logger.info(`[Gemini] 🟡 Circuit HALF-OPEN para '${model}' — tentando 1 chamada de teste após ${(elapsed / 1000).toFixed(0)}s`);
         return false; // Allow one attempt
     }
     
@@ -155,7 +156,7 @@ export async function callGeminiWithRetry(
     // Global outage fast-fail: if ALL models are circuit-open, skip entirely
     if (isGlobalOutage(requestedModel)) {
         const fallbacks = GEMINI_FALLBACK_MODELS[requestedModel] || [];
-        console.error(`[Gemini] 🔥 GLOBAL OUTAGE DETECTADA — todos os modelos com circuit OPEN (${requestedModel}, ${fallbacks.join(', ')}). Falhando imediatamente.`);
+        logger.error(`[Gemini] 🔥 GLOBAL OUTAGE DETECTADA — todos os modelos com circuit OPEN (${requestedModel}, ${fallbacks.join(', ')}). Falhando imediatamente.`);
         throw new Error(`[Gemini] Global outage detectada — todos os modelos Gemini indisponíveis. Tente novamente em ${CIRCUIT_RESET_MS / 60000} minutos.`);
     }
 
@@ -165,7 +166,7 @@ export async function callGeminiWithRetry(
         // Circuit breaker check
         if (shouldSkipModel(targetModel)) {
             const state = getCircuitState(targetModel);
-            console.warn(`[Gemini] ⚡ Circuit OPEN — pulando '${targetModel}' (${state.consecutiveFailures} falhas 503). Direto para fallback.`);
+            logger.warn(`[Gemini] ⚡ Circuit OPEN — pulando '${targetModel}' (${state.consecutiveFailures} falhas 503). Direto para fallback.`);
             return null;
         }
         
@@ -177,7 +178,7 @@ export async function callGeminiWithRetry(
         for (let i = 0; i < effectiveRetries; i++) {
             try {
                 if (i > 0 || isFallback) {
-                    console.log(`[Gemini] ${isFallback ? '🔄 Cascata →' : 'Retrying'} '${label}' (attempt ${i + 1}/${effectiveRetries})`);
+                    logger.info(`[Gemini] ${isFallback ? '🔄 Cascata →' : 'Retrying'} '${label}' (attempt ${i + 1}/${effectiveRetries})`);
                 }
                 const result = await withTimeout(
                     model.generateContent({ ...options, model: targetModel }),
@@ -185,7 +186,7 @@ export async function callGeminiWithRetry(
                     `${label} attempt ${i + 1}`
                 );
                 if (isFallback) {
-                    console.log(`[Gemini] ✅ Fallback '${targetModel}' respondeu com sucesso`);
+                    logger.info(`[Gemini] ✅ Fallback '${targetModel}' respondeu com sucesso`);
                 }
                 // Success — reset circuit breaker
                 recordSuccess(targetModel);
@@ -198,7 +199,7 @@ export async function callGeminiWithRetry(
                 const is404 = errMsg.includes('404') || error?.status === 404 || error?.code === 404 ||
                     errMsg.includes('NOT_FOUND') || errMsg.includes('no longer available');
                 if (is404) {
-                    console.warn(`[Gemini] ⛔ Modelo '${targetModel}' não existe (404). Pulando para próximo fallback...`);
+                    logger.warn(`[Gemini] ⛔ Modelo '${targetModel}' não existe (404). Pulando para próximo fallback...`);
                     break;
                 }
 
@@ -211,7 +212,7 @@ export async function callGeminiWithRetry(
                     recordFailure503(targetModel);
                     // If circuit just opened on this model, bail immediately — no more retries
                     if (shouldSkipModel(targetModel)) {
-                        console.warn(`[Gemini] ⚡ Circuit ABRIU durante retry — interrompendo retries para '${targetModel}'`);
+                        logger.warn(`[Gemini] ⚡ Circuit ABRIU durante retry — interrompendo retries para '${targetModel}'`);
                         break;
                     }
                 }
@@ -227,11 +228,11 @@ export async function callGeminiWithRetry(
                                  (baseDelaysTimeout[i] || 8000);
                     const jitter = Math.floor(Math.random() * 2000);
                     const delay = base + jitter;
-                    console.warn(`[Gemini] ${is503 ? '503/UNAVAILABLE' : is429 ? '429/RATE_LIMIT' : 'TIMEOUT'} on '${label}', retrying in ${(delay / 1000).toFixed(1)}s (attempt ${i + 1}/${effectiveRetries})...`);
+                    logger.warn(`[Gemini] ${is503 ? '503/UNAVAILABLE' : is429 ? '429/RATE_LIMIT' : 'TIMEOUT'} on '${label}', retrying in ${(delay / 1000).toFixed(1)}s (attempt ${i + 1}/${effectiveRetries})...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     continue;
                 }
-                console.error(`[Gemini] Error on '${label}' after ${i + 1} attempts: ${errMsg}`);
+                logger.error(`[Gemini] Error on '${label}' after ${i + 1} attempts: ${errMsg}`);
                 break;
             }
         }
@@ -250,17 +251,17 @@ export async function callGeminiWithRetry(
         
         if (primaryFailed503 && fallbackModels.length > 0) {
             for (const fallbackModel of fallbackModels) {
-                console.warn(`[Gemini] 🔄 Modelo '${requestedModel}' indisponível. Tentando fallback '${fallbackModel}'...`);
+                logger.warn(`[Gemini] 🔄 Modelo '${requestedModel}' indisponível. Tentando fallback '${fallbackModel}'...`);
                 const fallbackResult = await tryModel(fallbackModel, 2, true);
                 if (fallbackResult) return fallbackResult;
             }
-            console.error(`[Gemini] ❌ Todos os modelos Gemini falharam (${requestedModel} + fallbacks: ${fallbackModels.join(', ')})`);
+            logger.error(`[Gemini] ❌ Todos os modelos Gemini falharam (${requestedModel} + fallbacks: ${fallbackModels.join(', ')})`);
         }
 
         // Phase 3: All Gemini models failed — throw for OpenAI fallback
         const finalErrorMsg = lastError?.message || String(lastError);
         if (finalErrorMsg.includes('leaked') || lastError?.status === 403) {
-            console.error("!!! CRITICAL: GEMINI API KEY IS LEAKED OR INVALID !!!", lastError);
+            logger.error("!!! CRITICAL: GEMINI API KEY IS LEAKED OR INVALID !!!", lastError);
             throw new Error("A chave da API Gemini foi bloqueada por razões de segurança ou é inválida. Por favor, atualize a GEMINI_API_KEY no arquivo .env.");
         }
 

@@ -1,3 +1,4 @@
+import { logger } from '../../../lib/logger';
 /**
  * ══════════════════════════════════════════════════════════════════
  *  URL Resolution Test Suite — Verifica links funcionais por plataforma
@@ -279,9 +280,9 @@ function runTests(): TestResult[] {
 
 // ── Output ──
 
-console.log(`\n${'═'.repeat(60)}`);
-console.log(`🔗  URL RESOLUTION TEST SUITE`);
-console.log(`${'═'.repeat(60)}\n`);
+logger.info(`\n${'═'.repeat(60)}`);
+logger.info(`🔗  URL RESOLUTION TEST SUITE`);
+logger.info(`${'═'.repeat(60)}\n`);
 
 const results = runTests();
 const passed = results.filter(r => r.pass);
@@ -289,20 +290,20 @@ const failed = results.filter(r => !r.pass);
 
 for (const r of results) {
     const icon = r.pass ? '✅' : '❌';
-    console.log(`${icon} ${r.scenario}`);
+    logger.info(`${icon} ${r.scenario}`);
     if (!r.pass) {
-        console.log(`   └→ ${r.detail}`);
+        logger.info(`   └→ ${r.detail}`);
     }
 }
 
-console.log(`\n${'═'.repeat(60)}`);
-console.log(`TOTAL: ${results.length} tests | ✅ ${passed.length} passed | ❌ ${failed.length} failed`);
+logger.info(`\n${'═'.repeat(60)}`);
+logger.info(`TOTAL: ${results.length} tests | ✅ ${passed.length} passed | ❌ ${failed.length} failed`);
 
 if (failed.length > 0) {
-    console.log(`\n🚨 ${failed.length} TESTE(S) FALHARAM — verificar links e AutoEnrich`);
+    logger.info(`\n🚨 ${failed.length} TESTE(S) FALHARAM — verificar links e AutoEnrich`);
     process.exit(1);
 } else {
-    console.log(`\n✅ TODOS OS TESTES PASSARAM`);
+    logger.info(`\n✅ TODOS OS TESTES PASSARAM`);
     process.exit(0);
 }
 

@@ -16,6 +16,7 @@
 
 import type { AuthoritativeFacts, DeclarationValidationIssue } from './declarationTypes';
 import { parseAndSanitize, type ParsedDeclaration } from './declarationParser';
+import { logger } from '../../../lib/logger';
 
 // ═══════════════════════════════════════════════════════════════
 // TIPO DA FUNÇÃO DE CHAMADA À IA (injeção de dependência)
@@ -144,7 +145,7 @@ export async function repairDeclaration(
         return noRepair;
     }
 
-    console.log(`[DeclarationRepair] ${criticalIssues.length} critical issues. Attempting repair...`);
+    logger.info(`[DeclarationRepair] ${criticalIssues.length} critical issues. Attempting repair...`);
 
     try {
         // Step 1: Chamar IA com prompt de repair
@@ -154,7 +155,7 @@ export async function repairDeclaration(
         // Step 2: Parsear resposta
         const repaired = parseAndSanitize(rawResponse);
         if (!repaired || !repaired.text) {
-            console.log('[DeclarationRepair] Repair returned empty response. Keeping original.');
+            logger.info('[DeclarationRepair] Repair returned empty response. Keeping original.');
             return { ...noRepair, attempted: true };
         }
 
@@ -173,7 +174,7 @@ export async function repairDeclaration(
                 .filter(i => !afterCodes.has(i.code))
                 .map(i => `${i.code}: ${i.message} → CORRIGIDO`);
 
-            console.log(`[DeclarationRepair] Success: ${corrections.length} issues fixed, ${reIssues.length} remaining (${reCritical} critical)`);
+            logger.info(`[DeclarationRepair] Success: ${corrections.length} issues fixed, ${reIssues.length} remaining (${reCritical} critical)`);
 
             return {
                 attempted: true,
@@ -184,12 +185,12 @@ export async function repairDeclaration(
                 corrections,
             };
         } else {
-            console.log(`[DeclarationRepair] Repair did not improve. Original: ${originalCritical} critical → Repaired: ${reCritical} critical. Keeping original.`);
+            logger.info(`[DeclarationRepair] Repair did not improve. Original: ${originalCritical} critical → Repaired: ${reCritical} critical. Keeping original.`);
             return { ...noRepair, attempted: true };
         }
 
     } catch (err: any) {
-        console.error('[DeclarationRepair] Repair call failed:', err?.message || err);
+        logger.error('[DeclarationRepair] Repair call failed:', err?.message || err);
         return { ...noRepair, attempted: true };
     }
 }
