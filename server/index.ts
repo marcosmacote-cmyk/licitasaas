@@ -75,6 +75,7 @@ import teamRoutes from './routes/team';
 import companiesRoutes from './routes/companies';
 import documentsRoutes from './routes/documents';
 import biddingsRoutes from './routes/biddings';
+import pncpRoutes from './routes/pncp';
 
 // Resolve server root (handles both ts-node and compiled dist/)
 const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') : __dirname;
@@ -651,6 +652,9 @@ app.use('/api', documentsRoutes);
 
 // Biddings CRUD + AutoEnrich + AutoMonitor (Sprint 8.1 — extracted from index.ts)
 app.use('/api/biddings', biddingsRoutes);
+
+// PNCP Searches, Scanner, Favorites (Sprint 8.1 — extracted from index.ts)
+app.use('/api/pncp', pncpRoutes);
 // ═══════════════════════════════════════════════════════════════
 // MÓDULO DECLARAÇÕES IA v5 — Gerador Juridicamente Confiável
 // Fluxo-alvo: 12 etapas com validação + repair IA + re-validação
