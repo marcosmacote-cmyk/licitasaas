@@ -17,7 +17,8 @@ import {
   Users,
   ShieldCheck,
   Menu,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { BiddingPage } from './components/BiddingPage';
 import { Dashboard } from './components/Dashboard';

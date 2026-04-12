@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, FileText, Building2, Briefcase, ChevronRight, CornerDownLeft, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, FileText, Building2, Briefcase, CornerDownLeft, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 interface Props {
