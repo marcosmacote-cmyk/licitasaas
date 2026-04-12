@@ -23,21 +23,33 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
     
     // Infinite Scroll Intersection Observer
     const loaderRef = useRef<HTMLDivElement>(null);
+    const loadingRef = useRef(false);
+
+    // Sync loading state
+    useEffect(() => {
+        loadingRef.current = p.loading || p.scannerOpportunitiesLoading;
+    }, [p.loading, p.scannerOpportunitiesLoading]);
 
     useEffect(() => {
         const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) {
-                if (p.activeTab === 'search' && !p.loading && p.page < Math.ceil(p.totalResults / 10)) {
-                    p.setPage(prev => prev + 1);
-                } else if (p.activeTab === 'found' && !p.scannerOpportunitiesLoading && p.scannerOpportunitiesPage < Math.ceil(p.scannerOpportunitiesTotal / 50)) {
-                    p.setScannerOpportunitiesPage(prev => prev + 1);
+            if (entries[0].isIntersecting && !loadingRef.current) {
+                if (p.activeTab === 'search') {
+                    p.setPage(prev => {
+                        const max = Math.ceil(p.totalResults / 10);
+                        return prev < max ? prev + 1 : prev;
+                    });
+                } else if (p.activeTab === 'found') {
+                    p.setScannerOpportunitiesPage(prev => {
+                        const max = Math.ceil(p.scannerOpportunitiesTotal / 50);
+                        return prev < max ? prev + 1 : prev;
+                    });
                 }
             }
-        }, { threshold: 0.1, rootMargin: '100px' });
+        }, { threshold: 0.1, rootMargin: '200px' });
 
         if (loaderRef.current) observer.observe(loaderRef.current);
         return () => observer.disconnect();
-    }, [p.activeTab, p.loading, p.scannerOpportunitiesLoading, p.page, p.scannerOpportunitiesPage, p.totalResults, p.scannerOpportunitiesTotal]);
+    }, [p.activeTab, p.totalResults, p.scannerOpportunitiesTotal, p.setPage, p.setScannerOpportunitiesPage]);
 
     // Refresh data on mount to guarantee we have the latest items (e.g. after deletions in Kanban)
     useEffect(() => {
