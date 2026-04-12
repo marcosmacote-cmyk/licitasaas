@@ -106,8 +106,7 @@ export function KanbanItemVisual({ item, isOverlay, hasAnalysis, companies, onVi
         zIndex: isOverlay ? 999 : undefined,
         padding: compactMode ? '10px' : undefined,
         gap: compactMode ? '8px' : undefined,
-        minHeight: !isRendered ? `${cardHeight}px` : undefined, // Keep spacer size when virtualized
-        transition: isOverlay || isDragging ? 'none' : undefined, // Disable CSS transition during drag/drop to let DndKit physics do the work
+        minHeight: !isRendered ? `${cardHeight}px` : undefined,
         ...expiringStyle,
     };
 
