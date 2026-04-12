@@ -76,6 +76,11 @@ import companiesRoutes from './routes/companies';
 import documentsRoutes from './routes/documents';
 import biddingsRoutes from './routes/biddings';
 import pncpRoutes from './routes/pncp';
+import {
+    normalizeModality, normalizePortal, hasMonitorableDomain,
+    detectPlatformFromLink, sanitizeBiddingData,
+    MONITORABLE_DOMAINS, PLATFORM_DOMAINS
+} from './lib/biddingHelpers';
 
 // Resolve server root (handles both ts-node and compiled dist/)
 const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') : __dirname;
@@ -642,8 +647,6 @@ app.get('/api/admin/golden-search', authenticateToken, requireSuperAdmin, async 
 
 // Team & Users Management
 app.use('/api/team', teamRoutes);
-
-
 // Companies, Credentials & Config  (router has /*, /credentials/*, /config/* paths)
 app.use('/api', companiesRoutes);
 
@@ -660,8 +663,6 @@ app.use('/api/pncp', pncpRoutes);
 // Fluxo-alvo: 12 etapas com validação + repair IA + re-validação
 // Tipos: AuthoritativeFacts, DeclarationFamily → importados de services/ai/declaration
 // ═══════════════════════════════════════════════════════════════
-
-
 // ── Step 4: Classificação por Família ──
 
 function classifyFamily(declarationType: string): DeclarationFamily {
@@ -968,8 +969,6 @@ app.post('/api/generate-declaration', authenticateToken, async (req: any, res) =
         };
 
         logger.info(`[Declaration v5] Step 3: Facts → org="${orgaoName}" div=${hasDivergence} rep="${representanteName}"`);
-
-
         // ── Step 5: Contexto específico ──
         const familyContext = extractFamilyContext(family, schema);
 
@@ -1110,436 +1109,6 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
         handleApiError(res, error, 'generate-declaration');
     }
 });
-
-// PNCP Proxy and Saved Searches
-app.get('/api/pncp/searches', authenticateToken, async (req: any, res) => {
-    try {
-        const searches = await prisma.pncpSavedSearch.findMany({
-            where: { tenantId: req.user.tenantId },
-            include: { company: true },
-            orderBy: { createdAt: 'desc' }
-        });
-        res.json(searches);
-    } catch (error) {
-        logger.error("Fetch saved searches error:", error);
-        res.status(500).json({ error: 'Failed to fetch saved searches' });
-    }
-});
-
-app.post('/api/pncp/searches', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const search = await prisma.pncpSavedSearch.create({
-            data: { ...req.body, tenantId }
-        });
-        res.json(search);
-    } catch (error) {
-        logger.error("Create saved search error:", error);
-        res.status(500).json({ error: 'Failed to create saved search' });
-    }
-});
-
-app.delete('/api/pncp/searches/:id', authenticateToken, async (req: any, res) => {
-    try {
-        const id = req.params.id;
-        const tenantId = req.user.tenantId;
-        await prisma.pncpSavedSearch.deleteMany({
-            where: { id, tenantId }
-        });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Delete saved search error:", error);
-        res.status(500).json({ error: 'Failed to delete saved search' });
-    }
-});
-
-// ── Update a single saved search ──
-app.put('/api/pncp/searches/:id', authenticateToken, async (req: any, res) => {
-    try {
-        const id = req.params.id;
-        const tenantId = req.user.tenantId;
-        const { name, keywords, status, states, listName, companyProfileId } = req.body;
-        const data: any = {};
-        if (name !== undefined) data.name = name;
-        if (keywords !== undefined) data.keywords = keywords;
-        if (status !== undefined) data.status = status;
-        if (states !== undefined) data.states = states;
-        if (listName !== undefined) data.listName = listName;
-        if (companyProfileId !== undefined) data.companyProfileId = companyProfileId || null;
-        await prisma.pncpSavedSearch.updateMany({
-            where: { id, tenantId },
-            data
-        });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Update saved search error:", error);
-        res.status(500).json({ error: 'Failed to update saved search' });
-    }
-});
-
-// ── Rename a saved search list (bulk update listName) ──
-app.put('/api/pncp/searches/list/rename', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const { oldName, newName } = req.body;
-        if (!oldName || !newName) return res.status(400).json({ error: 'oldName and newName required' });
-        await prisma.pncpSavedSearch.updateMany({
-            where: { tenantId, listName: oldName },
-            data: { listName: newName.trim() }
-        });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Rename search list error:", error);
-        res.status(500).json({ error: 'Failed to rename list' });
-    }
-});
-
-// ── Delete a saved search list (migrate items to default) ──
-app.delete('/api/pncp/searches/list/:name', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const listName = decodeURIComponent(req.params.name);
-        if (listName === 'Pesquisas Gerais') return res.status(400).json({ error: 'Cannot delete default list' });
-        // Move all searches from this list to the default list
-        await prisma.pncpSavedSearch.updateMany({
-            where: { tenantId, listName },
-            data: { listName: 'Pesquisas Gerais' }
-        });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Delete search list error:", error);
-        res.status(500).json({ error: 'Failed to delete list' });
-    }
-});
-// ── Opportunity Scanner Global Toggle ──
-app.get('/api/pncp/scanner/status', authenticateToken, async (req: any, res) => {
-    try {
-        const globalConfig = await prisma.globalConfig.findUnique({
-            where: { tenantId: req.user.tenantId }
-        });
-        if (!globalConfig) return res.json({ enabled: true });
-        
-        try {
-            const conf = JSON.parse(globalConfig.config || '{}');
-            res.json({ 
-                enabled: conf.opportunityScannerEnabled !== false,
-                lastScanAt: conf.lastScanAt || null,
-                lastScanTotalNew: conf.lastScanTotalNew || 0,
-                lastScanResults: conf.lastScanResults || [],
-                nextScanAt: conf.nextScanAt || null,
-            });
-        } catch {
-            res.json({ enabled: true });
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to get scanner status' });
-    }
-});
-
-app.post('/api/pncp/scanner/toggle', authenticateToken, async (req: any, res) => {
-    try {
-        const { enabled } = req.body;
-        const tenantId = req.user.tenantId;
-
-        const globalConfig = await prisma.globalConfig.upsert({
-            where: { tenantId },
-            update: {},
-            create: { tenantId, config: '{}' }
-        });
-
-        let conf = {};
-        try { conf = JSON.parse(globalConfig.config || '{}'); } catch {}
-        
-        (conf as any).opportunityScannerEnabled = enabled;
-
-        await prisma.globalConfig.update({
-            where: { tenantId },
-            data: { config: JSON.stringify(conf) }
-        });
-
-        res.json({ success: true, enabled });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to toggle scanner status' });
-    }
-});
-
-// ── Manual trigger for Opportunity Scanner ──
-app.post('/api/pncp/scan-opportunities', authenticateToken, async (req: any, res) => {
-    try {
-        const { runOpportunityScan } = await import('./services/monitoring/opportunity-scanner.service');
-        logger.info(`[OpportunityScanner] Manual scan triggered by tenant ${req.user.tenantId}`);
-        // Run async — don't block the response
-        runOpportunityScan(req.user.tenantId).catch(err => logger.error('[OpportunityScanner] Manual scan error:', err));
-        res.json({ success: true, message: 'Varredura de oportunidades iniciada. Você receberá notificações se houver novos editais.' });
-    } catch (error) {
-        logger.error("Manual scan trigger error:", error);
-        res.status(500).json({ error: 'Failed to trigger scan' });
-    }
-});
-
-// ── List scanner-found opportunities (for "Encontradas" tab) ──
-// Sorted by closest deadline first (dataEncerramentoProposta ASC, nulls last)
-app.get('/api/pncp/scanner/opportunities', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const searchId = req.query.searchId as string | undefined;
-        const page = parseInt(req.query.page as string) || 1;
-        const pageSize = 50;
-
-        const where: any = { tenantId };
-        if (searchId) where.searchId = searchId;
-
-        // Fetch ordered items directly from DB (avoids memory leak)
-        const [items, total] = await Promise.all([
-            prisma.opportunityScannerLog.findMany({
-                where,
-                select: {
-                    id: true,
-                    pncpId: true,
-                    searchId: true,
-                    searchName: true,
-                    titulo: true,
-                    objeto: true,
-                    orgaoNome: true,
-                    uf: true,
-                    municipio: true,
-                    valorEstimado: true,
-                    dataEncerramentoProposta: true,
-                    modalidadeNome: true,
-                    linkSistema: true,
-                    isViewed: true,
-                    createdAt: true,
-                },
-                orderBy: [
-                    { dataEncerramentoProposta: { sort: 'asc', nulls: 'last' } },
-                    { createdAt: 'desc' }
-                ],
-                skip: (page - 1) * pageSize,
-                take: pageSize,
-            }),
-            prisma.opportunityScannerLog.count({ where })
-        ]);
-
-        res.json({ items, total, page, pageSize });
-    } catch (error) {
-        logger.error("Scanner opportunities error:", error);
-        res.status(500).json({ error: 'Failed to list scanner opportunities' });
-    }
-});
-
-// ── Mark opportunities as viewed ──
-app.patch('/api/pncp/scanner/opportunities/mark-viewed', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const { ids } = req.body; // Array of log IDs to mark as viewed, or "all"
-        
-        if (ids === 'all') {
-            await prisma.opportunityScannerLog.updateMany({
-                where: { tenantId, isViewed: false },
-                data: { isViewed: true }
-            });
-        } else if (Array.isArray(ids) && ids.length > 0) {
-            await prisma.opportunityScannerLog.updateMany({
-                where: { tenantId, id: { in: ids } },
-                data: { isViewed: true }
-            });
-        }
-
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Mark viewed error:", error);
-        res.status(500).json({ error: 'Failed to mark as viewed' });
-    }
-});
-
-// ── Get unread count (for sidebar badge) ──
-app.get('/api/pncp/scanner/opportunities/unread-count', authenticateToken, async (req: any, res) => {
-    try {
-        const count = await prisma.opportunityScannerLog.count({
-            where: { tenantId: req.user.tenantId, isViewed: false }
-        });
-        res.json({ count });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to get unread count' });
-    }
-});
-
-// ═══ PNCP Favorites (persisted in DB — syncs across devices) ═══
-
-// ── Get all favorites (lists + items) ──
-app.get('/api/pncp/favorites', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const lists = await prisma.pncpFavoriteList.findMany({
-            where: { tenantId },
-            include: { items: true },
-            orderBy: { createdAt: 'asc' }
-        });
-        res.json({ lists });
-    } catch (error) {
-        logger.error("Fetch favorites error:", error);
-        res.status(500).json({ error: 'Failed to fetch favorites' });
-    }
-});
-
-// ── Create a favorite list ──
-app.post('/api/pncp/favorites/lists', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const { name } = req.body;
-        if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
-        const list = await prisma.pncpFavoriteList.upsert({
-            where: { tenantId_name: { tenantId, name: name.trim() } },
-            update: {},
-            create: { tenantId, name: name.trim() }
-        });
-        res.json(list);
-    } catch (error) {
-        logger.error("Create fav list error:", error);
-        res.status(500).json({ error: 'Failed to create list' });
-    }
-});
-
-// ── Rename a favorite list ──
-app.put('/api/pncp/favorites/lists/:id', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const { name } = req.body;
-        if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
-        await prisma.pncpFavoriteList.updateMany({
-            where: { id: req.params.id, tenantId },
-            data: { name: name.trim() }
-        });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Rename fav list error:", error);
-        res.status(500).json({ error: 'Failed to rename list' });
-    }
-});
-
-// ── Delete a favorite list (moves items to default list) ──
-app.delete('/api/pncp/favorites/lists/:id', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const listId = req.params.id;
-        // Find or create default list
-        const defaultList = await prisma.pncpFavoriteList.upsert({
-            where: { tenantId_name: { tenantId, name: 'Favoritos Gerais' } },
-            update: {},
-            create: { tenantId, name: 'Favoritos Gerais' }
-        });
-        if (listId === defaultList.id) return res.status(400).json({ error: 'Cannot delete default list' });
-        // Move items to default list (skip duplicates)
-        const itemsToMove = await prisma.pncpFavoriteItem.findMany({ where: { listId, tenantId } });
-        for (const item of itemsToMove) {
-            try {
-                await prisma.pncpFavoriteItem.update({ where: { id: item.id }, data: { listId: defaultList.id } });
-            } catch { /* duplicate — delete instead */ await prisma.pncpFavoriteItem.delete({ where: { id: item.id } }).catch(() => {}); }
-        }
-        await prisma.pncpFavoriteList.deleteMany({ where: { id: listId, tenantId } });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Delete fav list error:", error);
-        res.status(500).json({ error: 'Failed to delete list' });
-    }
-});
-
-// ── Add item to a favorites list ──
-app.post('/api/pncp/favorites/items', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const { listId, pncpId, data } = req.body;
-        if (!listId || !pncpId) return res.status(400).json({ error: 'listId and pncpId required' });
-        const item = await prisma.pncpFavoriteItem.upsert({
-            where: { tenantId_listId_pncpId: { tenantId, listId, pncpId } },
-            update: { data },
-            create: { tenantId, listId, pncpId, data }
-        });
-        res.json(item);
-    } catch (error) {
-        logger.error("Add fav item error:", error);
-        res.status(500).json({ error: 'Failed to add favorite' });
-    }
-});
-
-// ── Remove item from favorites ──
-app.delete('/api/pncp/favorites/items/:id', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        await prisma.pncpFavoriteItem.deleteMany({ where: { id: req.params.id, tenantId } });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Remove fav item error:", error);
-        res.status(500).json({ error: 'Failed to remove favorite' });
-    }
-});
-
-// ── Remove item by pncpId (from all lists) ──
-app.delete('/api/pncp/favorites/items/by-pncp/:pncpId', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const pncpId = decodeURIComponent(req.params.pncpId);
-        await prisma.pncpFavoriteItem.deleteMany({ where: { tenantId, pncpId } });
-        res.json({ success: true });
-    } catch (error) {
-        logger.error("Remove fav by pncpId error:", error);
-        res.status(500).json({ error: 'Failed to remove favorite' });
-    }
-});
-
-// ── Bulk import favorites (migration from localStorage) ──
-app.post('/api/pncp/favorites/import', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const { lists, items } = req.body; // { lists: [{name}], items: [{listName, pncpId, data}] }
-        let imported = 0;
-
-        // Ensure all lists exist
-        const listMap = new Map<string, string>(); // name → id
-        for (const l of (lists || [])) {
-            const list = await prisma.pncpFavoriteList.upsert({
-                where: { tenantId_name: { tenantId, name: l.name } },
-                update: {},
-                create: { tenantId, name: l.name }
-            });
-            listMap.set(l.name, list.id);
-        }
-
-        // Import items
-        for (const item of (items || [])) {
-            const listId = listMap.get(item.listName) || listMap.get('Favoritos Gerais');
-            if (!listId || !item.pncpId) continue;
-            try {
-                await prisma.pncpFavoriteItem.upsert({
-                    where: { tenantId_listId_pncpId: { tenantId, listId, pncpId: item.pncpId } },
-                    update: { data: item.data },
-                    create: { tenantId, listId, pncpId: item.pncpId, data: item.data }
-                });
-                imported++;
-            } catch { /* skip duplicates */ }
-        }
-
-        res.json({ success: true, imported, listsCreated: listMap.size });
-    } catch (error) {
-        logger.error("Import favorites error:", error);
-        res.status(500).json({ error: 'Failed to import favorites' });
-    }
-});
-
-// ── Reset scanner dedup history (re-send notifications on next scan) ──
-app.post('/api/pncp/scanner/reset', authenticateToken, async (req: any, res) => {
-    try {
-        const deleted = await prisma.opportunityScannerLog.deleteMany({
-            where: { tenantId: req.user.tenantId }
-        });
-        logger.info(`[OpportunityScanner] 🔄 Histórico de dedup resetado para tenant ${req.user.tenantId} (${deleted.count} registros removidos)`);
-        res.json({ success: true, deleted: deleted.count, message: `Histórico limpo. ${deleted.count} registros removidos. Próxima varredura reenviará notificações.` });
-    } catch (error) {
-        logger.error("Scanner reset error:", error);
-        res.status(500).json({ error: 'Failed to reset scanner history' });
-    }
-});
-
 // ── Internal: Reset + Scan (for admin/worker use without JWT) ──
 app.post('/api/internal/scanner/reset-and-scan', async (req: any, res) => {
     const secret = req.headers['x-worker-secret'] || req.body?.workerSecret;
@@ -2077,8 +1646,6 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
         let dlIndex = 0;
         for (const arq of filteredArquivos) {
             const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
-
-
             const fileUrl = arq.url || arq.uri || '';
             const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
             if (!fileUrl || !arq.statusAtivo) continue;
@@ -2562,8 +2129,6 @@ app.post('/api/pncp/analyze', authenticateToken, aiLimiter, async (req: any, res
                 logger.info(`[PNCP-V2] 🧹 Dedup IE/IM: removido(s) ${beforeLen - dedupedRft.length} item(ns) genérico(s) (IE+IM separados existem)`);
             }
         }
-
-
         // ── HARD FAILURE GATE: Check extraction quality ──
         const extractedReqs = Object.values(extractionJson.requirements || {}).flat().length;
         const extractedEvidence = (extractionJson.evidence_registry || []).length;
@@ -3434,8 +2999,6 @@ Responda APENAS com JSON array:
         if (rawObjResumo !== bestObjResumo) {
             logger.info(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
         }
-
-
         const legacyProcess = {
             title: cleanNumEdital
                 ? `${v2Result.process_identification.modalidade} ${cleanNumEdital} - ${v2Result.process_identification.orgao}`
@@ -3781,866 +3344,6 @@ Responda APENAS com JSON array:
     }
 });
 
-// ══════════════════════════════════════════
-// ── Portal & Modality Normalization + Monitoring Helpers ──
-// ══════════════════════════════════════════
-
-// Canonical list of monitorable platform domains (used in create, update, and backfill)
-// NOTE: Only include domains that have an active monitor/worker/cron.
-// Removed 'compras.fortaleza.ce.gov.br' — no monitor exists, was causing false-positive isMonitored=true.
-const MONITORABLE_DOMAINS = [
-    'cnetmobile', 'licitamaisbrasil', 'bllcompras', 'bll.org',
-    'bnccompras', 'portaldecompraspublicas', 'licitanet.com.br', 'bbmnet', 'm2atecnologia',
-    'precodereferencia',
-    // ⚠️ NÃO incluir 'comprasnet' aqui! O domínio www.comprasnet.gov.br é o portal antigo de LOGIN
-    // (ex: https://www.comprasnet.gov.br/seguro/loginPortal.asp) — NÃO é monitorável.
-    // O único domínio ComprasNet monitorável é 'cnetmobile' (cnetmobile.estaleiro.serpro.gov.br).
-    // Incluir 'comprasnet' causa falso-positivo que impede o AutoEnrich de buscar o link correto.
-];
-
-// Map platform canonical names → domains they use (for credential matching)
-const PLATFORM_DOMAINS: Record<string, string[]> = {
-    'Compras.gov.br':            ['cnetmobile', 'comprasnet', 'compras.gov.br', 'gov.br/compras', 'pncp.gov.br'],
-    'M2A':                       ['m2atecnologia', 'precodereferencia'],
-    'BLL':                       ['bllcompras', 'bll.org'],
-    'BBMNET':                    ['bbmnet'],
-    'BNC':                       ['bnccompras'],
-    'Licita Mais Brasil':        ['licitamaisbrasil'],
-    'Portal de Compras Públicas': ['portaldecompraspublicas'],
-    'Licitanet':                 ['licitanet.com.br'],
-};
-
-/**
- * Normaliza o campo "modalidade" para um valor canônico conforme Lei 14.133/2021.
- * 
- * MODALIDADES LICITATÓRIAS (Art. 28):
- *   - Pregão (eletrônico ou presencial — mesma modalidade)
- *   - Concorrência (eletrônica, internacional — mesma modalidade)
- *   - Diálogo Competitivo
- *   - Concurso
- *   - Leilão
- * 
- * CONTRATAÇÃO DIRETA (Art. 72-75):
- *   - Dispensa de Licitação
- *   - Inexigibilidade
- * 
- * PROCEDIMENTOS AUXILIARES (Art. 78):
- *   - Pré-Qualificação, Credenciamento, etc.
- */
-function normalizeModality(raw: string | undefined | null): string {
-    if (!raw || !raw.trim()) return '';
-    // Strip accents, lowercase, remove Nº/numbers/SRP suffixes
-    const s = raw.trim()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/\s*n[°ºo]?\s*[\d/.]+.*/i, '')
-        .replace(/\s*-?\s*srp$/i, '')
-        .replace(/\s*-?\s*sispp$/i, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-    // ── 5 Modalidades Licitatórias (Lei 14.133, Art. 28) ──
-    if (s.includes('pregao')) return 'Pregão';
-    if (s.includes('concorrencia')) return 'Concorrência';
-    if (s.includes('dialogo competitivo')) return 'Diálogo Competitivo';
-    if (s.includes('concurso')) return 'Concurso';
-    if (s.includes('leilao')) return 'Leilão';
-
-    // ── Contratação Direta (Art. 72-75) ──
-    if (s.includes('dispensa')) return 'Dispensa';
-    if (s.includes('inexigibilidade')) return 'Inexigibilidade';
-
-    // ── Procedimentos Auxiliares (Art. 78) ──
-    if (s.includes('pre-qualificacao') || s.includes('pre qualificacao')) return 'Procedimento Auxiliar';
-    if (s.includes('credenciamento')) return 'Procedimento Auxiliar';
-    if (s.includes('manifestacao de interesse')) return 'Procedimento Auxiliar';
-
-    // ── Termos genéricos → inferir ──
-    if (s.includes('licitacao eletronica') || s.includes('licitacao')) return 'Pregão';
-    if (s.includes('chamada publica')) return 'Chamada Pública';
-    if (s.includes('tomada de precos')) return 'Concorrência';
-    if (s.includes('convite')) return 'Concorrência';
-    if (s === 'rdc' || s.includes('regime diferenciado')) return 'Concorrência';
-
-    // Fallback: Title Case limpo
-    return raw.trim()
-        .replace(/\s*[Nn][°ºo]?\s*[\d/.]+.*/i, '')
-        .replace(/\s*-?\s*SRP$/i, '')
-        .split(' ')
-        .map(w => {
-            const lower = w.toLowerCase();
-            if (['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'para', 'em'].includes(lower)) return lower;
-            return lower.charAt(0).toUpperCase() + lower.slice(1);
-        })
-        .join(' ').trim();
-}
-
-/**
- * Normaliza o campo "portal" para o nome canônico da PLATAFORMA.
- * PNCP é repositório, NÃO plataforma. ComprasNet/Compras.gov.br/PNCP → "Compras.gov.br"
- */
-function normalizePortal(portal: string, link?: string | null): string {
-    if (!portal && !link) return 'Não Informado';
-    const p = (portal || '').toLowerCase().trim();
-    const l = (link || '').toLowerCase();
-
-    // ═══════════════════════════════════════════════════════════
-    // Prioridade 0: Texto do portal contém URL/nome ESPECÍFICO de plataforma
-    // (Deve ser avaliado ANTES do link genérico PNCP para não ser sobrescrito)
-    // ═══════════════════════════════════════════════════════════
-    if (p.includes('m2a') || p.includes('m2atecnologia')) return 'M2A';
-    if (p.includes('bbmnet')) return 'BBMNET';
-    if (p.includes('bll')) return 'BLL';
-    if (p.includes('bnc') && !p.includes('banco')) return 'BNC';
-    if (p.includes('licita mais') || p.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
-    if (p.includes('portal de compras') || p.includes('portaldecompras')) return 'Portal de Compras Públicas';
-    if (p.includes('licitanet')) return 'Licitanet';
-    if (p.includes('bolsa de licita')) return 'Bolsa de Licitações';
-
-    // Prioridade 1: Inferir pelo link (mais confiável para portais de disputa)
-    if (l) {
-        if (l.includes('m2atecnologia') || l.includes('precodereferencia')) return 'M2A';
-        if (l.includes('bbmnet') || l.includes('novabbmnet')) return 'BBMNET';
-        if (l.includes('bllcompras') || l.includes('bll.org')) return 'BLL';
-        if (l.includes('bnccompras')) return 'BNC';
-        if (l.includes('licitamaisbrasil')) return 'Licita Mais Brasil';
-        if (l.includes('portaldecompraspublicas')) return 'Portal de Compras Públicas';
-        if (l.includes('licitanet.com.br')) return 'Licitanet';
-        if (l.includes('bolsadelicitacoes') || l.includes('bfrr.com')) return 'Bolsa de Licitações';
-        if (l.includes('cnetmobile') || l.includes('comprasnet') || l.includes('compras.gov.br') || l.includes('gov.br/compras') || l.includes('pncp.gov.br')) return 'Compras.gov.br';
-    }
-
-    // Prioridade 2: Texto do portal → Compras.gov.br (genérico, avaliado por último)
-    if (p.includes('compras.gov') || p.includes('comprasnet') || p.includes('comprasgov') || p.includes('www.gov.br/compras') || p.includes('cnetmobile') || p.includes('pncp')) return 'Compras.gov.br';
-
-    // Prioridade 3: URL crua → tentar extrair plataforma
-    if (portal) {
-        // Remove embedded URLs: "Nome (https://...)" or "Nome: https://..."
-        const cleaned = portal
-            .replace(/\s*\(?\s*https?:\/\/[^\s)]+\s*\)?\s*/gi, '')
-            .replace(/\s*:\s*https?:\/\/[^\s]+/gi, '')
-            .trim();
-        if (cleaned && cleaned.length > 2) return cleaned;
-
-        // Se é URL pura, extrair domínio
-        const urlMatch = portal.match(/https?:\/\/(?:www\.)?([^/\s]+)/i);
-        if (urlMatch) {
-            const domain = urlMatch[1];
-            // Portais municipais conhecidos
-            if (domain.includes('comprasquixelo') || domain.includes('licitacesmilagres') || domain.includes('licitamoraisjoice'))
-                return 'Portal Municipal';
-            return domain;
-        }
-    }
-
-    return portal || 'Não Informado';
-}
-
-/**
- * Detecta se um link contém domínio de plataforma monitorável.
- */
-function hasMonitorableDomain(link: string): boolean {
-    const l = link.toLowerCase();
-    return MONITORABLE_DOMAINS.some(d => l.includes(d));
-}
-
-/**
- * Detecta a plataforma canônica a partir de um link.
- */
-function detectPlatformFromLink(link: string): string | null {
-    const l = link.toLowerCase();
-    for (const [platform, domains] of Object.entries(PLATFORM_DOMAINS)) {
-        if (domains.some(d => l.includes(d))) return platform;
-    }
-    return null;
-}
-
-// ── Sanitize BiddingProcess fields — only allow valid Prisma scalar fields ──
-const BIDDING_ALLOWED_FIELDS = new Set([
-    'title', 'summary', 'portal', 'modality', 'status', 'substage',
-    'risk', 'estimatedValue', 'sessionDate', 'link', 'pncpLink',
-    'uasg', 'modalityCode', 'processNumber', 'processYear',
-    'isMonitored', 'observations', 'reminderDate', 'reminderStatus',
-    'reminderType', 'reminderDays',
-]);
-function sanitizeBiddingData(raw: Record<string, any>): Record<string, any> {
-    const clean: Record<string, any> = {};
-    for (const key of Object.keys(raw)) {
-        if (BIDDING_ALLOWED_FIELDS.has(key)) {
-            clean[key] = raw[key];
-        }
-    }
-    // Ensure sessionDate is a valid ISO string
-    if (clean.sessionDate && typeof clean.sessionDate === 'string') {
-        const parsed = new Date(clean.sessionDate);
-        if (isNaN(parsed.getTime())) {
-            logger.warn(`[Sanitize] Invalid sessionDate "${clean.sessionDate}", using current date`);
-            clean.sessionDate = new Date().toISOString();
-        } else {
-            clean.sessionDate = parsed.toISOString();
-        }
-    }
-    // Ensure reminderDate is valid or null
-    if (clean.reminderDate !== undefined) {
-        if (clean.reminderDate === null || clean.reminderDate === '' || clean.reminderDate === 'null') {
-            clean.reminderDate = null;
-        } else if (typeof clean.reminderDate === 'string') {
-            const parsed = new Date(clean.reminderDate);
-            if (isNaN(parsed.getTime())) {
-                logger.warn(`[Sanitize] Invalid reminderDate "${clean.reminderDate}", setting null`);
-                clean.reminderDate = null;
-            } else {
-                clean.reminderDate = parsed.toISOString();
-            }
-        }
-    }
-    return clean;
-}
-
-// Bidding Processes
-app.get('/api/biddings', authenticateToken, async (req: any, res) => {
-    try {
-        const biddings = await prisma.biddingProcess.findMany({
-            where: { tenantId: req.user.tenantId },
-            include: { aiAnalysis: true }
-        });
-        res.json(biddings);
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch biddings' });
-    }
-});
-
-app.post('/api/biddings', authenticateToken, async (req: any, res) => {
-    try {
-        let { companyProfileId, ...rawData } = req.body;
-        const tenantId = req.user.tenantId;
-        let biddingData = sanitizeBiddingData(rawData);
-
-        if (companyProfileId === '') {
-            companyProfileId = null;
-        }
-
-        // ── Step 0: Normalize portal & modality ──
-        biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
-        if (biddingData.modality) biddingData.modality = normalizeModality(biddingData.modality);
-
-        // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
-        let enrichedLink = biddingData.link || '';
-        const hasPlatformLink = hasMonitorableDomain(enrichedLink);
-
-        // Check if the platform link is "functional" (has the params needed for chat monitoring).
-        // A link like "bllcompras.com/Home/PublicAccess" is monitorable-by-domain but NOT functional
-        // because it lacks param1. Similarly, "compras.m2atecnologia.com.br/processos/publicacao/..."
-        // is monitorable but lacks /certame/{id}. In these cases, we still need AutoEnrich.
-        const isGenericPlatformLink = hasPlatformLink && (() => {
-            const l = enrichedLink.toLowerCase();
-            // BLL: functional links have "param1=" or "ProcessView"
-            if (l.includes('bllcompras') && !l.includes('param1=') && !l.includes('processview')) return true;
-            // M2A: functional links have "/certame/" (not the public "/publicacao/" vitrine)
-            if (l.includes('m2atecnologia') && !l.includes('/certame/') && !l.includes('precodereferencia')) return true;
-            return false;
-        })();
-
-        if ((!hasPlatformLink || isGenericPlatformLink) && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
-            try {
-                const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-                if (pncpMatch) {
-                    const [, cnpj, ano, seq] = pncpMatch;
-                    const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
-                    logger.info(`[AutoEnrich] 🔍 Buscando linkSistemaOrigem: ${enrichUrl}`);
-                    const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 10000);
-                    try {
-                        const apiRes = await fetch(enrichUrl, { signal: controller.signal });
-                        clearTimeout(timeout);
-                        if (apiRes.ok) {
-                            const apiData = await apiRes.json();
-                            const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                            logger.info(`[AutoEnrich] 📋 linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
-                            if (platformUrl && hasMonitorableDomain(platformUrl)) {
-                                // Case 1: linkSistemaOrigem IS monitorable (e.g., cnetmobile, bllcompras)
-                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                                
-                                if (isGenericPlatformLink) {
-                                    // REPLACE: Remove the generic link and add the functional one
-                                    // e.g., "bllcompras.com/Home/PublicAccess" → "bllcompras.com/Process/ProcessView?param1=..."
-                                    const platformDomain = (() => {
-                                        try { return new URL(platformUrl).hostname.replace('www.', ''); } catch { return ''; }
-                                    })();
-                                    const filteredParts = existingParts.filter((part: string) => {
-                                        try {
-                                            const partDomain = new URL(part).hostname.replace('www.', '');
-                                            // Remove parts from the same platform domain (the generic link)
-                                            return partDomain !== platformDomain;
-                                        } catch { return true; } // keep non-URL parts
-                                    });
-                                    filteredParts.push(platformUrl);
-                                    enrichedLink = filteredParts.join(', ');
-                                    biddingData.link = enrichedLink;
-                                    logger.info(`[AutoEnrich] 🔄 Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
-                                } else if (!existingParts.some((part: string) => part === platformUrl)) {
-                                    // APPEND: No generic link — just add alongside existing
-                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                    biddingData.link = enrichedLink;
-                                    logger.info(`[AutoEnrich] ✅ Link monitorável adicionado: ${platformUrl.substring(0, 60)}`);
-                                }
-                                // Re-normalize portal with the enriched link
-                                biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
-                            } else if (platformUrl) {
-                                // Case 2: linkSistemaOrigem is NOT monitorable (e.g., portalcompras.ce.gov.br)
-                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                                if (!existingParts.some((part: string) => part === platformUrl)) {
-                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                    biddingData.link = enrichedLink;
-                                }
-                                logger.info(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable: ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal}`);
-                            } else {
-                                logger.info(`[AutoEnrich] ⚠️ linkSistemaOrigem VAZIO para ${cnpj}/${ano}/${seq}`);
-                            }
-                        } else {
-                            logger.info(`[AutoEnrich] ⚠️ API retornou status ${apiRes.status} para ${cnpj}/${ano}/${seq}`);
-                        }
-                    } catch (fetchErr: any) {
-                        clearTimeout(timeout);
-                        logger.warn(`[AutoEnrich] ⏱️ Fetch falhou (timeout ou rede): ${fetchErr.message}`);
-                    }
-                }
-            } catch (e) {
-                logger.warn('[AutoEnrich] Failed to fetch platform link:', e);
-            }
-        } else if (!hasPlatformLink) {
-            logger.info(`[AutoEnrich] ⏭ Skipped: link="${enrichedLink?.substring(0, 60)}" hasPlatform=${hasPlatformLink} pncp=${enrichedLink.includes('pncp.gov.br')} editais=${enrichedLink.includes('editais')}`);
-        }
-
-        // ── Step 2: Auto-enable monitoring for all supported platforms ──
-        // Also enable for Compras.gov.br processes (even without cnetmobile link — worker can use URL Discovery)
-        const portalLower = (biddingData.portal || '').toLowerCase();
-        const isComprasGovPortal = portalLower.includes('compras.gov') || portalLower.includes('comprasnet');
-        if (hasMonitorableDomain(enrichedLink) || isComprasGovPortal) {
-            biddingData.isMonitored = true;
-            if (isComprasGovPortal && !hasMonitorableDomain(enrichedLink)) {
-                logger.info(`[AutoMonitor] Auto-enabled monitoring for Compras.gov.br process (needs cnetmobile link for worker). Portal: ${biddingData.portal}`);
-            } else {
-                logger.info(`[AutoMonitor] Auto-enabled monitoring for new process (portal: ${biddingData.portal})`);
-            }
-        }
-
-        // ── Step 3: Auto-backfill pncpLink from link ──
-        if (!biddingData.pncpLink) {
-            const allLinks = (biddingData.link || '').split(',').map((s: string) => s.trim());
-            const pncpUrl = allLinks.find((s: string) => s.includes('pncp.gov.br/app/editais'));
-            if (pncpUrl) biddingData.pncpLink = pncpUrl;
-        }
-
-        const bidding = await prisma.biddingProcess.create({
-            data: { ...biddingData, tenantId, companyProfileId } as any
-        });
-        res.json(bidding);
-    } catch (error) {
-        logger.error("Create bidding error:", error);
-        handleApiError(res, error, 'create-bidding');
-    }
-});
-
-// ── Universal backfill: fetch platform links from PNCP API for ALL platforms ──
-app.post('/api/backfill-platform-links', authenticateToken, async (req: any, res) => {
-    const testMode = req.query.test === '1';
-    try {
-        // Fetch all processes with PNCP link but missing platform link
-        const allProcesses = await prisma.biddingProcess.findMany({
-            where: { link: { contains: 'pncp.gov.br' } },
-            select: { id: true, link: true, portal: true, isMonitored: true, pncpLink: true }
-        });
-        const processes = allProcesses.filter(p => {
-            const link = (p.link || '').toLowerCase();
-            // Keep processes that don't have ANY monitorable domain yet
-            return !hasMonitorableDomain(link);
-        });
-
-        if (processes.length === 0) {
-            return res.json({ message: 'All PNCP processes already have platform links', updated: 0, total: allProcesses.length });
-        }
-
-        // Test mode: debug one process and return
-        if (testMode) {
-            const proc = processes[0];
-            const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-            if (!match) return res.json({ debug: 'no match in link', link: proc.link });
-            const [, cnpj, ano, seq] = match;
-            const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
-            try {
-                const apiRes = await fetch(apiUrl);
-                const text = await apiRes.text();
-                let parsed: any = null;
-                try { parsed = JSON.parse(text); } catch {}
-                return res.json({
-                    processId: proc.id, link: proc.link, portal: proc.portal, apiUrl, httpStatus: apiRes.status,
-                    linkSistemaOrigem: parsed?.linkSistemaOrigem || null,
-                    detectedPlatform: parsed?.linkSistemaOrigem ? detectPlatformFromLink(parsed.linkSistemaOrigem) : null,
-                    responseSnippet: text.substring(0, 500),
-                });
-            } catch (e) {
-                return res.json({ processId: proc.id, apiUrl, error: String(e) });
-            }
-        }
-
-        // Full mode: respond immediately, process in background
-        res.json({ message: `Universal backfill started for ${processes.length} processes (${allProcesses.length} total PNCP). Check server logs.`, total: processes.length });
-
-        (async () => {
-            // Step 1: Clean up duplicate links in all PNCP processes
-            for (const proc of allProcesses) {
-                const parts = (proc.link || '').split(',').map((s: string) => s.trim()).filter(Boolean);
-                const unique = [...new Set(parts)];
-                if (unique.length < parts.length) {
-                    await prisma.biddingProcess.update({
-                        where: { id: proc.id },
-                        data: { link: unique.join(', ') }
-                    });
-                    logger.info(`[Backfill] 🧹 ${proc.id.slice(0,8)}: cleaned ${parts.length - unique.length} duplicate links`);
-                }
-            }
-
-            // Step 2: Normalize portals for ALL processes (not just ones missing links)
-            let portalNormalized = 0;
-            for (const proc of allProcesses) {
-                const normalized = normalizePortal(proc.portal || '', proc.link);
-                if (normalized !== proc.portal) {
-                    await prisma.biddingProcess.update({
-                        where: { id: proc.id },
-                        data: { portal: normalized }
-                    });
-                    portalNormalized++;
-                    logger.info(`[Backfill] 🏷️ ${proc.id.slice(0,8)}: portal "${proc.portal}" → "${normalized}"`);
-                }
-            }
-
-            // Step 3: Add platform links where missing (ALL platforms, not just ComprasNet)
-            let updated = 0;
-            let noLinkAvailable = 0;
-            for (const proc of processes) {
-                const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-                if (!match) continue;
-                const [, cnpj, ano, seq] = match;
-                try {
-                    const apiRes = await fetch(`https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`);
-                    if (!apiRes.ok) { logger.info(`[Backfill] ${proc.id.slice(0,8)}: API ${apiRes.status}`); continue; }
-                    const data = await apiRes.json();
-                    const lso = (data.linkSistemaOrigem || '').trim();
-
-                    if (lso && hasMonitorableDomain(lso)) {
-                        // Prevent duplicate links
-                        const existingLinks = (proc.link || '').split(',').map((s: string) => s.trim());
-                        if (!existingLinks.includes(lso)) {
-                            const newLink = [...existingLinks, lso].join(', ');
-                            const detectedPlatform = detectPlatformFromLink(lso);
-                            const updateData: any = { link: newLink, isMonitored: true };
-                            if (detectedPlatform) updateData.portal = detectedPlatform;
-                            // Auto-backfill pncpLink if missing
-                            if (!proc.pncpLink) {
-                                const pncpUrl = existingLinks.find((s: string) => s.includes('pncp.gov.br/app/editais'));
-                                if (pncpUrl) updateData.pncpLink = pncpUrl;
-                            }
-                            await prisma.biddingProcess.update({
-                                where: { id: proc.id },
-                                data: updateData
-                            });
-                            updated++;
-                            logger.info(`[Backfill] ✅ ${proc.id.slice(0,8)}: ${detectedPlatform || 'platform'} link added (${lso.substring(0,60)})`);
-                        }
-                    } else if (lso) {
-                        logger.info(`[Backfill] ⏭ ${proc.id.slice(0,8)}: non-monitorable link (${lso.substring(0,60)})`);
-                    } else {
-                        noLinkAvailable++;
-                        logger.info(`[Backfill] ⏭ ${proc.id.slice(0,8)}: linkSistemaOrigem empty`);
-                    }
-                    await new Promise(r => setTimeout(r, 300));
-                } catch (e) {
-                    logger.info(`[Backfill] ❌ ${proc.id.slice(0,8)}: ${e}`);
-                }
-            }
-            logger.info(`[Backfill] ✅ Complete: ${updated} enriched, ${portalNormalized} portals normalized, ${noLinkAvailable} empty, ${processes.length} total`);
-        })();
-    } catch (error) {
-        logger.error('[Backfill] Error:', error);
-        handleApiError(res, error, 'backfill');
-    }
-});
-
-// Keep backward-compatible alias
-app.post('/api/backfill-comprasnet-links', authenticateToken, async (req: any, res) => {
-    // Redirect to universal backfill
-    res.redirect(307, `/api/backfill-platform-links${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`);
-});
-
-// ── Normalize portals for ALL existing processes ──
-app.post('/api/admin/normalize-portals', authenticateToken, async (req: any, res) => {
-    try {
-        const allProcesses = await prisma.biddingProcess.findMany({
-            where: { tenantId: req.user.tenantId },
-            select: { id: true, portal: true, link: true }
-        });
-
-        let updated = 0;
-        const changes: Array<{ id: string; from: string; to: string }> = [];
-
-        for (const proc of allProcesses) {
-            const normalized = normalizePortal(proc.portal || '', proc.link);
-            if (normalized !== proc.portal) {
-                await prisma.biddingProcess.update({
-                    where: { id: proc.id },
-                    data: { portal: normalized }
-                });
-                changes.push({ id: proc.id.slice(0, 8), from: proc.portal || '(vazio)', to: normalized });
-                updated++;
-            }
-        }
-
-        logger.info(`[NormalizePortals] ${updated}/${allProcesses.length} portals normalized for tenant ${req.user.tenantId}`);
-        res.json({ message: `${updated} portals normalized`, total: allProcesses.length, updated, changes });
-    } catch (error) {
-        logger.error('[NormalizePortals] Error:', error);
-        res.status(500).json({ error: 'Failed to normalize portals' });
-    }
-});
-
-// ── Normalize BOTH portals AND modalities for ALL existing processes ──
-app.post('/api/admin/normalize-all', authenticateToken, async (req: any, res) => {
-    try {
-        const allProcesses = await prisma.biddingProcess.findMany({
-            where: { tenantId: req.user.tenantId },
-            select: { id: true, portal: true, modality: true, link: true }
-        });
-
-        let portalUpdated = 0, modalityUpdated = 0;
-        const portalChanges: Array<{ id: string; from: string; to: string }> = [];
-        const modalityChanges: Array<{ id: string; from: string; to: string }> = [];
-
-        for (const proc of allProcesses) {
-            const updateData: Record<string, string> = {};
-
-            const normPortal = normalizePortal(proc.portal || '', proc.link);
-            if (normPortal !== proc.portal) {
-                updateData.portal = normPortal;
-                portalChanges.push({ id: proc.id.slice(0, 8), from: proc.portal || '(vazio)', to: normPortal });
-                portalUpdated++;
-            }
-
-            const normModality = normalizeModality(proc.modality);
-            if (normModality && normModality !== proc.modality) {
-                updateData.modality = normModality;
-                modalityChanges.push({ id: proc.id.slice(0, 8), from: proc.modality || '(vazio)', to: normModality });
-                modalityUpdated++;
-            }
-
-            if (Object.keys(updateData).length > 0) {
-                await prisma.biddingProcess.update({
-                    where: { id: proc.id },
-                    data: updateData
-                });
-            }
-        }
-
-        logger.info(`[NormalizeAll] tenant=${req.user.tenantId} | portals: ${portalUpdated}, modalities: ${modalityUpdated} / ${allProcesses.length} total`);
-        res.json({
-            message: `Normalização concluída: ${portalUpdated} portais + ${modalityUpdated} modalidades atualizadas`,
-            total: allProcesses.length,
-            portalUpdated, modalityUpdated,
-            portalChanges, modalityChanges
-        });
-    } catch (error) {
-        logger.error('[NormalizeAll] Error:', error);
-        res.status(500).json({ error: 'Failed to normalize data' });
-    }
-});
-
-app.get('/api/admin/monitoring-audit', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const biddings = await prisma.biddingProcess.findMany({
-            where: { tenantId, isMonitored: true },
-            select: { 
-                id: true, 
-                portal: true, 
-                link: true, 
-                title: true,
-                companyProfileId: true, 
-                company: { select: { credentials: true } } 
-            }
-        });
-
-        let totalMonitored = biddings.length;
-        let readyCount = 0;
-        let missingCredsCount = 0;
-        let invalidLinkCount = 0;
-
-        const issues: any[] = [];
-
-        for (const b of biddings) {
-            const portal = (b.portal || '').toLowerCase();
-            const link = (b.link || '').toLowerCase();
-            const credentials = b.company?.credentials || [];
-            
-            // Verificação de Link
-            if (!hasMonitorableDomain(link)) {
-                invalidLinkCount++;
-                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Link inválido ou não suportado', link: b.link });
-                // We still check credentials below even if link is bad
-            }
-
-            if (!b.companyProfileId || credentials.length === 0) {
-                missingCredsCount++;
-                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Sem credenciais para a empresa vinculada', companyId: b.companyProfileId });
-                continue;
-            }
-
-            const isComprasNet = portal.includes('comprasnet') || link.includes('comprasnet');
-            const isBLL = portal === 'bll' || link.includes('bll');
-            const isBNC = portal.includes('bnc') || link.includes('bnc');
-            const isM2A = portal.includes('m2a') || link.includes('m2a') || link.includes('precodereferencia');
-            const isBBMNet = portal.includes('bbmnet') || link.includes('bbmnet');
-
-            let hasMatch = false;
-            for (const cred of credentials) {
-                const cp = (cred.platform || '').toLowerCase();
-                const cu = (cred.url || '').toLowerCase();
-                if (isComprasNet && (cp.includes('comprasnet') || cu.includes('comprasnet'))) hasMatch = true;
-                if (isBLL && (cp.includes('bll') || cu.includes('bll'))) hasMatch = true;
-                if (isBNC && (cp.includes('bnc') || cu.includes('bnc'))) hasMatch = true;
-                if (isM2A && (cp.includes('m2a') || cu.includes('m2a'))) hasMatch = true;
-                if (isBBMNet && (cp.includes('bbmnet') || cu.includes('bbmnet'))) hasMatch = true;
-            }
-
-            if (!hasMatch) {
-                missingCredsCount++;
-                issues.push({ id: b.id, title: b.title, portal: b.portal, issue: 'Sem credenciais para este portal', companyId: b.companyProfileId });
-            } else {
-                readyCount++;
-            }
-        }
-
-        res.json({
-            ok: true,
-            stats: {
-                totalMonitored,
-                readyCount,
-                missingCredsCount,
-                invalidLinkCount,
-                issuesCount: new Set(issues.map(i => i.id)).size
-            },
-            issues
-        });
-    } catch (e) {
-        logger.error('[MonitoringAudit]', e);
-        res.status(500).json({ error: 'Falha na auditoria.' });
-    }
-});
-
-// ── AI Usage Dashboard (per-tenant token consumption) ──
-app.get('/api/admin/ai-usage', authenticateToken, async (req: any, res) => {
-    try {
-        const tenantId = req.user.tenantId;
-        const periodDays = parseInt(req.query.period as string) || 30;
-
-        const { getDailyBreakdown, getQuotaStatus } = await import('./lib/aiUsageTracker');
-
-        const [summary, daily, quota] = await Promise.all([
-            getUsageSummary(prisma, tenantId, periodDays),
-            getDailyBreakdown(prisma, tenantId, periodDays),
-            getQuotaStatus(prisma, tenantId),
-        ]);
-
-        res.json({ ok: true, ...summary, daily, quota });
-    } catch (e: any) {
-        logger.error('[AiUsage]', e);
-        res.status(500).json({ error: 'Falha ao buscar consumo de IA.' });
-    }
-});
-
-// ── Oracle Evidence Persistence ──
-app.put('/api/biddings/:id/oracle-evidence', authenticateToken, async (req: any, res) => {
-    try {
-        const { id } = req.params;
-        const { oracleEvidence } = req.body;
-        const tenantId = req.user.tenantId;
-
-        const bidding = await prisma.biddingProcess.findFirst({
-            where: { id, tenantId },
-            include: { aiAnalysis: true }
-        });
-
-        if (!bidding) {
-            return res.status(404).json({ error: 'Processo não encontrado.' });
-        }
-
-        // Persist oracle evidence alongside existing schemaV2 metadata
-        if (bidding.aiAnalysis) {
-            const existingSchema = (bidding.aiAnalysis.schemaV2 as any) || {};
-            await prisma.aiAnalysis.update({
-                where: { id: bidding.aiAnalysis.id },
-                data: {
-                    schemaV2: {
-                        ...existingSchema,
-                        oracle_evidence: oracleEvidence
-                    }
-                }
-            });
-            logger.info(`[Oracle] Evidências persistidas para bidding ${id} (${Object.keys(oracleEvidence || {}).length} exigências)`);
-        }
-
-        res.json({ success: true });
-    } catch (error: any) {
-        logger.error('[Oracle Evidence]', error);
-        res.status(500).json({ error: 'Falha ao persistir evidências.' });
-    }
-});
-
-app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
-    try {
-        const { id } = req.params;
-        const tenantId = req.user.tenantId;
-
-        // Extract companyProfileId separately; sanitize the rest
-        const { companyProfileId, ...rawData } = req.body;
-        const biddingData = sanitizeBiddingData(rawData);
-
-        // ── Step 0: Normalize portal & modality ──
-        if (biddingData.portal !== undefined) {
-            biddingData.portal = normalizePortal(biddingData.portal || '', biddingData.link);
-        }
-        if (biddingData.modality !== undefined && biddingData.modality) {
-            biddingData.modality = normalizeModality(biddingData.modality);
-        }
-
-        // ── Step 1: Auto-enrich — fetch platform link from PNCP API if missing ──
-        let enrichedLink = biddingData.link || '';
-        const hasPlatformLink = hasMonitorableDomain(enrichedLink);
-
-        // Same generic-link detection as POST (see POST /api/biddings for full docs)
-        const isGenericPlatformLink = hasPlatformLink && (() => {
-            const l = enrichedLink.toLowerCase();
-            if (l.includes('bllcompras') && !l.includes('param1=') && !l.includes('processview')) return true;
-            if (l.includes('m2atecnologia') && !l.includes('/certame/') && !l.includes('precodereferencia')) return true;
-            return false;
-        })();
-
-        if ((!hasPlatformLink || isGenericPlatformLink) && enrichedLink.includes('pncp.gov.br') && enrichedLink.includes('editais')) {
-            try {
-                const pncpMatch = enrichedLink.match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-                if (pncpMatch) {
-                    const [, cnpj, ano, seq] = pncpMatch;
-                    const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
-                    logger.info(`[AutoEnrich] 🔍 Update: Buscando linkSistemaOrigem: ${enrichUrl}`);
-                    const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 10000);
-                    try {
-                        const apiRes = await fetch(enrichUrl, { signal: controller.signal });
-                        clearTimeout(timeout);
-                        if (apiRes.ok) {
-                            const apiData = await apiRes.json();
-                            const platformUrl = (apiData.linkSistemaOrigem || '').trim();
-                            logger.info(`[AutoEnrich] 📋 Update: linkSistemaOrigem=${platformUrl ? platformUrl.substring(0, 80) : 'VAZIO'}`);
-                            if (platformUrl && hasMonitorableDomain(platformUrl)) {
-                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                                
-                                if (isGenericPlatformLink) {
-                                    // REPLACE: Remove the generic link and add the functional one
-                                    const platformDomain = (() => {
-                                        try { return new URL(platformUrl).hostname.replace('www.', ''); } catch { return ''; }
-                                    })();
-                                    const filteredParts = existingParts.filter((part: string) => {
-                                        try {
-                                            const partDomain = new URL(part).hostname.replace('www.', '');
-                                            return partDomain !== platformDomain;
-                                        } catch { return true; }
-                                    });
-                                    filteredParts.push(platformUrl);
-                                    enrichedLink = filteredParts.join(', ');
-                                    biddingData.link = enrichedLink;
-                                    logger.info(`[AutoEnrich] 🔄 Update: Link genérico SUBSTITUÍDO pelo funcional: ${platformUrl.substring(0, 60)}`);
-                                } else if (!existingParts.some((part: string) => part === platformUrl)) {
-                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                    biddingData.link = enrichedLink;
-                                    logger.info(`[AutoEnrich] ✅ Update: link monitorável adicionado para "${id}": ${platformUrl.substring(0, 60)}`);
-                                }
-                                if (biddingData.portal !== undefined) {
-                                    biddingData.portal = normalizePortal(biddingData.portal, enrichedLink);
-                                }
-                            } else if (platformUrl) {
-                                const existingParts = enrichedLink.split(',').map((s: string) => s.trim());
-                                if (!existingParts.some((part: string) => part === platformUrl)) {
-                                    enrichedLink = `${enrichedLink}, ${platformUrl}`;
-                                    biddingData.link = enrichedLink;
-                                }
-                                logger.info(`[AutoEnrich] ⚠️ linkSistemaOrigem is not monitorable for "${id}": ${platformUrl.substring(0, 60)} — portal: ${biddingData.portal || 'N/A'}`);
-                            }
-                        }
-                    } catch (fetchErr: any) {
-                        clearTimeout(timeout);
-                        logger.warn(`[AutoEnrich] ⏱️ Update fetch falhou: ${fetchErr.message}`);
-                    }
-                }
-            } catch (e) {
-                logger.warn('[AutoEnrich] Failed to fetch platform link:', e);
-            }
-        }
-
-        // ── Step 2: Auto-enable monitoring for all supported platforms ──
-        // Also enable for Compras.gov.br processes (even without cnetmobile link)
-        const putPortalLower = (biddingData.portal || '').toLowerCase();
-        const isPutComprasGovPortal = putPortalLower.includes('compras.gov') || putPortalLower.includes('comprasnet');
-        if (biddingData.isMonitored === undefined) {
-            const shouldAutoMonitor = hasMonitorableDomain(enrichedLink) || isPutComprasGovPortal;
-            if (shouldAutoMonitor) {
-                const current = await prisma.biddingProcess.findUnique({ where: { id }, select: { isMonitored: true } });
-                if (current && !current.isMonitored) {
-                    biddingData.isMonitored = true;
-                    logger.info(`[AutoMonitor] Auto-enabled monitoring for "${id}" (portal: ${biddingData.portal || 'N/A'})`);
-                }
-            }
-        }
-
-        // ── Step 3: Auto-backfill pncpLink from link ──
-        if (!biddingData.pncpLink) {
-            const allLinks = (biddingData.link || '').split(',').map((s: string) => s.trim());
-            const pncpUrl = allLinks.find((s: string) => s.includes('pncp.gov.br/app/editais'));
-            if (pncpUrl) biddingData.pncpLink = pncpUrl;
-        }
-
-        const bidding = await prisma.biddingProcess.update({
-            where: {
-                id,
-                tenantId // Ensure user can only update their own tenant's data
-            },
-            data: {
-                ...biddingData,
-                companyProfileId: companyProfileId === '' ? null : companyProfileId
-            }
-        });
-        res.json(bidding);
-    } catch (error) {
-        logger.error("Update bidding error:", error);
-        handleApiError(res, error, 'update-bidding');
-    }
-});
-
-app.delete('/api/biddings/:id', authenticateToken, async (req: any, res) => {
-    try {
-        const { id } = req.params;
-        const bidding = await prisma.biddingProcess.findUnique({ where: { id } });
-
-        if (bidding && bidding.tenantId === req.user.tenantId) {
-            await prisma.biddingProcess.delete({ where: { id } });
-            res.json({ success: true });
-        } else {
-            res.status(404).json({ error: 'Bidding not found or unauthorized' });
-        }
-    } catch (error) {
-        logger.error("Delete bidding error:", error);
-        res.status(500).json({ error: 'Failed to delete bidding' });
-    }
-});
-
 // Ai Analysis
 app.post('/api/analysis', authenticateToken, async (req: any, res) => {
     try {
@@ -4836,8 +3539,6 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req: an
         res.status(500).json({ error: 'File upload failed' });
     }
 });
-
-
 // ═══════════════════════════════════════════════════════════════════════
 // Price Proposal CRUD + AI Populate
 // ═══════════════════════════════════════════════════════════════════════
@@ -5933,8 +4634,6 @@ REGRAS CRÍTICAS:
         res.status(500).json({ error: 'AI block generation failed: ' + (error.message || 'Unknown') });
     }
 });
-
-
 // ═══════════════════════════════════════════════════════════════════════
 app.post('/api/dossier/ai-match', authenticateToken, async (req: any, res) => {
     try {
@@ -6086,8 +4785,6 @@ Responda somente com o JSON array, sem markdown, sem texto adicional:`;
         res.status(500).json({ error: 'AI matching failed: ' + (error?.message || 'Unknown error') });
     }
 });
-
-
 // AI Services imports movidos para cima
 
 // AI Analysis Endpoint
@@ -6380,8 +5077,6 @@ Prompt: ${(schema.analysis_meta as any)?.prompt_version || 'N/A'}`);
 
     return sections.join('\n\n');
 }
-
-
 /**
  * Validador automático de completude (sem IA).
  * Verifica se o JSON extraído está minimamente preenchido.
@@ -7366,8 +6061,6 @@ app.post('/api/petitions/generate', authenticateToken, async (req: any, res) => 
         const tenantId = req.user.tenantId;
 
         logger.info(`[Petition] Generating ${templateType} for process ${biddingProcessId} with ${attachments?.length || 0} attachments`);
-
-
         const bidding = await prisma.biddingProcess.findUnique({
             where: { id: biddingProcessId, tenantId },
             include: { aiAnalysis: true }
@@ -7476,8 +6169,6 @@ Penalidades: ${aiAnalysis.penalties || 'Não disponível'}
             ],
             config: {
                 systemInstruction: systemInstruction,
-
-
                 temperature: 0.2,
                 maxOutputTokens: 8192
             }
@@ -8413,8 +7104,6 @@ async function runWatchdogCheck() {
         await sendAdminAlert(msg);
     }
 }
-
-
 // 1. Get sessions the agent should monitor
 app.get('/api/chat-monitor/agents/sessions', authenticateToken, async (req: any, res) => {
     try {
@@ -9636,8 +8325,6 @@ app.listen(PORT, async () => {
 
     async function pollBatchProcesses() {
         try {
-
-
             // 1. Buscar processos monitorados de TODAS as plataformas Batch
             const batchProcesses = await prisma.biddingProcess.findMany({
                 where: {
@@ -9726,8 +8413,6 @@ app.listen(PORT, async () => {
 
     async function pollPCPProcesses() {
         try {
-
-
             // 1. Buscar processos monitorados do Portal de Compras Públicas
             const pcpProcesses = await prisma.biddingProcess.findMany({
                 where: {
@@ -9811,8 +8496,6 @@ app.listen(PORT, async () => {
 
     async function pollLicitanetProcesses() {
         try {
-
-
             // 1. Buscar processos monitorados da Licitanet
             const licitanetProcesses = await prisma.biddingProcess.findMany({
                 where: {
@@ -9896,8 +8579,6 @@ app.listen(PORT, async () => {
 
     async function pollLMBProcesses() {
         try {
-
-
             // 1. Buscar processos monitorados da Licita Mais Brasil
             const lmbProcesses = await prisma.biddingProcess.findMany({
                 where: {
@@ -9986,4 +8667,3 @@ if (PROCESS_ROLE !== 'api') {
 
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);
-
