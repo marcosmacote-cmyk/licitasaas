@@ -33,6 +33,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: item.id,
         data: item,
+        disabled: isOverlay, // CRITICAL: Stop DragOverlay from overwriting the source node's physics coordinates
     });
 
     // Single-click → Hub, distinguishing from double-click and drag
@@ -121,11 +122,14 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
     return (
         <div
             ref={(node) => {
-                setNodeRef(node);
+                // Ensure only the REAL node is registered as a draggable drop zone, NOT the overlay ghost
+                if (!isOverlay) {
+                    setNodeRef(node);
+                }
                 cardElRef.current = node;
             }}
-            {...attributes}
-            {...listeners}
+            {...(isOverlay ? {} : attributes)}
+            {...(isOverlay ? {} : listeners)}
             className="kanban-card"
             style={style}
             onClick={handleClick}
