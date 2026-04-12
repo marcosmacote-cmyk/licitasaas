@@ -1,3 +1,6 @@
+// ── Sentry MUST be imported first for proper instrumentation ──
+import { Sentry, sentryErrorHandler, captureError, setSentryUser } from './lib/sentry';
+
 import { robustJsonParse, robustJsonParseDetailed } from "./services/ai/parser.service";
 import { callGeminiWithRetry } from "./services/ai/gemini.service";
 import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser, MANUAL_EXTRACTION_ADDON } from "./services/ai/prompt.service";
@@ -7922,6 +7925,9 @@ app.get('/api/admin/health', authenticateToken, async (req: any, res: any) => {
         handleApiError(res, err, 'healthcheck');
     }
 });
+
+// ── Sentry Error Handler (captures unhandled errors) ──
+app.use(sentryErrorHandler);
 
 // ── Global Error Handler (must be LAST middleware before listen) ──
 app.use(globalErrorHandler as any);
