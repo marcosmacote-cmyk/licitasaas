@@ -24,6 +24,8 @@ export { Table, Thead, Tbody, Tr, Th, Td } from './Table';
 // Patterns
 export { SectionHeader, EmptyState, TabNav, Skeleton, StatusDot } from './Components';
 export { ListPickerPopover } from './ListPickerPopover';
+export { Tooltip, TooltipHelp, TooltipInfo, EducationalPopover } from './Tooltip';
+export { GuidedTour, type TourStep } from './GuidedTour';
 
 // Domain Components — LicitaSaaS-specific
 export {
