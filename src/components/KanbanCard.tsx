@@ -103,7 +103,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
         }
     }
 
-    const style = {
+    const style: React.CSSProperties = {
         opacity: isDragging ? 0.5 : 1,
         cursor: isDragging ? 'grabbing' : 'pointer',
         boxShadow: isOverlay ? 'var(--shadow-lg)' : undefined,
@@ -111,6 +111,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
         padding: compactMode ? '10px' : undefined,
         gap: compactMode ? '8px' : undefined,
         minHeight: !isRendered ? `${cardHeight}px` : undefined, // Keep spacer size when virtualized
+        transition: isOverlay || isDragging ? 'none' : undefined, // Disable CSS transition during drag/drop to let DndKit physics do the work
         ...expiringStyle,
     };
 
