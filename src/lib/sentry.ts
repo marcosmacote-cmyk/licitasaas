@@ -66,7 +66,7 @@ export function initSentry() {
  */
 export const SentryErrorBoundary = SENTRY_DSN
     ? Sentry.ErrorBoundary
-    : ({ children }: { children: React.ReactNode; fallback?: any }) => <>{children}</>;
+    : (({ children }: { children: React.ReactNode; fallback?: any }) => children) as any;
 
 /**
  * Set user context after login.
