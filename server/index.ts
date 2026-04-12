@@ -1794,7 +1794,7 @@ app.post('/api/pncp/search', authenticateToken, async (req: any, res) => {
         });
     } catch (error: any) {
         console.error("PNCP search error:", error?.message || error);
-        res.status(502).json({ error: 'Falha ao comunicar com a API do PNCP', details: error?.message || 'Erro desconhecido' });
+        handleApiError(res, error, 'pncp-search');
     }
 });
 
@@ -4240,7 +4240,7 @@ app.post('/api/backfill-platform-links', authenticateToken, async (req: any, res
         })();
     } catch (error) {
         console.error('[Backfill] Error:', error);
-        res.status(500).json({ error: 'Backfill failed', details: error instanceof Error ? error.message : String(error) });
+        handleApiError(res, error, 'backfill');
     }
 });
 
@@ -6555,7 +6555,7 @@ app.get('/api/jobs/:jobId', authenticateToken, async (req: any, res) => {
             completedAt: job.completedAt,
         });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -6573,7 +6573,7 @@ app.get('/api/jobs/:jobId/result', authenticateToken, async (req: any, res) => {
         }
         res.json({ ok: true, result: job.result });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -6583,7 +6583,7 @@ app.get('/api/jobs', authenticateToken, async (req: any, res) => {
         const jobs = await listJobs(req.user.tenantId, req.user.id, 30);
         res.json(jobs);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -8661,7 +8661,7 @@ app.post('/api/chat-monitor/internal/ingest', authenticateWorker, async (req: an
         res.json(result);
     } catch (error: any) {
         console.error('[Worker Ingest] Error:', error.message);
-        res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
+        handleApiError(res, error, 'worker-ingest');
     }
 });
 
@@ -8821,7 +8821,7 @@ app.get('/api/chat-monitor/internal/test-bll-fetch', authenticateWorker, async (
         });
 
     } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        handleApiError(res, error, 'chat-monitor-test');
     }
 });
 
@@ -8882,7 +8882,7 @@ app.patch('/api/chat-monitor/internal/sessions/:processId/link', authenticateWor
         res.json({ success: true, updated: true, newLink: canonicalUrl });
     } catch (error: any) {
         console.error('[Worker Link] Error updating link:', error.message);
-        res.status(500).json({ error: 'Failed to update process link', details: error.message });
+        handleApiError(res, error, 'update-process-link');
     }
 });
 
@@ -8898,7 +8898,7 @@ app.delete('/api/chat-monitor/internal/sessions/:processId/logs', authenticateWo
         res.json({ success: true, deletedCount: result.count });
     } catch (error: any) {
         console.error('[Admin] Error purging logs:', error.message);
-        res.status(500).json({ error: 'Failed to purge logs', details: error.message });
+        handleApiError(res, error, 'purge-logs');
     }
 });
 
@@ -8928,7 +8928,7 @@ app.post('/api/chat-monitor/ingest', authenticateToken, async (req: any, res) =>
         res.json(result);
     } catch (error: any) {
         console.error('[Ingest] Error:', error.message);
-        res.status(500).json({ error: 'Failed to ingest messages', details: error.message });
+        handleApiError(res, error, 'ingest-messages');
     }
 });
 
@@ -9042,7 +9042,7 @@ app.post('/api/ai/feedback', authenticateToken, async (req: any, res: any) => {
         const feedback = submitFeedback(req.body as AIExecutionFeedback);
         res.json({ success: true, feedbackId: feedback.feedbackId });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9053,7 +9053,7 @@ app.get('/api/ai/feedback/:moduleName', authenticateToken, async (req: any, res:
         const stats = getFeedbackStats(req.params.moduleName);
         res.json({ items, stats });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9063,7 +9063,7 @@ app.get('/api/ai/metrics', authenticateToken, async (_req: any, res: any) => {
         const report = generateSystemReport(30);
         res.json(report);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9074,7 +9074,7 @@ app.get('/api/ai/versions', authenticateToken, async (_req: any, res: any) => {
         const promotions = getPromotionHistory();
         res.json({ versions, promotions });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9084,7 +9084,7 @@ app.get('/api/ai/insights', authenticateToken, async (_req: any, res: any) => {
         const report = generateImprovementInsights(30);
         res.json(report);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9094,7 +9094,7 @@ app.post('/api/ai/golden-cases/convert', authenticateToken, async (_req: any, re
         const converted = convertFeedbackToGoldenCases();
         res.json({ success: true, converted: converted.length, cases: converted });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9108,7 +9108,7 @@ app.post('/api/company/profile', authenticateToken, async (req: any, res: any) =
         const profile = await createOrUpdateProfile(req.body as CompanyLicitationProfile);
         res.json({ success: true, companyId: profile.companyId });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9117,7 +9117,7 @@ app.get('/api/company/profiles', authenticateToken, async (_req: any, res: any) 
     try {
         res.json(await getAllProfiles());
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9128,7 +9128,7 @@ app.get('/api/company/:companyId', authenticateToken, async (req: any, res: any)
         if (!profile) return res.status(404).json({ error: 'Company not found' });
         res.json(profile);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9165,7 +9165,7 @@ app.post('/api/strategy/analyze', authenticateToken, aiLimiter, async (req: any,
 
         res.json({ matchResult, assessment, actionPlan });
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
@@ -9175,7 +9175,7 @@ app.get('/api/company/:companyId/insights', authenticateToken, async (req: any, 
         const report = await generateCompanyInsights(req.params.companyId);
         res.json(report);
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error)?.message || 'Erro interno' });
     }
 });
 
