@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Calendar, User, Search, RefreshCw, Activity, ArrowRight, Monitor, Globe } from 'lucide-react';
+import { ShieldCheck, Calendar, Globe, Activity, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 export function AuditLogViewer() {

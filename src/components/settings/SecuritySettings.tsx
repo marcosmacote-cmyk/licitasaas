@@ -4,14 +4,13 @@ import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui'; // Assuming there is a ToastProvider
 
 export function SecuritySettings() {
-    const { addToast } = useToast();
+    const toast = useToast();
     const [is2faEnabled, setIs2faEnabled] = useState(false);
     const [qrCodeData, setQrCodeData] = useState<{ qrCodeUrl: string; secret: string } | null>(null);
     const [setupCode, setSetupCode] = useState('');
     const [loading, setLoading] = useState(false);
 
     // Initial load will need user context
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
     const token = localStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -28,7 +27,7 @@ export function SecuritySettings() {
             const data = await res.json();
             setQrCodeData(data);
         } catch (error: any) {
-            addToast({ type: 'error', title: 'Erro', message: error.message });
+            toast.error(error.message || 'Erro');
         } finally {
             setLoading(false);
         }
@@ -45,9 +44,9 @@ export function SecuritySettings() {
             
             setIs2faEnabled(true);
             setQrCodeData(null);
-            addToast({ type: 'success', title: 'Sucesso', message: 'Autenticação em duas etapas ativada!' });
+            toast.success('Autenticação em duas etapas ativada!');
         } catch (error: any) {
-            addToast({ type: 'error', title: 'Erro', message: error.message });
+            toast.error(error.message || 'Erro');
         } finally {
             setLoading(false);
         }
@@ -56,7 +55,7 @@ export function SecuritySettings() {
     const copySecret = () => {
         if (!qrCodeData) return;
         navigator.clipboard.writeText(qrCodeData.secret);
-        addToast({ type: 'success', title: 'Copiado', message: 'Código secreto copiado para a área de transferência' });
+        toast.success('Código secreto copiado!');
     };
 
     return (
