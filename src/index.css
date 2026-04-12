@@ -4000,11 +4000,15 @@ table tr.selected td { background: var(--color-primary-light); }
 @keyframes pageFadeIn {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        /* CRITICAL: Do NOT use transform here.
+           Any transform (even translateY(0)) creates a new CSS "containing block",
+           which breaks position:fixed elements like dnd-kit's DragOverlay.
+           This was the root cause of the Kanban drag offset bug. */
+        margin-top: 10px;
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        margin-top: 0;
     }
 }
 
