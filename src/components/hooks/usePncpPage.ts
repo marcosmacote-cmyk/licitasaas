@@ -421,7 +421,6 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         fetchUnreadCount();
     }, []);
 
-    // Fetch scanner opportunities when tab changes or page changes
     useEffect(() => {
         if (activeTab === 'found') {
             fetchScannerOpportunities();
@@ -445,7 +444,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
                 const data = await res.json();
-                setScannerOpportunities(data.items || []);
+                setScannerOpportunities(prev => scannerOpportunitiesPage === 1 ? data.items || [] : [...prev, ...(data.items || [])]);
                 setScannerOpportunitiesTotal(data.total || 0);
             }
         } catch (e) { console.error("Failed to fetch scanner opportunities", e); }
@@ -510,7 +509,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         } catch (e) { console.error("Failed to fetch saved searches", e); }
     };
 
-    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string; excludeKeywords?: string }) => {
+    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string; excludeKeywords?: string; resetPage?: boolean }) => {
         if (e) { e.preventDefault(); setPage(1); }
         setLoading(true);
         const controller = new AbortController();
@@ -523,7 +522,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 signal: controller.signal,
                 body: JSON.stringify({
                     keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
-                    uf: overrides?.uf ?? selectedUf, pagina: e ? 1 : page,
+                    uf: overrides?.uf ?? selectedUf, pagina: e || overrides?.resetPage ? 1 : page,
                     modalidade: overrides?.modalidade ?? modalidade,
                     dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
                     dataFim: (overrides?.dataFim ?? dataFim) || undefined,
@@ -535,7 +534,8 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             if (res.ok) {
                 const data = await res.json();
                 const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
-                setResults(items);
+                const isNewSearch = e || overrides?.resetPage || page === 1;
+                setResults(prev => isNewSearch ? items : [...prev, ...items]);
                 setTotalResults(typeof data.total === 'number' ? data.total : items.length);
             } else { throw new Error("Erro na busca"); }
         } catch (e: any) {
@@ -661,7 +661,8 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             modalidade: customState.modalidade, esfera: customState.esfera,
             orgao: customState.orgao, orgaosLista: customState.orgaosLista,
             excludeKeywords: customState.excludeKeywords,
-            dataInicio: customState.dataInicio, dataFim: customState.dataFim
+            dataInicio: customState.dataInicio, dataFim: customState.dataFim,
+            resetPage: true
         });
     };
 

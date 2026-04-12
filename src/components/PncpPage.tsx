@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Save, Loader2, Bookmark, ExternalLink, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock, Bell, MapPin } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -20,6 +20,24 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
     const [favListMenu, setFavListMenu] = useState<string | null>(null);
     const [searchListMenu, setSearchListMenu] = useState<string | null>(null);
     const [searchChipMenu, setSearchChipMenu] = useState<string | null>(null);
+    
+    // Infinite Scroll Intersection Observer
+    const loaderRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                if (p.activeTab === 'search' && !p.loading && p.page < Math.ceil(p.totalResults / 10)) {
+                    p.setPage(prev => prev + 1);
+                } else if (p.activeTab === 'found' && !p.scannerOpportunitiesLoading && p.scannerOpportunitiesPage < Math.ceil(p.scannerOpportunitiesTotal / 50)) {
+                    p.setScannerOpportunitiesPage(prev => prev + 1);
+                }
+            }
+        }, { threshold: 0.1, rootMargin: '100px' });
+
+        if (loaderRef.current) observer.observe(loaderRef.current);
+        return () => observer.disconnect();
+    }, [p.activeTab, p.loading, p.scannerOpportunitiesLoading, p.page, p.scannerOpportunitiesPage, p.totalResults, p.scannerOpportunitiesTotal]);
 
     // Refresh data on mount to guarantee we have the latest items (e.g. after deletions in Kanban)
     useEffect(() => {
@@ -968,107 +986,16 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
                     </tbody>
                 </table>
 
-                {/* Pagination Controls */}
-                {p.activeTab === 'search' && p.displayItems.length > 0 && p.totalResults > 0 && (() => {
-                    const totalPages = Math.ceil(p.totalResults / 10);
-                    const renderPageNumbers = () => {
-                        const pages = [];
-                        let start = Math.max(1, p.page - 2);
-                        let end = Math.min(totalPages, p.page + 2);
+                {/* Infinite Scroll Loader */}
+                <div ref={loaderRef} style={{ height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 'var(--space-4)' }}>
+                    {(p.loading || p.scannerOpportunitiesLoading) && <Loader2 size={24} className="spinner" color="var(--color-primary)" />}
+                </div>
 
-                        if (p.page <= 3 && totalPages >= 5) end = 5;
-                        if (p.page >= totalPages - 2 && totalPages >= 5) start = totalPages - 4;
-
-                        for (let i = start; i <= end; i++) {
-                            pages.push(
-                                <button
-                                    key={i}
-                                    onClick={() => p.setPage(i)}
-                                    style={{
-                                        padding: '6px 14px',
-                                        borderRadius: 'var(--radius-md)',
-                                        border: i === p.page ? 'none' : '1px solid var(--color-border)',
-                                        background: i === p.page ? 'var(--color-primary)' : 'transparent',
-                                        color: i === p.page ? 'white' : 'var(--color-text)',
-                                        fontSize: 'var(--text-md)',
-                                        fontWeight: i === p.page ? 'var(--font-semibold)' as any : 'var(--font-normal)' as any,
-                                        cursor: 'pointer',
-                                        transition: 'var(--transition-fast)'
-                                    }}
-                                    disabled={p.loading}
-                                >
-                                    {i}
-                                </button>
-                            );
-                        }
-                        return pages;
-                    };
-
-                    return (
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: 'var(--space-4) var(--space-6)',
-                            borderTop: '1px solid var(--color-border)',
-                            background: 'var(--color-bg-surface)'
-                        }}>
-                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
-                                Página {p.page} de {totalPages} ({p.totalResults} resultados)
-                            </span>
-                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                                <button
-                                    className="btn btn-outline"
-                                    style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
-                                    onClick={() => p.setPage(p => Math.max(1, p - 1))}
-                                    disabled={p.page === 1 || p.loading}
-                                >
-                                    Anterior
-                                </button>
-
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                    {renderPageNumbers()}
-                                </div>
-
-                                <button
-                                    className="btn btn-outline"
-                                    style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
-                                    onClick={() => p.setPage(p => p + 1)}
-                                    disabled={p.page >= totalPages || p.loading}
-                                >
-                                    Próxima
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })()}
-
-                {/* Pagination for Encontradas tab */}
-                {p.activeTab === 'found' && p.scannerOpportunitiesTotal > 50 && (() => {
-                    const totalPages = Math.ceil(p.scannerOpportunitiesTotal / 50);
-                    return (
-                        <div style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: 'var(--space-4) var(--space-6)', borderTop: '1px solid var(--color-border)',
-                            background: 'var(--color-bg-surface)'
-                        }}>
-                            <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)' }}>
-                                Página {p.scannerOpportunitiesPage} de {totalPages} ({p.scannerOpportunitiesTotal} encontradas)
-                            </span>
-                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                                <button className="btn btn-outline" style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
-                                    onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage - 1)}
-                                    disabled={p.scannerOpportunitiesPage === 1}>Anterior</button>
-                                <span style={{ padding: '0 8px', fontSize: 'var(--text-md)', color: 'var(--color-text-secondary)' }}>
-                                    {p.scannerOpportunitiesPage} / {totalPages}
-                                </span>
-                                <button className="btn btn-outline" style={{ padding: '6px 14px', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-md)' }}
-                                    onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage + 1)}
-                                    disabled={p.scannerOpportunitiesPage >= totalPages}>Próxima</button>
-                            </div>
-                        </div>
-                    );
-                })()}
+                {/* Show total records count indicator at the bottom if fully loaded */}
+                <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
+                    {p.activeTab === 'search' && p.page >= Math.ceil(p.totalResults / 10) && p.totalResults > 0 && `Todos os ${p.totalResults} resultados carregados.`}
+                    {p.activeTab === 'found' && p.scannerOpportunitiesPage >= Math.ceil(p.scannerOpportunitiesTotal / 50) && p.scannerOpportunitiesTotal > 0 && `Todas as ${p.scannerOpportunitiesTotal} oportunidades carregadas.`}
+                </div>
             </div>
 
             {p.editingProcess && (
