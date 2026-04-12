@@ -16,7 +16,7 @@ import {
 import React from 'react';
 
 import { KanbanColumn } from './KanbanColumn';
-import { KanbanItem, KanbanItemVisual } from './KanbanCard';
+import { KanbanItemVisual } from './KanbanCard';
 import type { BiddingProcess, BiddingStatus, AiAnalysis, CompanyProfile } from '../types';
 import { COLUMNS } from '../types';
 import { resolveStage } from '../governance';
