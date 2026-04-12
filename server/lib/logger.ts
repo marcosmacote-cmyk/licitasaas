@@ -55,8 +55,15 @@ function formatDev(entry: LogEntry): string {
     return `${color}[${level}]${COLORS.reset} ${message}${metaStr}`;
 }
 
-function emit(level: LogLevel, message: string, meta: Record<string, any> = {}) {
+function emit(level: LogLevel, message: string, meta: any = {}) {
     if (LOG_LEVELS[level] < minLevel) return;
+
+    let payload: Record<string, any> = {};
+    if (meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
+        payload = meta;
+    } else if (meta !== undefined) {
+        payload = { details: meta };
+    }
 
     const entry: LogEntry = {
         timestamp: new Date().toISOString(),
@@ -64,7 +71,7 @@ function emit(level: LogLevel, message: string, meta: Record<string, any> = {}) 
         message,
         service: serviceName,
         role: processRole,
-        ...meta,
+        ...payload,
     };
 
     if (isProduction) {
@@ -89,16 +96,16 @@ function emit(level: LogLevel, message: string, meta: Record<string, any> = {}) 
 }
 
 export const logger = {
-    debug: (message: string, meta?: Record<string, any>) => emit('debug', message, meta),
-    info: (message: string, meta?: Record<string, any>) => emit('info', message, meta),
-    warn: (message: string, meta?: Record<string, any>) => emit('warn', message, meta),
-    error: (message: string, meta?: Record<string, any>) => emit('error', message, meta),
+    debug: (message: string, meta?: any) => emit('debug', message, meta),
+    info: (message: string, meta?: any) => emit('info', message, meta),
+    warn: (message: string, meta?: any) => emit('warn', message, meta),
+    error: (message: string, meta?: any) => emit('error', message, meta),
 
     /** Create a child logger with persistent metadata */
     child: (defaultMeta: Record<string, any>) => ({
-        debug: (msg: string, meta?: Record<string, any>) => emit('debug', msg, { ...defaultMeta, ...meta }),
-        info: (msg: string, meta?: Record<string, any>) => emit('info', msg, { ...defaultMeta, ...meta }),
-        warn: (msg: string, meta?: Record<string, any>) => emit('warn', msg, { ...defaultMeta, ...meta }),
-        error: (msg: string, meta?: Record<string, any>) => emit('error', msg, { ...defaultMeta, ...meta }),
+        debug: (msg: string, meta?: any) => emit('debug', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
+        info: (msg: string, meta?: any) => emit('info', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
+        warn: (msg: string, meta?: any) => emit('warn', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
+        error: (msg: string, meta?: any) => emit('error', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
     }),
 };
