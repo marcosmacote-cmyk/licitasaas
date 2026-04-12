@@ -32,3 +32,30 @@ Object.defineProperty(window, 'Audio', {
 
 // Global fetch mock
 global.fetch = vi.fn();
+
+// ── Mock useToast globally ──
+// This prevents "useToast must be used within ToastProvider" errors
+// in hook tests that don't render the full component tree.
+vi.mock('../components/ui/Toast', () => ({
+    useToast: () => ({
+        success: vi.fn(),
+        error: vi.fn(),
+        warning: vi.fn(),
+        info: vi.fn(),
+    }),
+    ToastProvider: ({ children }: any) => children,
+}));
+
+vi.mock('../components/ui', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, any>>();
+    return {
+        ...actual,
+        useToast: () => ({
+            success: vi.fn(),
+            error: vi.fn(),
+            warning: vi.fn(),
+            info: vi.fn(),
+        }),
+        ToastProvider: ({ children }: any) => children,
+    };
+});

@@ -8,7 +8,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts'],
-    setupFiles: [],
+    setupFiles: ['./src/test/setup.ts'],
   },
   build: {
     rollupOptions: {
