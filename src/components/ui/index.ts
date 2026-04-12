@@ -26,6 +26,7 @@ export { SectionHeader, EmptyState, TabNav, Skeleton, StatusDot } from './Compon
 export { ListPickerPopover } from './ListPickerPopover';
 export { Tooltip, TooltipHelp, TooltipInfo, EducationalPopover } from './Tooltip';
 export { GuidedTour, type TourStep } from './GuidedTour';
+export * from './GlobalSearchModal';
 
 // Domain Components — LicitaSaaS-specific
 export {

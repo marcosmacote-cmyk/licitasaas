@@ -26,7 +26,7 @@ import { LoginPage } from './components/LoginPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ToastProvider, GuidedTour, type TourStep } from './components/ui';
+import { ToastProvider, GuidedTour, type TourStep, GlobalSearchModal } from './components/ui';
 import NotificationCenter from './components/NotificationCenter';
 import { onSessionExpired } from './services/apiClient';
 
@@ -62,6 +62,30 @@ function App() {
 
   // Guided Tour State
   const [tourOpen, setTourOpen] = useState(false);
+
+  // Global Search Modal State
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global Shortcuts
+  useEffect(() => {
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen(prev => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        // Only trigger if not already inside an input field
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) return;
+        e.preventDefault();
+        setActiveTab('bidding');
+        setModuleContext({ action: 'new' });
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        setTourOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, []);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -437,6 +461,9 @@ function App() {
 
             {/* Right: Actions + User */}
             <div className="flex-gap">
+              <button className="icon-btn" onClick={() => setSearchOpen(true)} title="Busca Global (Ctrl+K)">
+                <Search size={16} />
+              </button>
               <button className="icon-btn" onClick={toggleTheme} title="Alternar Tema">
                 {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </button>
@@ -455,22 +482,14 @@ function App() {
               <div style={{ width: '1px', height: '24px', background: 'var(--color-border)', margin: '0 var(--space-2)' }} />
 
               <div className="flex-gap" style={{ gap: 'var(--space-3)' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-md)', lineHeight: 1.3 }}>{user.name}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{user.tenantName}</div>
-                </div>
-                <div
-                  style={{
-                    width: 32, height: 32,
-                    background: 'var(--color-primary)',
-                    borderRadius: 'var(--radius-full)',
-                    color: 'white',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)'
-                  }}
-                  title={user.email}
-                >
-                  {user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
+                <div className="user-profile">
+                  <div className="user-avatar" style={{ fontSize: 'var(--text-xs)' }}>
+                    {user?.name?.substring(0, 2).toUpperCase() || 'O'}
+                  </div>
+                  <div className="user-info">
+                    <div className="user-name">{user?.name?.split(' ')[0] || 'Operador'}</div>
+                    <div className="user-role">{user?.tenantName?.substring(0, 15) || 'LicitaSaaS'}</div>
+                  </div>
                 </div>
                 <button
                   className="icon-btn"
@@ -527,6 +546,16 @@ function App() {
           {activeTab === 'settings' && <SettingsPage />}
           </Suspense>
         </main>
+      {/* Global Modals & Overlays */}
+      <GlobalSearchModal 
+          isOpen={searchOpen} 
+          onClose={() => setSearchOpen(false)} 
+          onNavigate={(route, context) => {
+             setActiveTab(route as AppTab);
+             if (context) setModuleContext(context);
+          }} 
+      />
+
       </div>
     </ErrorBoundary>
     </ToastProvider>
