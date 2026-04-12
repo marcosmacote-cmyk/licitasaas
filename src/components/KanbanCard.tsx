@@ -57,7 +57,7 @@ export function KanbanItem({ item, isOverlay, hasAnalysis, companies, onViewAnal
         return cardFields.find(f => f.key === key)?.visible ?? true;
     };
 
-    const [isRendered, setIsRendered] = useState(false);
+    const [isRendered, setIsRendered] = useState(true); // Default to true. The observer will turn it off safely if it's outside the view.
     const cardElRef = useRef<HTMLDivElement | null>(null);
     const [cardHeight, setCardHeight] = useState<number>(compactMode ? 90 : 150);
 
