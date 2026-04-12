@@ -15,7 +15,9 @@ import {
   LogOut,
   Scale,
   Users,
-  ShieldCheck
+  ShieldCheck,
+  Menu,
+  X
 } from 'lucide-react';
 // Static imports — core pages that load on startup
 import { BiddingPage } from './components/BiddingPage';
@@ -24,7 +26,7 @@ import { LoginPage } from './components/LoginPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ToastProvider } from './components/ui';
+import { ToastProvider, GuidedTour, type TourStep } from './components/ui';
 import NotificationCenter from './components/NotificationCenter';
 import { onSessionExpired } from './services/apiClient';
 
@@ -54,6 +56,12 @@ function App() {
   const [pncpUnreadCount, setPncpUnreadCount] = useState(0);
   const [navFilter, setNavFilter] = useState<{ statuses?: string[]; highlight?: string; specialFilter?: string; targetProcessId?: string } | null>(null);
   const [moduleContext, setModuleContext] = useState<{ subTab?: string; processId?: string; hubOriginId?: string; action?: string; jobId?: string } | null>(null);
+
+  // Responsive Sidebar State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Guided Tour State
+  const [tourOpen, setTourOpen] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -234,6 +242,24 @@ function App() {
     setUser(null);
   };
 
+  useEffect(() => {
+    // Check if the welcome tour has been completed
+    if (user && !loading && activeTab === 'dashboard') {
+      if (!localStorage.getItem('tour_welcome_completed')) {
+        setTimeout(() => {
+          setTourOpen(true);
+        }, 1000);
+      }
+    }
+  }, [user, loading, activeTab]);
+
+  const welcomeSteps: TourStep[] = [
+    { target: '.sidebar-header', title: 'Bem-vindo ao LicitaSaaS!', content: 'Vamos fazer um tour rápido de 4 etapas para você conhecer sua nova central de inteligência e vendas governamentais.', placement: 'right' },
+    { target: '[data-tour="nav-opportunities"]', title: '1. Oportunidades', content: 'Aqui o nosso Scanner e a IA varrem diariamente o PNCP atraindo editais qualificados de forma automática para seu negócio.', placement: 'right' },
+    { target: '[data-tour="nav-bidding"]', title: '2. Hub Kanban', content: 'As oportunidades capturadas caem aqui. É o seu Funil de Vendas de Licitações para gerenciar o processo de ponta-a-ponta.', placement: 'right' },
+    { target: '[data-tour="notifications-icon"]', title: '3. Notificações Vivas', content: 'Você não precisa esperar o Edital ser lido na tela para avançar! Quando os Agentes trabalharem em background fazendo análises, redigindo lances e impugnações, você receberá a notificação que a "missão foi concluída" bem aqui!', placement: 'bottom' }
+  ];
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: 'var(--color-bg-base)' }}>
@@ -290,14 +316,23 @@ function App() {
   return (
     <ToastProvider>
     <ErrorBoundary>
+      <GuidedTour
+        id="welcome"
+        isOpen={tourOpen}
+        onDismiss={() => { setTourOpen(false); localStorage.setItem('tour_welcome_completed', 'true'); }}
+        onComplete={() => { setTourOpen(false); localStorage.setItem('tour_welcome_completed', 'true'); }}
+        steps={welcomeSteps}
+      />
       <div className="app-container">
         {/* ═══════════════════════════
             SIDEBAR — Nova Navegação
             ═══════════════════════════ */}
-        <aside className="sidebar">
+        <div className={`sidebar-overlay ${isSidebarOpen ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} />
+        <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           {/* Logo */}
-          <div className="sidebar-header">
-            <div style={{
+          <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <div style={{
               width: 32,
               height: 32,
               borderRadius: 'var(--radius-md)',
@@ -318,6 +353,10 @@ function App() {
               letterSpacing: '-0.03em',
               lineHeight: 1,
             }}>LicitaSaaS</span>
+            </div>
+            <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(false)} style={{ display: 'none' }}>
+              <X size={20} />
+            </button>
           </div>
 
           <nav className="sidebar-nav">
@@ -331,10 +370,12 @@ function App() {
                     key={item.key}
                     href="#"
                     className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+                    data-tour={`nav-${item.key}`}
                     onClick={(e) => {
                       e.preventDefault();
                       setActiveTab(item.key);
                       if (item.key === 'settings') setAlertCount(0);
+                      setIsSidebarOpen(false); // Close mobile sidebar on navigation
                     }}
                   >
                     {item.icon}
@@ -359,7 +400,7 @@ function App() {
             <a
               href="#"
               className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={(e) => { e.preventDefault(); setActiveTab('settings'); setAlertCount(0); }}
+              onClick={(e) => { e.preventDefault(); setActiveTab('settings'); setAlertCount(0); setIsSidebarOpen(false); }}
             >
               <Settings size={18} />
               <span>Configurações</span>
@@ -378,6 +419,13 @@ function App() {
           <header className="header">
             {/* Left: Page context */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <button 
+                className="mobile-menu-btn" 
+                onClick={() => setIsSidebarOpen(true)}
+                title="Abrir Menu"
+              >
+                <Menu size={20} />
+              </button>
               <span style={{
                 fontSize: 'var(--text-lg)',
                 fontWeight: 'var(--font-semibold)',
@@ -392,15 +440,17 @@ function App() {
               <button className="icon-btn" onClick={toggleTheme} title="Alternar Tema">
                 {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               </button>
-              <NotificationCenter onNavigateToProcess={(processId, type, jobId) => {
-                if (type === 'pncp_analysis') {
-                  setModuleContext({ action: 'open_pncp_job', jobId });
-                  setActiveTab('opportunities');
-                } else {
-                  setModuleContext({ processId });
-                  setActiveTab('bidding');
-                }
-              }} />
+              <div data-tour="notifications-icon">
+                <NotificationCenter onNavigateToProcess={(processId, type, jobId) => {
+                  if (type === 'pncp_analysis') {
+                    setModuleContext({ action: 'open_pncp_job', jobId });
+                    setActiveTab('opportunities');
+                  } else {
+                    setModuleContext({ processId });
+                    setActiveTab('bidding');
+                  }
+                }} />
+              </div>
 
               <div style={{ width: '1px', height: '24px', background: 'var(--color-border)', margin: '0 var(--space-2)' }} />
 

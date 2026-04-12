@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Bell, CheckCircle, AlertCircle, Loader2, Brain, FileText, Gavel, ScanSearch } from 'lucide-react';
+import { Bell, CheckCircle, AlertCircle, Loader2, Brain, FileText, Gavel, ScanSearch, X } from 'lucide-react';
 import { useSSE, fetchJobList, type JobEvent } from './hooks/useSSE';
 import { useToast } from './ui';
 
@@ -312,7 +312,7 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
 
             {/* Dropdown */}
             {isOpen && (
-                <div style={{
+                <div className="notification-dropdown" style={{
                     position: 'absolute',
                     top: '100%',
                     right: 0,
@@ -334,9 +334,14 @@ export default function NotificationCenter({ onNavigateToProcess }: Notification
                         alignItems: 'center',
                     }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>Tarefas em Processamento</span>
-                        {notifications.some(n => n.status === 'processing') && (
-                            <Loader2 size={14} className="spin" style={{ color: 'var(--color-ai)' }} />
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {notifications.some(n => n.status === 'processing') && (
+                                <Loader2 size={14} className="spin" style={{ color: 'var(--color-ai)' }} />
+                            )}
+                            <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', padding: 0, display: 'flex' }}>
+                                <X size={16} />
+                            </button>
+                        </div>
                     </div>
 
                     {notifications.length === 0 ? (

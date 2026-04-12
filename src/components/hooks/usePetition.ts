@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { useToast } from '../ui';
 import { resolveStage, isModuleAllowed } from '../../governance';
+import { useSSE, submitBackgroundJob, fetchJobResult } from './useSSE';
 
 export const PETITION_TYPES = [
     { id: 'impugnacao', label: 'Impugnação ao Edital', law: 'Lei 14.133/2021, Art. 164' },
@@ -161,32 +162,64 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
         setIsCopied(true); setTimeout(() => setIsCopied(false), 2000);
     };
 
+    const [activeJobId, setActiveJobId] = useState<string | null>(null);
+    const [progressMsg, setProgressMsg] = useState<string>('');
+
+    useSSE((event) => {
+        if (event.jobId === activeJobId) {
+            if (event.type === 'job_progress') {
+                setProgressMsg(event.progressMsg || `Gerando (${event.progress}%)`);
+            } else if (event.type === 'job_completed') {
+                fetchJobResult(event.jobId).then(data => {
+                    const displayHtml = data.text
+                        .replace(/\[INICIO_ASSINATURA\]/g, '<span class="tech-tag" data-tag="start">[INICIO_ASSINATURA]</span>')
+                        .replace(/\[FIM_ASSINATURA\]/g, '<span class="tech-tag" data-tag="end">[FIM_ASSINATURA]</span>');
+
+                    lastAiResult.current = displayHtml;
+                    setGeneratedDraft(displayHtml);
+                    setEditorKey(prev => prev + 1);
+                    setProgressMsg('');
+                    setActiveJobId(null);
+                    setIsGenerating(false);
+                }).catch(_err => {
+                    toast.error('Erro ao baixar rascunho da petição.');
+                    setIsGenerating(false);
+                    setActiveJobId(null);
+                    setProgressMsg('');
+                });
+            } else if (event.type === 'job_failed') {
+                toast.error(event.error || 'Erro na geração da petição.');
+                setIsGenerating(false);
+                setActiveJobId(null);
+                setProgressMsg('');
+            }
+        }
+    });
+
     const handleGenerate = async () => {
         if (!selectedBiddingId || !selectedCompanyId || (!factsSummary && attachments.length === 0)) {
             toast.warning('Por favor, selecione o processo, a empresa e descreva os fatos ou anexe documentos.'); return;
         }
         setIsGenerating(true);
+        setProgressMsg('Iniciando...');
         try {
-            const response = await fetch(`${API_BASE_URL}/api/petitions/generate`, {
-                method: 'POST', headers,
-                body: JSON.stringify({
+            const { jobId } = await submitBackgroundJob({
+                type: 'petition',
+                targetId: selectedBidding?.id,
+                targetTitle: selectedBidding?.title || 'Licitação',
+                input: {
                     biddingProcessId: selectedBiddingId, companyId: selectedCompanyId,
                     templateType: petitionTypeId, userContext: factsSummary,
                     attachments: attachments.map(a => ({ name: a.name, data: a.data, mimeType: a.mimeType }))
-                })
+                }
             });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Erro ao gerar petição');
-
-            const displayHtml = data.text
-                .replace(/\[INICIO_ASSINATURA\]/g, '<span class="tech-tag" data-tag="start">[INICIO_ASSINATURA]</span>')
-                .replace(/\[FIM_ASSINATURA\]/g, '<span class="tech-tag" data-tag="end">[FIM_ASSINATURA]</span>');
-
-            lastAiResult.current = displayHtml;
-            setGeneratedDraft(displayHtml);
-            setEditorKey(prev => prev + 1);
-        } catch (error: any) { console.error(error); toast.error(`Erro: ${error.message}`); }
-        finally { setIsGenerating(false); }
+            setActiveJobId(jobId);
+        } catch (error: any) { 
+            console.error(error); 
+            toast.error(`Erro ao iniciar geração: ${error.message}`); 
+            setIsGenerating(false);
+            setProgressMsg('');
+        }
     };
 
     const handleInsertImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -320,7 +353,7 @@ export function usePetition({ biddings, companies, initialBiddingId }: UsePetiti
         headerImage, setHeaderImage, footerImage, setFooterImage,
         headerImageHeight, setHeaderImageHeight, footerImageHeight, setFooterImageHeight,
         isSavingTemplate, showStyles, setShowStyles, selectedImg,
-        editorRef, lastAiResult, editorKey,
+        editorRef, lastAiResult, editorKey, progressMsg,
         // Computed
         selectedCompany, selectedBidding, eligibleBiddings,
         // Handlers

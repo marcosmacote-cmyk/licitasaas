@@ -525,10 +525,10 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
       )}
 
       {/* ── Split Panel ── */}
-      <div className="chat-split-panel">
+      <div className="chat-split-panel chat-monitor-layout">
 
         {/* ── LEFT: Process List ── */}
-        <div className="chat-sidebar">
+        <div className="chat-sidebar chat-monitor-sidebar">
 
           {/* Filters */}
           <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>

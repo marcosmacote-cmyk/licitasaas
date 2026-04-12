@@ -7,6 +7,7 @@ import { calculateItem, calculateTotals, calculateAdjustedItem, calculateAdjuste
 import type { RoundingMode } from '../proposals/engine';
 import { exportExcelProposal, generateProposalPdf } from '../proposals/exportServices';
 import type { ExcelExportType } from '../proposals/exportServices';
+import { useSSE, submitBackgroundJob, fetchJobResult } from './useSSE';
 
 interface UseProposalOptions {
     biddings: BiddingProcess[];
@@ -235,76 +236,112 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         }
     };
 
+    const [activePopulateJobId, setActivePopulateJobId] = useState<string | null>(null);
+    const [populateProgressMsg, setPopulateProgressMsg] = useState<string>('');
+
+    useSSE((event) => {
+        if (event.jobId === activePopulateJobId) {
+            if (event.type === 'job_progress') {
+                setPopulateProgressMsg(event.progressMsg || `Processando (${event.progress}%)`);
+            } else if (event.type === 'job_completed') {
+                fetchJobResult(event.jobId).then(data => {
+                    setPopulateProgressMsg('Validando e finalizando...');
+                    setTimeout(() => processAiPopulateData(data), 500);
+                }).catch(_err => {
+                    toast.error('Erro ao baixar itens da proposta.');
+                    setIsAiLoading(false);
+                    setActivePopulateJobId(null);
+                    setPopulateProgressMsg('');
+                });
+            } else if (event.type === 'job_failed') {
+                toast.error(event.error || 'Erro no preenchimento IA.');
+                setIsAiLoading(false);
+                setActivePopulateJobId(null);
+                setPopulateProgressMsg('');
+            }
+        }
+    });
+
+    const processAiPopulateData = async (data: any) => {
+        try {
+            // F5: Validate AI items before saving
+            const validItems = (data.items || []).filter((it: any) => {
+                if (!it.description || it.description.trim().length < 3) return false;
+                if (typeof it.quantity === 'number' && it.quantity <= 0) return false;
+                return true;
+            });
+
+            if (validItems.length === 0) {
+                toast.warning('A IA não encontrou itens válidos neste edital.');
+                setIsAiLoading(false);
+                setActivePopulateJobId(null);
+                return;
+            }
+
+            // F4: Preserve multiplier from AI; map referencePrice as unitCost (starting point)
+            const prepareItems = (items: any[]) => items.map((it: any) => {
+                const rawItem = {
+                    ...it,
+                    unitCost: it.referencePrice || it.unitCost || 0,
+                    multiplier: it.multiplier || 1,           // F4: preserve AI multiplier
+                    multiplierLabel: it.multiplierLabel || '', // F4: preserve label
+                    quantity: it.quantity || 1,
+                    referencePrice: it.referencePrice || null,
+                };
+                const calc = calculateItem(rawItem, bdi, discount, roundingMode);
+                return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
+            });
+
+            const saveItems = async (proposalId: string) => {
+                const itemsToSave = prepareItems(validItems);
+                const saveRes = await fetch(`${API_BASE_URL}/api/proposals/${proposalId}/items`, {
+                    method: 'POST', headers,
+                    body: JSON.stringify({ items: itemsToSave, replaceAll: true, roundingMode }),
+                });
+                if (saveRes.ok) {
+                    await loadProposals();
+                    const src = data.source === 'pncp_planilha' ? ' (via planilha PNCP)' : '';
+                    showSaveMsg(`${validItems.length} itens extraídos pela IA${src}!`);
+                }
+            };
+
+            if (proposal) {
+                await saveItems(proposal.id);
+            } else {
+                await handleCreateProposal();
+                setTimeout(async () => {
+                    const latestRes = await fetch(`${API_BASE_URL}/api/proposals/${selectedBiddingId}`, { headers });
+                    if (latestRes.ok) {
+                        const latestData = await latestRes.json();
+                        if (latestData[0]) await saveItems(latestData[0].id);
+                    }
+                }, 1000);
+            }
+        } catch (e) {
+            toast.error('Erro ao salvar os itens extraídos.');
+        } finally {
+            setIsAiLoading(false);
+            setActivePopulateJobId(null);
+            setPopulateProgressMsg('');
+        }
+    };
+
     const handleAiPopulate = async () => {
         if (!selectedBiddingId) return;
         setIsAiLoading(true);
+        setPopulateProgressMsg('Iniciando...');
         try {
-            const res = await fetch(`${API_BASE_URL}/api/proposals/ai-populate`, {
-                method: 'POST', headers,
-                body: JSON.stringify({ biddingProcessId: selectedBiddingId }),
+            const { jobId } = await submitBackgroundJob({
+                type: 'proposal_populate',
+                targetId: selectedBidding?.id,
+                targetTitle: selectedBidding?.title || 'Licitação',
+                input: { biddingProcessId: selectedBiddingId }
             });
-            if (res.ok) {
-                const data = await res.json();
-
-                // F5: Validate AI items before saving
-                const validItems = (data.items || []).filter((it: any) => {
-                    if (!it.description || it.description.trim().length < 3) return false;
-                    if (typeof it.quantity === 'number' && it.quantity <= 0) return false;
-                    return true;
-                });
-
-                if (validItems.length === 0) {
-                    toast.warning('A IA não encontrou itens válidos neste edital.');
-                    return;
-                }
-
-                // F4: Preserve multiplier from AI; map referencePrice as unitCost (starting point)
-                const prepareItems = (items: any[]) => items.map((it: any) => {
-                    const rawItem = {
-                        ...it,
-                        unitCost: it.referencePrice || it.unitCost || 0,
-                        multiplier: it.multiplier || 1,           // F4: preserve AI multiplier
-                        multiplierLabel: it.multiplierLabel || '', // F4: preserve label
-                        quantity: it.quantity || 1,
-                        referencePrice: it.referencePrice || null,
-                    };
-                    const calc = calculateItem(rawItem, bdi, discount, roundingMode);
-                    return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
-                });
-
-                const saveItems = async (proposalId: string) => {
-                    const itemsToSave = prepareItems(validItems);
-                    const saveRes = await fetch(`${API_BASE_URL}/api/proposals/${proposalId}/items`, {
-                        method: 'POST', headers,
-                        body: JSON.stringify({ items: itemsToSave, replaceAll: true, roundingMode }),
-                    });
-                    if (saveRes.ok) {
-                        await loadProposals();
-                        const src = data.source === 'pncp_planilha' ? ' (via planilha PNCP)' : '';
-                        showSaveMsg(`${validItems.length} itens extraídos pela IA${src}!`);
-                    }
-                };
-
-                if (proposal) {
-                    await saveItems(proposal.id);
-                } else {
-                    await handleCreateProposal();
-                    setTimeout(async () => {
-                        const latestRes = await fetch(`${API_BASE_URL}/api/proposals/${selectedBiddingId}`, { headers });
-                        if (latestRes.ok) {
-                            const latestData = await latestRes.json();
-                            if (latestData[0]) await saveItems(latestData[0].id);
-                        }
-                    }, 1000);
-                }
-            } else {
-                const err = await res.json();
-                toast.error(err.error || 'Erro ao popular itens com IA.');
-            }
+            setActivePopulateJobId(jobId);
         } catch (e) {
-            toast.error('Erro ao consultar IA.');
-        } finally {
+            toast.error('Erro ao iniciar extração de itens pela IA no plano de fundo.');
             setIsAiLoading(false);
+            setPopulateProgressMsg('');
         }
     };
 
@@ -730,7 +767,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         adjustedLetterContent, setAdjustedLetterContent,
         updateAdjustedItem,
         // Handlers
-        handleCreateProposal, handleAiPopulate,
+        handleCreateProposal, handleAiPopulate, populateProgressMsg,
         handleAddItem, updateItem,
         handleSaveAllItems, handleSaveCompanyTemplate,
         handleDeleteItem, executeDeleteItem,

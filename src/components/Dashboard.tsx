@@ -15,6 +15,7 @@ import type { BiddingProcess, CompanyProfile } from '../types';
 import {
     LiveCountdown, MetricCard, AlertCard, PipelineStep,
     RadarCard, MissionCard, AgendaItem, ProgressBar,
+    EducationalPopover, TooltipHelp,
 } from './ui';
 import { useDashboardMetrics } from './hooks/useDashboardMetrics';
 import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
@@ -153,7 +154,25 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
             <div className="breadcrumb premium-entrance stagger-1"><span className="breadcrumb-current">Painel</span></div>
             <div className="page-header premium-entrance stagger-1" style={{ marginBottom: 'var(--space-5)' }}>
                 <div>
-                    <h1 className="page-title">Painel de Licitações</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <h1 className="page-title">Painel de Licitações</h1>
+                        <EducationalPopover
+                            id="edu_dashboard_overview"
+                            title="Seu Centro de Operações (QG)"
+                            content={
+                                <>
+                                    <p style={{ marginTop: 0 }}>Onde você gerencia todo o seu Funil de Vendas ao invés de usar o Excel de antigamente.</p>
+                                    <ul style={{ paddingLeft: 'var(--space-4)', margin: 'var(--space-2) 0 0 0' }}>
+                                        <li><b>Termômetro:</b> Fique de olho no radar e missões do dia.</li>
+                                        <li><b>Alertas Críticos:</b> O sistema avisará caso o Monitoramento pare de ler o chat.</li>
+                                        <li><b>Sessões e Documentos:</b> Não perca o prazo.</li>
+                                    </ul>
+                                </>
+                            }
+                        >
+                            <span style={{ fontSize: 'var(--text-xl)' }}>💡</span>
+                        </EducationalPopover>
+                    </div>
                     <p className="page-subtitle">{today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
                 </div>
                 {companies.length > 1 && (
@@ -268,6 +287,12 @@ export function Dashboard({ items, companies = [], onNavigate }: Props) {
                     )}
 
                     {/* RADAR DO SISTEMA */}
+                    <div className="flex-between mb-4">
+                        <h3 className="dash-section-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <RadioTower size={18} color="var(--color-primary)" /> Radar do Sistema
+                            <TooltipHelp text="Estes agentes virtuais estão constantemente vigiando novas compras, validando a inteligência dos editais em seu funil, e monitorando as certidões vitais." />
+                        </h3>
+                    </div>
                     <div className="stagger-children grid-3">
                         <RadarCard icon={<RadioTower size={18} />} title="Captação PNCP" value={m.pncpCount.toString()} desc="no funil via PNCP" color="var(--color-primary)" bg="var(--color-primary-light)" action="Buscar novas" onClick={() => onNavigate?.('opportunities')} />
                         <RadarCard icon={<ScanSearch size={18} />} title="LicitIA" value={m.aiCount.toString()} desc={m.needsAiAnalysis.length > 0 ? `${m.needsAiAnalysis.length} sem análise` : 'editais analisados'} color={m.needsAiAnalysis.length > 0 ? 'var(--color-warning)' : 'var(--color-ai)'} bg={m.needsAiAnalysis.length > 0 ? 'var(--color-warning-bg)' : 'var(--color-ai-bg)'} action={m.needsAiAnalysis.length > 0 ? 'Analisar' : 'Ver relatórios'} onClick={() => onNavigate?.('bidding', m.needsAiAnalysis.length > 0 ? { specialFilter: 'needs_ai_analysis' } : undefined)} />

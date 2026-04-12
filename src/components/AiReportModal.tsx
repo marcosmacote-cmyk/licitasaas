@@ -4,6 +4,7 @@ import type { AiAnalysis, BiddingProcess } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
 import { exportAiReportPdf } from './report/AiReportPdfExporter';
+import { EducationalPopover, TooltipHelp } from './ui';
 import type { ReportPdfData } from './report/AiReportPdfExporter';
 
 interface Props {
@@ -177,9 +178,27 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport, 
                                 <ScanSearch size={24} color="white" />
                             </div>
                             <div>
-                                <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, margin: 0, letterSpacing: '-0.025em' }}>
-                                    Análise Estratégica <span style={{ color: 'var(--color-primary-border)' }}>IA</span>
-                                </h2>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, margin: 0, letterSpacing: '-0.025em' }}>
+                                        Análise Estratégica <span style={{ color: 'var(--color-primary-border)' }}>IA</span>
+                                    </h2>
+                                    <EducationalPopover
+                                        id="edu_aireport_overview"
+                                        title="Raio-X do Edital"
+                                        content={
+                                            <>
+                                                <p style={{ marginTop: 0 }}>A IA leu todo o PDF e estruturou este documento técnico.</p>
+                                                <ul style={{ paddingLeft: 'var(--space-4)', margin: 'var(--space-2) 0 0 0' }}>
+                                                    <li><b>Riscos e Vedações:</b> Identificamos na hora armadilhas que te impedem de participar.</li>
+                                                    <li><b>Exigências:</b> Tudo mastigado para montar sua pasta de documentos.</li>
+                                                    <li><b>Consultor:</b> Use a aba do lado para fazer perguntas diretas como: "Qual a data da visita técnica?".</li>
+                                                </ul>
+                                            </>
+                                        }
+                                    >
+                                        <span style={{ fontSize: 'var(--text-xl)', filter: 'drop-shadow(0 0 4px rgba(255,255,255,0.2))' }}>💡</span>
+                                    </EducationalPopover>
+                                </div>
                                 <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)', marginTop: '2px', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {process?.title}
                                 </p>
@@ -602,8 +621,9 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport, 
                                                         border: `1px solid ${report.readinessScore > 70 ? 'var(--color-success-border)' : 'var(--color-warning-border)'}`
                                                     }}>
                                                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: report.readinessScore > 70 ? 'var(--color-success)' : 'var(--color-warning)' }} />
-                                                        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-bold)', color: report.readinessScore > 70 ? 'var(--color-success-hover)' : 'var(--color-warning-hover)' }}>
+                                                        <span style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--font-bold)', color: report.readinessScore > 70 ? 'var(--color-success-hover)' : 'var(--color-warning-hover)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             Readiness: {report.readinessScore}%
+                                                            <TooltipHelp text="O Readiness indica a compatibilidade entre as exigências deste edital e os documentos ativos que você já possui cadastrados no sistema." />
                                                         </span>
                                                     </div>
                                                 )}

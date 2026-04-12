@@ -5,7 +5,8 @@ import { BiddingTable } from './BiddingTable';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
 import type { BiddingProcess, AiAnalysis, CompanyProfile } from '../types';
-import { ConfirmDialog } from './ui';
+import { ConfirmDialog, GuidedTour, type TourStep } from './ui';
+import { useState } from 'react';
 import { BiddingSettingsPanel } from './bidding/BiddingSettingsPanel';
 import { useBiddingPage, EMPTY_FILTERS } from './hooks/useBiddingPage';
 
@@ -34,8 +35,27 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
         }
     }, [autoOpenProcessId, items.length]);
 
+    const [tourOpen, setTourOpen] = useState(false);
+    useEffect(() => {
+        if (!localStorage.getItem('tour_kanban_completed') && b.viewMode === 'kanban') {
+            setTimeout(() => setTourOpen(true), 1200);
+        }
+    }, [b.viewMode]);
+
+    const kanbanSteps: TourStep[] = [
+        { target: '[data-tour="kanban-kpis"]', title: 'Visão de Governança', content: 'Monitore exatamente quantos processos estão em cada fase do seu funil e veja onde estão os gargalos comerciais.', placement: 'bottom' },
+        { target: '[data-tour="kanban-board"]', title: 'Funil Kanban de Ponta a Ponta', content: 'Ao arrastar os cards entre essas colunas, nosso Motor de Governança atua como o regente da orquestra, acionando Agentes de IA e Lembretes automáticos no fundo.', placement: 'top' }
+    ];
+
     return (
         <div className="page-container">
+            <GuidedTour
+                id="kanban"
+                isOpen={tourOpen}
+                onDismiss={() => { setTourOpen(false); localStorage.setItem('tour_kanban_completed', 'true'); }}
+                onComplete={() => { setTourOpen(false); localStorage.setItem('tour_kanban_completed', 'true'); }}
+                steps={kanbanSteps}
+            />
             {/* Interactive Notification Modal */}
             {b.activeNotification && (
                 <div style={{
@@ -121,7 +141,7 @@ export function BiddingPage({ items, setItems, companies, initialFilter, onFilte
                     overflowX: 'auto',
                     scrollbarWidth: 'none', // Firefox
                     msOverflowStyle: 'none' // IE and Edge
-                }} className="hide-scrollbar">
+                }} className="hide-scrollbar" data-tour="kanban-kpis">
                     {b.dynamicCounters.map((s, idx) => {
                         const shortLabel: Record<string, string> = {
                             'Captado': 'Captado', 'Em Análise': 'Análise', 'Aprovado para Participação': 'Aprovado',

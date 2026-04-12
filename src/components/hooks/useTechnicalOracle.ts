@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui';
 import type { BiddingProcess, TechnicalCertificate } from '../../types';
 import { resolveStage, isModuleAllowed } from '../../governance';
+import { useSSE, submitBackgroundJob, fetchJobResult } from './useSSE';
 
 export interface AnalysisItem {
     requirement: string;
@@ -159,43 +160,58 @@ export function useTechnicalOracle({ biddings, onRefresh, initialBiddingId }: Us
         setSelectedCertIds(newSelected);
     };
 
+    const [activeJobId, setActiveJobId] = useState<string | null>(null);
+
+    useSSE((event) => {
+        if (event.jobId === activeJobId) {
+            if (event.type === 'job_progress') {
+                setAnalysisProgress(event.progress || 0);
+            } else if (event.type === 'job_completed') {
+                fetchJobResult(event.jobId).then(res => {
+                    setAnalysisProgress(100);
+                    setTimeout(() => {
+                        setAnalysisResult(res);
+                        setIsAnalyzing(false);
+                        setActiveJobId(null);
+                    }, 400);
+                }).catch(_err => {
+                    toast.error('Erro ao buscar resultado da análise.');
+                    setIsAnalyzing(false);
+                    setActiveJobId(null);
+                });
+            } else if (event.type === 'job_failed') {
+                toast.error(event.error || 'Erro na análise de compatibilidade.');
+                setIsAnalyzing(false);
+                setActiveJobId(null);
+            }
+        }
+    });
+
     const handleAnalyzeCompatibility = async () => {
         if (!selectedBiddingId || selectedCertIds.size === 0) return;
+        
+        const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
+        
         setIsAnalyzing(true);
         setAnalysisProgress(0);
         setAnalysisResult(null);
 
-        // Progress simulator
-        const progressInterval = setInterval(() => {
-            setAnalysisProgress(prev => {
-                if (prev >= 95) return 95;
-                // Acelera no começo, desacelera perto de 90
-                const increment = prev < 50 ? 5 : (prev < 80 ? 2 : 1);
-                return prev + increment;
-            });
-        }, 300);
-
         try {
-            const res = await axios.post(`${API_BASE_URL}/api/technical-certificates/compare`, {
-                biddingProcessId: selectedBiddingId,
-                technicalCertificateIds: Array.from(selectedCertIds),
-                disabledRequirements: Array.from(disabledRequirements)
-            }, getAuthHeaders());
-            
-            setAnalysisProgress(100);
-            
-            // Dá um tempo pra barra bater 100% e sumir
-            setTimeout(() => {
-                setAnalysisResult(res.data);
-                setIsAnalyzing(false);
-            }, 400);
-
+            const { jobId } = await submitBackgroundJob({
+                type: 'oracle',
+                targetId: selectedBiddingId,
+                targetTitle: selectedBidding?.title || 'Licitação',
+                input: {
+                    biddingProcessId: selectedBiddingId,
+                    technicalCertificateIds: Array.from(selectedCertIds),
+                    disabledRequirements: Array.from(disabledRequirements)
+                }
+            });
+            setActiveJobId(jobId);
         } catch (error) {
-            console.error('Failed to analyze compatibility:', error);
-            toast.error('Erro ao realizar a análise de compatibilidade.');
+            console.error('Failed to submit job:', error);
+            toast.error('Erro ao iniciar a análise de compatibilidade.');
             setIsAnalyzing(false);
-        } finally {
-            clearInterval(progressInterval);
         }
     };
 

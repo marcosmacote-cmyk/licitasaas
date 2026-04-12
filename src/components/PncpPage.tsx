@@ -3,7 +3,7 @@ import { Search, Save, Loader2, Bookmark, ExternalLink, X, ChevronDown, ChevronU
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
 import { AiReportModal } from './AiReportModal';
-import { ConfirmDialog, ListPickerPopover } from './ui';
+import { ConfirmDialog, ListPickerPopover, EducationalPopover, TooltipHelp, GuidedTour, type TourStep } from './ui';
 import { usePncpPage, UFS, ESFERAS, MODALIDADES, STATUS_OPTIONS } from './hooks/usePncpPage';
 import { normalizeModality } from '../utils/normalizeModality';
 
@@ -26,15 +26,52 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
         if (onRefresh) {
             onRefresh();
         }
+    }, [onRefresh]);
+
+    const [tourOpen, setTourOpen] = useState(false);
+    useEffect(() => {
+        if (!localStorage.getItem('tour_pncp_completed')) {
+            setTimeout(() => setTourOpen(true), 1200);
+        }
     }, []);
+
+    const pncpSteps: TourStep[] = [
+        { target: '[data-tour="pncp-upload"]', title: 'Upload Manual de Editais', content: 'Você não precisa esperar o Scanner encontrar. Faça o upload manual do PDF do Edital aqui e a IA fará o resto.', placement: 'left' },
+        { target: '[data-tour="pncp-search-panel"]', title: 'Pesquisas Salvas', content: 'Configure filtros como palavras-chave e Unidades Federativas. O sistema salvará isso e o Robô vigiará 24h por dia para você nessas condições.', placement: 'top' }
+    ];
 
     return (
         <>
+        <GuidedTour
+            id="pncp"
+            isOpen={tourOpen}
+            onDismiss={() => { setTourOpen(false); localStorage.setItem('tour_pncp_completed', 'true'); }}
+            onComplete={() => { setTourOpen(false); localStorage.setItem('tour_pncp_completed', 'true'); }}
+            steps={pncpSteps}
+        />
         <div className="page-container" style={{ paddingBottom: '32px' }}>
             {/* Page Header */}
             <div className="page-header" style={{ marginBottom: 'var(--space-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
                 <div>
-                    <h1 className="page-title">Módulo de Oportunidades</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <h1 className="page-title">Módulo de Oportunidades</h1>
+                        <EducationalPopover
+                            id="edu_pncp_overview"
+                            title="Bem-vindo ao Localizador!"
+                            content={
+                                <>
+                                    <p style={{ marginTop: 0 }}>Esta é a sua porta de entrada. O sistema não apenas <b>pesquisa ativamente</b> fontes oficiais (PNCP e ComprasNet) usando suas palavras-chave, mas também age como um <b>Scanner Automático</b>.</p>
+                                    <ul style={{ paddingLeft: 'var(--space-4)', margin: 'var(--space-2) 0 0 0' }}>
+                                        <li>Crie e salve pesquisas nas abas abaixo.</li>
+                                        <li>Ative as notificações para receber novos editais no WhatsApp.</li>
+                                        <li>Em 1-clique, adicione os editais favoritos diretamente no seu Pipeline (Painel).</li>
+                                    </ul>
+                                </>
+                            }
+                        >
+                            <span style={{ fontSize: 'var(--text-xl)' }}>💡</span>
+                        </EducationalPopover>
+                    </div>
                     <p className="page-subtitle">Central de prospecção e ingestão de licitações com IA.</p>
                     {/* ── Dashboard Indicators ── */}
                     <div style={{ display: 'flex', gap: 'var(--space-3)', overflowX: 'auto', paddingTop: 'var(--space-3)' }}>
@@ -57,7 +94,7 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
                     {/* ── Botão de Upload Manual ── */}
                     <div style={{ display: 'flex' }}>
                         <input type="file" accept="application/pdf, application/zip, application/x-zip-compressed, application/vnd.rar, .rar, .zip" ref={p.fileInputRef} style={{ display: 'none' }} onChange={p.handleFileUpload} multiple />
-                        <button className="btn btn-primary" onClick={p.handleAIAssistClick} disabled={p.isParsingAI} style={{ padding: '10px 24px', boxShadow: 'var(--shadow-md)' }}>
+                        <button className="btn btn-primary" onClick={p.handleAIAssistClick} disabled={p.isParsingAI} style={{ padding: '10px 24px', boxShadow: 'var(--shadow-md)' }} data-tour="pncp-upload">
                             {p.isParsingAI ? <><Loader2 size={16} className="spinner" /> Processando PDF...</> : <><FolderOpen size={16} /> Upload de Edital</>}
                         </button>
                     </div>
@@ -193,7 +230,7 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
                     )}
 
                     {/* Search chips */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }} data-tour="pncp-search-panel">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', width: '100%', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                 <span style={{ fontSize: 'var(--text-md)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-semibold)' as any, whiteSpace: 'nowrap' }}>
@@ -496,7 +533,10 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
                             </div>
 
                             <div className="col-span-full">
-                                <label className="form-label">Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)</label>
+                                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)
+                                    <TooltipHelp text="Essa ferramenta permite buscar em Lote. Cole dezenas de CNPJs ou nomes (ex: secretarias, prefeituras) e faremos o raio-x completo de todos de uma só vez!" />
+                                </label>
                                 <textarea
                                     placeholder="Cole aqui a lista de nomes de prefeituras/órgãos ou seus CNPJs que deseja buscar de uma vez, separados por vírgula ou quebra de linha... (Vai cruzar tudo numa lista só de uma vez!)"
                                     value={p.orgaosLista}

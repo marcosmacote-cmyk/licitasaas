@@ -111,7 +111,7 @@ export function KanbanBoard({ items, setItems, onEditProcess, onDeleteProcess, a
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
-            <div className="kanban-board">
+            <div className="kanban-board" data-tour="kanban-board" style={{ height: 'calc(100vh - 280px)', minHeight: '500px' }}>
                 {(visibleColumns && visibleColumns.length > 0 ? COLUMNS.filter(col => visibleColumns.includes(col)) : COLUMNS).map((col) => {
                     let colItems = items.filter(item => resolveStage(item.status) === col);
                     // Apply sorting

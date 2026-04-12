@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../config';
 import type { BiddingProcess, CompanyProfile } from '../../types';
 import { useToast } from '../ui';
 import { resolveStage, isModuleAllowed } from '../../governance';
+import { useSSE, submitBackgroundJob, fetchJobResult } from './useSSE';
 
 // ── Types ──
 
@@ -345,43 +346,87 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
 
     const handleCompanyChange = (companyId: string) => setSelectedCompanyId(companyId);
 
+    const [activeJobId, setActiveJobId] = useState<string | null>(null);
+    const [progressMsg, setProgressMsg] = useState<string>('');
+
+    useSSE((event) => {
+        if (event.jobId === activeJobId) {
+            if (event.type === 'job_progress') {
+                setProgressMsg(event.progressMsg || `Gerando (${event.progress}%)`);
+            } else if (event.type === 'job_completed') {
+                fetchJobResult(event.jobId).then(data => {
+                    setGeneratedText(data.text);
+                    if (data.title) setDeclarationType(data.title.toUpperCase());
+                    
+                    if (data.quality) {
+                        setQualityReport(data.quality);
+                        if (data.quality.corrected) {
+                            toast.warning(`Declaração auto-corrigida: ${data.quality.corrections.length} problema(s) resolvido(s) automaticamente.`);
+                        }
+                        if (data.quality.contaminationDetected) {
+                            toast.error('Possível contaminação de dados de outro certame detectada. Revise com atenção.');
+                        } else if (data.quality.grade === 'D') {
+                            toast.error('Qualidade baixa. Revise a declaração antes de exportar.');
+                        }
+                    } else {
+                        setQualityReport(null);
+                    }
+                    if (data.warning) setQualityWarning(data.warning);
+
+                    setProgressMsg('');
+                    setActiveJobId(null);
+                    setIsGenerating(false);
+                }).catch(_err => {
+                    toast.error('Erro ao baixar declaração.');
+                    setIsGenerating(false);
+                    setActiveJobId(null);
+                    setProgressMsg('');
+                });
+            } else if (event.type === 'job_failed') {
+                toast.error(event.error || 'Erro na geração da declaração.');
+                setIsGenerating(false);
+                setActiveJobId(null);
+                setProgressMsg('');
+            }
+        }
+    });
+
     // ── Generate ──
     const handleGenerate = async () => {
         if (!selectedBiddingId || !selectedCompanyId || !declarationType) {
             toast.warning('Selecione licitação, empresa e tipo de declaração.'); return;
         }
+
+        const selectedBidding = biddings.find(b => b.id === selectedBiddingId);
+        
         // Atualizar data para o dia da geração
         const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
         updateLayout({ signatureDate: today });
 
         setIsGenerating(true); setSaveSuccess(false); setQualityWarning(null);
+        setProgressMsg('Iniciando...');
         try {
-            const response = await fetch(`${API_BASE_URL}/api/generate-declaration`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ biddingProcessId: selectedBiddingId, companyId: selectedCompanyId, declarationType, issuerType, customPrompt, style: declarationStyle, signatureCity: layout.signatureCity, signatureDate: today })
+            const { jobId } = await submitBackgroundJob({
+                type: 'declaration',
+                targetId: selectedBidding?.id,
+                targetTitle: selectedBidding?.title || 'Licitação',
+                input: { 
+                    biddingProcessId: selectedBiddingId, 
+                    companyId: selectedCompanyId, 
+                    declarationType, 
+                    issuerType, 
+                    customPrompt, 
+                    style: declarationStyle, 
+                    signatureCity: layout.signatureCity, 
+                    signatureDate: today 
+                }
             });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.details || data.error || 'Falha ao gerar');
-            setGeneratedText(data.text);
-            if (data.title) setDeclarationType(data.title.toUpperCase());
-            // Capturar qualityReport v5 (backend modular)
-            if (data.quality) {
-                setQualityReport(data.quality);
-                if (data.quality.corrected) {
-                    toast.warning(`Declaração auto-corrigida: ${data.quality.corrections.length} problema(s) resolvido(s) automaticamente.`);
-                }
-                if (data.quality.contaminationDetected) {
-                    toast.error('Possível contaminação de dados de outro certame detectada. Revise com atenção.');
-                } else if (data.quality.grade === 'D') {
-                    toast.error('Qualidade baixa. Revise a declaração antes de exportar.');
-                }
-            } else {
-                setQualityReport(null);
-            }
-            if (data.warning) setQualityWarning(data.warning);
-        } catch (error: any) { toast.error(`Erro ao gerar declaração: ${error.message}`); }
-        finally { setIsGenerating(false); }
+            setActiveJobId(jobId);
+        } catch (error: any) { 
+            toast.error(`Erro ao iniciar geração de declaração: ${error.message}`); 
+            setIsGenerating(false);
+            setProgressMsg('');
+        }
     };
 
     // ── PDF Builder ──
@@ -519,7 +564,7 @@ export function useAiDeclaration({ biddings, companies, onSave, initialBiddingId
         declarationStyle, setDeclarationStyle,
         isGenerating, isSaving, generatedText, setGeneratedText, saveSuccess,
         confirmAction, setConfirmAction, layoutSaved,
-        layouts, currentLayoutId, layoutName, qualityReport, qualityWarning,
+        layouts, currentLayoutId, layoutName, qualityReport, qualityWarning, progressMsg,
         // Computed
         layout, biddingsWithAnalysis, declarationTypesFromEdital,
         // Layout actions
