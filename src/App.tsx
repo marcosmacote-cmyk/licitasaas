@@ -26,6 +26,7 @@ import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui';
 import NotificationCenter from './components/NotificationCenter';
+import { onSessionExpired } from './services/apiClient';
 
 // Lazy imports — pages loaded on demand
 const PncpPage = lazy(() => import('./components/PncpPage').then(m => ({ default: m.PncpPage })));
@@ -62,6 +63,14 @@ function App() {
       setUser(JSON.parse(savedUser));
     }
     setLoading(false);
+  }, []);
+
+  // Global session expiry listener — auto-logout on 401
+  useEffect(() => {
+    const unsubscribe = onSessionExpired(() => {
+      handleLogout();
+    });
+    return unsubscribe;
   }, []);
 
   const fetchCompanies = async () => {

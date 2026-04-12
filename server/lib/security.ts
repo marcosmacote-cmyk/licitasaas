@@ -89,18 +89,23 @@ export function globalErrorHandler(err: any, req: Request, res: Response, _next:
     const tenantId = (req as any).user?.tenantId || '-';
     const userId = (req as any).user?.userId || '-';
 
+    // Use the intelligent error translation system
+    const { translateError } = require('../middlewares/errorHandler');
+    const translated = translateError(err);
+
     console.error(
-        `[UNHANDLED ERROR] ${req.method} ${req.path} | tenant=${tenantId} user=${userId}`,
+        `[UNHANDLED ERROR] ${req.method} ${req.path} | tenant=${tenantId} user=${userId} | code=${translated.code}`,
         err.message || err,
         err.stack ? `\n${err.stack.split('\n').slice(0, 3).join('\n')}` : ''
     );
 
-    // Never leak stack trace to client in production
-    const isDev = process.env.NODE_ENV !== 'production';
-    res.status(err.status || 500).json({
-        error: isDev ? err.message : 'Erro interno do servidor',
-        ...(isDev && { stack: err.stack?.split('\n').slice(0, 3) }),
-    });
+    // Never leak stack trace to client — always return translated message
+    if (!res.headersSent) {
+        res.status(translated.statusCode).json({
+            error: translated.userMessage,
+            code: translated.code,
+        });
+    }
 }
 
 /**

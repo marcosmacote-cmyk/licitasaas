@@ -48,6 +48,7 @@ import { LicitaMaisBrasilMonitor } from "./services/monitoring/licitamaisbrasil-
 import { IngestService } from "./services/monitoring/ingest.service";
 import { submitJob, getJob, listJobs, registerSSEClient, removeSSEClient, updateJobProgress, completeJob, failJob } from "./services/backgroundJobService";
 import { registerJobHandler, startJobWorker } from "./services/backgroundJobWorker";
+import { handleApiError } from "./middlewares/errorHandler";
 import express from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
@@ -259,7 +260,7 @@ app.get('/api/debug-db', authenticateToken, async (req: any, res) => {
         };
         res.json({ counts });
     } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        handleApiError(res, e, 'debug-counts');
     }
 });
 
@@ -1083,7 +1084,7 @@ ${company.technicalQualification || 'Nenhum profissional técnico cadastrado.'}`
 
     } catch (error: any) {
         console.error("[Declaration v5] Fatal error:", error);
-        res.status(500).json({ error: 'Failed to generate declaration', details: error?.message || 'Erro desconhecido' });
+        handleApiError(res, error, 'generate-declaration');
     }
 });
 
@@ -1536,7 +1537,7 @@ app.post('/api/internal/scanner/reset-and-scan', async (req: any, res) => {
         res.json({ success: true, deleted: deleted.count, message: `Reset OK (${deleted.count} removed). Scan triggered.` });
     } catch (error: any) {
         console.error("Internal reset error:", error);
-        res.status(500).json({ error: error.message });
+        handleApiError(res, error, 'scanner-reset');
     }
 });
 
@@ -4114,7 +4115,7 @@ app.post('/api/biddings', authenticateToken, async (req: any, res) => {
         res.json(bidding);
     } catch (error) {
         console.error("Create bidding error:", error);
-        res.status(500).json({ error: 'Failed to create bidding', details: error instanceof Error ? error.message : String(error) });
+        handleApiError(res, error, 'create-bidding');
     }
 });
 
@@ -4596,7 +4597,7 @@ app.put('/api/biddings/:id', authenticateToken, async (req: any, res) => {
         res.json(bidding);
     } catch (error) {
         console.error("Update bidding error:", error);
-        res.status(500).json({ error: 'Failed to update bidding', details: error instanceof Error ? error.message : String(error) });
+        handleApiError(res, error, 'update-bidding');
     }
 });
 
@@ -6530,8 +6531,7 @@ app.post('/api/jobs/submit', authenticateToken, aiLimiter, async (req: any, res)
             message: 'Tarefa enviada para processamento em segundo plano.',
         });
     } catch (err: any) {
-        console.error('[Jobs] Submit error:', err.message);
-        res.status(429).json({ error: err.message });
+        handleApiError(res, err, 'job-submit');
     }
 });
 
