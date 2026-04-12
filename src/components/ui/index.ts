@@ -27,6 +27,7 @@ export { ListPickerPopover } from './ListPickerPopover';
 export { Tooltip, TooltipHelp, TooltipInfo, EducationalPopover } from './Tooltip';
 export { GuidedTour, type TourStep } from './GuidedTour';
 export * from './GlobalSearchModal';
+export * from './Skeleton';
 
 // Domain Components — LicitaSaaS-specific
 export {

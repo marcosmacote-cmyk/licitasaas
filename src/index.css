@@ -3939,3 +3939,69 @@ table tr.selected td { background: var(--color-primary-light); }
       overflow-y: auto;
   }
 }
+
+/* ══════════════════════════════════════════════════════
+   SKELETON LOADERS E TRANSIÇÕES GERAIS (Sprint 6)
+   ══════════════════════════════════════════════════════ */
+
+@keyframes pulse-skeleton {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.skeleton-loader {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-bg-secondary);
+}
+
+.skeleton-loader::before {
+    content: '';
+    display: block;
+    position: absolute;
+    top: 0;
+    left: -150px;
+    height: 100%;
+    width: 150px;
+    background: linear-gradient(to right, transparent 0%, var(--color-bg-base) 50%, transparent 100%);
+    animation: skeleton-shimmer 1.5s infinite linear;
+}
+
+@keyframes skeleton-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(1000%); }
+}
+
+.skeleton-animate {
+    animation: pulse-skeleton 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Page Transitions (Sprint 6) ── */
+.page-fade-enter {
+    animation: pageFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pageFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+

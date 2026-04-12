@@ -19,14 +19,13 @@ import {
   Menu,
   X
 } from 'lucide-react';
-// Static imports — core pages that load on startup
 import { BiddingPage } from './components/BiddingPage';
 import { Dashboard } from './components/Dashboard';
 import { LoginPage } from './components/LoginPage';
 import type { BiddingProcess, CompanyProfile } from './types';
 import { API_BASE_URL } from './config';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ToastProvider, GuidedTour, type TourStep, GlobalSearchModal } from './components/ui';
+import { ToastProvider, GuidedTour, type TourStep, GlobalSearchModal, PageSkeleton } from './components/ui';
 import NotificationCenter from './components/NotificationCenter';
 import { onSessionExpired } from './services/apiClient';
 
@@ -504,7 +503,8 @@ function App() {
           </header>
 
           {/* ── Page Content ── */}
-          <Suspense fallback={<div className="flex-center" style={{ padding: 'var(--space-20)', justifyContent: 'center' }}><Loader2 size={32} className="spinner" color="var(--color-primary)" /></div>}>
+          <Suspense fallback={<PageSkeleton />}>
+          <div className="page-fade-enter" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           {activeTab === 'dashboard' && <Dashboard items={items} companies={companies} onNavigate={(tab, filter) => { 
                 if (filter?.targetProcessId) {
                     setModuleContext({ processId: filter.targetProcessId });
@@ -544,6 +544,7 @@ function App() {
           {activeTab === 'team' && <TeamPage />}
           {activeTab === 'admin' && <AdminPage />}
           {activeTab === 'settings' && <SettingsPage />}
+          </div>
           </Suspense>
         </main>
       {/* Global Modals & Overlays */}
