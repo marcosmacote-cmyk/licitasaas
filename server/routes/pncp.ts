@@ -456,7 +456,7 @@ router.get('/items', authenticateToken, async (req: any, res) => {
         
         const response = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 15000 } as any);
         
-        const responseData = response.data || [];
+        const responseData: any = response.data || {};
         const rawItems: any[] = Array.isArray(responseData) ? responseData : (responseData.data || []);
         const items = rawItems.map((it: any) => ({
             itemNumber: it.numeroItem || '-',
