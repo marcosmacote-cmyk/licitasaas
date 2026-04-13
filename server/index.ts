@@ -480,11 +480,13 @@ if (frontendDist) {
     app.use(express.static(frontendDist));
     
     // Fallback for React Router (catch-all)
-    app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
-            return next();
+    // Using app.use() instead of app.get('*') to avoid Express 5 path-to-regexp crash
+    app.use((req, res, next) => {
+        if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/uploads/')) {
+            res.sendFile(path.join(frontendDist, 'index.html'));
+        } else {
+            next();
         }
-        res.sendFile(path.join(frontendDist, 'index.html'));
     });
 } else {
     logger.error(`[Frontend] CRITICAL: UI Build (dist) not found in any expected location!`);
