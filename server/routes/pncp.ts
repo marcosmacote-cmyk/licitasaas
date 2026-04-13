@@ -638,19 +638,18 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // Limit max generated combinations to 50 to avoid excessive API calls
-        urlsToFetch = urlsToFetch.slice(0, 50);
+        // Limit max generated combinations to avoid completely hanging
+        urlsToFetch = urlsToFetch.slice(0, 30);
 
-        const agent = new https.Agent({ rejectUnauthorized: false });
+        const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
         const startTime = Date.now();
-        logger.info(`[PNCP] START GET ${urlsToFetch.length} url(s) in batches...`);
+        logger.info(`[PNCP] START GET ${urlsToFetch.length} url(s) in parallel batches...`);
 
         let rawItems: any[] = [];
-        const chunkSize = 5; // Small batches for faster first-result delivery
-        const MAX_ITEMS = 500; // Stop fetching once we have enough items
+        const chunkSize = 15; // Higher concurrency (15 at a time)
+        const MAX_ITEMS = 500;
 
         for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
-            // Early termination: stop if we already have plenty of results
             if (rawItems.length >= MAX_ITEMS) {
                 logger.info(`[PNCP] Early termination — already have ${rawItems.length} items`);
                 break;
@@ -661,19 +660,17 @@ router.post('/search', authenticateToken, async (req: any, res) => {
                 chunk.map(u => axios.get(u, {
                     headers: { 'Accept': 'application/json' },
                     httpsAgent: agent,
-                    timeout: 12000
+                    timeout: 8000 // Very strict fail-fast if Gov.br hangs on a specific endpoint
                 } as any))
             );
 
-            responses.forEach((res) => {
+            for (const res of responses) {
                 if (res.status === 'fulfilled') {
                     const data = res.value.data as any;
                     const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
                     rawItems = rawItems.concat(items);
-                } else {
-                    logger.error('[PNCP] Request failed:', res.reason?.message);
                 }
-            });
+            }
         }
 
         // First pass: extract what we can from search results
