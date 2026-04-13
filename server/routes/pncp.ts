@@ -481,21 +481,28 @@ router.get('/items', authenticateToken, async (req: any, res) => {
         let responseData: any = null;
         
         try {
-            // Try both endpoints in parallel — first success wins
-            const result = await Promise.any([
-                axios.get(url1, { httpsAgent: agent, timeout: 8000 } as any).then(r => r.data),
-                axios.get(url2, { httpsAgent: agent, timeout: 8000 } as any).then(r => r.data),
+            // Try both endpoints in parallel — use first successful response
+            const results = await Promise.allSettled([
+                axios.get(url1, { httpsAgent: agent, timeout: 8000 } as any),
+                axios.get(url2, { httpsAgent: agent, timeout: 8000 } as any),
             ]);
-            responseData = result;
-        } catch (aggErr: any) {
-            // All requests failed
-            const firstError = aggErr.errors?.[0];
-            if (firstError?.response?.status === 404) {
-                const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
-                pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
-                return res.json(emptyResult);
+            
+            const firstSuccess = results.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<any> | undefined;
+            if (firstSuccess) {
+                responseData = firstSuccess.value.data;
+            } else {
+                // All failed — check for 404
+                const firstRejection = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+                const err = firstRejection?.reason;
+                if (err?.response?.status === 404) {
+                    const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
+                    pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
+                    return res.json(emptyResult);
+                }
+                throw err || new Error('All PNCP item endpoints failed');
             }
-            throw firstError || aggErr;
+        } catch (fetchErr: any) {
+            throw fetchErr;
         }
         
         const elapsed = Date.now() - startTime;
