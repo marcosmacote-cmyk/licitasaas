@@ -668,7 +668,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     };
 
     // Fetch results when page changes (pagination buttons)
-    const prevPageRef = React.useRef(page);
+    const prevPageRef = useRef(page);
     useEffect(() => {
         if (hasSearched && !loading && page !== prevPageRef.current) {
             prevPageRef.current = page;
