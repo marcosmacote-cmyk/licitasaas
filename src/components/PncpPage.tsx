@@ -35,7 +35,7 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
     useEffect(() => {
         const observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && !loadingRef.current) {
-                if (p.activeTab === 'search') {
+                if (p.activeTab === 'search' && p.hasSearched) {
                     p.setPage(prev => {
                         const max = Math.ceil(p.totalResults / 10);
                         return prev < max ? prev + 1 : prev;
