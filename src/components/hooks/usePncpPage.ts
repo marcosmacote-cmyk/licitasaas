@@ -542,7 +542,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             } else { throw new Error("Erro na busca"); }
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente ou refine sua busca com filtros mais específicos.', { duration: 6000 });
+                toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente ou refine sua busca com filtros mais específicos.');
             } else {
                 console.error(e);
                 toast.error('Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');
