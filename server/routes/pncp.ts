@@ -454,9 +454,10 @@ router.get('/items', authenticateToken, async (req: any, res) => {
         const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens?pagina=1&tamanhoPagina=100`;
         const agent = new https.Agent({ rejectUnauthorized: false });
         
-        const response = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 15000 });
+        const response = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 15000 } as any);
         
-        const rawItems = response.data || [];
+        const responseData = response.data || [];
+        const rawItems: any[] = Array.isArray(responseData) ? responseData : (responseData.data || []);
         const items = rawItems.map((it: any) => ({
             itemNumber: it.numeroItem || '-',
             description: it.descricao || it.materialOuServicoNome || 'Sem descrição',

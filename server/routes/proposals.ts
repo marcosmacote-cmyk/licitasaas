@@ -470,7 +470,7 @@ Responda APENAS com um JSON array válido:
                     
                     let parseIndex = 0;
                     for await (const chunk of resultStream) {
-                        responseText += chunk.text();
+                        responseText += chunk.text;
                         const { objects, nextIndex } = extractValidObjects(responseText, parseIndex);
                         if (objects.length > 0) {
                             items.push(...objects);
@@ -730,7 +730,7 @@ Responda APENAS com um JSON array válido:
                 
                 let parseIndex = 0;
                 for await (const chunk of resultStream) {
-                    responseText += chunk.text();
+                    responseText += chunk.text;
                     const { objects, nextIndex } = extractValidObjects(responseText, parseIndex);
                     if (objects.length > 0) {
                         items.push(...objects);
