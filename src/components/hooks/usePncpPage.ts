@@ -515,7 +515,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         setHasSearched(true);
         setLoading(true);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout (Gov.br can be slow)
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {
@@ -542,10 +542,10 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             } else { throw new Error("Erro na busca"); }
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                toast.error('A consulta ao PNCP excedeu o tempo limite (30s). A API pode estar indisponível. Tente novamente em alguns minutos.');
+                toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente ou refine sua busca com filtros mais específicos.', { duration: 6000 });
             } else {
                 console.error(e);
-                toast.error('Falha ao buscar editais. Tente novamente.');
+                toast.error('Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');
             }
         }
         finally { clearTimeout(timeoutId); setLoading(false); }

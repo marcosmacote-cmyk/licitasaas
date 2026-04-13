@@ -689,7 +689,13 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             for (const f of valueFields) {
                 if (sample[f] !== undefined && sample[f] !== null) found[f] = sample[f];
             }
-            logger.info(`[PNCP] Sample item value fields: ${JSON.stringify(found)} | All keys: ${Object.keys(sample).filter(k => k.toLowerCase().includes('valor') || k.toLowerCase().includes('amount') || k.toLowerCase().includes('preco')).join(', ')}`);
+            // Also log UF-related fields
+            const ufFields = ['uf', 'ufSigla', 'unidadeOrgao', 'ufNome', 'municipio_nome', 'municipio'];
+            const ufFound: Record<string, any> = {};
+            for (const f of ufFields) {
+                if (sample[f] !== undefined && sample[f] !== null) ufFound[f] = sample[f];
+            }
+            logger.info(`[PNCP] Sample value fields: ${JSON.stringify(found)} | UF fields: ${JSON.stringify(ufFound)}`);
         }
         
         const items = rawItems.filter(item => item != null).map((item: any) => {
@@ -720,8 +726,8 @@ router.post('/search', authenticateToken, async (req: any, res) => {
                 data_abertura: item.dataAberturaProposta || item.data_inicio_vigencia || item.data_abertura || '',
                 data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
                 valor_estimado: valorEstimado,
-                uf: item.uf || item.unidadeOrgao?.ufSigla || uf || '--',
-                municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '--',
+                uf: item.uf || item.unidadeOrgao?.ufSigla || item.ufSigla || item.ufNome || '',
+                municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '',
                 modalidade_nome: modalidadeNome,
                 link_sistema: (cnpj && ano && nSeq)
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
@@ -765,6 +771,21 @@ router.post('/search', authenticateToken, async (req: any, res) => {
                     return !excludeTerms.some((term: string) => objNorm.includes(term));
                 });
             }
+        }
+
+        // ── Post-filter by UF (API does NOT reliably filter by UF!) ──
+        if (uf && uf !== '' && !uf.includes(',')) {
+            const ufUpper = uf.toUpperCase();
+            filteredItems = filteredItems.filter((it: any) => {
+                if (!it.uf || it.uf === '') return true; // Keep items without UF info (can't determine)
+                return it.uf.toUpperCase() === ufUpper;
+            });
+        } else if (uf && uf.includes(',')) {
+            const allowedUfs = new Set(uf.split(',').map((u: string) => u.trim().toUpperCase()));
+            filteredItems = filteredItems.filter((it: any) => {
+                if (!it.uf || it.uf === '') return true;
+                return allowedUfs.has(it.uf.toUpperCase());
+            });
         }
 
         // ── Post-filter by esfera (additional accuracy) ──
