@@ -456,15 +456,30 @@ async function fetchPdfPartsForProcess(biddingProcessId: string | null, fileName
     return pdfParts;
 }
 
-// ── Frontend Static Serving (Vite dist) ──
-const frontendDist = path.join(SERVER_ROOT, '..', 'dist');
-logger.info(`[Frontend] Checking static UI path: ${frontendDist}`);
+// ── Frontend Static Serving (Vite dist / Docker public) ──
+const possibleDistPaths = [
+    path.join(SERVER_ROOT, 'public'),              // Dockerfile production path (moved from dist -> public)
+    path.join(SERVER_ROOT, '..', 'dist'),          // Parent dir (local monorepo root)
+    path.join(SERVER_ROOT, 'dist'),                // Inside server root
+    path.join(process.cwd(), '..', 'dist'),        // Using cwd
+    path.join(process.cwd(), 'dist'),              // Using cwd direct
+    '/app/dist',                                   // Railway Nixpacks specific
+    '/workspace/dist'                              // Railway standard path
+];
 
-if (fs.existsSync(frontendDist)) {
-    logger.info(`[Frontend] Serving static UI from ${frontendDist}`);
+let frontendDist = '';
+for (const p of possibleDistPaths) {
+    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
+        frontendDist = p;
+        break;
+    }
+}
+
+if (frontendDist) {
+    logger.info(`[Frontend] Found and serving static UI from: ${frontendDist}`);
     app.use(express.static(frontendDist));
     
-    // Fallback for React Router (catch-all) - MUST be after all API and static routes
+    // Fallback for React Router (catch-all)
     app.get('*', (req, res, next) => {
         if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
             return next();
@@ -472,7 +487,8 @@ if (fs.existsSync(frontendDist)) {
         res.sendFile(path.join(frontendDist, 'index.html'));
     });
 } else {
-    logger.warn(`[Frontend] UI Build (dist) not found at ${frontendDist}. Running in API-only mode.`);
+    logger.error(`[Frontend] CRITICAL: UI Build (dist) not found in any expected location!`);
+    logger.error(`Tested paths: ${possibleDistPaths.join(', ')}`);
 }
 
 app.listen(PORT, async () => {
