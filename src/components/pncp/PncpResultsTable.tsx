@@ -1,9 +1,44 @@
-import React from 'react';
-import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { normalizeModality } from '../../utils/normalizeModality';
 import type { PncpChildProps } from './types';
+import api from '../../lib/api';
 
 export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loaderRef: any }) {
+    const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+    const [itemDetails, setItemDetails] = useState<any[] | null>(null);
+    const [loadingItems, setLoadingItems] = useState(false);
+    const [itemError, setItemError] = useState('');
+
+    const toggleItems = async (item: any) => {
+        if (expandedItemId === item.id) {
+            setExpandedItemId(null);
+            setItemDetails(null);
+            return;
+        }
+
+        setExpandedItemId(item.id);
+        setItemDetails(null);
+        setLoadingItems(true);
+        setItemError('');
+
+        try {
+            const res = await api.get(`/api/pncp/items`, { 
+                params: {
+                    cnpj: item.orgao_cnpj,
+                    ano: item.ano,
+                    seq: item.numero_sequencial
+                }
+            });
+            setItemDetails(res.data.items || []);
+            if (res.data.message) setItemError(res.data.message);
+            else if (res.data.items?.length === 0) setItemError('Nenhum item exibido / Licitação sem itens cadastrados no PNCP');
+        } catch (error: any) {
+            setItemError('Não foi possível carregar os itens. Talvez não estejam publicados no PNCP.');
+        } finally {
+            setLoadingItems(false);
+        }
+    };
     return (
         <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-xl)', border: 'none', boxShadow: 'var(--shadow-sm), 0 0 0 1px var(--color-border)', overflow: 'hidden' }}>
             <table className="table" style={{ width: '100%' }}>
@@ -144,6 +179,20 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
                                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                                             <button
                                                 className="btn btn-ghost"
+                                                onClick={() => toggleItems(item)}
+                                                style={{ 
+                                                    padding: '7px', 
+                                                    borderRadius: 'var(--radius-md)', 
+                                                    background: expandedItemId === item.id ? 'var(--color-bg-elevated)' : 'transparent',
+                                                    color: expandedItemId === item.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                                    border: expandedItemId === item.id ? '1px solid var(--color-border)' : '1px solid transparent'
+                                                }}
+                                                title="Ver itens da Licitação"
+                                            >
+                                                {expandedItemId === item.id ? <ChevronUp size={15} /> : <List size={15} />}
+                                            </button>
+                                            <button
+                                                className="btn btn-ghost"
                                                 onClick={() => p.toggleFavorito(item)}
                                                 style={{ padding: '7px', borderRadius: 'var(--radius-md)', color: isFavorito ? 'var(--color-warning)' : 'var(--color-text-tertiary)', background: isFavorito ? 'var(--color-warning-bg)' : 'transparent' }}
                                                 title={isFavorito ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
@@ -200,6 +249,90 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
                                         </div>
                                     </td>
                                 </tr>
+                                {expandedItemId === item.id && (
+                                    <tr style={{ background: 'var(--color-bg-base)' }}>
+                                        <td colSpan={6} style={{ padding: 0 }}>
+                                            <div style={{ 
+                                                padding: '20px 24px', 
+                                                borderTop: '1px solid var(--color-border-subtle)',
+                                                borderBottom: '1px solid var(--color-border)',
+                                                boxShadow: 'inset 0 4px 6px -4px rgba(0,0,0,0.05)'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                                    <h4 style={{ fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <List size={16} color="var(--color-primary)" />
+                                                        Itens da Licitação (Pré-visualização)
+                                                    </h4>
+                                                </div>
+                                                
+                                                {loadingItems ? (
+                                                    <div style={{ padding: '30px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                                                        <Loader2 size={24} className="spinner" style={{ margin: '0 auto 12px', color: 'var(--color-primary)' }} />
+                                                        <span style={{ fontSize: '0.875rem' }}>Buscando itens diretamente no Gov.br...</span>
+                                                    </div>
+                                                ) : itemError ? (
+                                                    <div style={{ padding: '20px', textAlign: 'center', background: 'var(--color-bg-surface-elevated)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+                                                        {itemError}
+                                                    </div>
+                                                ) : itemDetails && itemDetails.length > 0 ? (
+                                                    <div style={{ 
+                                                        border: '1px solid var(--color-border)', 
+                                                        borderRadius: 'var(--radius-lg)', 
+                                                        overflow: 'hidden',
+                                                        background: 'var(--color-bg-surface)',
+                                                        maxHeight: '350px',
+                                                        overflowY: 'auto'
+                                                    }}>
+                                                        <table className="table" style={{ width: '100%', fontSize: '0.75rem' }}>
+                                                            <thead style={{ background: 'var(--color-bg-subtle)' }}>
+                                                                <tr>
+                                                                    <th style={{ padding: '10px 16px', width: '5%', textAlign: 'center' }}>Item</th>
+                                                                    <th style={{ padding: '10px 16px', width: '55%' }}>Descrição</th>
+                                                                    <th style={{ padding: '10px 16px', width: '10%', textAlign: 'right' }}>Qtd</th>
+                                                                    <th style={{ padding: '10px 16px', width: '15%', textAlign: 'right' }}>Valor Unit. Estimado</th>
+                                                                    <th style={{ padding: '10px 16px', width: '15%', textAlign: 'right' }}>Valor Total</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {itemDetails.map((det, idx) => (
+                                                                    <tr key={idx} style={{ borderBottom: idx === itemDetails.length - 1 ? 'none' : '1px solid var(--color-border-subtle)' }}>
+                                                                        <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{det.itemNumber}</td>
+                                                                        <td style={{ padding: '12px 16px', lineHeight: '1.4' }}>{det.description}</td>
+                                                                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500 }}>{det.quantity}</td>
+                                                                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(det.unitValue || 0)}
+                                                                        </td>
+                                                                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-success)' }}>
+                                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(det.totalValue || 0)}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ) : null}
+                                                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                                                    <button 
+                                                        className="btn" 
+                                                        onClick={() => p.handlePncpAiAnalyze(item)}
+                                                        disabled={!!p.analyzingItemId}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            fontSize: '0.8125rem',
+                                                            background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
+                                                            color: 'white',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            border: 'none',
+                                                            gap: '6px'
+                                                        }}
+                                                    >
+                                                        <Brain size={14} /> Importar e Analisar com IA
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                                 </React.Fragment>)
                         })
                     )}

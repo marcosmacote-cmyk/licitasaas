@@ -443,6 +443,40 @@ router.post('/favorites/import', authenticateToken, async (req: any, res) => {
 });
 
 // ══════════════════════════════════════════
+// ── PNCP Items API (Pre-filter capability) ──
+// ══════════════════════════════════════════
+router.get('/items', authenticateToken, async (req: any, res) => {
+    try {
+        const { cnpj, ano, seq } = req.query;
+        if (!cnpj || !ano || !seq) return res.status(400).json({ error: 'cnpj, ano, and seq required' });
+        
+        // Fetch up to 100 items (most editais have < 100)
+        const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens?pagina=1&tamanhoPagina=100`;
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        
+        const response = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 15000 });
+        
+        const rawItems = response.data || [];
+        const items = rawItems.map((it: any) => ({
+            itemNumber: it.numeroItem || '-',
+            description: it.descricao || it.materialOuServicoNome || 'Sem descrição',
+            quantity: it.quantidade || 1,
+            unitValue: it.valorUnitarioEstimado || it.valorUnitarioHomologado || 0,
+            totalValue: it.valorTotal || ((it.quantidade || 0) * (it.valorUnitarioEstimado || 0)) || 0,
+            status: it.situacaoCompraItemNome || it.situacaoItemNome || 'Ativo'
+        }));
+        
+        res.json({ items });
+    } catch (error: any) {
+        if (error.response?.status === 404) {
+            return res.json({ items: [], message: 'Itens não cadastrados no portal PNCP' });
+        }
+        logger.error(`PNCP items error for ${req.query.cnpj}/${req.query.ano}/${req.query.seq}:`, error?.message || error);
+        res.status(500).json({ error: 'Erro ao buscar itens no PNCP' });
+    }
+});
+
+// ══════════════════════════════════════════
 // ── PNCP Search (Extracted from index.ts) ──
 // ══════════════════════════════════════════
 
