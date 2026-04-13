@@ -243,6 +243,29 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         if (event.jobId === activePopulateJobId) {
             if (event.type === 'job_progress') {
                 setPopulateProgressMsg(event.progressMsg || `Processando (${event.progress}%)`);
+                if (event.metadata?.yieldedItems && Array.isArray(event.metadata.yieldedItems)) {
+                    // Mapeia e calcula preços dos itens imediatamente para a tabela (Efeito Streaming)
+                    const newItems = event.metadata.yieldedItems.map((it: any) => {
+                        const rawItem = {
+                            ...it,
+                            unitCost: it.referencePrice || it.unitCost || 0,
+                            multiplier: it.multiplier || 1,
+                            multiplierLabel: it.multiplierLabel || '',
+                            quantity: it.quantity || 1,
+                            referencePrice: it.referencePrice || null,
+                        };
+                        const calc = calculateItem(rawItem, bdi, discount, roundingMode);
+                        return { ...rawItem, unitPrice: calc.unitPrice, totalPrice: calc.totalPrice };
+                    });
+                    
+                    setItems(prev => {
+                        // Append items preventing duplicates by itemNumber
+                        const existingNumbers = new Set(prev.map(p => p.itemNumber));
+                        const uniqueNew = newItems.filter(p => !existingNumbers.has(p.itemNumber));
+                        if (uniqueNew.length === 0) return prev;
+                        return [...prev, ...uniqueNew];
+                    });
+                }
             } else if (event.type === 'job_completed') {
                 fetchJobResult(event.jobId).then(data => {
                     setPopulateProgressMsg('Validando e finalizando...');

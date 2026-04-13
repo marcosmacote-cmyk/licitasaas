@@ -49,6 +49,7 @@ export interface JobEvent {
     progress?: number;
     progressMsg?: string;
     error?: string;
+    metadata?: any;
     timestamp: string;
 }
 
@@ -83,7 +84,7 @@ export function removeSSEClient(clientId: string): void {
 /**
  * Push an event to all SSE clients of a given tenant
  */
-function pushEventToTenant(tenantId: string, event: JobEvent): void {
+export function pushEventToTenant(tenantId: string, event: JobEvent): void {
     const eventData = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
     let sent = 0;
     for (const [clientId, client] of sseClients) {

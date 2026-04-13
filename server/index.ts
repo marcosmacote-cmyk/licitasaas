@@ -707,7 +707,7 @@ app.listen(PORT, async () => {
                     'Authorization': `Bearer ${internalToken}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(job.input),
+                body: JSON.stringify({ ...job.input, __jobId: job.id }),
             });
             clearInterval(progressTimer);
 

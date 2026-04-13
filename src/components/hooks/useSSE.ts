@@ -16,6 +16,7 @@ export interface JobEvent {
     progress?: number;
     progressMsg?: string;
     error?: string;
+    metadata?: any;
     timestamp: string;
 }
 
