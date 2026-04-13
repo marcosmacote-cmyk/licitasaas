@@ -445,16 +445,29 @@ router.post('/favorites/import', authenticateToken, async (req: any, res) => {
 // ══════════════════════════════════════════
 // ── PNCP Items API (Pre-filter capability) ──
 // ══════════════════════════════════════════
+
+// In-memory cache for PNCP items (avoids repeated slow Gov.br calls)
+const pncpItemsCache = new Map<string, { data: any, timestamp: number }>();
+const PNCP_ITEMS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 router.get('/items', authenticateToken, async (req: any, res) => {
     try {
         const { cnpj, ano, seq } = req.query;
         if (!cnpj || !ano || !seq) return res.status(400).json({ error: 'cnpj, ano, and seq required' });
         
-        // Fetch up to 100 items (most editais have < 100)
+        const cacheKey = `${cnpj}-${ano}-${seq}`;
+        const cached = pncpItemsCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp) < PNCP_ITEMS_CACHE_TTL) {
+            logger.info(`[PNCP Items] Cache HIT for ${cacheKey} (${cached.data.items.length} items)`);
+            return res.json(cached.data);
+        }
+
+        const startTime = Date.now();
         const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens?pagina=1&tamanhoPagina=100`;
         const agent = new https.Agent({ rejectUnauthorized: false });
         
-        const response = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 15000 } as any);
+        const response = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 10000 } as any);
+        const elapsed = Date.now() - startTime;
         
         const responseData: any = response.data || {};
         const rawItems: any[] = Array.isArray(responseData) ? responseData : (responseData.data || []);
@@ -467,10 +480,22 @@ router.get('/items', authenticateToken, async (req: any, res) => {
             status: it.situacaoCompraItemNome || it.situacaoItemNome || 'Ativo'
         }));
         
-        res.json({ items });
+        const result = { items };
+        pncpItemsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        logger.info(`[PNCP Items] Fetched ${items.length} items for ${cacheKey} in ${elapsed}ms (cached for ${PNCP_ITEMS_CACHE_TTL / 60000}min)`);
+        
+        res.json(result);
     } catch (error: any) {
         if (error.response?.status === 404) {
-            return res.json({ items: [], message: 'Itens não cadastrados no portal PNCP' });
+            // Cache 404s too to avoid re-hitting Gov.br
+            const { cnpj, ano, seq } = req.query;
+            const cacheKey = `${cnpj}-${ano}-${seq}`;
+            const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP' };
+            pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
+            return res.json(emptyResult);
+        }
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            return res.status(504).json({ error: 'A API do PNCP (Gov.br) demorou para responder. Tente novamente.' });
         }
         logger.error(`PNCP items error for ${req.query.cnpj}/${req.query.ano}/${req.query.seq}:`, error?.message || error);
         res.status(500).json({ error: 'Erro ao buscar itens no PNCP' });

@@ -9,6 +9,7 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
     const [itemDetails, setItemDetails] = useState<any[] | null>(null);
     const [loadingItems, setLoadingItems] = useState(false);
     const [itemError, setItemError] = useState('');
+    const [slowLoad, setSlowLoad] = useState(false);
 
     const toggleItems = async (item: any) => {
         if (expandedItemId === item.id) {
@@ -21,6 +22,10 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
         setItemDetails(null);
         setLoadingItems(true);
         setItemError('');
+        setSlowLoad(false);
+
+        // Show "slow" message after 3 seconds
+        const slowTimer = setTimeout(() => setSlowLoad(true), 3000);
 
         try {
             const token = localStorage.getItem('token');
@@ -29,13 +34,19 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
-            setItemDetails(data.items || []);
-            if (data.message) setItemError(data.message);
-            else if (data.items?.length === 0) setItemError('Nenhum item exibido / Licitação sem itens cadastrados no PNCP');
+            if (!res.ok) {
+                setItemError(data.error || 'Erro ao buscar itens');
+            } else {
+                setItemDetails(data.items || []);
+                if (data.message) setItemError(data.message);
+                else if (data.items?.length === 0) setItemError('Nenhum item exibido / Licitação sem itens cadastrados no PNCP');
+            }
         } catch (error: any) {
             setItemError('Não foi possível carregar os itens. Talvez não estejam publicados no PNCP.');
         } finally {
+            clearTimeout(slowTimer);
             setLoadingItems(false);
+            setSlowLoad(false);
         }
     };
     return (
@@ -267,7 +278,11 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
                                                 {loadingItems ? (
                                                     <div style={{ padding: '30px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                                                         <Loader2 size={24} className="spinner" style={{ margin: '0 auto 12px', color: 'var(--color-primary)' }} />
-                                                        <span style={{ fontSize: '0.875rem' }}>Buscando itens diretamente no Gov.br...</span>
+                                                        <span style={{ fontSize: '0.875rem', display: 'block' }}>
+                                                            {slowLoad 
+                                                                ? 'A API do Gov.br está demorando para responder... Aguarde mais um momento.'
+                                                                : 'Buscando itens no Gov.br...'}
+                                                        </span>
                                                     </div>
                                                 ) : itemError ? (
                                                     <div style={{ padding: '20px', textAlign: 'center', background: 'var(--color-bg-surface-elevated)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
@@ -310,24 +325,6 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
                                                         </table>
                                                     </div>
                                                 ) : null}
-                                                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                                                    <button 
-                                                        className="btn" 
-                                                        onClick={() => p.handlePncpAiAnalyze(item)}
-                                                        disabled={!!p.analyzingItemId}
-                                                        style={{
-                                                            padding: '8px 16px',
-                                                            fontSize: '0.8125rem',
-                                                            background: 'linear-gradient(135deg, var(--color-primary), var(--color-ai))',
-                                                            color: 'white',
-                                                            borderRadius: 'var(--radius-md)',
-                                                            border: 'none',
-                                                            gap: '6px'
-                                                        }}
-                                                    >
-                                                        <Brain size={14} /> Importar e Analisar com IA
-                                                    </button>
-                                                </div>
                                             </div>
                                         </td>
                                     </tr>
