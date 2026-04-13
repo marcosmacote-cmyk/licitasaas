@@ -456,6 +456,25 @@ async function fetchPdfPartsForProcess(biddingProcessId: string | null, fileName
     return pdfParts;
 }
 
+// ── Frontend Static Serving (Vite dist) ──
+const frontendDist = path.join(SERVER_ROOT, '..', 'dist');
+logger.info(`[Frontend] Checking static UI path: ${frontendDist}`);
+
+if (fs.existsSync(frontendDist)) {
+    logger.info(`[Frontend] Serving static UI from ${frontendDist}`);
+    app.use(express.static(frontendDist));
+    
+    // Fallback for React Router (catch-all) - MUST be after all API and static routes
+    app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+            return next();
+        }
+        res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+} else {
+    logger.warn(`[Frontend] UI Build (dist) not found at ${frontendDist}. Running in API-only mode.`);
+}
+
 app.listen(PORT, async () => {
     logger.info(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
     logger.info(`Upload directory: ${uploadDir}`);
