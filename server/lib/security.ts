@@ -46,7 +46,7 @@ export const aiLimiter = rateLimit({
     max: 20,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req: any) => req.user?.tenantId || req.ip || 'unknown',
+    keyGenerator: (req: any) => req.user?.tenantId || 'anon',
     message: { error: 'Limite corporativo de requisições de IA atingido. Aguarde 1 minuto.' },
 });
 
