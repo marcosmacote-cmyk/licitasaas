@@ -506,10 +506,25 @@ router.get('/items', authenticateToken, async (req: any, res) => {
 // ── PNCP Search (Extracted from index.ts) ──
 // ══════════════════════════════════════════
 
+// In-memory cache for PNCP search results (avoids repeated slow Gov.br calls)
+const pncpSearchCache = new Map<string, { data: any, timestamp: number }>();
+const PNCP_SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 router.post('/search', authenticateToken, async (req: any, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
         const pageSize = 10;
+
+        // ── Cache check: hash search params to avoid redundant Gov.br calls ──
+        const cacheKey = JSON.stringify({ keywords, status, uf, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords });
+        const cached = pncpSearchCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp) < PNCP_SEARCH_CACHE_TTL) {
+            const totalResults = cached.data.length;
+            const startIdx = (Number(pagina) - 1) * pageSize;
+            const pageItems = cached.data.slice(startIdx, startIdx + pageSize);
+            logger.info(`[PNCP] Cache HIT for search (${totalResults} total, page ${pagina})`);
+            return res.json({ items: pageItems, total: totalResults });
+        }
 
         let kwList: string[] = [];
         if (keywords) {
@@ -542,7 +557,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
         }
 
         const buildBaseUrl = (qItems: string[], overrideCnpj?: string, singleUf?: string) => {
-            let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 100 : 500}&pagina=1`;
+            let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 50 : 100}&pagina=1`;
             if (overrideCnpj) {
                 url += `&cnpj=${overrideCnpj}`;
             }
@@ -715,46 +730,19 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             return absA - absB;
         });
 
-        // Paginate first, then hydrate ONLY the page items (fast!)
+        // Paginate from filtered results (NO hydration — search API data is sufficient)
         const totalResults = filteredItems.length;
         const startIdx = (Number(pagina) - 1) * pageSize;
         const pageItems = filteredItems.slice(startIdx, startIdx + pageSize);
 
-        // Hydrate only the 10 items on this page from detail API
-        const hydratedPageItems = await Promise.all(pageItems.map(async (item: any) => {
-            if (item.orgao_cnpj && item.ano && item.numero_sequencial) {
-                try {
-                    const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${item.orgao_cnpj}/compras/${item.ano}/${item.numero_sequencial}`;
-                    const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 5000 } as any);
-                    const d: any = detailRes.data;
-                    if (d) {
-                        if (!item.valor_estimado) {
-                            const v = Number(d.valorTotalEstimado ?? d.valorTotalHomologado ?? d.valorGlobal ?? 0);
-                            if (v > 0) item.valor_estimado = v;
-                        }
-                        if (!item.modalidade_nome) {
-                            item.modalidade_nome = d.modalidadeNome || d.modalidadeLicitacaoNome || d.modalidade?.nome || '';
-                        }
-                        // Hydrate dates from detail API
-                        if (d.dataEncerramentoProposta) {
-                            item.data_encerramento_proposta = d.dataEncerramentoProposta;
-                        }
-                        if (d.dataAberturaProposta) {
-                            item.data_abertura = d.dataAberturaProposta;
-                        }
-                    }
-                } catch (e) {
-                    // Safe mute — detail endpoint can fail for some items
-                }
-            }
-            return item;
-        }));
+        // ── Cache the full filtered+sorted list for subsequent pages ──
+        pncpSearchCache.set(cacheKey, { data: filteredItems, timestamp: Date.now() });
 
         const endTime = Date.now();
-        logger.info(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults}, Page ${pagina}: items ${startIdx}-${startIdx + hydratedPageItems.length}`);
+        logger.info(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults}, Page ${pagina}: items ${startIdx}-${startIdx + pageItems.length}`);
 
         res.json({
-            items: hydratedPageItems,
+            items: pageItems,
             total: totalResults
         });
     } catch (error: any) {
