@@ -22,12 +22,13 @@ const ALLOWED_ORIGINS = [
 // so Express resolves req.ip from X-Forwarded-For automatically.
 // The default keyGenerator uses req.ip with proper IPv6 normalization.
 
-/** Global: 200 requests per minute per IP */
+/** Global API: 500 requests per minute per IP (only applied to /api/ routes, not static files) */
 export const globalLimiter = rateLimit({
     windowMs: 60 * 1000,         // 1 minuto
-    max: 200,
+    max: 500,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req: any) => !req.path.startsWith('/api/'),  // Skip static files
     message: { error: 'Muitas requisições. Tente novamente em instantes.' },
 });
 
