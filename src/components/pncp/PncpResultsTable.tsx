@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { normalizeModality } from '../../utils/normalizeModality';
 import type { PncpChildProps } from './types';
-import api from '../../lib/api';
+import { API_BASE_URL } from '../../config';
 
 export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loaderRef: any }) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -23,16 +23,15 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
         setItemError('');
 
         try {
-            const res = await api.get(`/api/pncp/items`, { 
-                params: {
-                    cnpj: item.orgao_cnpj,
-                    ano: item.ano,
-                    seq: item.numero_sequencial
-                }
+            const token = localStorage.getItem('token');
+            const params = new URLSearchParams({ cnpj: item.orgao_cnpj, ano: item.ano, seq: item.numero_sequencial });
+            const res = await fetch(`${API_BASE_URL}/api/pncp/items?${params}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            setItemDetails(res.data.items || []);
-            if (res.data.message) setItemError(res.data.message);
-            else if (res.data.items?.length === 0) setItemError('Nenhum item exibido / Licitação sem itens cadastrados no PNCP');
+            const data = await res.json();
+            setItemDetails(data.items || []);
+            if (data.message) setItemError(data.message);
+            else if (data.items?.length === 0) setItemError('Nenhum item exibido / Licitação sem itens cadastrados no PNCP');
         } catch (error: any) {
             setItemError('Não foi possível carregar os itens. Talvez não estejam publicados no PNCP.');
         } finally {

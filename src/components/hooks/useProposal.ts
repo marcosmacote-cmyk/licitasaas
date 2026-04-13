@@ -260,8 +260,8 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     
                     setItems(prev => {
                         // Append items preventing duplicates by itemNumber
-                        const existingNumbers = new Set(prev.map(p => p.itemNumber));
-                        const uniqueNew = newItems.filter(p => !existingNumbers.has(p.itemNumber));
+                        const existingNumbers = new Set(prev.map((p: any) => p.itemNumber));
+                        const uniqueNew = newItems.filter((p: any) => !existingNumbers.has(p.itemNumber));
                         if (uniqueNew.length === 0) return prev;
                         return [...prev, ...uniqueNew];
                     });
