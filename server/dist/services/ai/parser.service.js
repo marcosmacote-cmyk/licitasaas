@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.robustJsonParse = robustJsonParse;
 exports.robustJsonParseDetailed = robustJsonParseDetailed;
+const logger_1 = require("../../lib/logger");
 function robustJsonParse(rawText, label = 'AI') {
     const result = robustJsonParseDetailed(rawText, label);
     return result.data;
@@ -19,7 +20,7 @@ function robustJsonParseDetailed(rawText, label = 'AI') {
         return { data: JSON.parse(cleaned), repaired: false, strategy: 'direct' };
     }
     catch (directErr) {
-        console.log(`[${label}] Direct JSON.parse failed: ${directErr.message}. Attempting repair...`);
+        logger_1.logger.info(`[${label}] Direct JSON.parse failed: ${directErr.message}. Attempting repair...`);
     }
     // Step 3: Depth-tracked truncation — find where the outermost {} closes
     let depth = 0, inString = false, escape = false;
@@ -52,11 +53,11 @@ function robustJsonParseDetailed(rawText, label = 'AI') {
         const truncated = cleaned.substring(0, lastValidClose + 1);
         try {
             const result = JSON.parse(truncated);
-            console.log(`[${label}] ✅ JSON parsed after depth-tracked truncation at position ${lastValidClose}`);
+            logger_1.logger.info(`[${label}] ✅ JSON parsed after depth-tracked truncation at position ${lastValidClose}`);
             return { data: result, repaired: true, strategy: 'depth_truncation' };
         }
         catch (truncErr) {
-            console.log(`[${label}] Depth-tracked truncation failed: ${truncErr.message}`);
+            logger_1.logger.info(`[${label}] Depth-tracked truncation failed: ${truncErr.message}`);
         }
     }
     // Step 4: Error-position-based truncation
@@ -67,7 +68,7 @@ function robustJsonParseDetailed(rawText, label = 'AI') {
             attempt = attempt.replace(/,\s*([}\]])/, '$1');
             try {
                 const result = JSON.parse(attempt);
-                console.log(`[${label}] ✅ JSON parsed after lastBrace truncation at position ${lastBrace}`);
+                logger_1.logger.info(`[${label}] ✅ JSON parsed after lastBrace truncation at position ${lastBrace}`);
                 return { data: result, repaired: true, strategy: 'lastBrace_truncation' };
             }
             catch { /* continue */ }
@@ -75,7 +76,7 @@ function robustJsonParseDetailed(rawText, label = 'AI') {
     }
     catch { /* continue */ }
     // Step 5: Stack-based bracket repair
-    console.log(`[${label}] Attempting stack-based bracket repair...`);
+    logger_1.logger.info(`[${label}] Attempting stack-based bracket repair...`);
     let repaired = cleaned;
     repaired = repaired.replace(/,\s*$/, '');
     depth = 0;
@@ -111,13 +112,13 @@ function robustJsonParseDetailed(rawText, label = 'AI') {
         repaired += stack.pop();
     try {
         const result = JSON.parse(repaired);
-        console.log(`[${label}] ✅ JSON parsed after stack-based repair (added ${stack.length} closers)`);
+        logger_1.logger.info(`[${label}] ✅ JSON parsed after stack-based repair (added ${stack.length} closers)`);
         return { data: result, repaired: true, strategy: 'stack_repair' };
     }
     catch (finalErr) {
-        console.error(`[${label}] ❌ ALL JSON repair strategies failed. Raw length: ${rawText.length}, Error: ${finalErr.message}`);
-        console.error(`[${label}] First 200 chars: ${cleaned.substring(0, 200)}`);
-        console.error(`[${label}] Last 200 chars: ${cleaned.substring(cleaned.length - 200)}`);
+        logger_1.logger.error(`[${label}] ❌ ALL JSON repair strategies failed. Raw length: ${rawText.length}, Error: ${finalErr.message}`);
+        logger_1.logger.error(`[${label}] First 200 chars: ${cleaned.substring(0, 200)}`);
+        logger_1.logger.error(`[${label}] Last 200 chars: ${cleaned.substring(cleaned.length - 200)}`);
         throw new Error(`Falha ao interpretar resposta da IA (JSON inválido após múltiplas tentativas de reparo)`);
     }
 }

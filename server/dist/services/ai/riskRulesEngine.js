@@ -9,6 +9,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeRiskRules = executeRiskRules;
+const logger_1 = require("../../lib/logger");
 // ── Regras ──
 const rules = [
     // R01 — CAT mencionada mas sem técnica profissional
@@ -444,12 +445,12 @@ function executeRiskRules(schema) {
             findings.push(...result);
         }
         catch (err) {
-            console.warn(`[RiskRules] Regra ${rule.name} falhou: ${err.message}`);
+            logger_1.logger.warn(`[RiskRules] Regra ${rule.name} falhou: ${err.message}`);
         }
     }
     // Sort by severity
     const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
     findings.sort((a, b) => (severityOrder[a.severity] || 3) - (severityOrder[b.severity] || 3));
-    console.log(`[RiskRules] ${findings.length} findings (${findings.filter(f => f.severity === 'critical').length} critical, ${findings.filter(f => f.severity === 'high').length} high)`);
+    logger_1.logger.info(`[RiskRules] ${findings.length} findings (${findings.filter(f => f.severity === 'critical').length} critical, ${findings.filter(f => f.severity === 'high').length} high)`);
     return findings;
 }

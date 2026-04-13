@@ -6,8 +6,7 @@ import { BackToHubBanner } from './ui/BackToHubBanner';
 import { GovernanceBlockedBanner } from './ui/GovernanceBlockedBanner';
 import { resolveStage, isModuleAllowed } from '../governance';
 import type { BiddingProcess } from '../types';
-
-// ── Keyword highlight helper ──
+import React, { memo, useCallback, useMemo } from 'react';// ── Keyword highlight helper ──
 function highlightKeywords(text: string, keyword: string | null) {
   if (!keyword) return text;
   const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
@@ -166,6 +165,194 @@ function ConfigSection({ title, icon, defaultOpen = false, badge, children }: {
     </div>
   );
 }
+
+// ── Memoized Items ──
+const ProcessItem = memo(({ proc, isSelected, companyName, pBadge, onSelect, onDoubleClick, onRemoveMonitoring }: any) => {
+  const preview = proc.lastMessage?.content?.substring(0, 80) || '';
+  const lastMsgDate = proc.lastMessage?.createdAt;
+
+  return (
+    <div onClick={onSelect}
+      onDoubleClick={onDoubleClick}
+      className={`chat-process-item${isSelected ? ' active' : ''}`}
+      title="Duplo clique para abrir o HUB do processo">
+      {/* Title + Badge */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
+        <span style={{ fontSize: '0.8125rem', fontWeight: proc.unreadCount > 0 ? 700 : 600, color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>
+          {proc.isImportant && <span style={{ color: 'var(--color-warning)', marginRight: '4px', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>ALERTA</span>}
+          {proc.title.substring(0, 70)}{proc.title.length > 70 ? '...' : ''}
+        </span>
+        <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: pBadge.bg, color: pBadge.color, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          {pBadge.label}
+        </span>
+      </div>
+
+      {/* Company */}
+      {companyName && (
+        <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <Building2 size={10} />
+          {companyName}
+        </div>
+      )}
+
+      {/* Preview + Time */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px' }}>
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {preview}{preview.length >= 80 ? '...' : ''}
+        </span>
+        {lastMsgDate && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
+            <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
+              {new Date(lastMsgDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+            </span>
+            <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
+              {new Date(lastMsgDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Message count + unread badge + link + remove monitoring */}
+      <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {(() => {
+            const pl = (proc.portal || '').toLowerCase();
+            const ll = (proc.link || '').toLowerCase();
+            const isPncpBased = pl.includes('pncp') || ll.includes('pncp.gov.br') || pl.includes('compras') || pl.includes('cnet') || ll.includes('comprasnet') || ll.includes('cnetmobile');
+            const isOtherPlatform = ll.includes('bbmnet') || ll.includes('bllcompras') || ll.includes('bnccompras') || ll.includes('portaldecompraspublicas') || ll.includes('licitanet.com.br') || ll.includes('licitamaisbrasil') || ll.includes('m2atecnologia') || pl.includes('bbmnet') || pl.includes('bll') || pl.includes('bnc') || pl.includes('portal de compras') || pl.includes('licitanet') || pl.includes('licitamaisbrasil') || pl.includes('m2a');
+            if (proc.hasPncpLink === false && proc.totalMessages === 0 && isPncpBased && !isOtherPlatform) {
+              return (
+                <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <AlertTriangle size={10} /> Sem link PNCP — edite o processo
+                </span>
+              );
+            }
+            return (
+              <>
+                <span>{proc.totalMessages} msgs</span>
+                {proc.unreadCount > 0 && (
+                  <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
+                    {proc.unreadCount} novas
+                  </span>
+                )}
+              </>
+            );
+          })()}
+        </div>
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          {(() => {
+            const pLink = proc.platformLink;
+            const fallbackLink = proc.link;
+            const href = pLink || fallbackLink;
+            if (!href) return null;
+            const isPlatform = !!pLink;
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={isPlatform ? 'Acessar plataforma' : 'Acessar via PNCP'}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '3px',
+                  padding: '2px 8px', borderRadius: 'var(--radius-sm)',
+                  background: isPlatform ? 'rgba(37, 99, 235, 0.06)' : 'rgba(100, 116, 139, 0.06)',
+                  color: isPlatform ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                  fontSize: '0.625rem', fontWeight: 600, textDecoration: 'none',
+                  border: 'none',
+                  boxShadow: `0 0 0 1px ${isPlatform ? 'rgba(37, 99, 235, 0.15)' : 'rgba(100, 116, 139, 0.15)'}`,
+                  transition: 'var(--transition-fast)',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = isPlatform ? 'rgba(37, 99, 235, 0.12)' : 'rgba(100, 116, 139, 0.12)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = isPlatform ? 'rgba(37, 99, 235, 0.06)' : 'rgba(100, 116, 139, 0.06)'; }}
+              >
+                <ExternalLink size={10} /> {isPlatform ? 'Acessar' : 'PNCP'}
+              </a>
+            );
+          })()}
+          <button
+            title="Remover monitoramento"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemoveMonitoring(proc.id, proc.title);
+            }}
+            style={{
+              padding: '3px', borderRadius: 'var(--radius-sm)', border: 'none',
+              background: 'transparent', cursor: 'pointer', display: 'flex',
+              alignItems: 'center', opacity: 0.4, transition: 'var(--transition-fast)',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(220, 38, 38, 0.08)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.4'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+          >
+            <EyeOff size={13} color="var(--color-danger, #dc2626)" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  return prev.isSelected === next.isSelected &&
+    prev.proc.id === next.proc.id &&
+    prev.proc.unreadCount === next.proc.unreadCount &&
+    prev.proc.totalMessages === next.proc.totalMessages &&
+    prev.proc.isImportant === next.proc.isImportant &&
+    prev.proc.title === next.proc.title &&
+    prev.proc.lastMessage?.createdAt === next.proc.lastMessage?.createdAt &&
+    prev.companyName === next.companyName &&
+    prev.pBadge.label === next.pBadge.label;
+});
+
+const MessageItem = memo(({ msg }: any) => {
+  const colors = authorColor(msg.authorType);
+  const hasKeyword = !!msg.detectedKeyword;
+
+  return (
+    <div style={{
+      padding: 'var(--space-4) var(--space-5)', borderRadius: 'var(--radius-lg)',
+      background: colors.bg,
+      border: 'none',
+      boxShadow: hasKeyword ? '0 0 0 2px rgba(245, 158, 11, 0.4), 0 4px 12px rgba(245, 158, 11, 0.08)' : `0 0 0 1px ${colors.border}`,
+    }}>
+      {/* Author Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: colors.text, fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
+          <AuthorIcon type={msg.authorType} />
+          <span>{authorLabel(msg.authorType)}</span>
+          {msg.itemRef && (
+            <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.05)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-normal)' }}>
+              Item {msg.itemRef}
+            </span>
+          )}
+          {hasKeyword && (
+            <span style={{ padding: '1px var(--space-2)', borderRadius: 'var(--radius-lg)', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
+              {msg.detectedKeyword}
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
+          {msg.messageTimestamp
+            ? `Enviada em ${msg.messageTimestamp}`
+            : `${new Date(msg.createdAt).toLocaleDateString('pt-BR')} ${new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+          }
+        </span>
+      </div>
+
+      {/* Message Content */}
+      <div style={{ fontSize: 'var(--text-md)', lineHeight: 1.6, color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>
+        {highlightKeywords(msg.content, msg.detectedKeyword)}
+      </div>
+
+      {/* Source badge */}
+      {msg.captureSource && (
+        <div style={{ marginTop: 'var(--space-2)', display: 'flex', justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: 'var(--text-xs)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
+            via {msg.captureSource === 'comprasnet-xhr' || msg.captureSource === 'server-worker' ? 'ComprasNet' : msg.captureSource === 'bbmnet-firestore' ? 'BBMNET' : msg.captureSource === 'bll-api' ? 'BLL Compras' : msg.captureSource === 'bnc-api' ? 'BNC Compras' : msg.captureSource === 'pcp-api' ? 'PCP' : msg.captureSource === 'licitanet-api' ? 'Licitanet' : msg.captureSource === 'licitamaisbrasil-api' ? 'Licita+Brasil' : msg.captureSource === 'm2a-api' ? 'M2A' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}, (prev, next) => prev.msg.id === next.msg.id && prev.msg.detectedKeyword === next.msg.detectedKeyword);
 
 // ── Config Panel (redesigned with collapsible sections) ──
 function ConfigPanel({ c }: { c: ReturnType<typeof useChatMonitor> }) {
@@ -595,134 +782,25 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
             ) : (
               c.filteredProcesses.map(proc => {
                 const isSelected = proc.id === c.selectedProcessId;
-                const badge = portalBadge(proc.portal, (proc as any).link);
+                const pBadge = portalBadge(proc.portal, (proc as any).link);
                 const company = companies.find(cp => cp.id === proc.companyProfileId);
-                const preview = proc.lastMessage?.content?.substring(0, 80) || '';
-                const lastMsgDate = proc.lastMessage?.createdAt;
+                const compName = (proc as any).companyName || company?.name;
 
                 return (
-                  <div key={proc.id} onClick={() => c.handleSelectProcess(proc.id)}
+                  <ProcessItem 
+                    key={proc.id} 
+                    proc={proc} 
+                    isSelected={isSelected} 
+                    companyName={compName}
+                    pBadge={pBadge}
+                    onSelect={() => c.handleSelectProcess(proc.id)}
                     onDoubleClick={() => onNavigateToHub?.(proc.id)}
-                    className={`chat-process-item${isSelected ? ' active' : ''}`}
-                    title="Duplo clique para abrir o HUB do processo">
-                    {/* Title + Badge */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '0.8125rem', fontWeight: proc.unreadCount > 0 ? 700 : 600, color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3' }}>
-                        {proc.isImportant && <span style={{ color: 'var(--color-warning)', marginRight: '4px', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>ALERTA</span>}
-                        {proc.title.substring(0, 70)}{proc.title.length > 70 ? '...' : ''}
-                      </span>
-                      <span style={{ fontSize: '0.625rem', padding: '2px 6px', borderRadius: '4px', background: badge.bg, color: badge.color, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        {badge.label}
-                      </span>
-                    </div>
-
-                    {/* Company */}
-                    {(() => {
-                      const compName = (proc as any).companyName || company?.name;
-                      return compName ? (
-                        <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Building2 size={10} />
-                          {compName}
-                        </div>
-                      ) : null;
-                    })()}
-
-                    {/* Preview + Time */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                        {preview}{preview.length >= 80 ? '...' : ''}
-                      </span>
-                      {lastMsgDate && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
-                          <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
-                            {new Date(lastMsgDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                          </span>
-                          <span style={{ fontSize: '0.625rem', color: 'var(--color-text-tertiary)' }}>
-                            {new Date(lastMsgDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Message count + unread badge + link + remove monitoring */}
-                    <div style={{ marginTop: '6px', display: 'flex', gap: '8px', fontSize: '0.6875rem', color: 'var(--color-text-tertiary)', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {(() => {
-                          const pl = (proc.portal || '').toLowerCase();
-                          const ll = ((proc as any).link || '').toLowerCase();
-                          const isPncpBased = pl.includes('pncp') || ll.includes('pncp.gov.br') || pl.includes('compras') || pl.includes('cnet') || ll.includes('comprasnet') || ll.includes('cnetmobile');
-                          const isOtherPlatform = ll.includes('bbmnet') || ll.includes('bllcompras') || ll.includes('bnccompras') || ll.includes('portaldecompraspublicas') || ll.includes('licitanet.com.br') || ll.includes('licitamaisbrasil') || ll.includes('m2atecnologia') || pl.includes('bbmnet') || pl.includes('bll') || pl.includes('bnc') || pl.includes('portal de compras') || pl.includes('licitanet') || pl.includes('licitamaisbrasil') || pl.includes('m2a');
-                          if ((proc as any).hasPncpLink === false && proc.totalMessages === 0 && isPncpBased && !isOtherPlatform) {
-                            return (
-                              <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                <AlertTriangle size={10} /> Sem link PNCP — edite o processo
-                              </span>
-                            );
-                          }
-                          return (
-                            <>
-                              <span>{proc.totalMessages} msgs</span>
-                              {proc.unreadCount > 0 && (
-                                <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-lg)', background: 'var(--color-primary)', color: 'white', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-xs)' }}>
-                                  {proc.unreadCount} novas
-                                </span>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        {(() => {
-                          const pLink = (proc as any).platformLink;
-                          const fallbackLink = (proc as any).link;
-                          const href = pLink || fallbackLink;
-                          if (!href) return null;
-                          const isPlatform = !!pLink;
-                          return (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              title={isPlatform ? 'Acessar plataforma' : 'Acessar via PNCP'}
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '3px',
-                                padding: '2px 8px', borderRadius: 'var(--radius-sm)',
-                                background: isPlatform ? 'rgba(37, 99, 235, 0.06)' : 'rgba(100, 116, 139, 0.06)',
-                                color: isPlatform ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
-                                fontSize: '0.625rem', fontWeight: 600, textDecoration: 'none',
-                                border: 'none',
-                                boxShadow: `0 0 0 1px ${isPlatform ? 'rgba(37, 99, 235, 0.15)' : 'rgba(100, 116, 139, 0.15)'}`,
-                                transition: 'var(--transition-fast)',
-                              }}
-                              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = isPlatform ? 'rgba(37, 99, 235, 0.12)' : 'rgba(100, 116, 139, 0.12)'; }}
-                              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = isPlatform ? 'rgba(37, 99, 235, 0.06)' : 'rgba(100, 116, 139, 0.06)'; }}
-                            >
-                              <ExternalLink size={10} /> {isPlatform ? 'Acessar' : 'PNCP'}
-                            </a>
-                          );
-                        })()}
-                        <button
-                          title="Remover monitoramento"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm(`Deseja remover o monitoramento do processo "${proc.title.substring(0, 50)}..."?\n\nO status do processo NÃO será alterado.`)) {
-                              c.removeMonitoring(proc.id);
-                            }
-                          }}
-                          style={{
-                            padding: '3px', borderRadius: 'var(--radius-sm)', border: 'none',
-                            background: 'transparent', cursor: 'pointer', display: 'flex',
-                            alignItems: 'center', opacity: 0.4, transition: 'var(--transition-fast)',
-                          }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(220, 38, 38, 0.08)'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.4'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                        >
-                          <EyeOff size={13} color="var(--color-danger, #dc2626)" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                    onRemoveMonitoring={(id: string, title: string) => {
+                      if (window.confirm(`Deseja remover o monitoramento do processo "${title.substring(0, 50)}..."?\n\nO status do processo NÃO será alterado.`)) {
+                        c.removeMonitoring(id);
+                      }
+                    }}
+                  />
                 );
               })
             )}
@@ -874,57 +952,9 @@ export function ChatMonitorPage({ companies, biddings, hubOriginId, onReturnToHu
                         <p>Nenhuma mensagem capturada para este processo.</p>
                       </div>
                     ) : (
-                      c.selectedMessages.map(msg => {
-                        const colors = authorColor(msg.authorType);
-                        const hasKeyword = !!msg.detectedKeyword;
-
-                        return (
-                          <div key={msg.id} style={{
-                            padding: 'var(--space-4) var(--space-5)', borderRadius: 'var(--radius-lg)',
-                            background: colors.bg,
-                            border: 'none',
-                            boxShadow: hasKeyword ? '0 0 0 2px rgba(245, 158, 11, 0.4), 0 4px 12px rgba(245, 158, 11, 0.08)' : `0 0 0 1px ${colors.border}`,
-                          }}>
-                            {/* Author Header */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: colors.text, fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
-                                <AuthorIcon type={msg.authorType} />
-                                <span>{authorLabel(msg.authorType)}</span>
-                                {msg.itemRef && (
-                                  <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.05)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-normal)' }}>
-                                    Item {msg.itemRef}
-                                  </span>
-                                )}
-                                {hasKeyword && (
-                                  <span style={{ padding: '1px var(--space-2)', borderRadius: 'var(--radius-lg)', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
-                                    {msg.detectedKeyword}
-                                  </span>
-                                )}
-                              </div>
-                              <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
-                                {(msg as any).messageTimestamp
-                                  ? `Enviada em ${(msg as any).messageTimestamp}`
-                                  : `${new Date(msg.createdAt).toLocaleDateString('pt-BR')} ${new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-                                }
-                              </span>
-                            </div>
-
-                            {/* Message Content */}
-                            <div style={{ fontSize: 'var(--text-md)', lineHeight: 1.6, color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>
-                              {highlightKeywords(msg.content, msg.detectedKeyword)}
-                            </div>
-
-                            {/* Source badge */}
-                            {msg.captureSource && (
-                              <div style={{ marginTop: 'var(--space-2)', display: 'flex', justifyContent: 'flex-end' }}>
-                                <span style={{ fontSize: 'var(--text-xs)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.04)', color: 'var(--color-text-tertiary)' }}>
-                                  via {msg.captureSource === 'comprasnet-xhr' || msg.captureSource === 'server-worker' ? 'ComprasNet' : msg.captureSource === 'bbmnet-firestore' ? 'BBMNET' : msg.captureSource === 'bll-api' ? 'BLL Compras' : msg.captureSource === 'bnc-api' ? 'BNC Compras' : msg.captureSource === 'pcp-api' ? 'PCP' : msg.captureSource === 'licitanet-api' ? 'Licitanet' : msg.captureSource === 'licitamaisbrasil-api' ? 'Licita+Brasil' : msg.captureSource === 'm2a-api' ? 'M2A' : msg.captureSource === 'pncp-status' ? 'PNCP' : msg.captureSource}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
+                      c.selectedMessages.map((msg: any) => (
+                        <MessageItem key={msg.id} msg={msg} />
+                      ))
                     )}
                     <div ref={c.messagesEndRef} />
                   </div>

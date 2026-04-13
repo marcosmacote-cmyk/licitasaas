@@ -160,6 +160,7 @@ model AiAnalysis {
   modelUsed                 String? // AI model used (e.g. "gemini-2.5-flash")
   pipelineDurationS         Float? // Total pipeline duration in seconds
   overallConfidence         String? // baixa | media | alta
+  requiresHumanAudit        Boolean @default(false)
   analyzedAt                DateTime       @default(now())
   biddingProcess            BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
 }

@@ -83,13 +83,17 @@ function healthCheckRoute(req, res) {
 function globalErrorHandler(err, req, res, _next) {
     const tenantId = req.user?.tenantId || '-';
     const userId = req.user?.userId || '-';
-    console.error(`[UNHANDLED ERROR] ${req.method} ${req.path} | tenant=${tenantId} user=${userId}`, err.message || err, err.stack ? `\n${err.stack.split('\n').slice(0, 3).join('\n')}` : '');
-    // Never leak stack trace to client in production
-    const isDev = process.env.NODE_ENV !== 'production';
-    res.status(err.status || 500).json({
-        error: isDev ? err.message : 'Erro interno do servidor',
-        ...(isDev && { stack: err.stack?.split('\n').slice(0, 3) }),
-    });
+    // Use the intelligent error translation system
+    const { translateError } = require('../middlewares/errorHandler');
+    const translated = translateError(err);
+    console.error(`[UNHANDLED ERROR] ${req.method} ${req.path} | tenant=${tenantId} user=${userId} | code=${translated.code}`, err.message || err, err.stack ? `\n${err.stack.split('\n').slice(0, 3).join('\n')}` : '');
+    // Never leak stack trace to client — always return translated message
+    if (!res.headersSent) {
+        res.status(translated.statusCode).json({
+            error: translated.userMessage,
+            code: translated.code,
+        });
+    }
 }
 /**
  * Apply the full security middleware stack to an Express app.

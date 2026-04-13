@@ -1,12 +1,4 @@
 "use strict";
-/**
- * ══════════════════════════════════════════════════════════════════
- *  Feedback Schemas & Service — Captura Estruturada de Feedback
- * ══════════════════════════════════════════════════════════════════
- *
- *  Permite que revisores humanos registrem se uma saída da IA foi
- *  correta, parcial, inadequada ou arriscada, com tipologia de erro.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.submitFeedback = submitFeedback;
 exports.getFeedbackByExecution = getFeedbackByExecution;
@@ -15,6 +7,7 @@ exports.getAllFeedback = getAllFeedback;
 exports.getFeedbackStats = getFeedbackStats;
 exports.getFeedbackForGoldenConversion = getFeedbackForGoldenConversion;
 exports.markAsConvertedToGolden = markAsConvertedToGolden;
+const logger_1 = require("../../../lib/logger");
 // ── Armazenamento em memória (será migrado para DB) ──
 const feedbackStore = [];
 // ── Service ──
@@ -22,7 +15,7 @@ function submitFeedback(feedback) {
     feedback.feedbackId = feedback.feedbackId || `fb-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     feedback.reviewedAt = feedback.reviewedAt || new Date().toISOString();
     feedbackStore.push(feedback);
-    console.log(`[Feedback] ${feedback.moduleName}: ${feedback.verdict} | Issues: ${feedback.issueTypes.join(', ')} | By: ${feedback.reviewedBy || 'anonymous'}`);
+    logger_1.logger.info(`[Feedback] ${feedback.moduleName}: ${feedback.verdict} | Issues: ${feedback.issueTypes.join(', ')} | By: ${feedback.reviewedBy || 'anonymous'}`);
     return feedback;
 }
 function getFeedbackByExecution(executionId) {

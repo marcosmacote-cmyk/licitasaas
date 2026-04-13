@@ -1,0 +1,2045 @@
+// ── Sentry MUST be imported first for proper instrumentation ──
+import { Sentry, sentryErrorHandler, captureError, setSentryUser } from '../lib/sentry';
+
+import { robustJsonParse, robustJsonParseDetailed } from "../services/ai/parser.service";
+import { callGeminiWithRetry } from "../services/ai/gemini.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser, MANUAL_EXTRACTION_ADDON } from "../services/ai/prompt.service";
+import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "../services/ai/analysis-schema-v1";
+import { fallbackToOpenAi, fallbackToOpenAiV2 } from "../services/ai/openai.service";
+import { indexDocumentChunks, searchSimilarChunks } from "../services/ai/rag.service";
+import { executeRiskRules } from "../services/ai/riskRulesEngine";
+import { evaluateAnalysisQuality, validateAnalysisCompleteness } from "../services/ai/analysisQualityEvaluator";
+import { enforceSchema } from "../services/ai/schemaEnforcer";
+import { buildModuleContext, ModuleName } from "../services/ai/modules/moduleContextContracts";
+import { CHAT_SYSTEM_PROMPT, CHAT_USER_INSTRUCTION } from "../services/ai/modules/prompts/chatPromptV2";
+import { PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION as PETITION_V2_USER_INSTRUCTION } from "../services/ai/modules/prompts/petitionPromptV2";
+import { ORACLE_SYSTEM_PROMPT } from "../services/ai/modules/prompts/oraclePromptV2";
+import { DECLARATION_SYSTEM_PROMPT } from "../services/ai/modules/prompts/declarationPromptV2";
+import {
+    parseAndSanitize as parseDeclaration,
+    validateDeclaration,
+    calculateQualityReport,
+    hasCriticalIssues,
+    summarizeReport,
+    repairDeclaration,
+    createGeminiRepairFn,
+    FAMILY_LENGTH_CONSTRAINTS,
+    DECLARATION_SEMANTIC_MAP,
+    ANTI_GENERIC_PHRASES,
+    validateAndFixTitle,
+} from "../services/ai/declaration";
+import type { AuthoritativeFacts, DeclarationFamily, DeclarationStyle } from "../services/ai/declaration";
+import { evaluateModuleQuality } from "../services/ai/modules/moduleQualityEvaluator";
+import { evaluateHumanReview } from "../services/ai/modules/humanReviewPolicy";
+import { submitFeedback, getFeedbackByModule, getFeedbackStats, AIExecutionFeedback } from "../services/ai/governance/feedbackService";
+import { generateSystemReport, recordExecution } from "../services/ai/governance/operationalMetrics";
+import { registerInitialVersions, getAllVersions, getPromotionHistory } from "../services/ai/governance/versionGovernance";
+import { generateImprovementInsights, convertFeedbackToGoldenCases } from "../services/ai/governance/improvementInsights";
+import { createOrUpdateProfile, getProfile, getAllProfiles, createEmptyProfile, CompanyLicitationProfile } from "../services/ai/company/companyProfileService";
+import { matchCompanyToEdital, calculateParticipationScore, generateActionPlan } from "../services/ai/strategy/participationEngine";
+import { buildHybridContext } from "../services/ai/strategy/companyAwareContext";
+import { generateCompanyInsights, recordMatchHistory } from "../services/ai/strategy/companyLearningInsights";
+import { pncpMonitor } from "../services/monitoring/pncp-monitor.service";
+import { recordAnalysisTelemetry, getPipelineHealth, classifySafetyNets } from "../services/ai/telemetry/analysisTelemetry";
+import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "../services/monitoring/alertTaxonomy";
+import { NotificationService } from "../services/monitoring/notification.service";
+import { startOpportunityScanner } from "../services/monitoring/opportunity-scanner.service";
+import { BatchPlatformMonitor } from "../services/monitoring/batch-platform-monitor.service";
+import { PCPMonitor } from "../services/monitoring/pcp-monitor.service";
+import { LicitanetMonitor } from "../services/monitoring/licitanet-monitor.service";
+import { LicitaMaisBrasilMonitor } from "../services/monitoring/licitamaisbrasil-monitor.service";
+import { IngestService } from "../services/monitoring/ingest.service";
+import { submitJob, getJob, listJobs, registerSSEClient, removeSSEClient, updateJobProgress, completeJob, failJob } from "../services/backgroundJobService";
+import { registerJobHandler, startJobWorker } from "../services/backgroundJobWorker";
+import { handleApiError } from "../middlewares/errorHandler";
+import express from 'express';
+import dotenv from 'dotenv';
+import axios from 'axios';
+import https from 'https';
+import { PrismaClient } from '@prisma/client';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+import { GoogleGenAI, createPartFromUri } from '@google/genai';
+import { uploadDir, initStoragePaths } from '../services/files.service';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+import { storageService } from '../storage';
+import { createExtractorFromData } from 'node-unrar-js';
+import { applySecurityMiddleware, authLimiter, aiLimiter, globalErrorHandler } from '../lib/security';
+import { encryptCredential, decryptCredential, isEncrypted, isEncryptionConfigured } from '../lib/crypto';
+import { requestLogger } from '../lib/requestLogger';
+import { logger } from '../lib/logger';
+import { getUsageSummary, getSystemUsageSummary } from '../lib/aiUsageTracker';
+import { authenticateToken, requireAdmin, requireSuperAdmin } from '../middlewares/auth';
+import authRoutes from '../routes/auth';
+import adminRoutes from '../routes/admin';
+import teamRoutes from '../routes/team';
+import companiesRoutes from '../routes/companies';
+import documentsRoutes from '../routes/documents';
+import biddingsRoutes from '../routes/biddings';
+import pncpRoutes from '../routes/pncp';
+import {
+    normalizeModality, normalizePortal, hasMonitorableDomain,
+    detectPlatformFromLink, sanitizeBiddingData,
+    MONITORABLE_DOMAINS, PLATFORM_DOMAINS
+} from '../lib/biddingHelpers';
+
+const router = express.Router();
+router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
+    // ── SSE Setup ──
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+    });
+    res.flushHeaders();
+
+    const TOTAL_STEPS = 8;
+    const sendProgress = (step: number, message: string, detail?: string) => {
+        try {
+            if (res.writableEnded || res.destroyed) return;
+            res.write(`data: ${JSON.stringify({
+                type: 'progress', step, total: TOTAL_STEPS, message, detail,
+                percent: Math.round((step / TOTAL_STEPS) * 100)
+            })}\n\n`);
+        } catch (_) { /* connection closed */ }
+    };
+    const sendError = (error: string, details?: string) => {
+        try {
+            clearInterval(sseKeepAlive);
+            if (res.writableEnded || res.destroyed) return;
+            res.write(`data: ${JSON.stringify({ type: 'error', error, details })}\n\n`);
+            res.end();
+        } catch (_) { /* connection closed */ }
+    };
+    const sendResult = (payload: any) => {
+        try {
+            clearInterval(sseKeepAlive);
+            if (res.writableEnded || res.destroyed) return;
+            res.write(`data: ${JSON.stringify({ type: 'result', payload })}\n\n`);
+            res.end();
+        } catch (_) { /* connection closed */ }
+    };
+
+    // SSE keepalive: send a comment every 15s to prevent Railway/Nginx/browser from killing the connection
+    const sseKeepAlive = setInterval(() => {
+        try {
+            if (res.writableEnded || res.destroyed) {
+                clearInterval(sseKeepAlive);
+                return;
+            }
+            res.write(`: keepalive ${new Date().toISOString()}\n\n`);
+        } catch (_) {
+            clearInterval(sseKeepAlive);
+        }
+    }, 15000);
+    // Clean up on connection close
+    res.on('close', () => clearInterval(sseKeepAlive));
+    res.on('finish', () => clearInterval(sseKeepAlive));
+
+    try {
+        const { orgao_cnpj, ano, numero_sequencial, link_sistema } = req.body;
+        if (!orgao_cnpj || !ano || !numero_sequencial) {
+            return sendError('orgao_cnpj, ano e numero_sequencial são obrigatórios');
+        }
+
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        const JSZip = require('jszip');
+
+        // 1. Fetch edital attachments from PNCP API (correct endpoint: /api/pncp/v1/)
+        sendProgress(1, 'Buscando documentos no PNCP...', 'Consultando lista de anexos do edital');
+        const arquivosUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}/arquivos`;
+        logger.info(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
+
+        let arquivos: any[] = [];
+        try {
+            const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 10000 } as any);
+            arquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
+            logger.info(`[PNCP-AI] Found ${arquivos.length} attachments`);
+        } catch (e: any) {
+            logger.warn(`[PNCP-AI] Failed to fetch attachments: ${e.message}`);
+        }
+
+        // 2. Sort to prioritize: Edital (tipoDocumentoId=2) > Termo de Referência (4) > Others
+        // Sort by legal/technical priority: Edital > TR > Projeto Básico > Planilhas > Proposta > Minuta > outros
+        arquivos.sort((a: any, b: any) => {
+            const nameScore = (name: string): number => {
+                const n = (name || '').toLowerCase();
+                if (n.includes('edital') && !n.includes('anexo')) return 0;
+                if (n.includes('termo_referencia') || n.includes('termo de referencia') || n.includes('tr_') || (a.tipoDocumentoId === 4)) return 1;
+                if (n.includes('projeto_basico') || n.includes('projeto basico')) return 2;
+                if (n.includes('planilha') || n.includes('orcamento')) return 3;
+                if (n.includes('proposta') || n.includes('modelo_proposta')) return 4;
+                if (n.includes('etp') || n.includes('estudo_tecnico')) return 5;
+                if (n.includes('minuta') || n.includes('contrato')) return 8;
+                if (n.includes('anexo')) return 6;
+                return 7;
+            };
+            const pa = (a.tipoDocumentoId === 2) ? -1 : nameScore(a.titulo || a.nomeArquivo || '');
+            const pb = (b.tipoDocumentoId === 2) ? -1 : nameScore(b.titulo || b.nomeArquivo || '');
+            return pa - pb;
+        });
+
+        // 3. Download and process files — SMART PDF FILTER
+        // Only download PDFs that contribute to habilitação extraction
+        const MAX_PDF_PARTS = 5; // Send only top 5 most important docs to Stage 1 (Edital + TR + Planilha + etc)
+        const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
+        let totalPdfSizeAccum = 0;
+        const pdfParts: any[] = [];
+        const downloadedFiles: string[] = [];
+        const discardedFiles: string[] = [];
+
+        // Pre-filter: exclude templates, project drawings, and irrelevant attachments BEFORE download
+        const EXCLUDE_PATTERNS = [
+            // Templates / Modelos
+            'modelo_proposta', 'modelo_de_proposta', 'modelo proposta',
+            'modelo_recibo', 'modelo recibo', 'modelo_declarac', 'modelo declarac',
+            'modelo_ata', 'modelo ata', 'modelo_contrato', 'modelo_carta',
+            'carta_fian', 'carta fian',
+            // Publicações / Atas / Avisos
+            'aviso_publicac', 'aviso publicac', 'aviso_licitac',
+            'aviso_de_licit', 'aviso de licit', 'aviso_licit',
+            'aviso_de_publicac', 'aviso de publicac',
+            'quadro_de_aviso', 'quadro de aviso',
+            'd.o.u', 'diario_oficial', 'diario oficial',
+            'retificac', 'errata', 'ata_sessao', 'ata_da_sessao',
+            'comprovante', 'recibo_garantia', 'modelo_recibo_garantia',
+            'minuta_contrato', 'minuta contrato', 'minuta_de_contrato',
+            // Projetos de engenharia / plantas / memoriais / peças gráficas
+            'projeto_arq', 'projeto arq', 'planta_', 'planta ',
+            'memorial_descritivo', 'memorial descritivo',
+            'croqui', 'layout_', 'layout ',
+            'detalhamento_', 'det_arq', 'det arq',
+            'pecas_graficas', 'pecas graficas', 'peas_grficas', 'peas_graficas',
+            'desenho_tecnico', 'desenho tecnico', 'peca_grafica',
+        ];
+
+        // ── Smart-Sort: priorizar PDFs dentro de RAR/ZIP por relevância ──
+        const ARCHIVE_EXCLUDE_PATTERNS = [
+            'relatorio_fot', 'relatorio fot', 'relatório fot',
+            'licenca_ambiental', 'licença ambiental', 'licenca ambiental',
+            'art_de_projeto', 'art de projeto', 'anotacao_responsabilidade',
+            'marco_zero', 'marco zero',
+        ];
+
+        const archivePriorityScore = (name: string): number => {
+            const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            // Máxima prioridade: edital principal
+            if ((n.includes('edital') || n.includes('edital_bll') || n.includes('edital bll')) && !n.includes('modelo')) return 0;
+            if (n.includes('termo_referencia') || n.includes('termo de referencia') || n.includes('tr_')) return 1;
+            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orcamentaria')) return 2;
+            if (n.includes('cronograma')) return 3;
+            if (n.includes('bdi') || n.includes('encargos')) return 4;
+            if (n.includes('composic')) return 5;
+            if (n.includes('memoria') || n.includes('calculo')) return 6;
+            // Prioridade média: documentos complementares
+            if (n.includes('memorial')) return 50;
+            if (n.includes('projeto') || n.includes('pavimentac')) return 60;
+            // Baixa prioridade: fotos, licenças, ARTs
+            if (n.includes('relatorio_fot') || n.includes('relatorio fot') || n.includes('foto') || n.includes('marco_zero') || n.includes('marco zero')) return 90;
+            if (n.includes('licenca') || n.includes('licença')) return 91;
+            if (n.includes('art_') || n.includes('art ') || n.includes('anotacao')) return 92;
+            return 40; // Default
+        };
+
+        // Keywords that indicate edital/TR content (should NOT be excluded even if "Outros Documentos")
+        const ESSENTIAL_KEYWORDS = [
+            'edital', 'termo_referencia', 'termo de referencia', 'tr_',
+            'projeto_basico', 'projeto basico', 'planilha', 'orcamento',
+            'cronograma', 'bdi', 'etp', 'estudo_tecnico',
+        ];
+
+        const filteredArquivos = arquivos.filter((arq: any) => {
+            const name = (arq.titulo || arq.nomeArquivo || arq.nome || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const tipoDesc = (arq.tipoDocumentoDescricao || '').toLowerCase();
+            const tipoId = arq.tipoDocumentoId;
+
+            // Rule 1: Exclude by explicit pattern match
+            const isExcludedByPattern = EXCLUDE_PATTERNS.some(pat => name.includes(pat));
+            if (isExcludedByPattern) {
+                logger.info(`[PNCP-AI] 🚫 Excluído (template/padrão): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                discardedFiles.push(`${arq.titulo} (excluído: template/padrão)`);
+                return false;
+            }
+
+            // Rule 2: "Outros Documentos" with generic "ANEXO" names and no essential keywords → likely project files
+            const isOutros = tipoDesc.includes('outros') || (tipoId !== 2 && tipoId !== 4); // Not Edital (2) nor TR (4)
+            const hasEssentialKeyword = ESSENTIAL_KEYWORDS.some(kw => name.includes(kw));
+            const isGenericAnexo = /^anexo[_\s]+(i|ii|iii|iv|v|vi|vii|viii|ix|x|[0-9])/.test(name);
+
+            if (isOutros && isGenericAnexo && !hasEssentialKeyword) {
+                logger.info(`[PNCP-AI] 🚫 Excluído (anexo genérico/projeto): "${arq.titulo}" (tipo: ${tipoDesc || tipoId})`);
+                discardedFiles.push(`${arq.titulo} (excluído: anexo genérico)`);
+                return false;
+            }
+
+            return true;
+        });
+
+        // ── BUILD FULL ATTACHMENT CATALOG (for Proposal module) ──
+        // Classifies ALL files by purpose so they can be downloaded on demand later
+        const classifyAttachment = (arq: any): string => {
+            const n = (arq.titulo || arq.nomeArquivo || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const tipoId = arq.tipoDocumentoId;
+            if (tipoId === 2 || (n.includes('edital') && !n.includes('anexo'))) return 'edital';
+            if (tipoId === 4 || n.includes('termo_referencia') || n.includes('tr_')) return 'termo_referencia';
+            if (n.includes('planilha') || n.includes('orcamento') || n.includes('orçamento')) return 'planilha_orcamentaria';
+            if (n.includes('cronograma')) return 'cronograma';
+            if (n.includes('bdi') || n.includes('encargos')) return 'bdi_encargos';
+            if (n.includes('modelo_proposta') || n.includes('modelo de proposta') || n.includes('modelo_carta')) return 'modelo_proposta';
+            if (n.includes('modelo_recibo') || n.includes('modelo_garantia')) return 'modelo_documento';
+            if (n.includes('minuta') || n.includes('contrato')) return 'minuta_contrato';
+            if (n.includes('projeto') || n.includes('planta') || n.includes('memorial')) return 'projeto_engenharia';
+            if (n.includes('aviso')) return 'aviso_publicacao';
+            if (n.includes('composic') || n.includes('custo')) return 'composicao_custos';
+            return 'anexo_geral';
+        };
+
+        const pncpAttachments = arquivos.map((arq: any) => {
+            const name = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
+            const purpose = classifyAttachment(arq);
+            const isDownloaded = filteredArquivos.includes(arq);
+            return {
+                titulo: name,
+                url: arq.url || arq.uri || '',
+                tipoDocumentoId: arq.tipoDocumentoId,
+                tipoDocumentoDescricao: arq.tipoDocumentoDescricao || '',
+                purpose,
+                downloaded: isDownloaded,
+                sequencial: arq.sequencialDocumento || arq.sequencial || null,
+                ativo: arq.statusAtivo ?? true,
+            };
+        });
+
+        const purposeCounts = pncpAttachments.reduce((acc: Record<string, number>, a: any) => {
+            acc[a.purpose] = (acc[a.purpose] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+        logger.info(`[PNCP-AI] 📋 Catálogo completo: ${pncpAttachments.length} arquivos — ${JSON.stringify(purposeCounts)}`);
+
+        logger.info(`[PNCP-AI] 📊 Filtro inteligente: ${arquivos.length} anexos → ${filteredArquivos.length} relevantes (${arquivos.length - filteredArquivos.length} excluídos)`);
+        sendProgress(2, 'Baixando documentos...', `${filteredArquivos.length} arquivos relevantes de ${arquivos.length} total`);
+
+        // Sort by priority: Edital > TR > Orçamento > Cronograma > rest
+        filteredArquivos.sort((a: any, b: any) => {
+            const nameA = a.titulo || a.nomeArquivo || a.nome || '';
+            const nameB = b.titulo || b.nomeArquivo || b.nome || '';
+            // Edital tipo always first
+            const aIsEdital = ([1, 2].includes(a.tipoDocumentoId) || /edital/i.test(a.tipoDocumentoDescricao));
+            const bIsEdital = ([1, 2].includes(b.tipoDocumentoId) || /edital/i.test(b.tipoDocumentoDescricao));
+            if (aIsEdital && !bIsEdital) return -1;
+            if (!aIsEdital && bIsEdital) return 1;
+            return archivePriorityScore(nameA) - archivePriorityScore(nameB);
+        });
+
+        let dlIndex = 0;
+        for (const arq of filteredArquivos) {
+            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
+            const fileUrl = arq.url || arq.uri || '';
+            const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
+            if (!fileUrl || !arq.statusAtivo) continue;
+
+            try {
+                dlIndex++;
+                sendProgress(2, `Baixando documento ${dlIndex}/${filteredArquivos.length}...`, `"${fileName}"`);
+                logger.info(`[PNCP-AI] Downloading: "${fileName}" (tipo: ${arq.tipoDocumentoDescricao || arq.tipoDocumentoId}) from ${fileUrl}`);
+                const fileRes = await axios.get(fileUrl, {
+                    httpsAgent: agent,
+                    timeout: 90000,
+                    responseType: 'arraybuffer',
+                    maxRedirects: 5
+                } as any);
+
+                const buffer = Buffer.from(fileRes.data as ArrayBuffer);
+                if (buffer.length === 0) continue;
+
+                // Detect file type by magic bytes
+                const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // %PDF
+                const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B; // PK
+                const isRar = buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21; // Rar!
+
+                if (isPdf) {
+                    const MAX_INLINE_FILE_KB = 8000; // 8MB per file — keeps base64 under ~11MB per part
+                    const bufferSizeKB = buffer.length / 1024;
+                    
+                    // Only add to pdfParts if we haven't reached the limit for Stage 1
+                    if (!pdfPartsFull) {
+                    if (bufferSizeKB > MAX_INLINE_FILE_KB) {
+                        // Large PDF: use Gemini Files API (supports up to 50MB, works with scanned PDFs)
+                        logger.info(`[PNCP-AI] ⚡ Arquivo grande (${Math.round(bufferSizeKB)}KB > ${MAX_INLINE_FILE_KB}KB). Usando Gemini Files API para upload...`);
+                        try {
+                            const apiKey = process.env.GEMINI_API_KEY;
+                            if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                            const filesAi = new GoogleGenAI({ apiKey });
+                            const tempFilePath = path.join(uploadDir, `temp_upload_${Date.now()}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                            fs.writeFileSync(tempFilePath, buffer);
+                            const uploadedFile = await filesAi.files.upload({
+                                file: tempFilePath,
+                                config: { mimeType: 'application/pdf', displayName: fileName }
+                            });
+                            // Clean up temp file
+                            try { fs.unlinkSync(tempFilePath); } catch (_e) {}
+                            if (uploadedFile && uploadedFile.uri) {
+                                pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                logger.info(`[PNCP-AI] ✅ Upload via Files API concluído: ${uploadedFile.name} (URI: ${uploadedFile.uri})`);
+                            } else {
+                                logger.warn(`[PNCP-AI] ⚠️ Files API não retornou URI para ${fileName}`);
+                            }
+                        } catch (e: any) {
+                            logger.warn(`[PNCP-AI] ⚠️ Falha no upload via Files API para ${fileName}:`, e.message);
+                        }
+                        totalPdfSizeAccum += 1; // Files API handles storage; minimal budget impact
+                    } else {
+                        // Budget check: if inline budget exceeded, use Files API as fallback
+                        if (totalPdfSizeAccum + bufferSizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                            logger.info(`[PNCP-AI] ⚡ Orçamento inline de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Enviando "${fileName}" via Files API...`);
+                            try {
+                                const apiKey = process.env.GEMINI_API_KEY;
+                                if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                const filesAi = new GoogleGenAI({ apiKey });
+                                const tempPath = path.join(uploadDir, `temp_overflow_${Date.now()}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                fs.writeFileSync(tempPath, buffer);
+                                const uploadedFile = await filesAi.files.upload({
+                                    file: tempPath,
+                                    config: { mimeType: 'application/pdf', displayName: fileName }
+                                });
+                                try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                if (uploadedFile && uploadedFile.uri) {
+                                    pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                    logger.info(`[PNCP-AI] ✅ Overflow via Files API: ${uploadedFile.name}`);
+                                }
+                            } catch (e: any) {
+                                logger.warn(`[PNCP-AI] ⚠️ Files API overflow falhou para ${fileName}:`, e.message);
+                                discardedFiles.push(`${fileName} (${Math.round(bufferSizeKB)}KB)`);
+                            }
+                            totalPdfSizeAccum += 1;
+                        } else {
+                            totalPdfSizeAccum += bufferSizeKB;
+                            pdfParts.push({ inlineData: { data: buffer.toString('base64'), mimeType: 'application/pdf' } });
+                        }
+                    }
+                    } else {
+                        logger.info(`[PNCP-AI] 📁 Salvando "${fileName}" (${Math.round(bufferSizeKB)}KB) apenas no storage (limite de ${MAX_PDF_PARTS} docs para IA atingido)`);
+                    }
+                    
+                    const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
+                    fs.writeFileSync(path.join(uploadDir, safeFileName), buffer);
+
+                    let storageFileName = safeFileName;
+                    try {
+                        const up = await storageService.uploadFile({
+                            originalname: safeFileName,
+                            buffer: buffer,
+                            mimetype: 'application/pdf'
+                        } as any, req.user.tenantId);
+                        storageFileName = up.fileName;
+                    } catch (e) {
+                        logger.error(`[PNCP-AI] Erro upload PDF Storage:`, e);
+                    }
+
+                    // Note: pdfParts is pushed either as text or inlineData above
+
+                    downloadedFiles.push(storageFileName);
+                    logger.info(`[PNCP-AI] ✅ PDF: ${fileName} saved as ${storageFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);
+                } else if (isZip) {
+                    logger.info(`[PNCP-AI] 📦 ZIP detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const zip = await JSZip.loadAsync(buffer);
+                        let zipEntries = Object.keys(zip.files).filter((name: string) => {
+                            if (!name.toLowerCase().endsWith('.pdf') || zip.files[name].dir) return false;
+                            const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
+                            if (excluded) { logger.info(`[PNCP-AI] 🚫 ZIP: Excluído "${name}" (padrão filtrado)`); discardedFiles.push(`${name} (ZIP, filtrado)`); }
+                            return !excluded;
+                        });
+                        // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
+                        zipEntries.sort((a, b) => archivePriorityScore(a) - archivePriorityScore(b));
+                        logger.info(`[PNCP-AI] ZIP contains ${zipEntries.length} PDF(s) (sorted): ${zipEntries.join(', ')}`);
+
+                        for (const entryName of zipEntries) {
+                            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
+                            const pdfBuffer = await zip.files[entryName].async('nodebuffer');
+                            const entrySizeKB = pdfBuffer.length / 1024;
+                            const MAX_SINGLE_FILE_KB = 8000;
+                            
+                            if (!pdfPartsFull) {
+                                if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                    logger.info(`[PNCP-AI] ⚡ ZIP Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                    try {
+                                        const apiKey = process.env.GEMINI_API_KEY;
+                                        if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                        const filesAi = new GoogleGenAI({ apiKey });
+                                        const tempPath = path.join(uploadDir, `temp_zip_${Date.now()}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                        fs.writeFileSync(tempPath, pdfBuffer);
+                                        const uploadedFile = await filesAi.files.upload({
+                                            file: tempPath,
+                                            config: { mimeType: 'application/pdf', displayName: entryName }
+                                        });
+                                        try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                        if (uploadedFile && uploadedFile.uri) {
+                                            pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                            logger.info(`[PNCP-AI] ✅ ZIP Entry via Files API: ${uploadedFile.name}`);
+                                        }
+                                    } catch (e: any) {
+                                        logger.warn(`[PNCP-AI] ⚠️ Falha Files API para ZIP entry ${entryName}:`, e.message);
+                                    }
+                                    totalPdfSizeAccum += 1;
+                                } else {
+                                    if (pdfBuffer.length > 0) {
+                                        if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                            logger.warn(`[PNCP-AI] \u26a0\ufe0f Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco ZIP entry "${entryName}" (${Math.round(entrySizeKB)}KB)`);
+                                        } else {
+                                            totalPdfSizeAccum += entrySizeKB;
+                                            pdfParts.push({
+                                                inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                            });
+                                        }
+                                    }
+                                }
+                            } else {
+                                logger.info(`[PNCP-AI] 📁 Salvando "${entryName}" (${Math.round(entrySizeKB)}KB) do ZIP apenas no storage (limite da IA atingido)`);
+                            }
+
+                            if (pdfBuffer.length > 0) {
+                                const safeName = `pncp_${req.user.tenantId}_${entryName.replace(/[^a-z0-9._-]/gi, '_')}`;
+                                fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
+
+                                let storageFileName = safeName;
+                                try {
+                                    const up = await storageService.uploadFile({
+                                        originalname: safeName,
+                                        buffer: pdfBuffer,
+                                        mimetype: 'application/pdf'
+                                    } as any, req.user.tenantId);
+                                    storageFileName = up.fileName;
+                                } catch (e) {
+                                    logger.error(`[PNCP-AI] Erro upload ZIP-PDF Storage:`, e);
+                                }
+                                downloadedFiles.push(storageFileName);
+                                logger.info(`[PNCP-AI] ✅ Extracted from ZIP: ${entryName} saved as ${storageFileName} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
+                    } catch (zipErr: any) {
+                        logger.warn(`[PNCP-AI] Failed to extract ZIP ${fileName}: ${zipErr.message}`);
+                    }
+                } else if (isRar) {
+                    logger.info(`[PNCP-AI] 📦 RAR detected: ${fileName} (${(buffer.length / 1024).toFixed(0)} KB) — extracting PDFs...`);
+                    try {
+                        const extractor = await createExtractorFromData({ data: new Uint8Array(buffer).buffer });
+                        const extracted = extractor.extract({});
+                        const files = [...extracted.files];
+                        const pdfFiles = files.filter(f => {
+                            if (!f.fileHeader.name.toLowerCase().endsWith('.pdf')) return false;
+                            if (f.fileHeader.flags.directory || !f.extraction) return false;
+                            const n = f.fileHeader.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const excluded = ARCHIVE_EXCLUDE_PATTERNS.some(pat => n.includes(pat));
+                            if (excluded) { logger.info(`[PNCP-AI] 🚫 RAR: Excluído "${f.fileHeader.name}" (padrão filtrado)`); discardedFiles.push(`${f.fileHeader.name} (RAR, filtrado)`); }
+                            return !excluded;
+                        });
+                        // Smart-sort: priorizar edital > TR > planilha > cronograma > BDI > resto
+                        pdfFiles.sort((a, b) => archivePriorityScore(a.fileHeader.name) - archivePriorityScore(b.fileHeader.name));
+                        logger.info(`[PNCP-AI] RAR contains ${pdfFiles.length} PDF(s) (sorted): ${pdfFiles.map(f => f.fileHeader.name).join(', ')}`);
+
+                        for (const rarFile of pdfFiles) {
+                            const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
+                            if (rarFile.extraction && rarFile.extraction.length > 0) {
+                                const pdfBuffer = Buffer.from(rarFile.extraction);
+                                const entrySizeKB = pdfBuffer.length / 1024;
+                                const MAX_SINGLE_FILE_KB = 8000;
+                                
+                                if (!pdfPartsFull) {
+                                    if (entrySizeKB > MAX_SINGLE_FILE_KB) {
+                                        logger.info(`[PNCP-AI] ⚡ RAR Entry grande (${Math.round(entrySizeKB)}KB), usando Gemini Files API...`);
+                                        try {
+                                            const apiKey = process.env.GEMINI_API_KEY;
+                                            if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
+                                            const filesAi = new GoogleGenAI({ apiKey });
+                                            const tempPath = path.join(uploadDir, `temp_rar_${Date.now()}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`);
+                                            fs.writeFileSync(tempPath, pdfBuffer);
+                                            const uploadedFile = await filesAi.files.upload({
+                                                file: tempPath,
+                                                config: { mimeType: 'application/pdf', displayName: rarFile.fileHeader.name }
+                                            });
+                                            try { fs.unlinkSync(tempPath); } catch (_e) {}
+                                            if (uploadedFile && uploadedFile.uri) {
+                                                pdfParts.push(createPartFromUri(uploadedFile.uri, uploadedFile.mimeType || 'application/pdf'));
+                                                logger.info(`[PNCP-AI] ✅ RAR Entry via Files API: ${uploadedFile.name}`);
+                                            }
+                                        } catch (e: any) {
+                                            logger.warn(`[PNCP-AI] ⚠️ Falha Files API para RAR entry ${rarFile.fileHeader.name}:`, e.message);
+                                        }
+                                        totalPdfSizeAccum += 1;
+                                    } else {
+                                        if (totalPdfSizeAccum + entrySizeKB > MAX_TOTAL_PDF_SIZE_KB && pdfParts.length > 0) {
+                                            logger.warn(`[PNCP-AI] ⚠️ Orçamento de ${MAX_TOTAL_PDF_SIZE_KB}KB atingido. Apenas salvando no disco RAR entry "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB)`);
+                                        } else {
+                                            totalPdfSizeAccum += entrySizeKB;
+                                            pdfParts.push({
+                                                inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' }
+                                            });
+                                        }
+                                    }
+                                } else {
+                                    logger.info(`[PNCP-AI] 📁 Salvando "${rarFile.fileHeader.name}" (${Math.round(entrySizeKB)}KB) do RAR apenas no storage (limite da IA atingido)`);
+                                }
+
+                                const safeName = `pncp_${req.user.tenantId}_${rarFile.fileHeader.name.replace(/[^a-z0-9._-]/gi, '_')}`;
+                                fs.writeFileSync(path.join(uploadDir, safeName), pdfBuffer);
+
+                                let storageFileName = safeName;
+                                try {
+                                    const up = await storageService.uploadFile({
+                                        originalname: safeName,
+                                        buffer: pdfBuffer,
+                                        mimetype: 'application/pdf'
+                                    } as any, req.user.tenantId);
+                                    storageFileName = up.fileName;
+                                } catch (e) {
+                                    logger.error(`[PNCP-AI] Erro upload RAR-PDF Storage:`, e);
+                                }
+                                downloadedFiles.push(storageFileName);
+                                logger.info(`[PNCP-AI] ✅ Extracted from RAR: ${rarFile.fileHeader.name} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+                            }
+                        }
+                    } catch (rarErr: any) {
+                        logger.warn(`[PNCP-AI] Failed to extract RAR ${fileName}: ${rarErr.message}`);
+                    }
+                } else {
+                    logger.info(`[PNCP-AI] ⏭️ Skipped non-PDF/non-ZIP/non-RAR: ${fileName} (first bytes: ${buffer[0].toString(16)} ${buffer[1].toString(16)})`);
+                }
+            } catch (dlErr: any) {
+                logger.warn(`[PNCP-AI] Failed to download ${fileName}: ${dlErr.message}`);
+            }
+        }
+
+        if (pdfParts.length === 0) {
+            return sendError(
+                'Nenhum arquivo PDF encontrado para este edital no PNCP.',
+                `Encontramos ${arquivos.length} arquivo(s) mas nenhum era PDF ou ZIP com PDFs.`
+            );
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
+        // ═══════════════════════════════════════════════════════════════════════
+        
+        // ── MODEL CONFIGURATION ──
+        // Each pipeline stage uses the optimal model for its task
+        const PIPELINE_MODELS = {
+            extraction: 'gemini-2.5-flash',         // Etapa 1: PDF parsing (multimodal, proven)
+            reExtraction: 'gemini-2.5-flash',       // Re-extraction fallback  
+            normalization: 'gemini-2.5-flash',       // Etapa 2: text-only JSON→JSON — upgraded from flash-lite (QTO/QTP confusion fix)
+            normQtp: 'gemini-2.5-flash',             // Etapa 2 QTP: needs full Flash for Rule 18 (CAT explosion)
+            riskReview: 'gemini-2.5-flash',          // Etapa 3: text-only risk analysis — upgraded from flash-lite (better critical_points)
+        };
+        logger.info(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
+
+        sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return sendError('GEMINI_API_KEY não configurada');
+        }
+        const ai = new GoogleGenAI({ apiKey });
+        const analysisStartTime = Date.now();
+
+        // Initialize V2 result schema
+        const v2Result = createEmptyAnalysisSchema();
+        v2Result.analysis_meta.analysis_id = `pncp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        v2Result.analysis_meta.generated_at = new Date().toISOString();
+        v2Result.analysis_meta.source_files = downloadedFiles;
+        v2Result.analysis_meta.source_type = 'pncp_download';
+
+        let modelsUsed: string[] = [];
+        const stageTimes: Record<string, number> = {};
+        // Pipeline health tracking for honest confidence scoring
+        const pipelineHealth = {
+            parseRepairs: 0,
+            fallbacksUsed: 0,
+            stagesFailed: 0,
+        };
+
+        logger.info(`[PNCP-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${downloadedFiles.join(', ')})`);
+
+        // ── Stage 1: Factual Extraction (with PDFs) ──
+        // Log diagnostic info about PDFs being sent
+        const pdfSizes = pdfParts.map((p: any, i: number) => {
+            if (p.inlineData?.data) {
+                const sizeKB = Math.round(Buffer.from(p.inlineData.data, 'base64').length / 1024);
+                return `Doc${i + 1}: ${sizeKB}KB`;
+            } else if (p.fileData?.fileUri) {
+                return `Doc${i + 1}: FilesAPI`;
+            } else {
+                return `Doc${i + 1}: text`;
+            }
+        });
+        const totalPdfSizeKB = pdfParts.reduce((sum: number, p: any) => {
+            if (p.inlineData?.data) return sum + Buffer.from(p.inlineData.data, 'base64').length;
+            return sum;
+        }, 0) / 1024;
+        sendProgress(4, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${pdfParts.length} PDFs (${Math.round(totalPdfSizeKB)}KB inline)`);
+        logger.info(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} partes, ${Math.round(totalPdfSizeKB)}KB inline — ${pdfSizes.join(', ')})...`);
+        let extractionJson: any;
+        const t1Start = Date.now();
+
+        try {
+            const extractionResponse = await callGeminiWithRetry(ai.models, {
+                model: PIPELINE_MODELS.extraction,
+                contents: [{
+                    role: 'user',
+                    parts: [
+                        ...pdfParts,
+                        { text: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') }
+                    ]
+                }],
+                config: {
+                    systemInstruction: V2_EXTRACTION_PROMPT,
+                    temperature: 0.05,
+                    maxOutputTokens: 65536,
+                    responseMimeType: 'application/json'
+                }
+            }, 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
+            const extractionText = extractionResponse.text;
+            if (!extractionText) throw new Error('Etapa 1 retornou vazio');
+            const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');
+            extractionJson = parseResult1.data;
+            if (parseResult1.repaired) pipelineHealth.parseRepairs++;
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
+            modelsUsed.push(PIPELINE_MODELS.extraction);
+            stageTimes.extraction = (Date.now() - t1Start) / 1000;
+            logger.info(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
+        } catch (err: any) {
+            const errMsg = err?.message || String(err);
+            const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
+            logger.warn(`[PNCP-V2] ⚠️ Etapa 1 Gemini falhou (${isServiceOverload ? 'SOBRECARGA' : 'ERRO'}): ${errMsg}. Tentando OpenAI...`);
+            pipelineHealth.fallbacksUsed++;
+            try {
+                const openAiResult = await fallbackToOpenAiV2({
+                    systemPrompt: V2_EXTRACTION_PROMPT,
+                    userPrompt: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', ''),
+                    pdfParts,
+                    temperature: 0.05,
+                    maxTokens: 65536,
+                    stageName: 'PNCP Etapa 1 (Extração)'
+                });
+                if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                extractionJson = robustJsonParse(openAiResult.text, 'PNCP-V2-Extraction-OpenAI');
+                v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
+                modelsUsed.push(openAiResult.model);
+                stageTimes.extraction = (Date.now() - t1Start) / 1000;
+                logger.info(`[PNCP-V2] ✅ Etapa 1 via OpenAI em ${stageTimes.extraction.toFixed(1)}s`);
+            } catch (openAiErr: any) {
+                logger.error(`[PNCP-V2] ❌ Etapa 1 falhou (ambos modelos)`);
+                // User-friendly error message that distinguishes service overload from document issues
+                if (isServiceOverload) {
+                    throw new Error(`A IA está temporariamente sobrecarregada (5 tentativas em ~90s). ` +
+                        `Tente novamente em 1-2 minutos. O edital está salvo e será processado.`);
+                }
+                throw new Error(`Etapa 1 (Extração) falhou. Gemini: ${errMsg} | OpenAI: ${openAiErr.message}`);
+            }
+        }
+
+        // Merge extraction into V2 result
+        if (extractionJson.process_identification) v2Result.process_identification = extractionJson.process_identification;
+        if (extractionJson.timeline) v2Result.timeline = extractionJson.timeline;
+        if (extractionJson.participation_conditions) v2Result.participation_conditions = extractionJson.participation_conditions;
+        if (extractionJson.requirements) v2Result.requirements = extractionJson.requirements;
+        if (extractionJson.technical_analysis) v2Result.technical_analysis = extractionJson.technical_analysis;
+        if (extractionJson.economic_financial_analysis) v2Result.economic_financial_analysis = extractionJson.economic_financial_analysis;
+        if (extractionJson.proposal_analysis) v2Result.proposal_analysis = extractionJson.proposal_analysis;
+        if (extractionJson.contractual_analysis) v2Result.contractual_analysis = extractionJson.contractual_analysis;
+        if (extractionJson.evidence_registry) v2Result.evidence_registry = extractionJson.evidence_registry;
+
+        // Diagnostic: check itens_licitados extraction
+        const extractedItens = v2Result.proposal_analysis?.itens_licitados || [];
+        logger.info(`[PNCP-V2] 📋 itens_licitados: ${Array.isArray(extractedItens) ? extractedItens.length : 0} itens extraídos pela Etapa 1`);
+
+        // ── MANDATORY RFT COMPLETENESS INJECTION ──
+        // The AI model consistently omits "obvious" fiscal documents (CNPJ, inscrições).
+        // This server-side safety net ensures they're always present.
+        const rftItems = Array.isArray((extractionJson.requirements as any)?.regularidade_fiscal_trabalhista)
+            ? (extractionJson.requirements as any).regularidade_fiscal_trabalhista as any[]
+            : [];
+        const rftTexts = rftItems.map((r: any) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join(' ');
+
+        // Find an existing source_ref from RFT items to reuse
+        const existingRftSourceRef = rftItems.find((r: any) => r.source_ref && r.source_ref !== 'referência não localizada')?.source_ref || 'Edital, seção de habilitação';
+
+        const mandatoryRftDocs = [
+            {
+                keywords: ['cnpj', 'cadastro nacional'],
+                item: { requirement_id: 'RFT-CNPJ', title: 'Prova de inscrição no CNPJ', description: 'Comprovação de inscrição e situação cadastral no Cadastro Nacional da Pessoa Jurídica (CNPJ)', obligation_type: 'obrigatoria_universal', phase: 'habilitacao', applies_to: 'licitante', risk_if_missing: 'inabilitacao', source_ref: existingRftSourceRef, entry_type: 'exigencia_principal' }
+            },
+            {
+                keywords: ['inscrição estadual', 'inscricao estadual', 'cadastro estadual'],
+                item: { requirement_id: 'RFT-IE', title: 'Inscrição estadual no cadastro de contribuintes', description: 'Prova de inscrição no cadastro de contribuintes estadual, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade', obligation_type: 'se_aplicavel', phase: 'habilitacao', applies_to: 'licitante', risk_if_missing: 'inabilitacao', source_ref: existingRftSourceRef, entry_type: 'exigencia_principal' }
+            },
+            {
+                keywords: ['inscrição municipal', 'inscricao municipal', 'cadastro municipal'],
+                item: { requirement_id: 'RFT-IM', title: 'Inscrição municipal no cadastro de contribuintes', description: 'Prova de inscrição no cadastro de contribuintes municipal, relativo ao domicílio ou sede do licitante, pertinente ao seu ramo de atividade', obligation_type: 'se_aplicavel', phase: 'habilitacao', applies_to: 'licitante', risk_if_missing: 'inabilitacao', source_ref: existingRftSourceRef, entry_type: 'exigencia_principal' }
+            },
+        ];
+
+        let injectedCount = 0;
+        for (const doc of mandatoryRftDocs) {
+            const alreadyExists = doc.keywords.some(kw => rftTexts.includes(kw));
+            if (!alreadyExists) {
+                // CNPJ is always mandatory; inscrições only if edital has habilitação section
+                const isCnpj = doc.item.requirement_id === 'RFT-CNPJ';
+                const hasHabilitacao = rftItems.length > 0; // If there are ANY RFT items, habilitação exists
+                if (isCnpj || hasHabilitacao) {
+                    rftItems.push(doc.item);
+                    injectedCount++;
+                }
+            }
+        }
+
+        if (injectedCount > 0) {
+            (extractionJson.requirements as any).regularidade_fiscal_trabalhista = rftItems;
+            (v2Result.requirements as any).regularidade_fiscal_trabalhista = rftItems;
+            logger.info(`[PNCP-V2] 🔧 RFT completude: +${injectedCount} doc(s) injetado(s) (CNPJ/inscrições omitidos pela IA)`);
+        }
+
+        // ── M3: DEDUP — remove generic "estadual ou municipal" if IE/IM are separate ──
+        const hasIE = rftItems.some((r: any) => r.requirement_id === 'RFT-IE' || /inscri[çc][ãa]o\s+estadual/i.test(r.title || ''));
+        const hasIM = rftItems.some((r: any) => r.requirement_id === 'RFT-IM' || /inscri[çc][ãa]o\s+municipal/i.test(r.title || ''));
+        if (hasIE && hasIM) {
+            // Remove generic combined IE+IM items ("estadual ou municipal" / "estadual e municipal")
+            const beforeLen = rftItems.length;
+            const dedupedRft = rftItems.filter((r: any) => {
+                const title = (r.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const isGenericCombined = (title.includes('estadual') && title.includes('municipal'))
+                    && r.requirement_id !== 'RFT-IE' && r.requirement_id !== 'RFT-IM';
+                return !isGenericCombined;
+            });
+            if (dedupedRft.length < beforeLen) {
+                (extractionJson.requirements as any).regularidade_fiscal_trabalhista = dedupedRft;
+                (v2Result.requirements as any).regularidade_fiscal_trabalhista = dedupedRft;
+                logger.info(`[PNCP-V2] 🧹 Dedup IE/IM: removido(s) ${beforeLen - dedupedRft.length} item(ns) genérico(s) (IE+IM separados existem)`);
+            }
+        }
+        // ── HARD FAILURE GATE: Check extraction quality ──
+        const extractedReqs = Object.values(extractionJson.requirements || {}).flat().length;
+        const extractedEvidence = (extractionJson.evidence_registry || []).length;
+        const hasProcessId = !!(extractionJson.process_identification?.objeto_resumido || extractionJson.process_identification?.objeto_completo);
+
+        // Log detailed per-category extraction
+        if (extractionJson.requirements) {
+            const catCounts = Object.entries(extractionJson.requirements)
+                .map(([cat, items]: [string, any]) => `${cat}: ${Array.isArray(items) ? items.length : 0}`)
+                .join(' | ');
+            logger.info(`[PNCP-V2] 📋 Exigências por categoria: ${catCounts}`);
+        }
+        logger.info(`[PNCP-V2] 📊 Extração: ${extractedReqs} exigências, ${extractedEvidence} evidências, processo=${hasProcessId}`);
+
+        // ── ANTI-HALLUCINATION GATE (V4.7.1) ──
+        // Detect when the AI generates template/example data from prompt examples
+        // instead of reading the actual PDF documents.
+        const hallucinationSignals: string[] = [];
+        const processId = extractionJson.process_identification || {};
+        const allProcessText = [
+            processId.orgao, processId.objeto_resumido, processId.objeto_completo,
+            processId.municipio_uf, processId.link_sistema, processId.fonte_oficial,
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        // Known template/example patterns from prompt examples and taxonomy
+        const HALLUCINATION_PATTERNS = [
+            { pattern: /prefeitura\s+municipal\s+de\s+exemplo/i, label: 'orgão fictício "Prefeitura Municipal de Exemplo"' },
+            { pattern: /exemplo\.gov/i, label: 'URL fictícia "exemplo.gov"' },
+            { pattern: /exemplo\/ex\b/i, label: 'UF fictícia "EX"' },
+            { pattern: /\bmunicípio\s+de\s+exemplo\b/i, label: 'município fictício "Exemplo"' },
+            { pattern: /\borgão\s+de\s+exemplo\b/i, label: 'órgão fictício' },
+            { pattern: /\bcidade\s+exemplo\b/i, label: 'cidade fictícia' },
+        ];
+
+        for (const hp of HALLUCINATION_PATTERNS) {
+            if (hp.pattern.test(allProcessText)) {
+                hallucinationSignals.push(hp.label);
+            }
+        }
+
+        // Additional check: if ALL source_refs are generic "Edital, item X.X" with sequential numbering
+        // AND the orgao contains "Exemplo" — strong hallucination signal
+        const evidences = extractionJson.evidence_registry || [];
+        if (evidences.length > 0) {
+            const genericRefCount = evidences.filter((e: any) => /^Edital,\s*item\s+\d+\.\d+$/i.test(e.source_ref || '')).length;
+            if (genericRefCount === evidences.length && hallucinationSignals.length > 0) {
+                hallucinationSignals.push('todas as referências são genéricas "Edital, item X.X"');
+            }
+        }
+
+        if (hallucinationSignals.length > 0) {
+            logger.error(`[PNCP-V2] 🚨 ALUCINAÇÃO DETECTADA: ${hallucinationSignals.join(', ')}`);
+            logger.error(`[PNCP-V2] 🚨 A IA gerou dados de TEMPLATE em vez de ler o PDF real. Abortando análise.`);
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
+            return sendError(
+                'Alucinação detectada — a IA não conseguiu ler os documentos',
+                `A IA gerou dados fictícios (${hallucinationSignals.join('; ')}) em vez de extrair do edital real. ` +
+                    `Isso geralmente ocorre quando o PDF está protegido, escaneado sem OCR, ou houve falha de comunicação com a IA. ` +
+                    `Tente novamente em alguns minutos.`
+            );
+        }
+
+        // Hard failure: Extraction returned materially empty content
+        const MIN_REQUIREMENTS = 3;
+        const MIN_EVIDENCE = 1;
+        if (extractedReqs < MIN_REQUIREMENTS && extractedEvidence < MIN_EVIDENCE && !hasProcessId) {
+            logger.error(`[PNCP-V2] ❌ FALHA FACTUAL DURA: ${extractedReqs} exigências (mín: ${MIN_REQUIREMENTS}), ${extractedEvidence} evidências (mín: ${MIN_EVIDENCE}), sem identificação do processo`);
+            v2Result.analysis_meta.workflow_stage_status.extraction = 'failed';
+            const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
+            return sendError(
+                'Extração factual insuficiente',
+                `A IA não conseguiu extrair dados suficientes dos ${pdfParts.length} documento(s). ` +
+                    `Foram encontradas apenas ${extractedReqs} exigência(s) e ${extractedEvidence} evidência(s). ` +
+                    `Isso pode indicar que os documentos estão escaneados com baixa qualidade, protegidos, ou em formato não-textual.`
+            );
+        }
+
+        // Soft warning: Low quality extraction (still continues)
+        if (extractedReqs < MIN_REQUIREMENTS || extractedEvidence < MIN_EVIDENCE) {
+            logger.warn(`[PNCP-V2] ⚠️ Extração abaixo do ideal: ${extractedReqs} exigências, ${extractedEvidence} evidências — pipeline continua com degradação`);
+            v2Result.confidence.warnings.push(`Extração com qualidade reduzida: ${extractedReqs} exigências, ${extractedEvidence} evidências`);
+            if (extractedReqs < MIN_REQUIREMENTS) {
+                v2Result.confidence.warnings.push(`Extração retornou apenas ${extractedReqs} exigência(s) — possível truncamento ou PDF protegido`);
+            }
+        }
+
+        // Domain Routing
+        const detectedObjectType = v2Result.process_identification?.tipo_objeto || 'outro';
+        const domainReinforcement = getDomainRoutingInstruction(detectedObjectType);
+        if (domainReinforcement) {
+            logger.info(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
+        }
+
+        // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION (V4.7.0) ──
+        // Reativado com otimização: só dispara quando há truncamento detectado (parseRepairs>0)
+        // OU quando ≥2 categorias críticas estão vazias para o tipo de objeto.
+        // Usa apenas 1-2 PDFs e prompt focado → ~15-25s extra (vs 60s+ na V1).
+        const expectedCategories: Record<string, string[]> = {
+            'obra_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
+            'servico_comum_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
+            'servico_comum': ['qualificacao_tecnica_operacional', 'qualificacao_economico_financeira', 'proposta_comercial'],
+            'fornecimento': ['qualificacao_economico_financeira', 'proposta_comercial'],
+            'locacao': ['qualificacao_economico_financeira', 'proposta_comercial'],
+            'outro': ['qualificacao_economico_financeira', 'proposta_comercial'],
+        };
+        const objType = detectedObjectType || 'outro';
+        const expected = expectedCategories[objType] || expectedCategories['outro'];
+        const missingCategories = expected.filter(cat => {
+            const items = Array.isArray((extractionJson.requirements as any)?.[cat]) ? (extractionJson.requirements as any)[cat] : [];
+            return items.length === 0;
+        });
+
+        // Trigger conditions: (A) JSON was repaired (truncation likely) OR (B) ≥2 critical categories empty
+        const hasTruncationSignal = pipelineHealth.parseRepairs > 0;
+        const hasCriticalGap = missingCategories.length >= 2;
+        // Also check if RFT is suspiciously thin (only CNPJ/IE/IM injected, no CNDs) — sign of truncation
+        const rftOnlyInjected = rftItems.length <= 3 + injectedCount && injectedCount > 0;
+        const shouldReExtract = missingCategories.length > 0 && (hasTruncationSignal || hasCriticalGap || rftOnlyInjected);
+
+        if (shouldReExtract) {
+            logger.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')} ` +
+                `(truncamento=${hasTruncationSignal}, gap_critico=${hasCriticalGap}, rft_thin=${rftOnlyInjected})`);
+            sendProgress(5, 'Completando categorias faltantes...', `${missingCategories.length} categorias precisam re-extração`);
+            logger.info(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
+
+            const missingCatLabels: Record<string, string> = {
+                'qualificacao_tecnica_operacional': 'Qualificação Técnica Operacional (atestados da empresa, parcelas relevantes, visita técnica)',
+                'qualificacao_tecnica_profissional': 'Qualificação Técnica Profissional (RT, CAT, acervo técnico do profissional)',
+                'qualificacao_economico_financeira': 'Qualificação Econômico-Financeira (balanço, índices contábeis LG/LC/SG/EG, certidão falência, patrimônio/capital social mínimo)',
+                'proposta_comercial': 'Proposta Comercial (envelope de preços, planilha, BDI, validade, formato)',
+                'documentos_complementares': 'Documentos Complementares e Declarações (declarações, procurações, docs auxiliares)',
+                'regularidade_fiscal_trabalhista': 'Regularidade Fiscal e Trabalhista (CND Federal, Estadual, Municipal, FGTS, CNDT)',
+            };
+
+            // Also add RFT to re-extraction if it seems truncated (only injected items, no CNDs)
+            const rftMissingCnds = rftOnlyInjected && !missingCategories.includes('regularidade_fiscal_trabalhista');
+            const effectiveMissingCategories = rftMissingCnds
+                ? [...missingCategories, 'regularidade_fiscal_trabalhista']
+                : missingCategories;
+
+            const catDescriptions = effectiveMissingCategories.map(c => `- ${missingCatLabels[c] || c}`).join('\n');
+
+            // Already-captured categories for exclusion instructions
+            const capturedCategories = Object.entries(extractionJson.requirements || {})
+                .filter(([, items]) => Array.isArray(items) && items.length > 0)
+                .map(([cat]) => cat);
+
+            const reExtractionPrompt = `ATENÇÃO: a extração anterior capturou apenas ${extractedReqs} exigências e OMITIU categorias inteiras (provável truncamento de output).
+
+As seguintes categorias estão VAZIAS e precisam ser COMPLETAMENTE extraídas dos documentos:
+${catDescriptions}
+
+Categorias JÁ CAPTURADAS (NÃO re-extraia): ${capturedCategories.join(', ')}
+
+INSTRUÇÕES:
+1. Leia ATENTAMENTE todo o edital e TR/ETP procurando as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA e REQUISITOS FINANCEIROS.
+2. Extraia TODAS as exigências das categorias faltantes listadas acima.
+3. Para QTO/QTP, transcreva LITERALMENTE cada parcela de maior relevância com quantitativos exatos.
+4. Para QEF, extraia balanço, índices (LG, LC, SG, EG), patrimônio/capital mínimo, certidão de falência.
+5. Para RFT (se listada), extraia TODAS as certidões: CND Federal (Receita + PGFN), Estadual, Municipal, CRF/FGTS, CNDT.
+6. Inclua evidence_registry com ao menos 1 evidência por exigência principal.
+
+${domainReinforcement || ''}
+
+Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "evidence_registry": [...] }`;
+
+            const t15Start = Date.now();
+            try {
+                // Use first 2 PDFs (edital + TR typically) for re-extraction
+                const reExtractionParts = pdfParts.slice(0, Math.min(2, pdfParts.length));
+                const reExtractionResponse = await callGeminiWithRetry(ai.models, {
+                    model: PIPELINE_MODELS.reExtraction,
+                    contents: [{
+                        role: 'user',
+                        parts: [
+                            ...reExtractionParts,
+                            { text: reExtractionPrompt }
+                        ]
+                    }],
+                    config: {
+                        systemInstruction: V2_EXTRACTION_PROMPT,
+                        temperature: 0.05,
+                        maxOutputTokens: 32768,
+                        responseMimeType: 'application/json'
+                    }
+                }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
+                const reText = reExtractionResponse.text;
+                if (reText) {
+                    const reParseResult = robustJsonParseDetailed(reText, 'PNCP-V2-ReExtraction');
+                    const reData = reParseResult.data;
+                    if (reParseResult.repaired) pipelineHealth.parseRepairs++;
+
+                    // Merge re-extracted categories into the main extraction
+                    let reExtractedCount = 0;
+                    if (reData.requirements) {
+                        for (const [cat, items] of Object.entries(reData.requirements)) {
+                            if (Array.isArray(items) && items.length > 0) {
+                                const existing = Array.isArray((extractionJson.requirements as any)?.[cat]) ? (extractionJson.requirements as any)[cat] : [];
+                                if (existing.length === 0) {
+                                    // Category was completely empty — fill with re-extracted data
+                                    (extractionJson.requirements as any)[cat] = items;
+                                    (v2Result.requirements as any)[cat] = items;
+                                    reExtractedCount += (items as any[]).length;
+                                    logger.info(`[PNCP-V2] ✅ Re-extração ${cat}: +${(items as any[]).length} itens`);
+                                } else if (cat === 'regularidade_fiscal_trabalhista' && rftOnlyInjected) {
+                                    // RFT had only injected items — merge real CNDs from re-extraction
+                                    const newItems = (items as any[]).filter((item: any) => {
+                                        const title = (item.title || '').toLowerCase();
+                                        // Don't duplicate CNPJ/IE/IM already injected
+                                        return !title.includes('cnpj') && !title.includes('inscrição estadual') && !title.includes('inscrição municipal');
+                                    });
+                                    if (newItems.length > 0) {
+                                        existing.push(...newItems);
+                                        (extractionJson.requirements as any).regularidade_fiscal_trabalhista = existing;
+                                        (v2Result.requirements as any).regularidade_fiscal_trabalhista = existing;
+                                        reExtractedCount += newItems.length;
+                                        logger.info(`[PNCP-V2] ✅ Re-extração RFT (CNDs): +${newItems.length} itens adicionais`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Merge evidence_registry
+                    if (reData.evidence_registry && Array.isArray(reData.evidence_registry)) {
+                        extractionJson.evidence_registry = [
+                            ...(extractionJson.evidence_registry || []),
+                            ...reData.evidence_registry
+                        ];
+                        v2Result.evidence_registry = extractionJson.evidence_registry;
+                    }
+
+                    const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
+                    stageTimes.re_extraction = parseFloat(reDuration);
+                    logger.info(`[PNCP-V2] ✅ Re-extração concluída em ${reDuration}s: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
+                    if (reExtractedCount > 0) {
+                        v2Result.confidence.warnings.push(`Re-extração recuperou ${reExtractedCount} exigência(s) de ${effectiveMissingCategories.length} categoria(s) truncada(s)`);
+                    }
+                }
+            } catch (reErr: any) {
+                const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
+                logger.warn(`[PNCP-V2] ⚠️ Re-extração falhou em ${reDuration}s: ${reErr.message}. Continuando com dados parciais.`);
+                v2Result.confidence.warnings.push(`Re-extração de categorias faltantes falhou: ${reErr.message}`);
+                pipelineHealth.fallbacksUsed++;
+            }
+        } else if (missingCategories.length > 0) {
+            logger.info(`[PNCP-V2] ℹ️ ${missingCategories.length} categorias vazias (${missingCategories.join(', ')}) — sem sinal de truncamento, mantendo extração original`);
+        }
+
+        // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
+        sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
+        logger.info(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
+        let normalizationJson: any = {};
+        const extractionJsonCompact = JSON.stringify(extractionJson);  // Compact — saves ~20-30% tokens
+        const t2t3Start = Date.now();
+
+        // Run both stages concurrently
+        const [normSettled, riskSettled, itemsSettled] = await Promise.allSettled([
+            // ── Stage 2: Per-Category Normalization (7 parallel micro-calls) ──
+            (async () => {
+                const t2Start = Date.now();
+                const mergedRequirements: Record<string, any[]> = {};
+                const mergedDocs: any[] = [];
+                let totalNormalized = 0;
+                let categoriesFailed = 0;
+                let categoriesSkipped = 0;
+                let usedFallback = false;
+                let hadRepair = false;
+
+                // Build parallel tasks for categories that have items
+                const categoryTasks = NORM_CATEGORIES.map(cat => {
+                    const items = Array.isArray((extractionJson.requirements as any)?.[cat.key])
+                        ? (extractionJson.requirements as any)[cat.key]
+                        : [];
+
+                    if (items.length === 0) {
+                        mergedRequirements[cat.key] = [];
+                        categoriesSkipped++;
+                        return null; // Skip empty categories
+                    }
+
+                    // ── FAST-PATH: HJ, RFT, QEF — server-side normalization (no AI call) ──
+                    const FAST_NORM_CATEGORIES = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira'];
+                    if (FAST_NORM_CATEGORIES.includes(cat.key)) {
+                        // Deterministic normalization — assign IDs, entry_type, risk_if_missing
+                        const riskDefault = cat.key === 'habilitacao_juridica' ? 'inabilitacao'
+                            : cat.key === 'regularidade_fiscal_trabalhista' ? 'inabilitacao'
+                            : 'inabilitacao';
+                        const normalized = items.map((item: any, idx: number) => ({
+                            ...item,
+                            requirement_id: item.requirement_id || `${cat.prefix}-${String(idx + 1).padStart(2, '0')}`,
+                            entry_type: item.entry_type || 'exigencia_principal',
+                            risk_if_missing: item.risk_if_missing || riskDefault,
+                            applies_to: item.applies_to || 'licitante',
+                            obligation_type: item.obligation_type || 'obrigatoria_universal',
+                            phase: item.phase || 'habilitacao',
+                            source_ref: item.source_ref || 'referência não localizada',
+                        }));
+                        mergedRequirements[cat.key] = normalized;
+                        totalNormalized += normalized.length;
+                        // Generate documents_to_prepare
+                        normalized.filter((n: any) => n.entry_type === 'exigencia_principal').forEach((n: any) => {
+                            mergedDocs.push({
+                                document_name: n.title || n.requirement_id,
+                                category: cat.key,
+                                priority: n.risk_if_missing === 'inabilitacao' ? 'critica' : 'alta',
+                                responsible_area: cat.key === 'regularidade_fiscal_trabalhista' ? 'contabil'
+                                    : cat.key === 'qualificacao_economico_financeira' ? 'contabil'
+                                    : 'juridico',
+                                notes: ''
+                            });
+                        });
+                        logger.info(`[PNCP-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side, 0 API calls)`);
+                        return { cat: cat.key, success: true, fastPath: true };
+                    }
+
+                    // ── AI NORMALIZATION: QTO, QTP, PC, DC (interpretation needed) ──
+                    // QTP uses full Flash model for Rule 18 (CAT explosion) reliability
+                    const normModel = cat.key === 'qualificacao_tecnica_profissional'
+                        ? PIPELINE_MODELS.normQtp
+                        : PIPELINE_MODELS.normalization;
+                    return (async () => {
+                        const systemPrompt = buildCategoryNormPrompt(cat);
+                        const userPrompt = buildCategoryNormUser(cat, items);
+
+                        try {
+                            const resp = await callGeminiWithRetry(ai.models, {
+                                model: normModel,
+                                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                                config: {
+                                    systemInstruction: systemPrompt,
+                                    temperature: 0.1,
+                                    maxOutputTokens: 16384,
+                                    responseMimeType: 'application/json'
+                                }
+                            }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'normalization', category: cat.key } });
+
+                            const text = resp.text;
+                            if (!text) throw new Error(`${cat.prefix} retornou vazio`);
+                            const parsed = robustJsonParseDetailed(text, `Norm-${cat.prefix}`);
+                            if (parsed.repaired) hadRepair = true;
+                            const data = parsed.data;
+
+                            // Validate block schema
+                            if (Array.isArray(data.items) && data.items.length > 0) {
+                                mergedRequirements[cat.key] = data.items;
+                                totalNormalized += data.items.length;
+                            } else {
+                                // Response valid but no items — keep originals
+                                mergedRequirements[cat.key] = items;
+                                totalNormalized += items.length;
+                            }
+                            if (Array.isArray(data.documents_to_prepare)) {
+                                mergedDocs.push(...data.documents_to_prepare);
+                            }
+                            logger.info(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens (${normModel})`);
+                            return { cat: cat.key, success: true };
+                        } catch (geminiErr: any) {
+                            // Per-block fallback to OpenAI
+                            logger.warn(`[PNCP-V2] ⚠️ Norm ${cat.prefix} Gemini falhou: ${geminiErr.message}. Fallback OpenAI...`);
+                            usedFallback = true;
+                            try {
+                                const oaiResult = await fallbackToOpenAiV2({
+                                    systemPrompt,
+                                    userPrompt,
+                                    temperature: 0.1,
+                                    stageName: `Norm-${cat.prefix}`
+                                });
+                                if (!oaiResult.text) throw new Error('OpenAI vazio');
+                                const parsed = robustJsonParseDetailed(oaiResult.text, `Norm-${cat.prefix}-OAI`);
+                                if (parsed.repaired) hadRepair = true;
+                                const data = parsed.data;
+                                if (Array.isArray(data.items) && data.items.length > 0) {
+                                    mergedRequirements[cat.key] = data.items;
+                                    totalNormalized += data.items.length;
+                                } else {
+                                    mergedRequirements[cat.key] = items;
+                                    totalNormalized += items.length;
+                                }
+                                if (Array.isArray(data.documents_to_prepare)) {
+                                    mergedDocs.push(...data.documents_to_prepare);
+                                }
+                                logger.info(`[PNCP-V2] ✅ Norm ${cat.prefix} via OpenAI: ${(data.items || []).length} itens`);
+                                return { cat: cat.key, success: true, fallback: true };
+                            } catch (oaiErr: any) {
+                                // Both failed — keep original extraction data
+                                logger.error(`[PNCP-V2] ❌ Norm ${cat.prefix} falhou (ambos): ${oaiErr.message}`);
+                                mergedRequirements[cat.key] = items;
+                                totalNormalized += items.length;
+                                categoriesFailed++;
+                                return { cat: cat.key, success: false };
+                            }
+                        }
+                    })();
+                }).filter(Boolean);
+
+                // Execute all categories in parallel
+                const results = await Promise.allSettled(categoryTasks as Promise<any>[]);
+
+                stageTimes.normalization = (Date.now() - t2Start) / 1000;
+                const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+                const fastPathCount = results.filter(r => r.status === 'fulfilled' && r.value?.fastPath).length;
+                const aiNormCount = successCount - fastPathCount;
+                logger.info(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${NORM_CATEGORIES.length - categoriesSkipped} OK (⚡${fastPathCount} fast + 🤖${aiNormCount} AI), ${categoriesFailed} falhas`);
+
+                // Build merged normalization result
+                const json = {
+                    requirements_normalized: mergedRequirements,
+                    operational_outputs: {
+                        documents_to_prepare: mergedDocs,
+                    },
+                    confidence: {
+                        overall_confidence: categoriesFailed > 2 ? 'baixa' : categoriesFailed > 0 ? 'media' : 'alta',
+                        section_confidence: {} as any,
+                        warnings: categoriesFailed > 0 ? [`${categoriesFailed} categoria(s) não normalizada(s) — dados originais preservados`] : [],
+                    }
+                };
+
+                return { json, model: PIPELINE_MODELS.normalization, repaired: hadRepair, fallback: usedFallback };
+            })(),
+
+            // ── Stage 3: Risk Review ──
+            (async () => {
+                const t3Start = Date.now();
+                const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
+                    .replace('{extractionJson}', extractionJsonCompact)
+                    .replace('{normalizationJson}', '{}')  // Norm not yet available in parallel, use empty
+                    + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
+                try {
+                    const riskResponse = await callGeminiWithRetry(ai.models, {
+                        model: PIPELINE_MODELS.riskReview,
+                        contents: [{ role: 'user', parts: [{ text: riskUserInstruction }] }],
+                        config: {
+                            systemInstruction: V2_RISK_REVIEW_PROMPT,
+                            temperature: 0.2,
+                            maxOutputTokens: 16384,
+                            responseMimeType: 'application/json'
+                        }
+                    }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'risk-review' } });
+                    const riskText = riskResponse.text;
+                    if (!riskText) throw new Error('Etapa 3 retornou vazio');
+                    const parseR = robustJsonParseDetailed(riskText, 'PNCP-V2-RiskReview');
+                    const json = parseR.data;
+                    stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+                    logger.info(`[PNCP-V2] ✅ Etapa 3 em ${stageTimes.risk_review.toFixed(1)}s — ${(json.legal_risk_review?.critical_points || []).length} pontos críticos`);
+                    return { json, model: PIPELINE_MODELS.riskReview, repaired: parseR.repaired, fallback: false };
+                } catch (err: any) {
+                    logger.warn(`[PNCP-V2] ⚠️ Etapa 3 Gemini falhou: ${err.message}. Tentando OpenAI...`);
+                    const openAiResult = await fallbackToOpenAiV2({
+                        systemPrompt: V2_RISK_REVIEW_PROMPT,
+                        userPrompt: riskUserInstruction,
+                        temperature: 0.2,
+                        stageName: 'PNCP Etapa 3 (Risco)'
+                    });
+                    if (!openAiResult.text) throw new Error('OpenAI retornou vazio');
+                    const parseROai = robustJsonParseDetailed(openAiResult.text, 'PNCP-V2-RiskReview-OpenAI');
+                    const json = parseROai.data;
+                    stageTimes.risk_review = (Date.now() - t3Start) / 1000;
+                    logger.info(`[PNCP-V2] ✅ Etapa 3 via OpenAI em ${stageTimes.risk_review.toFixed(1)}s`);
+                    return { json, model: openAiResult.model, repaired: parseROai.repaired, fallback: true };
+                }
+            })(),
+
+            // ── Stage 1.5: Parallel Item Extraction (runs concurrently with 2+3) ──
+            // When itens_licitados is empty AND we have planilha-like PDFs in the catalog,
+            // download and extract items NOW instead of waiting for ai-populate
+            (async () => {
+                const currentItens = v2Result.proposal_analysis?.itens_licitados || [];
+                if (Array.isArray(currentItens) && currentItens.length > 0) {
+                    logger.info(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — itens_licitados já tem ${currentItens.length} itens`);
+                    return { items: currentItens, skipped: true };
+                }
+
+                // Find planilha/budget PDFs from catalog (including excluded-due-to-size ones)
+                const planilhaAttachments = pncpAttachments.filter((a: any) =>
+                    a.ativo && a.url && (
+                        a.purpose === 'planilha_orcamentaria' ||
+                        a.purpose === 'composicao_custos' ||
+                        a.purpose === 'anexo_geral' ||
+                        a.purpose === 'termo_referencia'
+                    )
+                );
+
+                if (planilhaAttachments.length === 0) {
+                    logger.info(`[PNCP-V2] ⚡ Etapa 1.5 SKIP — sem planilhas no catálogo`);
+                    return { items: [], skipped: true };
+                }
+
+                logger.info(`[PNCP-V2] 📋 Etapa 1.5: Extraindo itens de ${planilhaAttachments.length} PDF(s) em paralelo...`);
+                const t15Start = Date.now();
+
+                try {
+                    // Download the first planilha PDF (prioritize: planilha > composicao > anexo > TR)
+                    const priorityOrder = ['planilha_orcamentaria', 'composicao_custos', 'anexo_geral', 'termo_referencia'];
+                    const sorted = planilhaAttachments.sort((a: any, b: any) => 
+                        priorityOrder.indexOf(a.purpose) - priorityOrder.indexOf(b.purpose)
+                    );
+                    const target = sorted[0];
+                    
+                    const agent15 = new (require('https').Agent)({ rejectUnauthorized: false });
+                    const pdfResp = await axios.get(target.url, { 
+                        responseType: 'arraybuffer', 
+                        httpsAgent: agent15, 
+                        timeout: 30000,
+                        maxContentLength: 50 * 1024 * 1024 // 50MB max
+                    } as any);
+                    const pdfBuffer = Buffer.from(pdfResp.data as ArrayBuffer);
+                    logger.info(`[PNCP-V2] 📋 Etapa 1.5: PDF "${target.titulo}" (${(pdfBuffer.length / 1024).toFixed(0)} KB)`);
+
+                    const itemExtractionPrompt = `Você é um extrator de itens de planilhas orçamentárias de licitações brasileiras.
+
+Analise o PDF e extraia TODOS os itens/lotes com preço.
+
+Para CADA item extraia:
+- itemNumber: número do item/lote
+- description: descrição técnica COMPLETA (NÃO resuma)
+- unit: unidade de medida (UN, KG, M², M³, ML, MÊS, HORA, DIA, DIÁRIA, KM, LITRO, CJ, VB, SV)
+- quantity: quantidade numérica
+- referencePrice: valor unitário de referência/estimado (número, sem R$)
+- multiplier: se há período (ex: 12 meses), retorne o multiplicador
+- multiplierLabel: rótulo do multiplicador (ex: "Meses")
+
+REGRAS:
+- Extraia APENAS itens PRINCIPAIS (totalizadores), NÃO sub-itens de composição
+- referencePrice é NUMÉRICO (ex: 15000.00, não "R$ 15.000,00")
+- Se não encontrar itens com preço, retorne array vazio []
+- NUNCA invente itens
+
+Responda APENAS com JSON array:
+[{"itemNumber":"1","description":"...","unit":"UN","quantity":1,"referencePrice":0,"multiplier":1,"multiplierLabel":""}]`;
+
+                    const itemResult = await callGeminiWithRetry(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: [{
+                            role: 'user',
+                            parts: [
+                                { inlineData: { data: pdfBuffer.toString('base64'), mimeType: 'application/pdf' } },
+                                { text: itemExtractionPrompt }
+                            ]
+                        }],
+                        config: { temperature: 0.05, maxOutputTokens: 16384 }
+                    }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'item_extraction' } });
+
+                    const responseText = itemResult.text?.trim() || '';
+                    let jsonStr = responseText;
+                    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                    if (jsonMatch) jsonStr = jsonMatch[0];
+                    
+                    let items: any[] = [];
+                    try { items = JSON.parse(jsonStr); } catch { items = []; }
+                    
+                    // Filter valid items
+                    items = items.filter((it: any) => it.description && it.description.trim().length > 5);
+                    
+                    const elapsed = ((Date.now() - t15Start) / 1000).toFixed(1);
+                    logger.info(`[PNCP-V2] ✅ Etapa 1.5 em ${elapsed}s — ${items.length} itens extraídos de "${target.titulo}"`);
+                    
+                    return { items, skipped: false, source: target.titulo, elapsed };
+                } catch (err: any) {
+                    logger.warn(`[PNCP-V2] ⚠️ Etapa 1.5 falhou: ${err.message}`);
+                    return { items: [], skipped: false, error: err.message };
+                }
+            })()
+        ]);
+
+        logger.info(`[PNCP-V2] Etapas 2+3 paralelas concluídas em ${((Date.now() - t2t3Start) / 1000).toFixed(1)}s`);
+
+        // Process normalization result
+        if (normSettled.status === 'fulfilled') {
+            normalizationJson = normSettled.value.json;
+            v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
+            modelsUsed.push(normSettled.value.model);
+            if (normSettled.value.repaired) pipelineHealth.parseRepairs++;
+            if (normSettled.value.fallback) pipelineHealth.fallbacksUsed++;
+        } else {
+            logger.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
+            v2Result.analysis_meta.workflow_stage_status.normalization = 'failed';
+            v2Result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${normSettled.reason?.message || 'erro desconhecido'}`);
+            stageTimes.normalization = stageTimes.normalization || 0;
+        }
+
+        // Merge normalization
+        if (normalizationJson.requirements_normalized) {
+            v2Result.requirements = normalizationJson.requirements_normalized;
+        }
+        if (normalizationJson.operational_outputs) {
+            v2Result.operational_outputs = { ...v2Result.operational_outputs, ...normalizationJson.operational_outputs };
+        }
+        if (normalizationJson.confidence) {
+            v2Result.confidence = { ...v2Result.confidence, ...normalizationJson.confidence };
+        }
+
+        // Process risk review result
+        if (riskSettled.status === 'fulfilled') {
+            const riskJson = riskSettled.value.json;
+            v2Result.analysis_meta.workflow_stage_status.risk_review = 'done';
+            modelsUsed.push(riskSettled.value.model);
+            if (riskSettled.value.repaired) pipelineHealth.parseRepairs++;
+            if (riskSettled.value.fallback) pipelineHealth.fallbacksUsed++;
+            if (riskJson.legal_risk_review) v2Result.legal_risk_review = riskJson.legal_risk_review;
+            if (riskJson.operational_outputs_risk) {
+                if (riskJson.operational_outputs_risk.questions_for_consultor_chat) {
+                    v2Result.operational_outputs.questions_for_consultor_chat = riskJson.operational_outputs_risk.questions_for_consultor_chat;
+                }
+                if (riskJson.operational_outputs_risk.possible_petition_routes) {
+                    v2Result.operational_outputs.possible_petition_routes = riskJson.operational_outputs_risk.possible_petition_routes;
+                }
+            }
+            if (riskJson.confidence_update) {
+                v2Result.confidence.section_confidence.risk_review = riskJson.confidence_update.risk_review || 'media';
+            }
+        } else {
+            logger.error(`[PNCP-V2] ❌ Etapa 3 falhou — continuando sem revisão de risco`);
+            v2Result.analysis_meta.workflow_stage_status.risk_review = 'failed';
+            v2Result.confidence.warnings.push(`Etapa 3 (Risco) falhou: ${riskSettled.reason?.message || 'erro desconhecido'}`);
+            stageTimes.risk_review = stageTimes.risk_review || 0;
+        }
+
+        // Process item extraction result (Etapa 1.5)
+        if (itemsSettled.status === 'fulfilled' && !itemsSettled.value.skipped) {
+            const extractedItems = itemsSettled.value.items || [];
+            if (extractedItems.length > 0) {
+                if (!v2Result.proposal_analysis) v2Result.proposal_analysis = {} as any;
+                v2Result.proposal_analysis.itens_licitados = extractedItems;
+                stageTimes.item_extraction = parseFloat(itemsSettled.value.elapsed || '0');
+                logger.info(`[PNCP-V2] ✅ Etapa 1.5 merge: ${extractedItems.length} itens → proposal_analysis.itens_licitados`);
+            }
+        } else if (itemsSettled.status === 'rejected') {
+            logger.warn(`[PNCP-V2] ⚠️ Etapa 1.5 rejected: ${itemsSettled.reason?.message || 'erro'}`);
+        }
+
+        // ── Schema Sanitization: Safe defaults for all arrays/collections ──
+        // Prevents "Cannot read properties of undefined (reading 'length')" crashes
+        const reqCategories = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira',
+            'qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'proposta_comercial', 'documentos_complementares'];
+        if (!v2Result.requirements) v2Result.requirements = {} as any;
+        for (const cat of reqCategories) {
+            if (!Array.isArray((v2Result.requirements as any)[cat])) {
+                (v2Result.requirements as any)[cat] = [];
+            }
+        }
+        if (!Array.isArray(v2Result.evidence_registry)) v2Result.evidence_registry = [];
+        if (!v2Result.legal_risk_review) v2Result.legal_risk_review = { critical_points: [], ambiguities: [], inconsistencies: [], omissions: [], possible_restrictive_clauses: [], points_for_impugnation_or_clarification: [] } as any;
+        if (!Array.isArray(v2Result.legal_risk_review.critical_points)) v2Result.legal_risk_review.critical_points = [];
+        if (!v2Result.operational_outputs) v2Result.operational_outputs = { documents_to_prepare: [], internal_checklist: [], questions_for_consultor_chat: [], possible_petition_routes: [] } as any;
+        if (!v2Result.confidence) v2Result.confidence = { overall_confidence: 'baixa', section_confidence: {} as any, warnings: [] } as any;
+        if (!Array.isArray(v2Result.confidence.warnings)) v2Result.confidence.warnings = [];
+        if (!v2Result.economic_financial_analysis) v2Result.economic_financial_analysis = { indices_exigidos: [] } as any;
+        if (!Array.isArray(v2Result.economic_financial_analysis.indices_exigidos)) v2Result.economic_financial_analysis.indices_exigidos = [];
+        if (!v2Result.technical_analysis) v2Result.technical_analysis = { parcelas_relevantes: [] } as any;
+        if (!Array.isArray(v2Result.technical_analysis.parcelas_relevantes)) v2Result.technical_analysis.parcelas_relevantes = [];
+
+        // Record discarded files in analysis metadata
+        if (discardedFiles.length > 0) {
+            (v2Result.analysis_meta as any).discarded_files = discardedFiles;
+            v2Result.confidence.warnings.push(`${discardedFiles.length} anexo(s) ignorado(s) por limite de tamanho: ${discardedFiles.join(', ')}`);
+        }
+
+        // ── Schema Enforcement (Level 1, 2, 3) — ANTES da validação ──
+        // Corrige campos vazios com defaults inteligentes, normaliza formatos,
+        // e injeta categorias faltantes. Beneficia todos os 8 módulos downstream.
+        const enforceResult = enforceSchema(v2Result);
+        if (enforceResult.corrections > 0) {
+            v2Result.confidence.warnings.push(
+                `SchemaEnforcer: ${enforceResult.corrections} campo(s) padronizado(s) automaticamente`
+            );
+            (v2Result.analysis_meta as any).schema_enforcer = {
+                corrections: enforceResult.corrections,
+                details: enforceResult.details.slice(0, 20),
+            };
+        }
+
+        // ── Validation (no AI) ──
+        const validation = validateAnalysisCompleteness(v2Result);
+        v2Result.analysis_meta.workflow_stage_status.validation = validation.valid ? 'done' : 'failed';
+        if (validation.issues.length > 0) {
+            v2Result.confidence.warnings.push(...validation.issues);
+        }
+
+        // ── Risk Rules Engine ──
+        let ruleFindings: any[] = [];
+        try {
+            ruleFindings = executeRiskRules(v2Result);
+            if (ruleFindings.length > 0) {
+                (v2Result.analysis_meta as any).rule_findings = ruleFindings;
+            }
+        } catch (ruleErr: any) {
+            logger.warn(`[PNCP-V2] Motor de regras falhou: ${ruleErr.message}`);
+        }
+
+        // ── Quality Evaluator ──
+        let qualityReport: any = null;
+        try {
+            qualityReport = evaluateAnalysisQuality(v2Result, ruleFindings, v2Result.analysis_meta.analysis_id);
+            (v2Result.analysis_meta as any).quality_report = {
+                overallScore: qualityReport.overallScore,
+                categoryScores: qualityReport.categoryScores,
+                issueCount: qualityReport.issues.length,
+                summary: qualityReport.summary
+            };
+        } catch (qualErr: any) {
+            logger.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
+        }
+
+        // ── Confidence Score V2.5 (calibrado para refletir precisão real) ──
+        const stagesDone = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
+        const stagesTotal = 4;
+        const stageScore = (stagesDone / stagesTotal) * 100;
+        const qualityScore = qualityReport?.overallScore || 50;
+        // Rebalanceado: stages 30% + validation 25% + quality 25% + bônus excelência 20%
+        let combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.25) + (qualityScore * 0.25));
+
+        // Traceability assessment: count requirements with valid source_ref
+        const evidenceCount = v2Result.evidence_registry?.length || 0;
+        const allReqArrays = Object.values(v2Result.requirements || {}).flat() as any[];
+        const principalReqs = allReqArrays.filter((r: any) => !r.entry_type || r.entry_type === 'exigencia_principal');
+        const requirementCount = principalReqs.length;
+        const tracedCount = principalReqs.filter((r: any) => r.source_ref && r.source_ref !== 'referência não localizada' && r.source_ref.trim() !== '').length;
+        const traceabilityRatio = requirementCount > 0 ? tracedCount / requirementCount : 0;
+
+        // Bônus de excelência: análises ricas recebem até 20% extra
+        if (requirementCount >= 20 && traceabilityRatio >= 0.7) {
+            combinedScore += 20; // Pipeline maduro com boa extração
+        } else if (requirementCount >= 10 && traceabilityRatio >= 0.5) {
+            combinedScore += 15;
+        } else if (requirementCount >= 5) {
+            combinedScore += 10;
+        }
+
+        // Traceability penalty (suavizada na V2.5)
+        if (traceabilityRatio < 0.3 && requirementCount > 5) {
+            combinedScore -= 5;
+            v2Result.confidence.warnings.push(`Apenas ${Math.round(traceabilityRatio * 100)}% das exigências têm referência documental — rastreabilidade comprometida`);
+        }
+
+        // Parse repair penalty (suavizada: 3/reparo, max -10)
+        if (pipelineHealth.parseRepairs > 0) {
+            const repairPenalty = Math.min(pipelineHealth.parseRepairs * 3, 10);
+            combinedScore -= repairPenalty;
+            v2Result.confidence.warnings.push(`${pipelineHealth.parseRepairs} reparos de JSON foram necessários`);
+        }
+
+        // Fallback penalty (suavizada: 5/fallback, max -12)
+        if (pipelineHealth.fallbacksUsed > 0) {
+            const fallbackPenalty = Math.min(pipelineHealth.fallbacksUsed * 5, 12);
+            combinedScore -= fallbackPenalty;
+            v2Result.confidence.warnings.push(`${pipelineHealth.fallbacksUsed} fallback(s) para OpenAI acionado(s)`);
+        }
+
+        // Stage failure penalty
+        const stagesFailed = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'failed').length;
+        if (stagesFailed > 0) {
+            combinedScore -= stagesFailed * 10;
+        }
+
+        // Floor: análises com todas as stages concluídas nunca ficam abaixo de 80%
+        const allStagesOk = stagesFailed === 0 && stagesDone === stagesTotal;
+        const scoreFloor = allStagesOk ? 80 : 5;
+        combinedScore = Math.max(scoreFloor, Math.min(100, combinedScore));
+
+        // Confidence level V2.5 (flexibilizado — reflete precisão real)
+        if (combinedScore >= 85 && traceabilityRatio >= 0.5) {
+            v2Result.confidence.overall_confidence = 'alta';
+        } else if (combinedScore >= 70) {
+            v2Result.confidence.overall_confidence = 'alta';
+        } else if (combinedScore >= 50) {
+            v2Result.confidence.overall_confidence = 'media';
+        } else {
+            v2Result.confidence.overall_confidence = 'baixa';
+        }
+        (v2Result.confidence as any).score_percentage = combinedScore;
+        (v2Result.confidence as any).pipeline_health = pipelineHealth;
+        (v2Result.confidence as any).traceability = {
+            total_requirements: requirementCount,
+            traced_requirements: tracedCount,
+            traceability_percentage: Math.round(traceabilityRatio * 100),
+            evidence_registry_count: evidenceCount,
+        };
+
+        const uniqueModels = [...new Set(modelsUsed)];
+        v2Result.analysis_meta.model_used = uniqueModels.join('+');
+        (v2Result.analysis_meta as any).prompt_version = V2_PROMPT_VERSION;
+        (v2Result.analysis_meta as any).models_per_stage = {
+            extraction: modelsUsed[0] || 'failed',
+            normalization: modelsUsed[1] || 'failed',
+            risk_review: modelsUsed[2] || 'failed'
+        };
+        (v2Result.analysis_meta as any).stage_times = stageTimes;
+
+        const totalDuration = ((Date.now() - analysisStartTime) / 1000).toFixed(1);
+        const totalReqs = Object.values(v2Result.requirements).reduce((sum, arr) => sum + arr.length, 0);
+        sendProgress(7, 'Validando completude da análise...', `${totalReqs} exigências, ${v2Result.evidence_registry.length} evidências`);
+        logger.info(`[PNCP-V2] ═══ PIPELINE CONCLUÍDO ═══ ${totalDuration}s total | ` +
+            `Modelos: ${uniqueModels.join('+')} | ` +
+            `${totalReqs} exigências | ${v2Result.legal_risk_review.critical_points.length} riscos | ` +
+            `${v2Result.evidence_registry.length} evidências | Score: ${combinedScore}% (${v2Result.confidence.overall_confidence})`);
+
+        // ── Legacy V1 Compatibility ──
+        // Build process/analysis format expected by frontend
+        const allReqs = Object.entries(v2Result.requirements).reduce((acc: Record<string, any[]>, [cat, items]) => {
+            acc[cat] = items.map((r: any) => ({ item: r.requirement_id, description: `${r.title}: ${r.description}` }));
+            return acc;
+        }, {} as Record<string, any[]>);
+
+        // ── PNCP Metadata Enrichment: Fetch valorTotalEstimado from PNCP API ──
+        let pncpApiValue = 0;
+        let pncpApiSessionDate = '';
+        try {
+            const detailUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
+            const detailRes = await axios.get(detailUrl, { httpsAgent: agent, timeout: 5000 } as any);
+            const d: any = detailRes.data;
+            if (d) {
+                pncpApiValue = Number(d.valorTotalEstimado ?? d.valorTotalHomologado ?? d.valorGlobal ?? 0) || 0;
+                // dataAberturaProposta = início do recebimento de propostas (NÃO é a sessão!)
+                // dataInicioDisputa ou dataAberturaEdital são mais próximos da sessão real
+                pncpApiSessionDate = d.dataInicioDisputa || d.dataAberturaEdital || '';
+                logger.info(`[PNCP-V2] 💰 API metadata: valor=${pncpApiValue}, sessionDate=${pncpApiSessionDate || '(vazio)'}`);
+            }
+        } catch (e: any) {
+            logger.warn(`[PNCP-V2] Failed to fetch PNCP metadata for value: ${e.message}`);
+        }
+
+        // Resolve estimatedValue: AI extraction > PNCP API > 0
+        const aiExtractedValue = Number(v2Result.process_identification?.valor_estimado_global) || 0;
+        const resolvedEstimatedValue = aiExtractedValue > 0 ? aiExtractedValue : pncpApiValue;
+        logger.info(`[PNCP-V2] 💰 Valor resolução: AI=${aiExtractedValue}, API=${pncpApiValue}, final=${resolvedEstimatedValue}`);
+
+        // Resolve sessionDate: AI timeline > PNCP API data_abertura
+        const resolvedSessionDateRaw = v2Result.timeline.data_sessao || pncpApiSessionDate || '';
+
+        // Convert Brazilian "DD/MM/AAAA às HH:MM" to ISO for frontend Date() compatibility
+        const parseBrazilianDateToISO = (dateStr: string): string => {
+            if (!dateStr) return '';
+            // Already ISO? Return as-is
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+            // Parse "DD/MM/AAAA às HH:MM" or "DD/MM/AAAA HH:MM"
+            const match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{2}):(\d{2}))?/);
+            if (match) {
+                const [, day, month, year, hour = '00', minute = '00'] = match;
+                return `${year}-${month}-${day}T${hour}:${minute}:00-03:00`;
+            }
+            return dateStr; // Can't parse, return as-is
+        };
+        const resolvedSessionDateISO = parseBrazilianDateToISO(resolvedSessionDateRaw);
+
+        // ── SANITIZAÇÃO DO OBJETO (anti-poluição por Minuta) ──
+        const sanitizeObjeto = (text: string): string => {
+            if (!text) return '';
+            let s = text
+                .replace(/^TERMO DE CONTRATO QUE ENTRE SI FAZEM[\s\S]*?DECLARA:\s*/i, '')
+                .replace(/^O presente contrato tem por objeto a execu..o dos servi.os de\s*\[espa.o em branco\]\s*conforme[\s\S]*?processo\.\s*/i, '')
+                .replace(/\(Minuta,\s*Cl.usula[\s\S]*?\)\.\s*/gi, '')
+                .replace(/\[espa.o em branco\]/gi, '')
+                .replace(/\[nome[^\]]*\]/gi, '').replace(/\[CNPJ[^\]]*\]/gi, '')
+                .replace(/\bXX\/\d{4}\b/g, '').trim();
+            if (s.length < 20) return '';
+            return s;
+        };
+        const rawObjResumo = v2Result.process_identification.objeto_resumido || '';
+        const rawObjCompleto = v2Result.process_identification.objeto_completo || '';
+        const cleanObjResumo = sanitizeObjeto(rawObjResumo);
+        const cleanObjCompleto = sanitizeObjeto(rawObjCompleto);
+        const bestObjResumo = cleanObjResumo || cleanObjCompleto.slice(0, 150) || rawObjResumo;
+        const bestObjCompleto = cleanObjCompleto || cleanObjResumo || rawObjCompleto;
+        let cleanNumProcesso = v2Result.process_identification.numero_processo || '';
+        let cleanNumEdital = v2Result.process_identification.numero_edital || '';
+        if (/XX\/\d{4}/.test(cleanNumProcesso)) cleanNumProcesso = '';
+        if (/XX\/\d{4}/.test(cleanNumEdital)) cleanNumEdital = '';
+        if (rawObjResumo !== bestObjResumo) {
+            logger.info(`[PNCP-V2] 🧹 Sanitização anti-Minuta: obj "${rawObjResumo.slice(0,50)}..." → "${bestObjResumo.slice(0,50)}..."`);
+        }
+        const legacyProcess = {
+            title: cleanNumEdital
+                ? `${v2Result.process_identification.modalidade} ${cleanNumEdital} - ${v2Result.process_identification.orgao}`
+                : bestObjResumo || '',
+            summary: `${bestObjResumo || bestObjCompleto || ''}\n\n` +
+                `Modalidade: ${v2Result.process_identification.modalidade || ''}\n` +
+                `Critério: ${v2Result.process_identification.criterio_julgamento || ''}\n` +
+                `Regime: ${v2Result.process_identification.regime_execucao || ''}\n` +
+                `Município: ${v2Result.process_identification.municipio_uf || ''}\n` +
+                `Sessão: ${resolvedSessionDateRaw}\n` +
+                (v2Result.participation_conditions.exige_visita_tecnica ? `Visita Técnica: ${v2Result.participation_conditions.visita_tecnica_detalhes}\n` : '') +
+                (v2Result.participation_conditions.exige_garantia_proposta ? `Garantia de Proposta: ${v2Result.participation_conditions.garantia_proposta_detalhes}\n` : '') +
+                (v2Result.participation_conditions.exige_garantia_contratual ? `Garantia Contratual: ${v2Result.participation_conditions.garantia_contratual_detalhes}\n` : '') +
+                `\n--- RISCOS CRÍTICOS (${v2Result.legal_risk_review.critical_points.length}) ---\n` +
+                v2Result.legal_risk_review.critical_points.map(cp =>
+                    `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`
+                ).join('\n'),
+            modality: normalizeModality(v2Result.process_identification.modalidade),
+            portal: normalizePortal(v2Result.process_identification.fonte_oficial || 'PNCP', link_sistema),
+            estimatedValue: resolvedEstimatedValue,
+            risk: v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'critica') ? 'Crítico'
+                : v2Result.legal_risk_review.critical_points.some(cp => cp.severity === 'alta') ? 'Alto'
+                : v2Result.legal_risk_review.critical_points.length > 0 ? 'Médio' : 'Baixo',
+            sessionDate: resolvedSessionDateISO,
+            link_sistema: (() => {
+                // Sanitize: strip generic ComprasNet links that are NOT actual monitoring URLs
+                // Only cnetmobile.estaleiro.serpro.gov.br/...?compra=XXX is a valid monitoring link
+                const rawLink = (v2Result.process_identification.link_sistema || '').trim();
+                if (!rawLink) return '';
+                const lower = rawLink.toLowerCase();
+                const isGenericComprasNet = (
+                    lower.includes('comprasnet.gov.br') ||
+                    lower.includes('www.gov.br/compras') ||
+                    lower.includes('compras.gov.br') && !lower.includes('cnetmobile')
+                );
+                if (isGenericComprasNet) {
+                    logger.info(`[PNCP-V2] 🧹 Sanitização: link_sistema genérico removido: "${rawLink.substring(0, 60)}"`);
+                    return '';
+                }
+                return rawLink;
+            })()
+        };
+
+        // ── AUTO-ENRICH: Buscar link de monitoramento via API PNCP ──
+        // Se link_sistema está vazio OU é genérico (sem parâmetros funcionais para chat monitor),
+        // buscamos linkSistemaOrigem da API PNCP para TODAS as plataformas monitoráveis.
+        // V4.6.0: Expandido para BLL, BNC, BBMNET, PCP, Licitanet, LMB (antes: só cnetmobile).
+        const isAnalysisLinkFunctional = (() => {
+            const l = (legacyProcess.link_sistema || '').toLowerCase();
+            if (!l) return false;
+            // BLL: functional links need param1= or ProcessView
+            if ((l.includes('bllcompras') || l.includes('bll.org')) && !l.includes('param1=') && !l.includes('processview')) return false;
+            // M2A: functional links need /certame/
+            if (l.includes('m2atecnologia') && !l.includes('/certame/')) return false;
+            // Generic domain-only links (e.g. "www.bll.org.br", "bllcompras.com") without path
+            try {
+                const url = new URL(l.startsWith('http') ? l : `https://${l}`);
+                if (url.pathname === '/' || url.pathname === '' || url.pathname === '/Home/PublicAccess') return false;
+            } catch { /* not a parseable URL, treat as non-functional */ return false; }
+            return true;
+        })();
+        const needsAutoEnrich = (!legacyProcess.link_sistema || !isAnalysisLinkFunctional) && orgao_cnpj && ano && numero_sequencial;
+        if (needsAutoEnrich) {
+            try {
+                const enrichUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${orgao_cnpj}/compras/${ano}/${numero_sequencial}`;
+                logger.info(`[PNCP-V2] 🔍 Buscando linkSistemaOrigem: ${enrichUrl} (link_sistema=${legacyProcess.link_sistema ? 'genérico' : 'vazio'})`);
+                const controller = new AbortController();
+                const enrichTimeout = setTimeout(() => controller.abort(), 8000);
+                const enrichRes = await fetch(enrichUrl, { signal: controller.signal });
+                clearTimeout(enrichTimeout);
+                if (enrichRes.ok) {
+                    const enrichData = await enrichRes.json();
+                    const lso = (enrichData.linkSistemaOrigem || '').trim();
+                    if (lso && hasMonitorableDomain(lso)) {
+                        legacyProcess.link_sistema = lso;
+                        const platform = detectPlatformFromLink(lso) || 'desconhecida';
+                        logger.info(`[PNCP-V2] ✅ linkSistemaOrigem enriquecido (${platform}): ${lso.substring(0, 80)}`);
+                    } else {
+                        logger.info(`[PNCP-V2] ⚠️ linkSistemaOrigem=${lso ? lso.substring(0, 60) : 'VAZIO'} → tentando Fallback B (edital)`);
+
+                        // ── FALLBACK B: Construir URL ComprasNet a partir dos dados do edital ──
+                        // Quando linkSistemaOrigem é null (ex: CE-SOP), o edital pode conter
+                        // "UASG: 943001" e "Número Comprasnet: (95033/2026)" que são diferentes
+                        // da unidade/número do PNCP (081401/202606994).
+                        // Fórmula: UASG(6) + coModalidade(2) + nuCompra(5) + ano(4) = 17 dígitos
+                        try {
+                            // Fontes: (1) campo IA, (2) regex nos campos IA, (3) regex no PDF direto
+                            const aiNumComprasnet = ((v2Result.process_identification as any).numero_comprasnet || '').trim();
+                            const aiUasg = ((v2Result.process_identification as any).uasg_comprasnet || '').trim();
+                            
+                            const allTextFields = [
+                                v2Result.process_identification.numero_edital || '',
+                                v2Result.process_identification.numero_processo || '',
+                                v2Result.process_identification.objeto_completo || '',
+                                v2Result.process_identification.fonte_oficial || '',
+                                v2Result.process_identification.unidade_compradora || '',
+                            ].join(' ');
+
+                            const aiModalidade = (v2Result.process_identification.modalidade || '').toLowerCase();
+                            const pncpUasg = enrichData.unidadeOrgao?.codigoUnidade || '';
+                            
+                            // ── Resolução de numero_comprasnet ──
+                            // Prioridade: campo IA > regex campos IA > regex PDF direto
+                            let nuCompraRaw = aiNumComprasnet;
+                            let compraAno = ano;
+                            let resolvedUasg = aiUasg;
+                            let extractionSrc = aiNumComprasnet ? 'AI' : '';
+                            
+                            if (!nuCompraRaw) {
+                                const comprasnetMatch = allTextFields.match(/[Nn][uú]mero\s+[Cc]omprasnet\s*:?\s*\(?(\d{4,6})\s*[/\\]?\s*(\d{4})?\)?/);
+                                if (comprasnetMatch) {
+                                    nuCompraRaw = comprasnetMatch[1];
+                                    compraAno = comprasnetMatch[2] || ano;
+                                    extractionSrc = 'REGEX-FIELD';
+                                }
+                            }
+                            
+                            if (!resolvedUasg) {
+                                const uasgMatch = allTextFields.match(/UASG\s*:?\s*(\d{6})/i);
+                                if (uasgMatch) resolvedUasg = uasgMatch[1];
+                            }
+                            
+                            // ── Fallback C: Extração direta do PDF via pdf-parse ──
+                            // Se a IA e o regex nos campos IA falharam, buscar no texto bruto do PDF
+                            if ((!nuCompraRaw || !resolvedUasg) && pdfParts.length > 0) {
+                                try {
+                                    const pdfParse = require('pdf-parse');
+                                    const firstPdf = pdfParts[0];
+                                    let pdfBuffer: Buffer | null = null;
+                                    if (firstPdf?.inlineData?.data) {
+                                        pdfBuffer = Buffer.from(firstPdf.inlineData.data, 'base64');
+                                    }
+                                    if (pdfBuffer) {
+                                        const pdfData = await pdfParse(pdfBuffer);
+                                        // Buscar apenas nos primeiros 3000 chars (cabeçalho)
+                                        const headerText = (pdfData.text || '').substring(0, 3000);
+                                        
+                                        if (!nuCompraRaw) {
+                                            const pdfNumMatch = headerText.match(/[Nn][uú]mero\s+[Cc]omprasnet\s*:?\s*\(?(\d{4,6})\s*[/\\]?\s*(\d{4})?\)?/);
+                                            if (pdfNumMatch) {
+                                                nuCompraRaw = pdfNumMatch[1];
+                                                compraAno = pdfNumMatch[2] || ano;
+                                                extractionSrc = 'PDF-PARSE';
+                                                logger.info(`[PNCP-V2] 📄 Fallback C: numero_comprasnet=${nuCompraRaw} extraído do PDF direto`);
+                                            }
+                                        }
+                                        if (!resolvedUasg) {
+                                            const pdfUasgMatch = headerText.match(/UASG\s*:?\s*(\d{6})/i);
+                                            if (pdfUasgMatch) {
+                                                resolvedUasg = pdfUasgMatch[1];
+                                                logger.info(`[PNCP-V2] 📄 Fallback C: uasg=${resolvedUasg} extraído do PDF direto`);
+                                            }
+                                        }
+                                    }
+                                } catch (pdfErr: any) {
+                                    logger.warn(`[PNCP-V2] ⚠️ Fallback C (pdf-parse) falhou: ${pdfErr.message}`);
+                                }
+                            }
+                            
+                            // Fallback final para UASG: usar PNCP API
+                            if (!resolvedUasg) resolvedUasg = pncpUasg;
+                            
+                            // Mapeamento de modalidade → código ComprasNet (SISG)
+                            const MODALIDADE_TO_CODE: Record<string, string> = {
+                                'pregão': '05', 'pregao': '05',
+                                'concorrência': '03', 'concorrencia': '03',
+                                'tomada de preço': '02', 'tomada de preco': '02',
+                                'convite': '04', 'concurso': '01',
+                                'leilão': '07', 'leilao': '07',
+                                'dispensa': '08', 'inexigibilidade': '09',
+                            };
+                            
+                            let coModalidade = '';
+                            for (const [key, code] of Object.entries(MODALIDADE_TO_CODE)) {
+                                if (aiModalidade.includes(key)) { coModalidade = code; break; }
+                            }
+
+                            if (nuCompraRaw && coModalidade && resolvedUasg && resolvedUasg.length === 6) {
+                                const nuCompra = nuCompraRaw.padStart(5, '0');
+                                const compraId = `${resolvedUasg}${coModalidade}${nuCompra}${compraAno}`;
+                                const fallbackUrl = `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${compraId}`;
+                                
+                                legacyProcess.link_sistema = fallbackUrl;
+                                logger.info(`[PNCP-V2] 🔧 Fallback B: URL construída do edital → ${fallbackUrl}`);
+                                logger.info(`[PNCP-V2]    UASG=${resolvedUasg} mod=${coModalidade} num=${nuCompra} ano=${compraAno} src=${extractionSrc}`);
+                            } else {
+                                logger.info(`[PNCP-V2] ℹ️ Fallback B+C: dados insuficientes (nuCompra=${nuCompraRaw || 'N/A'}, coMod=${coModalidade || 'N/A'}, uasg=${resolvedUasg || 'N/A'})`);
+                            }
+                        } catch (fbErr: any) {
+                            logger.warn(`[PNCP-V2] ⚠️ Fallback B falhou: ${fbErr.message}`);
+                        }
+                    }
+                }
+            } catch (err: any) {
+                logger.warn(`[PNCP-V2] ⏱️ Enrich falhou: ${err.message}`);
+            }
+        }
+
+        // ── Re-normalize portal after Auto-Enrich ──
+        // If we enriched link_sistema to a platform URL (BLL, BNC, etc.), the portal
+        // was still set to "PNCP" from L3216. Re-normalize with the enriched link.
+        if (legacyProcess.link_sistema && hasMonitorableDomain(legacyProcess.link_sistema)) {
+            const enrichedPortal = normalizePortal(legacyProcess.portal || 'PNCP', legacyProcess.link_sistema);
+            if (enrichedPortal !== legacyProcess.portal) {
+                logger.info(`[PNCP-V2] 🔄 Portal re-normalizado: "${legacyProcess.portal}" → "${enrichedPortal}" (Auto-Enrich)`);
+                legacyProcess.portal = enrichedPortal;
+            }
+        }
+
+        const legacyAnalysis = {
+            requiredDocuments: allReqs,
+            pricingConsiderations: v2Result.economic_financial_analysis.indices_exigidos
+                .map(i => `${i.indice}: ${i.formula_ou_descricao} (mín: ${i.valor_minimo})`).join('\n')
+                + (v2Result.contractual_analysis.medicao_pagamento ? `\nPagamento: ${v2Result.contractual_analysis.medicao_pagamento}` : '')
+                + (v2Result.contractual_analysis.reajuste ? `\nReajuste: ${v2Result.contractual_analysis.reajuste}` : ''),
+            irregularitiesFlags: v2Result.legal_risk_review.critical_points.map(cp => `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description}`),
+            fullSummary: `ANÁLISE V2 PIPELINE — ${bestObjResumo || ''}\n\n` +
+                `Objeto: ${bestObjCompleto || ''}\n` +
+                `Órgão: ${v2Result.process_identification.orgao || ''}\n` +
+                `Sessão: ${v2Result.timeline.data_sessao || ''}\n\n` +
+                `--- CONDIÇÕES ---\n` +
+                `Consórcio: ${v2Result.participation_conditions.permite_consorcio ?? 'Não informado'}\n` +
+                `Subcontratação: ${v2Result.participation_conditions.permite_subcontratacao ?? 'Não informado'}\n` +
+                `Visita Técnica: ${v2Result.participation_conditions.exige_visita_tecnica ?? 'Não informado'}\n\n` +
+                `--- PENALIDADES ---\n` +
+                (v2Result.contractual_analysis.penalidades || []).join('\n') +
+                `\n\n--- RISCOS (${v2Result.legal_risk_review.critical_points.length}) ---\n` +
+                v2Result.legal_risk_review.critical_points.map(cp =>
+                    `[${(cp.severity || '').toUpperCase()}] ${cp.title}: ${cp.description} → ${cp.recommended_action}`
+                ).join('\n'),
+            deadlines: [
+                v2Result.timeline.data_sessao ? `${v2Result.timeline.data_sessao} - Sessão Pública` : '',
+                v2Result.timeline.prazo_impugnacao ? `${v2Result.timeline.prazo_impugnacao} - Impugnação` : '',
+                v2Result.timeline.prazo_esclarecimento ? `${v2Result.timeline.prazo_esclarecimento} - Esclarecimento` : '',
+                v2Result.timeline.prazo_envio_proposta ? `${v2Result.timeline.prazo_envio_proposta} - Envio de Proposta` : '',
+                v2Result.contractual_analysis.prazo_execucao ? `Prazo de Execução: ${v2Result.contractual_analysis.prazo_execucao}` : '',
+                v2Result.contractual_analysis.prazo_vigencia ? `Vigência: ${v2Result.contractual_analysis.prazo_vigencia}` : '',
+                ...(v2Result.timeline.outros_prazos || []).map(p => `${p.data || ''} - ${p.descricao || ''}`)
+            ].filter(Boolean),
+            penalties: (v2Result.contractual_analysis.penalidades || []).join('\n'),
+            qualificationRequirements: Object.values(v2Result.requirements)
+                .flat()
+                .map(r => `[${r.requirement_id}] ${r.title}: ${r.description}`)
+                .join('\n'),
+            biddingItems: (() => {
+                // Primary: structured items from itens_licitados (V2 pipeline extraction)
+                const itens = v2Result.proposal_analysis?.itens_licitados || [];
+                if (Array.isArray(itens) && itens.length > 0) {
+                    return itens.map((it: any) => 
+                        `Item ${it.itemNumber || '?'}: ${it.description || ''} | Unid: ${it.unit || 'UN'} | Qtd: ${it.quantity || 1}${it.multiplier && it.multiplier > 1 ? ` × ${it.multiplier} ${it.multiplierLabel || ''}` : ''} | Ref: R$ ${it.referencePrice || 0}`
+                    ).join('\n');
+                }
+                // Fallback: observacoes_proposta (legacy, but usually short/useless)
+                return (v2Result.proposal_analysis.observacoes_proposta || []).join('\n');
+            })()
+        };
+
+        // Embed pncpSource inside schemaV2 so it's persisted in the DB
+        (v2Result as any).pncp_source = {
+            link_sistema,
+            downloaded_files: downloadedFiles,
+            discarded_files: discardedFiles,
+            attachments: pncpAttachments,
+            analyzed_at: new Date().toISOString()
+        };
+
+        // Build final response with both V1 compat and V2 schema
+        const finalPayload = {
+            process: legacyProcess,
+            analysis: legacyAnalysis,
+            schemaV2: v2Result,
+            pncpSource: {
+                link_sistema,
+                downloadedFiles,
+                discardedFiles,
+                attachments: pncpAttachments,  // Full catalog with URLs for proposal module
+                analyzedAt: new Date().toISOString()
+            },
+            _version: '2.0',
+            _pipeline_duration_s: parseFloat(totalDuration),
+            _prompt_version: V2_PROMPT_VERSION,
+            _model_used: uniqueModels.join('+'),
+            _overall_confidence: v2Result.confidence.overall_confidence,
+            _stage_times: stageTimes,
+            _quality_score: qualityReport?.overallScore || null,
+            _evidence_count: v2Result.evidence_registry.length,
+            _risk_count: v2Result.legal_risk_review.critical_points.length,
+            _requirement_count: totalReqs,
+            _requires_human_audit: combinedScore < 80 || pipelineHealth.fallbacksUsed > 2 || pipelineHealth.parseRepairs > 1
+        };
+
+        logger.info(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
+        sendProgress(8, 'Análise concluída!', `Score: ${combinedScore}% • ${totalReqs} exigências • ${v2Result.legal_risk_review.critical_points.length} riscos`);
+
+        // ── Telemetry (fire-and-forget) ──
+        const catCounts: Record<string, number> = {};
+        for (const [cat, items] of Object.entries(v2Result.requirements || {})) {
+            catCounts[cat] = (items as any[]).length;
+        }
+        recordAnalysisTelemetry({
+            tenantId: req.user.tenantId,
+            processId: undefined,
+            numPdfs: pdfParts.length,
+            totalPages: 0,
+            totalChars: 0,
+            hasScannedPdf: false,
+            portal: v2Result.process_identification?.portal_licitacao || '',
+            modalidade: v2Result.process_identification?.modalidade || '',
+            objeto: ((v2Result.process_identification as any)?.objeto || '').substring(0, 200),
+            model: uniqueModels.join('+'),
+            promptVersion: V2_PROMPT_VERSION,
+            extractionTimeMs: Math.round((stageTimes.extraction || 0) * 1000),
+            totalTimeMs: Math.round(parseFloat(totalDuration) * 1000),
+            parseRepairs: pipelineHealth.parseRepairs,
+            fallbackUsed: pipelineHealth.fallbacksUsed > 0,
+            categoryGapRecovery: !!stageTimes.re_extraction,
+            totalRequirements: totalReqs,
+            categoryCounts: catCounts,
+            totalEvidences: v2Result.evidence_registry.length,
+            totalRisks: v2Result.legal_risk_review.critical_points.length,
+            qualityScore: qualityReport?.overallScore ?? null,
+            confidenceScore: combinedScore,
+            enforcerCorrections: enforceResult.corrections,
+            safetyNetsTriggered: classifySafetyNets(enforceResult.details),
+            status: 'success',
+        }).catch(() => {}); // Never block pipeline
+
+        sendResult(finalPayload);
+
+    } catch (error: any) {
+        logger.error('[PNCP-V2] Error:', error?.message || error);
+        // Record error telemetry
+        recordAnalysisTelemetry({
+            tenantId: req.user?.tenantId || 'unknown',
+            numPdfs: 0, totalPages: 0, totalChars: 0, hasScannedPdf: false,
+            model: 'failed', promptVersion: V2_PROMPT_VERSION,
+            extractionTimeMs: 0, totalTimeMs: 0,
+            parseRepairs: 0, fallbackUsed: false, categoryGapRecovery: false,
+            totalRequirements: 0, categoryCounts: {}, totalEvidences: 0, totalRisks: 0,
+            enforcerCorrections: 0, safetyNetsTriggered: [],
+            status: 'error', errorMessage: error?.message || 'Unknown',
+        }).catch(() => {});
+        sendError(`Erro na análise IA do PNCP: ${error?.message || 'Erro desconhecido'}`);
+    }
+});
+
+// Ai Analysis
+
+export default router;

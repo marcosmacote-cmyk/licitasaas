@@ -16,6 +16,7 @@ exports.matchCompanyToEdital = matchCompanyToEdital;
 exports.calculateParticipationScore = calculateParticipationScore;
 exports.generateActionPlan = generateActionPlan;
 const companyProfileService_1 = require("../company/companyProfileService");
+const logger_1 = require("../../../lib/logger");
 // ── Pesos Auditáveis ──
 const DIMENSION_WEIGHTS = {
     documentaryReadiness: 0.25,
@@ -58,7 +59,7 @@ async function matchCompanyToEdital(companyId, schemaV2, processId) {
         documentaryFit, technicalFit, economicFinancialFit, proposalFit,
         strategicNotes, hardBlocks
     };
-    console.log(`[Matching] ${companyId} × ${processId}: Doc=${documentaryFit.score}% Tech=${technicalFit.score}% EF=${economicFinancialFit.score}% Prop=${proposalFit.score}% HardBlocks=${hardBlocks.length}`);
+    logger_1.logger.info(`[Matching] ${companyId} × ${processId}: Doc=${documentaryFit.score}% Tech=${technicalFit.score}% EF=${economicFinancialFit.score}% Prop=${proposalFit.score}% HardBlocks=${hardBlocks.length}`);
     return result;
 }
 // ── Score Engine (v2 — com hard-blocks e auditoria) ──
@@ -164,7 +165,7 @@ function calculateParticipationScore(matchResult, schemaV2) {
             decisionPath
         }
     };
-    console.log(`[Score] ${matchResult.companyId}: ${overallScore}% → ${recommendation} (path: ${decisionPath})`);
+    logger_1.logger.info(`[Score] ${matchResult.companyId}: ${overallScore}% → ${recommendation} (path: ${decisionPath})`);
     return assessment;
 }
 // ── Action Plan (v2 — com impact, priority, risk summary) ──
@@ -277,7 +278,7 @@ function generateActionPlan(matchResult, assessment, schemaV2) {
         proposalPreparationWarnings: proposalWarnings,
         disqualificationRisks
     };
-    console.log(`[ActionPlan] ${matchResult.companyId}: ${criticalPendingItems.length} pendências | ${disqualificationRisks.length} riscos desclass. | ${assessment.recommendation}`);
+    logger_1.logger.info(`[ActionPlan] ${matchResult.companyId}: ${criticalPendingItems.length} pendências | ${disqualificationRisks.length} riscos desclass. | ${assessment.recommendation}`);
     return plan;
 }
 // ── Helpers ──

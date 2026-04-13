@@ -63,6 +63,7 @@ const licitanet_monitor_service_1 = require("./services/monitoring/licitanet-mon
 const licitamaisbrasil_monitor_service_1 = require("./services/monitoring/licitamaisbrasil-monitor.service");
 const ingest_service_1 = require("./services/monitoring/ingest.service");
 const opportunity_scanner_service_1 = require("./services/monitoring/opportunity-scanner.service");
+const logger_1 = require("./lib/logger");
 // ── Environment ──
 const SERVER_ROOT = __dirname.endsWith('dist') ? path_1.default.resolve(__dirname, '..') : __dirname;
 dotenv_1.default.config({ path: path_1.default.join(SERVER_ROOT, '.env'), override: false });
@@ -112,10 +113,10 @@ async function runComprasNetBackfill() {
             select: { id: true, link: true, isMonitored: true }
         });
         if (processes.length === 0) {
-            console.log('[Backfill] All processes already have ComprasNet links or no PNCP links found.');
+            logger_1.logger.info('[Backfill] All processes already have ComprasNet links or no PNCP links found.');
             return;
         }
-        console.log(`[Backfill] Found ${processes.length} processes with PNCP links missing ComprasNet. Fetching...`);
+        logger_1.logger.info(`[Backfill] Found ${processes.length} processes with PNCP links missing ComprasNet. Fetching...`);
         let updated = 0;
         for (const proc of processes) {
             try {
@@ -139,7 +140,7 @@ async function runComprasNetBackfill() {
                         }
                     });
                     updated++;
-                    console.log(`[Backfill] ✅ Updated process ${proc.id.slice(0, 8)} with ComprasNet link`);
+                    logger_1.logger.info(`[Backfill] ✅ Updated process ${proc.id.slice(0, 8)} with ComprasNet link`);
                 }
                 await new Promise(r => setTimeout(r, 500));
             }
@@ -147,10 +148,10 @@ async function runComprasNetBackfill() {
                 // Skip individual failures silently
             }
         }
-        console.log(`[Backfill] Done. Updated ${updated}/${processes.length} processes with ComprasNet links.`);
+        logger_1.logger.info(`[Backfill] Done. Updated ${updated}/${processes.length} processes with ComprasNet links.`);
     }
     catch (e) {
-        console.error('[Backfill] Error:', e);
+        logger_1.logger.error('[Backfill] Error:', e);
     }
 }
 // ══════════════════════════════════════════════════════════════════
@@ -204,23 +205,23 @@ async function pollBatchProcesses() {
                     captureSource: platform.captureSource,
                 });
                 if (result.created > 0) {
-                    console.log(`[${platform.label} Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                    logger_1.logger.info(`[${platform.label} Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                     totalNew += result.created;
                     totalAlerts += result.alerts;
                 }
                 await new Promise(r => setTimeout(r, 1000));
             }
             catch (err) {
-                console.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                logger_1.logger.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
         if (totalNew > 0) {
-            console.log(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
+            logger_1.logger.info(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
         }
         lastCycleAt = new Date();
     }
     catch (error) {
-        console.error('[Batch Poll] Erro no ciclo:', error.message);
+        logger_1.logger.error('[Batch Poll] Erro no ciclo:', error.message);
     }
 }
 // ── Portal de Compras Públicas (PCP) ──
@@ -263,23 +264,23 @@ async function pollPCPProcesses() {
                     captureSource: 'pcp-api',
                 });
                 if (result.created > 0) {
-                    console.log(`[PCP Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                    logger_1.logger.info(`[PCP Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                     totalNew += result.created;
                     totalAlerts += result.alerts;
                 }
                 await new Promise(r => setTimeout(r, 2000));
             }
             catch (err) {
-                console.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                logger_1.logger.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
         if (totalNew > 0) {
-            console.log(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
+            logger_1.logger.info(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
         }
         lastCycleAt = new Date();
     }
     catch (error) {
-        console.error('[PCP Poll] Erro no ciclo:', error.message);
+        logger_1.logger.error('[PCP Poll] Erro no ciclo:', error.message);
     }
 }
 // ── Licitanet ──
@@ -322,23 +323,23 @@ async function pollLicitanetProcesses() {
                     captureSource: 'licitanet-api',
                 });
                 if (result.created > 0) {
-                    console.log(`[Licitanet Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                    logger_1.logger.info(`[Licitanet Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                     totalNew += result.created;
                     totalAlerts += result.alerts;
                 }
                 await new Promise(r => setTimeout(r, 1000));
             }
             catch (err) {
-                console.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                logger_1.logger.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
         if (totalNew > 0) {
-            console.log(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
+            logger_1.logger.info(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
         }
         lastCycleAt = new Date();
     }
     catch (error) {
-        console.error('[Licitanet Poll] Erro no ciclo:', error.message);
+        logger_1.logger.error('[Licitanet Poll] Erro no ciclo:', error.message);
     }
 }
 // ── Licita Mais Brasil ──
@@ -381,23 +382,23 @@ async function pollLMBProcesses() {
                     captureSource: 'licitamaisbrasil-api',
                 });
                 if (result.created > 0) {
-                    console.log(`[LMB Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
+                    logger_1.logger.info(`[LMB Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
                     totalNew += result.created;
                     totalAlerts += result.alerts;
                 }
                 await new Promise(r => setTimeout(r, 1500));
             }
             catch (err) {
-                console.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
+                logger_1.logger.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
             }
         }
         if (totalNew > 0) {
-            console.log(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
+            logger_1.logger.info(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
         }
         lastCycleAt = new Date();
     }
     catch (error) {
-        console.error('[LMB Poll] Erro no ciclo:', error.message);
+        logger_1.logger.error('[LMB Poll] Erro no ciclo:', error.message);
     }
 }
 // ══════════════════════════════════════════════════════════════════
@@ -406,7 +407,7 @@ async function pollLMBProcesses() {
 const BACKUP_HOUR_UTC = 6; // 6 AM UTC = 3 AM BRT
 let lastBackupDate = null;
 function scheduleBackup() {
-    console.log(`[Backup] 🗄️ Daily backup scheduled (runs at ${BACKUP_HOUR_UTC}:00 UTC / ${BACKUP_HOUR_UTC - 3}:00 BRT)`);
+    logger_1.logger.info(`[Backup] 🗄️ Daily backup scheduled (runs at ${BACKUP_HOUR_UTC}:00 UTC / ${BACKUP_HOUR_UTC - 3}:00 BRT)`);
     // Check every 30 minutes if it's time to backup
     setInterval(async () => {
         const now = new Date();
@@ -414,19 +415,19 @@ function scheduleBackup() {
         // Only run once per day, at the target hour
         if (now.getUTCHours() === BACKUP_HOUR_UTC && lastBackupDate !== todayStr) {
             lastBackupDate = todayStr;
-            console.log(`[Backup] ⏰ Starting scheduled daily backup for ${todayStr}...`);
+            logger_1.logger.info(`[Backup] ⏰ Starting scheduled daily backup for ${todayStr}...`);
             try {
                 const { runBackup } = await Promise.resolve().then(() => __importStar(require('./scripts/backup-database')));
                 const result = await runBackup();
                 if (result.success) {
-                    console.log(`[Backup] ✅ Daily backup completed: ${result.fileName} (${result.sizeKB}KB)`);
+                    logger_1.logger.info(`[Backup] ✅ Daily backup completed: ${result.fileName} (${result.sizeKB}KB)`);
                 }
                 else {
-                    console.error(`[Backup] ❌ Daily backup failed: ${result.error}`);
+                    logger_1.logger.error(`[Backup] ❌ Daily backup failed: ${result.error}`);
                 }
             }
             catch (err) {
-                console.error(`[Backup] ❌ Backup exception: ${err.message}`);
+                logger_1.logger.error(`[Backup] ❌ Backup exception: ${err.message}`);
             }
         }
     }, 30 * 60 * 1000); // Check every 30 min
@@ -435,46 +436,46 @@ function scheduleBackup() {
 // ── Main: Start all workers ──
 // ══════════════════════════════════════════════════════════════════
 async function main() {
-    console.log('══════════════════════════════════════════════════════');
-    console.log('  🔧 LicitaSaaS Worker Process');
-    console.log('══════════════════════════════════════════════════════');
-    console.log(`  PID:  ${process.pid}`);
-    console.log(`  Node: ${process.version}`);
-    console.log(`  ENV:  ${process.env.NODE_ENV || 'development'}`);
-    console.log('══════════════════════════════════════════════════════');
+    logger_1.logger.info('══════════════════════════════════════════════════════');
+    logger_1.logger.info('  🔧 LicitaSaaS Worker Process');
+    logger_1.logger.info('══════════════════════════════════════════════════════');
+    logger_1.logger.info(`  PID:  ${process.pid}`);
+    logger_1.logger.info(`  Node: ${process.version}`);
+    logger_1.logger.info(`  ENV:  ${process.env.NODE_ENV || 'development'}`);
+    logger_1.logger.info('══════════════════════════════════════════════════════');
     // Verify DB connection
     try {
         await prisma.$connect();
-        console.log('[Worker] ✅ Database connection established');
+        logger_1.logger.info('[Worker] ✅ Database connection established');
     }
     catch (err) {
-        console.error('[Worker] ❌ Failed to connect to database:', err.message);
+        logger_1.logger.error('[Worker] ❌ Failed to connect to database:', err.message);
         process.exit(1);
     }
     // Start health check server
     healthServer.listen(HEALTH_PORT, () => {
-        console.log(`[Worker] 🏥 Health check listening on port ${HEALTH_PORT}`);
+        logger_1.logger.info(`[Worker] 🏥 Health check listening on port ${HEALTH_PORT}`);
     });
     // Run one-time backfill
     runComprasNetBackfill();
     // Start pollers with staggered delays to avoid thundering herd
     setTimeout(() => {
-        console.log(`[Batch Poll] 🚀 Monitor BLL+BNC iniciado (intervalo: ${BATCH_POLL_INTERVAL_MS / 1000}s)`);
+        logger_1.logger.info(`[Batch Poll] 🚀 Monitor BLL+BNC iniciado (intervalo: ${BATCH_POLL_INTERVAL_MS / 1000}s)`);
         pollBatchProcesses();
         setInterval(pollBatchProcesses, BATCH_POLL_INTERVAL_MS);
     }, 10000); // 10s after boot
     setTimeout(() => {
-        console.log(`[PCP Poll] 🚀 Monitor Portal de Compras Públicas iniciado (intervalo: ${PCP_POLL_INTERVAL_MS / 1000}s)`);
+        logger_1.logger.info(`[PCP Poll] 🚀 Monitor Portal de Compras Públicas iniciado (intervalo: ${PCP_POLL_INTERVAL_MS / 1000}s)`);
         pollPCPProcesses();
         setInterval(pollPCPProcesses, PCP_POLL_INTERVAL_MS);
     }, 25000); // 25s after boot
     setTimeout(() => {
-        console.log(`[Licitanet Poll] 🚀 Monitor Licitanet iniciado (intervalo: ${LICITANET_POLL_INTERVAL_MS / 1000}s)`);
+        logger_1.logger.info(`[Licitanet Poll] 🚀 Monitor Licitanet iniciado (intervalo: ${LICITANET_POLL_INTERVAL_MS / 1000}s)`);
         pollLicitanetProcesses();
         setInterval(pollLicitanetProcesses, LICITANET_POLL_INTERVAL_MS);
     }, 40000); // 40s after boot
     setTimeout(() => {
-        console.log(`[LMB Poll] 🚀 Monitor Licita Mais Brasil iniciado (intervalo: ${LMB_POLL_INTERVAL_MS / 1000}s)`);
+        logger_1.logger.info(`[LMB Poll] 🚀 Monitor Licita Mais Brasil iniciado (intervalo: ${LMB_POLL_INTERVAL_MS / 1000}s)`);
         pollLMBProcesses();
         setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
     }, 55000); // 55s after boot
@@ -482,11 +483,11 @@ async function main() {
     (0, opportunity_scanner_service_1.startOpportunityScanner)(4);
     // ── Daily Automated Backup (3:00 AM UTC) ──
     scheduleBackup();
-    console.log('[Worker] 🚀 All monitors scheduled. Worker is running.');
+    logger_1.logger.info('[Worker] 🚀 All monitors scheduled. Worker is running.');
 }
 // ── Graceful Shutdown ──
 async function shutdown(signal) {
-    console.log(`[Worker] Received ${signal}. Shutting down gracefully...`);
+    logger_1.logger.info(`[Worker] Received ${signal}. Shutting down gracefully...`);
     isHealthy = false;
     healthServer.close();
     await prisma.$disconnect();
@@ -496,10 +497,10 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 // ── Unhandled errors: log but keep running ──
 process.on('uncaughtException', (err) => {
-    console.error('[Worker] ⚠️ Uncaught exception (keeping alive):', err.message);
+    logger_1.logger.error('[Worker] ⚠️ Uncaught exception (keeping alive):', err.message);
 });
 process.on('unhandledRejection', (reason) => {
-    console.error('[Worker] ⚠️ Unhandled rejection (keeping alive):', reason);
+    logger_1.logger.error('[Worker] ⚠️ Unhandled rejection (keeping alive):', reason);
 });
 // Go!
 main();

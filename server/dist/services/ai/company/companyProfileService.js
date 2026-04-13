@@ -17,6 +17,7 @@ exports.markDocumentUsed = markDocumentUsed;
 exports.refreshDocumentStatuses = refreshDocumentStatuses;
 exports.buildCompanyContextSummary = buildCompanyContextSummary;
 const client_1 = require("@prisma/client");
+const logger_1 = require("../../../lib/logger");
 const prisma = new client_1.PrismaClient();
 // ── Funções de Helper ──
 const parseJsonField = (val, def) => {
@@ -49,10 +50,10 @@ async function createOrUpdateProfile(profile) {
                 historicalPerformance: profile.historicalPerformance
             }
         });
-        console.log(`[CompanyProfile] Saved profile to DB for ${profile.corporateData.legalName} (${profile.companyId})`);
+        logger_1.logger.info(`[CompanyProfile] Saved profile to DB for ${profile.corporateData.legalName} (${profile.companyId})`);
     }
     catch (e) {
-        console.error(`[CompanyProfile] Error saving profile to DB for ${profile.companyId}`, e);
+        logger_1.logger.error(`[CompanyProfile] Error saving profile to DB for ${profile.companyId}`, e);
     }
     return profile;
 }

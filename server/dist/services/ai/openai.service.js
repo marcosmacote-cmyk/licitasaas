@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.fallbackToOpenAi = fallbackToOpenAi;
 exports.fallbackToOpenAiV2 = fallbackToOpenAiV2;
 const openai_1 = __importDefault(require("openai"));
+const logger_1 = require("../../lib/logger");
 const pdfParse = require("pdf-parse");
 /**
  * Extrai texto dos PDFs (compartilhado entre V1 e V2 fallbacks).
@@ -30,12 +31,12 @@ async function extractTextFromPdfParts(pdfParts) {
                     partsProcessed++;
                 }
                 else {
-                    console.warn(`[OpenAI] PDF ${i + 1} (inline) não contém texto extraível (possível scan sem OCR)`);
+                    logger_1.logger.warn(`[OpenAI] PDF ${i + 1} (inline) não contém texto extraível (possível scan sem OCR)`);
                     partsFailed++;
                 }
             }
             catch (err) {
-                console.warn(`[OpenAI] Falha ao extrair texto do PDF ${i + 1} (inline): ${err.message}`);
+                logger_1.logger.warn(`[OpenAI] Falha ao extrair texto do PDF ${i + 1} (inline): ${err.message}`);
                 partsFailed++;
             }
         }
@@ -43,7 +44,7 @@ async function extractTextFromPdfParts(pdfParts) {
         else if (part.fileData?.fileUri) {
             try {
                 const uri = part.fileData.fileUri;
-                console.log(`[OpenAI] Downloading PDF from Files API: ${uri.substring(0, 80)}...`);
+                logger_1.logger.info(`[OpenAI] Downloading PDF from Files API: ${uri.substring(0, 80)}...`);
                 // Gemini Files API URIs require API key authentication
                 const apiKey = process.env.GEMINI_API_KEY;
                 // The Files API URI format: https://generativelanguage.googleapis.com/...
@@ -56,20 +57,20 @@ async function extractTextFromPdfParts(pdfParts) {
                     if (data.text && data.text.trim().length > 0) {
                         fullExtractedText += `\n--- Documento ${i + 1} (Files API) ---\n` + data.text;
                         partsProcessed++;
-                        console.log(`[OpenAI] ✅ Files API PDF ${i + 1}: ${data.text.length} chars extraídos`);
+                        logger_1.logger.info(`[OpenAI] ✅ Files API PDF ${i + 1}: ${data.text.length} chars extraídos`);
                     }
                     else {
-                        console.warn(`[OpenAI] Files API PDF ${i + 1} não contém texto extraível`);
+                        logger_1.logger.warn(`[OpenAI] Files API PDF ${i + 1} não contém texto extraível`);
                         partsFailed++;
                     }
                 }
                 else {
-                    console.warn(`[OpenAI] Falha ao baixar PDF da Files API (${response.status}): ${uri.substring(0, 60)}`);
+                    logger_1.logger.warn(`[OpenAI] Falha ao baixar PDF da Files API (${response.status}): ${uri.substring(0, 60)}`);
                     partsFailed++;
                 }
             }
             catch (err) {
-                console.warn(`[OpenAI] Falha ao processar Files API PDF ${i + 1}: ${err.message}`);
+                logger_1.logger.warn(`[OpenAI] Falha ao processar Files API PDF ${i + 1}: ${err.message}`);
                 partsFailed++;
             }
         }
@@ -78,12 +79,12 @@ async function extractTextFromPdfParts(pdfParts) {
             // Skip — text parts are the user instruction, not document content
         }
     }
-    console.log(`[OpenAI] Extração de texto: ${partsProcessed} PDF(s) processado(s), ${partsFailed} falha(s), ${fullExtractedText.length} chars total`);
+    logger_1.logger.info(`[OpenAI] Extração de texto: ${partsProcessed} PDF(s) processado(s), ${partsFailed} falha(s), ${fullExtractedText.length} chars total`);
     // Truncar se muito longo — gpt-4o TPM limit is low (30k), keep text budget tight
     // gpt-4o-mini: 128k context but better to keep under 100k chars (~25k tokens)
     const MAX_CHARS = 100000;
     if (fullExtractedText.length > MAX_CHARS) {
-        console.warn(`[OpenAI] Texto truncado: ${fullExtractedText.length} → ${MAX_CHARS} chars`);
+        logger_1.logger.warn(`[OpenAI] Texto truncado: ${fullExtractedText.length} → ${MAX_CHARS} chars`);
         fullExtractedText = fullExtractedText.substring(0, MAX_CHARS);
     }
     return fullExtractedText;
@@ -101,7 +102,7 @@ async function fallbackToOpenAi(pdfParts, systemInstruction, userInstruction) {
     if (!fullExtractedText.trim()) {
         throw new Error("Não foi possível extrair texto legível dos PDFs para processar com a OpenAI.");
     }
-    console.log(`[OpenAI Fallback V1] Chamando gpt-4o-mini...`);
+    logger_1.logger.info(`[OpenAI Fallback V1] Chamando gpt-4o-mini...`);
     const startTime = Date.now();
     const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -112,7 +113,7 @@ async function fallbackToOpenAi(pdfParts, systemInstruction, userInstruction) {
         temperature: 0.1,
     });
     const duration = (Date.now() - startTime) / 1000;
-    console.log(`[OpenAI Fallback V1] gpt-4o-mini respondeu em ${duration.toFixed(1)}s`);
+    logger_1.logger.info(`[OpenAI Fallback V1] gpt-4o-mini respondeu em ${duration.toFixed(1)}s`);
     const textOutput = response.choices[0]?.message?.content || "";
     return { text: textOutput };
 }
@@ -151,7 +152,7 @@ async function fallbackToOpenAiV2(opts) {
         // Cap max_tokens to model's limit (avoid 400 errors)
         const modelLimit = MODEL_MAX_TOKENS[model] || 16384;
         const effectiveMaxTokens = Math.min(opts.maxTokens || 16384, modelLimit);
-        console.log(`[OpenAI V2 Fallback] ${opts.stageName} → chamando ${model} (max_tokens: ${effectiveMaxTokens})...`);
+        logger_1.logger.info(`[OpenAI V2 Fallback] ${opts.stageName} → chamando ${model} (max_tokens: ${effectiveMaxTokens})...`);
         const startTime = Date.now();
         try {
             const response = await openai.chat.completions.create({
@@ -166,7 +167,7 @@ async function fallbackToOpenAiV2(opts) {
             });
             const duration = (Date.now() - startTime) / 1000;
             const textOutput = response.choices[0]?.message?.content || "";
-            console.log(`[OpenAI V2 Fallback] ${opts.stageName} respondeu em ${duration.toFixed(1)}s (${textOutput.length} chars) via ${model}`);
+            logger_1.logger.info(`[OpenAI V2 Fallback] ${opts.stageName} respondeu em ${duration.toFixed(1)}s (${textOutput.length} chars) via ${model}`);
             return { text: textOutput, model };
         }
         catch (err) {
@@ -175,7 +176,7 @@ async function fallbackToOpenAiV2(opts) {
             const isContextLimit = err.message?.includes('context_length') || err.message?.includes('too large');
             const isMaxTokens = err.status === 400 && err.message?.includes('max_tokens');
             if (is429 || isContextLimit || isMaxTokens) {
-                console.warn(`[OpenAI V2 Fallback] ${model} falhou (${is429 ? 'rate limit' : isMaxTokens ? 'max_tokens' : 'context'}): ${err.message}. Tentando próximo modelo...`);
+                logger_1.logger.warn(`[OpenAI V2 Fallback] ${model} falhou (${is429 ? 'rate limit' : isMaxTokens ? 'max_tokens' : 'context'}): ${err.message}. Tentando próximo modelo...`);
                 continue;
             }
             // Non-retriable error

@@ -66,6 +66,7 @@ exports.BatchPlatformMonitor = exports.BATCH_PLATFORMS = void 0;
 exports.isBLLLink = isBLLLink;
 const cheerio = __importStar(require("cheerio"));
 const crypto_1 = __importDefault(require("crypto"));
+const logger_1 = require("../../lib/logger");
 // ── Plataformas reconhecidas ──
 exports.BATCH_PLATFORMS = [
     { id: 'bll', domain: 'bllcompras.com', label: 'BLL Compras', captureSource: 'bll-api' },
@@ -137,7 +138,7 @@ class BatchPlatformMonitor {
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                console.warn(`[${platform.label}] HTTP ${res.status} para GetProcessMessageView param1=${param1.substring(0, 20)}...`);
+                logger_1.logger.warn(`[${platform.label}] HTTP ${res.status} para GetProcessMessageView param1=${param1.substring(0, 20)}...`);
                 return [];
             }
             const data = await res.json();
@@ -149,10 +150,10 @@ class BatchPlatformMonitor {
         }
         catch (error) {
             if (error.name === 'AbortError') {
-                console.warn(`[${platform.label}] Timeout GetProcessMessageView param1=${param1.substring(0, 20)}...`);
+                logger_1.logger.warn(`[${platform.label}] Timeout GetProcessMessageView param1=${param1.substring(0, 20)}...`);
             }
             else {
-                console.error(`[${platform.label}] Erro GetProcessMessageView:`, error.message);
+                logger_1.logger.error(`[${platform.label}] Erro GetProcessMessageView:`, error.message);
             }
             return [];
         }
@@ -192,7 +193,7 @@ class BatchPlatformMonitor {
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                console.warn(`[${platform.label}] HTTP ${res.status} para ProcessView`);
+                logger_1.logger.warn(`[${platform.label}] HTTP ${res.status} para ProcessView`);
                 return [];
             }
             const html = await res.text();
@@ -206,7 +207,7 @@ class BatchPlatformMonitor {
             const batchOnclick = batchBtn.attr('onclick') || '';
             const innerMatch = batchOnclick.match(/GetBatchesInfo\s*\(\s*'([^']+)'\s*\)/);
             if (!innerMatch) {
-                console.warn(`[${platform.label}] GetBatchesInfo button found but could not extract param`);
+                logger_1.logger.warn(`[${platform.label}] GetBatchesInfo button found but could not extract param`);
                 return [];
             }
             const innerParam = innerMatch[1];
@@ -225,7 +226,7 @@ class BatchPlatformMonitor {
             });
             clearTimeout(timeoutId2);
             if (!batchRes.ok) {
-                console.warn(`[${platform.label}] HTTP ${batchRes.status} para ProcessBatches`);
+                logger_1.logger.warn(`[${platform.label}] HTTP ${batchRes.status} para ProcessBatches`);
                 return [];
             }
             const batchData = await batchRes.json();
@@ -252,7 +253,7 @@ class BatchPlatformMonitor {
                 lots.push({ lotNumber, param2: batchParam2, batchParam1 });
             });
             if (lots.length > 0) {
-                console.log(`[${platform.label}] 🔍 Descobertos ${lots.length} lote(s) via ProcessBatches AJAX`);
+                logger_1.logger.info(`[${platform.label}] 🔍 Descobertos ${lots.length} lote(s) via ProcessBatches AJAX`);
             }
             else {
                 // Fallback: Try to find lot info directly in ProcessView HTML
@@ -271,10 +272,10 @@ class BatchPlatformMonitor {
         }
         catch (error) {
             if (error.name === 'AbortError') {
-                console.warn(`[${platform.label}] Timeout ao buscar lotes`);
+                logger_1.logger.warn(`[${platform.label}] Timeout ao buscar lotes`);
             }
             else {
-                console.error(`[${platform.label}] Erro ao buscar lotes:`, error.message);
+                logger_1.logger.error(`[${platform.label}] Erro ao buscar lotes:`, error.message);
             }
             return [];
         }
@@ -304,7 +305,7 @@ class BatchPlatformMonitor {
                 // 302/404 = lot doesn't exist or requires auth — skip silently
                 if (res.status === 302 || res.status === 404)
                     return [];
-                console.warn(`[${platform.label}] HTTP ${res.status} para GetBatchMessageView Lote ${lotNumber}`);
+                logger_1.logger.warn(`[${platform.label}] HTTP ${res.status} para GetBatchMessageView Lote ${lotNumber}`);
                 return [];
             }
             const contentType = res.headers.get('content-type') || '';
@@ -320,12 +321,12 @@ class BatchPlatformMonitor {
         }
         catch (error) {
             if (error.name === 'AbortError') {
-                console.warn(`[${platform.label}] Timeout GetBatchMessageView Lote ${lotNumber}`);
+                logger_1.logger.warn(`[${platform.label}] Timeout GetBatchMessageView Lote ${lotNumber}`);
             }
             else {
                 // Don't spam logs — lot endpoints may legitimately fail for public access
                 if (!error.message?.includes('Unexpected token')) {
-                    console.warn(`[${platform.label}] Erro GetBatchMessageView Lote ${lotNumber}:`, error.message);
+                    logger_1.logger.warn(`[${platform.label}] Erro GetBatchMessageView Lote ${lotNumber}:`, error.message);
                 }
             }
             return [];
@@ -360,7 +361,7 @@ class BatchPlatformMonitor {
             }
             const totalBatch = allMessages.filter(m => m.itemRef).length;
             if (totalBatch > 0) {
-                console.log(`[${platform.label}] 📋 ${lots.length} lote(s) verificados, ${totalBatch} msg(s) de lote encontradas`);
+                logger_1.logger.info(`[${platform.label}] 📋 ${lots.length} lote(s) verificados, ${totalBatch} msg(s) de lote encontradas`);
             }
         }
         return allMessages;

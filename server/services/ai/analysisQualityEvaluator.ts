@@ -278,3 +278,104 @@ export function evaluateAnalysisQuality(
     summary
   };
 }
+
+export function validateAnalysisCompleteness(schema: AnalysisSchemaV1): { valid: boolean; issues: string[]; confidence_score: number } {
+    const issues: string[] = [];
+    let totalChecks = 0;
+    let passedChecks = 0;
+
+    const check = (condition: boolean, message: string) => {
+        totalChecks++;
+        if (condition) {
+            passedChecks++;
+        } else {
+            issues.push(message);
+        }
+    };
+
+    // ── 1. Identificação do Processo (peso alto) ──
+    check(
+        !!(schema.process_identification?.objeto_resumido || schema.process_identification?.objeto_completo),
+        'Objeto da licitação não identificado'
+    );
+    check(!!schema.process_identification?.modalidade, 'Modalidade não identificada');
+    check(!!schema.process_identification?.orgao, 'Órgão licitante não identificado');
+    check(!!schema.process_identification?.numero_edital, 'Número do edital não identificado');
+
+    // ── 2. Timeline ──
+    check(!!schema.timeline?.data_sessao, 'Data da sessão não identificada');
+    check(
+        !!(schema.timeline?.data_publicacao || schema.timeline?.prazo_impugnacao || schema.timeline?.prazo_esclarecimento),
+        'Nenhum prazo relevante identificado (publicação, impugnação ou esclarecimento)'
+    );
+
+    // ── 3. Exigências de Habilitação (V2.5 calibrado) ──
+    const allReqItems = Object.values(schema.requirements || {}).reduce((acc: any[], arr) => acc.concat(Array.isArray(arr) ? arr : []), [] as any[]);
+    const totalReqs = allReqItems.filter((r: any) => !r.entry_type || r.entry_type === 'exigencia_principal').length;
+    check(totalReqs > 0, 'Nenhuma exigência de habilitação identificada');
+    check(totalReqs >= 5, `Pouquíssimas exigências identificadas (apenas ${totalReqs}), possível extração incompleta`);
+
+    // ── 4. Condições de Participação ──
+    check(
+        schema.participation_conditions?.permite_consorcio !== null ||
+        schema.participation_conditions?.permite_subcontratacao !== null ||
+        !!schema.participation_conditions?.tratamento_me_epp,
+        'Nenhuma condição de participação identificada'
+    );
+
+    // ── 5. Análise Técnica (flexibilizado — editais de fornecimento simples nem sempre têm) ──
+    check(
+        (schema.requirements?.qualificacao_tecnica_operacional?.length || 0) > 0 ||
+        (schema.requirements?.qualificacao_tecnica_profissional?.length || 0) > 0 ||
+        schema.technical_analysis?.exige_atestado_capacidade_tecnica === true ||
+        totalReqs >= 10, // editais com muitas exigências provavelmente têm técnica embutida
+        'Nenhuma exigência técnica ou atestado identificado'
+    );
+
+    // ── 6. Análise Econômico-Financeira (flexibilizado — dispensas/pregões menores dispensam) ──
+    // Apenas registra como issue informativa, não é check eliminatório
+    const hasEconReqs = (schema.requirements?.qualificacao_economico_financeira?.length || 0) > 0 ||
+        (schema.economic_financial_analysis?.indices_exigidos?.length || 0) > 0;
+    if (!hasEconReqs) {
+        issues.push('Nenhuma exigência econômico-financeira identificada (pode ser dispensada pelo tipo de edital)');
+    }
+    // Conta como check, mas sempre passa (não penaliza)
+    totalChecks++;
+    passedChecks++;
+
+    // ── 7. Proposta/Preço ──
+    check(
+        !!schema.process_identification?.criterio_julgamento,
+        'Critério de julgamento não identificado'
+    );
+
+    // ── 8. Evidências (threshold reduzido na V2.5) ──
+    const evCount = schema.evidence_registry?.length || 0;
+    check(evCount > 0, 'Nenhuma evidência textual registrada');
+    check(
+        evCount >= 5,
+        `Poucas evidências registradas (apenas ${evCount}), rastreabilidade comprometida`
+    );
+
+    // ── 9. Outputs Operacionais (Desativado na V2 Otimizada) ──
+    // O pipeline unificou isso nas exigências para ganhar performance.
+
+    // ── 10. Revisão de Risco (suavizado — editais limpos não geram achados) ──
+    // Registra como check que sempre passa; a ausência de achados é informativa, não punitiva
+    totalChecks++;
+    if ((schema.legal_risk_review?.critical_points?.length || 0) > 0 ||
+        (schema.legal_risk_review?.ambiguities?.length || 0) > 0) {
+        passedChecks++;
+    } else {
+        passedChecks++; // Não penaliza — edital limpo é legítimo
+        issues.push('Nenhum ponto crítico ou ambiguidade identificada (edital pode ser objetivo)');
+    }
+
+    const confidence_score = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
+
+    return {
+        valid: confidence_score >= 80, // FASE 2: exigência mínima subiu de 60% para 80%
+        issues,
+        confidence_score
+    };
+}

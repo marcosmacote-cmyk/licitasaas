@@ -321,4 +321,69 @@ router.post('/technical-certificates/compare', authenticateToken, aiLimiter, asy
     }
 });
 
+// ═══════════════════════════════════════════
+// Documents List + Upload (extracted from index.ts)
+// ═══════════════════════════════════════════
+router.get('/', authenticateToken, async (req: any, res) => {
+    try {
+        const documents = await prisma.document.findMany({
+            where: { tenantId: req.user.tenantId },
+            select: {
+                id: true,
+                tenantId: true,
+                companyProfileId: true,
+                docType: true,
+                fileUrl: true,
+                expirationDate: true,
+                status: true,
+                autoRenew: true,
+                docGroup: true,
+                issuerLink: true,
+                fileName: true,
+                alertDays: true,
+                uploadDate: true
+            },
+            orderBy: { uploadDate: 'desc' }
+        });
+        res.json(documents);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+});
+
+// File Upload endpoint (Protected)
+router.post('/upload', authenticateToken, upload.single('file'), async (req: any, res: any) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const { url: fileUrl, fileName } = await storageService.uploadFile(req.file, req.user.tenantId);
+
+        // Register in Document table (Crucial for security and context mapping)
+        const document = await prisma.document.create({
+            data: {
+                tenantId: req.user.tenantId,
+                docType: "Edital/Anexo",
+                fileUrl: fileUrl,
+                fileName: req.file.originalname,
+                expirationDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+                status: "Válido"
+            }
+        });
+
+        res.json({
+            message: 'File uploaded successfully',
+            fileUrl,
+            fileName: req.file.originalname,
+            storageName: fileName,
+            originalName: req.file.originalname,
+            documentId: document.id
+        });
+    } catch (error) {
+        console.error("Upload error:", error);
+        res.status(500).json({ error: 'File upload failed' });
+    }
+});
+
 export default router;

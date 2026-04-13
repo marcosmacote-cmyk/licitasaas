@@ -9,6 +9,7 @@ exports.recordExecution = recordExecution;
 exports.generateModuleMetrics = generateModuleMetrics;
 exports.generateSystemReport = generateSystemReport;
 const feedbackService_1 = require("./feedbackService");
+const logger_1 = require("../../../lib/logger");
 const executionStore = [];
 function recordExecution(record) {
     executionStore.push(record);
@@ -104,6 +105,6 @@ function generateSystemReport(periodDays = 30) {
             mostCommonIssue
         }
     };
-    console.log(`[Metrics] System Report: ${globalStats.total} feedbacks | Approval: ${globalStats.approvalRate}% | Worst: ${worstModule?.moduleName} (${worstModule?.rejectionRate}% rejection)`);
+    logger_1.logger.info(`[Metrics] System Report: ${globalStats.total} feedbacks | Approval: ${globalStats.approvalRate}% | Worst: ${worstModule?.moduleName} (${worstModule?.rejectionRate}% rejection)`);
     return report;
 }

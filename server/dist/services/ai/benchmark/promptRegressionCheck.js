@@ -1,4 +1,6 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = require("../../../lib/logger");
 /**
  * ══════════════════════════════════════════════════════════════════
  *  Prompt Regression Check — Verificação estática de regressões
@@ -9,7 +11,6 @@
  *
  * Uso: npx tsx server/services/ai/benchmark/promptRegressionCheck.ts
  */
-Object.defineProperty(exports, "__esModule", { value: true });
 const prompt_service_1 = require("../prompt.service");
 const results = [];
 function check(name, pass, detail, severity = 'critical') {
@@ -18,8 +19,8 @@ function check(name, pass, detail, severity = 'critical') {
 // ══════════════════════════════════════════════════════════════════
 // INVARIANTES DO PROMPT COMPARTILHADO (NÃO devem ser violados)
 // ══════════════════════════════════════════════════════════════════
-console.log(`\n🔍 PROMPT REGRESSION CHECK — v${prompt_service_1.V2_PROMPT_VERSION}`);
-console.log(`═══════════════════════════════════════════════\n`);
+logger_1.logger.info(`\n🔍 PROMPT REGRESSION CHECK — v${prompt_service_1.V2_PROMPT_VERSION}`);
+logger_1.logger.info(`═══════════════════════════════════════════════\n`);
 // 1. prompt NÃO deve conter regras de valor/portal/data que pertencem ao manual
 check('PNCP-ISOLATION: valor_estimado_global ausente do prompt compartilhado', !prompt_service_1.V2_EXTRACTION_PROMPT.includes('valor_estimado_global'), 'O V2_EXTRACTION_PROMPT NÃO deve conter "valor_estimado_global" — esse campo é do MANUAL_EXTRACTION_ADDON');
 check('PNCP-ISOLATION: portal_licitacao ausente do prompt compartilhado', !prompt_service_1.V2_EXTRACTION_PROMPT.includes('portal_licitacao'), 'O V2_EXTRACTION_PROMPT NÃO deve conter "portal_licitacao" — esse campo é do MANUAL_EXTRACTION_ADDON');
@@ -80,35 +81,35 @@ check('RISK-ISOLATION: Risk Review limpo', !prompt_service_1.V2_RISK_REVIEW_PROM
 // ══════════════════════════════════════════════════════════════════
 // RELATÓRIO
 // ══════════════════════════════════════════════════════════════════
-console.log(`\n${'═'.repeat(60)}`);
-console.log(`📊 RESULTADOS`);
-console.log(`${'═'.repeat(60)}\n`);
+logger_1.logger.info(`\n${'═'.repeat(60)}`);
+logger_1.logger.info(`📊 RESULTADOS`);
+logger_1.logger.info(`${'═'.repeat(60)}\n`);
 const passed = results.filter(r => r.pass);
 const failed = results.filter(r => !r.pass);
 const criticalFails = failed.filter(r => r.severity === 'critical');
 const warningFails = failed.filter(r => r.severity === 'warning');
 for (const r of results) {
     const icon = r.pass ? '✅' : (r.severity === 'critical' ? '❌' : '⚠️');
-    console.log(`${icon} ${r.name}`);
+    logger_1.logger.info(`${icon} ${r.name}`);
     if (!r.pass) {
-        console.log(`   └→ ${r.detail}`);
+        logger_1.logger.info(`   └→ ${r.detail}`);
     }
 }
-console.log(`\n${'═'.repeat(60)}`);
-console.log(`TOTAL: ${results.length} checks | ✅ ${passed.length} passed | ❌ ${criticalFails.length} critical | ⚠️ ${warningFails.length} warnings`);
+logger_1.logger.info(`\n${'═'.repeat(60)}`);
+logger_1.logger.info(`TOTAL: ${results.length} checks | ✅ ${passed.length} passed | ❌ ${criticalFails.length} critical | ⚠️ ${warningFails.length} warnings`);
 if (criticalFails.length > 0) {
-    console.log(`\n🚨 REGRESSÃO CRÍTICA DETECTADA — ${criticalFails.length} falha(s) crítica(s)!`);
-    console.log(`   Ações imediatas necessárias:`);
+    logger_1.logger.info(`\n🚨 REGRESSÃO CRÍTICA DETECTADA — ${criticalFails.length} falha(s) crítica(s)!`);
+    logger_1.logger.info(`   Ações imediatas necessárias:`);
     for (const f of criticalFails) {
-        console.log(`   • ${f.name}: ${f.detail}`);
+        logger_1.logger.info(`   • ${f.name}: ${f.detail}`);
     }
     process.exit(1);
 }
 else if (warningFails.length > 0) {
-    console.log(`\n⚠️ ${warningFails.length} warning(s) detectado(s) — revisar manualmente.`);
+    logger_1.logger.info(`\n⚠️ ${warningFails.length} warning(s) detectado(s) — revisar manualmente.`);
     process.exit(0);
 }
 else {
-    console.log(`\n✅ PROMPT ÍNTEGRO — Nenhuma regressão detectada.`);
+    logger_1.logger.info(`\n✅ PROMPT ÍNTEGRO — Nenhuma regressão detectada.`);
     process.exit(0);
 }

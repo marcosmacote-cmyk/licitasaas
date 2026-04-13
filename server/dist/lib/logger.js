@@ -45,13 +45,20 @@ function formatDev(entry) {
 function emit(level, message, meta = {}) {
     if (LOG_LEVELS[level] < minLevel)
         return;
+    let payload = {};
+    if (meta !== null && typeof meta === 'object' && !Array.isArray(meta)) {
+        payload = meta;
+    }
+    else if (meta !== undefined) {
+        payload = { details: meta };
+    }
     const entry = {
         timestamp: new Date().toISOString(),
         level,
         message,
         service: serviceName,
         role: processRole,
-        ...meta,
+        ...payload,
     };
     if (isProduction) {
         // JSON line — one line per log entry
@@ -84,9 +91,9 @@ exports.logger = {
     error: (message, meta) => emit('error', message, meta),
     /** Create a child logger with persistent metadata */
     child: (defaultMeta) => ({
-        debug: (msg, meta) => emit('debug', msg, { ...defaultMeta, ...meta }),
-        info: (msg, meta) => emit('info', msg, { ...defaultMeta, ...meta }),
-        warn: (msg, meta) => emit('warn', msg, { ...defaultMeta, ...meta }),
-        error: (msg, meta) => emit('error', msg, { ...defaultMeta, ...meta }),
+        debug: (msg, meta) => emit('debug', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
+        info: (msg, meta) => emit('info', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
+        warn: (msg, meta) => emit('warn', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
+        error: (msg, meta) => emit('error', msg, typeof meta === 'object' ? { ...defaultMeta, ...meta } : { ...defaultMeta, details: meta }),
     }),
 };

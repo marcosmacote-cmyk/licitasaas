@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const benchmarkRunner_1 = require("./benchmarkRunner");
+const logger_1 = require("../../../lib/logger");
 /**
  * ══════════════════════════════════════════════════════════════════
  *  Benchmark CLI — Ferramenta de Linha de Comando para Fase 4
@@ -48,59 +49,59 @@ function carregarManifesto() {
 async function run() {
     const args = process.argv.slice(2);
     const manifesto = carregarManifesto();
-    console.log(`\n======================================================`);
-    console.log(`🛡️  LICITASAAS AI PIPELINE V2 - BENCHMARK RUNNER (FASE 4)`);
-    console.log(`======================================================`);
-    console.log(`Casos de Gold Standard Carregados: ${manifesto.total_cases}`);
-    console.log(`Prompt Analisado (Baseline): ${manifesto.prompt_version}\n`);
+    logger_1.logger.info(`\n======================================================`);
+    logger_1.logger.info(`🛡️  LICITASAAS AI PIPELINE V2 - BENCHMARK RUNNER (FASE 4)`);
+    logger_1.logger.info(`======================================================`);
+    logger_1.logger.info(`Casos de Gold Standard Carregados: ${manifesto.total_cases}`);
+    logger_1.logger.info(`Prompt Analisado (Baseline): ${manifesto.prompt_version}\n`);
     if (args.length === 0) {
-        console.log(`Uso:`);
-        console.log(`1. Avaliar um caso isolado:`);
-        console.log(`   npm run benchmark:run <case-id> <caminho_para_json_extraido>`);
-        console.log(`2. Listar todos os casos de teste:`);
-        console.log(`   npm run benchmark:run list\n`);
-        console.log(`EXEMPLO: npm run benchmark:run case-003 ./test_data/analise_case_003_raw.json\n`);
+        logger_1.logger.info(`Uso:`);
+        logger_1.logger.info(`1. Avaliar um caso isolado:`);
+        logger_1.logger.info(`   npm run benchmark:run <case-id> <caminho_para_json_extraido>`);
+        logger_1.logger.info(`2. Listar todos os casos de teste:`);
+        logger_1.logger.info(`   npm run benchmark:run list\n`);
+        logger_1.logger.info(`EXEMPLO: npm run benchmark:run case-003 ./test_data/analise_case_003_raw.json\n`);
         return;
     }
     const command = args[0];
     if (command === 'list') {
-        console.log(`Lista de Casos Gabarito Disponíveis:`);
+        logger_1.logger.info(`Lista de Casos Gabarito Disponíveis:`);
         for (const c of manifesto.cases) {
-            console.log(`  - ${c.id}: [${c.tipo_objeto}] ${c.name} (${c.complexity})`);
+            logger_1.logger.info(`  - ${c.id}: [${c.tipo_objeto}] ${c.name} (${c.complexity})`);
         }
         return;
     }
     const caseId = command;
     const jsonPath = args[1];
     if (!jsonPath) {
-        console.error(`❌ Erro: Por favor, forneça o caminho do arquivo JSON que contém o output da IA.`);
+        logger_1.logger.error(`❌ Erro: Por favor, forneça o caminho do arquivo JSON que contém o output da IA.`);
         return;
     }
     try {
         const fullPath = path.resolve(process.cwd(), jsonPath);
         if (!fs.existsSync(fullPath)) {
-            console.error(`❌ Erro: Arquivo não encontrado: ${fullPath}`);
+            logger_1.logger.error(`❌ Erro: Arquivo não encontrado: ${fullPath}`);
             return;
         }
         const rawData = fs.readFileSync(fullPath, 'utf-8');
         const analysisData = JSON.parse(rawData);
-        console.log(`⏳ Executando avaliação contra o gabarito do caso: ${caseId}...`);
+        logger_1.logger.info(`⏳ Executando avaliação contra o gabarito do caso: ${caseId}...`);
         const result = (0, benchmarkRunner_1.evaluateAgainstBenchmark)(caseId, analysisData);
         if (!result) {
-            console.error(`❌ Falha na avaliação. Caso não encontrado ou erro de processamento.`);
+            logger_1.logger.error(`❌ Falha na avaliação. Caso não encontrado ou erro de processamento.`);
             return;
         }
         const summary = (0, benchmarkRunner_1.generateBenchmarkSummary)([result]);
         if (result.details.length > 0) {
-            console.log(`\n🚧 DETALHES DOS DESVIOS (GAP ANALISYS):`);
-            result.details.forEach(detail => console.log(`   • ${detail}`));
+            logger_1.logger.info(`\n🚧 DETALHES DOS DESVIOS (GAP ANALISYS):`);
+            result.details.forEach(detail => logger_1.logger.info(`   • ${detail}`));
         }
         else {
-            console.log(`\n✅ O Output atingiu precisão EXCELENTE e bateu com o caso de Ouro.`);
+            logger_1.logger.info(`\n✅ O Output atingiu precisão EXCELENTE e bateu com o caso de Ouro.`);
         }
     }
     catch (e) {
-        console.error(`❌ Erro na execução: ${e.message}`);
+        logger_1.logger.error(`❌ Erro na execução: ${e.message}`);
     }
 }
 run();

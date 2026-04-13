@@ -53,6 +53,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LicitanetMonitor = exports.LICITANET_PLATFORM = void 0;
 const crypto_1 = __importDefault(require("crypto"));
+const logger_1 = require("../../lib/logger");
 exports.LICITANET_PLATFORM = {
     id: 'licitanet',
     domain: 'licitanet.com.br',
@@ -144,7 +145,7 @@ class LicitanetMonitor {
                 });
                 clearTimeout(timeoutId);
                 if (!res.ok) {
-                    console.warn(`[Licitanet Monitor] HTTP ${res.status} para sessão ${sessionId} (tab=${tab}, page=${page})`);
+                    logger_1.logger.warn(`[Licitanet Monitor] HTTP ${res.status} para sessão ${sessionId} (tab=${tab}, page=${page})`);
                     break;
                 }
                 const data = await res.json();
@@ -160,10 +161,10 @@ class LicitanetMonitor {
             }
             catch (error) {
                 if (error.name === 'AbortError') {
-                    console.warn(`[Licitanet Monitor] Timeout (${this.TIMEOUT_MS}ms) tab=${tab} para sessão ${sessionId}`);
+                    logger_1.logger.warn(`[Licitanet Monitor] Timeout (${this.TIMEOUT_MS}ms) tab=${tab} para sessão ${sessionId}`);
                 }
                 else {
-                    console.error(`[Licitanet Monitor] Erro ao buscar tab=${tab}:`, error.message);
+                    logger_1.logger.error(`[Licitanet Monitor] Erro ao buscar tab=${tab}:`, error.message);
                 }
                 break;
             }
@@ -179,7 +180,7 @@ class LicitanetMonitor {
     static async fetchMessages(sessionUrl) {
         const sessionId = this.extractSessionId(sessionUrl);
         if (!sessionId) {
-            console.warn(`[Licitanet Monitor] Não foi possível extrair sessionId de: ${sessionUrl.substring(0, 60)}...`);
+            logger_1.logger.warn(`[Licitanet Monitor] Não foi possível extrair sessionId de: ${sessionUrl.substring(0, 60)}...`);
             return [];
         }
         const [generalMessages, lotMessages] = await Promise.all([

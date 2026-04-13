@@ -5,12 +5,12 @@ import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { authLimiter } from '../lib/security';
 import { AuditLogService } from '../services/auditLog.service';
+import { JWT_SECRET, BCRYPT_COST } from '../lib/constants';
 
 import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://licitasaas.com';
 
 // ── Sprint 5.1: 2FA & Session Verification ──

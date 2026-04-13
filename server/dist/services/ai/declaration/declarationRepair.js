@@ -18,6 +18,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.repairDeclaration = repairDeclaration;
 exports.createGeminiRepairFn = createGeminiRepairFn;
 const declarationParser_1 = require("./declarationParser");
+const logger_1 = require("../../../lib/logger");
 // ═══════════════════════════════════════════════════════════════
 // REPAIR PROMPT BUILDER
 // ═══════════════════════════════════════════════════════════════
@@ -96,7 +97,7 @@ async function repairDeclaration(originalText, originalTitle, issues, facts, val
     if (criticalIssues.length === 0) {
         return noRepair;
     }
-    console.log(`[DeclarationRepair] ${criticalIssues.length} critical issues. Attempting repair...`);
+    logger_1.logger.info(`[DeclarationRepair] ${criticalIssues.length} critical issues. Attempting repair...`);
     try {
         // Step 1: Chamar IA com prompt de repair
         const prompt = buildRepairPrompt(originalText, issues, facts);
@@ -104,7 +105,7 @@ async function repairDeclaration(originalText, originalTitle, issues, facts, val
         // Step 2: Parsear resposta
         const repaired = (0, declarationParser_1.parseAndSanitize)(rawResponse);
         if (!repaired || !repaired.text) {
-            console.log('[DeclarationRepair] Repair returned empty response. Keeping original.');
+            logger_1.logger.info('[DeclarationRepair] Repair returned empty response. Keeping original.');
             return { ...noRepair, attempted: true };
         }
         // Step 3: Re-validar texto reparado
@@ -119,7 +120,7 @@ async function repairDeclaration(originalText, originalTitle, issues, facts, val
             const corrections = issues
                 .filter(i => !afterCodes.has(i.code))
                 .map(i => `${i.code}: ${i.message} → CORRIGIDO`);
-            console.log(`[DeclarationRepair] Success: ${corrections.length} issues fixed, ${reIssues.length} remaining (${reCritical} critical)`);
+            logger_1.logger.info(`[DeclarationRepair] Success: ${corrections.length} issues fixed, ${reIssues.length} remaining (${reCritical} critical)`);
             return {
                 attempted: true,
                 improved: true,
@@ -130,12 +131,12 @@ async function repairDeclaration(originalText, originalTitle, issues, facts, val
             };
         }
         else {
-            console.log(`[DeclarationRepair] Repair did not improve. Original: ${originalCritical} critical → Repaired: ${reCritical} critical. Keeping original.`);
+            logger_1.logger.info(`[DeclarationRepair] Repair did not improve. Original: ${originalCritical} critical → Repaired: ${reCritical} critical. Keeping original.`);
             return { ...noRepair, attempted: true };
         }
     }
     catch (err) {
-        console.error('[DeclarationRepair] Repair call failed:', err?.message || err);
+        logger_1.logger.error('[DeclarationRepair] Repair call failed:', err?.message || err);
         return { ...noRepair, attempted: true };
     }
 }

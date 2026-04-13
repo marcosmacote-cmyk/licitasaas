@@ -3,9 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireSuperAdmin = exports.requireAdmin = exports.authenticateToken = void 0;
+exports.requireAnyRole = exports.requireSuperAdmin = exports.requireAdmin = exports.authenticateToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const constants_1 = require("../lib/constants");
 // Middleware de Autenticação
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -13,7 +13,7 @@ const authenticateToken = (req, res, next) => {
     const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
     if (!token)
         return res.status(401).json({ error: 'Token não fornecido' });
-    jsonwebtoken_1.default.verify(token, JWT_SECRET, (err, decoded) => {
+    jsonwebtoken_1.default.verify(token, constants_1.JWT_SECRET, (err, decoded) => {
         if (err)
             return res.status(403).json({ error: 'Token inválido ou expirado' });
         req.user = decoded;
@@ -38,3 +38,22 @@ const requireSuperAdmin = (req, res, next) => {
     next();
 };
 exports.requireSuperAdmin = requireSuperAdmin;
+/**
+ * Sprint 5.3: RBAC Granular Middleware
+ * Permite o acesso se a role do usuário for uma das listadas.
+ * 'SUPER_ADMIN' sempre tem permissão suprema de acesso.
+ */
+const requireAnyRole = (allowedRoles) => {
+    return (req, res, next) => {
+        const userRole = (req.user?.role || '').toUpperCase();
+        if (userRole === 'SUPER_ADMIN')
+            return next();
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({
+                error: `Acesso negado (RBAC). Requer uma das roles: ${allowedRoles.join(', ')}`
+            });
+        }
+        next();
+    };
+};
+exports.requireAnyRole = requireAnyRole;

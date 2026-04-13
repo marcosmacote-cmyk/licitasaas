@@ -22,6 +22,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.enforceSchema = enforceSchema;
+const logger_1 = require("../../lib/logger");
 // ── Mapas Fixos ──
 const RISK_BY_CATEGORY = {
     habilitacao_juridica: 'inabilitacao',
@@ -1219,18 +1220,18 @@ function enforceSchema(schema) {
     // DONE
     // ═══════════════════════════════════════════
     if (corrections > 0) {
-        console.log(`[SchemaEnforcer] ✅ ${corrections} correção(ões) aplicada(s):`);
+        logger_1.logger.info(`[SchemaEnforcer] ✅ ${corrections} correção(ões) aplicada(s):`);
         // Log first 10 details max
         const logDetails = details.slice(0, 10);
         for (const d of logDetails) {
-            console.log(`[SchemaEnforcer]   → ${d}`);
+            logger_1.logger.info(`[SchemaEnforcer]   → ${d}`);
         }
         if (details.length > 10) {
-            console.log(`[SchemaEnforcer]   ... e mais ${details.length - 10} correção(ões)`);
+            logger_1.logger.info(`[SchemaEnforcer]   ... e mais ${details.length - 10} correção(ões)`);
         }
     }
     else {
-        console.log(`[SchemaEnforcer] ✅ Nenhuma correção necessária — schema já padronizado`);
+        logger_1.logger.info(`[SchemaEnforcer] ✅ Nenhuma correção necessária — schema já padronizado`);
     }
     return { schema, corrections, details };
 }

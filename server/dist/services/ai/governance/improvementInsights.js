@@ -12,6 +12,7 @@ exports.generateImprovementInsights = generateImprovementInsights;
 exports.convertFeedbackToGoldenCases = convertFeedbackToGoldenCases;
 const feedbackService_1 = require("./feedbackService");
 const operationalMetrics_1 = require("./operationalMetrics");
+const logger_1 = require("../../../lib/logger");
 // ── Gerador de Insights ──
 function generateImprovementInsights(periodDays = 30) {
     const allFeedback = (0, feedbackService_1.getAllFeedback)();
@@ -100,7 +101,7 @@ function generateImprovementInsights(periodDays = 30) {
         },
         goldenCaseCandidates: goldenCandidates.length
     };
-    console.log(`[Insights] Generated ${insights.length} insights (${report.summary.criticalInsights} critical, ${report.summary.highInsights} high) | ${goldenCandidates.length} golden case candidates`);
+    logger_1.logger.info(`[Insights] Generated ${insights.length} insights (${report.summary.criticalInsights} critical, ${report.summary.highInsights} high) | ${goldenCandidates.length} golden case candidates`);
     return report;
 }
 /**
@@ -131,7 +132,7 @@ function convertFeedbackToGoldenCases() {
         });
         (0, feedbackService_1.markAsConvertedToGolden)(fb.feedbackId);
     }
-    console.log(`[GoldenCases] Converted ${converted.length} feedbacks to golden cases`);
+    logger_1.logger.info(`[GoldenCases] Converted ${converted.length} feedbacks to golden cases`);
     return converted;
 }
 // ── Helpers ──

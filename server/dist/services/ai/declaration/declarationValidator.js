@@ -1,22 +1,4 @@
 "use strict";
-/**
- * ══════════════════════════════════════════════════════════════════
- *  Declaration Validator — Validação Pós-Geração (v3.0.0)
- * ══════════════════════════════════════════════════════════════════
- *
- *  Pipeline obrigatório entre a IA e o frontend.
- *  Nenhuma declaração é retornada sem passar por aqui.
- *
- *  Responsabilidades:
- *    1. validateDeclaration()  — detecta issues no texto gerado
- *    2. calculateQualityReport() — computa score, grade e booleanos
- *
- *  Design:
- *    - Cada regra é uma função pura (text, facts) → issue | null
- *    - Regras são organizadas por severidade (critical > major > minor)
- *    - Novas regras podem ser adicionadas sem alterar a estrutura
- *    - As constantes VALIDATION_CODES e SEVERITY_PENALTIES vêm de declarationTypes.ts
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateDeclaration = validateDeclaration;
 exports.calculateQualityReport = calculateQualityReport;
@@ -24,6 +6,7 @@ exports.hasCriticalIssues = hasCriticalIssues;
 exports.computeCorrections = computeCorrections;
 exports.summarizeReport = summarizeReport;
 exports.validateAndFixTitle = validateAndFixTitle;
+const logger_1 = require("../../../lib/logger");
 const declarationTypes_1 = require("./declarationTypes");
 // ═══════════════════════════════════════════════════════════════
 // REGRAS DE VALIDAÇÃO
@@ -381,7 +364,7 @@ function validateDeclaration(text, facts) {
         }
         catch (err) {
             // Regra com erro interno — registra como minor para não bloquear
-            console.error(`[DeclarationValidator] Rule ${rule.code} threw:`, err);
+            logger_1.logger.error(`[DeclarationValidator] Rule ${rule.code} threw:`, err);
             issues.push({
                 code: rule.code,
                 severity: 'minor',
@@ -396,7 +379,7 @@ function validateDeclaration(text, facts) {
     const criticalCount = issues.filter(i => i.severity === 'critical').length;
     const majorCount = issues.filter(i => i.severity === 'major').length;
     const minorCount = issues.filter(i => i.severity === 'minor').length;
-    console.log(`[DeclarationValidator] ${issues.length} issues: ${criticalCount} critical, ${majorCount} major, ${minorCount} minor`);
+    logger_1.logger.info(`[DeclarationValidator] ${issues.length} issues: ${criticalCount} critical, ${majorCount} major, ${minorCount} minor`);
     return issues;
 }
 // ═══════════════════════════════════════════════════════════════

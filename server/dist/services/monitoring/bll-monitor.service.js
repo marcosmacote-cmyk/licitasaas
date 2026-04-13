@@ -53,6 +53,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BLLMonitor = void 0;
 const cheerio = __importStar(require("cheerio"));
 const crypto_1 = __importDefault(require("crypto"));
+const logger_1 = require("../../lib/logger");
 class BLLMonitor {
     /**
      * Extrai o hash `param1` de uma URL BLL.
@@ -105,7 +106,7 @@ class BLLMonitor {
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                console.warn(`[BLLMonitor] HTTP ${res.status} para param1=${param1.substring(0, 20)}...`);
+                logger_1.logger.warn(`[BLLMonitor] HTTP ${res.status} para param1=${param1.substring(0, 20)}...`);
                 return [];
             }
             const data = await res.json();
@@ -117,10 +118,10 @@ class BLLMonitor {
         }
         catch (error) {
             if (error.name === 'AbortError') {
-                console.warn(`[BLLMonitor] Timeout (${this.TIMEOUT_MS}ms) para param1=${param1.substring(0, 20)}...`);
+                logger_1.logger.warn(`[BLLMonitor] Timeout (${this.TIMEOUT_MS}ms) para param1=${param1.substring(0, 20)}...`);
             }
             else {
-                console.error(`[BLLMonitor] Erro ao buscar mensagens:`, error.message);
+                logger_1.logger.error(`[BLLMonitor] Erro ao buscar mensagens:`, error.message);
             }
             return [];
         }

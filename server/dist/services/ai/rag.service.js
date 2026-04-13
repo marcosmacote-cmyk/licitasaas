@@ -9,6 +9,7 @@ exports.indexDocumentChunks = indexDocumentChunks;
 exports.searchSimilarChunks = searchSimilarChunks;
 const client_1 = require("@prisma/client");
 const openai_1 = __importDefault(require("openai"));
+const logger_1 = require("../../lib/logger");
 const pdfParse = require("pdf-parse");
 const prisma = new client_1.PrismaClient();
 // Divide um texto grande em blocos/parágrafos menores
@@ -47,7 +48,7 @@ async function generateEmbedding(text) {
 // Extrai texto físico dos PDFs e indexa tudo no banco de dados
 async function indexDocumentChunks(biddingProcessId, pdfParts) {
     try {
-        console.log(`[RAG] Iniciando indexação para o processo: ${biddingProcessId}`);
+        logger_1.logger.info(`[RAG] Iniciando indexação para o processo: ${biddingProcessId}`);
         // 1. Extrair texto de todas as partes PDF usando pdf-parse
         let fullExtractedText = "";
         for (let i = 0; i < pdfParts.length; i++) {
@@ -59,17 +60,17 @@ async function indexDocumentChunks(biddingProcessId, pdfParts) {
                     fullExtractedText += `\n--- Documento ${i + 1} ---\n` + data.text;
                 }
                 catch (err) {
-                    console.warn(`[RAG] Falha ao extrair texto do PDF ${i + 1} para indexação: ${err.message}`);
+                    logger_1.logger.warn(`[RAG] Falha ao extrair texto do PDF ${i + 1} para indexação: ${err.message}`);
                 }
             }
         }
         if (!fullExtractedText.trim()) {
-            console.warn(`[RAG] Nenhum texto legível encontrado nos PDFs para o processo ${biddingProcessId}.`);
+            logger_1.logger.warn(`[RAG] Nenhum texto legível encontrado nos PDFs para o processo ${biddingProcessId}.`);
             return;
         }
         // 2. Quebrar o texto em blocos menores (chunks) compatíveis
         const chunks = chunkText(fullExtractedText, 800);
-        console.log(`[RAG] Texto dividido em ${chunks.length} chunks. Gerando embeddings...`);
+        logger_1.logger.info(`[RAG] Texto dividido em ${chunks.length} chunks. Gerando embeddings...`);
         // Deleta chunks anteriores caso estejamos re-analisando o edital
         await prisma.documentChunk.deleteMany({
             where: { biddingProcessId }
@@ -96,10 +97,10 @@ async function indexDocumentChunks(biddingProcessId, pdfParts) {
                 });
             }
         }
-        console.log(`[RAG] Concluída a indexação de ${chunks.length} chunks com sucesso para o processo ${biddingProcessId}.`);
+        logger_1.logger.info(`[RAG] Concluída a indexação de ${chunks.length} chunks com sucesso para o processo ${biddingProcessId}.`);
     }
     catch (error) {
-        console.error(`[RAG] Erro catastrófico ao indexar documentos:`, error.message);
+        logger_1.logger.error(`[RAG] Erro catastrófico ao indexar documentos:`, error.message);
     }
 }
 // Calcula a Similaridade de Cosseno (Cosine Similarity) entre dois vetores em memória
@@ -147,7 +148,7 @@ async function searchSimilarChunks(biddingProcessId, query, topK = 7) {
         return scoredChunks.slice(0, topK);
     }
     catch (error) {
-        console.error(`[RAG] Erro ao buscar similaridade em memória: ${error.message}`);
+        logger_1.logger.error(`[RAG] Erro ao buscar similaridade em memória: ${error.message}`);
         return [];
     }
 }

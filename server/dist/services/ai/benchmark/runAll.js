@@ -52,6 +52,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const benchmarkRunner_1 = require("./benchmarkRunner");
+const logger_1 = require("../../../lib/logger");
 // ── Config ──
 const GOLD_DIR = path.join(__dirname, 'gold');
 const REPORTS_DIR = path.join(__dirname, 'reports');
@@ -65,29 +66,29 @@ async function main() {
     const shouldSave = args.includes('--save');
     const compareIdx = args.indexOf('--compare');
     const baselinePath = compareIdx >= 0 ? args[compareIdx + 1] : null;
-    console.log(`\n${'═'.repeat(60)}`);
-    console.log(`🛡️  LICITASAAS — GOLDEN DATASET BENCHMARK (runAll)`);
-    console.log(`${'═'.repeat(60)}\n`);
+    logger_1.logger.info(`\n${'═'.repeat(60)}`);
+    logger_1.logger.info(`🛡️  LICITASAAS — GOLDEN DATASET BENCHMARK (runAll)`);
+    logger_1.logger.info(`${'═'.repeat(60)}\n`);
     // Load manifest
     if (!fs.existsSync(MANIFEST_PATH)) {
-        console.error(`❌ benchmarkManifest.json não encontrado em ${MANIFEST_PATH}`);
+        logger_1.logger.error(`❌ benchmarkManifest.json não encontrado em ${MANIFEST_PATH}`);
         process.exit(1);
     }
     const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'));
     const promptVersion = manifest.prompt_version || 'unknown';
     const cases = manifest.cases || [];
-    console.log(`📋 Manifest: ${cases.length} casos | Prompt: ${promptVersion}`);
+    logger_1.logger.info(`📋 Manifest: ${cases.length} casos | Prompt: ${promptVersion}`);
     // Scan gold/ directory for available gold files
     if (!fs.existsSync(GOLD_DIR)) {
-        console.error(`❌ Diretório gold/ não encontrado. Crie em: ${GOLD_DIR}`);
+        logger_1.logger.error(`❌ Diretório gold/ não encontrado. Crie em: ${GOLD_DIR}`);
         process.exit(1);
     }
     const goldFiles = fs.readdirSync(GOLD_DIR).filter(f => f.endsWith('.json'));
-    console.log(`📁 Gold files: ${goldFiles.length} encontrados em gold/\n`);
+    logger_1.logger.info(`📁 Gold files: ${goldFiles.length} encontrados em gold/\n`);
     if (goldFiles.length === 0) {
-        console.log(`⚠️ Nenhum gold file encontrado. Adicione JSONs de gabarito em gold/`);
-        console.log(`   Formato: gold-{case-id}.json (ex: gold-real-001.json)`);
-        console.log(`   Cada arquivo deve conter o AnalysisSchemaV1 confirmado como correto.\n`);
+        logger_1.logger.info(`⚠️ Nenhum gold file encontrado. Adicione JSONs de gabarito em gold/`);
+        logger_1.logger.info(`   Formato: gold-{case-id}.json (ex: gold-real-001.json)`);
+        logger_1.logger.info(`   Cada arquivo deve conter o AnalysisSchemaV1 confirmado como correto.\n`);
         process.exit(0);
     }
     // Match gold files to manifest cases
@@ -115,65 +116,65 @@ async function main() {
                 casesEvaluated++;
             }
             else {
-                console.warn(`⚠️ Caso ${effectiveCaseId} não encontrado no manifest — pulando`);
+                logger_1.logger.warn(`⚠️ Caso ${effectiveCaseId} não encontrado no manifest — pulando`);
             }
         }
         catch (e) {
-            console.error(`❌ Erro ao avaliar ${goldFile}: ${e.message}`);
+            logger_1.logger.error(`❌ Erro ao avaliar ${goldFile}: ${e.message}`);
         }
     }
     if (unmatchedGolds.length > 0) {
-        console.log(`\n⚠️ ${unmatchedGolds.length} gold file(s) sem correspondência no manifest:`);
-        unmatchedGolds.forEach(f => console.log(`   - ${f}`));
+        logger_1.logger.info(`\n⚠️ ${unmatchedGolds.length} gold file(s) sem correspondência no manifest:`);
+        unmatchedGolds.forEach(f => logger_1.logger.info(`   - ${f}`));
     }
     if (results.length === 0) {
-        console.log(`\n⚠️ Nenhum caso avaliado. Verifique se os IDs dos gold files correspondem aos IDs do manifest.`);
+        logger_1.logger.info(`\n⚠️ Nenhum caso avaliado. Verifique se os IDs dos gold files correspondem aos IDs do manifest.`);
         process.exit(0);
     }
     // Generate summary
     const summary = (0, benchmarkRunner_1.generateBenchmarkSummary)(results);
     // ── GATES ──
-    console.log(`\n${'═'.repeat(60)}`);
-    console.log(`🚦 GATES DE QUALIDADE`);
-    console.log(`${'═'.repeat(60)}\n`);
+    logger_1.logger.info(`\n${'═'.repeat(60)}`);
+    logger_1.logger.info(`🚦 GATES DE QUALIDADE`);
+    logger_1.logger.info(`${'═'.repeat(60)}\n`);
     // Gate G1: Average score
     const g1Pass = summary.averageScore >= MIN_AVERAGE_SCORE;
-    console.log(`${g1Pass ? '✅' : '❌'} G1 — Score Médio: ${summary.averageScore}% (threshold: ${MIN_AVERAGE_SCORE}%)`);
+    logger_1.logger.info(`${g1Pass ? '✅' : '❌'} G1 — Score Médio: ${summary.averageScore}% (threshold: ${MIN_AVERAGE_SCORE}%)`);
     // Gate G2: No case below minimum + regression check
     const failedCases = results.filter(r => r.totalScore < MIN_INDIVIDUAL_SCORE);
     const g2Pass = failedCases.length === 0;
-    console.log(`${g2Pass ? '✅' : '❌'} G2 — Casos abaixo de ${MIN_INDIVIDUAL_SCORE}%: ${failedCases.length}`);
+    logger_1.logger.info(`${g2Pass ? '✅' : '❌'} G2 — Casos abaixo de ${MIN_INDIVIDUAL_SCORE}%: ${failedCases.length}`);
     if (!g2Pass) {
-        failedCases.forEach(r => console.log(`   ⚠️ ${r.caseId}: ${r.totalScore}% — ${r.caseName}`));
+        failedCases.forEach(r => logger_1.logger.info(`   ⚠️ ${r.caseId}: ${r.totalScore}% — ${r.caseName}`));
     }
     // Regression check against baseline (if provided)
     let regressionCases = [];
     if (baselinePath) {
         try {
             const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf-8'));
-            console.log(`\n📊 Comparando com baseline: ${baselinePath}`);
+            logger_1.logger.info(`\n📊 Comparando com baseline: ${baselinePath}`);
             for (const result of results) {
                 const baselineResult = baseline.individualResults?.find(r => r.caseId === result.caseId);
                 if (baselineResult) {
                     const diff = result.totalScore - baselineResult.totalScore;
                     const icon = diff >= 0 ? '📈' : '📉';
-                    console.log(`   ${icon} ${result.caseId}: ${baselineResult.totalScore}% → ${result.totalScore}% (${diff >= 0 ? '+' : ''}${diff}%)`);
+                    logger_1.logger.info(`   ${icon} ${result.caseId}: ${baselineResult.totalScore}% → ${result.totalScore}% (${diff >= 0 ? '+' : ''}${diff}%)`);
                     if (diff < -MAX_REGRESSION_PER_CASE) {
                         regressionCases.push(`${result.caseId} regrediu ${Math.abs(diff)}%`);
                     }
                 }
             }
             if (regressionCases.length > 0) {
-                console.log(`\n❌ REGRESSÃO DETECTADA em ${regressionCases.length} caso(s):`);
-                regressionCases.forEach(c => console.log(`   • ${c}`));
+                logger_1.logger.info(`\n❌ REGRESSÃO DETECTADA em ${regressionCases.length} caso(s):`);
+                regressionCases.forEach(c => logger_1.logger.info(`   • ${c}`));
             }
         }
         catch (e) {
-            console.warn(`⚠️ Não foi possível ler baseline: ${e.message}`);
+            logger_1.logger.warn(`⚠️ Não foi possível ler baseline: ${e.message}`);
         }
     }
     // Gate G4: Prompt integrity (just a note — run separately)
-    console.log(`ℹ️  G4 — Prompt Integrity: Rode separadamente com 'npx tsx promptRegressionCheck.ts'`);
+    logger_1.logger.info(`ℹ️  G4 — Prompt Integrity: Rode separadamente com 'npx tsx promptRegressionCheck.ts'`);
     // ── Report ──
     const report = {
         timestamp: new Date().toISOString(),
@@ -197,27 +198,27 @@ async function main() {
         const timeStr = new Date().toISOString().split('T')[1].replace(/[:.]/g, '').slice(0, 4);
         const reportPath = path.join(REPORTS_DIR, `report-${dateStr}-${timeStr}.json`);
         fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-        console.log(`\n💾 Relatório salvo em: ${reportPath}`);
+        logger_1.logger.info(`\n💾 Relatório salvo em: ${reportPath}`);
     }
     // Print to stdout as JSON for piping
-    console.log(`\n${'═'.repeat(60)}`);
+    logger_1.logger.info(`\n${'═'.repeat(60)}`);
     const allGatesPass = g1Pass && g2Pass && regressionCases.length === 0;
     if (allGatesPass) {
-        console.log(`✅ TODOS OS GATES PASSARAM — Score: ${summary.averageScore}% | ${casesEvaluated} casos avaliados`);
+        logger_1.logger.info(`✅ TODOS OS GATES PASSARAM — Score: ${summary.averageScore}% | ${casesEvaluated} casos avaliados`);
     }
     else {
-        console.log(`❌ GATES FALHARAM — Deploy NÃO recomendado`);
+        logger_1.logger.info(`❌ GATES FALHARAM — Deploy NÃO recomendado`);
         if (!g1Pass)
-            console.log(`   • Score médio ${summary.averageScore}% < ${MIN_AVERAGE_SCORE}%`);
+            logger_1.logger.info(`   • Score médio ${summary.averageScore}% < ${MIN_AVERAGE_SCORE}%`);
         if (!g2Pass)
-            console.log(`   • ${failedCases.length} caso(s) abaixo de ${MIN_INDIVIDUAL_SCORE}%`);
+            logger_1.logger.info(`   • ${failedCases.length} caso(s) abaixo de ${MIN_INDIVIDUAL_SCORE}%`);
         if (regressionCases.length > 0)
-            console.log(`   • ${regressionCases.length} regressão(ões) > ${MAX_REGRESSION_PER_CASE}%`);
+            logger_1.logger.info(`   • ${regressionCases.length} regressão(ões) > ${MAX_REGRESSION_PER_CASE}%`);
     }
-    console.log(`${'═'.repeat(60)}\n`);
+    logger_1.logger.info(`${'═'.repeat(60)}\n`);
     process.exit(allGatesPass ? 0 : 1);
 }
 main().catch(err => {
-    console.error(`\n❌ Erro fatal: ${err.message}`);
+    logger_1.logger.error(`\n❌ Erro fatal: ${err.message}`);
     process.exit(1);
 });

@@ -26,6 +26,7 @@ exports.listJobs = listJobs;
 exports.pickNextJob = pickNextJob;
 exports.cleanupStalledJobs = cleanupStalledJobs;
 const client_1 = require("@prisma/client");
+const logger_1 = require("../lib/logger");
 const prisma = new client_1.PrismaClient();
 const sseClients = new Map();
 /**
@@ -33,14 +34,14 @@ const sseClients = new Map();
  */
 function registerSSEClient(clientId, userId, tenantId, res) {
     sseClients.set(clientId, { userId, tenantId, res });
-    console.log(`[SSE] Client registered: ${clientId} (user=${userId}, tenant=${tenantId}). Total: ${sseClients.size}`);
+    logger_1.logger.info(`[SSE] Client registered: ${clientId} (user=${userId}, tenant=${tenantId}). Total: ${sseClients.size}`);
 }
 /**
  * Remove an SSE client connection
  */
 function removeSSEClient(clientId) {
     sseClients.delete(clientId);
-    console.log(`[SSE] Client removed: ${clientId}. Total: ${sseClients.size}`);
+    logger_1.logger.info(`[SSE] Client removed: ${clientId}. Total: ${sseClients.size}`);
 }
 /**
  * Push an event to all SSE clients of a given tenant
@@ -55,13 +56,13 @@ function pushEventToTenant(tenantId, event) {
                 sent++;
             }
             catch (err) {
-                console.warn(`[SSE] Failed to send to ${clientId}, removing client`);
+                logger_1.logger.warn(`[SSE] Failed to send to ${clientId}, removing client`);
                 sseClients.delete(clientId);
             }
         }
     }
     if (sent > 0) {
-        console.log(`[SSE] Pushed ${event.type} for job ${event.jobId} to ${sent} client(s)`);
+        logger_1.logger.info(`[SSE] Pushed ${event.type} for job ${event.jobId} to ${sent} client(s)`);
     }
 }
 // ═══════════════════════════════════════════
@@ -82,7 +83,7 @@ async function submitJob(submission) {
             }
         });
         if (existing) {
-            console.log(`[BackgroundJob] Duplicate prevented: ${submission.type} for ${submission.targetId} already ${existing.status}`);
+            logger_1.logger.info(`[BackgroundJob] Duplicate prevented: ${submission.type} for ${submission.targetId} already ${existing.status}`);
             return { jobId: existing.id };
         }
     }
@@ -108,7 +109,7 @@ async function submitJob(submission) {
             targetTitle: submission.targetTitle || null,
         }
     });
-    console.log(`[BackgroundJob] Created: ${job.id} (type=${job.type}, target=${job.targetId})`);
+    logger_1.logger.info(`[BackgroundJob] Created: ${job.id} (type=${job.type}, target=${job.targetId})`);
     // Push SSE event
     pushEventToTenant(submission.tenantId, {
         type: 'job_queued',
@@ -159,7 +160,7 @@ async function completeJob(jobId, tenantId, result) {
             completedAt: new Date(),
         }
     });
-    console.log(`[BackgroundJob] Completed: ${jobId} (type=${job.type})`);
+    logger_1.logger.info(`[BackgroundJob] Completed: ${jobId} (type=${job.type})`);
     pushEventToTenant(tenantId, {
         type: 'job_completed',
         jobId,
@@ -183,7 +184,7 @@ async function failJob(jobId, tenantId, error) {
             completedAt: new Date(),
         }
     });
-    console.log(`[BackgroundJob] Failed: ${jobId} — ${error}`);
+    logger_1.logger.info(`[BackgroundJob] Failed: ${jobId} — ${error}`);
     pushEventToTenant(tenantId, {
         type: 'job_failed',
         jobId,
@@ -272,7 +273,7 @@ async function cleanupStalledJobs() {
         }
     });
     if (stalled.count > 0 || old.count > 0) {
-        console.log(`[BackgroundJob] Cleanup: ${stalled.count} stalled, ${old.count} old deleted`);
+        logger_1.logger.info(`[BackgroundJob] Cleanup: ${stalled.count} stalled, ${old.count} old deleted`);
     }
     return stalled.count + old.count;
 }

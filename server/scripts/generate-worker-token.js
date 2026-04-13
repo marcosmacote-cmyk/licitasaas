@@ -11,7 +11,11 @@
 
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('❌ FATAL: JWT_SECRET environment variable is required to generate a valid worker token.');
+    process.exit(1);
+}
 
 const TENANT_ID = process.env.TENANT_ID || '9f7a7155-be67-4470-8952-eb947fd97931';
 const USER_ID = process.env.USER_ID || '42a629b0-4fd3-48b4-9a16-c585600fe682';
@@ -37,7 +41,7 @@ console.log(`  Label:    ${LABEL}`);
 console.log(`  Tenant:   ${TENANT_ID}`);
 console.log(`  User:     ${USER_ID}`);
 console.log(`  Expires:  365 days`);
-console.log(`  Secret:   ${JWT_SECRET === 'fallback-secret' ? '⚠️  USING FALLBACK (dev only)' : '✅ Production secret'}`);
+console.log(`  Secret:   ✅ Production secret`);
 console.log('───────────────────────────────────────────────');
 console.log('');
 console.log(token);

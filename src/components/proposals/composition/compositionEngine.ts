@@ -17,11 +17,45 @@ export function calcLineTotal(line: CostCompositionLine): number {
     return Math.round(line.quantity * line.unitValue * 100) / 100;
 }
 
+/** Interface de Auditoria Financeira Estrita */
+export interface FinancialMutationAudit {
+    action: 'add_line' | 'update_line' | 'remove_line' | 'recalc' | 'apply_discount' | 'sync_with_proposal';
+    itemId: string;
+    oldValue?: number;
+    newValue?: number;
+    details: any;
+    timestamp: string;
+}
+
+/** Logger Atômico de Mutações Financeiras (Governança) */
+export const logFinancialMutation = (mutation: FinancialMutationAudit) => {
+    if (process.env.NODE_ENV !== 'test') {
+        console.info(`[Financial-Audit] [${mutation.timestamp}] Ação: ${mutation.action} | Item: ${mutation.itemId}`, mutation.details);
+    }
+};
+
 /** Recalcula todos os totalValue das linhas e retorna a composição atualizada */
 export function recalcComposition(comp: ItemCostComposition): ItemCostComposition {
+    const recalculated = comp.lines.map(l => ({ ...l, totalValue: calcLineTotal(l) }));
+    
+    // Calcula o total antigo e novo para registro de auditoria atômico
+    const oldGrandTotal = comp.lines.reduce((s, l) => s + (l.totalValue || 0), 0);
+    const newGrandTotal = recalculated.reduce((s, l) => s + l.totalValue, 0);
+
+    if (oldGrandTotal !== newGrandTotal) {
+        logFinancialMutation({
+            action: 'recalc',
+            itemId: comp.itemId,
+            oldValue: oldGrandTotal,
+            newValue: newGrandTotal,
+            details: { message: 'Engine recalculou composição completa', diff: newGrandTotal - oldGrandTotal },
+            timestamp: new Date().toISOString()
+        });
+    }
+
     return {
         ...comp,
-        lines: comp.lines.map(l => ({ ...l, totalValue: calcLineTotal(l) })),
+        lines: recalculated,
     };
 }
 

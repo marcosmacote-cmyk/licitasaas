@@ -75,6 +75,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PCPMonitor = exports.PCP_PLATFORM = void 0;
 const cheerio = __importStar(require("cheerio"));
 const crypto_1 = __importDefault(require("crypto"));
+const logger_1 = require("../../lib/logger");
 exports.PCP_PLATFORM = {
     id: 'pcp',
     domain: 'portaldecompraspublicas.com.br',
@@ -190,22 +191,22 @@ class PCPMonitor {
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                console.warn(`[PCP Monitor] HTTP ${res.status} para ${processUrl.substring(0, 60)}...`);
+                logger_1.logger.warn(`[PCP Monitor] HTTP ${res.status} para ${processUrl.substring(0, 60)}...`);
                 return [];
             }
             const html = await res.text();
             if (!html.includes('timeline-item')) {
-                console.warn(`[PCP Monitor] Nenhuma timeline encontrada em ${processUrl.substring(0, 60)}...`);
+                logger_1.logger.warn(`[PCP Monitor] Nenhuma timeline encontrada em ${processUrl.substring(0, 60)}...`);
                 return [];
             }
             return this.parseMessages(html);
         }
         catch (error) {
             if (error.name === 'AbortError') {
-                console.warn(`[PCP Monitor] Timeout (${this.TIMEOUT_MS}ms) para ${processUrl.substring(0, 60)}...`);
+                logger_1.logger.warn(`[PCP Monitor] Timeout (${this.TIMEOUT_MS}ms) para ${processUrl.substring(0, 60)}...`);
             }
             else {
-                console.error(`[PCP Monitor] Erro ao buscar mensagens:`, error.message);
+                logger_1.logger.error(`[PCP Monitor] Erro ao buscar mensagens:`, error.message);
             }
             return [];
         }

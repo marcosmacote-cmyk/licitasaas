@@ -15,6 +15,7 @@ exports.recordAnalysisTelemetry = recordAnalysisTelemetry;
 exports.getPipelineHealth = getPipelineHealth;
 exports.classifySafetyNets = classifySafetyNets;
 const client_1 = require("@prisma/client");
+const logger_1 = require("../../../lib/logger");
 const prisma = new client_1.PrismaClient();
 // ── Record Analysis ──
 async function recordAnalysisTelemetry(input) {
@@ -49,11 +50,11 @@ async function recordAnalysisTelemetry(input) {
                 errorMessage: input.errorMessage || null,
             }
         });
-        console.log(`[Telemetry] ✅ Recorded | Quality: ${input.qualityScore ?? '-'}% | Reqs: ${input.totalRequirements} | Enforcer: ${input.enforcerCorrections} corrections | Status: ${input.status}`);
+        logger_1.logger.info(`[Telemetry] ✅ Recorded | Quality: ${input.qualityScore ?? '-'}% | Reqs: ${input.totalRequirements} | Enforcer: ${input.enforcerCorrections} corrections | Status: ${input.status}`);
     }
     catch (err) {
         // Telemetry must never crash the pipeline
-        console.error(`[Telemetry] ⚠️ Failed to record (non-blocking): ${err.message}`);
+        logger_1.logger.error(`[Telemetry] ⚠️ Failed to record (non-blocking): ${err.message}`);
     }
 }
 // ── Pipeline Health Dashboard ──

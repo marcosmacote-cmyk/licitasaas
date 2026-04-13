@@ -1,12 +1,4 @@
 "use strict";
-/**
- * ══════════════════════════════════════════════════════════════════
- *  Regression Runner + Promotion Gate
- * ══════════════════════════════════════════════════════════════════
- *
- *  Impede que mudanças em prompt, regra, contexto ou modelo
- *  sejam promovidas sem validação comparativa.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerVersion = registerVersion;
 exports.getVersionHistory = getVersionHistory;
@@ -17,6 +9,7 @@ exports.evaluatePromotion = evaluatePromotion;
 exports.getPromotionHistory = getPromotionHistory;
 exports.getRegressionHistory = getRegressionHistory;
 exports.registerInitialVersions = registerInitialVersions;
+const logger_1 = require("../../../lib/logger");
 // ── Stores ──
 const versionStore = [];
 const regressionStore = [];
@@ -26,7 +19,7 @@ function registerVersion(entry) {
     entry.createdAt = entry.createdAt || new Date().toISOString();
     entry.status = entry.status || 'experimental';
     versionStore.push(entry);
-    console.log(`[Version] Registered: ${entry.componentName}@${entry.version} (${entry.status}) — ${entry.changeDescription}`);
+    logger_1.logger.info(`[Version] Registered: ${entry.componentName}@${entry.version} (${entry.status}) — ${entry.changeDescription}`);
     return entry;
 }
 function getVersionHistory(componentName) {
@@ -65,7 +58,7 @@ function runRegression(componentName, candidateVersion, baselineVersion, testRes
         timestamp: new Date().toISOString()
     };
     regressionStore.push(result);
-    console.log(`[Regression] ${componentName}: ${candidateVersion} vs ${baselineVersion} — ${passed}/${testResults.length} passed (delta: ${deltaScore > 0 ? '+' : ''}${deltaScore})`);
+    logger_1.logger.info(`[Regression] ${componentName}: ${candidateVersion} vs ${baselineVersion} — ${passed}/${testResults.length} passed (delta: ${deltaScore > 0 ? '+' : ''}${deltaScore})`);
     return result;
 }
 // ── Thresholds por criticidade ──
@@ -131,7 +124,7 @@ function evaluatePromotion(componentName, candidateVersion, baselineVersion, reg
             versionEntry.status = 'in_validation';
         }
     }
-    console.log(`[Promotion] ${componentName}${isCritical ? ' [CRITICAL]' : ''}: ${candidateVersion} — ${decision.toUpperCase()} — ${reason}`);
+    logger_1.logger.info(`[Promotion] ${componentName}${isCritical ? ' [CRITICAL]' : ''}: ${candidateVersion} — ${decision.toUpperCase()} — ${reason}`);
     return promotionDecision;
 }
 function getPromotionHistory(componentName) {

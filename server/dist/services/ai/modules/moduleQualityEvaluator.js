@@ -6,6 +6,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.evaluateModuleQuality = evaluateModuleQuality;
+const logger_1 = require("../../../lib/logger");
 const MODULE_CHECKS = {
     chat: [
         { code: 'CH01', dimension: 'aderência', weight: 5, check: (o) => o?.answer?.length > 50, failMessage: 'Resposta muito curta (<50 chars)', severity: 'high' },
@@ -95,7 +96,7 @@ function evaluateModuleQuality(moduleName, output, executionId) {
     }
     const overallScore = totalWeight > 0 ? Math.round((totalPassed / totalWeight) * 100) : 0;
     const summary = `[${moduleName}] Quality: ${overallScore}% | ${Object.entries(dimensions).map(([k, v]) => `${k}: ${v}%`).join(' | ')} | ${issues.length} issues`;
-    console.log(`[ModuleQuality] ${summary}`);
+    logger_1.logger.info(`[ModuleQuality] ${summary}`);
     return {
         moduleName,
         executionId: executionId || 'unknown',

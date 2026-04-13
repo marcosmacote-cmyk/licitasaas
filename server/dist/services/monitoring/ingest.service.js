@@ -24,6 +24,7 @@ exports.IngestService = void 0;
 const keywordDetector_1 = require("./keywordDetector");
 const dedup_service_1 = require("./dedup.service");
 const notification_service_1 = require("./notification.service");
+const logger_1 = require("../../lib/logger");
 // ── Service ──
 class IngestService {
     /**
@@ -110,7 +111,7 @@ class IngestService {
                 await notification_service_1.NotificationService.processPendingNotifications();
             }
             catch (notifErr) {
-                console.error(`[IngestService] ⚠️ Notification processing failed (${alerts} alerts):`, notifErr.message || notifErr);
+                logger_1.logger.error(`[IngestService] ⚠️ Notification processing failed (${alerts} alerts):`, notifErr.message || notifErr);
             }
         }
         return { success: true, created, alerts, total: messages.length };

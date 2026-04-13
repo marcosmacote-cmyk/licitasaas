@@ -11,6 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.recordMatchHistory = recordMatchHistory;
 exports.generateCompanyInsights = generateCompanyInsights;
 const companyProfileService_1 = require("../company/companyProfileService");
+const logger_1 = require("../../../lib/logger");
 // ── Storage ──
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
@@ -43,7 +44,7 @@ async function recordMatchHistory(companyId, processId, scores, recommendation) 
         });
     }
     catch (e) {
-        console.error('[LearningInsights] Failed to save history', e);
+        logger_1.logger.error('[LearningInsights] Failed to save history', e);
     }
 }
 async function generateCompanyInsights(companyId) {
@@ -60,7 +61,7 @@ async function generateCompanyInsights(companyId) {
         }
     }
     catch (e) {
-        console.error('[LearningInsights] Failed to load history', e);
+        logger_1.logger.error('[LearningInsights] Failed to load history', e);
     }
     const insights = [];
     // 1. Profile-based insights
@@ -200,7 +201,7 @@ async function generateCompanyInsights(companyId) {
         },
         readinessProfile
     };
-    console.log(`[CompanyInsights] ${companyId}: ${insights.length} insights (${report.summary.weaknesses} weaknesses, ${report.summary.strengths} strengths)`);
+    logger_1.logger.info(`[CompanyInsights] ${companyId}: ${insights.length} insights (${report.summary.weaknesses} weaknesses, ${report.summary.strengths} strengths)`);
     return report;
 }
 function buildReadinessProfile(profile, history) {

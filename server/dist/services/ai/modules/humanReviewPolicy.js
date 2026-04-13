@@ -10,6 +10,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.evaluateHumanReview = evaluateHumanReview;
+const logger_1 = require("../../../lib/logger");
 // ── Regras por módulo (calibradas v2.1) ──
 const REVIEW_RULES = {
     chat: [
@@ -154,7 +155,7 @@ function evaluateHumanReview(moduleName, moduleOutput, schemaV2, qualityScore, u
     else if (recommendedCount === 1)
         riskLevel = 'low';
     if (triggeredReasons.length > 0) {
-        console.log(`[HumanReview] ${moduleName}: ${maxLevel} (risk: ${riskLevel}) — ${triggeredReasons.join('; ')}`);
+        logger_1.logger.info(`[HumanReview] ${moduleName}: ${maxLevel} (risk: ${riskLevel}) — ${triggeredReasons.join('; ')}`);
     }
     return {
         reviewStatus: maxLevel,

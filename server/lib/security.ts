@@ -40,13 +40,14 @@ export const authLimiter = rateLimit({
     message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 });
 
-/** AI-heavy routes: 20 requests per minute per IP */
+/** AI-heavy routes: 20 requests per minute per Tenant (fallback to IP if not authed) */
 export const aiLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 20,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Limite de requisições de IA atingido. Tente novamente em instantes.' },
+    keyGenerator: (req: any) => req.user?.tenantId || req.ip || 'unknown',
+    message: { error: 'Limite corporativo de requisições de IA atingido. Aguarde 1 minuto.' },
 });
 
 // ── Request Logger Middleware ──

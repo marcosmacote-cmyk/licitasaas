@@ -12,13 +12,14 @@ exports.evaluateAgainstBenchmark = evaluateAgainstBenchmark;
 exports.generateBenchmarkSummary = generateBenchmarkSummary;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const benchmarkManifest = require('./benchmarkManifest.json');
+const logger_1 = require("../../../lib/logger");
 /**
  * Avaliar um output do pipeline contra um caso do benchmark
  */
 function evaluateAgainstBenchmark(caseId, analysisOutput) {
     const benchCase = benchmarkManifest.cases.find((c) => c.id === caseId);
     if (!benchCase) {
-        console.warn(`[Benchmark] Case ${caseId} not found in manifest`);
+        logger_1.logger.warn(`[Benchmark] Case ${caseId} not found in manifest`);
         return null;
     }
     const expected = benchCase.expected;
@@ -126,12 +127,12 @@ function generateBenchmarkSummary(results) {
     const criticalPointAccuracy = totalCases > 0
         ? Math.round(results.reduce((sum, r) => sum + r.scores.criticalPointsFoundPct, 0) / totalCases)
         : 0;
-    console.log(`\n[Benchmark] ══════════════ SUMÁRIO ══════════════`);
-    console.log(`[Benchmark] Cases: ${totalCases} | Score Médio: ${averageScore}%`);
-    console.log(`[Benchmark] Tipo Objeto: ${tipoObjetoAccuracy}% | Categorias: ${categoryAccuracy}% | Exigências: ${requirementAccuracy}% | Críticos: ${criticalPointAccuracy}%`);
+    logger_1.logger.info(`\n[Benchmark] ══════════════ SUMÁRIO ══════════════`);
+    logger_1.logger.info(`[Benchmark] Cases: ${totalCases} | Score Médio: ${averageScore}%`);
+    logger_1.logger.info(`[Benchmark] Tipo Objeto: ${tipoObjetoAccuracy}% | Categorias: ${categoryAccuracy}% | Exigências: ${requirementAccuracy}% | Críticos: ${criticalPointAccuracy}%`);
     for (const r of results) {
-        console.log(`[Benchmark]   ${r.caseId}: ${r.totalScore}% — ${r.caseName}${r.details.length > 0 ? ' ⚠️' : ' ✅'}`);
+        logger_1.logger.info(`[Benchmark]   ${r.caseId}: ${r.totalScore}% — ${r.caseName}${r.details.length > 0 ? ' ⚠️' : ' ✅'}`);
     }
-    console.log(`[Benchmark] ═══════════════════════════════════\n`);
+    logger_1.logger.info(`[Benchmark] ═══════════════════════════════════\n`);
     return { totalCases, averageScore, tipoObjetoAccuracy, categoryAccuracy, requirementAccuracy, criticalPointAccuracy, results };
 }

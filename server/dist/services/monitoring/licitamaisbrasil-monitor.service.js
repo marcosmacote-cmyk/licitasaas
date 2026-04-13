@@ -44,6 +44,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LicitaMaisBrasilMonitor = exports.LICITA_MAIS_BRASIL_PLATFORM = void 0;
 const crypto_1 = __importDefault(require("crypto"));
+const logger_1 = require("../../lib/logger");
 exports.LICITA_MAIS_BRASIL_PLATFORM = {
     id: 'licitamaisbrasil',
     domain: 'licitamaisbrasil.com.br',
@@ -160,25 +161,25 @@ class LicitaMaisBrasilMonitor {
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                console.error(`[LMB Monitor] Login falhou: HTTP ${res.status}`);
+                logger_1.logger.error(`[LMB Monitor] Login falhou: HTTP ${res.status}`);
                 return null;
             }
             const data = await res.json();
             if (!data.token) {
-                console.error(`[LMB Monitor] Login retornou sem token`);
+                logger_1.logger.error(`[LMB Monitor] Login retornou sem token`);
                 return null;
             }
             this.cachedToken = data.token;
             this.tokenExpiry = new Date(data.expirationDateSession);
-            console.log(`[LMB Monitor] 🔑 Token obtido, expira em: ${data.expirationDateSession}`);
+            logger_1.logger.info(`[LMB Monitor] 🔑 Token obtido, expira em: ${data.expirationDateSession}`);
             return data.token;
         }
         catch (error) {
             if (error.name === 'AbortError') {
-                console.error(`[LMB Monitor] Timeout no login`);
+                logger_1.logger.error(`[LMB Monitor] Timeout no login`);
             }
             else {
-                console.error(`[LMB Monitor] Erro no login:`, error.message);
+                logger_1.logger.error(`[LMB Monitor] Erro no login:`, error.message);
             }
             return null;
         }
@@ -207,7 +208,7 @@ class LicitaMaisBrasilMonitor {
                 });
                 clearTimeout(timeoutId);
                 if (!res.ok) {
-                    console.warn(`[LMB Monitor] Erro ao listar batches: HTTP ${res.status}`);
+                    logger_1.logger.warn(`[LMB Monitor] Erro ao listar batches: HTTP ${res.status}`);
                     break;
                 }
                 const data = await res.json();
@@ -222,7 +223,7 @@ class LicitaMaisBrasilMonitor {
                 page++;
             }
             catch (error) {
-                console.error(`[LMB Monitor] Erro ao buscar batches:`, error.message);
+                logger_1.logger.error(`[LMB Monitor] Erro ao buscar batches:`, error.message);
                 break;
             }
         }
@@ -248,14 +249,14 @@ class LicitaMaisBrasilMonitor {
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                console.warn(`[LMB Monitor] Erro ao ler batch ${batchId}: HTTP ${res.status}`);
+                logger_1.logger.warn(`[LMB Monitor] Erro ao ler batch ${batchId}: HTTP ${res.status}`);
                 return null;
             }
             const data = await res.json();
             return data?.chatChannel?.id || null;
         }
         catch (error) {
-            console.error(`[LMB Monitor] Erro ao buscar chatChannel:`, error.message);
+            logger_1.logger.error(`[LMB Monitor] Erro ao buscar chatChannel:`, error.message);
             return null;
         }
     }
@@ -279,7 +280,7 @@ class LicitaMaisBrasilMonitor {
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                console.warn(`[LMB Monitor] HTTP ${res.status} para chatChannel ${chatChannelId}`);
+                logger_1.logger.warn(`[LMB Monitor] HTTP ${res.status} para chatChannel ${chatChannelId}`);
                 return [];
             }
             const data = await res.json();
@@ -291,10 +292,10 @@ class LicitaMaisBrasilMonitor {
         }
         catch (error) {
             if (error.name === 'AbortError') {
-                console.warn(`[LMB Monitor] Timeout (${this.TIMEOUT_MS}ms) para chatChannel ${chatChannelId}`);
+                logger_1.logger.warn(`[LMB Monitor] Timeout (${this.TIMEOUT_MS}ms) para chatChannel ${chatChannelId}`);
             }
             else {
-                console.error(`[LMB Monitor] Erro ao buscar mensagens:`, error.message);
+                logger_1.logger.error(`[LMB Monitor] Erro ao buscar mensagens:`, error.message);
             }
             return [];
         }
@@ -311,12 +312,12 @@ class LicitaMaisBrasilMonitor {
     static async fetchMessages(lmbUrl) {
         const auctionId = this.extractAuctionId(lmbUrl);
         if (!auctionId) {
-            console.warn(`[LMB Monitor] Não foi possível extrair auctionId de: ${lmbUrl.substring(0, 60)}...`);
+            logger_1.logger.warn(`[LMB Monitor] Não foi possível extrair auctionId de: ${lmbUrl.substring(0, 60)}...`);
             return [];
         }
         const token = await this.getToken();
         if (!token) {
-            console.error(`[LMB Monitor] Sem token para buscar mensagens`);
+            logger_1.logger.error(`[LMB Monitor] Sem token para buscar mensagens`);
             return [];
         }
         const batches = await this.fetchBatchIds(auctionId, token);
