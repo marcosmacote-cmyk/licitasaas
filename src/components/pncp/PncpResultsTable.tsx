@@ -20,16 +20,23 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
 
         setExpandedItemId(item.id);
         setItemDetails(null);
-        setLoadingItems(true);
         setItemError('');
         setSlowLoad(false);
+
+        // Validate: if missing cnpj/ano/seq, show instant message (avoid doomed API call)
+        if (!item.orgao_cnpj || !item.ano || !item.numero_sequencial) {
+            setItemError('Este processo não possui dados suficientes (CNPJ/ano/sequencial) para consultar itens no PNCP.');
+            return;
+        }
+
+        setLoadingItems(true);
 
         // Show "slow" message after 3 seconds
         const slowTimer = setTimeout(() => setSlowLoad(true), 3000);
 
         try {
             const token = localStorage.getItem('token');
-            const params = new URLSearchParams({ cnpj: item.orgao_cnpj, ano: item.ano, seq: item.numero_sequencial });
+            const params = new URLSearchParams({ cnpj: item.orgao_cnpj, ano: String(item.ano), seq: String(item.numero_sequencial) });
             const res = await fetch(`${API_BASE_URL}/api/pncp/items?${params}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -39,10 +46,10 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
             } else {
                 setItemDetails(data.items || []);
                 if (data.message) setItemError(data.message);
-                else if (data.items?.length === 0) setItemError('Nenhum item exibido / Licitação sem itens cadastrados no PNCP');
+                else if (data.items?.length === 0) setItemError('Nenhum item cadastrado no PNCP para este processo');
             }
         } catch (error: any) {
-            setItemError('Não foi possível carregar os itens. Talvez não estejam publicados no PNCP.');
+            setItemError('Falha de conexão ao buscar itens. Verifique sua internet e tente novamente.');
         } finally {
             clearTimeout(slowTimer);
             setLoadingItems(false);

@@ -455,26 +455,57 @@ router.get('/items', authenticateToken, async (req: any, res) => {
         const { cnpj, ano, seq } = req.query;
         if (!cnpj || !ano || !seq) return res.status(400).json({ error: 'cnpj, ano, and seq required' });
         
-        const cacheKey = `${cnpj}-${ano}-${seq}`;
+        // Validate params — avoid doomed requests
+        const cleanCnpj = String(cnpj).replace(/\D/g, '');
+        const cleanAno = String(ano).replace(/\D/g, '');
+        const cleanSeq = String(seq).replace(/\D/g, '');
+        
+        if (cleanCnpj.length < 11 || !cleanAno || !cleanSeq) {
+            logger.warn(`[PNCP Items] Invalid params: cnpj=${cnpj}, ano=${ano}, seq=${seq}`);
+            return res.json({ items: [], message: 'Dados insuficientes para consultar itens (CNPJ/ano/sequencial incompletos)' });
+        }
+        
+        const cacheKey = `${cleanCnpj}-${cleanAno}-${cleanSeq}`;
         const cached = pncpItemsCache.get(cacheKey);
         if (cached && (Date.now() - cached.timestamp) < PNCP_ITEMS_CACHE_TTL) {
-            logger.info(`[PNCP Items] Cache HIT for ${cacheKey} (${cached.data.items.length} items)`);
             return res.json(cached.data);
         }
 
         const startTime = Date.now();
-        const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens?pagina=1&tamanhoPagina=100`;
         const agent = new https.Agent({ rejectUnauthorized: false });
         
-        const response = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 10000 } as any);
-        const elapsed = Date.now() - startTime;
+        // Race two API variants — whichever responds first wins
+        const url1 = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
+        const url2 = `https://pncp.gov.br/api/consulta/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
         
-        const responseData: any = response.data || {};
-        const rawItems: any[] = Array.isArray(responseData) ? responseData : (responseData.data || []);
+        let responseData: any = null;
+        
+        try {
+            // Try both endpoints in parallel — first success wins
+            const result = await Promise.any([
+                axios.get(url1, { httpsAgent: agent, timeout: 8000 } as any).then(r => r.data),
+                axios.get(url2, { httpsAgent: agent, timeout: 8000 } as any).then(r => r.data),
+            ]);
+            responseData = result;
+        } catch (aggErr: any) {
+            // All requests failed
+            const firstError = aggErr.errors?.[0];
+            if (firstError?.response?.status === 404) {
+                const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
+                pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
+                return res.json(emptyResult);
+            }
+            throw firstError || aggErr;
+        }
+        
+        const elapsed = Date.now() - startTime;
+        const rawItems: any[] = Array.isArray(responseData) ? responseData : (responseData?.data || responseData?.items || []);
+        
         const items = rawItems.map((it: any) => ({
-            itemNumber: it.numeroItem || '-',
-            description: it.descricao || it.materialOuServicoNome || 'Sem descrição',
+            itemNumber: it.numeroItem || it.numero || '-',
+            description: it.descricao || it.materialOuServicoNome || it.materialServico?.nome || 'Sem descrição',
             quantity: it.quantidade || 1,
+            unit: it.unidadeMedida || it.unidade || '',
             unitValue: it.valorUnitarioEstimado || it.valorUnitarioHomologado || 0,
             totalValue: it.valorTotal || ((it.quantidade || 0) * (it.valorUnitarioEstimado || 0)) || 0,
             status: it.situacaoCompraItemNome || it.situacaoItemNome || 'Ativo'
@@ -482,23 +513,15 @@ router.get('/items', authenticateToken, async (req: any, res) => {
         
         const result = { items };
         pncpItemsCache.set(cacheKey, { data: result, timestamp: Date.now() });
-        logger.info(`[PNCP Items] Fetched ${items.length} items for ${cacheKey} in ${elapsed}ms (cached for ${PNCP_ITEMS_CACHE_TTL / 60000}min)`);
+        logger.info(`[PNCP Items] ✅ ${items.length} items for ${cacheKey} in ${elapsed}ms`);
         
         res.json(result);
     } catch (error: any) {
-        if (error.response?.status === 404) {
-            // Cache 404s too to avoid re-hitting Gov.br
-            const { cnpj, ano, seq } = req.query;
-            const cacheKey = `${cnpj}-${ano}-${seq}`;
-            const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP' };
-            pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
-            return res.json(emptyResult);
-        }
         if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-            return res.status(504).json({ error: 'A API do PNCP (Gov.br) demorou para responder. Tente novamente.' });
+            return res.status(504).json({ error: 'A API do Gov.br não respondeu a tempo. Tente novamente em alguns segundos.' });
         }
         logger.error(`PNCP items error for ${req.query.cnpj}/${req.query.ano}/${req.query.seq}:`, error?.message || error);
-        res.status(500).json({ error: 'Erro ao buscar itens no PNCP' });
+        res.status(500).json({ error: 'Erro ao buscar itens no PNCP. Verifique se o processo possui itens cadastrados.' });
     }
 });
 
