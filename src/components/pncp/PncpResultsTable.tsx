@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { normalizeModality } from '../../utils/normalizeModality';
 import type { PncpChildProps } from './types';
 import { API_BASE_URL } from '../../config';
 
-export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loaderRef: any }) {
+export function PncpResultsTable({ p, items }: PncpChildProps) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
     const [itemDetails, setItemDetails] = useState<any[] | null>(null);
     const [loadingItems, setLoadingItems] = useState(false);
@@ -344,16 +344,68 @@ export function PncpResultsTable({ p, items, loaderRef }: PncpChildProps & { loa
                 </tbody>
             </table>
 
-            {/* Infinite Scroll Loader */}
-            <div ref={loaderRef} style={{ height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 'var(--space-4)' }}>
-                {(p.loading || p.scannerOpportunitiesLoading) && <Loader2 size={24} className="spinner" color="var(--color-primary)" />}
-            </div>
+            {/* ═══ Pagination Controls ═══ */}
+            {p.activeTab === 'search' && p.hasSearched && p.totalResults > 0 && (() => {
+                const totalPages = Math.ceil(p.totalResults / 10);
+                return (
+                    <div style={{
+                        display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        gap: 'var(--space-4)', padding: 'var(--space-5)',
+                        borderTop: '1px solid var(--color-border)',
+                    }}>
+                        <button
+                            className="btn btn-ghost"
+                            disabled={p.page <= 1 || p.loading}
+                            onClick={() => p.setPage(p.page - 1)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '0.875rem' }}
+                        >
+                            <ChevronLeft size={16} /> Anterior
+                        </button>
+                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                            Página {p.page} de {totalPages} — {p.totalResults} resultados
+                        </span>
+                        <button
+                            className="btn btn-ghost"
+                            disabled={p.page >= totalPages || p.loading}
+                            onClick={() => p.setPage(p.page + 1)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '0.875rem' }}
+                        >
+                            Próxima <ChevronRight size={16} />
+                        </button>
+                    </div>
+                );
+            })()}
 
-            {/* Show total records count indicator at the bottom if fully loaded */}
-            <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-                {p.activeTab === 'search' && p.page >= Math.ceil(p.totalResults / 10) && p.totalResults > 0 && `Todos os ${p.totalResults} resultados carregados.`}
-                {p.activeTab === 'found' && p.scannerOpportunitiesPage >= Math.ceil(p.scannerOpportunitiesTotal / 50) && p.scannerOpportunitiesTotal > 0 && `Todas as ${p.scannerOpportunitiesTotal} oportunidades carregadas.`}
-            </div>
+            {p.activeTab === 'found' && p.scannerOpportunitiesTotal > 0 && (() => {
+                const totalPages = Math.ceil(p.scannerOpportunitiesTotal / 50);
+                return (
+                    <div style={{
+                        display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        gap: 'var(--space-4)', padding: 'var(--space-5)',
+                        borderTop: '1px solid var(--color-border)',
+                    }}>
+                        <button
+                            className="btn btn-ghost"
+                            disabled={p.scannerOpportunitiesPage <= 1 || p.scannerOpportunitiesLoading}
+                            onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage - 1)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '0.875rem' }}
+                        >
+                            <ChevronLeft size={16} /> Anterior
+                        </button>
+                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                            Página {p.scannerOpportunitiesPage} de {totalPages}
+                        </span>
+                        <button
+                            className="btn btn-ghost"
+                            disabled={p.scannerOpportunitiesPage >= totalPages || p.scannerOpportunitiesLoading}
+                            onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage + 1)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '0.875rem' }}
+                        >
+                            Próxima <ChevronRight size={16} />
+                        </button>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

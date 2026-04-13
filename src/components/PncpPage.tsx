@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Save, Loader2, Bookmark, ExternalLink, X, ChevronDown, ChevronUp, Filter, Building2, Brain, Star, Trash2, CheckCircle2, Download, BarChart2, FolderOpen, List, MoreVertical, Pencil, Clock, Bell, MapPin } from 'lucide-react';
 import type { CompanyProfile, BiddingProcess } from '../types';
 import { ProcessFormModal } from './ProcessFormModal';
@@ -22,36 +22,6 @@ interface Props {
 
 export function PncpPage({ companies, onRefresh, items = [], initialContext, onContextConsumed }: Props) {
     const p = usePncpPage({ companies, onRefresh, items, initialContext, onContextConsumed });
-    
-    // Infinite Scroll Intersection Observer
-    const loaderRef = useRef<HTMLDivElement>(null);
-    const loadingRef = useRef(false);
-
-    // Sync loading state
-    useEffect(() => {
-        loadingRef.current = p.loading || p.scannerOpportunitiesLoading;
-    }, [p.loading, p.scannerOpportunitiesLoading]);
-
-    useEffect(() => {
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting && !loadingRef.current) {
-                if (p.activeTab === 'search' && p.hasSearched) {
-                    p.setPage(prev => {
-                        const max = Math.ceil(p.totalResults / 10);
-                        return prev < max ? prev + 1 : prev;
-                    });
-                } else if (p.activeTab === 'found') {
-                    p.setScannerOpportunitiesPage(prev => {
-                        const max = Math.ceil(p.scannerOpportunitiesTotal / 50);
-                        return prev < max ? prev + 1 : prev;
-                    });
-                }
-            }
-        }, { threshold: 0.1, rootMargin: '200px' });
-
-        if (loaderRef.current) observer.observe(loaderRef.current);
-        return () => observer.disconnect();
-    }, [p.activeTab, p.totalResults, p.scannerOpportunitiesTotal, p.setPage, p.setScannerOpportunitiesPage]);
 
     // Refresh data on mount to guarantee we have the latest items (e.g. after deletions in Kanban)
     useEffect(() => {
@@ -86,7 +56,7 @@ export function PncpPage({ companies, onRefresh, items = [], initialContext, onC
             <PncpSavedSearches p={p} companies={companies} items={items} />
             <PncpSearchFilters p={p} companies={companies} items={items} />
             <PncpTabsRow p={p} companies={companies} items={items} />
-            <PncpResultsTable p={p} companies={companies} items={items} loaderRef={loaderRef} />
+            <PncpResultsTable p={p} companies={companies} items={items} />
 
 
             {p.editingProcess && (

@@ -536,8 +536,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             if (res.ok) {
                 const data = await res.json();
                 const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
-                const isNewSearch = e || overrides?.resetPage || page === 1;
-                setResults(prev => isNewSearch ? items : [...prev, ...items]);
+                setResults(items); // Always replace results (pagination, not infinite scroll)
                 setTotalResults(typeof data.total === 'number' ? data.total : items.length);
             } else { throw new Error("Erro na busca"); }
         } catch (e: any) {
@@ -668,8 +667,14 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         });
     };
 
-    // Only fetch more results when page increments (scroll) — NOT on mount
-    useEffect(() => { if (hasSearched && !loading && page > 1) { handleSearch(); } }, [page]);
+    // Fetch results when page changes (pagination buttons)
+    const prevPageRef = React.useRef(page);
+    useEffect(() => {
+        if (hasSearched && !loading && page !== prevPageRef.current) {
+            prevPageRef.current = page;
+            handleSearch();
+        }
+    }, [page]);
 
     const deleteSavedSearch = async (id: string, e?: React.MouseEvent) => {
         e?.stopPropagation();
