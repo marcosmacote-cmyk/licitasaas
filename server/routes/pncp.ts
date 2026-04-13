@@ -672,6 +672,19 @@ router.post('/search', authenticateToken, async (req: any, res) => {
         // First pass: extract what we can from search results
         // Also ensure no duplicate results based on PNCP ID just in case
         const seenIds = new Set<string>();
+        
+        // Debug: log first raw item to identify field names for value extraction
+        if (rawItems.length > 0) {
+            const sample = rawItems[0];
+            const valueFields = ['valor_estimado', 'valor_global', 'valorTotalEstimado', 'valorTotalHomologado', 
+                'amountInfo', 'valorTotalLicitacao', 'valor_total', 'valorEstimado', 'valorGlobal', 'amount'];
+            const found: Record<string, any> = {};
+            for (const f of valueFields) {
+                if (sample[f] !== undefined && sample[f] !== null) found[f] = sample[f];
+            }
+            logger.info(`[PNCP] Sample item value fields: ${JSON.stringify(found)} | All keys: ${Object.keys(sample).filter(k => k.toLowerCase().includes('valor') || k.toLowerCase().includes('amount') || k.toLowerCase().includes('preco')).join(', ')}`);
+        }
+        
         const items = rawItems.filter(item => item != null).map((item: any) => {
             const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
             const ano = item.ano || item.anoCompra || '';
@@ -679,7 +692,8 @@ router.post('/search', authenticateToken, async (req: any, res) => {
 
             // Extract value from all possible fields aggressively (null-safe)
             const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
-                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao ?? null;
+                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao 
+                ?? item.valorEstimado ?? item.valorGlobal ?? item.valor_total ?? item.amount ?? null;
             const valorEstimado = rawVal != null ? (Number(rawVal) || 0) : 0;
 
             // Extract modalidade from API response

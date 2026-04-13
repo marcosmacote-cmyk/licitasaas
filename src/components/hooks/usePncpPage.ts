@@ -90,6 +90,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     const [dataFim, setDataFim] = useState('');
     const [page, setPage] = useState(1);
     const [totalResults, setTotalResults] = useState(0);
+    const [hasSearched, setHasSearched] = useState(false); // prevent auto-search on mount
 
     // Modal state
     const [editingProcess, setEditingProcess] = useState<Partial<BiddingProcess> | null>(null);
@@ -511,6 +512,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
 
     const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string; excludeKeywords?: string; resetPage?: boolean }) => {
         if (e) { e.preventDefault(); setPage(1); }
+        setHasSearched(true);
         setLoading(true);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
@@ -666,7 +668,8 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         });
     };
 
-    useEffect(() => { if (!loading) { handleSearch(); } }, [page]);
+    // Only fetch more results when page increments (scroll) — NOT on mount
+    useEffect(() => { if (hasSearched && !loading && page > 1) { handleSearch(); } }, [page]);
 
     const deleteSavedSearch = async (id: string, e?: React.MouseEvent) => {
         e?.stopPropagation();
@@ -1167,7 +1170,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         modalidade, setModalidade, esfera, setEsfera, orgao, setOrgao,
         orgaosLista, setOrgaosLista, excludeKeywords, setExcludeKeywords,
         dataInicio, setDataInicio, dataFim, setDataFim,
-        page, setPage, totalResults,
+        page, setPage, totalResults, hasSearched,
         // Modal state
         editingProcess, setEditingProcess, fileInputRef, handleAIAssistClick, handleFileUpload, isParsingAI,
         // AI state
