@@ -638,23 +638,30 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // Limit max generated combinations to 1000 to avoid complete application DOS (extreme user input).
-        urlsToFetch = urlsToFetch.slice(0, 1000);
+        // Limit max generated combinations to 50 to avoid excessive API calls
+        urlsToFetch = urlsToFetch.slice(0, 50);
 
         const agent = new https.Agent({ rejectUnauthorized: false });
         const startTime = Date.now();
         logger.info(`[PNCP] START GET ${urlsToFetch.length} url(s) in batches...`);
 
         let rawItems: any[] = [];
-        const chunkSize = 60;
+        const chunkSize = 5; // Small batches for faster first-result delivery
+        const MAX_ITEMS = 500; // Stop fetching once we have enough items
 
         for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
+            // Early termination: stop if we already have plenty of results
+            if (rawItems.length >= MAX_ITEMS) {
+                logger.info(`[PNCP] Early termination — already have ${rawItems.length} items`);
+                break;
+            }
+            
             const chunk = urlsToFetch.slice(i, i + chunkSize);
             const responses = await Promise.allSettled(
                 chunk.map(u => axios.get(u, {
                     headers: { 'Accept': 'application/json' },
                     httpsAgent: agent,
-                    timeout: 25000
+                    timeout: 12000
                 } as any))
             );
 
