@@ -550,10 +550,8 @@ router.post('/search', authenticateToken, async (req: any, res) => {
         const cached = pncpSearchCache.get(cacheKey);
         if (cached && (Date.now() - cached.timestamp) < PNCP_SEARCH_CACHE_TTL) {
             const totalResults = cached.data.length;
-            const startIdx = (Number(pagina) - 1) * pageSize;
-            const pageItems = cached.data.slice(startIdx, startIdx + pageSize);
-            logger.info(`[PNCP] Cache HIT for search (${totalResults} total, page ${pagina})`);
-            return res.json({ items: pageItems, total: totalResults });
+            logger.info(`[PNCP] Cache HIT for search (${totalResults} total)`);
+            return res.json({ items: cached.data, total: totalResults });
         }
 
         let kwList: string[] = [];
@@ -799,19 +797,17 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             return absA - absB;
         });
 
-        // Paginate from filtered results (NO hydration — search API data is sufficient)
+        // Send all results to frontend for client-side pagination
         const totalResults = filteredItems.length;
-        const startIdx = (Number(pagina) - 1) * pageSize;
-        const pageItems = filteredItems.slice(startIdx, startIdx + pageSize);
 
-        // ── Cache the full filtered+sorted list for subsequent pages ──
+        // ── Cache the full filtered+sorted list for subsequent searches ──
         pncpSearchCache.set(cacheKey, { data: filteredItems, timestamp: Date.now() });
 
         const endTime = Date.now();
-        logger.info(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults}, Page ${pagina}: items ${startIdx}-${startIdx + pageItems.length}`);
+        logger.info(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults} items sent to client`);
 
         res.json({
-            items: pageItems,
+            items: filteredItems,
             total: totalResults
         });
     } catch (error: any) {

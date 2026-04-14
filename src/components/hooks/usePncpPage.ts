@@ -71,7 +71,8 @@ interface UsePncpPageParams {
 export function usePncpPage({ companies, onRefresh, items = [], initialContext, onContextConsumed }: UsePncpPageParams) {
     const toast = useToast();
     const [savedSearches, setSavedSearches] = useState<PncpSavedSearch[]>([]);
-    const [results, setResults] = useState<PncpBiddingItem[]>([]);
+    const [allResults, setAllResults] = useState<PncpBiddingItem[]>([]); // Store all API results
+    const [results, setResults] = useState<PncpBiddingItem[]>([]); // Sliced for current page
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -536,8 +537,14 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             if (res.ok) {
                 const data = await res.json();
                 const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
-                setResults(items); // Always replace results (pagination, not infinite scroll)
+                
+                // Store all results and paginate locally
+                setAllResults(items);
                 setTotalResults(typeof data.total === 'number' ? data.total : items.length);
+                
+                // Handle page 1 instantly
+                const perPage = 10;
+                setResults(items.slice(0, perPage));
             } else { throw new Error("Erro na busca"); }
         } catch (e: any) {
             if (e.name === 'AbortError') {
@@ -667,14 +674,17 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         });
     };
 
-    // Fetch results when page changes (pagination buttons)
+    // Local client-side pagination (instant, no API calls)
     const prevPageRef = useRef(page);
     useEffect(() => {
-        if (hasSearched && !loading && page !== prevPageRef.current) {
+        if (hasSearched && page !== prevPageRef.current) {
             prevPageRef.current = page;
-            handleSearch();
+            const perPage = 10;
+            const startIdx = (page - 1) * perPage;
+            setResults(allResults.slice(startIdx, startIdx + perPage));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-    }, [page]);
+    }, [page, allResults, hasSearched]);
 
     const deleteSavedSearch = async (id: string, e?: React.MouseEvent) => {
         e?.stopPropagation();
