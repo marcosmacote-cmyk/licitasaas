@@ -835,7 +835,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
                 );
                 hydrateResults.forEach((r, idx) => {
                     if (r.status === 'fulfilled') {
-                        const detail = r.value.data;
+                        const detail: any = r.value.data;
                         const val = detail?.valorTotalEstimado ?? detail?.valorTotalHomologado ?? null;
                         if (val != null && Number(val) > 0) {
                             hydrateChunk[idx].valor_estimado = Number(val);
