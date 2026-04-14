@@ -1140,6 +1140,197 @@ router.post('/search', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ══════════════════════════════════════════════════════════════
+// ── PNCP Aggregator: Local search (queries PostgreSQL) ──
+// Ultra-fast: < 200ms vs 8-25s from Gov.br
+// ══════════════════════════════════════════════════════════════
+
+router.post('/search-local', authenticateToken, async (req: any, res) => {
+    try {
+        const { keywords, status, uf, modalidade, esfera, valorMin, valorMax, pagina = 1, tamanhoPagina = 50 } = req.body;
+        const startTime = Date.now();
+
+        // Build Prisma where clause
+        const where: any = {};
+
+        // Full-text keyword search (object + orgao name)
+        if (keywords && keywords.trim()) {
+            const terms = keywords.trim().split(/\s+/).filter((t: string) => t.length > 2);
+            if (terms.length > 0) {
+                where.OR = terms.map((term: string) => ({
+                    OR: [
+                        { objeto: { contains: term, mode: 'insensitive' } },
+                        { orgaoNome: { contains: term, mode: 'insensitive' } },
+                    ]
+                }));
+            }
+        }
+
+        // UF filter (supports comma-separated for regions)
+        if (uf) {
+            const ufs = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
+            if (ufs.length === 1) {
+                where.uf = ufs[0];
+            } else if (ufs.length > 1) {
+                where.uf = { in: ufs };
+            }
+        }
+
+        // Situação filter
+        if (status) {
+            const statusMap: Record<string, string[]> = {
+                'recebendo_proposta': ['Divulgada', 'Aberta'],
+                'encerrada': ['Encerrada'],
+                'suspensa': ['Suspensa'],
+                'revogada': ['Revogada', 'Anulada'],
+            };
+            const mapped = statusMap[status];
+            if (mapped) {
+                where.situacao = { in: mapped };
+            }
+        }
+
+        // Modalidade filter
+        if (modalidade) {
+            where.modalidade = { contains: modalidade, mode: 'insensitive' };
+        }
+
+        // Esfera filter
+        if (esfera) {
+            where.esfera = esfera;
+        }
+
+        // Valor range filter
+        if (valorMin || valorMax) {
+            where.valorEstimado = {};
+            if (valorMin) where.valorEstimado.gte = Number(valorMin);
+            if (valorMax) where.valorEstimado.lte = Number(valorMax);
+        }
+
+        // Count total
+        const total = await prisma.pncpContratacao.count({ where });
+
+        // Fetch page
+        const skip = (Number(pagina) - 1) * Number(tamanhoPagina);
+        const contratacoes = await prisma.pncpContratacao.findMany({
+            where,
+            include: { itens: { take: 20 } }, // Include first 20 items
+            orderBy: [
+                { dataEncerramento: 'asc' }, // Closest deadline first
+            ],
+            skip,
+            take: Number(tamanhoPagina),
+        });
+
+        // Map to the same format the frontend expects
+        const items = contratacoes.map(c => ({
+            orgao_cnpj: c.cnpjOrgao,
+            ano: String(c.anoCompra),
+            numero_sequencial: String(c.sequencialCompra),
+            titulo: c.objeto?.substring(0, 120) || 'Sem título',
+            objeto: c.objeto,
+            orgao_nome: c.orgaoNome,
+            unidade_nome: c.unidadeNome,
+            uf: c.uf,
+            municipio: c.municipio,
+            esfera: c.esfera,
+            modalidade: c.modalidade,
+            situacao: c.situacao,
+            valor_estimado: c.valorEstimado,
+            valor_homologado: c.valorHomologado,
+            srp: c.srp,
+            data_publicacao: c.dataPublicacao?.toISOString(),
+            data_abertura: c.dataAbertura?.toISOString(),
+            data_encerramento_proposta: c.dataEncerramento?.toISOString(),
+            link_sistema: c.linkOrigem || c.linkSistema,
+            numeroControlePNCP: c.numeroControle,
+            // Include items if available
+            itens_preview: c.itens?.map(it => ({
+                numero: it.numeroItem,
+                descricao: it.descricao,
+                quantidade: it.quantidade,
+                unidade: it.unidadeMedida,
+                valorUnitario: it.valorUnitario,
+                valorTotal: it.valorTotal,
+            })),
+            _source: 'local', // Flag for frontend to know this came from local DB
+        }));
+
+        const elapsed = Date.now() - startTime;
+        logger.info(`[PNCP-LOCAL] Search: ${total} results in ${elapsed}ms (keywords="${keywords}" uf="${uf}")`);
+
+        res.json({ items, total, elapsed, source: 'local' });
+    } catch (error: any) {
+        logger.error("PNCP local search error:", error?.message || error);
+        handleApiError(res, error, 'pncp-search-local');
+    }
+});
+
+// ── Aggregator Stats (for admin dashboard) ──
+router.get('/aggregator/stats', authenticateToken, async (req: any, res) => {
+    try {
+        const { getPncpAggregatorStats } = await import('../workers/pncpAggregator');
+        const stats = await getPncpAggregatorStats();
+        res.json(stats);
+    } catch (error: any) {
+        handleApiError(res, error, 'aggregator-stats');
+    }
+});
+
+// ── Aggregator: Manual sync trigger (admin only) ──
+router.post('/aggregator/sync', authenticateToken, async (req: any, res) => {
+    try {
+        if (req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Apenas administradores podem disparar sync manual' });
+        }
+        const { runPncpSync } = await import('../workers/pncpAggregator');
+        // Fire and forget — don't block the response
+        runPncpSync().then(result => {
+            logger.info(`[PNCP-AGG] Manual sync complete: ${JSON.stringify(result)}`);
+        }).catch(err => {
+            logger.error(`[PNCP-AGG] Manual sync failed: ${err?.message}`);
+        });
+        res.json({ message: 'Sync manual iniciado. Verifique os stats em alguns minutos.' });
+    } catch (error: any) {
+        handleApiError(res, error, 'aggregator-sync');
+    }
+});
+
+// ── Local items endpoint (fetches from PncpItem table) ──
+router.get('/items-local/:cnpj/:ano/:seq', authenticateToken, async (req: any, res) => {
+    try {
+        const { cnpj, ano, seq } = req.params;
+        const contratacao = await prisma.pncpContratacao.findFirst({
+            where: {
+                cnpjOrgao: cnpj,
+                anoCompra: Number(ano),
+                sequencialCompra: Number(seq),
+            },
+            include: { itens: { orderBy: { numeroItem: 'asc' } } },
+        });
+
+        if (!contratacao || contratacao.itens.length === 0) {
+            return res.status(404).json({ error: 'Itens não encontrados na base local' });
+        }
+
+        // Map to same format as Gov.br API
+        const items = contratacao.itens.map(it => ({
+            numeroItem: it.numeroItem,
+            descricao: it.descricao,
+            quantidade: it.quantidade,
+            unidadeMedida: it.unidadeMedida,
+            valorUnitarioEstimado: it.valorUnitario,
+            valorTotal: it.valorTotal,
+            situacaoCompraItemNome: it.situacao,
+            tipoBeneficioNome: it.tipoBeneficio,
+        }));
+
+        res.json(items);
+    } catch (error: any) {
+        handleApiError(res, error, 'items-local');
+    }
+});
+
 
 export default router;
 
