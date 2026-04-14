@@ -28,11 +28,17 @@ const log = (level: string, msg: string, data?: any) => {
 };
 
 /**
- * Formata data para YYYYMMDD (formato da API consulta)
+ * Formata data para YYYYMMDD (formato da API consulta PNCP)
  */
 function formatDate(d: Date): string {
     return d.toISOString().split('T')[0].replace(/-/g, '');
 }
+
+// All Brazilian states for full coverage sync
+const BRAZILIAN_UFS = [
+    'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
+    'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'
+];
 
 /**
  * Fetch com retry e backoff
@@ -125,7 +131,8 @@ function mapItem(contratacaoId: string, item: any, idx: number): any {
 }
 
 /**
- * SYNC INCREMENTAL: Busca contratações publicadas desde o último sync
+ * SYNC INCREMENTAL: Busca contratações com proposta aberta
+ * Usa o mesmo endpoint que funciona no search: /contratacoes/proposta
  */
 async function syncIncremental(): Promise<number> {
     // Get or create sync state
@@ -147,57 +154,61 @@ async function syncIncremental(): Promise<number> {
     });
 
     try {
-        const dataInicial = formatDate(state.lastSyncAt);
-        const dataFinal = formatDate(new Date());
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const dataFinal = formatDate(tomorrow);
         let totalUpserted = 0;
-        let page = 1;
-        const maxPages = 50; // Safety limit: 50 pages × 500 items = 25,000 max
 
-        log('INFO', `Sync incremental: ${dataInicial} → ${dataFinal}`);
+        log('INFO', `Sync incremental via /contratacoes/proposta (dataFinal=${dataFinal})`);
 
-        while (page <= maxPages) {
-            const url = `${PNCP_BASE}/contratacoes/publicacao?dataInicial=${dataInicial}&dataFinal=${dataFinal}&pagina=${page}&tamanhoPagina=500`;
-            
-            let data: any;
+        // Fetch per UF for better coverage (same strategy as working search)
+        for (const uf of BRAZILIAN_UFS) {
             try {
-                data = await fetchWithRetry(url);
-            } catch (err: any) {
-                log('ERROR', `Failed to fetch page ${page}: ${err?.message?.substring(0, 100)}`);
-                break;
-            }
+                const url = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataFinal}&uf=${uf}&pagina=1&tamanhoPagina=50`;
+                const data = await fetchWithRetry(url, 2, 2000);
+                const items = data?.data || [];
+                
+                if (items.length === 0) continue;
 
-            const items = data?.data || [];
-            if (items.length === 0) break;
+                // Fetch additional pages (up to 5 pages per UF = 250 items)
+                let allItems = [...items];
+                const totalPages = Math.min(data?.totalPaginas || 1, 5);
+                for (let p = 2; p <= totalPages; p++) {
+                    try {
+                        const pageUrl = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataFinal}&uf=${uf}&pagina=${p}&tamanhoPagina=50`;
+                        const pageData = await fetchWithRetry(pageUrl, 1, 2000);
+                        if (pageData?.data?.length > 0) allItems.push(...pageData.data);
+                    } catch { break; }
+                    await new Promise(r => setTimeout(r, 300));
+                }
 
-            log('INFO', `Page ${page}: ${items.length} items (total API: ${data?.totalRegistros || '?'})`);
+                // Upsert contratações
+                for (const item of allItems) {
+                    try {
+                        const mapped = mapContratacao(item);
+                        if (!mapped.cnpjOrgao || !mapped.anoCompra || !mapped.sequencialCompra) continue;
 
-            // Upsert contratações
-            for (const item of items) {
-                try {
-                    const mapped = mapContratacao(item);
-                    if (!mapped.cnpjOrgao || !mapped.anoCompra || !mapped.sequencialCompra) continue;
-
-                    await prisma.pncpContratacao.upsert({
-                        where: { numeroControle: mapped.numeroControle },
-                        update: { ...mapped, syncedAt: new Date() },
-                        create: mapped,
-                    });
-                    totalUpserted++;
-                } catch (err: any) {
-                    // Skip individual errors (corrupt data, etc)
-                    if (!err?.message?.includes('Unique constraint')) {
-                        log('WARN', `Skip item: ${err?.message?.substring(0, 80)}`);
+                        await prisma.pncpContratacao.upsert({
+                            where: { numeroControle: mapped.numeroControle },
+                            update: { ...mapped, syncedAt: new Date() },
+                            create: mapped,
+                        });
+                        totalUpserted++;
+                    } catch (err: any) {
+                        if (!err?.message?.includes('Unique constraint')) {
+                            log('WARN', `Skip item: ${err?.message?.substring(0, 80)}`);
+                        }
                     }
                 }
+
+                log('INFO', `UF ${uf}: ${allItems.length} items fetched, total upserted so far: ${totalUpserted}`);
+                
+                // Rate limit between UFs
+                await new Promise(r => setTimeout(r, 500));
+            } catch (err: any) {
+                log('WARN', `UF ${uf} failed: ${err?.message?.substring(0, 80)}`);
+                continue; // Skip failed UFs, don't stop entire sync
             }
-
-            // Check if more pages
-            const totalPages = data?.totalPaginas || 1;
-            if (page >= totalPages) break;
-            page++;
-
-            // Rate limit: wait 1s between pages to not abuse Gov.br
-            await new Promise(r => setTimeout(r, 1000));
         }
 
         // Update sync state
@@ -211,7 +222,7 @@ async function syncIncremental(): Promise<number> {
             }
         });
 
-        log('INFO', `Sync incremental complete: ${totalUpserted} upserted`);
+        log('INFO', `Sync incremental complete: ${totalUpserted} upserted across ${BRAZILIAN_UFS.length} UFs`);
         return totalUpserted;
 
     } catch (err: any) {
