@@ -450,12 +450,70 @@ router.post('/favorites/import', authenticateToken, async (req: any, res) => {
 const pncpItemsCache = new Map<string, { data: any, timestamp: number }>();
 const PNCP_ITEMS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
+// Shared keepAlive agent — reuses TCP connections, eliminates TLS handshake overhead
+const pncpKeepAliveAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 10 });
+
+/**
+ * Fetch items for a single process from Gov.br with retry + backoff.
+ * Returns the parsed result or throws on complete failure.
+ */
+async function fetchPncpItems(cleanCnpj: string, cleanAno: string, cleanSeq: string): Promise<{ items: any[], message?: string }> {
+    const cacheKey = `${cleanCnpj}-${cleanAno}-${cleanSeq}`;
+    const cached = pncpItemsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PNCP_ITEMS_CACHE_TTL) {
+        return cached.data;
+    }
+
+    const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
+    
+    // Retry with escalating timeout: 5s first, 10s second attempt
+    const timeouts = [5000, 10000];
+    let lastError: any = null;
+    
+    for (let attempt = 0; attempt < timeouts.length; attempt++) {
+        try {
+            const resp = await axios.get(itemsUrl, {
+                httpsAgent: pncpKeepAliveAgent,
+                timeout: timeouts[attempt],
+            } as any);
+
+            const rawItems: any[] = Array.isArray(resp.data) ? resp.data : (resp.data?.data || resp.data?.items || []);
+            const items = rawItems.map((it: any) => ({
+                itemNumber: it.numeroItem || it.numero || '-',
+                description: it.descricao || it.materialOuServicoNome || it.materialServico?.nome || 'Sem descrição',
+                quantity: it.quantidade || 1,
+                unit: it.unidadeMedida || it.unidade || '',
+                unitValue: it.valorUnitarioEstimado || it.valorUnitarioHomologado || 0,
+                totalValue: it.valorTotal || ((it.quantidade || 0) * (it.valorUnitarioEstimado || 0)) || 0,
+                status: it.situacaoCompraItemNome || it.situacaoItemNome || 'Ativo'
+            }));
+
+            const result = { items };
+            pncpItemsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+            return result;
+        } catch (err: any) {
+            lastError = err;
+            if (err?.response?.status === 404) {
+                const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
+                pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
+                return emptyResult;
+            }
+            // On timeout/network error: retry with longer timeout
+            if (attempt < timeouts.length - 1) {
+                logger.warn(`[PNCP Items] Attempt ${attempt + 1} failed (${err?.message}), retrying with ${timeouts[attempt + 1]}ms timeout...`);
+                await new Promise(r => setTimeout(r, 800)); // 800ms backoff
+            }
+        }
+    }
+    
+    throw lastError;
+}
+
 router.get('/items', authenticateToken, async (req: any, res) => {
     try {
         const { cnpj, ano, seq } = req.query;
         if (!cnpj || !ano || !seq) return res.status(400).json({ error: 'cnpj, ano, and seq required' });
         
-        // Validate params — avoid doomed requests
         const cleanCnpj = String(cnpj).replace(/\D/g, '');
         const cleanAno = String(ano).replace(/\D/g, '');
         const cleanSeq = String(seq).replace(/\D/g, '');
@@ -465,49 +523,13 @@ router.get('/items', authenticateToken, async (req: any, res) => {
             return res.json({ items: [], message: 'Dados insuficientes para consultar itens (CNPJ/ano/sequencial incompletos)' });
         }
         
-        const cacheKey = `${cleanCnpj}-${cleanAno}-${cleanSeq}`;
-        const cached = pncpItemsCache.get(cacheKey);
-        if (cached && (Date.now() - cached.timestamp) < PNCP_ITEMS_CACHE_TTL) {
-            return res.json(cached.data);
-        }
-
         const startTime = Date.now();
-        const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
-        
-        // The items endpoint is actually on the /api/pncp/v1/ path, NOT /api/consulta/v1/
-        const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
-        
-        let responseData: any = null;
-        
-        try {
-            const resp = await axios.get(itemsUrl, { httpsAgent: agent, timeout: 8000 } as any);
-            responseData = resp.data;
-        } catch (err: any) {
-            if (err?.response?.status === 404) {
-                const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
-                pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
-                return res.json(emptyResult);
-            }
-            logger.error(`[PNCP Items] Failed to fetch items (${err?.message})`);
-            throw err;
-        }
-        
+        const result = await fetchPncpItems(cleanCnpj, cleanAno, cleanSeq);
         const elapsed = Date.now() - startTime;
-        const rawItems: any[] = Array.isArray(responseData) ? responseData : (responseData?.data || responseData?.items || []);
         
-        const items = rawItems.map((it: any) => ({
-            itemNumber: it.numeroItem || it.numero || '-',
-            description: it.descricao || it.materialOuServicoNome || it.materialServico?.nome || 'Sem descrição',
-            quantity: it.quantidade || 1,
-            unit: it.unidadeMedida || it.unidade || '',
-            unitValue: it.valorUnitarioEstimado || it.valorUnitarioHomologado || 0,
-            totalValue: it.valorTotal || ((it.quantidade || 0) * (it.valorUnitarioEstimado || 0)) || 0,
-            status: it.situacaoCompraItemNome || it.situacaoItemNome || 'Ativo'
-        }));
-        
-        const result = { items };
-        pncpItemsCache.set(cacheKey, { data: result, timestamp: Date.now() });
-        logger.info(`[PNCP Items] ✅ ${items.length} items for ${cacheKey} in ${elapsed}ms`);
+        if (elapsed > 100) { // Only log non-cached calls
+            logger.info(`[PNCP Items] ✅ ${result.items.length} items for ${cleanCnpj}-${cleanAno}-${cleanSeq} in ${elapsed}ms`);
+        }
         
         res.json(result);
     } catch (error: any) {
@@ -516,6 +538,51 @@ router.get('/items', authenticateToken, async (req: any, res) => {
         }
         logger.error(`PNCP items error for ${req.query.cnpj}/${req.query.ano}/${req.query.seq}:`, error?.message || error);
         res.status(500).json({ error: 'Erro ao buscar itens no PNCP. Verifique se o processo possui itens cadastrados.' });
+    }
+});
+
+/**
+ * Batch prefetch endpoint — pre-warms cache for multiple items in parallel.
+ * Called by the frontend immediately after search results load.
+ * Returns nothing meaningful; the goal is to warm the cache.
+ */
+router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
+    try {
+        const { processes } = req.body; // Array of { cnpj, ano, seq }
+        if (!Array.isArray(processes) || processes.length === 0) {
+            return res.json({ prefetched: 0 });
+        }
+
+        // Limit to 5 concurrent prefetches to avoid overwhelming Gov.br
+        const toFetch = processes.slice(0, 5).filter((p: any) => {
+            if (!p.cnpj || !p.ano || !p.seq) return false;
+            const key = `${String(p.cnpj).replace(/\D/g, '')}-${String(p.ano).replace(/\D/g, '')}-${String(p.seq).replace(/\D/g, '')}`;
+            const cached = pncpItemsCache.get(key);
+            return !cached || (Date.now() - cached.timestamp) > PNCP_ITEMS_CACHE_TTL;
+        });
+
+        if (toFetch.length === 0) {
+            return res.json({ prefetched: 0, cached: true });
+        }
+
+        // Fire-and-forget: don't await — respond immediately
+        res.json({ prefetched: toFetch.length, status: 'warming' });
+
+        // Warm cache in background with 500ms stagger between calls
+        for (const proc of toFetch) {
+            const cleanCnpj = String(proc.cnpj).replace(/\D/g, '');
+            const cleanAno = String(proc.ano).replace(/\D/g, '');
+            const cleanSeq = String(proc.seq).replace(/\D/g, '');
+            
+            fetchPncpItems(cleanCnpj, cleanAno, cleanSeq).catch(err => {
+                logger.warn(`[PNCP Prefetch] Failed for ${cleanCnpj}-${cleanAno}-${cleanSeq}: ${err?.message}`);
+            });
+            
+            await new Promise(r => setTimeout(r, 500)); // 500ms stagger
+        }
+    } catch (error: any) {
+        logger.error('[PNCP Prefetch] Error:', error?.message);
+        if (!res.headersSent) res.json({ prefetched: 0, error: error?.message });
     }
 });
 

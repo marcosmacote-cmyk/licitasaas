@@ -545,6 +545,18 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 // Handle page 1 instantly
                 const perPage = 10;
                 setResults(items.slice(0, perPage));
+
+                // ── Prefetch items for the first 5 results (warms server cache) ──
+                const prefetchCandidates = items.slice(0, 5)
+                    .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
+                    .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
+                if (prefetchCandidates.length > 0) {
+                    fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ processes: prefetchCandidates }),
+                    }).catch(() => {}); // Fire-and-forget
+                }
             } else { throw new Error("Erro na busca"); }
         } catch (e: any) {
             if (e.name === 'AbortError') {
