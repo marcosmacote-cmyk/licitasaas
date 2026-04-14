@@ -538,6 +538,17 @@ const STATUS_TO_GOVBR: Record<string, string> = {
 const pncpSearchCache = new Map<string, { data: any, timestamp: number }>();
 const PNCP_SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// ── Periodic cache cleanup to prevent memory leaks (P4 fix) ──
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of pncpSearchCache) {
+        if (now - val.timestamp > PNCP_SEARCH_CACHE_TTL * 2) pncpSearchCache.delete(key);
+    }
+    for (const [key, val] of pncpItemsCache) {
+        if (now - val.timestamp > PNCP_ITEMS_CACHE_TTL * 2) pncpItemsCache.delete(key);
+    }
+}, 5 * 60 * 1000); // Every 5 minutes
+
 router.post('/search', authenticateToken, async (req: any, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
@@ -577,6 +588,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             const dataFinalParam = dataFim ? dataFim.replace(/-/g, '') : tomorrow.toISOString().split('T')[0].replace(/-/g, '');
+            const dataInicialParam = dataInicio ? dataInicio.replace(/-/g, '') : '';
 
             // Build UF list for iteration
             let ufsForApi: string[] = [];
@@ -593,6 +605,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
 
             const fetchOfficialPage = async (pageNum: number, singleUf?: string): Promise<{ data: any[], totalPages: number }> => {
                 let url = `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=${dataFinalParam}&pagina=${pageNum}&tamanhoPagina=50`;
+                if (dataInicialParam) url += `&dataInicial=${dataInicialParam}`;
                 if (singleUf) url += `&uf=${singleUf}`;
                 if (modalidadeCode) url += `&codigoModalidadeContratacao=${modalidadeCode}`;
 
@@ -832,7 +845,19 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             // Map search API results to standard format
             const seenIds = new Set<string>();
             filteredItems = rawItems.filter(item => item != null).map((item: any) => {
-                const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
+                let cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
+                // C4 Fix: extract CNPJ from numeroControlePNCP (format: "CNPJ-ANO-SEQ")
+                if (!cnpj && item.numeroControlePNCP) {
+                    const pncpParts = item.numeroControlePNCP.split('-');
+                    if (pncpParts.length >= 3 && pncpParts[0].replace(/\D/g, '').length >= 11) {
+                        cnpj = pncpParts[0].replace(/\D/g, '');
+                    }
+                }
+                // Fallback: extract from link URL (format: /editais/CNPJ/ANO/SEQ)
+                if (!cnpj && (item.link || item.linkSistemaOrigem)) {
+                    const linkMatch = (item.link || item.linkSistemaOrigem || '').match(/editais\/(\d{11,14})\//);
+                    if (linkMatch) cnpj = linkMatch[1];
+                }
                 const ano = item.ano || item.anoCompra || '';
                 const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
                 const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
@@ -933,6 +958,21 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             }
         }
 
+        // ── C2 Fix: Post-filter by esfera (was completely missing) ──
+        if (esfera && esfera !== 'todas') {
+            const esferaMap: Record<string, string[]> = {
+                'F': ['F', '1'], 'E': ['E', '2'], 'M': ['M', '3'], 'D': ['D', '4'],
+            };
+            const allowed = new Set(esferaMap[esfera] || [esfera]);
+            const beforeEsfera = filteredItems.length;
+            filteredItems = filteredItems.filter((it: any) =>
+                !it.esfera_id || allowed.has(String(it.esfera_id))
+            );
+            if (filteredItems.length !== beforeEsfera) {
+                logger.info(`[PNCP] Esfera Post-Filter (${esfera}): kept ${filteredItems.length}/${beforeEsfera}`);
+            }
+        }
+
         // ── Post-filter: exclude keywords ──
         if (excludeKeywords && typeof excludeKeywords === 'string' && excludeKeywords.trim()) {
             const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -947,14 +987,41 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // ── Sort by closest deadline ──
+        // ── C3 Fix: Post-filter by publication date (Official API doesn't filter this) ──
+        if (dataInicio || dataFim) {
+            const beforeDate = filteredItems.length;
+            const startTs = dataInicio ? new Date(dataInicio + 'T00:00:00').getTime() : 0;
+            const endTs = dataFim ? new Date(dataFim + 'T23:59:59').getTime() : Infinity;
+            filteredItems = filteredItems.filter((it: any) => {
+                if (!it.data_publicacao) return true; // Keep items without pub date
+                const pubTs = new Date(it.data_publicacao).getTime();
+                if (isNaN(pubTs)) return true;
+                return pubTs >= startTs && pubTs <= endTs;
+            });
+            if (filteredItems.length !== beforeDate) {
+                logger.info(`[PNCP] Date Post-Filter: kept ${filteredItems.length}/${beforeDate}`);
+            }
+        }
+
+        // ── C6 Fix: Sort by closest FUTURE deadline (expired items go to end) ──
         const now = Date.now();
         filteredItems.sort((a: any, b: any) => {
             const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || '9999').getTime();
             const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || '9999').getTime();
-            const absA = isNaN(dateA) ? Infinity : Math.abs(dateA - now);
-            const absB = isNaN(dateB) ? Infinity : Math.abs(dateB - now);
-            return absA - absB;
+            const validA = !isNaN(dateA);
+            const validB = !isNaN(dateB);
+            const futureA = validA && dateA >= now;
+            const futureB = validB && dateB >= now;
+            // Future dates first
+            if (futureA && !futureB) return -1;
+            if (!futureA && futureB) return 1;
+            // Both future: soonest deadline first
+            if (futureA && futureB) return dateA - dateB;
+            // Both past or invalid: most recent expired first
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dateB - dateA;
         });
 
         const totalResults = filteredItems.length;

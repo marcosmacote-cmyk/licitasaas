@@ -516,7 +516,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         setHasSearched(true);
         setLoading(true);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout (Gov.br can be slow)
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout (aligned with server-side PNCP timeouts)
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {

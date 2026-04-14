@@ -172,16 +172,25 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                     </td>
                                     {/* Prazo Limite (data fim de recebimento de propostas) */}
                                     <td style={{ whiteSpace: 'nowrap', verticalAlign: 'top', paddingTop: '16px' }}>
-                                        {item.data_encerramento_proposta ? (
+                                        {item.data_encerramento_proposta ? (() => {
+                                            const deadline = new Date(item.data_encerramento_proposta);
+                                            const msLeft = deadline.getTime() - Date.now();
+                                            const isExpired = msLeft < 0;
+                                            const deadlineColor = isExpired ? 'var(--color-text-tertiary)'
+                                                : msLeft < 3 * 86400000 ? 'var(--color-danger)'
+                                                : msLeft < 7 * 86400000 ? 'var(--color-warning)'
+                                                : 'var(--color-text-primary)';
+                                            return (
                                             <>
-                                                <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: new Date(item.data_encerramento_proposta) > new Date() ? 'var(--color-danger)' : 'var(--color-text-secondary)' }}>
-                                                    {new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR')}
+                                                <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: deadlineColor }}>
+                                                    {deadline.toLocaleDateString('pt-BR')}
+                                                    {isExpired && <span style={{ fontSize: '0.625rem', marginLeft: '4px', opacity: 0.7 }}>Vencido</span>}
                                                 </div>
                                                 <div style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>
-                                                    {new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                    {deadline.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
-                                            </>
-                                        ) : (
+                                            </>);
+                                        })() : (
                                             <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}>—</span>
                                         )}
                                     </td>
