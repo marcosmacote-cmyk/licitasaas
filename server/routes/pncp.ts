@@ -472,34 +472,29 @@ router.get('/items', authenticateToken, async (req: any, res) => {
         }
 
         const startTime = Date.now();
-        const agent = new https.Agent({ rejectUnauthorized: false });
+        const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
         
-        // Race two API variants — whichever responds first wins
-        const url1 = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
-        const url2 = `https://pncp.gov.br/api/consulta/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
+        // The old /api/pncp/v1/ now returns 301, so prioritize /api/consulta/v1/
+        const primaryUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
+        const fallbackUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
         
         let responseData: any = null;
         
         try {
-            // Try both endpoints in parallel — use first successful response
-            const results = await Promise.allSettled([
-                axios.get(url1, { httpsAgent: agent, timeout: 8000 } as any),
-                axios.get(url2, { httpsAgent: agent, timeout: 8000 } as any),
-            ]);
-            
-            const firstSuccess = results.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<any> | undefined;
-            if (firstSuccess) {
-                responseData = firstSuccess.value.data;
-            } else {
-                // All failed — check for 404
-                const firstRejection = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
-                const err = firstRejection?.reason;
-                if (err?.response?.status === 404) {
+            // Try primary endpoint first (fast path)
+            try {
+                const primaryRes = await axios.get(primaryUrl, { httpsAgent: agent, timeout: 6000 } as any);
+                responseData = primaryRes.data;
+            } catch (primaryErr: any) {
+                // If primary fails with non-404, try fallback
+                if (primaryErr?.response?.status === 404) {
                     const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
                     pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
                     return res.json(emptyResult);
                 }
-                throw err || new Error('All PNCP item endpoints failed');
+                logger.warn(`[PNCP Items] Primary endpoint failed (${primaryErr?.message}), trying fallback...`);
+                const fallbackRes = await axios.get(fallbackUrl, { httpsAgent: agent, timeout: 5000, maxRedirects: 5 } as any);
+                responseData = fallbackRes.data;
             }
         } catch (fetchErr: any) {
             throw fetchErr;
@@ -535,6 +530,17 @@ router.get('/items', authenticateToken, async (req: any, res) => {
 // ══════════════════════════════════════════
 // ── PNCP Search (Extracted from index.ts) ──
 // ══════════════════════════════════════════
+
+// The Gov.br search API uses DIFFERENT status values than what our UI sends.
+// Our UI sends: 'recebendo_proposta', 'encerrada', 'suspensa', 'anulada', 'todas'
+// Gov.br expects: 'recebendo_proposta', 'encerradas', 'suspensas', 'anuladas', (omit for all)
+const STATUS_TO_GOVBR: Record<string, string> = {
+    'recebendo_proposta': 'recebendo_proposta',
+    'encerrada': 'encerradas',
+    'suspensa': 'suspensas',
+    'anulada': 'anuladas',
+    'todas': '',  // omit param entirely
+};
 
 // In-memory cache for PNCP search results (avoids repeated slow Gov.br calls)
 const pncpSearchCache = new Map<string, { data: any, timestamp: number }>();
@@ -593,7 +599,8 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             if (qItems.length > 0) {
                 url += `&q=${encodeURIComponent(qItems.join(' '))}`;
             }
-            if (status && status !== 'todas') url += `&status=${status}`;
+            const govStatus = STATUS_TO_GOVBR[status] || status;
+            if (govStatus && govStatus !== '') url += `&status=${govStatus}`;
             // Use single UF per request (region groups are split upstream)
             if (singleUf) url += `&ufs=${singleUf}`;
             if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
@@ -807,6 +814,37 @@ router.post('/search', authenticateToken, async (req: any, res) => {
 
         // Send all results to frontend for client-side pagination
         const totalResults = filteredItems.length;
+
+        // ── Hydrate valor_estimado from PNCP detail API (search API always returns null) ──
+        // Only hydrate the first page worth of items (top 30) to avoid excessive API calls
+        const hydrateAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
+        const itemsToHydrate = filteredItems.slice(0, 30).filter((it: any) => 
+            it.orgao_cnpj && it.ano && it.numero_sequencial && (!it.valor_estimado || it.valor_estimado === 0)
+        );
+        if (itemsToHydrate.length > 0) {
+            const hydrateChunkSize = 10;
+            for (let hi = 0; hi < itemsToHydrate.length; hi += hydrateChunkSize) {
+                const hydrateChunk = itemsToHydrate.slice(hi, hi + hydrateChunkSize);
+                const hydrateResults = await Promise.allSettled(
+                    hydrateChunk.map((it: any) => 
+                        axios.get(
+                            `https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`,
+                            { httpsAgent: hydrateAgent, timeout: 4000 } as any
+                        )
+                    )
+                );
+                hydrateResults.forEach((r, idx) => {
+                    if (r.status === 'fulfilled') {
+                        const detail = r.value.data;
+                        const val = detail?.valorTotalEstimado ?? detail?.valorTotalHomologado ?? null;
+                        if (val != null && Number(val) > 0) {
+                            hydrateChunk[idx].valor_estimado = Number(val);
+                        }
+                    }
+                });
+            }
+            logger.info(`[PNCP] Hydrated values for ${itemsToHydrate.length} items`);
+        }
 
         // ── Cache the full filtered+sorted list for subsequent searches ──
         pncpSearchCache.set(cacheKey, { data: filteredItems, timestamp: Date.now() });

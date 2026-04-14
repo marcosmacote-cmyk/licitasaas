@@ -717,7 +717,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         setKeywords(''); setStatus('recebendo_proposta'); setSelectedUf('');
         setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');
         setOrgao(''); setOrgaosLista(''); setExcludeKeywords(''); setDataInicio(''); setDataFim('');
-        setResults([]); setTotalResults(0); setPage(1);
+        setAllResults([]); setResults([]); setTotalResults(0); setPage(1);
         setActiveTab('search');
     };
 
