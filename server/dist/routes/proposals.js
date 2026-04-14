@@ -15,6 +15,51 @@ const logger_1 = require("../lib/logger");
 const router = express_1.default.Router();
 const genai_1 = require("@google/genai");
 const gemini_service_1 = require("../services/ai/gemini.service");
+const backgroundJobService_1 = require("../services/backgroundJobService");
+function extractValidObjects(text, fromIndex) {
+    const objects = [];
+    let braceCount = 0;
+    let objStart = -1;
+    let inString = false;
+    let escape = false;
+    for (let i = fromIndex; i < text.length; i++) {
+        const char = text[i];
+        if (escape) {
+            escape = false;
+            continue;
+        }
+        if (char === '\\') {
+            escape = true;
+            continue;
+        }
+        if (char === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (!inString) {
+            if (char === '{') {
+                if (braceCount === 0)
+                    objStart = i;
+                braceCount++;
+            }
+            else if (char === '}') {
+                braceCount--;
+                if (braceCount === 0 && objStart !== -1) {
+                    const objStr = text.slice(objStart, i + 1);
+                    try {
+                        const parsed = JSON.parse(objStr);
+                        if (parsed && typeof parsed === 'object' && parsed.itemNumber) {
+                            objects.push(parsed);
+                        }
+                    }
+                    catch (e) { }
+                    fromIndex = i + 1;
+                }
+            }
+        }
+    }
+    return { objects, nextIndex: fromIndex };
+}
 // Price Proposal CRUD + AI Populate
 // ═══════════════════════════════════════════════════════════════════════
 // GET proposals for a bidding process
@@ -383,22 +428,50 @@ ORGANIZAÇÃO DE LOTES E ITENS (itemNumber):
 
 Responda APENAS com um JSON array válido:
 [{"itemNumber":"1","description":"Descrição completa","unit":"Mês","quantity":3,"multiplier":12,"multiplierLabel":"Meses","referencePrice":22465.00}]`;
-            const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { temperature: 0.05, maxOutputTokens: 65536, responseMimeType: 'application/json' },
-            }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'analysis' } });
-            const responseText = result.text?.trim() || '';
-            let jsonStr = responseText;
-            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-            if (jsonMatch)
-                jsonStr = jsonMatch[0];
-            let items;
+            let responseText = '';
+            let items = [];
             try {
-                items = JSON.parse(jsonStr);
+                if (req.body.__jobId) {
+                    const resultStream = await ai.models.generateContentStream({
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.05, maxOutputTokens: 65536 },
+                    });
+                    let parseIndex = 0;
+                    for await (const chunk of resultStream) {
+                        responseText += chunk.text;
+                        const { objects, nextIndex } = extractValidObjects(responseText, parseIndex);
+                        if (objects.length > 0) {
+                            items.push(...objects);
+                            parseIndex = nextIndex;
+                            (0, backgroundJobService_1.pushEventToTenant)(req.user.tenantId, {
+                                type: 'job_progress',
+                                jobId: req.body.__jobId,
+                                jobType: 'proposal_populate',
+                                progress: 50,
+                                progressMsg: `Extraindo item ${objects[objects.length - 1].itemNumber}...`,
+                                metadata: { yieldedItems: objects },
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                }
+                else {
+                    const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                        model: 'gemini-2.5-flash',
+                        contents: prompt,
+                        config: { temperature: 0.05, maxOutputTokens: 65536, responseMimeType: 'application/json' },
+                    }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'analysis' } });
+                    responseText = result.text?.trim() || '';
+                    let jsonStr = responseText;
+                    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                    if (jsonMatch)
+                        jsonStr = jsonMatch[0];
+                    items = JSON.parse(jsonStr);
+                }
             }
-            catch {
-                return res.status(500).json({ error: 'AI returned invalid format', raw: responseText.substring(0, 200) });
+            catch (err) {
+                return res.status(500).json({ error: 'AI returned invalid format or stream failed', raw: responseText.substring(0, 200) });
             }
             // ── Truncation guard: if legacy biddingItems returned suspiciously few items, 
             // fall through to Strategy 2/3 for fuller extraction from PNCP planilhas ──
@@ -598,42 +671,71 @@ ${pricingInfo ? `INFORMAÇÕES ADICIONAIS DE PREÇO:\n${pricingInfo}\n` : ''}
 Responda APENAS com um JSON array válido:
 [{"itemNumber":"1.1","description":"Descrição completa do serviço incluindo grupo","unit":"M²","quantity":100,"multiplier":1,"multiplierLabel":"","referencePrice":45.67}]`;
         logger_1.logger.info(`[AI Populate] Sending ${pdfParts.length} PDFs to Gemini for item extraction...`);
-        const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
-            model: 'gemini-2.5-flash',
-            contents: [{
-                    role: 'user',
-                    parts: [
-                        ...pdfParts,
-                        { text: extractPrompt }
-                    ]
-                }],
-            config: {
-                temperature: 0.05,
-                maxOutputTokens: 65536,
-                responseMimeType: 'application/json'
-            }
-        }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'pdf_extraction' } });
-        const responseText = result.text?.trim() || '';
-        logger_1.logger.info(`[AI Populate] Response length: ${responseText.length} chars (first 300): ${responseText.substring(0, 300)}`);
-        let items;
+        let responseText = '';
+        let items = [];
         try {
-            const parsed = JSON.parse(responseText);
-            items = Array.isArray(parsed) ? parsed : (parsed.items || parsed.data || []);
-        }
-        catch {
-            // Try regex extract
-            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                try {
-                    items = JSON.parse(jsonMatch[0]);
-                }
-                catch {
-                    return res.status(500).json({ error: 'AI returned invalid JSON from planilha', raw: responseText.substring(0, 300) });
+            if (req.body.__jobId) {
+                const resultStream = await ai.models.generateContentStream({
+                    model: 'gemini-2.5-flash',
+                    contents: [{
+                            role: 'user',
+                            parts: [
+                                ...pdfParts,
+                                { text: extractPrompt }
+                            ]
+                        }],
+                    config: { temperature: 0.05, maxOutputTokens: 65536 },
+                });
+                let parseIndex = 0;
+                for await (const chunk of resultStream) {
+                    responseText += chunk.text;
+                    const { objects, nextIndex } = extractValidObjects(responseText, parseIndex);
+                    if (objects.length > 0) {
+                        items.push(...objects);
+                        parseIndex = nextIndex;
+                        (0, backgroundJobService_1.pushEventToTenant)(req.user.tenantId, {
+                            type: 'job_progress',
+                            jobId: req.body.__jobId,
+                            jobType: 'proposal_populate',
+                            progress: 80,
+                            progressMsg: `Lendo itens da planilha: ${objects[objects.length - 1].itemNumber}...`,
+                            metadata: { yieldedItems: objects },
+                            timestamp: new Date().toISOString()
+                        });
+                    }
                 }
             }
             else {
-                return res.status(500).json({ error: 'AI returned no extractable data from planilha' });
+                const result = await (0, gemini_service_1.callGeminiWithRetry)(ai.models, {
+                    model: 'gemini-2.5-flash',
+                    contents: [{
+                            role: 'user',
+                            parts: [
+                                ...pdfParts,
+                                { text: extractPrompt }
+                            ]
+                        }],
+                    config: {
+                        temperature: 0.05,
+                        maxOutputTokens: 65536,
+                        responseMimeType: 'application/json'
+                    }
+                }, 3, { tenantId: req.user.tenantId, operation: 'proposal_populate', metadata: { source: 'pdf_extraction' } });
+                responseText = result.text?.trim() || '';
+                try {
+                    const parsed = JSON.parse(responseText);
+                    items = Array.isArray(parsed) ? parsed : (parsed.items || parsed.data || []);
+                }
+                catch {
+                    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                    if (jsonMatch) {
+                        items = JSON.parse(jsonMatch[0]);
+                    }
+                }
             }
+        }
+        catch (err) {
+            return res.status(500).json({ error: 'AI returned invalid format or stream failed for planilha', raw: responseText.substring(0, 300) });
         }
         logger_1.logger.info(`[AI Populate] ✅ Extracted ${items.length} items from ${downloadedNames.length} planilha(s): ${downloadedNames.join(', ')}`);
         res.json({

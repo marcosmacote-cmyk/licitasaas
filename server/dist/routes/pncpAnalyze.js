@@ -1925,7 +1925,8 @@ Responda APENAS com JSON array:
             _quality_score: qualityReport?.overallScore || null,
             _evidence_count: v2Result.evidence_registry.length,
             _risk_count: v2Result.legal_risk_review.critical_points.length,
-            _requirement_count: totalReqs
+            _requirement_count: totalReqs,
+            _requires_human_audit: combinedScore < 80 || pipelineHealth.fallbacksUsed > 2 || pipelineHealth.parseRepairs > 1
         };
         logger_1.logger.info(`[PNCP-V2] SUCCESS — Score: ${combinedScore}% | ${totalReqs} exigências | ${v2Result.evidence_registry.length} evidências`);
         sendProgress(8, 'Análise concluída!', `Score: ${combinedScore}% • ${totalReqs} exigências • ${v2Result.legal_risk_review.critical_points.length} riscos`);

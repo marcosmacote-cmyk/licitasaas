@@ -27,12 +27,13 @@ const ALLOWED_ORIGINS = [
 // Note: We set `trust proxy: 1` in applySecurityMiddleware(),
 // so Express resolves req.ip from X-Forwarded-For automatically.
 // The default keyGenerator uses req.ip with proper IPv6 normalization.
-/** Global: 200 requests per minute per IP */
+/** Global API: 500 requests per minute per IP (only applied to /api/ routes, not static files) */
 exports.globalLimiter = (0, express_rate_limit_1.default)({
     windowMs: 60 * 1000, // 1 minuto
-    max: 200,
+    max: 500,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => !req.path.startsWith('/api/'), // Skip static files
     message: { error: 'Muitas requisições. Tente novamente em instantes.' },
 });
 /** Auth routes: 10 attempts per 15 minutes per IP */
@@ -43,13 +44,14 @@ exports.authLimiter = (0, express_rate_limit_1.default)({
     legacyHeaders: false,
     message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 });
-/** AI-heavy routes: 20 requests per minute per IP */
+/** AI-heavy routes: 20 requests per minute per Tenant (fallback to IP if not authed) */
 exports.aiLimiter = (0, express_rate_limit_1.default)({
     windowMs: 60 * 1000,
     max: 20,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Limite de requisições de IA atingido. Tente novamente em instantes.' },
+    keyGenerator: (req) => req.user?.tenantId || 'anon',
+    message: { error: 'Limite corporativo de requisições de IA atingido. Aguarde 1 minuto.' },
 });
 // ── Request Logger Middleware ──
 function requestLogger(req, res, next) {

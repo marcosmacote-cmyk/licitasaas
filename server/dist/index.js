@@ -414,6 +414,41 @@ async function fetchPdfPartsForProcess(biddingProcessId, fileNamesRaw, tenantId)
     }
     return pdfParts;
 }
+// ── Frontend Static Serving (Vite dist / Docker public) ──
+const possibleDistPaths = [
+    path_1.default.join(SERVER_ROOT, 'public'), // Dockerfile production path (moved from dist -> public)
+    path_1.default.join(SERVER_ROOT, '..', 'dist'), // Parent dir (local monorepo root)
+    path_1.default.join(SERVER_ROOT, 'dist'), // Inside server root
+    path_1.default.join(process.cwd(), '..', 'dist'), // Using cwd
+    path_1.default.join(process.cwd(), 'dist'), // Using cwd direct
+    '/app/dist', // Railway Nixpacks specific
+    '/workspace/dist' // Railway standard path
+];
+let frontendDist = '';
+for (const p of possibleDistPaths) {
+    if (fs_1.default.existsSync(p) && fs_1.default.existsSync(path_1.default.join(p, 'index.html'))) {
+        frontendDist = p;
+        break;
+    }
+}
+if (frontendDist) {
+    logger_1.logger.info(`[Frontend] Found and serving static UI from: ${frontendDist}`);
+    app.use(express_1.default.static(frontendDist));
+    // Fallback for React Router (catch-all)
+    // Using app.use() instead of app.get('*') to avoid Express 5 path-to-regexp crash
+    app.use((req, res, next) => {
+        if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/uploads/')) {
+            res.sendFile(path_1.default.join(frontendDist, 'index.html'));
+        }
+        else {
+            next();
+        }
+    });
+}
+else {
+    logger_1.logger.error(`[Frontend] CRITICAL: UI Build (dist) not found in any expected location!`);
+    logger_1.logger.error(`Tested paths: ${possibleDistPaths.join(', ')}`);
+}
 app.listen(PORT, async () => {
     logger_1.logger.info(`Server is running on port ${PORT} (mode: ${process.env.NODE_ENV || 'development'})`);
     logger_1.logger.info(`Upload directory: ${uploadDir}`);
@@ -590,7 +625,7 @@ app.listen(PORT, async () => {
                     'Authorization': `Bearer ${internalToken}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(job.input),
+                body: JSON.stringify({ ...job.input, __jobId: job.id }),
             });
             clearInterval(progressTimer);
             if (!response.ok) {

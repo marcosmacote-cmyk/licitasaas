@@ -1514,12 +1514,15 @@ router.post('/analysis', auth_1.authenticateToken, async (req, res) => {
             v2Fields.pipelineDurationS = parseFloat(payload.pipelineDurationS);
         if (payload.overallConfidence)
             v2Fields.overallConfidence = payload.overallConfidence;
+        if (payload.requiresHumanAudit !== undefined)
+            v2Fields.requiresHumanAudit = payload.requiresHumanAudit;
         // Remove V2 fields from payload to avoid Prisma unknown field error
         delete payload.schemaV2;
         delete payload.promptVersion;
         delete payload.modelUsed;
         delete payload.pipelineDurationS;
         delete payload.overallConfidence;
+        delete payload.requiresHumanAudit;
         const mergedPayload = { ...payload, ...v2Fields };
         logger_1.logger.info(`[Analysis] Upserting analysis for process ${mergedPayload.biddingProcessId}. Payload summary length: ${mergedPayload.fullSummary?.length || 0}. Files: ${mergedPayload.sourceFileNames}. V2: ${!!v2Fields.schemaV2}`);
         const analysis = await prisma_1.prisma.aiAnalysis.upsert({

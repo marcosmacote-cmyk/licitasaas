@@ -17,6 +17,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSSEClient = registerSSEClient;
 exports.removeSSEClient = removeSSEClient;
+exports.pushEventToTenant = pushEventToTenant;
 exports.submitJob = submitJob;
 exports.updateJobProgress = updateJobProgress;
 exports.completeJob = completeJob;

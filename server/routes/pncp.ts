@@ -549,7 +549,6 @@ const PNCP_SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 router.post('/search', authenticateToken, async (req: any, res) => {
     try {
         const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
-        const pageSize = 10;
 
         // ── Cache check: hash search params to avoid redundant Gov.br calls ──
         const cacheKey = JSON.stringify({ keywords, status, uf, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords });
@@ -560,209 +559,386 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             return res.json({ items: cached.data, total: totalResults });
         }
 
-        let kwList: string[] = [];
-        if (keywords) {
-            if (keywords.includes(',')) {
-                kwList = keywords.split(',')
-                    .map((k: string) => k.trim().replace(/^"|"$/g, ''))
-                    .filter((k: string) => k.length > 0)
-                    .map((k: string) => k.includes(' ') ? `"${k}"` : k);
+        const startTime = Date.now();
+        const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
+        logger.info(`[PNCP] SEARCH REQUEST - status="${status}" uf="${uf}" keywords="${keywords}" modalidade="${modalidade}"`);
+
+        // ══════════════════════════════════════════════════════════════
+        // ── STRATEGY: Use Official Consulta API when possible ──
+        // The /api/consulta/v1/ returns valorTotalEstimado, UF reliable,
+        // and structured data. The /api/search/ is needed only for 
+        // full-text keyword matching.
+        // ══════════════════════════════════════════════════════════════
+
+        let filteredItems: any[] = [];
+        const useOfficialApi = (status === 'recebendo_proposta' || !status || status === '') && !orgao && !orgaosLista;
+
+        if (useOfficialApi) {
+            // ── FAST PATH: Official PNCP Consulta API ──
+            // Endpoint: /api/consulta/v1/contratacoes/proposta
+            // Returns: valorTotalEstimado, UF, modalidade, everything!
+            logger.info(`[PNCP] Using OFFICIAL API (contratacoes/proposta) fast path`);
+            
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dataFinalParam = dataFim ? dataFim.replace(/-/g, '') : tomorrow.toISOString().split('T')[0].replace(/-/g, '');
+
+            // Build UF list for iteration
+            let ufsForApi: string[] = [];
+            if (uf && typeof uf === 'string' && uf.trim()) {
+                if (uf.includes(',')) {
+                    ufsForApi = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
+                } else {
+                    ufsForApi = [uf.trim()];
+                }
+            }
+
+            // Build modalidade code if specified
+            const modalidadeCode = modalidade && modalidade !== 'todas' ? modalidade : '';
+
+            const fetchOfficialPage = async (pageNum: number, singleUf?: string): Promise<{ data: any[], totalPages: number }> => {
+                let url = `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=${dataFinalParam}&pagina=${pageNum}&tamanhoPagina=50`;
+                if (singleUf) url += `&uf=${singleUf}`;
+                if (modalidadeCode) url += `&codigoModalidadeContratacao=${modalidadeCode}`;
+
+                // Exponential backoff retry
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const resp = await axios.get(url, { httpsAgent: agent, timeout: 10000 } as any);
+                        const body: any = resp.data;
+                        return {
+                            data: Array.isArray(body?.data) ? body.data : [],
+                            totalPages: body?.totalPaginas || 1
+                        };
+                    } catch (err: any) {
+                        if (attempt < 2 && (err?.response?.status >= 500 || err.code === 'ECONNABORTED')) {
+                            const delay = 1000 * Math.pow(2, attempt);
+                            logger.warn(`[PNCP] Official API retry ${attempt + 1} after ${delay}ms (${err?.message})`);
+                            await new Promise(r => setTimeout(r, delay));
+                            continue;
+                        }
+                        logger.error(`[PNCP] Official API failed: ${err?.message}`);
+                        return { data: [], totalPages: 0 };
+                    }
+                }
+                return { data: [], totalPages: 0 };
+            };
+
+            const MAX_PAGES = 10; // Max 500 items (50/page * 10 pages)
+            const MAX_ITEMS = 500;
+            let rawConsulta: any[] = [];
+
+            if (ufsForApi.length > 0) {
+                // Fetch per UF in parallel
+                const ufBatches = await Promise.allSettled(
+                    ufsForApi.map(async (singleUf) => {
+                        const first = await fetchOfficialPage(1, singleUf);
+                        let allData = [...first.data];
+                        const pagesToFetch = Math.min(first.totalPages, MAX_PAGES);
+                        if (pagesToFetch > 1) {
+                            const pageResults = await Promise.allSettled(
+                                Array.from({ length: pagesToFetch - 1 }, (_, i) => fetchOfficialPage(i + 2, singleUf))
+                            );
+                            for (const pr of pageResults) {
+                                if (pr.status === 'fulfilled') allData.push(...pr.value.data);
+                            }
+                        }
+                        return allData;
+                    })
+                );
+                for (const batch of ufBatches) {
+                    if (batch.status === 'fulfilled') rawConsulta.push(...batch.value);
+                    if (rawConsulta.length >= MAX_ITEMS) break;
+                }
             } else {
-                kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
+                // No UF filter — fetch nationally
+                const first = await fetchOfficialPage(1);
+                rawConsulta = [...first.data];
+                const pagesToFetch = Math.min(first.totalPages, MAX_PAGES);
+                if (pagesToFetch > 1) {
+                    const pageResults = await Promise.allSettled(
+                        Array.from({ length: pagesToFetch - 1 }, (_, i) => fetchOfficialPage(i + 2))
+                    );
+                    for (const pr of pageResults) {
+                        if (pr.status === 'fulfilled') rawConsulta.push(...pr.value.data);
+                    }
+                }
             }
-        }
 
-        // Merge single orgao into orgaosLista if it contains commas
-        let effectiveOrgao = orgao || '';
-        let effectiveOrgaosLista = orgaosLista || '';
-        if (effectiveOrgao.includes(',')) {
-            effectiveOrgaosLista = effectiveOrgaosLista
-                ? `${effectiveOrgaosLista},${effectiveOrgao}`
-                : effectiveOrgao;
-            effectiveOrgao = '';
-        }
+            // ── Map official API response to our standard format ──
+            const seenIds = new Set<string>();
+            filteredItems = rawConsulta.filter(item => item != null).map((item: any) => {
+                const org = item.orgaoEntidade || {};
+                const uni = item.unidadeOrgao || {};
+                const cnpj = org.cnpj || '';
+                const ano = String(item.anoCompra || '');
+                const nSeq = String(item.sequencialCompra || '');
+                const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : Math.random().toString());
 
-        // Expand region UF groups into individual UFs for separate fetches
-        let ufsToIterate: string[] = [];
-        logger.info(`[PNCP] SEARCH REQUEST - req.body.uf is: "${uf}", typeof: ${typeof uf}`);
-        if (uf && uf.includes(',')) {
-            ufsToIterate = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
-        } else if (uf) {
-            ufsToIterate = [uf];
-        }
+                // Urgency level based on deadline
+                let urgency = 'medium';
+                if (item.dataAberturaProposta) {
+                    const daysUntil = (new Date(item.dataAberturaProposta).getTime() - Date.now()) / (1000 * 3600 * 24);
+                    if (daysUntil <= 3) urgency = 'critical';
+                    else if (daysUntil <= 7) urgency = 'high';
+                    else if (daysUntil <= 15) urgency = 'medium';
+                    else urgency = 'low';
+                }
 
-        const buildBaseUrl = (qItems: string[], overrideCnpj?: string, singleUf?: string) => {
-            let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 50 : 100}&pagina=1`;
-            if (overrideCnpj) {
-                url += `&cnpj=${overrideCnpj}`;
+                return {
+                    id: pncpId,
+                    orgao_nome: org.razaoSocial || 'Órgão não informado',
+                    orgao_cnpj: cnpj,
+                    ano,
+                    numero_sequencial: nSeq,
+                    titulo: item.numeroCompra ? `Compra nº ${item.numeroCompra}/${ano}` : `${item.modalidadeNome || 'Licitação'} nº ${nSeq}/${ano}`,
+                    objeto: item.objetoCompra || 'Sem objeto',
+                    data_publicacao: item.dataPublicacaoPncp || item.dataInclusao || new Date().toISOString(),
+                    data_abertura: item.dataAberturaProposta || '',
+                    data_encerramento_proposta: item.dataEncerramentoProposta || '',
+                    valor_estimado: Number(item.valorTotalEstimado || item.valorTotalHomologado || 0),
+                    uf: uni.ufSigla || '',
+                    municipio: uni.municipioNome || '',
+                    modalidade_nome: item.modalidadeNome || '',
+                    link_sistema: (cnpj && ano && nSeq)
+                        ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
+                        : (item.linkSistemaOrigem || ''),
+                    link_comprasnet: item.linkSistemaOrigem || '',
+                    status: item.situacaoCompraNome || 'Aberta',
+                    esfera_id: org.esferaId || '',
+                    urgency,
+                    srp: item.srp || false,
+                    modo_disputa: item.modoDisputaNome || '',
+                };
+            }).filter(item => {
+                if (seenIds.has(item.id)) return false;
+                seenIds.add(item.id);
+                return true;
+            });
+
+            // ── Client-side keyword filtering (official API has no text search) ──
+            if (keywords && typeof keywords === 'string' && keywords.trim()) {
+                const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const kwTerms = keywords.split(',')
+                    .map((k: string) => normalize(k.trim().replace(/^"|"$/g, '')))
+                    .filter((k: string) => k.length > 1);
+                if (kwTerms.length > 0) {
+                    filteredItems = filteredItems.filter((it: any) => {
+                        const searchText = normalize((it.objeto || '') + ' ' + (it.titulo || '') + ' ' + (it.orgao_nome || ''));
+                        return kwTerms.some((term: string) => searchText.includes(term));
+                    });
+                    logger.info(`[PNCP] Keyword filter applied: ${filteredItems.length} items match "${keywords}"`);
+                }
             }
-            if (qItems.length > 0) {
-                url += `&q=${encodeURIComponent(qItems.join(' '))}`;
+
+            logger.info(`[PNCP] Official API returned ${filteredItems.length} items (from ${rawConsulta.length} raw)`);
+
+        } else {
+            // ── FALLBACK: Search API (for non-open statuses or org-specific searches) ──
+            logger.info(`[PNCP] Using SEARCH API fallback (status="${status}")`);
+
+            let kwList: string[] = [];
+            if (keywords) {
+                if (keywords.includes(',')) {
+                    kwList = keywords.split(',')
+                        .map((k: string) => k.trim().replace(/^"|"$/g, ''))
+                        .filter((k: string) => k.length > 0)
+                        .map((k: string) => k.includes(' ') ? `"${k}"` : k);
+                } else {
+                    kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
+                }
             }
-            const govStatus = STATUS_TO_GOVBR[status] || status;
-            if (govStatus && govStatus !== '') url += `&status=${govStatus}`;
-            // Use single UF per request (region groups are split upstream)
-            if (singleUf) url += `&ufs=${singleUf}`;
-            if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-            if (dataInicio) url += `&data_inicio=${dataInicio}`;
-            if (dataFim) url += `&data_fim=${dataFim}`;
-            if (esfera && esfera !== 'todas') url += `&esferas=${esfera}`;
-            return url;
-        };
 
-        let extractedNames: string[] = [];
-        if (effectiveOrgaosLista) {
-            extractedNames = effectiveOrgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
-            extractedNames = [...new Set(extractedNames)]; // Remove duplicates
-        }
+            let effectiveOrgao = orgao || '';
+            let effectiveOrgaosLista = orgaosLista || '';
+            if (effectiveOrgao.includes(',')) {
+                effectiveOrgaosLista = effectiveOrgaosLista
+                    ? `${effectiveOrgaosLista},${effectiveOrgao}`
+                    : effectiveOrgao;
+                effectiveOrgao = '';
+            }
 
-        let urlsToFetch: string[] = [];
-        const keywordsToIterate = kwList.length > 0 ? kwList : [null];
-        const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (effectiveOrgao ? [effectiveOrgao] : [null]);
-        const ufsForIteration = ufsToIterate.length > 0 ? ufsToIterate : [null];
+            let ufsToIterate: string[] = [];
+            if (uf && uf.includes(',')) {
+                ufsToIterate = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
+            } else if (uf) {
+                ufsToIterate = [uf];
+            }
 
-        for (const kw of keywordsToIterate) {
-            for (const org of orgaosToIterate) {
-                for (const singleUf of ufsForIteration) {
-                    let localParams: string[] = [];
-                    let overrideCnpj: string | undefined = undefined;
+            const buildBaseUrl = (qItems: string[], overrideCnpj?: string, singleUf?: string) => {
+                let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 50 : 100}&pagina=1`;
+                if (overrideCnpj) url += `&cnpj=${overrideCnpj}`;
+                if (qItems.length > 0) url += `&q=${encodeURIComponent(qItems.join(' '))}`;
+                const govStatus = STATUS_TO_GOVBR[status] || status;
+                if (govStatus && govStatus !== '') url += `&status=${govStatus}`;
+                if (singleUf) url += `&ufs=${singleUf}`;
+                if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
+                if (dataInicio) url += `&data_inicio=${dataInicio}`;
+                if (dataFim) url += `&data_fim=${dataFim}`;
+                if (esfera && esfera !== 'todas') url += `&esferas=${esfera}`;
+                return url;
+            };
 
-                    if (kw) localParams.push(kw);
+            let extractedNames: string[] = [];
+            if (effectiveOrgaosLista) {
+                extractedNames = effectiveOrgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
+                extractedNames = [...new Set(extractedNames)];
+            }
 
-                    if (org) {
-                        const onlyNumbers = org.replace(/\D/g, '');
-                        if (onlyNumbers.length === 14) {
-                            overrideCnpj = onlyNumbers;
-                        } else {
-                            const exactOrgName = org.includes(' ') && !org.startsWith('"') ? `"${org}"` : org;
-                            localParams.push(exactOrgName);
+            let urlsToFetch: string[] = [];
+            const keywordsToIterate = kwList.length > 0 ? kwList : [null];
+            const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (effectiveOrgao ? [effectiveOrgao] : [null]);
+            const ufsForIteration = ufsToIterate.length > 0 ? ufsToIterate : [null];
+
+            for (const kw of keywordsToIterate) {
+                for (const org2 of orgaosToIterate) {
+                    for (const singleUf of ufsForIteration) {
+                        let localParams: string[] = [];
+                        let overrideCnpj: string | undefined = undefined;
+                        if (kw) localParams.push(kw);
+                        if (org2) {
+                            const onlyNumbers = org2.replace(/\D/g, '');
+                            if (onlyNumbers.length === 14) {
+                                overrideCnpj = onlyNumbers;
+                            } else {
+                                const exactOrgName = org2.includes(' ') && !org2.startsWith('"') ? `"${org2}"` : org2;
+                                localParams.push(exactOrgName);
+                            }
+                        }
+                        urlsToFetch.push(buildBaseUrl(localParams, overrideCnpj, singleUf || undefined));
+                    }
+                }
+            }
+            urlsToFetch = urlsToFetch.slice(0, 30);
+
+            let rawItems: any[] = [];
+            const chunkSize = 15;
+            const MAX_ITEMS = 500;
+
+            for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
+                if (rawItems.length >= MAX_ITEMS) break;
+                const chunk = urlsToFetch.slice(i, i + chunkSize);
+                const responses = await Promise.allSettled(
+                    chunk.map(u => axios.get(u, {
+                        headers: { 'Accept': 'application/json' },
+                        httpsAgent: agent,
+                        timeout: 8000
+                    } as any))
+                );
+                for (const r of responses) {
+                    if (r.status === 'fulfilled') {
+                        const data = r.value.data as any;
+                        const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
+                        rawItems = rawItems.concat(items);
+                    }
+                }
+            }
+
+            // Map search API results to standard format
+            const seenIds = new Set<string>();
+            filteredItems = rawItems.filter(item => item != null).map((item: any) => {
+                const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
+                const ano = item.ano || item.anoCompra || '';
+                const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
+                const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
+                    ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao
+                    ?? item.valorEstimado ?? item.valorGlobal ?? item.valor_total ?? item.amount ?? null;
+                const valorEstimado = rawVal != null ? (Number(rawVal) || 0) : 0;
+                const modalidadeNome = item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidadeNome
+                    || item.modalidadeLicitacaoNome || '';
+                const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : null) || item.id || Math.random().toString();
+                return {
+                    id: pncpId,
+                    orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || item.nomeOrgao || 'Órgão não informado',
+                    orgao_cnpj: cnpj, ano, numero_sequencial: nSeq,
+                    titulo: item.title || item.titulo || item.identificador || 'Sem título',
+                    objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
+                    data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
+                    data_abertura: item.dataAberturaProposta || item.data_inicio_vigencia || item.data_abertura || '',
+                    data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
+                    valor_estimado: valorEstimado,
+                    uf: item.uf || item.unidadeOrgao?.ufSigla || item.ufSigla || item.ufNome || '',
+                    municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '',
+                    modalidade_nome: modalidadeNome,
+                    link_sistema: (cnpj && ano && nSeq)
+                        ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
+                        : (item.linkSistemaOrigem || item.link || ''),
+                    link_comprasnet: item.linkSistemaOrigem || '',
+                    status: item.situacao_nome || item.situacaoCompraNome || item.status || status || '',
+                    esfera_id: item.esferaId || item.orgaoEntidade?.esferaId || '',
+                    urgency: 'medium',
+                };
+            }).filter(item => {
+                if (seenIds.has(item.id)) return false;
+                seenIds.add(item.id);
+                return true;
+            });
+
+            // ── Post-filter by UF (search API leaks UFs) ──
+            if (typeof uf === 'string' && uf.trim() !== '') {
+                const beforeCount = filteredItems.length;
+                if (uf.includes(',')) {
+                    const allowedUfs = new Set(uf.split(',').map((u: string) => u.trim().toUpperCase()));
+                    filteredItems = filteredItems.filter((it: any) => {
+                        const itemUf = (it.uf || '').toString().trim().toUpperCase();
+                        return !itemUf || allowedUfs.has(itemUf);
+                    });
+                } else {
+                    const ufUpper = uf.trim().toUpperCase();
+                    filteredItems = filteredItems.filter((it: any) => {
+                        const itemUf = (it.uf || '').toString().trim().toUpperCase();
+                        return !itemUf || itemUf === ufUpper;
+                    });
+                }
+                logger.info(`[PNCP] UF Post-Filter: kept ${filteredItems.length}/${beforeCount}`);
+            }
+
+            // ── Hydrate valor_estimado for search API results (top 30) ──
+            const itemsToHydrate = filteredItems.slice(0, 30).filter((it: any) =>
+                it.orgao_cnpj && it.ano && it.numero_sequencial && (!it.valor_estimado || it.valor_estimado === 0)
+            );
+            if (itemsToHydrate.length > 0) {
+                const hydrateResults = await Promise.allSettled(
+                    itemsToHydrate.map((it: any) =>
+                        axios.get(
+                            `https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`,
+                            { httpsAgent: agent, timeout: 4000 } as any
+                        )
+                    )
+                );
+                hydrateResults.forEach((r, idx) => {
+                    if (r.status === 'fulfilled') {
+                        const detail: any = r.value.data;
+                        const val = detail?.valorTotalEstimado ?? detail?.valorTotalHomologado ?? null;
+                        if (val != null && Number(val) > 0) {
+                            itemsToHydrate[idx].valor_estimado = Number(val);
                         }
                     }
-
-                    urlsToFetch.push(buildBaseUrl(localParams, overrideCnpj, singleUf || undefined));
-                }
+                });
+                logger.info(`[PNCP] Hydrated values for ${itemsToHydrate.length} items`);
             }
         }
 
-        // Limit max generated combinations to avoid completely hanging
-        urlsToFetch = urlsToFetch.slice(0, 30);
+        // ═══════════════════════════════════════
+        // ── COMMON: Post-processing for both paths ──
+        // ═══════════════════════════════════════
 
-        const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
-        const startTime = Date.now();
-        logger.info(`[PNCP] START GET ${urlsToFetch.length} url(s) in parallel batches...`);
-
-        let rawItems: any[] = [];
-        const chunkSize = 15; // Higher concurrency (15 at a time)
-        const MAX_ITEMS = 500;
-
-        for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
-            if (rawItems.length >= MAX_ITEMS) {
-                logger.info(`[PNCP] Early termination — already have ${rawItems.length} items`);
-                break;
-            }
-            
-            const chunk = urlsToFetch.slice(i, i + chunkSize);
-            const responses = await Promise.allSettled(
-                chunk.map(u => axios.get(u, {
-                    headers: { 'Accept': 'application/json' },
-                    httpsAgent: agent,
-                    timeout: 8000 // Very strict fail-fast if Gov.br hangs on a specific endpoint
-                } as any))
-            );
-
-            for (const res of responses) {
-                if (res.status === 'fulfilled') {
-                    const data = res.value.data as any;
-                    const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-                    rawItems = rawItems.concat(items);
-                }
-            }
-        }
-
-        // First pass: extract what we can from search results
-        // Also ensure no duplicate results based on PNCP ID just in case
-        const seenIds = new Set<string>();
-        
-        // Debug: log first raw item to identify field names for value extraction
-        if (rawItems.length > 0) {
-            const sample = rawItems[0];
-            const valueFields = ['valor_estimado', 'valor_global', 'valorTotalEstimado', 'valorTotalHomologado', 
-                'amountInfo', 'valorTotalLicitacao', 'valor_total', 'valorEstimado', 'valorGlobal', 'amount'];
-            const found: Record<string, any> = {};
-            for (const f of valueFields) {
-                if (sample[f] !== undefined && sample[f] !== null) found[f] = sample[f];
-            }
-            // Also log UF-related fields
-            const ufFields = ['uf', 'ufSigla', 'unidadeOrgao', 'ufNome', 'municipio_nome', 'municipio'];
-            const ufFound: Record<string, any> = {};
-            for (const f of ufFields) {
-                if (sample[f] !== undefined && sample[f] !== null) ufFound[f] = sample[f];
-            }
-            logger.info(`[PNCP] Sample value fields: ${JSON.stringify(found)} | UF fields: ${JSON.stringify(ufFound)}`);
-        }
-        
-        const items = rawItems.filter(item => item != null).map((item: any) => {
-            const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
-            const ano = item.ano || item.anoCompra || '';
-            const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
-
-            // Extract value from all possible fields aggressively (null-safe)
-            const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
-                ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao 
-                ?? item.valorEstimado ?? item.valorGlobal ?? item.valor_total ?? item.amount ?? null;
-            const valorEstimado = rawVal != null ? (Number(rawVal) || 0) : 0;
-
-            // Extract modalidade from API response
-            const modalidadeNome = item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidadeNome
-                || item.modalidadeLicitacaoNome || '';
-
-            const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : null) || item.id || Math.random().toString();
-            return {
-                id: pncpId,
-                orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || item.nomeOrgao || 'Órgão não informado',
-                orgao_cnpj: cnpj,
-                ano,
-                numero_sequencial: nSeq,
-                titulo: item.title || item.titulo || item.identificador || 'Sem título',
-                objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
-                data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
-                data_abertura: item.dataAberturaProposta || item.data_inicio_vigencia || item.data_abertura || '',
-                data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
-                valor_estimado: valorEstimado,
-                uf: item.uf || item.unidadeOrgao?.ufSigla || item.ufSigla || item.ufNome || '',
-                municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '',
-                modalidade_nome: modalidadeNome,
-                link_sistema: (cnpj && ano && nSeq)
-                    ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
-                    : (item.linkSistemaOrigem || item.link || ''),
-                link_comprasnet: item.linkSistemaOrigem || '',
-                status: item.situacao_nome || item.situacaoCompraNome || item.status || status || '',
-                esfera_id: item.esferaId || item.orgaoEntidade?.esferaId || '',
-            };
-        }).filter(item => {
-            if (seenIds.has(item.id)) return false;
-            seenIds.add(item.id);
-            return true;
-        });
-
-        // ── Post-filter by modalidade (API may not filter precisely) ──
+        // ── Post-filter by modalidade ──
         const modalidadeMap: Record<string, string> = {
-            '1': 'Pregão - Eletrônico', '2': 'Concorrência', '3': 'Concurso',
-            '4': 'Leilão', '5': 'Diálogo Competitivo', '6': 'Dispensa de Licitação',
+            '1': 'Pregão', '2': 'Concorrência', '3': 'Concurso',
+            '4': 'Leilão', '5': 'Diálogo Competitivo', '6': 'Dispensa',
             '7': 'Inexigibilidade', '8': 'Tomada de Preços', '9': 'Convite',
         };
-        let filteredItems = items;
         if (modalidade && modalidade !== 'todas') {
             const modalidadeLabel = (modalidadeMap[modalidade] || '').toLowerCase();
             if (modalidadeLabel) {
-                filteredItems = filteredItems.filter((it: any) => {
-                    const nome = (it.modalidade_nome || '').toLowerCase();
-                    return nome.includes(modalidadeLabel.split(' - ')[0]) || nome.includes(modalidadeLabel);
-                });
+                filteredItems = filteredItems.filter((it: any) =>
+                    (it.modalidade_nome || '').toLowerCase().includes(modalidadeLabel)
+                );
             }
         }
 
-        // ── Post-filter by exclude keywords (remove results with unwanted terms in objeto) ──
+        // ── Post-filter: exclude keywords ──
         if (excludeKeywords && typeof excludeKeywords === 'string' && excludeKeywords.trim()) {
             const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const excludeTerms = excludeKeywords.split(',')
@@ -776,33 +952,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // ── Post-filter by UF (API does NOT reliably filter by UF!) ──
-        if (typeof uf === 'string' && uf.trim() !== '') {
-            const beforeCount = filteredItems.length;
-            if (uf.includes(',')) {
-                const allowedUfs = new Set(uf.split(',').map((u: string) => u.trim().toUpperCase()));
-                filteredItems = filteredItems.filter((it: any) => {
-                    const itemUf = (it.uf || '').toString().trim().toUpperCase();
-                    if (!itemUf) return true; // Keep items without UF info (API bug)
-                    return allowedUfs.has(itemUf);
-                });
-            } else {
-                const ufUpper = uf.trim().toUpperCase();
-                filteredItems = filteredItems.filter((it: any) => {
-                    const itemUf = (it.uf || '').toString().trim().toUpperCase();
-                    if (!itemUf) return true; // Keep items without UF info
-                    // Specifically kill wrong UFs
-                    return itemUf === ufUpper;
-                });
-            }
-            logger.info(`[PNCP] UF Post-Filter applied for "${uf}": kept ${filteredItems.length}/${beforeCount} items.`);
-        }
-
-        // ── Post-filter by esfera (additional accuracy) ──
-        // The PNCP API esfera param works on the search API but results may leak
-        // We don't post-filter esfera since the API handles it and we don't have esfera in results
-
-        // GLOBAL sort ALL items by closest deadline using search API dates
+        // ── Sort by closest deadline ──
         const now = Date.now();
         filteredItems.sort((a: any, b: any) => {
             const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || '9999').getTime();
@@ -812,54 +962,19 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             return absA - absB;
         });
 
-        // Send all results to frontend for client-side pagination
         const totalResults = filteredItems.length;
-
-        // ── Hydrate valor_estimado from PNCP detail API (search API always returns null) ──
-        // Only hydrate the first page worth of items (top 30) to avoid excessive API calls
-        const hydrateAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
-        const itemsToHydrate = filteredItems.slice(0, 30).filter((it: any) => 
-            it.orgao_cnpj && it.ano && it.numero_sequencial && (!it.valor_estimado || it.valor_estimado === 0)
-        );
-        if (itemsToHydrate.length > 0) {
-            const hydrateChunkSize = 10;
-            for (let hi = 0; hi < itemsToHydrate.length; hi += hydrateChunkSize) {
-                const hydrateChunk = itemsToHydrate.slice(hi, hi + hydrateChunkSize);
-                const hydrateResults = await Promise.allSettled(
-                    hydrateChunk.map((it: any) => 
-                        axios.get(
-                            `https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`,
-                            { httpsAgent: hydrateAgent, timeout: 4000 } as any
-                        )
-                    )
-                );
-                hydrateResults.forEach((r, idx) => {
-                    if (r.status === 'fulfilled') {
-                        const detail: any = r.value.data;
-                        const val = detail?.valorTotalEstimado ?? detail?.valorTotalHomologado ?? null;
-                        if (val != null && Number(val) > 0) {
-                            hydrateChunk[idx].valor_estimado = Number(val);
-                        }
-                    }
-                });
-            }
-            logger.info(`[PNCP] Hydrated values for ${itemsToHydrate.length} items`);
-        }
-
-        // ── Cache the full filtered+sorted list for subsequent searches ──
         pncpSearchCache.set(cacheKey, { data: filteredItems, timestamp: Date.now() });
 
         const endTime = Date.now();
-        logger.info(`[PNCP] END GET (${endTime - startTime}ms) - Total: ${totalResults} items sent to client`);
+        logger.info(`[PNCP] END (${endTime - startTime}ms) - Total: ${totalResults} items`);
 
-        res.json({
-            items: filteredItems,
-            total: totalResults
-        });
+        res.json({ items: filteredItems, total: totalResults });
     } catch (error: any) {
         logger.error("PNCP search error:", error?.message || error);
         handleApiError(res, error, 'pncp-search');
     }
 });
 
+
 export default router;
+
