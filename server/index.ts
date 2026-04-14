@@ -1228,42 +1228,11 @@ app.listen(PORT, async () => {
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
 if (PROCESS_ROLE !== 'api') {
     startOpportunityScanner(4);
-
-    // ── PNCP Aggregator: Sync contratações from Gov.br every 15 minutes ──
-    (async () => {
-        const { runPncpSync } = await import('./workers/pncpAggregator');
-        const PNCP_SYNC_INTERVAL = 15 * 60 * 1000; // 15 minutes
-
-        // Initial sync after 2 minutes (give server time to stabilize)
-        setTimeout(async () => {
-            logger.info('[PNCP-AGG] 🚀 Initial sync starting...');
-            try {
-                const result = await runPncpSync();
-                logger.info(`[PNCP-AGG] ✅ Initial sync: ${result.synced} contratações, ${result.items} itens`);
-            } catch (err: any) {
-                logger.error(`[PNCP-AGG] ❌ Initial sync failed: ${err?.message}`);
-            }
-
-            // Then run every 15 minutes
-            setInterval(async () => {
-                try {
-                    const result = await runPncpSync();
-                    if (result.synced > 0 || result.items > 0) {
-                        logger.info(`[PNCP-AGG] ✅ Sync: ${result.synced} contratações, ${result.items} itens, ${result.cleaned} cleaned`);
-                    }
-                } catch (err: any) {
-                    logger.error(`[PNCP-AGG] ❌ Sync error: ${err?.message}`);
-                }
-            }, PNCP_SYNC_INTERVAL);
-        }, 2 * 60_000);
-
-        logger.info(`[PNCP-AGG] 📡 PNCP Aggregator scheduled (every ${PNCP_SYNC_INTERVAL / 60000}min)`);
-    })();
+    // PNCP Aggregator runs as a SEPARATE Railway service (pncp-aggregator/)
+    logger.info('[PNCP-AGG] 📡 Aggregator is an independent service — see pncp-aggregator/ in Railway');
 } else {
     logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
-    logger.info('[Server] PNCP Aggregator disabled (PROCESS_ROLE=api)');
 }
 
 // Keep event loop alive (required in this environment)
 setInterval(() => { }, 1 << 30);
-

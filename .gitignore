@@ -39,3 +39,5 @@ local-watcher/test-pub*
 
 # Backup temp files
 server/.tmp-backups/
+pncp-aggregator/node_modules/
+pncp-aggregator/dist/

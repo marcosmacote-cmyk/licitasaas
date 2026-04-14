@@ -1,0 +1,80 @@
+// ═══════════════════════════════════════════════════════
+// PNCP Aggregator — Prisma Schema
+// Conecta ao MESMO banco do LicitaSaaS (mesmas tabelas)
+// ═══════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PncpContratacao {
+  id                String    @id @default(cuid())
+  numeroControle    String    @unique
+  cnpjOrgao         String
+  anoCompra         Int
+  sequencialCompra  Int
+  orgaoNome         String?
+  unidadeNome       String?
+  uf                String?
+  municipio         String?
+  esfera            String?
+  objeto            String?
+  modalidade        String?
+  modalidadeCodigo  String?
+  situacao          String?
+  valorEstimado     Float?
+  valorHomologado   Float?
+  srp               Boolean   @default(false)
+  modoDisputa       String?
+  numeroCompra      String?
+  dataPublicacao    DateTime?
+  dataAbertura      DateTime?
+  dataEncerramento  DateTime?
+  dataInclusao      DateTime?
+  linkSistema       String?
+  linkOrigem        String?
+  syncedAt          DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  itens PncpItem[]
+
+  @@index([uf])
+  @@index([situacao])
+  @@index([modalidade])
+  @@index([dataPublicacao])
+  @@index([valorEstimado])
+  @@index([cnpjOrgao, anoCompra, sequencialCompra])
+}
+
+model PncpItem {
+  id              String  @id @default(cuid())
+  contratacaoId   String
+  numeroItem      Int
+  descricao       String?
+  quantidade      Float?
+  unidadeMedida   String?
+  valorUnitario   Float?
+  valorTotal      Float?
+  situacao        String?
+  tipoBeneficio   String?
+
+  contratacao PncpContratacao @relation(fields: [contratacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([contratacaoId, numeroItem])
+  @@index([contratacaoId])
+}
+
+model PncpSyncState {
+  id              String   @id @default("singleton")
+  lastSyncAt      DateTime @default(now())
+  lastFullSyncAt  DateTime @default(now())
+  totalSynced     Int      @default(0)
+  lastError       String?
+  isRunning       Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+}
