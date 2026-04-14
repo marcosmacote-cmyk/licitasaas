@@ -578,6 +578,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
 
         // Expand region UF groups into individual UFs for separate fetches
         let ufsToIterate: string[] = [];
+        logger.info(`[PNCP] SEARCH REQUEST - req.body.uf is: "${uf}", typeof: ${typeof uf}`);
         if (uf && uf.includes(',')) {
             ufsToIterate = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
         } else if (uf) {
@@ -769,18 +770,25 @@ router.post('/search', authenticateToken, async (req: any, res) => {
         }
 
         // ── Post-filter by UF (API does NOT reliably filter by UF!) ──
-        if (uf && uf !== '' && !uf.includes(',')) {
-            const ufUpper = uf.toUpperCase();
-            filteredItems = filteredItems.filter((it: any) => {
-                if (!it.uf || it.uf === '') return true; // Keep items without UF info (can't determine)
-                return it.uf.toUpperCase() === ufUpper;
-            });
-        } else if (uf && uf.includes(',')) {
-            const allowedUfs = new Set(uf.split(',').map((u: string) => u.trim().toUpperCase()));
-            filteredItems = filteredItems.filter((it: any) => {
-                if (!it.uf || it.uf === '') return true;
-                return allowedUfs.has(it.uf.toUpperCase());
-            });
+        if (typeof uf === 'string' && uf.trim() !== '') {
+            const beforeCount = filteredItems.length;
+            if (uf.includes(',')) {
+                const allowedUfs = new Set(uf.split(',').map((u: string) => u.trim().toUpperCase()));
+                filteredItems = filteredItems.filter((it: any) => {
+                    const itemUf = (it.uf || '').toString().trim().toUpperCase();
+                    if (!itemUf) return true; // Keep items without UF info (API bug)
+                    return allowedUfs.has(itemUf);
+                });
+            } else {
+                const ufUpper = uf.trim().toUpperCase();
+                filteredItems = filteredItems.filter((it: any) => {
+                    const itemUf = (it.uf || '').toString().trim().toUpperCase();
+                    if (!itemUf) return true; // Keep items without UF info
+                    // Specifically kill wrong UFs
+                    return itemUf === ufUpper;
+                });
+            }
+            logger.info(`[PNCP] UF Post-Filter applied for "${uf}": kept ${filteredItems.length}/${beforeCount} items.`);
         }
 
         // ── Post-filter by esfera (additional accuracy) ──
