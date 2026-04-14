@@ -888,25 +888,39 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             urlsToFetch = urlsToFetch.slice(0, 30);
 
             let rawItems: any[] = [];
-            const chunkSize = 15;
             const MAX_ITEMS = 500;
 
+            // Fetch all URLs with retry (Gov.br is unstable, especially from Railway EU)
+            const fetchWithRetry = async (url: string, retries = 2): Promise<any[]> => {
+                for (let attempt = 0; attempt <= retries; attempt++) {
+                    try {
+                        const resp = await axios.get(url, {
+                            headers: { 'Accept': 'application/json' },
+                            httpsAgent: agent,
+                            timeout: 12000
+                        } as any);
+                        const data: any = resp.data;
+                        return Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
+                    } catch (err: any) {
+                        if (attempt < retries && (err.code === 'ECONNABORTED' || err?.response?.status >= 500)) {
+                            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                            continue;
+                        }
+                        logger.warn(`[PNCP] Search fetch failed: ${err?.message?.substring(0, 80)}`);
+                        return [];
+                    }
+                }
+                return [];
+            };
+
+            // Process URLs in parallel chunks (max 10 concurrent)
+            const chunkSize = 10;
             for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
                 if (rawItems.length >= MAX_ITEMS) break;
                 const chunk = urlsToFetch.slice(i, i + chunkSize);
-                const responses = await Promise.allSettled(
-                    chunk.map(u => axios.get(u, {
-                        headers: { 'Accept': 'application/json' },
-                        httpsAgent: agent,
-                        timeout: 8000
-                    } as any))
-                );
-                for (const r of responses) {
-                    if (r.status === 'fulfilled') {
-                        const data = r.value.data as any;
-                        const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-                        rawItems = rawItems.concat(items);
-                    }
+                const results = await Promise.all(chunk.map(u => fetchWithRetry(u)));
+                for (const items of results) {
+                    rawItems = rawItems.concat(items);
                 }
             }
 
@@ -996,29 +1010,35 @@ router.post('/search', authenticateToken, async (req: any, res) => {
                 logger.info(`[PNCP] UF Post-Filter: kept ${filteredItems.length}/${beforeCount}`);
             }
 
-            // ── Hydrate valor_estimado for search API results (top 30) ──
-            const itemsToHydrate = filteredItems.slice(0, 30).filter((it: any) =>
-                it.orgao_cnpj && it.ano && it.numero_sequencial && (!it.valor_estimado || it.valor_estimado === 0)
-            );
-            if (itemsToHydrate.length > 0) {
-                const hydrateResults = await Promise.allSettled(
-                    itemsToHydrate.map((it: any) =>
-                        axios.get(
-                            `https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`,
-                            { httpsAgent: agent, timeout: 4000 } as any
-                        )
-                    )
+            // ── Hydrate valor_estimado for search API results (top 10, time-budgeted) ──
+            const elapsed = Date.now() - startTime;
+            const hydrateBudget = Math.max(0, 15000 - elapsed); // Max 15s total for search+hydration
+            if (hydrateBudget > 2000) {
+                const itemsToHydrate = filteredItems.slice(0, 10).filter((it: any) =>
+                    it.orgao_cnpj && it.ano && it.numero_sequencial && (!it.valor_estimado || it.valor_estimado === 0)
                 );
-                hydrateResults.forEach((r, idx) => {
-                    if (r.status === 'fulfilled') {
-                        const detail: any = r.value.data;
-                        const val = detail?.valorTotalEstimado ?? detail?.valorTotalHomologado ?? null;
-                        if (val != null && Number(val) > 0) {
-                            itemsToHydrate[idx].valor_estimado = Number(val);
+                if (itemsToHydrate.length > 0) {
+                    const hydrateResults = await Promise.allSettled(
+                        itemsToHydrate.map((it: any) =>
+                            axios.get(
+                                `https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`,
+                                { httpsAgent: agent, timeout: Math.min(hydrateBudget, 5000) } as any
+                            )
+                        )
+                    );
+                    hydrateResults.forEach((r, idx) => {
+                        if (r.status === 'fulfilled') {
+                            const detail: any = r.value.data;
+                            const val = detail?.valorTotalEstimado ?? detail?.valorTotalHomologado ?? null;
+                            if (val != null && Number(val) > 0) {
+                                itemsToHydrate[idx].valor_estimado = Number(val);
+                            }
                         }
-                    }
-                });
-                logger.info(`[PNCP] Hydrated values for ${itemsToHydrate.length} items`);
+                    });
+                    logger.info(`[PNCP] Hydrated values for ${itemsToHydrate.length} items (budget: ${hydrateBudget}ms)`);
+                }
+            } else {
+                logger.warn(`[PNCP] Skipping hydration - time budget exhausted (${elapsed}ms elapsed)`);
             }
         }
 

@@ -518,7 +518,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         setLoading(true);
         setSearchSlow(false);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout (Railway EU → Gov.br BR = high latency)
         const slowTimer = setTimeout(() => setSearchSlow(true), 5000); // Show "slow" message after 5s
         try {
             const token = localStorage.getItem('token');
