@@ -511,30 +511,21 @@ router.get('/items', auth_1.authenticateToken, async (req, res) => {
         }
         const startTime = Date.now();
         const agent = new https_1.default.Agent({ rejectUnauthorized: false, keepAlive: true });
-        // The old /api/pncp/v1/ now returns 301, so prioritize /api/consulta/v1/
-        const primaryUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
-        const fallbackUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
+        // The items endpoint is actually on the /api/pncp/v1/ path, NOT /api/consulta/v1/
+        const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
         let responseData = null;
         try {
-            // Try primary endpoint first (fast path)
-            try {
-                const primaryRes = await axios_1.default.get(primaryUrl, { httpsAgent: agent, timeout: 6000 });
-                responseData = primaryRes.data;
-            }
-            catch (primaryErr) {
-                // If primary fails with non-404, try fallback
-                if (primaryErr?.response?.status === 404) {
-                    const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
-                    pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
-                    return res.json(emptyResult);
-                }
-                logger_1.logger.warn(`[PNCP Items] Primary endpoint failed (${primaryErr?.message}), trying fallback...`);
-                const fallbackRes = await axios_1.default.get(fallbackUrl, { httpsAgent: agent, timeout: 5000, maxRedirects: 5 });
-                responseData = fallbackRes.data;
-            }
+            const resp = await axios_1.default.get(itemsUrl, { httpsAgent: agent, timeout: 8000 });
+            responseData = resp.data;
         }
-        catch (fetchErr) {
-            throw fetchErr;
+        catch (err) {
+            if (err?.response?.status === 404) {
+                const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
+                pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
+                return res.json(emptyResult);
+            }
+            logger_1.logger.error(`[PNCP Items] Failed to fetch items (${err?.message})`);
+            throw err;
         }
         const elapsed = Date.now() - startTime;
         const rawItems = Array.isArray(responseData) ? responseData : (responseData?.data || responseData?.items || []);
@@ -597,7 +588,10 @@ router.post('/search', auth_1.authenticateToken, async (req, res) => {
         // full-text keyword matching.
         // ══════════════════════════════════════════════════════════════
         let filteredItems = [];
-        const useOfficialApi = (status === 'recebendo_proposta' || !status || status === '') && !orgao && !orgaosLista;
+        // If keywords are provided, we MUST use the search API fallback because the official
+        // consulta API doesn't support text search and we would only be searching within the first 500 items.
+        const useOfficialApi = (status === 'recebendo_proposta' || !status || status === '')
+            && !orgao && !orgaosLista && !keywords;
         if (useOfficialApi) {
             // ── FAST PATH: Official PNCP Consulta API ──
             // Endpoint: /api/consulta/v1/contratacoes/proposta
