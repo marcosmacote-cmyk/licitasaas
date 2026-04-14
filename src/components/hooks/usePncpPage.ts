@@ -550,7 +550,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 setResults(items.slice(0, perPage));
 
                 // ── Prefetch items for the first 5 results (warms server cache) ──
-                const prefetchCandidates = items.slice(0, 5)
+                const prefetchCandidates = items.slice(0, 10)
                     .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
                     .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
                 if (prefetchCandidates.length > 0) {
@@ -696,8 +696,24 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             prevPageRef.current = page;
             const perPage = 10;
             const startIdx = (page - 1) * perPage;
-            setResults(allResults.slice(startIdx, startIdx + perPage));
+            const pageItems = allResults.slice(startIdx, startIdx + perPage);
+            setResults(pageItems);
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // Prefetch items for the new page (warms server cache)
+            const token = localStorage.getItem('token');
+            if (token) {
+                const prefetchPage = pageItems
+                    .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
+                    .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
+                if (prefetchPage.length > 0) {
+                    fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ processes: prefetchPage }),
+                    }).catch(() => {});
+                }
+            }
         }
     }, [page, allResults, hasSearched]);
 

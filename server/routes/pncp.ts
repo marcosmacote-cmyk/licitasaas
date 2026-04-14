@@ -555,7 +555,7 @@ router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
         }
 
         // Limit to 5 concurrent prefetches to avoid overwhelming Gov.br
-        const toFetch = processes.slice(0, 5).filter((p: any) => {
+        const toFetch = processes.slice(0, 10).filter((p: any) => {
             if (!p.cnpj || !p.ano || !p.seq) return false;
             const key = `${String(p.cnpj).replace(/\D/g, '')}-${String(p.ano).replace(/\D/g, '')}-${String(p.seq).replace(/\D/g, '')}`;
             const cached = pncpItemsCache.get(key);
@@ -968,7 +968,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
                         : (item.linkSistemaOrigem || item.link || ''),
                     link_comprasnet: item.linkSistemaOrigem || '',
                     status: item.situacao_nome || item.situacaoCompraNome || item.status || status || '',
-                    esfera_id: item.esferaId || item.orgaoEntidade?.esferaId || '',
+                    esfera_id: item.esfera_id || item.esferaId || item.orgaoEntidade?.esferaId || '',
                     urgency: 'medium',
                 };
             }).filter(item => {

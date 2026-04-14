@@ -37,17 +37,37 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
         try {
             const token = localStorage.getItem('token');
             const params = new URLSearchParams({ cnpj: item.orgao_cnpj, ano: String(item.ano), seq: String(item.numero_sequencial) });
-            const res = await fetch(`${API_BASE_URL}/api/pncp/items?${params}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                setItemError(data.error || 'Erro ao buscar itens');
-            } else {
-                setItemDetails(data.items || []);
-                if (data.message) setItemError(data.message);
-                else if (data.items?.length === 0) setItemError('Nenhum item cadastrado no PNCP para este processo');
+            
+            // Retry up to 2 times on failure (Gov.br is unstable)
+            let lastError = '';
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/pncp/items?${params}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        lastError = data.error || 'Erro ao buscar itens';
+                        if (res.status === 504 && attempt < 1) {
+                            await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+                            continue;
+                        }
+                        setItemError(lastError);
+                        return;
+                    }
+                    setItemDetails(data.items || []);
+                    if (data.message) setItemError(data.message);
+                    else if (data.items?.length === 0) setItemError('Nenhum item cadastrado no PNCP para este processo');
+                    return;
+                } catch (fetchErr: any) {
+                    lastError = fetchErr?.message || 'Falha de conexão';
+                    if (attempt < 1) {
+                        await new Promise(r => setTimeout(r, 1000));
+                        continue;
+                    }
+                }
             }
+            setItemError('A API do Gov.br não respondeu após 2 tentativas. Tente novamente em alguns segundos.');
         } catch (error: any) {
             setItemError('Falha de conexão ao buscar itens. Verifique sua internet e tente novamente.');
         } finally {
