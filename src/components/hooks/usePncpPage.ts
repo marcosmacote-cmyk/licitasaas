@@ -74,6 +74,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     const [allResults, setAllResults] = useState<PncpBiddingItem[]>([]); // Store all API results
     const [results, setResults] = useState<PncpBiddingItem[]>([]); // Sliced for current page
     const [loading, setLoading] = useState(false);
+    const [searchSlow, setSearchSlow] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
@@ -515,8 +516,10 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         if (e) { e.preventDefault(); setPage(1); }
         setHasSearched(true);
         setLoading(true);
+        setSearchSlow(false);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout (aligned with server-side PNCP timeouts)
+        const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+        const slowTimer = setTimeout(() => setSearchSlow(true), 5000); // Show "slow" message after 5s
         try {
             const token = localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {
@@ -566,7 +569,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 toast.error('Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');
             }
         }
-        finally { clearTimeout(timeoutId); setLoading(false); }
+        finally { clearTimeout(timeoutId); clearTimeout(slowTimer); setLoading(false); setSearchSlow(false); }
     };
 
     // ─── Multi-list Saved Searches ───
@@ -1191,7 +1194,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
 
     return {
         // Search state
-        savedSearches, results, loading, saving, showAdvancedFilters, setShowAdvancedFilters,
+        savedSearches, results, loading, searchSlow, saving, showAdvancedFilters, setShowAdvancedFilters,
         keywords, setKeywords, status, setStatus, selectedUf, setSelectedUf,
         selectedSearchCompanyId, setSelectedSearchCompanyId,
         modalidade, setModalidade, esfera, setEsfera, orgao, setOrgao,

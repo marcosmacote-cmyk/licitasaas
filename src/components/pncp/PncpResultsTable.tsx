@@ -75,7 +75,11 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             <td colSpan={6} style={{ textAlign: 'center', padding: '60px' }}>
                                 <Loader2 size={32} className="spinner" style={{ margin: '0 auto', color: 'var(--color-primary)' }} />
                                 <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
-                                    {p.activeTab === 'found' ? 'Carregando oportunidades...' : 'Consultando PNCP...'}
+                                    {p.activeTab === 'found' ? 'Carregando oportunidades...' : (
+                                        p.searchSlow 
+                                            ? 'A API do Gov.br está demorando para responder... Aguarde mais um momento.'
+                                            : 'Consultando PNCP...'
+                                    )}
                                 </div>
                             </td>
                         </tr>
