@@ -477,7 +477,8 @@ async function fetchPncpItems(cleanCnpj: string, cleanAno: string, cleanSeq: str
                 timeout: timeouts[attempt],
             } as any);
 
-            const rawItems: any[] = Array.isArray(resp.data) ? resp.data : (resp.data?.data || resp.data?.items || []);
+            const responseData: any = resp.data;
+            const rawItems: any[] = Array.isArray(responseData) ? responseData : (responseData?.data || responseData?.items || []);
             const items = rawItems.map((it: any) => ({
                 itemNumber: it.numeroItem || it.numero || '-',
                 description: it.descricao || it.materialOuServicoNome || it.materialServico?.nome || 'Sem descrição',
