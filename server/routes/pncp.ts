@@ -914,20 +914,35 @@ router.post('/search', authenticateToken, async (req: any, res) => {
             const seenIds = new Set<string>();
             filteredItems = rawItems.filter(item => item != null).map((item: any) => {
                 let cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
-                // C4 Fix: extract CNPJ from numeroControlePNCP (format: "CNPJ-ANO-SEQ")
-                if (!cnpj && item.numeroControlePNCP) {
-                    const pncpParts = item.numeroControlePNCP.split('-');
-                    if (pncpParts.length >= 3 && pncpParts[0].replace(/\D/g, '').length >= 11) {
-                        cnpj = pncpParts[0].replace(/\D/g, '');
+                // C4v2: Unified extraction of CNPJ + ano + seq from numeroControlePNCP
+                // Format: "12345678000199-1-000042/2026" -> CNPJ, SEQ, ANO
+                let ano = item.ano || item.anoCompra || '';
+                let nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
+                if (item.numeroControlePNCP && (!cnpj || !ano || !nSeq)) {
+                    const ctrlMatch = item.numeroControlePNCP.match(/^(\d{11,14})-(\d+)-(\d+)\/(\d{4})$/);
+                    if (ctrlMatch) {
+                        if (!cnpj) cnpj = ctrlMatch[1];
+                        if (!nSeq) nSeq = ctrlMatch[3];
+                        if (!ano) ano = ctrlMatch[4];
+                    } else {
+                        const pncpParts = item.numeroControlePNCP.split('-');
+                        if (pncpParts.length >= 2) {
+                            const digits0 = pncpParts[0].replace(/\D/g, '');
+                            if (!cnpj && digits0.length >= 11) cnpj = digits0;
+                            const lastPart = pncpParts[pncpParts.length - 1];
+                            const seqAno = lastPart.match(/(\d+)\/(\d{4})/);
+                            if (seqAno) {
+                                if (!nSeq) nSeq = seqAno[1];
+                                if (!ano) ano = seqAno[2];
+                            }
+                        }
                     }
                 }
-                // Fallback: extract from link URL (format: /editais/CNPJ/ANO/SEQ)
-                if (!cnpj && (item.link || item.linkSistemaOrigem)) {
-                    const linkMatch = (item.link || item.linkSistemaOrigem || '').match(/editais\/(\d{11,14})\//);
-                    if (linkMatch) cnpj = linkMatch[1];
+                // Fallback: extract all three from PNCP link URL (/editais/CNPJ/ANO/SEQ)
+                if ((!cnpj || !ano || !nSeq) && (item.link || item.linkSistemaOrigem)) {
+                    const lm = (item.link || item.linkSistemaOrigem || '').match(/editais\/(\d{11,14})\/(\d{4})\/(\d+)/);
+                    if (lm) { if (!cnpj) cnpj = lm[1]; if (!ano) ano = lm[2]; if (!nSeq) nSeq = lm[3]; }
                 }
-                const ano = item.ano || item.anoCompra || '';
-                const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
                 const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
                     ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao
                     ?? item.valorEstimado ?? item.valorGlobal ?? item.valor_total ?? item.amount ?? null;
