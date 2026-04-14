@@ -631,7 +631,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
         }
 
         const startTime = Date.now();
-        const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
+        const agent = pncpKeepAliveAgent; // Reuse global agent (prevents socket leak)
         logger.info(`[PNCP] SEARCH REQUEST - status="${status}" uf="${uf}" keywords="${keywords}" modalidade="${modalidade}"`);
 
         // ══════════════════════════════════════════════════════════════

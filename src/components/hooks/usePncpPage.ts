@@ -549,7 +549,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 const perPage = 10;
                 setResults(items.slice(0, perPage));
 
-                // ── Prefetch items for the first 5 results (warms server cache) ──
+                // ── Prefetch items for the first 10 results (warms server cache) ──
                 const prefetchCandidates = items.slice(0, 10)
                     .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
                     .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
@@ -560,13 +560,45 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                         body: JSON.stringify({ processes: prefetchCandidates }),
                     }).catch(() => {}); // Fire-and-forget
                 }
-            } else { throw new Error("Erro na busca"); }
+            } else {
+                // Read error message from backend
+                let errorMsg = 'Erro na busca';
+                try { const errData = await res.json(); errorMsg = errData?.error || errData?.message || errorMsg; } catch {}
+                // Retry once on server error (502/503/504)
+                if (res.status >= 500) {
+                    console.warn(`[PNCP] Search failed (${res.status}), retrying...`);
+                    await new Promise(r => setTimeout(r, 2000));
+                    const retryRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
+                            uf: overrides?.uf ?? selectedUf, pagina: 1,
+                            modalidade: overrides?.modalidade ?? modalidade,
+                            dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
+                            dataFim: (overrides?.dataFim ?? dataFim) || undefined,
+                            esfera: overrides?.esfera ?? esfera, orgao: overrides?.orgao ?? orgao,
+                            orgaosLista: overrides?.orgaosLista ?? orgaosLista,
+                            excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
+                        })
+                    });
+                    if (retryRes.ok) {
+                        const data = await retryRes.json();
+                        const items = Array.isArray(data.items) ? data.items : [];
+                        setAllResults(items);
+                        setTotalResults(typeof data.total === 'number' ? data.total : items.length);
+                        setResults(items.slice(0, 10));
+                        return; // Retry succeeded
+                    }
+                }
+                throw new Error(errorMsg);
+            }
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente ou refine sua busca com filtros mais específicos.');
+                toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente ou refine sua busca.');
             } else {
                 console.error(e);
-                toast.error('Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');
+                toast.error(e?.message || 'Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');
             }
         }
         finally { clearTimeout(timeoutId); clearTimeout(slowTimer); setLoading(false); setSearchSlow(false); }
