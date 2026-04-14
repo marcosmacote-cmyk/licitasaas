@@ -75,6 +75,8 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     const [results, setResults] = useState<PncpBiddingItem[]>([]); // Sliced for current page
     const [loading, setLoading] = useState(false);
     const [searchSlow, setSearchSlow] = useState(false);
+    const [searchSource, setSearchSource] = useState<'local' | 'govbr' | ''>('');
+    const [searchElapsed, setSearchElapsed] = useState(0);
     const [saving, setSaving] = useState(false);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
@@ -517,39 +519,88 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         setHasSearched(true);
         setLoading(true);
         setSearchSlow(false);
+        setSearchSource('');
+        setSearchElapsed(0);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout (Railway EU → Gov.br BR = high latency)
-        const slowTimer = setTimeout(() => setSearchSlow(true), 5000); // Show "slow" message after 5s
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
+
+        const searchParams = {
+            keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
+            uf: overrides?.uf ?? selectedUf, pagina: e || overrides?.resetPage ? 1 : page,
+            modalidade: overrides?.modalidade ?? modalidade,
+            dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
+            dataFim: (overrides?.dataFim ?? dataFim) || undefined,
+            esfera: overrides?.esfera ?? esfera, orgao: overrides?.orgao ?? orgao,
+            orgaosLista: overrides?.orgaosLista ?? orgaosLista,
+            excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
+        };
+
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                signal: controller.signal,
-                body: JSON.stringify({
-                    keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
-                    uf: overrides?.uf ?? selectedUf, pagina: e || overrides?.resetPage ? 1 : page,
-                    modalidade: overrides?.modalidade ?? modalidade,
-                    dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
-                    dataFim: (overrides?.dataFim ?? dataFim) || undefined,
-                    esfera: overrides?.esfera ?? esfera, orgao: overrides?.orgao ?? orgao,
-                    orgaosLista: overrides?.orgaosLista ?? orgaosLista,
-                    excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
-                })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
-                
-                // Store all results and paginate locally
-                setAllResults(items);
-                setTotalResults(typeof data.total === 'number' ? data.total : items.length);
-                
-                // Handle page 1 instantly
-                const perPage = 10;
-                setResults(items.slice(0, perPage));
+            let items: any[] = [];
+            let total = 0;
+            let source: 'local' | 'govbr' = 'local';
 
-                // ── Prefetch items for the first 10 results (warms server cache) ──
+            // ══════════════════════════════════════════════════
+            // STRATEGY: Local DB first → fallback to Gov.br
+            // Local: < 200ms | Gov.br: 8-25s
+            // ══════════════════════════════════════════════════
+
+            // Step 1: Try local database (instant)
+            try {
+                const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(searchParams),
+                });
+                if (localRes.ok) {
+                    const localData = await localRes.json();
+                    items = Array.isArray(localData.items) ? localData.items : [];
+                    total = localData.total || items.length;
+                    source = 'local';
+                    if (localData.elapsed) setSearchElapsed(localData.elapsed);
+                }
+            } catch { /* local failed, will fallback */ }
+
+            // Step 2: If local returned few results, enrich with Gov.br (background)
+            // If local returned 0 results, try Gov.br as primary source
+            if (items.length === 0) {
+                source = 'govbr';
+                const govRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify(searchParams),
+                });
+                if (govRes.ok) {
+                    const govData = await govRes.json();
+                    items = Array.isArray(govData.items) ? govData.items : [];
+                    total = govData.total || items.length;
+                } else if (govRes.status >= 500) {
+                    // Retry once on 5xx
+                    await new Promise(r => setTimeout(r, 2000));
+                    const retryRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(searchParams),
+                    });
+                    if (retryRes.ok) {
+                        const retryData = await retryRes.json();
+                        items = Array.isArray(retryData.items) ? retryData.items : [];
+                        total = retryData.total || items.length;
+                    }
+                }
+            }
+
+            // Apply results
+            setSearchSource(source);
+            setAllResults(items);
+            setTotalResults(total);
+            setResults(items.slice(0, 10));
+
+            // Prefetch items (only needed for Gov.br results, local already has items)
+            if (source === 'govbr' && items.length > 0) {
                 const prefetchCandidates = items.slice(0, 10)
                     .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
                     .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
@@ -558,40 +609,8 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ processes: prefetchCandidates }),
-                    }).catch(() => {}); // Fire-and-forget
+                    }).catch(() => {});
                 }
-            } else {
-                // Read error message from backend
-                let errorMsg = 'Erro na busca';
-                try { const errData = await res.json(); errorMsg = errData?.error || errData?.message || errorMsg; } catch {}
-                // Retry once on server error (502/503/504)
-                if (res.status >= 500) {
-                    console.warn(`[PNCP] Search failed (${res.status}), retrying...`);
-                    await new Promise(r => setTimeout(r, 2000));
-                    const retryRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
-                            uf: overrides?.uf ?? selectedUf, pagina: 1,
-                            modalidade: overrides?.modalidade ?? modalidade,
-                            dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
-                            dataFim: (overrides?.dataFim ?? dataFim) || undefined,
-                            esfera: overrides?.esfera ?? esfera, orgao: overrides?.orgao ?? orgao,
-                            orgaosLista: overrides?.orgaosLista ?? orgaosLista,
-                            excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
-                        })
-                    });
-                    if (retryRes.ok) {
-                        const data = await retryRes.json();
-                        const items = Array.isArray(data.items) ? data.items : [];
-                        setAllResults(items);
-                        setTotalResults(typeof data.total === 'number' ? data.total : items.length);
-                        setResults(items.slice(0, 10));
-                        return; // Retry succeeded
-                    }
-                }
-                throw new Error(errorMsg);
             }
         } catch (e: any) {
             if (e.name === 'AbortError') {
@@ -1243,6 +1262,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     return {
         // Search state
         savedSearches, results, loading, searchSlow, saving, showAdvancedFilters, setShowAdvancedFilters,
+        searchSource, searchElapsed,
         keywords, setKeywords, status, setStatus, selectedUf, setSelectedUf,
         selectedSearchCompanyId, setSelectedSearchCompanyId,
         modalidade, setModalidade, esfera, setEsfera, orgao, setOrgao,

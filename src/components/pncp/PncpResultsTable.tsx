@@ -36,9 +36,40 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
 
         try {
             const token = localStorage.getItem('token');
-            const params = new URLSearchParams({ cnpj: item.orgao_cnpj, ano: String(item.ano), seq: String(item.numero_sequencial) });
             
-            // Retry up to 2 times on failure (Gov.br is unstable)
+            // ══════════════════════════════════════════════════
+            // STRATEGY: Local DB first → fallback to Gov.br
+            // ══════════════════════════════════════════════════
+
+            // Step 0: Check if result already has items from local search
+            if (item.itens_preview && item.itens_preview.length > 0) {
+                setItemDetails(item.itens_preview.map((it: any) => ({
+                    numeroItem: it.numero,
+                    descricao: it.descricao,
+                    quantidade: it.quantidade,
+                    unidadeMedida: it.unidade,
+                    valorUnitarioEstimado: it.valorUnitario,
+                    valorTotal: it.valorTotal,
+                })));
+                return;
+            }
+
+            // Step 1: Try local database (instant)
+            try {
+                const localRes = await fetch(`${API_BASE_URL}/api/pncp/items-local/${item.orgao_cnpj}/${item.ano}/${item.numero_sequencial}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (localRes.ok) {
+                    const localData = await localRes.json();
+                    if (Array.isArray(localData) && localData.length > 0) {
+                        setItemDetails(localData);
+                        return;
+                    }
+                }
+            } catch { /* local failed, fallback to Gov.br */ }
+
+            // Step 2: Fallback to Gov.br API
+            const params = new URLSearchParams({ cnpj: item.orgao_cnpj, ano: String(item.ano), seq: String(item.numero_sequencial) });
             let lastError = '';
             for (let attempt = 0; attempt < 2; attempt++) {
                 try {
@@ -49,7 +80,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                     if (!res.ok) {
                         lastError = data.error || 'Erro ao buscar itens';
                         if (res.status === 504 && attempt < 1) {
-                            await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+                            await new Promise(r => setTimeout(r, 1000));
                             continue;
                         }
                         setItemError(lastError);
@@ -394,8 +425,19 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                         >
                             <ChevronLeft size={16} /> Anterior
                         </button>
-                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
                             Página {p.page} de {totalPages} — {p.totalResults} resultados
+                            {p.searchSource && (
+                                <span style={{
+                                    fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 600,
+                                    background: p.searchSource === 'local' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                                    color: p.searchSource === 'local' ? 'var(--color-success)' : 'var(--color-info)',
+                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                }}>
+                                    {p.searchSource === 'local' ? '⚡ Base Local' : '🌐 Gov.br'}
+                                    {p.searchSource === 'local' && p.searchElapsed ? ` (${p.searchElapsed}ms)` : ''}
+                                </span>
+                            )}
                         </span>
                         <button
                             className="btn btn-ghost"
