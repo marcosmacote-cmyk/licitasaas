@@ -543,28 +543,36 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             let source: 'local' | 'govbr' = 'local';
 
             // ══════════════════════════════════════════════════
-            // STRATEGY: Local DB first → fallback to Gov.br
-            // Local: < 200ms | Gov.br: 8-25s
+            // HYBRID STRATEGY:
+            // - Keywords present → Gov.br (superior semantic search)
+            // - Filters only (UF, status, etc.) → Local DB (instant, < 100ms)
+            // - Local returns 0 → fallback to Gov.br
             // ══════════════════════════════════════════════════
 
-            // Step 1: Try local database (instant)
-            try {
-                const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(searchParams),
-                });
-                if (localRes.ok) {
-                    const localData = await localRes.json();
-                    items = Array.isArray(localData.items) ? localData.items : [];
-                    total = localData.total || items.length;
-                    source = 'local';
-                    if (localData.elapsed) setSearchElapsed(localData.elapsed);
-                }
-            } catch { /* local failed, will fallback */ }
+            const hasKeywords = !!(searchParams.keywords && searchParams.keywords.trim().length > 2);
 
-            // Step 2: If local returned few results, enrich with Gov.br (background)
-            // If local returned 0 results, try Gov.br as primary source
+            // Route 1: If no keywords (filter-only), use local DB for instant results
+            if (!hasKeywords) {
+                try {
+                    const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(searchParams),
+                    });
+                    if (localRes.ok) {
+                        const localData = await localRes.json();
+                        const localItems = Array.isArray(localData.items) ? localData.items : [];
+                        if (localItems.length > 0) {
+                            items = localItems;
+                            total = localData.total || items.length;
+                            source = 'local';
+                            if (localData.elapsed) setSearchElapsed(localData.elapsed);
+                        }
+                    }
+                } catch { /* local failed, will fallback */ }
+            }
+
+            // Route 2: Keywords present, or local returned 0 → Gov.br
             if (items.length === 0) {
                 source = 'govbr';
                 const govRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
