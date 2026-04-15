@@ -242,7 +242,9 @@ model OpportunityScannerLog {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, pncpId])
+  // Deduplicação agora é a nível de Pesquisa! Se um edital bater em duas pesquisas diferentes,
+  // ele deve aparecer nas duas caixas de entrada (sem conflitar).
+  @@unique([tenantId, searchId, pncpId])
   @@index([tenantId, createdAt])
 }
 
