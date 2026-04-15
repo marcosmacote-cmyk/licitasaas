@@ -223,7 +223,7 @@ model OpportunityScannerLog {
   id         String  @id @default(uuid())
   tenantId   String
   pncpId     String // ID do edital no PNCP (numeroControlePNCP)
-  searchId   String? // ID da pesquisa salva que detectou
+  searchId   String // ID da pesquisa salva que detectou. AGORA OBRIGATÓRIO!
   searchName String? // Nome da pesquisa (snapshot para exibição)
 
   // ── Dados completos do edital (para aba "Encontradas") ──

@@ -1228,8 +1228,8 @@ app.listen(PORT, async () => {
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
 if (PROCESS_ROLE !== 'api') {
     startOpportunityScanner(4);
-    // PNCP Aggregator runs as a SEPARATE Railway service (pncp-aggregator/)
-    logger.info('[PNCP-AGG] 📡 Aggregator is an independent service — see pncp-aggregator/ in Railway');
+    // O Aggregator Operacional funciona via Worker/Prefetch Interno nativamente
+    logger.info('[PNCP-AGG] 📡 Motor Híbrido de Sync PNCP ativado localmente');
 } else {
     logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
 }

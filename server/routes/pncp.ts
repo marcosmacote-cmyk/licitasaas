@@ -639,3 +639,14 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
     }
 });
 
+router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
+    try {
+        const { PncpSearchService } = await import('../services/pncp/pncp-search.service');
+        const result = await PncpSearchService.search(req.body); // Faz a mágica do fallback automaticamente
+        res.json({ items: result.items, total: result.total, totalLocal: result.meta.localCount, elapsed: result.meta.elapsedMs, source: result.meta.source, meta: result.meta });
+    } catch (error: any) {
+        logger.error("PNCP hybrid search error:", error?.message || error);
+        handleApiError(res, error, 'pncp-search-hybrid');
+    }
+});
+
