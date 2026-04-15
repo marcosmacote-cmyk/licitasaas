@@ -43,7 +43,8 @@ export class PncpSearchService {
                 'recebendo_proposta': ['Divulgada', 'Aberta'],
                 'encerrada': ['Encerrada'],
                 'suspensa': ['Suspensa'],
-                'revogada': ['Revogada', 'Anulada'],
+                'anulada': ['Revogada', 'Anulada'],
+                'revogada': ['Revogada', 'Anulada'], // alias de compatibilidade
             };
             const mapped = statusMap[status];
             if (mapped) {
@@ -142,7 +143,7 @@ export class PncpSearchService {
             const skip = (Number(pagina) - 1) * Number(tamanhoPagina);
             const contratacoes = await prisma.pncpContratacao.findMany({
                 where,
-                include: { itens: { take: 20, orderBy: { numeroItem: 'asc' } } },
+                // itens NÃO são carregados na listagem principal — apenas no detalhe/prefetch
                 orderBy: [ { dataEncerramento: { sort: 'asc', nulls: 'last' } } ],
                 skip,
                 take: Number(tamanhoPagina),
@@ -191,14 +192,7 @@ export class PncpSearchService {
                     link_comprasnet: c.linkSistema || '',
                     numeroControlePNCP: c.numeroControle,
                     urgency,
-                    itens_preview: (c as any).itens?.map((it: any) => ({
-                        numero: it.numeroItem,
-                        descricao: it.descricao,
-                        quantidade: it.quantidade ? Number(it.quantidade) : null,
-                        unidade: it.unidadeMedida,
-                        valorUnitario: it.valorUnitario ? Number(it.valorUnitario) : null,
-                        valorTotal: it.valorTotal ? Number(it.valorTotal) : null,
-                    })) || [],
+                    itens_preview: [], // carregado sob demanda no detalhe
                     _source: 'local',
                 };
             });
@@ -498,7 +492,17 @@ export class PncpSearchService {
         // Tentativa Local
         const localResponse = await this.searchLocal(input);
         
-        const hasHighRiskFilters = !!(input.keywords || input.orgao || input.orgaosLista || input.dataInicio || input.dataFim);
+        const hasHighRiskFilters = !!(
+            input.keywords ||
+            input.orgao ||
+            input.orgaosLista ||
+            input.dataInicio ||
+            input.dataFim ||
+            input.uf ||
+            (input.status && input.status !== 'todas') ||
+            (input.modalidade && input.modalidade !== 'todas') ||
+            (input.esfera && input.esfera !== 'todas')
+        );
         
         // Se achou no local, mas é uma busca de baixo risco (ex: todos status recebendo_proposta)
         if (localResponse.total > 0 && !hasHighRiskFilters) {

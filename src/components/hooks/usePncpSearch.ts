@@ -76,7 +76,7 @@ export function usePncpSearch() {
         const searchParams = {
             keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
             uf: overrides?.uf ?? selectedUf, pagina: 1,
-            tamanhoPagina: 500, // Fetch all at once — pagination is client-side
+            tamanhoPagina: 100, // Paginação client-side — 100 registros por vez
             modalidade: overrides?.modalidade ?? modalidade,
             dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
             dataFim: (overrides?.dataFim ?? dataFim) || undefined,
