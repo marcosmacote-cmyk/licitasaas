@@ -253,7 +253,7 @@ export class PncpSearchService {
                     return { data: [], totalPages: 0 };
                 };
 
-                const MAX_PAGES = 10;
+                const MAX_PAGES = 3; // Limitado para não estourar o timeout do frontend (3 páginas × 50 itens = 150 editais)
                 let rawConsulta: any[] = [];
                 if (ufsForApi.length > 0) {
                      // Parallel logic from the routes...

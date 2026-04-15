@@ -70,7 +70,7 @@ export function usePncpSearch() {
         }
         searchControllerRef.current = new AbortController();
 
-        const timeoutId = setTimeout(() => searchControllerRef.current?.abort(), 30000);
+        const timeoutId = setTimeout(() => searchControllerRef.current?.abort(), 55000);
         const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
 
         const searchParams = {
