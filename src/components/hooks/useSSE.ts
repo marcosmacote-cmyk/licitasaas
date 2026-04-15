@@ -30,7 +30,7 @@ let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 function connectSSE(token: string): void {
     if (globalEventSource) return;
 
-    const url = `${API_BASE_URL}/api/events/stream`;
+    const url = `${API_BASE_URL}/api/analyze-edital/events/stream`;
     
     // EventSource doesn't support custom headers, so we use a cookie-based approach
     // or pass the token as a query parameter for SSE

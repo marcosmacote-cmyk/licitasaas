@@ -34,6 +34,8 @@ export function usePncpSearch() {
     const [searchSource, setSearchSource] = useState<'local' | 'govbr' | ''>('');
     const [searchElapsed, setSearchElapsed] = useState(0);
 
+    const searchControllerRef = useRef<AbortController | null>(null);
+
     // Form state
     const [keywords, setKeywords] = useState('');
     const [status, setStatus] = useState('recebendo_proposta');
@@ -63,8 +65,12 @@ export function usePncpSearch() {
         setResults([]);
         setTotalResults(0);
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        if (searchControllerRef.current) {
+            searchControllerRef.current.abort();
+        }
+        searchControllerRef.current = new AbortController();
+
+        const timeoutId = setTimeout(() => searchControllerRef.current?.abort(), 30000);
         const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
 
         const searchParams = {
@@ -97,6 +103,7 @@ export function usePncpSearch() {
                 const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    signal: searchControllerRef.current.signal,
                     body: JSON.stringify(searchParams),
                 });
                 if (localRes.ok) {
@@ -169,10 +176,16 @@ export function usePncpSearch() {
     };
 
     const clearSearch = () => {
+        if (searchControllerRef.current) {
+            searchControllerRef.current.abort();
+            searchControllerRef.current = null;
+        }
         setKeywords(''); setStatus('recebendo_proposta'); setSelectedUf('');
         setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');
         setOrgao(''); setOrgaosLista(''); setExcludeKeywords(''); setDataInicio(''); setDataFim('');
         setAllResults([]); setResults([]); setTotalResults(0); setPage(1);
+        setLoading(false);
+        setSearchSlow(false);
     };
 
     const activeFilterCount = [
