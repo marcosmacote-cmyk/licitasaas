@@ -4,7 +4,7 @@
  * Extracted from usePncpPage.ts (Fase 1 Refatoração)
  * ═══════════════════════════════════════════════════════
  */
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { API_BASE_URL } from '../../config';
 import type { PncpBiddingItem } from '../../types';
 import { useToast } from '../ui';
