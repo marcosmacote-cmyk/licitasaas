@@ -172,7 +172,7 @@ async function syncIncremental(): Promise<number> {
 
                 // Fetch additional pages (up to 5 pages per UF = 250 items)
                 let allItems = [...items];
-                const totalPages = Math.min(data?.totalPaginas || 1, 5);
+                const totalPages = Math.min(data?.totalPaginas || 1, 20);
                 for (let p = 2; p <= totalPages; p++) {
                     try {
                         const pageUrl = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataFinal}&uf=${uf}&pagina=${p}&tamanhoPagina=50`;
@@ -314,7 +314,7 @@ export async function runPncpSync(): Promise<{ synced: number; items: number; cl
     const start = Date.now();
 
     const synced = await syncIncremental();
-    const items = await syncItens(30); // Sync items for 30 contratações per cycle
+    const items = await syncItens(100); // Sync items for 100 contratações per cycle
 
     // Cleanup once per day (check if last full sync was > 24h ago)
     let cleaned = 0;
