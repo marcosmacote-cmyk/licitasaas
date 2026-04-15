@@ -538,11 +538,14 @@ class PncpSearchService {
         // 3. Local = 0 → tentar Gov.br como fallback
         logger_1.logger.info(`[PncpSearch] Local retornou 0 → disparando Gov.br`);
         try {
-            const remoteResponse = await this.searchGovbr(input);
+            // Timeout de segurança: Gov.br NUNCA pode travar o backend por mais de 20s
+            const remoteResponse = await Promise.race([
+                this.searchGovbr(input),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Gov.br timeout (20s)')), 20000))
+            ]);
             remoteResponse.meta.localCount = 0;
             remoteResponse.meta.fallbackUsed = true;
             if (remoteResponse.total === 0 && remoteResponse.meta.errors.length > 0) {
-                // Gov.br falhou → retorna o vazio do local (sem errors confusos)
                 localResponse.meta.errors = remoteResponse.meta.errors;
                 localResponse.meta.fallbackUsed = true;
                 return localResponse;
