@@ -38,7 +38,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const versionGovernance_1 = require("./services/ai/governance/versionGovernance");
 const opportunity_scanner_service_1 = require("./services/monitoring/opportunity-scanner.service");
-const pncpAggregator_1 = require("./workers/pncpAggregator");
 const batch_platform_monitor_service_1 = require("./services/monitoring/batch-platform-monitor.service");
 const pcp_monitor_service_1 = require("./services/monitoring/pcp-monitor.service");
 const licitanet_monitor_service_1 = require("./services/monitoring/licitanet-monitor.service");
@@ -1095,24 +1094,14 @@ app.listen(PORT, async () => {
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
 if (PROCESS_ROLE !== 'api') {
     (0, opportunity_scanner_service_1.startOpportunityScanner)(4);
-    // ── PNCP Aggregator: sincroniza base local a cada 15min (modo single-process) ──
-    setTimeout(async () => {
-        logger_1.logger.info('[PNCP-AGG] 🚀 Aggregator inline iniciado (intervalo: 15min)');
-        try {
-            await (0, pncpAggregator_1.runPncpSync)();
-        }
-        catch (e) {
-            logger_1.logger.error('[PNCP-AGG] sync error:', e.message);
-        }
-        setInterval(async () => {
-            try {
-                await (0, pncpAggregator_1.runPncpSync)();
-            }
-            catch (e) {
-                logger_1.logger.error('[PNCP-AGG] sync error:', e.message);
-            }
-        }, 15 * 60000);
-    }, 90000);
+    // ── PNCP Aggregator DESATIVADO do processo principal ──
+    // O Railway tem um serviço dedicado "pncp-aggregator" que faz essa sincronização.
+    // Rodar o aggregator INLINE no API server causava:
+    //   1. Connection pool exhaustion (Prisma) — matando searchLocal()
+    //   2. HTTP socket contention (axios → pncp.gov.br) — atrasando searchGovbr()
+    //   3. Event loop blocking — degradando todas as rotas da API
+    // Ref: sessão de debugging 2026-04-15
+    logger_1.logger.info('[PNCP-AGG] ⏸️ Aggregator inline DESATIVADO — syncronizado pelo serviço dedicado pncp-aggregator no Railway');
 }
 else {
     logger_1.logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');

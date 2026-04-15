@@ -1229,14 +1229,14 @@ app.listen(PORT, async () => {
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
 if (PROCESS_ROLE !== 'api') {
     startOpportunityScanner(4);
-    // ── PNCP Aggregator: sincroniza base local a cada 15min (modo single-process) ──
-    setTimeout(async () => {
-        logger.info('[PNCP-AGG] 🚀 Aggregator inline iniciado (intervalo: 15min)');
-        try { await runPncpSync(); } catch (e: any) { logger.error('[PNCP-AGG] sync error:', e.message); }
-        setInterval(async () => {
-            try { await runPncpSync(); } catch (e: any) { logger.error('[PNCP-AGG] sync error:', e.message); }
-        }, 15 * 60_000);
-    }, 90_000);
+    // ── PNCP Aggregator DESATIVADO do processo principal ──
+    // O Railway tem um serviço dedicado "pncp-aggregator" que faz essa sincronização.
+    // Rodar o aggregator INLINE no API server causava:
+    //   1. Connection pool exhaustion (Prisma) — matando searchLocal()
+    //   2. HTTP socket contention (axios → pncp.gov.br) — atrasando searchGovbr()
+    //   3. Event loop blocking — degradando todas as rotas da API
+    // Ref: sessão de debugging 2026-04-15
+    logger.info('[PNCP-AGG] ⏸️ Aggregator inline DESATIVADO — syncronizado pelo serviço dedicado pncp-aggregator no Railway');
 } else {
     logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
 }
