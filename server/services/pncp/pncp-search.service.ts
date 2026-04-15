@@ -488,60 +488,48 @@ export class PncpSearchService {
     }
 
     /**
-     * Motor de Fusão (Busca Híbrida)
-     * Abordagem atual: tentar Local-First. Se o DB local não retornar nada, tentar Remoto (Govbr).
-     * No futuro isso pode mesclar e classificar tudo instantaneamente.
+     * Motor de Fusão (Busca Híbrida) — LOCAL-FIRST ABSOLUTO
+     * 
+     * A base local tem 6000+ contratações sincronizadas pelo pncp-aggregator (Railway).
+     * Prisma ILIKE cobre keywords, orgão, datas com precisão suficiente.
+     * 
+     * Regra: Se local retornou ≥1 resultado → RETORNA IMEDIATAMENTE.
+     * Gov.br é fallback SOMENTE quando local = 0.
+     * 
+     * Justificativa: Gov.br dá timeout para ~50% das UFs (PE, AM, etc).
+     * Referência competitiva: Conlicitações usa 100% base local (668K registros).
      */
     static async search(input: PncpSearchInput, preferLocalIfPartial = true): Promise<PncpSearchResponse> {
-        // Tentativa Local
+        // 1. SEMPRE local primeiro
         const localResponse = await this.searchLocal(input);
         
-        // Filtros que o banco local NÃO cobre com confiança total (texto livre, orgaos externos, janelas de data)
-        // UF, status, modalidade e esfera são bem indexados no local — não forçam remoto
-        const hasHighRiskFilters = !!(
-            input.keywords ||
-            input.orgao ||
-            input.orgaosLista ||
-            input.dataInicio ||
-            input.dataFim
-        );
-        
-        // Se achou no local, mas é uma busca de baixo risco (ex: todos status recebendo_proposta)
-        if (localResponse.total > 0 && !hasHighRiskFilters) {
-             return localResponse;
-        }
-
-        // Se tem filtros de risco, a base local será marcada como possivelmente parcial
-        if (localResponse.total > 0 && hasHighRiskFilters) {
-             localResponse.meta.isPartial = true;
-        }
-
-        // Disparar Gov.br se o local zerou, OU se há filtros de risco e precisamos confirmar na fonte
-        const shouldFallbackToRemote = localResponse.total === 0 || hasHighRiskFilters;
-
-        if (!shouldFallbackToRemote) {
-             return localResponse;
-        }
-
-        logger.info(`[PncpSearchService] Disparando fallback Gov.br (Total Local: ${localResponse.total} | Filtros de Risco: ${hasHighRiskFilters})`);
-        const remoteResponse = await this.searchGovbr(input);
-        
-        remoteResponse.meta.localCount = localResponse.total;
-        
-        // Se a remota não trouxe nada, mas a local tinha algo (ex: API offline), devolve a local (marcada como parcial)
-        if (remoteResponse.total === 0 && localResponse.total > 0) {
-            localResponse.meta.fallbackUsed = true;
-            if (remoteResponse.meta.errors.length > 0) {
-                 localResponse.meta.errors.push(...remoteResponse.meta.errors);
-            }
+        // 2. Se local tem resultados → retorna imediatamente, sem tocar Gov.br
+        if (localResponse.total > 0) {
+            logger.info(`[PncpSearch] ✅ Local: ${localResponse.total} resultados em ${localResponse.meta.elapsedMs}ms`);
             return localResponse;
         }
 
-        // Se ambos falharem, juntar os erros para observabilidade
-        if (remoteResponse.total === 0 && (remoteResponse.meta.errors.length > 0 || localResponse.meta.errors.length > 0)) {
-            remoteResponse.meta.errors = [...localResponse.meta.errors, ...remoteResponse.meta.errors];
+        // 3. Local = 0 → tentar Gov.br como fallback
+        logger.info(`[PncpSearch] Local retornou 0 → disparando Gov.br`);
+        
+        try {
+            const remoteResponse = await this.searchGovbr(input);
+            remoteResponse.meta.localCount = 0;
+            remoteResponse.meta.fallbackUsed = true;
+            
+            if (remoteResponse.total === 0 && remoteResponse.meta.errors.length > 0) {
+                // Gov.br falhou → retorna o vazio do local (sem errors confusos)
+                localResponse.meta.errors = remoteResponse.meta.errors;
+                localResponse.meta.fallbackUsed = true;
+                return localResponse;
+            }
+            
+            return remoteResponse;
+        } catch (error: any) {
+            logger.error(`[PncpSearch] Gov.br fallback failed: ${error?.message}`);
+            localResponse.meta.errors.push(`Gov.br indisponível: ${error?.message}`);
+            localResponse.meta.fallbackUsed = true;
+            return localResponse;
         }
-
-        return remoteResponse;
     }
 }
