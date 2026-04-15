@@ -1151,27 +1151,22 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
         const startTime = Date.now();
 
         // ══════════════════════════════════════════════════
-        // STRATEGY: Two-phase search
-        // Phase 1: PostgreSQL full-text search (tsquery) — best for keywords
-        // Phase 2: Prisma filters — for structured filters (UF, status, etc)
+        // Prisma native queries — no BigInt issues, no raw SQL
         // ══════════════════════════════════════════════════
 
-        // Build base filter conditions (non-keyword)
-        const filterConditions: string[] = [];
-        const filterParams: any[] = [];
-        let paramIdx = 1;
+        const where: any = {};
 
+        // UF filter
         if (uf) {
             const ufs = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
             if (ufs.length === 1) {
-                filterConditions.push(`"uf" = $${paramIdx++}`);
-                filterParams.push(ufs[0]);
+                where.uf = ufs[0];
             } else if (ufs.length > 1) {
-                filterConditions.push(`"uf" IN (${ufs.map(() => `$${paramIdx++}`).join(',')})`);
-                filterParams.push(...ufs);
+                where.uf = { in: ufs };
             }
         }
 
+        // Status filter — include NULL for 'recebendo_proposta'
         if (status) {
             const statusMap: Record<string, string[]> = {
                 'recebendo_proposta': ['Divulgada', 'Aberta'],
@@ -1181,94 +1176,81 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
             };
             const mapped = statusMap[status];
             if (mapped) {
-                // For "recebendo_proposta": include NULL situacao since aggregator
-                // pulls from /contratacoes/proposta (all records are open proposals)
                 if (status === 'recebendo_proposta') {
-                    filterConditions.push(`("situacao" IN (${mapped.map(() => `$${paramIdx++}`).join(',')}) OR "situacao" IS NULL)`);
+                    // Include NULL situacao — aggregator pulls from /proposta (all open)
+                    where.OR = [
+                        { situacao: { in: mapped } },
+                        { situacao: null },
+                    ];
                 } else {
-                    filterConditions.push(`"situacao" IN (${mapped.map(() => `$${paramIdx++}`).join(',')})`);
+                    where.situacao = { in: mapped };
                 }
-                filterParams.push(...mapped);
             }
         }
 
+        // Modalidade filter
         if (modalidade) {
-            filterConditions.push(`"modalidade" ILIKE $${paramIdx++}`);
-            filterParams.push(`%${modalidade}%`);
+            where.modalidade = { contains: modalidade, mode: 'insensitive' };
         }
 
+        // Esfera filter
         if (esfera) {
-            filterConditions.push(`"esfera" = $${paramIdx++}`);
-            filterParams.push(esfera);
+            where.esfera = esfera;
         }
 
-        if (valorMin) {
-            filterConditions.push(`"valorEstimado" >= $${paramIdx++}`);
-            filterParams.push(Number(valorMin));
-        }
-        if (valorMax) {
-            filterConditions.push(`"valorEstimado" <= $${paramIdx++}`);
-            filterParams.push(Number(valorMax));
+        // Valor range filter
+        if (valorMin || valorMax) {
+            where.valorEstimado = {};
+            if (valorMin) where.valorEstimado.gte = Number(valorMin);
+            if (valorMax) where.valorEstimado.lte = Number(valorMax);
         }
 
-        // Build keyword condition — multi-strategy
-        let keywordCondition = '';
+        // Keyword filter — ILIKE on objeto + orgaoNome + unidadeNome
         if (keywords && keywords.trim()) {
             const rawTerms = keywords.trim().split(/\s+/).filter((t: string) => t.length > 1);
             if (rawTerms.length > 0) {
-                // Strategy: each term matches objeto OR orgaoNome OR unidadeNome via ILIKE
-                // All terms must match (AND between terms, OR between fields)
-                const termConditions = rawTerms.map((term: string) => {
-                    const p1 = paramIdx++;
-                    const p2 = paramIdx++;
-                    const p3 = paramIdx++;
-                    filterParams.push(`%${term}%`, `%${term}%`, `%${term}%`);
-                    return `(COALESCE("objeto",'') ILIKE $${p1} OR COALESCE("orgaoNome",'') ILIKE $${p2} OR COALESCE("unidadeNome",'') ILIKE $${p3})`;
-                });
-                keywordCondition = termConditions.join(' AND ');
+                // Each term must match at least one field (AND between terms)
+                const keywordFilters = rawTerms.map((term: string) => ({
+                    OR: [
+                        { objeto: { contains: term, mode: 'insensitive' as const } },
+                        { orgaoNome: { contains: term, mode: 'insensitive' as const } },
+                        { unidadeNome: { contains: term, mode: 'insensitive' as const } },
+                    ]
+                }));
+                // Merge with existing OR (status filter)
+                if (where.OR) {
+                    // Status already has OR — wrap everything in AND
+                    where.AND = [
+                        { OR: where.OR }, // status condition
+                        ...keywordFilters, // keyword conditions
+                    ];
+                    delete where.OR;
+                } else {
+                    where.AND = keywordFilters;
+                }
             }
         }
 
-        // Combine all conditions
-        const allConditions = [...filterConditions];
-        if (keywordCondition) allConditions.push(keywordCondition);
-        const whereSQL = allConditions.length > 0 ? `WHERE ${allConditions.join(' AND ')}` : '';
-
         // Count total
-        const countQuery = `SELECT COUNT(*)::int as total FROM "PncpContratacao" ${whereSQL}`;
-        const countResult: any[] = await prisma.$queryRawUnsafe(countQuery, ...filterParams);
-        const total = countResult[0]?.total || 0;
+        const total = await prisma.pncpContratacao.count({ where });
 
         // Fetch page with items
         const skip = (Number(pagina) - 1) * Number(tamanhoPagina);
-        const dataQuery = `
-            SELECT c.*, 
-                   COALESCE(
-                       (SELECT json_agg(json_build_object(
-                           'numero', i."numeroItem",
-                           'descricao', i."descricao",
-                           'quantidade', i."quantidade",
-                           'unidade', i."unidadeMedida",
-                           'valorUnitario', i."valorUnitario",
-                           'valorTotal', i."valorTotal"
-                       ) ORDER BY i."numeroItem")
-                       FROM "PncpItem" i WHERE i."contratacaoId" = c.id LIMIT 20),
-                       '[]'::json
-                   ) as itens_json
-            FROM "PncpContratacao" c
-            ${whereSQL}
-            ORDER BY c."dataEncerramento" ASC NULLS LAST
-            LIMIT ${Number(tamanhoPagina)} OFFSET ${skip}
-        `;
-        const contratacoes: any[] = await prisma.$queryRawUnsafe(dataQuery, ...filterParams);
+        const contratacoes = await prisma.pncpContratacao.findMany({
+            where,
+            include: { itens: { take: 20, orderBy: { numeroItem: 'asc' } } },
+            orderBy: { dataEncerramento: 'asc' },
+            skip,
+            take: Number(tamanhoPagina),
+        });
 
         // Map to frontend format — MUST match Gov.br /search response exactly
         const now = Date.now();
-        const items = contratacoes.map((c: any) => {
+        const items = contratacoes.map((c) => {
             const cnpj = c.cnpjOrgao || '';
             const ano = String(c.anoCompra || '');
             const nSeq = String(c.sequencialCompra || '');
-            const pncpId = c.numeroControle || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : c.id);
+            const pncpId = c.numeroControle || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : String(c.id));
 
             // Urgency based on deadline
             let urgency = 'medium';
@@ -1280,10 +1262,7 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
                 else urgency = 'low';
             }
 
-            // Build titulo matching Gov.br format
-            const titulo = c.numeroCompra
-                ? `Compra nº ${c.numeroCompra}/${ano}`
-                : c.objeto?.substring(0, 120) || `${c.modalidade || 'Licitação'} nº ${nSeq}/${ano}`;
+            const titulo = c.objeto?.substring(0, 120) || `${c.modalidade || 'Licitação'} nº ${nSeq}/${ano}`;
 
             return {
                 id: pncpId,
@@ -1301,21 +1280,27 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
                 modalidade: c.modalidade || '',
                 modalidade_nome: c.modalidade || '',
                 situacao: c.situacao || '',
-                status: c.situacao || '',
+                status: c.situacao || 'Aberta',
                 valor_estimado: c.valorEstimado ? Number(c.valorEstimado) : 0,
                 valor_homologado: c.valorHomologado ? Number(c.valorHomologado) : null,
                 srp: c.srp || false,
-                modo_disputa: c.modoDisputa || '',
-                data_publicacao: c.dataPublicacao ? new Date(c.dataPublicacao).toISOString() : new Date().toISOString(),
-                data_abertura: c.dataAbertura ? new Date(c.dataAbertura).toISOString() : '',
-                data_encerramento_proposta: c.dataEncerramento ? new Date(c.dataEncerramento).toISOString() : '',
+                data_publicacao: c.dataPublicacao ? c.dataPublicacao.toISOString() : new Date().toISOString(),
+                data_abertura: c.dataAbertura ? c.dataAbertura.toISOString() : '',
+                data_encerramento_proposta: c.dataEncerramento ? c.dataEncerramento.toISOString() : '',
                 link_sistema: (cnpj && ano && nSeq)
                     ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
                     : (c.linkOrigem || c.linkSistema || ''),
                 link_comprasnet: c.linkSistema || '',
                 numeroControlePNCP: c.numeroControle,
                 urgency,
-                itens_preview: c.itens_json && c.itens_json !== '[]' ? (typeof c.itens_json === 'string' ? JSON.parse(c.itens_json) : c.itens_json) : [],
+                itens_preview: (c as any).itens?.map((it: any) => ({
+                    numero: it.numeroItem,
+                    descricao: it.descricao,
+                    quantidade: it.quantidade ? Number(it.quantidade) : null,
+                    unidade: it.unidadeMedida,
+                    valorUnitario: it.valorUnitario ? Number(it.valorUnitario) : null,
+                    valorTotal: it.valorTotal ? Number(it.valorTotal) : null,
+                })) || [],
                 _source: 'local',
             };
         });
@@ -1323,7 +1308,7 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
         const elapsed = Date.now() - startTime;
         logger.info(`[PNCP-LOCAL] Search: ${total} results in ${elapsed}ms (keywords="${keywords || ''}" uf="${uf || ''}")`);
 
-        res.json({ items, total, elapsed, source: 'local' });
+        res.json({ items, total: Number(total), elapsed, source: 'local' });
     } catch (error: any) {
         logger.error("PNCP local search error:", error?.message || error);
         handleApiError(res, error, 'pncp-search-local');
