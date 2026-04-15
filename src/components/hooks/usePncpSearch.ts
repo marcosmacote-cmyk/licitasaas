@@ -60,9 +60,10 @@ export function usePncpSearch() {
         setSearchSlow(false);
         setSearchSource('');
         setSearchElapsed(0);
-        // ── A2: UI Progressiva — NÃO limpar resultados existentes ──
-        // O usuário vê os dados anteriores com overlay de loading.
-        // Só atualiza quando a nova resposta chegar com sucesso.
+        // Clear previous results visually so it doesn't look stuck when searching a new UF
+        setAllResults([]);
+        setResults([]);
+        setTotalResults(0);
 
         if (searchControllerRef.current) {
             searchControllerRef.current.abort();
