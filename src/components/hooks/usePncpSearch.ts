@@ -87,86 +87,52 @@ export function usePncpSearch() {
 
         try {
             const token = localStorage.getItem('token');
-            let items: any[] = [];
-            let total = 0;
-            let source: 'local' | 'govbr' = 'local';
-
-            // ══════════════════════════════════════════════════
-            // STRATEGY: ALWAYS LOCAL-FIRST
-            // 1. Try local DB (< 100ms) — works for keywords AND filters
-            // 2. If local returns 0 → fallback to Gov.br (8-25s)
-            // 3. If Gov.br also fails → user sees clear error
-            // ══════════════════════════════════════════════════
-
-            // Step 1: Try local database ALWAYS (even with keywords)
-            try {
-                const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    signal: searchControllerRef.current.signal,
-                    body: JSON.stringify(searchParams),
-                });
-                if (localRes.ok) {
-                    const localData = await localRes.json();
-                    const localItems = Array.isArray(localData.items) ? localData.items : [];
-                    if (localItems.length > 0) {
-                        items = localItems;
-                        total = localData.total || items.length;
-                        source = 'local';
-                        if (localData.elapsed) setSearchElapsed(localData.elapsed);
+            const res = await fetch(`${API_BASE_URL}/api/pncp/search-hybrid`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                signal: searchControllerRef.current.signal,
+                body: JSON.stringify(searchParams),
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                const items = Array.isArray(data.items) ? data.items : [];
+                
+                // Tratamento de Erros Semânticos Vindos do Backend
+                if (data.meta) {
+                    if (data.meta.isPartial && data.meta.errors?.length > 0) {
+                        toast.warning(`Sua base local está desatualizada e o Portal Gov.br falhou. Mostrando apenas ${items.length} resultados parciais.\nErro reportado: ${data.meta.errors[0]}`);
+                    } else if (items.length === 0 && data.meta.errors?.length > 0) {
+                        toast.error(`O Portal do Governo não respondeu e sua base local ainda não possui editais com este filtro. Tente novamente mais tarde.`);
                     }
                 }
-            } catch { /* local failed, will fallback to Gov.br */ }
 
-            // Step 2: ONLY if local returned 0 → try Gov.br (with 15s timeout)
-            if (items.length === 0) {
-                source = 'govbr';
-                const govController = new AbortController();
-                const govTimeout = setTimeout(() => govController.abort(), 15000); // 15s hard timeout
-                try {
-                    const govRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        signal: govController.signal,
-                        body: JSON.stringify(searchParams),
-                    });
-                    if (govRes.ok) {
-                        const govData = await govRes.json();
-                        items = Array.isArray(govData.items) ? govData.items : [];
-                        total = govData.total || items.length;
+                setSearchSource(data.source || 'local');
+                if (data.elapsed) setSearchElapsed(data.elapsed);
+                setAllResults(items);
+                setTotalResults(data.total || items.length);
+                setResults(items.slice(0, 10));
+
+                // Prefetch items (only needed for Gov.br results)
+                if (data.source === 'govbr' && items.length > 0) {
+                    const prefetchCandidates = items.slice(0, 10)
+                        .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
+                        .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
+                    if (prefetchCandidates.length > 0) {
+                        fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({ processes: prefetchCandidates }),
+                        }).catch(() => {});
                     }
-                    // Don't retry on 500 — it just hangs the UI
-                } catch (govErr: any) {
-                    if (govErr.name === 'AbortError') {
-                        toast.warning('A API do Gov.br não respondeu em 15s. Mostrando apenas resultados da base local.');
-                    }
-                } finally {
-                    clearTimeout(govTimeout);
                 }
-            }
-
-            // Apply results
-            setSearchSource(source);
-            setAllResults(items);
-            setTotalResults(total);
-            setResults(items.slice(0, 10));
-
-            // Prefetch items (only needed for Gov.br results, local already has items)
-            if (source === 'govbr' && items.length > 0) {
-                const prefetchCandidates = items.slice(0, 10)
-                    .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
-                    .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
-                if (prefetchCandidates.length > 0) {
-                    fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ processes: prefetchCandidates }),
-                    }).catch(() => {});
-                }
+            } else {
+                 if (res.status !== 504) throw new Error('Falha na requisição de busca');
+                 toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente.');
             }
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente ou refine sua busca.');
+                toast.error('A busca foi cancelada ou o portal PNCP demorou muito para responder.');
             } else {
                 console.error(e);
                 toast.error(e?.message || 'Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');

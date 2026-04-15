@@ -53,347 +53,61 @@ interface SearchScanResult {
 }
 
 /**
- * Faz uma requisição HTTP com retry e backoff exponencial.
- * @param url URL a ser buscada
- * @param retries Número de tentativas restantes (default: 3)
- * @returns dados da resposta ou null se todas falharem
- */
-async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<any | null> {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const res = await axios.get(url, {
-                headers: { 'Accept': 'application/json' },
-                httpsAgent: agent,
-                timeout: 15000
-            } as any);
-            return res.data;
-        } catch (err: any) {
-            const isLast = attempt === retries;
-            if (isLast) {
-                logger.warn(`[OpportunityScanner] ❌ Falha após ${retries} tentativas: ${err.message}`);
-                return null;
-            }
-            const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-            logger.warn(`[OpportunityScanner] ⚠️ Tentativa ${attempt}/${retries} falhou (${err.message}). Retentando em ${backoffMs / 1000}s...`);
-            await new Promise(r => setTimeout(r, backoffMs));
-        }
-    }
-    return null;
-}
-
-/**
- * Executa uma busca PNCP com os mesmos filtros da pesquisa salva.
- * ═══════════════════════════════════════════════════════
- * STRATEGY: LOCAL-FIRST
- * 1. Query local PostgreSQL (< 100ms, populated by pncp-aggregator)
- * 2. If local returns 0 → fallback to Gov.br Search API (8-25s)
- * ═══════════════════════════════════════════════════════
+ * Executa uma busca PNCP utilizando o novo PncpSearchService unificado.
+ * Isso garante que o robô obtenha EXATAMENTE os mesmos resultados
+ * da tela de Busca, eliminando discrepâncias.
  */
 async function executePncpSearch(search: {
     keywords: string | null;
     status: string | null;
     states: string | null;
 }): Promise<PncpSearchResult[]> {
-    const keywords = search.keywords || '';
-    const status = search.status || 'recebendo_proposta';
-
-    // ── Parse filters from states (stored as JSON string) ──
-    let ufs: string[] = [];
+    const { PncpSearchService } = await import('../../pncp/pncp-search.service');
+    
+    let ufs = '';
     let modalidade = ''; let esfera = ''; let orgao = ''; let orgaosLista = ''; let excludeKeywords = '';
 
     if (search.states) {
         try {
             const parsed = JSON.parse(search.states);
-            if (Array.isArray(parsed)) ufs = parsed;
+            if (Array.isArray(parsed)) ufs = parsed.join(',');
             else if (typeof parsed === 'object') {
-                if (parsed.uf) {
-                    if (parsed.uf.includes(',')) ufs = parsed.uf.split(',').map((u: string) => u.trim()).filter(Boolean);
-                    else ufs = [parsed.uf];
-                }
+                if (parsed.uf) ufs = parsed.uf;
                 modalidade = parsed.modalidade || '';
                 esfera = parsed.esfera || '';
                 orgao = parsed.orgao || '';
                 orgaosLista = parsed.orgaosLista || '';
                 excludeKeywords = parsed.excludeKeywords || '';
-            } else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed.split(',');
+            } else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed;
         } catch {
-            if (search.states.includes(',')) ufs = search.states.split(',').map(s => s.trim());
-            else if (search.states.length === 2) ufs = [search.states];
+            ufs = search.states;
         }
     }
 
-    // ═══════════════════════════════════════════════════
-    // STEP 1: Try LOCAL database first (< 100ms)
-    // ═══════════════════════════════════════════════════
-    try {
-        const localResults = await queryLocalDatabase(keywords, status, ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords);
-        if (localResults.length > 0) {
-            logger.info(`[OpportunityScanner] ⚡ Local search returned ${localResults.length} results`);
-            return localResults;
-        }
-        logger.info(`[OpportunityScanner] 📭 Local search returned 0 results, falling back to Gov.br API`);
-    } catch (localErr: any) {
-        logger.warn(`[OpportunityScanner] ⚠️ Local search failed: ${localErr.message}, falling back to Gov.br API`);
-    }
-
-    // ═══════════════════════════════════════════════════
-    // STEP 2: FALLBACK — Gov.br Search API (slow, 8-25s)
-    // ═══════════════════════════════════════════════════
-    return await searchGovBrApi(keywords, status, ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords);
-}
-
-/**
- * Query local PostgreSQL via Prisma — same filters as /search-local endpoint
- */
-async function queryLocalDatabase(
-    keywords: string, status: string, ufs: string[],
-    modalidade: string, esfera: string, orgao: string,
-    orgaosLista: string, excludeKeywords: string
-): Promise<PncpSearchResult[]> {
-    const { PrismaClient } = await import('@prisma/client');
-    // Reuse the existing prisma instance from the import at top
-    
-    const where: any = {};
-
-    // UF filter
-    if (ufs.length === 1) where.uf = ufs[0];
-    else if (ufs.length > 1) where.uf = { in: ufs };
-
-    // Status filter
-    if (status) {
-        const statusMap: Record<string, string[]> = {
-            'recebendo_proposta': ['Divulgada', 'Aberta'],
-            'encerrada': ['Encerrada'],
-            'suspensa': ['Suspensa'],
-            'revogada': ['Revogada', 'Anulada'],
-        };
-        const mapped = statusMap[status];
-        if (mapped) {
-            if (status === 'recebendo_proposta') {
-                where.OR = [{ situacao: { in: mapped } }, { situacao: null }];
-            } else {
-                where.situacao = { in: mapped };
-            }
-        }
-    }
-
-    // Modalidade filter
-    if (modalidade && modalidade !== 'todas') {
-        const modalidadeMap: Record<string, string> = {
-            '1': 'Pregão', '2': 'Concorrência', '3': 'Concurso',
-            '4': 'Leilão', '5': 'Diálogo Competitivo', '6': 'Dispensa',
-            '7': 'Inexigibilidade', '8': 'Tomada de Preços', '9': 'Convite',
-        };
-        const modalText = modalidadeMap[modalidade] || modalidade;
-        where.modalidade = { contains: modalText, mode: 'insensitive' };
-    }
-
-    // Esfera
-    if (esfera && esfera !== 'todas') where.esfera = esfera;
-
-    // Build AND conditions
-    const andConditions: any[] = [];
-    if (where.OR) { andConditions.push({ OR: where.OR }); delete where.OR; }
-
-    // Keywords
-    if (keywords && keywords.trim()) {
-        const terms = keywords.includes(',')
-            ? keywords.split(',').map(t => t.trim().replace(/^"|"$/g, '')).filter(t => t.length > 1)
-            : keywords.trim().split(/\s+/).filter(t => t.length > 1);
-        for (const term of terms) {
-            andConditions.push({
-                OR: [
-                    { objeto: { contains: term, mode: 'insensitive' as const } },
-                    { orgaoNome: { contains: term, mode: 'insensitive' as const } },
-                    { unidadeNome: { contains: term, mode: 'insensitive' as const } },
-                ]
-            });
-        }
-    }
-
-    // Órgão filter
-    let orgaoNames: string[] = [];
-    if (orgao && orgao.trim()) orgaoNames.push(...(orgao.includes(',') ? orgao.split(',').map(s => s.trim()).filter(Boolean) : [orgao.trim()]));
-    if (orgaosLista) orgaoNames.push(...orgaosLista.split(/[\n,;]+/).map(s => s.trim().replace(/^"|"$/g, '')).filter(s => s.length > 0));
-    orgaoNames = [...new Set(orgaoNames)];
-    if (orgaoNames.length > 0) {
-        andConditions.push({
-            OR: orgaoNames.map(name => {
-                const digits = name.replace(/\D/g, '');
-                if (digits.length === 14) return { cnpjOrgao: digits };
-                return { OR: [
-                    { orgaoNome: { contains: name, mode: 'insensitive' as const } },
-                    { unidadeNome: { contains: name, mode: 'insensitive' as const } },
-                ]};
-            })
-        });
-    }
-
-    // Exclude keywords
-    if (excludeKeywords) {
-        const terms = excludeKeywords.split(',').map(t => t.trim()).filter(Boolean);
-        for (const term of terms) {
-            andConditions.push({ NOT: { objeto: { contains: term, mode: 'insensitive' as const } } });
-        }
-    }
-
-    if (andConditions.length > 0) where.AND = andConditions;
-
-    const contratacoes = await prisma.pncpContratacao.findMany({
-        where,
-        orderBy: [{ dataEncerramento: { sort: 'asc', nulls: 'last' } }],
-        take: 500,
-    });
-
-    return contratacoes.map(c => {
-        const cnpj = c.cnpjOrgao || '';
-        const ano = String(c.anoCompra || '');
-        const nSeq = String(c.sequencialCompra || '');
-        return {
-            id: c.numeroControle || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : String(c.id)),
-            titulo: c.objeto?.substring(0, 120) || `${c.modalidade || 'Licitação'} nº ${nSeq}/${ano}`,
-            objeto: c.objeto || 'Sem objeto',
-            orgao_nome: c.orgaoNome || 'Órgão não informado',
-            uf: c.uf || '--',
-            municipio: c.municipio || '--',
-            valor_estimado: c.valorEstimado ? Number(c.valorEstimado) : 0,
-            data_encerramento_proposta: c.dataEncerramento ? c.dataEncerramento.toISOString() : '',
-            modalidade_nome: c.modalidade || '',
-            link_sistema: (cnpj && ano && nSeq)
-                ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
-                : (c.linkOrigem || c.linkSistema || ''),
-        };
-    });
-}
-
-/**
- * Fallback: Gov.br Search API (used when local DB has 0 results)
- */
-async function searchGovBrApi(
-    keywords: string, status: string, ufs: string[],
-    modalidade: string, esfera: string, orgao: string,
-    orgaosLista: string, excludeKeywords: string
-): Promise<PncpSearchResult[]> {
-    // Parse keywords
-    let kwList: string[] = [];
-    if (keywords) {
-        if (keywords.includes(',')) {
-            kwList = keywords.split(',')
-                .map(k => k.trim().replace(/^"|"$/g, ''))
-                .filter(k => k.length > 0)
-                .map(k => k.includes(' ') ? `"${k}"` : k);
-        } else {
-            kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
-        }
-    }
-
-    // Process orgao and orgaosLista into single list
-    let extractedNames: string[] = [];
-    if (orgao && orgao.includes(',')) {
-        orgaosLista = orgaosLista ? `${orgaosLista},${orgao}` : orgao;
-        orgao = '';
-    }
-    if (orgaosLista) {
-        extractedNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
-        extractedNames = [...new Set(extractedNames)];
-    }
-    const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
-
-    // Build URL (now accepts page parameter)
-    const buildUrl = (qItems: string[], singleUf?: string, singleOrgao?: string, pagina = 1) => {
-        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=50&pagina=${pagina}`;
-        
-        let terms = [...qItems];
-        if (singleOrgao) terms.push(singleOrgao.includes(' ') && !singleOrgao.startsWith('"') ? `"${singleOrgao}"` : singleOrgao);
-
-        if (terms.length > 0) url += `&q=${encodeURIComponent(terms.join(' '))}`;
-
-        if (status && status !== 'todas') url += `&status=${status}`;
-        if (singleUf) url += `&ufs=${singleUf}`;
-        if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-        if (esfera && esfera !== 'todas') url += `&esferas=${esfera}`;
-        return url;
+    const input = {
+        keywords: search.keywords || '',
+        status: search.status || 'recebendo_proposta',
+        uf: ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords,
+        pagina: 1,
+        // Carga máxima permitida por varredura
+        tamanhoPagina: 150 
     };
 
-    const keywordsToIterate = kwList.length > 0 ? kwList : [null];
-    const ufsForIteration = ufs.length > 0 ? ufs : [null];
+    // A mágica agora mora no Service. O robô sempre usará a base unificada.
+    const result = await PncpSearchService.search(input);
 
-    // Build base URL combinations (page 1)
-    const baseUrlCombinations: { params: string[]; uf?: string; org?: string }[] = [];
-    for (const kw of keywordsToIterate) {
-        for (const singleUf of ufsForIteration) {
-            for (const org of orgaosToIterate) {
-                const params: string[] = [];
-                if (kw) params.push(kw);
-                baseUrlCombinations.push({ params, uf: singleUf || undefined, org: org || undefined });
-            }
-        }
-    }
-
-    // Limit combinations
-    const combinations = baseUrlCombinations.slice(0, 20);
-    
-    let excludeList: string[] = [];
-    if (excludeKeywords) {
-        excludeList = excludeKeywords.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    }
-
-    let rawItems: any[] = [];
-    
-    for (const combo of combinations) {
-        // ── Paginação: buscar múltiplas páginas por combinação ──
-        for (let page = 1; page <= MAX_PAGES_PER_SEARCH; page++) {
-            const url = buildUrl(combo.params, combo.uf, combo.org, page);
-            
-            const data = await fetchWithRetry(url);
-            if (!data) break; // Falhou após retries, pular combinação
-            
-            const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-            rawItems = rawItems.concat(items);
-            
-            // Se retornou menos que 50, não há mais páginas
-            if (items.length < 50) break;
-            
-            // Rate limit entre páginas
-            await new Promise(r => setTimeout(r, PNCP_REQUEST_DELAY_MS));
-        }
-        
-        // Rate limit entre combinações
-        await new Promise(r => setTimeout(r, PNCP_REQUEST_DELAY_MS));
-    }
-
-    // Dedup and normalize
-    const seenIds = new Set<string>();
-    return rawItems.filter(item => item != null).map((item: any) => {
-        const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || '';
-        const ano = item.ano || item.anoCompra || '';
-        const nSeq = item.numero_sequencial || item.sequencialCompra || '';
-        const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : null) || item.id || Math.random().toString();
-
-        return {
-            id: pncpId,
-            titulo: item.title || item.titulo || 'Sem título',
-            objeto: item.description || item.objetoCompra || item.objeto || '',
-            orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || 'Órgão não informado',
-            uf: item.uf || item.unidadeOrgao?.ufSigla || '--',
-            municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || '--',
-            valor_estimado: Number(item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado ?? 0) || 0,
-            data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
-            modalidade_nome: item.modalidade_licitacao_nome || item.modalidade_nome || '',
-            link_sistema: (cnpj && ano && nSeq) ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}` : (item.linkSistemaOrigem || ''),
-        };
-    }).filter(item => {
-        if (seenIds.has(item.id)) return false;
-
-        if (excludeList.length > 0) {
-            const txt = `${item.titulo} ${item.objeto}`.toLowerCase();
-            const containsExclude = excludeList.some(ex => txt.includes(ex));
-            if (containsExclude) return false;
-        }
-
-        seenIds.add(item.id);
-        return true;
-    });
+    return result.items.map((c: any) => ({
+        id: c.id,
+        titulo: c.titulo,
+        objeto: c.objeto,
+        orgao_nome: c.orgao_nome,
+        uf: c.uf,
+        municipio: c.municipio,
+        valor_estimado: c.valor_estimado,
+        data_encerramento_proposta: c.data_encerramento_proposta,
+        modalidade_nome: c.modalidade_nome,
+        link_sistema: c.link_sistema
+    }));
 }
 
 /**
