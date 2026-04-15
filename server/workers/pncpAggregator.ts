@@ -314,7 +314,7 @@ export async function runPncpSync(): Promise<{ synced: number; items: number; cl
     const start = Date.now();
 
     const synced = await syncIncremental();
-    const items = await syncItens(100); // Sync items for 100 contratações per cycle
+    const items = await syncItens(500); // Sync items for 500 contratações per cycle (boosted to catch up)
 
     // Cleanup once per day (check if last full sync was > 24h ago)
     let cleaned = 0;
