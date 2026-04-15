@@ -1275,6 +1275,7 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
                             { objeto: { contains: term, mode: 'insensitive' as const } },
                             { orgaoNome: { contains: term, mode: 'insensitive' as const } },
                             { unidadeNome: { contains: term, mode: 'insensitive' as const } },
+                            { itens: { some: { descricao: { contains: term, mode: 'insensitive' as const } } } }
                         ]
                     });
                 }
