@@ -64,7 +64,8 @@ export function usePncpSearch() {
 
         const searchParams = {
             keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
-            uf: overrides?.uf ?? selectedUf, pagina: e || overrides?.resetPage ? 1 : page,
+            uf: overrides?.uf ?? selectedUf, pagina: 1,
+            tamanhoPagina: 500, // Fetch all at once — pagination is client-side
             modalidade: overrides?.modalidade ?? modalidade,
             dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
             dataFim: (overrides?.dataFim ?? dataFim) || undefined,
@@ -105,38 +106,30 @@ export function usePncpSearch() {
                 }
             } catch { /* local failed, will fallback to Gov.br */ }
 
-            // Step 2: ONLY if local returned 0 → try Gov.br
+            // Step 2: ONLY if local returned 0 → try Gov.br (with 15s timeout)
             if (items.length === 0) {
                 source = 'govbr';
+                const govController = new AbortController();
+                const govTimeout = setTimeout(() => govController.abort(), 15000); // 15s hard timeout
                 try {
                     const govRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        signal: controller.signal,
+                        signal: govController.signal,
                         body: JSON.stringify(searchParams),
                     });
                     if (govRes.ok) {
                         const govData = await govRes.json();
                         items = Array.isArray(govData.items) ? govData.items : [];
                         total = govData.total || items.length;
-                    } else if (govRes.status >= 500) {
-                        await new Promise(r => setTimeout(r, 2000));
-                        const retryRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                            body: JSON.stringify(searchParams),
-                        });
-                        if (retryRes.ok) {
-                            const retryData = await retryRes.json();
-                            items = Array.isArray(retryData.items) ? retryData.items : [];
-                            total = retryData.total || items.length;
-                        }
                     }
+                    // Don't retry on 500 — it just hangs the UI
                 } catch (govErr: any) {
-                    // Gov.br also failed — show helpful message instead of generic error
                     if (govErr.name === 'AbortError') {
-                        toast.error('Portal PNCP indisponível. Tente novamente em alguns minutos.');
+                        toast.warning('A API do Gov.br não respondeu em 15s. Mostrando apenas resultados da base local.');
                     }
+                } finally {
+                    clearTimeout(govTimeout);
                 }
             }
 

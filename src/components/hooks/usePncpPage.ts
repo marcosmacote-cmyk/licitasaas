@@ -631,7 +631,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     return {
         // Search state (from usePncpSearch)
         savedSearches: savedSearches.savedSearches,
-        results: search.results, loading: search.loading || scanner.loading,
+        results: search.results, loading: search.loading,
         searchSlow: search.searchSlow,
         saving: savedSearches.saving,
         showAdvancedFilters: search.showAdvancedFilters, setShowAdvancedFilters: search.setShowAdvancedFilters,

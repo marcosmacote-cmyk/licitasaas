@@ -44,12 +44,12 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
             // Step 0: Check if result already has items from local search
             if (item.itens_preview && item.itens_preview.length > 0) {
                 setItemDetails(item.itens_preview.map((it: any) => ({
-                    numeroItem: it.numero,
-                    descricao: it.descricao,
-                    quantidade: it.quantidade,
-                    unidadeMedida: it.unidade,
-                    valorUnitarioEstimado: it.valorUnitario,
-                    valorTotal: it.valorTotal,
+                    itemNumber: it.numero || it.numeroItem || it.itemNumber,
+                    description: it.descricao || it.description || '',
+                    quantity: it.quantidade || it.quantity,
+                    unit: it.unidade || it.unidadeMedida || it.unit || '',
+                    unitValue: it.valorUnitario || it.valorUnitarioEstimado || it.unitValue || 0,
+                    totalValue: it.valorTotal || it.totalValue || 0,
                 })));
                 return;
             }
@@ -62,7 +62,15 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                 if (localRes.ok) {
                     const localData = await localRes.json();
                     if (Array.isArray(localData) && localData.length > 0) {
-                        setItemDetails(localData);
+                        // Normalize field names to match table renderer
+                        setItemDetails(localData.map((it: any) => ({
+                            itemNumber: it.numeroItem || it.itemNumber,
+                            description: it.descricao || it.description || '',
+                            quantity: it.quantidade || it.quantity,
+                            unit: it.unidadeMedida || it.unit || '',
+                            unitValue: it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0,
+                            totalValue: it.valorTotal || it.totalValue || 0,
+                        })));
                         return;
                     }
                 }
