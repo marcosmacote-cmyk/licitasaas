@@ -1,11 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runOpportunityScan = runOpportunityScan;
 exports.startOpportunityScanner = startOpportunityScanner;
-const axios_1 = __importDefault(require("axios"));
 const https_1 = __importDefault(require("https"));
 const prisma_1 = require("../../lib/prisma");
 const notification_service_1 = require("../monitoring/notification.service");
@@ -32,56 +64,13 @@ const MAX_PAGES_PER_SEARCH = 5; // Máximo 5 páginas = 250 resultados
 const DEDUP_EXPIRY_DAYS = 30; // Limpar registros com mais de 30 dias
 const agent = new https_1.default.Agent({ rejectUnauthorized: false });
 /**
- * Faz uma requisição HTTP com retry e backoff exponencial.
- * @param url URL a ser buscada
- * @param retries Número de tentativas restantes (default: 3)
- * @returns dados da resposta ou null se todas falharem
- */
-async function fetchWithRetry(url, retries = MAX_RETRIES) {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const res = await axios_1.default.get(url, {
-                headers: { 'Accept': 'application/json' },
-                httpsAgent: agent,
-                timeout: 15000
-            });
-            return res.data;
-        }
-        catch (err) {
-            const isLast = attempt === retries;
-            if (isLast) {
-                logger_1.logger.warn(`[OpportunityScanner] ❌ Falha após ${retries} tentativas: ${err.message}`);
-                return null;
-            }
-            const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-            logger_1.logger.warn(`[OpportunityScanner] ⚠️ Tentativa ${attempt}/${retries} falhou (${err.message}). Retentando em ${backoffMs / 1000}s...`);
-            await new Promise(r => setTimeout(r, backoffMs));
-        }
-    }
-    return null;
-}
-/**
- * Executa uma busca PNCP com os mesmos filtros da pesquisa salva.
- * Agora com paginação completa (até MAX_PAGES_PER_SEARCH páginas) e retry.
+ * Executa uma busca PNCP utilizando o novo PncpSearchService unificado.
+ * Isso garante que o robô obtenha EXATAMENTE os mesmos resultados
+ * da tela de Busca, eliminando discrepâncias.
  */
 async function executePncpSearch(search) {
-    const keywords = search.keywords || '';
-    const status = search.status || 'recebendo_proposta';
-    // Parse keywords (mesma lógica do endpoint /api/pncp/search)
-    let kwList = [];
-    if (keywords) {
-        if (keywords.includes(',')) {
-            kwList = keywords.split(',')
-                .map(k => k.trim().replace(/^"|"$/g, ''))
-                .filter(k => k.length > 0)
-                .map(k => k.includes(' ') ? `"${k}"` : k);
-        }
-        else {
-            kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
-        }
-    }
-    // Parse extra filters from states (stored as JSON string)
-    let ufs = [];
+    const { PncpSearchService } = await Promise.resolve().then(() => __importStar(require('../pncp/pncp-search.service')));
+    let ufs = '';
     let modalidade = '';
     let esfera = '';
     let orgao = '';
@@ -93,14 +82,10 @@ async function executePncpSearch(search) {
         try {
             const parsed = JSON.parse(search.states);
             if (Array.isArray(parsed))
-                ufs = parsed;
+                ufs = parsed.join(',');
             else if (typeof parsed === 'object') {
-                if (parsed.uf) {
-                    if (parsed.uf.includes(','))
-                        ufs = parsed.uf.split(',').map((u) => u.trim()).filter(Boolean);
-                    else
-                        ufs = [parsed.uf];
-                }
+                if (parsed.uf)
+                    ufs = parsed.uf;
                 modalidade = parsed.modalidade || '';
                 esfera = parsed.esfera || '';
                 orgao = parsed.orgao || '';
@@ -110,118 +95,35 @@ async function executePncpSearch(search) {
                 dataFim = parsed.dataFim || '';
             }
             else if (typeof parsed === 'string' && parsed.length > 0)
-                ufs = parsed.split(',');
+                ufs = parsed;
         }
         catch {
-            if (search.states.includes(','))
-                ufs = search.states.split(',').map(s => s.trim());
-            else if (search.states.length === 2)
-                ufs = [search.states];
+            ufs = search.states;
         }
     }
-    // Process orgao and orgaosLista into single list
-    let extractedNames = [];
-    if (orgao && orgao.includes(',')) {
-        orgaosLista = orgaosLista ? `${orgaosLista},${orgao}` : orgao;
-        orgao = '';
-    }
-    if (orgaosLista) {
-        extractedNames = orgaosLista.split(/[\n,;]+/).map((s) => s.trim().replace(/^"|"$/g, '')).filter((s) => s.length > 0);
-        extractedNames = [...new Set(extractedNames)]; // Remove duplicates
-    }
-    const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
-    // Build URL (now accepts page parameter)
-    const buildUrl = (qItems, singleUf, singleOrgao, pagina = 1) => {
-        let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=50&pagina=${pagina}`;
-        let terms = [...qItems];
-        if (singleOrgao)
-            terms.push(singleOrgao.includes(' ') && !singleOrgao.startsWith('"') ? `"${singleOrgao}"` : singleOrgao);
-        if (terms.length > 0)
-            url += `&q=${encodeURIComponent(terms.join(' '))}`;
-        if (status && status !== 'todas')
-            url += `&status=${status}`;
-        if (singleUf)
-            url += `&ufs=${singleUf}`;
-        if (modalidade && modalidade !== 'todas')
-            url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-        if (dataInicio)
-            url += `&data_inicio=${dataInicio}`;
-        if (dataFim)
-            url += `&data_fim=${dataFim}`;
-        if (esfera && esfera !== 'todas')
-            url += `&esferas=${esfera}`;
-        return url;
+    const input = {
+        keywords: search.keywords || '',
+        status: search.status || 'recebendo_proposta',
+        uf: ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords,
+        dataInicio, dataFim,
+        pagina: 1,
+        // Carga máxima permitida por varredura
+        tamanhoPagina: 150
     };
-    const keywordsToIterate = kwList.length > 0 ? kwList : [null];
-    const ufsForIteration = ufs.length > 0 ? ufs : [null];
-    // Build base URL combinations (page 1)
-    const baseUrlCombinations = [];
-    for (const kw of keywordsToIterate) {
-        for (const singleUf of ufsForIteration) {
-            for (const org of orgaosToIterate) {
-                const params = [];
-                if (kw)
-                    params.push(kw);
-                baseUrlCombinations.push({ params, uf: singleUf || undefined, org: org || undefined });
-            }
-        }
-    }
-    // Limit combinations
-    const combinations = baseUrlCombinations.slice(0, 20);
-    let excludeList = [];
-    if (excludeKeywords) {
-        excludeList = excludeKeywords.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    }
-    let rawItems = [];
-    for (const combo of combinations) {
-        // ── Paginação: buscar múltiplas páginas por combinação ──
-        for (let page = 1; page <= MAX_PAGES_PER_SEARCH; page++) {
-            const url = buildUrl(combo.params, combo.uf, combo.org, page);
-            const data = await fetchWithRetry(url);
-            if (!data)
-                break; // Falhou após retries, pular combinação
-            const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-            rawItems = rawItems.concat(items);
-            // Se retornou menos que 50, não há mais páginas
-            if (items.length < 50)
-                break;
-            // Rate limit entre páginas
-            await new Promise(r => setTimeout(r, PNCP_REQUEST_DELAY_MS));
-        }
-        // Rate limit entre combinações
-        await new Promise(r => setTimeout(r, PNCP_REQUEST_DELAY_MS));
-    }
-    // Dedup and normalize
-    const seenIds = new Set();
-    return rawItems.filter(item => item != null).map((item) => {
-        const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || '';
-        const ano = item.ano || item.anoCompra || '';
-        const nSeq = item.numero_sequencial || item.sequencialCompra || '';
-        const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : null) || item.id || Math.random().toString();
-        return {
-            id: pncpId,
-            titulo: item.title || item.titulo || 'Sem título',
-            objeto: item.description || item.objetoCompra || item.objeto || '',
-            orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || 'Órgão não informado',
-            uf: item.uf || item.unidadeOrgao?.ufSigla || '--',
-            municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || '--',
-            valor_estimado: Number(item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado ?? 0) || 0,
-            data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
-            modalidade_nome: item.modalidade_licitacao_nome || item.modalidade_nome || '',
-            link_sistema: (cnpj && ano && nSeq) ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}` : (item.linkSistemaOrigem || ''),
-        };
-    }).filter(item => {
-        if (seenIds.has(item.id))
-            return false;
-        if (excludeList.length > 0) {
-            const txt = `${item.titulo} ${item.objeto}`.toLowerCase();
-            const containsExclude = excludeList.some(ex => txt.includes(ex));
-            if (containsExclude)
-                return false;
-        }
-        seenIds.add(item.id);
-        return true;
-    });
+    // A mágica agora mora no Service. O robô sempre usará a base unificada.
+    const result = await PncpSearchService.search(input);
+    return result.items.map((c) => ({
+        id: c.id,
+        titulo: c.titulo,
+        objeto: c.objeto,
+        orgao_nome: c.orgao_nome,
+        uf: c.uf,
+        municipio: c.municipio,
+        valor_estimado: c.valor_estimado,
+        data_encerramento_proposta: c.data_encerramento_proposta,
+        modalidade_nome: c.modalidade_nome,
+        link_sistema: c.link_sistema
+    }));
 }
 /**
  * Formata valor em BRL
@@ -245,16 +147,18 @@ function formatDate(dateStr) {
     }
 }
 /**
- * Verifica se um pncpId já foi notificado para um tenant (usando DB persistente)
+ * Verifica se um pncpId já foi notificado para um tenant e para uma pesquisa específica.
+ * Usando findFirst pois searchId poderia ser nulo no banco antigo, mas não sob a nova regra.
  */
-async function isAlreadyNotified(tenantId, pncpId) {
+async function isAlreadyNotified(tenantId, searchId, pncpId) {
     const existing = await prisma_1.prisma.opportunityScannerLog.findUnique({
-        where: { tenantId_pncpId: { tenantId, pncpId } }
+        where: { tenantId_searchId_pncpId: { tenantId, searchId, pncpId } }
     });
     return !!existing;
 }
 /**
  * Marca um pncpId como notificado para um tenant e salva dados completos do edital.
+ * searchId e searchName agora são OBRIGATÓRIOS.
  */
 async function markAsNotified(tenantId, result, searchId, searchName) {
     try {
@@ -263,7 +167,7 @@ async function markAsNotified(tenantId, result, searchId, searchName) {
                 tenantId,
                 pncpId: result.id,
                 searchId,
-                searchName: searchName || null,
+                searchName,
                 titulo: result.titulo,
                 objeto: result.objeto,
                 orgaoNome: result.orgao_nome,
@@ -455,7 +359,8 @@ async function runOpportunityScan(targetTenantId) {
                     // Filtrar apenas resultados novos (não notificados anteriormente — via DB)
                     const newResults = [];
                     for (const r of results) {
-                        const alreadyNotified = await isAlreadyNotified(tenantId, r.id);
+                        // Passamos o search.id garantindo que a mesma oportunidade não conflita entre diferentes pesquisas
+                        const alreadyNotified = await isAlreadyNotified(tenantId, search.id, r.id);
                         if (!alreadyNotified) {
                             newResults.push(r);
                         }

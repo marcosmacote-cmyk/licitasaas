@@ -38,6 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const versionGovernance_1 = require("./services/ai/governance/versionGovernance");
 const opportunity_scanner_service_1 = require("./services/monitoring/opportunity-scanner.service");
+const pncpAggregator_1 = require("./workers/pncpAggregator");
 const batch_platform_monitor_service_1 = require("./services/monitoring/batch-platform-monitor.service");
 const pcp_monitor_service_1 = require("./services/monitoring/pcp-monitor.service");
 const licitanet_monitor_service_1 = require("./services/monitoring/licitanet-monitor.service");
@@ -1094,6 +1095,24 @@ app.listen(PORT, async () => {
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
 if (PROCESS_ROLE !== 'api') {
     (0, opportunity_scanner_service_1.startOpportunityScanner)(4);
+    // ── PNCP Aggregator: sincroniza base local a cada 15min (modo single-process) ──
+    setTimeout(async () => {
+        logger_1.logger.info('[PNCP-AGG] 🚀 Aggregator inline iniciado (intervalo: 15min)');
+        try {
+            await (0, pncpAggregator_1.runPncpSync)();
+        }
+        catch (e) {
+            logger_1.logger.error('[PNCP-AGG] sync error:', e.message);
+        }
+        setInterval(async () => {
+            try {
+                await (0, pncpAggregator_1.runPncpSync)();
+            }
+            catch (e) {
+                logger_1.logger.error('[PNCP-AGG] sync error:', e.message);
+            }
+        }, 15 * 60000);
+    }, 90000);
 }
 else {
     logger_1.logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');

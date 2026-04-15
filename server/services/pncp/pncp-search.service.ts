@@ -211,9 +211,14 @@ export class PncpSearchService {
 
     /**
      * Motor de Busca Governamental (Remoto/Fallback)
+     * Recebe budgetMs para controlar o teto global de tempo.
+     * Se o budget esgotar, retorna o que obteve com meta.isPartial = true.
      */
-    static async searchGovbr(input: PncpSearchInput): Promise<PncpSearchResponse> {
+    static async searchGovbr(input: PncpSearchInput, budgetMs = 12000): Promise<PncpSearchResponse> {
         const startTime = Date.now();
+        const deadline = Date.now() + budgetMs;
+        const timeLeft = () => Math.max(0, deadline - Date.now());
+        const isExpired = () => Date.now() >= deadline;
         const { keywords, status, uf, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = input;
         const meta: PncpSearchMeta = { source: 'govbr', fallbackUsed: true, isPartial: false, errors: [] };
         const requestedPageSize = Math.max(1, Math.min(Number(input.tamanhoPagina) || 50, 100));
@@ -240,8 +245,10 @@ export class PncpSearchService {
                     if (modalidadeCode) url += `&codigoModalidadeContratacao=${modalidadeCode}`;
                     
                     for (let attempt = 0; attempt < 3; attempt++) {
+                        if (isExpired()) { meta.isPartial = true; return { data: [], totalPages: 0 }; }
                         try {
-                            const resp = await axios.get(url, { httpsAgent: pncpKeepAliveAgent, timeout: 10000 } as any);
+                            const axiosTimeout = Math.min(8000, timeLeft());
+                            const resp = await axios.get(url, { httpsAgent: pncpKeepAliveAgent, timeout: axiosTimeout } as any);
                             return { data: Array.isArray((resp.data as any)?.data) ? (resp.data as any).data : [], totalPages: (resp.data as any)?.totalPaginas || 1 };
                         } catch (err: any) {
                             if (attempt < 2 && (err?.response?.status >= 500 || err.code === 'ECONNABORTED')) {
@@ -361,8 +368,10 @@ export class PncpSearchService {
                 let rawItems: any[] = [];
                 const fetchWithRetry = async (url: string, retries = 2) => {
                      for (let attempt = 0; attempt <= retries; attempt++) {
+                          if (isExpired()) { meta.isPartial = true; return []; }
                           try {
-                               const resp = await axios.get(url, { headers: { 'Accept': 'application/json' }, httpsAgent: pncpKeepAliveAgent, timeout: 12000 } as any);
+                               const axiosTimeout = Math.min(8000, timeLeft());
+                               const resp = await axios.get(url, { headers: { 'Accept': 'application/json' }, httpsAgent: pncpKeepAliveAgent, timeout: axiosTimeout } as any);
                                return Array.isArray((resp.data as any)?.items) ? (resp.data as any).items : (Array.isArray((resp.data as any)?.data) ? (resp.data as any).data : []);
                           } catch (err: any) {
                                if (attempt < retries && (err.code === 'ECONNABORTED' || err?.response?.status >= 500)) { await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); continue; }
@@ -488,60 +497,90 @@ export class PncpSearchService {
     }
 
     /**
-     * Motor de Fusão (Busca Híbrida)
-     * Abordagem atual: tentar Local-First. Se o DB local não retornar nada, tentar Remoto (Govbr).
-     * No futuro isso pode mesclar e classificar tudo instantaneamente.
+     * Motor de Fusão (Busca Híbrida) — LOCAL-FIRST com STALENESS CHECK
+     * 
+     * Estratégia em camadas:
+     * 1. Local SEMPRE primeiro (<500ms)
+     * 2. Se local retornou >0 E banco está fresco E filtros são simples → retorna local
+     * 3. Se local=0 OU banco stale OU filtros complexos → Gov.br com budget controlado
+     * 4. Nunca ultrapassa 15s de tempo total
      */
-    static async search(input: PncpSearchInput, preferLocalIfPartial = true): Promise<PncpSearchResponse> {
-        // Tentativa Local
+    static async search(input: PncpSearchInput): Promise<PncpSearchResponse> {
+        const TOTAL_BUDGET_MS = 13000;
+        const start = Date.now();
+
+        // 1. Local sempre primeiro (<500ms em condições normais)
         const localResponse = await this.searchLocal(input);
-        
-        // Filtros que o banco local NÃO cobre com confiança total (texto livre, orgaos externos, janelas de data)
-        // UF, status, modalidade e esfera são bem indexados no local — não forçam remoto
-        const hasHighRiskFilters = !!(
+
+        // 2. Verificar se o banco está atualizado
+        let isStale = true;
+        try {
+            const syncState = await prisma.pncpSyncState.findUnique({ where: { id: 'singleton' } });
+            isStale = !syncState ||
+                (Date.now() - syncState.lastFullSyncAt.getTime()) > 2 * 3600 * 1000; // >2h = stale
+        } catch { /* Se falhar a verificação, tratar como stale para segurança */ }
+
+        // 3. Decidir: ir ao Gov.br?
+        const hasComplexFilters = !!(
             input.keywords ||
             input.orgao ||
             input.orgaosLista ||
             input.dataInicio ||
             input.dataFim
         );
-        
-        // Se achou no local, mas é uma busca de baixo risco (ex: todos status recebendo_proposta)
-        if (localResponse.total > 0 && !hasHighRiskFilters) {
-             return localResponse;
-        }
+        // UF, status, modalidade, esfera: OK local se banco estiver completo
 
-        // Se tem filtros de risco, a base local será marcada como possivelmente parcial
-        if (localResponse.total > 0 && hasHighRiskFilters) {
-             localResponse.meta.isPartial = true;
-        }
+        const needsRemote =
+            localResponse.total === 0 ||   // zero local = vai remoto sempre
+            isStale ||                      // banco desatualizado = vai remoto sempre
+            hasComplexFilters;              // filtros complexos: local pode não cobrir
 
-        // Disparar Gov.br se o local zerou, OU se há filtros de risco e precisamos confirmar na fonte
-        const shouldFallbackToRemote = localResponse.total === 0 || hasHighRiskFilters;
-
-        if (!shouldFallbackToRemote) {
-             return localResponse;
-        }
-
-        logger.info(`[PncpSearchService] Disparando fallback Gov.br (Total Local: ${localResponse.total} | Filtros de Risco: ${hasHighRiskFilters})`);
-        const remoteResponse = await this.searchGovbr(input);
-        
-        remoteResponse.meta.localCount = localResponse.total;
-        
-        // Se a remota não trouxe nada, mas a local tinha algo (ex: API offline), devolve a local (marcada como parcial)
-        if (remoteResponse.total === 0 && localResponse.total > 0) {
-            localResponse.meta.fallbackUsed = true;
-            if (remoteResponse.meta.errors.length > 0) {
-                 localResponse.meta.errors.push(...remoteResponse.meta.errors);
-            }
+        if (!needsRemote) {
+            logger.info(`[PncpSearch] ✅ local-only: ${localResponse.total} resultados em ${localResponse.meta.elapsedMs}ms (stale=${isStale})`);
             return localResponse;
         }
 
-        // Se ambos falharem, juntar os erros para observabilidade
-        if (remoteResponse.total === 0 && (remoteResponse.meta.errors.length > 0 || localResponse.meta.errors.length > 0)) {
-            remoteResponse.meta.errors = [...localResponse.meta.errors, ...remoteResponse.meta.errors];
+        // 4. Calcular budget para o remoto
+        const budgetForRemote = TOTAL_BUDGET_MS - (Date.now() - start);
+        if (budgetForRemote < 2000) {
+            // Sem budget suficiente, retorna o que tem localmente
+            localResponse.meta.isPartial = true;
+            logger.info(`[PncpSearch] ⚠️ Budget insuficiente para Gov.br (${budgetForRemote}ms), retornando local parcial`);
+            return localResponse;
         }
 
-        return remoteResponse;
+        // 5. Remoto com budget
+        logger.info(`[PncpSearch] 🌐 Disparando Gov.br (local=${localResponse.total}, stale=${isStale}, complexFilters=${hasComplexFilters}, budget=${budgetForRemote}ms)`);
+        
+        try {
+            const remoteResponse = await this.searchGovbr(input, budgetForRemote);
+
+            // 6. Lógica de retorno
+            if (remoteResponse.total > 0) {
+                remoteResponse.meta.localCount = localResponse.total;
+                remoteResponse.meta.fallbackUsed = true;
+                return remoteResponse;
+            }
+            // Gov.br retornou vazio mas local tem dados → usar local (parcial)
+            if (localResponse.total > 0) {
+                localResponse.meta.isPartial = true;
+                localResponse.meta.fallbackUsed = true;
+                localResponse.meta.errors.push(...remoteResponse.meta.errors);
+                return localResponse;
+            }
+            // Ambos vazios
+            return remoteResponse;
+        } catch (error: any) {
+            logger.error(`[PncpSearch] Gov.br fallback failed: ${error?.message}`);
+            if (localResponse.total > 0) {
+                localResponse.meta.isPartial = true;
+                localResponse.meta.fallbackUsed = true;
+                localResponse.meta.errors.push(`Gov.br indisponível: ${error?.message}`);
+                return localResponse;
+            }
+            localResponse.meta.errors.push(`Gov.br indisponível: ${error?.message}`);
+            localResponse.meta.fallbackUsed = true;
+            return localResponse;
+        }
     }
 }

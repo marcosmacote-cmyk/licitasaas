@@ -650,4 +650,85 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ══════════════════════════════════════════
+// ── Sync Health (estado do Aggregator) ──
+// ══════════════════════════════════════════
+router.get('/sync-health', authenticateToken, async (req: any, res) => {
+    try {
+        const state = await prisma.pncpSyncState.findUnique({ where: { id: 'singleton' } });
+        const totalContratacoes = await prisma.pncpContratacao.count();
+        const totalItens = await prisma.pncpItem.count();
+        const totalAbertos = await prisma.pncpContratacao.count({ where: { situacao: { in: ['Divulgada', 'Aberta'] } } });
+
+        const now = Date.now();
+        const lastFullSyncMs = state?.lastFullSyncAt ? now - state.lastFullSyncAt.getTime() : null;
+        const isStale = !state || !lastFullSyncMs || lastFullSyncMs > 2 * 3600 * 1000; // >2h
+
+        res.json({
+            lastSyncAt: state?.lastSyncAt || null,
+            lastFullSyncAt: state?.lastFullSyncAt || null,
+            lastSyncAgo: state?.lastSyncAt ? `${Math.round((now - state.lastSyncAt.getTime()) / 60000)} min` : 'nunca',
+            totalContratacoes,
+            totalItens,
+            totalAbertos,
+            isStale,
+            isRunning: state?.isRunning || false,
+            totalSynced: state?.totalSynced || 0,
+            lastError: state?.lastError || null,
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error?.message || 'Erro ao buscar estado do sync' });
+    }
+});
+
+// ══════════════════════════════════════════
+// ── Items Local (consulta o banco PncpItem) ──
+// ══════════════════════════════════════════
+router.get('/items-local/:cnpj/:ano/:seq', authenticateToken, async (req: any, res) => {
+    try {
+        const { cnpj, ano, seq } = req.params;
+        const cleanCnpj = String(cnpj).replace(/\D/g, '');
+        const cleanAno = Number(ano);
+        const cleanSeq = Number(seq);
+
+        if (!cleanCnpj || !cleanAno || !cleanSeq) {
+            return res.json([]);
+        }
+
+        // Buscar contratação com seus itens
+        const contratacao = await prisma.pncpContratacao.findFirst({
+            where: {
+                cnpjOrgao: cleanCnpj,
+                anoCompra: cleanAno,
+                sequencialCompra: cleanSeq,
+            },
+            include: {
+                itens: {
+                    orderBy: { numeroItem: 'asc' },
+                },
+            },
+        });
+
+        if (!contratacao || contratacao.itens.length === 0) {
+            return res.json([]);
+        }
+
+        // Retornar items normalizados
+        const items = contratacao.itens.map(it => ({
+            itemNumber: it.numeroItem,
+            description: it.descricao || '',
+            quantity: it.quantidade || 0,
+            unit: it.unidadeMedida || 'UN',
+            unitValue: it.valorUnitario || 0,
+            totalValue: it.valorTotal || 0,
+            status: it.situacao || 'Ativo',
+        }));
+
+        res.json(items);
+    } catch (error: any) {
+        logger.error("Items local error:", error?.message);
+        res.json([]);
+    }
+});
+
 export default router;

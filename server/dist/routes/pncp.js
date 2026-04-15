@@ -491,12 +491,64 @@ router.post('/favorites/import', auth_1.authenticateToken, async (req, res) => {
 // In-memory cache for PNCP items (avoids repeated slow Gov.br calls)
 const pncpItemsCache = new Map();
 const PNCP_ITEMS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+// Shared keepAlive agent — reuses TCP connections, eliminates TLS handshake overhead
+const pncpKeepAliveAgent = new https_1.default.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 10 });
+/**
+ * Fetch items for a single process from Gov.br with retry + backoff.
+ * Returns the parsed result or throws on complete failure.
+ */
+async function fetchPncpItems(cleanCnpj, cleanAno, cleanSeq) {
+    const cacheKey = `${cleanCnpj}-${cleanAno}-${cleanSeq}`;
+    const cached = pncpItemsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < PNCP_ITEMS_CACHE_TTL) {
+        return cached.data;
+    }
+    const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
+    // Retry with escalating timeout: 5s first, 10s second attempt
+    const timeouts = [5000, 10000];
+    let lastError = null;
+    for (let attempt = 0; attempt < timeouts.length; attempt++) {
+        try {
+            const resp = await axios_1.default.get(itemsUrl, {
+                httpsAgent: pncpKeepAliveAgent,
+                timeout: timeouts[attempt],
+            });
+            const responseData = resp.data;
+            const rawItems = Array.isArray(responseData) ? responseData : (responseData?.data || responseData?.items || []);
+            const items = rawItems.map((it) => ({
+                itemNumber: it.numeroItem || it.numero || '-',
+                description: it.descricao || it.materialOuServicoNome || it.materialServico?.nome || 'Sem descrição',
+                quantity: it.quantidade || 1,
+                unit: it.unidadeMedida || it.unidade || '',
+                unitValue: it.valorUnitarioEstimado || it.valorUnitarioHomologado || 0,
+                totalValue: it.valorTotal || ((it.quantidade || 0) * (it.valorUnitarioEstimado || 0)) || 0,
+                status: it.situacaoCompraItemNome || it.situacaoItemNome || 'Ativo'
+            }));
+            const result = { items };
+            pncpItemsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+            return result;
+        }
+        catch (err) {
+            lastError = err;
+            if (err?.response?.status === 404) {
+                const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
+                pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
+                return emptyResult;
+            }
+            // On timeout/network error: retry with longer timeout
+            if (attempt < timeouts.length - 1) {
+                logger_1.logger.warn(`[PNCP Items] Attempt ${attempt + 1} failed (${err?.message}), retrying with ${timeouts[attempt + 1]}ms timeout...`);
+                await new Promise(r => setTimeout(r, 800)); // 800ms backoff
+            }
+        }
+    }
+    throw lastError;
+}
 router.get('/items', auth_1.authenticateToken, async (req, res) => {
     try {
         const { cnpj, ano, seq } = req.query;
         if (!cnpj || !ano || !seq)
             return res.status(400).json({ error: 'cnpj, ano, and seq required' });
-        // Validate params — avoid doomed requests
         const cleanCnpj = String(cnpj).replace(/\D/g, '');
         const cleanAno = String(ano).replace(/\D/g, '');
         const cleanSeq = String(seq).replace(/\D/g, '');
@@ -504,43 +556,12 @@ router.get('/items', auth_1.authenticateToken, async (req, res) => {
             logger_1.logger.warn(`[PNCP Items] Invalid params: cnpj=${cnpj}, ano=${ano}, seq=${seq}`);
             return res.json({ items: [], message: 'Dados insuficientes para consultar itens (CNPJ/ano/sequencial incompletos)' });
         }
-        const cacheKey = `${cleanCnpj}-${cleanAno}-${cleanSeq}`;
-        const cached = pncpItemsCache.get(cacheKey);
-        if (cached && (Date.now() - cached.timestamp) < PNCP_ITEMS_CACHE_TTL) {
-            return res.json(cached.data);
-        }
         const startTime = Date.now();
-        const agent = new https_1.default.Agent({ rejectUnauthorized: false, keepAlive: true });
-        // The items endpoint is actually on the /api/pncp/v1/ path, NOT /api/consulta/v1/
-        const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${cleanCnpj}/compras/${cleanAno}/${cleanSeq}/itens?pagina=1&tamanhoPagina=100`;
-        let responseData = null;
-        try {
-            const resp = await axios_1.default.get(itemsUrl, { httpsAgent: agent, timeout: 8000 });
-            responseData = resp.data;
-        }
-        catch (err) {
-            if (err?.response?.status === 404) {
-                const emptyResult = { items: [], message: 'Itens não cadastrados no portal PNCP para este processo' };
-                pncpItemsCache.set(cacheKey, { data: emptyResult, timestamp: Date.now() });
-                return res.json(emptyResult);
-            }
-            logger_1.logger.error(`[PNCP Items] Failed to fetch items (${err?.message})`);
-            throw err;
-        }
+        const result = await fetchPncpItems(cleanCnpj, cleanAno, cleanSeq);
         const elapsed = Date.now() - startTime;
-        const rawItems = Array.isArray(responseData) ? responseData : (responseData?.data || responseData?.items || []);
-        const items = rawItems.map((it) => ({
-            itemNumber: it.numeroItem || it.numero || '-',
-            description: it.descricao || it.materialOuServicoNome || it.materialServico?.nome || 'Sem descrição',
-            quantity: it.quantidade || 1,
-            unit: it.unidadeMedida || it.unidade || '',
-            unitValue: it.valorUnitarioEstimado || it.valorUnitarioHomologado || 0,
-            totalValue: it.valorTotal || ((it.quantidade || 0) * (it.valorUnitarioEstimado || 0)) || 0,
-            status: it.situacaoCompraItemNome || it.situacaoItemNome || 'Ativo'
-        }));
-        const result = { items };
-        pncpItemsCache.set(cacheKey, { data: result, timestamp: Date.now() });
-        logger_1.logger.info(`[PNCP Items] ✅ ${items.length} items for ${cacheKey} in ${elapsed}ms`);
+        if (elapsed > 100) { // Only log non-cached calls
+            logger_1.logger.info(`[PNCP Items] ✅ ${result.items.length} items for ${cleanCnpj}-${cleanAno}-${cleanSeq} in ${elapsed}ms`);
+        }
         res.json(result);
     }
     catch (error) {
@@ -549,6 +570,47 @@ router.get('/items', auth_1.authenticateToken, async (req, res) => {
         }
         logger_1.logger.error(`PNCP items error for ${req.query.cnpj}/${req.query.ano}/${req.query.seq}:`, error?.message || error);
         res.status(500).json({ error: 'Erro ao buscar itens no PNCP. Verifique se o processo possui itens cadastrados.' });
+    }
+});
+/**
+ * Batch prefetch endpoint — pre-warms cache for multiple items in parallel.
+ * Called by the frontend immediately after search results load.
+ * Returns nothing meaningful; the goal is to warm the cache.
+ */
+router.post('/items/prefetch', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { processes } = req.body; // Array of { cnpj, ano, seq }
+        if (!Array.isArray(processes) || processes.length === 0) {
+            return res.json({ prefetched: 0 });
+        }
+        // Limit to 5 concurrent prefetches to avoid overwhelming Gov.br
+        const toFetch = processes.slice(0, 10).filter((p) => {
+            if (!p.cnpj || !p.ano || !p.seq)
+                return false;
+            const key = `${String(p.cnpj).replace(/\D/g, '')}-${String(p.ano).replace(/\D/g, '')}-${String(p.seq).replace(/\D/g, '')}`;
+            const cached = pncpItemsCache.get(key);
+            return !cached || (Date.now() - cached.timestamp) > PNCP_ITEMS_CACHE_TTL;
+        });
+        if (toFetch.length === 0) {
+            return res.json({ prefetched: 0, cached: true });
+        }
+        // Fire-and-forget: don't await — respond immediately
+        res.json({ prefetched: toFetch.length, status: 'warming' });
+        // Warm cache in background with 500ms stagger between calls
+        for (const proc of toFetch) {
+            const cleanCnpj = String(proc.cnpj).replace(/\D/g, '');
+            const cleanAno = String(proc.ano).replace(/\D/g, '');
+            const cleanSeq = String(proc.seq).replace(/\D/g, '');
+            fetchPncpItems(cleanCnpj, cleanAno, cleanSeq).catch(err => {
+                logger_1.logger.warn(`[PNCP Prefetch] Failed for ${cleanCnpj}-${cleanAno}-${cleanSeq}: ${err?.message}`);
+            });
+            await new Promise(r => setTimeout(r, 500)); // 500ms stagger
+        }
+    }
+    catch (error) {
+        logger_1.logger.error('[PNCP Prefetch] Error:', error?.message);
+        if (!res.headersSent)
+            res.json({ prefetched: 0, error: error?.message });
     }
 });
 // ══════════════════════════════════════════
@@ -567,410 +629,123 @@ const STATUS_TO_GOVBR = {
 // In-memory cache for PNCP search results (avoids repeated slow Gov.br calls)
 const pncpSearchCache = new Map();
 const PNCP_SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// ── Periodic cache cleanup to prevent memory leaks (P4 fix) ──
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of pncpSearchCache) {
+        if (now - val.timestamp > PNCP_SEARCH_CACHE_TTL * 2)
+            pncpSearchCache.delete(key);
+    }
+    for (const [key, val] of pncpItemsCache) {
+        if (now - val.timestamp > PNCP_ITEMS_CACHE_TTL * 2)
+            pncpItemsCache.delete(key);
+    }
+}, 5 * 60 * 1000); // Every 5 minutes
 router.post('/search', auth_1.authenticateToken, async (req, res) => {
     try {
-        const { keywords, status, uf, pagina = 1, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = req.body;
-        // ── Cache check: hash search params to avoid redundant Gov.br calls ──
-        const cacheKey = JSON.stringify({ keywords, status, uf, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords });
-        const cached = pncpSearchCache.get(cacheKey);
-        if (cached && (Date.now() - cached.timestamp) < PNCP_SEARCH_CACHE_TTL) {
-            const totalResults = cached.data.length;
-            logger_1.logger.info(`[PNCP] Cache HIT for search (${totalResults} total)`);
-            return res.json({ items: cached.data, total: totalResults });
-        }
-        const startTime = Date.now();
-        const agent = new https_1.default.Agent({ rejectUnauthorized: false, keepAlive: true });
-        logger_1.logger.info(`[PNCP] SEARCH REQUEST - status="${status}" uf="${uf}" keywords="${keywords}" modalidade="${modalidade}"`);
-        // ══════════════════════════════════════════════════════════════
-        // ── STRATEGY: Use Official Consulta API when possible ──
-        // The /api/consulta/v1/ returns valorTotalEstimado, UF reliable,
-        // and structured data. The /api/search/ is needed only for 
-        // full-text keyword matching.
-        // ══════════════════════════════════════════════════════════════
-        let filteredItems = [];
-        // If keywords are provided, we MUST use the search API fallback because the official
-        // consulta API doesn't support text search and we would only be searching within the first 500 items.
-        const useOfficialApi = (status === 'recebendo_proposta' || !status || status === '')
-            && !orgao && !orgaosLista && !keywords;
-        if (useOfficialApi) {
-            // ── FAST PATH: Official PNCP Consulta API ──
-            // Endpoint: /api/consulta/v1/contratacoes/proposta
-            // Returns: valorTotalEstimado, UF, modalidade, everything!
-            logger_1.logger.info(`[PNCP] Using OFFICIAL API (contratacoes/proposta) fast path`);
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const dataFinalParam = dataFim ? dataFim.replace(/-/g, '') : tomorrow.toISOString().split('T')[0].replace(/-/g, '');
-            // Build UF list for iteration
-            let ufsForApi = [];
-            if (uf && typeof uf === 'string' && uf.trim()) {
-                if (uf.includes(',')) {
-                    ufsForApi = uf.split(',').map((u) => u.trim()).filter(Boolean);
-                }
-                else {
-                    ufsForApi = [uf.trim()];
-                }
-            }
-            // Build modalidade code if specified
-            const modalidadeCode = modalidade && modalidade !== 'todas' ? modalidade : '';
-            const fetchOfficialPage = async (pageNum, singleUf) => {
-                let url = `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=${dataFinalParam}&pagina=${pageNum}&tamanhoPagina=50`;
-                if (singleUf)
-                    url += `&uf=${singleUf}`;
-                if (modalidadeCode)
-                    url += `&codigoModalidadeContratacao=${modalidadeCode}`;
-                // Exponential backoff retry
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        const resp = await axios_1.default.get(url, { httpsAgent: agent, timeout: 10000 });
-                        const body = resp.data;
-                        return {
-                            data: Array.isArray(body?.data) ? body.data : [],
-                            totalPages: body?.totalPaginas || 1
-                        };
-                    }
-                    catch (err) {
-                        if (attempt < 2 && (err?.response?.status >= 500 || err.code === 'ECONNABORTED')) {
-                            const delay = 1000 * Math.pow(2, attempt);
-                            logger_1.logger.warn(`[PNCP] Official API retry ${attempt + 1} after ${delay}ms (${err?.message})`);
-                            await new Promise(r => setTimeout(r, delay));
-                            continue;
-                        }
-                        logger_1.logger.error(`[PNCP] Official API failed: ${err?.message}`);
-                        return { data: [], totalPages: 0 };
-                    }
-                }
-                return { data: [], totalPages: 0 };
-            };
-            const MAX_PAGES = 10; // Max 500 items (50/page * 10 pages)
-            const MAX_ITEMS = 500;
-            let rawConsulta = [];
-            if (ufsForApi.length > 0) {
-                // Fetch per UF in parallel
-                const ufBatches = await Promise.allSettled(ufsForApi.map(async (singleUf) => {
-                    const first = await fetchOfficialPage(1, singleUf);
-                    let allData = [...first.data];
-                    const pagesToFetch = Math.min(first.totalPages, MAX_PAGES);
-                    if (pagesToFetch > 1) {
-                        const pageResults = await Promise.allSettled(Array.from({ length: pagesToFetch - 1 }, (_, i) => fetchOfficialPage(i + 2, singleUf)));
-                        for (const pr of pageResults) {
-                            if (pr.status === 'fulfilled')
-                                allData.push(...pr.value.data);
-                        }
-                    }
-                    return allData;
-                }));
-                for (const batch of ufBatches) {
-                    if (batch.status === 'fulfilled')
-                        rawConsulta.push(...batch.value);
-                    if (rawConsulta.length >= MAX_ITEMS)
-                        break;
-                }
-            }
-            else {
-                // No UF filter — fetch nationally
-                const first = await fetchOfficialPage(1);
-                rawConsulta = [...first.data];
-                const pagesToFetch = Math.min(first.totalPages, MAX_PAGES);
-                if (pagesToFetch > 1) {
-                    const pageResults = await Promise.allSettled(Array.from({ length: pagesToFetch - 1 }, (_, i) => fetchOfficialPage(i + 2)));
-                    for (const pr of pageResults) {
-                        if (pr.status === 'fulfilled')
-                            rawConsulta.push(...pr.value.data);
-                    }
-                }
-            }
-            // ── Map official API response to our standard format ──
-            const seenIds = new Set();
-            filteredItems = rawConsulta.filter(item => item != null).map((item) => {
-                const org = item.orgaoEntidade || {};
-                const uni = item.unidadeOrgao || {};
-                const cnpj = org.cnpj || '';
-                const ano = String(item.anoCompra || '');
-                const nSeq = String(item.sequencialCompra || '');
-                const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : Math.random().toString());
-                // Urgency level based on deadline
-                let urgency = 'medium';
-                if (item.dataAberturaProposta) {
-                    const daysUntil = (new Date(item.dataAberturaProposta).getTime() - Date.now()) / (1000 * 3600 * 24);
-                    if (daysUntil <= 3)
-                        urgency = 'critical';
-                    else if (daysUntil <= 7)
-                        urgency = 'high';
-                    else if (daysUntil <= 15)
-                        urgency = 'medium';
-                    else
-                        urgency = 'low';
-                }
-                return {
-                    id: pncpId,
-                    orgao_nome: org.razaoSocial || 'Órgão não informado',
-                    orgao_cnpj: cnpj,
-                    ano,
-                    numero_sequencial: nSeq,
-                    titulo: item.numeroCompra ? `Compra nº ${item.numeroCompra}/${ano}` : `${item.modalidadeNome || 'Licitação'} nº ${nSeq}/${ano}`,
-                    objeto: item.objetoCompra || 'Sem objeto',
-                    data_publicacao: item.dataPublicacaoPncp || item.dataInclusao || new Date().toISOString(),
-                    data_abertura: item.dataAberturaProposta || '',
-                    data_encerramento_proposta: item.dataEncerramentoProposta || '',
-                    valor_estimado: Number(item.valorTotalEstimado || item.valorTotalHomologado || 0),
-                    uf: uni.ufSigla || '',
-                    municipio: uni.municipioNome || '',
-                    modalidade_nome: item.modalidadeNome || '',
-                    link_sistema: (cnpj && ano && nSeq)
-                        ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
-                        : (item.linkSistemaOrigem || ''),
-                    link_comprasnet: item.linkSistemaOrigem || '',
-                    status: item.situacaoCompraNome || 'Aberta',
-                    esfera_id: org.esferaId || '',
-                    urgency,
-                    srp: item.srp || false,
-                    modo_disputa: item.modoDisputaNome || '',
-                };
-            }).filter(item => {
-                if (seenIds.has(item.id))
-                    return false;
-                seenIds.add(item.id);
-                return true;
-            });
-            // ── Client-side keyword filtering (official API has no text search) ──
-            if (keywords && typeof keywords === 'string' && keywords.trim()) {
-                const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                const kwTerms = keywords.split(',')
-                    .map((k) => normalize(k.trim().replace(/^"|"$/g, '')))
-                    .filter((k) => k.length > 1);
-                if (kwTerms.length > 0) {
-                    filteredItems = filteredItems.filter((it) => {
-                        const searchText = normalize((it.objeto || '') + ' ' + (it.titulo || '') + ' ' + (it.orgao_nome || ''));
-                        return kwTerms.some((term) => searchText.includes(term));
-                    });
-                    logger_1.logger.info(`[PNCP] Keyword filter applied: ${filteredItems.length} items match "${keywords}"`);
-                }
-            }
-            logger_1.logger.info(`[PNCP] Official API returned ${filteredItems.length} items (from ${rawConsulta.length} raw)`);
-        }
-        else {
-            // ── FALLBACK: Search API (for non-open statuses or org-specific searches) ──
-            logger_1.logger.info(`[PNCP] Using SEARCH API fallback (status="${status}")`);
-            let kwList = [];
-            if (keywords) {
-                if (keywords.includes(',')) {
-                    kwList = keywords.split(',')
-                        .map((k) => k.trim().replace(/^"|"$/g, ''))
-                        .filter((k) => k.length > 0)
-                        .map((k) => k.includes(' ') ? `"${k}"` : k);
-                }
-                else {
-                    kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
-                }
-            }
-            let effectiveOrgao = orgao || '';
-            let effectiveOrgaosLista = orgaosLista || '';
-            if (effectiveOrgao.includes(',')) {
-                effectiveOrgaosLista = effectiveOrgaosLista
-                    ? `${effectiveOrgaosLista},${effectiveOrgao}`
-                    : effectiveOrgao;
-                effectiveOrgao = '';
-            }
-            let ufsToIterate = [];
-            if (uf && uf.includes(',')) {
-                ufsToIterate = uf.split(',').map((u) => u.trim()).filter(Boolean);
-            }
-            else if (uf) {
-                ufsToIterate = [uf];
-            }
-            const buildBaseUrl = (qItems, overrideCnpj, singleUf) => {
-                let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 50 : 100}&pagina=1`;
-                if (overrideCnpj)
-                    url += `&cnpj=${overrideCnpj}`;
-                if (qItems.length > 0)
-                    url += `&q=${encodeURIComponent(qItems.join(' '))}`;
-                const govStatus = STATUS_TO_GOVBR[status] || status;
-                if (govStatus && govStatus !== '')
-                    url += `&status=${govStatus}`;
-                if (singleUf)
-                    url += `&ufs=${singleUf}`;
-                if (modalidade && modalidade !== 'todas')
-                    url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-                if (dataInicio)
-                    url += `&data_inicio=${dataInicio}`;
-                if (dataFim)
-                    url += `&data_fim=${dataFim}`;
-                if (esfera && esfera !== 'todas')
-                    url += `&esferas=${esfera}`;
-                return url;
-            };
-            let extractedNames = [];
-            if (effectiveOrgaosLista) {
-                extractedNames = effectiveOrgaosLista.split(/[\n,;]+/).map((s) => s.trim().replace(/^"|"$/g, '')).filter((s) => s.length > 0);
-                extractedNames = [...new Set(extractedNames)];
-            }
-            let urlsToFetch = [];
-            const keywordsToIterate = kwList.length > 0 ? kwList : [null];
-            const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (effectiveOrgao ? [effectiveOrgao] : [null]);
-            const ufsForIteration = ufsToIterate.length > 0 ? ufsToIterate : [null];
-            for (const kw of keywordsToIterate) {
-                for (const org2 of orgaosToIterate) {
-                    for (const singleUf of ufsForIteration) {
-                        let localParams = [];
-                        let overrideCnpj = undefined;
-                        if (kw)
-                            localParams.push(kw);
-                        if (org2) {
-                            const onlyNumbers = org2.replace(/\D/g, '');
-                            if (onlyNumbers.length === 14) {
-                                overrideCnpj = onlyNumbers;
-                            }
-                            else {
-                                const exactOrgName = org2.includes(' ') && !org2.startsWith('"') ? `"${org2}"` : org2;
-                                localParams.push(exactOrgName);
-                            }
-                        }
-                        urlsToFetch.push(buildBaseUrl(localParams, overrideCnpj, singleUf || undefined));
-                    }
-                }
-            }
-            urlsToFetch = urlsToFetch.slice(0, 30);
-            let rawItems = [];
-            const chunkSize = 15;
-            const MAX_ITEMS = 500;
-            for (let i = 0; i < urlsToFetch.length; i += chunkSize) {
-                if (rawItems.length >= MAX_ITEMS)
-                    break;
-                const chunk = urlsToFetch.slice(i, i + chunkSize);
-                const responses = await Promise.allSettled(chunk.map(u => axios_1.default.get(u, {
-                    headers: { 'Accept': 'application/json' },
-                    httpsAgent: agent,
-                    timeout: 8000
-                })));
-                for (const r of responses) {
-                    if (r.status === 'fulfilled') {
-                        const data = r.value.data;
-                        const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data?.data) ? data.data : []);
-                        rawItems = rawItems.concat(items);
-                    }
-                }
-            }
-            // Map search API results to standard format
-            const seenIds = new Set();
-            filteredItems = rawItems.filter(item => item != null).map((item) => {
-                const cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
-                const ano = item.ano || item.anoCompra || '';
-                const nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
-                const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado
-                    ?? item.valorTotalHomologado ?? item.amountInfo?.amount ?? item.valorTotalLicitacao
-                    ?? item.valorEstimado ?? item.valorGlobal ?? item.valor_total ?? item.amount ?? null;
-                const valorEstimado = rawVal != null ? (Number(rawVal) || 0) : 0;
-                const modalidadeNome = item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidadeNome
-                    || item.modalidadeLicitacaoNome || '';
-                const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : null) || item.id || Math.random().toString();
-                return {
-                    id: pncpId,
-                    orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || item.nomeOrgao || 'Órgão não informado',
-                    orgao_cnpj: cnpj, ano, numero_sequencial: nSeq,
-                    titulo: item.title || item.titulo || item.identificador || 'Sem título',
-                    objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
-                    data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
-                    data_abertura: item.dataAberturaProposta || item.data_inicio_vigencia || item.data_abertura || '',
-                    data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
-                    valor_estimado: valorEstimado,
-                    uf: item.uf || item.unidadeOrgao?.ufSigla || item.ufSigla || item.ufNome || '',
-                    municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '',
-                    modalidade_nome: modalidadeNome,
-                    link_sistema: (cnpj && ano && nSeq)
-                        ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
-                        : (item.linkSistemaOrigem || item.link || ''),
-                    link_comprasnet: item.linkSistemaOrigem || '',
-                    status: item.situacao_nome || item.situacaoCompraNome || item.status || status || '',
-                    esfera_id: item.esferaId || item.orgaoEntidade?.esferaId || '',
-                    urgency: 'medium',
-                };
-            }).filter(item => {
-                if (seenIds.has(item.id))
-                    return false;
-                seenIds.add(item.id);
-                return true;
-            });
-            // ── Post-filter by UF (search API leaks UFs) ──
-            if (typeof uf === 'string' && uf.trim() !== '') {
-                const beforeCount = filteredItems.length;
-                if (uf.includes(',')) {
-                    const allowedUfs = new Set(uf.split(',').map((u) => u.trim().toUpperCase()));
-                    filteredItems = filteredItems.filter((it) => {
-                        const itemUf = (it.uf || '').toString().trim().toUpperCase();
-                        return !itemUf || allowedUfs.has(itemUf);
-                    });
-                }
-                else {
-                    const ufUpper = uf.trim().toUpperCase();
-                    filteredItems = filteredItems.filter((it) => {
-                        const itemUf = (it.uf || '').toString().trim().toUpperCase();
-                        return !itemUf || itemUf === ufUpper;
-                    });
-                }
-                logger_1.logger.info(`[PNCP] UF Post-Filter: kept ${filteredItems.length}/${beforeCount}`);
-            }
-            // ── Hydrate valor_estimado for search API results (top 30) ──
-            const itemsToHydrate = filteredItems.slice(0, 30).filter((it) => it.orgao_cnpj && it.ano && it.numero_sequencial && (!it.valor_estimado || it.valor_estimado === 0));
-            if (itemsToHydrate.length > 0) {
-                const hydrateResults = await Promise.allSettled(itemsToHydrate.map((it) => axios_1.default.get(`https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`, { httpsAgent: agent, timeout: 4000 })));
-                hydrateResults.forEach((r, idx) => {
-                    if (r.status === 'fulfilled') {
-                        const detail = r.value.data;
-                        const val = detail?.valorTotalEstimado ?? detail?.valorTotalHomologado ?? null;
-                        if (val != null && Number(val) > 0) {
-                            itemsToHydrate[idx].valor_estimado = Number(val);
-                        }
-                    }
-                });
-                logger_1.logger.info(`[PNCP] Hydrated values for ${itemsToHydrate.length} items`);
-            }
-        }
-        // ═══════════════════════════════════════
-        // ── COMMON: Post-processing for both paths ──
-        // ═══════════════════════════════════════
-        // ── Post-filter by modalidade ──
-        const modalidadeMap = {
-            '1': 'Pregão', '2': 'Concorrência', '3': 'Concurso',
-            '4': 'Leilão', '5': 'Diálogo Competitivo', '6': 'Dispensa',
-            '7': 'Inexigibilidade', '8': 'Tomada de Preços', '9': 'Convite',
-        };
-        if (modalidade && modalidade !== 'todas') {
-            const modalidadeLabel = (modalidadeMap[modalidade] || '').toLowerCase();
-            if (modalidadeLabel) {
-                filteredItems = filteredItems.filter((it) => (it.modalidade_nome || '').toLowerCase().includes(modalidadeLabel));
-            }
-        }
-        // ── Post-filter: exclude keywords ──
-        if (excludeKeywords && typeof excludeKeywords === 'string' && excludeKeywords.trim()) {
-            const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const excludeTerms = excludeKeywords.split(',')
-                .map((t) => normalize(t.trim()))
-                .filter((t) => t.length > 0);
-            if (excludeTerms.length > 0) {
-                filteredItems = filteredItems.filter((it) => {
-                    const objNorm = normalize((it.objeto || '') + ' ' + (it.titulo || ''));
-                    return !excludeTerms.some((term) => objNorm.includes(term));
-                });
-            }
-        }
-        // ── Sort by closest deadline ──
-        const now = Date.now();
-        filteredItems.sort((a, b) => {
-            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || '9999').getTime();
-            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || '9999').getTime();
-            const absA = isNaN(dateA) ? Infinity : Math.abs(dateA - now);
-            const absB = isNaN(dateB) ? Infinity : Math.abs(dateB - now);
-            return absA - absB;
-        });
-        const totalResults = filteredItems.length;
-        pncpSearchCache.set(cacheKey, { data: filteredItems, timestamp: Date.now() });
-        const endTime = Date.now();
-        logger_1.logger.info(`[PNCP] END (${endTime - startTime}ms) - Total: ${totalResults} items`);
-        res.json({ items: filteredItems, total: totalResults });
+        const { PncpSearchService } = await Promise.resolve().then(() => __importStar(require('../services/pncp/pncp-search.service')));
+        const result = await PncpSearchService.searchGovbr(req.body);
+        res.json({ items: result.items, total: result.total, meta: result.meta });
     }
     catch (error) {
         logger_1.logger.error("PNCP search error:", error?.message || error);
         (0, errorHandler_1.handleApiError)(res, error, 'pncp-search');
+    }
+});
+router.post('/search-local', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { PncpSearchService } = await Promise.resolve().then(() => __importStar(require('../services/pncp/pncp-search.service')));
+        const result = await PncpSearchService.searchLocal(req.body);
+        res.json({ items: result.items, total: result.total, totalLocal: result.meta.localCount, elapsed: result.meta.elapsedMs, source: 'local', meta: result.meta });
+    }
+    catch (error) {
+        logger_1.logger.error("PNCP local search error:", error?.message || error);
+        (0, errorHandler_1.handleApiError)(res, error, 'pncp-search-local');
+    }
+});
+router.post('/search-hybrid', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { PncpSearchService } = await Promise.resolve().then(() => __importStar(require('../services/pncp/pncp-search.service')));
+        const result = await PncpSearchService.search(req.body); // Faz a mágica do fallback automaticamente
+        res.json({ items: result.items, total: result.total, totalLocal: result.meta.localCount, elapsed: result.meta.elapsedMs, source: result.meta.source, meta: result.meta });
+    }
+    catch (error) {
+        logger_1.logger.error("PNCP hybrid search error:", error?.message || error);
+        (0, errorHandler_1.handleApiError)(res, error, 'pncp-search-hybrid');
+    }
+});
+// ══════════════════════════════════════════
+// ── Sync Health (estado do Aggregator) ──
+// ══════════════════════════════════════════
+router.get('/sync-health', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const state = await prisma_1.default.pncpSyncState.findUnique({ where: { id: 'singleton' } });
+        const totalContratacoes = await prisma_1.default.pncpContratacao.count();
+        const totalItens = await prisma_1.default.pncpItem.count();
+        const totalAbertos = await prisma_1.default.pncpContratacao.count({ where: { situacao: { in: ['Divulgada', 'Aberta'] } } });
+        const now = Date.now();
+        const lastFullSyncMs = state?.lastFullSyncAt ? now - state.lastFullSyncAt.getTime() : null;
+        const isStale = !state || !lastFullSyncMs || lastFullSyncMs > 2 * 3600 * 1000; // >2h
+        res.json({
+            lastSyncAt: state?.lastSyncAt || null,
+            lastFullSyncAt: state?.lastFullSyncAt || null,
+            lastSyncAgo: state?.lastSyncAt ? `${Math.round((now - state.lastSyncAt.getTime()) / 60000)} min` : 'nunca',
+            totalContratacoes,
+            totalItens,
+            totalAbertos,
+            isStale,
+            isRunning: state?.isRunning || false,
+            totalSynced: state?.totalSynced || 0,
+            lastError: state?.lastError || null,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error?.message || 'Erro ao buscar estado do sync' });
+    }
+});
+// ══════════════════════════════════════════
+// ── Items Local (consulta o banco PncpItem) ──
+// ══════════════════════════════════════════
+router.get('/items-local/:cnpj/:ano/:seq', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { cnpj, ano, seq } = req.params;
+        const cleanCnpj = String(cnpj).replace(/\D/g, '');
+        const cleanAno = Number(ano);
+        const cleanSeq = Number(seq);
+        if (!cleanCnpj || !cleanAno || !cleanSeq) {
+            return res.json([]);
+        }
+        // Buscar contratação com seus itens
+        const contratacao = await prisma_1.default.pncpContratacao.findFirst({
+            where: {
+                cnpjOrgao: cleanCnpj,
+                anoCompra: cleanAno,
+                sequencialCompra: cleanSeq,
+            },
+            include: {
+                itens: {
+                    orderBy: { numeroItem: 'asc' },
+                },
+            },
+        });
+        if (!contratacao || contratacao.itens.length === 0) {
+            return res.json([]);
+        }
+        // Retornar items normalizados
+        const items = contratacao.itens.map(it => ({
+            itemNumber: it.numeroItem,
+            description: it.descricao || '',
+            quantity: it.quantidade || 0,
+            unit: it.unidadeMedida || 'UN',
+            unitValue: it.valorUnitario || 0,
+            totalValue: it.valorTotal || 0,
+            status: it.situacao || 'Ativo',
+        }));
+        res.json(items);
+    }
+    catch (error) {
+        logger_1.logger.error("Items local error:", error?.message);
+        res.json([]);
     }
 });
 exports.default = router;

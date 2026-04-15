@@ -63,6 +63,7 @@ const licitanet_monitor_service_1 = require("./services/monitoring/licitanet-mon
 const licitamaisbrasil_monitor_service_1 = require("./services/monitoring/licitamaisbrasil-monitor.service");
 const ingest_service_1 = require("./services/monitoring/ingest.service");
 const opportunity_scanner_service_1 = require("./services/monitoring/opportunity-scanner.service");
+const pncpAggregator_1 = require("./workers/pncpAggregator");
 const logger_1 = require("./lib/logger");
 // ── Environment ──
 const SERVER_ROOT = __dirname.endsWith('dist') ? path_1.default.resolve(__dirname, '..') : __dirname;
@@ -479,6 +480,26 @@ async function main() {
         pollLMBProcesses();
         setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
     }, 55000); // 55s after boot
+    // ── PNCP Aggregator: sincroniza base local a cada 15 minutos ──
+    setTimeout(async () => {
+        logger_1.logger.info('[PNCP-AGG] 🚀 Aggregator iniciado (intervalo: 15min)');
+        try {
+            await (0, pncpAggregator_1.runPncpSync)();
+            const stats = await (0, pncpAggregator_1.getPncpAggregatorStats)();
+            logger_1.logger.info(`[PNCP-AGG] ✅ Base local: ${stats.totalContratacoes} contratações, ${stats.totalAbertos} abertas`);
+        }
+        catch (e) {
+            logger_1.logger.error('[PNCP-AGG] ❌ Primeira sync falhou:', e.message);
+        }
+        setInterval(async () => {
+            try {
+                await (0, pncpAggregator_1.runPncpSync)();
+            }
+            catch (e) {
+                logger_1.logger.error('[PNCP-AGG] sync error:', e.message);
+            }
+        }, 15 * 60000); // 15 minutos
+    }, 90000); // 90s após boot (depois de todos os pollers)
     // Start Opportunity Scanner (PNCP search auto-scan)
     (0, opportunity_scanner_service_1.startOpportunityScanner)(4);
     // ── Daily Automated Backup (3:00 AM UTC) ──

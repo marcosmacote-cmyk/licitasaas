@@ -44,6 +44,7 @@ import { recordAnalysisTelemetry, getPipelineHealth, classifySafetyNets } from "
 import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "./services/monitoring/alertTaxonomy";
 import { NotificationService } from "./services/monitoring/notification.service";
 import { startOpportunityScanner } from "./services/monitoring/opportunity-scanner.service";
+import { runPncpSync } from "./workers/pncpAggregator";
 import { BatchPlatformMonitor } from "./services/monitoring/batch-platform-monitor.service";
 import { PCPMonitor } from "./services/monitoring/pcp-monitor.service";
 import { LicitanetMonitor } from "./services/monitoring/licitanet-monitor.service";
@@ -1228,8 +1229,14 @@ app.listen(PORT, async () => {
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
 if (PROCESS_ROLE !== 'api') {
     startOpportunityScanner(4);
-    // O Aggregator Operacional funciona via Worker/Prefetch Interno nativamente
-    logger.info('[PNCP-AGG] 📡 Motor Híbrido de Sync PNCP ativado localmente');
+    // ── PNCP Aggregator: sincroniza base local a cada 15min (modo single-process) ──
+    setTimeout(async () => {
+        logger.info('[PNCP-AGG] 🚀 Aggregator inline iniciado (intervalo: 15min)');
+        try { await runPncpSync(); } catch (e: any) { logger.error('[PNCP-AGG] sync error:', e.message); }
+        setInterval(async () => {
+            try { await runPncpSync(); } catch (e: any) { logger.error('[PNCP-AGG] sync error:', e.message); }
+        }, 15 * 60_000);
+    }, 90_000);
 } else {
     logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
 }
