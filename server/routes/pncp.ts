@@ -650,3 +650,4 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     }
 });
 
+export default router;

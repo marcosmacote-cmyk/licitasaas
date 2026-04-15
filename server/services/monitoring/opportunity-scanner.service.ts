@@ -62,7 +62,7 @@ async function executePncpSearch(search: {
     status: string | null;
     states: string | null;
 }): Promise<PncpSearchResult[]> {
-    const { PncpSearchService } = await import('../../pncp/pncp-search.service');
+    const { PncpSearchService } = await import('../pncp/pncp-search.service');
     
     let ufs = '';
     let modalidade = ''; let esfera = ''; let orgao = ''; let orgaosLista = ''; let excludeKeywords = '';
