@@ -139,6 +139,7 @@ export class PncpSearchService {
         if (andConditions.length > 0) where.AND = andConditions;
 
         try {
+            logger.info(`[PncpSearch] searchLocal WHERE: ${JSON.stringify(where).substring(0, 300)}`);
             const total = await prisma.pncpContratacao.count({ where });
             const skip = (Number(pagina) - 1) * Number(tamanhoPagina);
             const contratacoes = await prisma.pncpContratacao.findMany({
@@ -202,10 +203,12 @@ export class PncpSearchService {
 
             return { items, total: Number(total), meta };
         } catch (error: any) {
-            logger.error("PncpSearchService local query error: ", error);
-            meta.errors.push(error?.message || "Local query failed");
+            logger.error(`[PncpSearch] ❌ LOCAL QUERY FAILED: ${error?.message}`, { stack: error?.stack?.split('\n').slice(0,3).join(' | ') });
+            meta.errors.push(`Local query failed: ${error?.message}`);
             meta.elapsedMs = Date.now() - startTime;
-            return { items: [], total: 0, meta };
+            // IMPORTANTE: marcar como erro local para que search() não tente Gov.br
+            meta.isPartial = true;
+            return { items: [], total: -1, meta }; // total=-1 sinaliza erro (não "sem dados")
         }
     }
 
@@ -509,7 +512,14 @@ export class PncpSearchService {
             return localResponse;
         }
 
-        // 3. Local = 0 → tentar Gov.br como fallback
+        // 2b. Se local FALHOU (total=-1), retornar erro ao invés de ir ao Gov.br
+        if (localResponse.total < 0) {
+            logger.error(`[PncpSearch] ❌ Local FALHOU — não faz fallback ao Gov.br`);
+            localResponse.total = 0; // normaliza para o frontend
+            return localResponse;
+        }
+
+        // 3. Local = 0 (sem dados, sem erro) → tentar Gov.br como fallback
         logger.info(`[PncpSearch] Local retornou 0 → disparando Gov.br`);
         
         try {
