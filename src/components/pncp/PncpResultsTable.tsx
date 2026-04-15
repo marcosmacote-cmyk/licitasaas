@@ -136,8 +136,8 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                 <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
                                     {p.activeTab === 'found' ? 'Carregando oportunidades...' : (
                                         p.searchSlow 
-                                            ? 'A API do Gov.br está demorando para responder... Aguarde mais um momento.'
-                                            : 'Consultando PNCP...'
+                                            ? 'A busca está demorando um pouco mais que o normal (Processando milhares de registros locais)...'
+                                            : 'Consultando Banco de Licitações...'
                                     )}
                                 </div>
                             </td>
