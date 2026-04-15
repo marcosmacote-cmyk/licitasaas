@@ -26,8 +26,8 @@ if (!DATABASE_URL) {
 }
 
 const PORT = process.env.PORT || 3002;
-const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-const ITEMS_PER_CYCLE = 50;              // Fetch items for 50 contratações per cycle
+const SYNC_INTERVAL_MS = 8 * 60 * 1000; // 8 minutes
+const ITEMS_PER_CYCLE = 100;             // Fetch items for 100 contratações per cycle
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
 const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 5 });
 
@@ -168,9 +168,9 @@ async function syncContratacoes(): Promise<number> {
                 continue;
             }
 
-            // Fetch additional pages (up to 5)
+            // Fetch additional pages (up to 15 — captures ~750 per UF)
             let allItems = [...items];
-            const totalPages = Math.min(data?.totalPaginas || 1, 5);
+            const totalPages = Math.min(data?.totalPaginas || 1, 15);
             for (let p = 2; p <= totalPages; p++) {
                 try {
                     const pageUrl = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataFinal}&uf=${uf}&pagina=${p}&tamanhoPagina=50`;
@@ -413,8 +413,8 @@ async function main() {
 ║   PNCP AGGREGATOR — v1.0.0              ║
 ║   Serviço de Sincronização PNCP         ║
 ╠══════════════════════════════════════════╣
-║   Interval: ${SYNC_INTERVAL_MS / 60000} minutes                    ║
-║   Items/cycle: ${ITEMS_PER_CYCLE}                        ║
+║   Interval: ${SYNC_INTERVAL_MS / 60000} minutes                     ║
+║   Items/cycle: ${ITEMS_PER_CYCLE}                       ║
 ║   UFs: ${BRAZILIAN_UFS.length} states                       ║
 ╚══════════════════════════════════════════╝
 `);

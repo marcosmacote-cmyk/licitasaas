@@ -543,60 +543,62 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             let source: 'local' | 'govbr' = 'local';
 
             // ══════════════════════════════════════════════════
-            // HYBRID STRATEGY:
-            // - Keywords present → Gov.br (superior semantic search)
-            // - Filters only (UF, status, etc.) → Local DB (instant, < 100ms)
-            // - Local returns 0 → fallback to Gov.br
+            // STRATEGY: ALWAYS LOCAL-FIRST
+            // 1. Try local DB (< 100ms) — works for keywords AND filters
+            // 2. If local returns 0 → fallback to Gov.br (8-25s)
+            // 3. If Gov.br also fails → user sees clear error
             // ══════════════════════════════════════════════════
 
-            const hasKeywords = !!(searchParams.keywords && searchParams.keywords.trim().length > 2);
-
-            // Route 1: If no keywords (filter-only), use local DB for instant results
-            if (!hasKeywords) {
-                try {
-                    const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(searchParams),
-                    });
-                    if (localRes.ok) {
-                        const localData = await localRes.json();
-                        const localItems = Array.isArray(localData.items) ? localData.items : [];
-                        if (localItems.length > 0) {
-                            items = localItems;
-                            total = localData.total || items.length;
-                            source = 'local';
-                            if (localData.elapsed) setSearchElapsed(localData.elapsed);
-                        }
-                    }
-                } catch { /* local failed, will fallback */ }
-            }
-
-            // Route 2: Keywords present, or local returned 0 → Gov.br
-            if (items.length === 0) {
-                source = 'govbr';
-                const govRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
+            // Step 1: Try local database ALWAYS (even with keywords)
+            try {
+                const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    signal: controller.signal,
                     body: JSON.stringify(searchParams),
                 });
-                if (govRes.ok) {
-                    const govData = await govRes.json();
-                    items = Array.isArray(govData.items) ? govData.items : [];
-                    total = govData.total || items.length;
-                } else if (govRes.status >= 500) {
-                    // Retry once on 5xx
-                    await new Promise(r => setTimeout(r, 2000));
-                    const retryRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
+                if (localRes.ok) {
+                    const localData = await localRes.json();
+                    const localItems = Array.isArray(localData.items) ? localData.items : [];
+                    if (localItems.length > 0) {
+                        items = localItems;
+                        total = localData.total || items.length;
+                        source = 'local';
+                        if (localData.elapsed) setSearchElapsed(localData.elapsed);
+                    }
+                }
+            } catch { /* local failed, will fallback to Gov.br */ }
+
+            // Step 2: ONLY if local returned 0 → try Gov.br
+            if (items.length === 0) {
+                source = 'govbr';
+                try {
+                    const govRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        signal: controller.signal,
                         body: JSON.stringify(searchParams),
                     });
-                    if (retryRes.ok) {
-                        const retryData = await retryRes.json();
-                        items = Array.isArray(retryData.items) ? retryData.items : [];
-                        total = retryData.total || items.length;
+                    if (govRes.ok) {
+                        const govData = await govRes.json();
+                        items = Array.isArray(govData.items) ? govData.items : [];
+                        total = govData.total || items.length;
+                    } else if (govRes.status >= 500) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        const retryRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify(searchParams),
+                        });
+                        if (retryRes.ok) {
+                            const retryData = await retryRes.json();
+                            items = Array.isArray(retryData.items) ? retryData.items : [];
+                            total = retryData.total || items.length;
+                        }
+                    }
+                } catch (govErr: any) {
+                    // Gov.br also failed — show helpful message instead of generic error
+                    if (govErr.name === 'AbortError') {
+                        toast.error('Portal PNCP indisponível. Tente novamente em alguns minutos.');
                     }
                 }
             }

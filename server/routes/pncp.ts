@@ -1256,31 +1256,63 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
         `;
         const contratacoes: any[] = await prisma.$queryRawUnsafe(dataQuery, ...filterParams);
 
-        // Map to frontend format
-        const items = contratacoes.map((c: any) => ({
-            orgao_cnpj: c.cnpjOrgao,
-            ano: String(c.anoCompra),
-            numero_sequencial: String(c.sequencialCompra),
-            titulo: c.objeto?.substring(0, 120) || 'Sem título',
-            objeto: c.objeto,
-            orgao_nome: c.orgaoNome,
-            unidade_nome: c.unidadeNome,
-            uf: c.uf,
-            municipio: c.municipio,
-            esfera: c.esfera,
-            modalidade: c.modalidade,
-            situacao: c.situacao,
-            valor_estimado: c.valorEstimado ? Number(c.valorEstimado) : null,
-            valor_homologado: c.valorHomologado ? Number(c.valorHomologado) : null,
-            srp: c.srp,
-            data_publicacao: c.dataPublicacao,
-            data_abertura: c.dataAbertura,
-            data_encerramento_proposta: c.dataEncerramento,
-            link_sistema: c.linkOrigem || c.linkSistema,
-            numeroControlePNCP: c.numeroControle,
-            itens_preview: c.itens_json && c.itens_json !== '[]' ? (typeof c.itens_json === 'string' ? JSON.parse(c.itens_json) : c.itens_json) : [],
-            _source: 'local',
-        }));
+        // Map to frontend format — MUST match Gov.br /search response exactly
+        const now = Date.now();
+        const items = contratacoes.map((c: any) => {
+            const cnpj = c.cnpjOrgao || '';
+            const ano = String(c.anoCompra || '');
+            const nSeq = String(c.sequencialCompra || '');
+            const pncpId = c.numeroControle || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : c.id);
+
+            // Urgency based on deadline
+            let urgency = 'medium';
+            if (c.dataEncerramento) {
+                const daysUntil = (new Date(c.dataEncerramento).getTime() - now) / (1000 * 3600 * 24);
+                if (daysUntil <= 3) urgency = 'critical';
+                else if (daysUntil <= 7) urgency = 'high';
+                else if (daysUntil <= 15) urgency = 'medium';
+                else urgency = 'low';
+            }
+
+            // Build titulo matching Gov.br format
+            const titulo = c.numeroCompra
+                ? `Compra nº ${c.numeroCompra}/${ano}`
+                : c.objeto?.substring(0, 120) || `${c.modalidade || 'Licitação'} nº ${nSeq}/${ano}`;
+
+            return {
+                id: pncpId,
+                orgao_cnpj: cnpj,
+                ano,
+                numero_sequencial: nSeq,
+                titulo,
+                objeto: c.objeto || 'Sem objeto',
+                orgao_nome: c.orgaoNome || 'Órgão não informado',
+                unidade_nome: c.unidadeNome || '',
+                uf: c.uf || '',
+                municipio: c.municipio || '',
+                esfera: c.esfera || '',
+                esfera_id: c.esfera || '',
+                modalidade: c.modalidade || '',
+                modalidade_nome: c.modalidade || '',
+                situacao: c.situacao || '',
+                status: c.situacao || '',
+                valor_estimado: c.valorEstimado ? Number(c.valorEstimado) : 0,
+                valor_homologado: c.valorHomologado ? Number(c.valorHomologado) : null,
+                srp: c.srp || false,
+                modo_disputa: c.modoDisputa || '',
+                data_publicacao: c.dataPublicacao ? new Date(c.dataPublicacao).toISOString() : new Date().toISOString(),
+                data_abertura: c.dataAbertura ? new Date(c.dataAbertura).toISOString() : '',
+                data_encerramento_proposta: c.dataEncerramento ? new Date(c.dataEncerramento).toISOString() : '',
+                link_sistema: (cnpj && ano && nSeq)
+                    ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
+                    : (c.linkOrigem || c.linkSistema || ''),
+                link_comprasnet: c.linkSistema || '',
+                numeroControlePNCP: c.numeroControle,
+                urgency,
+                itens_preview: c.itens_json && c.itens_json !== '[]' ? (typeof c.itens_json === 'string' ? JSON.parse(c.itens_json) : c.itens_json) : [],
+                _source: 'local',
+            };
+        });
 
         const elapsed = Date.now() - startTime;
         logger.info(`[PNCP-LOCAL] Search: ${total} results in ${elapsed}ms (keywords="${keywords || ''}" uf="${uf || ''}")`);
