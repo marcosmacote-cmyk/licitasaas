@@ -682,6 +682,55 @@ router.get('/sync-health', authenticateToken, async (req: any, res) => {
 });
 
 // ══════════════════════════════════════════
+// ── DEBUG: Contagem por UF (temporário) ──
+// ══════════════════════════════════════════
+router.get('/debug-local-counts', async (req: any, res) => {
+    try {
+        const total = await prisma.pncpContratacao.count();
+        const byUf = await prisma.pncpContratacao.groupBy({
+            by: ['uf'],
+            _count: { _all: true },
+            orderBy: { _count: { uf: 'desc' } },
+        });
+        const bySituacao = await prisma.pncpContratacao.groupBy({
+            by: ['situacao'],
+            _count: { _all: true },
+        });
+        // Quick test: what would searchLocal see for PE + recebendo_proposta?
+        const testPE = await prisma.pncpContratacao.count({
+            where: {
+                uf: 'PE',
+                AND: [{
+                    OR: [
+                        { situacao: { in: ['Divulgada', 'Aberta'] } },
+                        { situacao: null }
+                    ]
+                }]
+            }
+        });
+        const testCE = await prisma.pncpContratacao.count({
+            where: {
+                uf: 'CE',
+                AND: [{
+                    OR: [
+                        { situacao: { in: ['Divulgada', 'Aberta'] } },
+                        { situacao: null }
+                    ]
+                }]
+            }
+        });
+        res.json({
+            total,
+            byUf: byUf.map(r => ({ uf: r.uf, count: r._count._all })),
+            bySituacao: bySituacao.map(r => ({ situacao: r.situacao, count: r._count._all })),
+            searchSimulation: { PE_recebendo: testPE, CE_recebendo: testCE },
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error?.message || 'Debug error' });
+    }
+});
+
+// ══════════════════════════════════════════
 // ── Items Local (consulta o banco PncpItem) ──
 // ══════════════════════════════════════════
 router.get('/items-local/:cnpj/:ano/:seq', authenticateToken, async (req: any, res) => {
