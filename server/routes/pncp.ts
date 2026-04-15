@@ -1181,7 +1181,13 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
             };
             const mapped = statusMap[status];
             if (mapped) {
-                filterConditions.push(`"situacao" IN (${mapped.map(() => `$${paramIdx++}`).join(',')})`);
+                // For "recebendo_proposta": include NULL situacao since aggregator
+                // pulls from /contratacoes/proposta (all records are open proposals)
+                if (status === 'recebendo_proposta') {
+                    filterConditions.push(`("situacao" IN (${mapped.map(() => `$${paramIdx++}`).join(',')}) OR "situacao" IS NULL)`);
+                } else {
+                    filterConditions.push(`"situacao" IN (${mapped.map(() => `$${paramIdx++}`).join(',')})`);
+                }
                 filterParams.push(...mapped);
             }
         }

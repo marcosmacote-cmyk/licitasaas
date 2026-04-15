@@ -116,7 +116,7 @@ function mapContratacao(item: any): any {
         objeto: item.objetoCompra || item.objeto || null,
         modalidade: item.modalidadeNome || item.modalidade || null,
         modalidadeCodigo: item.modalidadeId?.toString() || item.modalidadeCodigo || null,
-        situacao: item.situacaoCompraId ? mapSituacao(item.situacaoCompraId) : (item.situacao || null),
+        situacao: item.situacaoCompraId ? mapSituacao(item.situacaoCompraId) : (item.situacao || item.situacaoCompraNome || 'Divulgada'),
         valorEstimado: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
         valorHomologado: item.valorTotalHomologado ? Number(item.valorTotalHomologado) : null,
         srp: item.srp === true || item.srp === 'Sim',
