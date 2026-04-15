@@ -58,6 +58,11 @@ export function usePncpSearch() {
         setSearchSlow(false);
         setSearchSource('');
         setSearchElapsed(0);
+        // Clear previous results visually so it doesn't look stuck when searching a new UF
+        setAllResults([]);
+        setResults([]);
+        setTotalResults(0);
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
