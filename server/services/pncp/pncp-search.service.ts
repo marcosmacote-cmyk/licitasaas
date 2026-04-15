@@ -216,6 +216,7 @@ export class PncpSearchService {
         const startTime = Date.now();
         const { keywords, status, uf, modalidade, dataInicio, dataFim, esfera, orgao, orgaosLista, excludeKeywords } = input;
         const meta: PncpSearchMeta = { source: 'govbr', fallbackUsed: true, isPartial: false, errors: [] };
+        const requestedPageSize = Math.max(1, Math.min(Number(input.tamanhoPagina) || 50, 100));
         let filteredItems: any[] = [];
 
         try {
@@ -226,12 +227,14 @@ export class PncpSearchService {
                 tomorrow.setDate(tomorrow.getDate() + 1);
                 const dataFinalParam = dataFim ? dataFim.replace(/-/g, '') : tomorrow.toISOString().split('T')[0].replace(/-/g, '');
                 const dataInicialParam = dataInicio ? dataInicio.replace(/-/g, '') : '';
+                const officialPageSize = Math.min(requestedPageSize, 50);
+                const officialPagesNeeded = Math.max(1, Math.ceil(requestedPageSize / officialPageSize));
                 let ufsForApi: string[] = [];
                 if (uf && uf.trim()) ufsForApi = uf.includes(',') ? uf.split(',').map(u => u.trim()).filter(Boolean) : [uf.trim()];
                 const modalidadeCode = modalidade && modalidade !== 'todas' ? modalidade : '';
 
                 const fetchOfficialPage = async (pageNum: number, singleUf?: string) => {
-                    let url = `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=${dataFinalParam}&pagina=${pageNum}&tamanhoPagina=50`;
+                    let url = `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=${dataFinalParam}&pagina=${pageNum}&tamanhoPagina=${officialPageSize}`;
                     if (dataInicialParam) url += `&dataInicial=${dataInicialParam}`;
                     if (singleUf) url += `&uf=${singleUf}`;
                     if (modalidadeCode) url += `&codigoModalidadeContratacao=${modalidadeCode}`;
@@ -253,14 +256,13 @@ export class PncpSearchService {
                     return { data: [], totalPages: 0 };
                 };
 
-                const MAX_PAGES = 3; // Limitado para não estourar o timeout do frontend (3 páginas × 50 itens = 150 editais)
                 let rawConsulta: any[] = [];
                 if (ufsForApi.length > 0) {
                      // Parallel logic from the routes...
                      const ufBatches = await Promise.allSettled(ufsForApi.map(async (singleUf) => {
                          const first = await fetchOfficialPage(1, singleUf);
                          let allData = [...first.data];
-                         const pagesToFetch = Math.min(first.totalPages, MAX_PAGES);
+                         const pagesToFetch = Math.min(first.totalPages, officialPagesNeeded);
                          if (pagesToFetch > 1) {
                              const pageResults = await Promise.allSettled(Array.from({ length: pagesToFetch - 1 }, (_, i) => fetchOfficialPage(i + 2, singleUf)));
                              pageResults.forEach(pr => { if (pr.status === 'fulfilled') allData.push(...pr.value.data); });
@@ -271,7 +273,7 @@ export class PncpSearchService {
                 } else {
                      const first = await fetchOfficialPage(1);
                      rawConsulta = [...first.data];
-                     const pagesToFetch = Math.min(first.totalPages, MAX_PAGES);
+                     const pagesToFetch = Math.min(first.totalPages, officialPagesNeeded);
                      if (pagesToFetch > 1) {
                          const pageResults = await Promise.allSettled(Array.from({ length: pagesToFetch - 1 }, (_, i) => fetchOfficialPage(i + 2)));
                          pageResults.forEach(pr => { if (pr.status === 'fulfilled') rawConsulta.push(...pr.value.data); });
@@ -321,7 +323,8 @@ export class PncpSearchService {
                 let extractedNames: string[] = effectiveOrgaosLista ? [...new Set(effectiveOrgaosLista.split(/[\n,;]+/).map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean))] : [];
                 
                 const buildBaseUrl = (qItems: string[], overrideCnpj?: string, singleUf?: string) => {
-                     let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${overrideCnpj ? 50 : 100}&pagina=1`;
+                     const searchPageSize = Math.min(requestedPageSize, overrideCnpj ? 50 : 100);
+                     let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${searchPageSize}&pagina=1`;
                      if (overrideCnpj) url += `&cnpj=${overrideCnpj}`;
                      if (qItems.length > 0) url += `&q=${encodeURIComponent(qItems.join(' '))}`;
                      const govStatus = status ? (STATUS_TO_GOVBR[status] || status) : '';
@@ -354,7 +357,7 @@ export class PncpSearchService {
                          }
                     }
                 }
-                urlsToFetch = urlsToFetch.slice(0, 30);
+                urlsToFetch = urlsToFetch.slice(0, 10);
                 let rawItems: any[] = [];
                 const fetchWithRetry = async (url: string, retries = 2) => {
                      for (let attempt = 0; attempt <= retries; attempt++) {
@@ -371,9 +374,9 @@ export class PncpSearchService {
                      return [];
                 };
 
-                for (let i = 0; i < urlsToFetch.length; i += 10) {
-                     if (rawItems.length >= 500) break;
-                     const results = await Promise.all(urlsToFetch.slice(i, i + 10).map(u => fetchWithRetry(u)));
+                for (let i = 0; i < urlsToFetch.length; i += 5) {
+                     if (rawItems.length >= requestedPageSize) break;
+                     const results = await Promise.all(urlsToFetch.slice(i, i + 5).map(u => fetchWithRetry(u)));
                      results.forEach(items => rawItems = rawItems.concat(items));
                 }
 
@@ -471,6 +474,7 @@ export class PncpSearchService {
                 if (!validB) return -1;
                 return dateB - dateA;
             });
+            filteredItems = filteredItems.slice(0, requestedPageSize);
 
             meta.remoteCount = filteredItems.length;
             meta.elapsedMs = Date.now() - startTime;
@@ -492,16 +496,14 @@ export class PncpSearchService {
         // Tentativa Local
         const localResponse = await this.searchLocal(input);
         
+        // Filtros que o banco local NÃO cobre com confiança total (texto livre, orgaos externos, janelas de data)
+        // UF, status, modalidade e esfera são bem indexados no local — não forçam remoto
         const hasHighRiskFilters = !!(
             input.keywords ||
             input.orgao ||
             input.orgaosLista ||
             input.dataInicio ||
-            input.dataFim ||
-            input.uf ||
-            (input.status && input.status !== 'todas') ||
-            (input.modalidade && input.modalidade !== 'todas') ||
-            (input.esfera && input.esfera !== 'todas')
+            input.dataFim
         );
         
         // Se achou no local, mas é uma busca de baixo risco (ex: todos status recebendo_proposta)
