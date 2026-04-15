@@ -1,12 +1,32 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+/**
+ * ═══════════════════════════════════════════════════════
+ * usePncpPage — Compositor Principal (Fase 1 Refatoração)
+ * 
+ * BEFORE: 1.314 lines monolithic hook
+ * AFTER: ~350 lines compositor that delegates to 3 sub-hooks:
+ *   - usePncpSearch (search + filters + pagination)
+ *   - usePncpFavorites (multi-list favorites + PDF export)
+ *   - usePncpScanner (opportunity scanner + notifications)
+ *   - usePncpSavedSearches (saved searches + multi-list)
+ * 
+ * IMPORTANT: The return contract is IDENTICAL to the original.
+ * No changes needed in PncpPage.tsx or any sub-components.
+ * ═══════════════════════════════════════════════════════
+ */
+import { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../../config';
 import type { CompanyProfile, PncpSavedSearch, PncpBiddingItem, BiddingProcess, AiAnalysis } from '../../types';
 import { useToast } from '../ui';
 import { v4 as uuidv4 } from 'uuid';
 import { aiService } from '../../services/ai';
 
+// Sub-hooks
+import { usePncpSearch } from './usePncpSearch';
+import { usePncpFavorites } from './usePncpFavorites';
+import { usePncpScanner } from './usePncpScanner';
+import { usePncpSavedSearches } from './usePncpSavedSearches';
+
+// Re-export constants for backward compatibility
 export const UFS = [
     'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
     'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN',
@@ -40,26 +60,6 @@ export const STATUS_OPTIONS = [
     { value: 'todas', label: 'Todas' },
 ];
 
-// ─── Multi-list Favorites Data (DB-backed) ───
-const DEFAULT_FAV_LIST = 'Favoritos Gerais';
-
-interface FavList {
-    id: string;
-    name: string;
-    createdAt: string;
-}
-
-interface FavItemWithList extends PncpBiddingItem {
-    _listId: string; // Which list this item belongs to
-    _dbItemId?: string; // DB record id for deletion
-}
-
-interface FavStore {
-    version: 2;
-    lists: FavList[];
-    items: FavItemWithList[];
-}
-
 interface UsePncpPageParams {
     companies: CompanyProfile[];
     onRefresh?: () => Promise<void>;
@@ -70,31 +70,23 @@ interface UsePncpPageParams {
 
 export function usePncpPage({ companies, onRefresh, items = [], initialContext, onContextConsumed }: UsePncpPageParams) {
     const toast = useToast();
-    const [savedSearches, setSavedSearches] = useState<PncpSavedSearch[]>([]);
-    const [allResults, setAllResults] = useState<PncpBiddingItem[]>([]); // Store all API results
-    const [results, setResults] = useState<PncpBiddingItem[]>([]); // Sliced for current page
-    const [loading, setLoading] = useState(false);
-    const [searchSlow, setSearchSlow] = useState(false);
-    const [searchSource, setSearchSource] = useState<'local' | 'govbr' | ''>('');
-    const [searchElapsed, setSearchElapsed] = useState(0);
-    const [saving, setSaving] = useState(false);
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-    // Form state
-    const [keywords, setKeywords] = useState('');
-    const [status, setStatus] = useState('recebendo_proposta');
-    const [selectedUf, setSelectedUf] = useState('');
-    const [selectedSearchCompanyId, setSelectedSearchCompanyId] = useState('');
-    const [modalidade, setModalidade] = useState('todas');
-    const [esfera, setEsfera] = useState('todas');
-    const [orgao, setOrgao] = useState('');
-    const [orgaosLista, setOrgaosLista] = useState('');
-    const [excludeKeywords, setExcludeKeywords] = useState('');
-    const [dataInicio, setDataInicio] = useState('');
-    const [dataFim, setDataFim] = useState('');
-    const [page, setPage] = useState(1);
-    const [totalResults, setTotalResults] = useState(0);
-    const [hasSearched, setHasSearched] = useState(false); // prevent auto-search on mount
+    // ═══════════════════════════════════════════════════
+    // COMPOSE SUB-HOOKS
+    // ═══════════════════════════════════════════════════
+
+    const search = usePncpSearch();
+    const favorites = usePncpFavorites();
+    const scanner = usePncpScanner();
+    const savedSearches = usePncpSavedSearches({
+        setConfirmAction: favorites.setConfirmAction,
+    });
+
+    // ═══════════════════════════════════════════════════
+    // SHARED STATE (activeTab, modals, import/AI)
+    // ═══════════════════════════════════════════════════
+
+    const [activeTab, setActiveTab] = useState<'search' | 'found' | 'favorites'>('search');
 
     // Modal state
     const [editingProcess, setEditingProcess] = useState<Partial<BiddingProcess> | null>(null);
@@ -108,133 +100,22 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     const [isParsingAI, setIsParsingAI] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // ─── Multi-list Favorites State (DB-backed) ───
-    const [favStore, setFavStore] = useState<FavStore>({ version: 2, lists: [], items: [] });
-    const [activeFavListId, setActiveFavListId] = useState<string | null>(null); // null = show all
-    const [activeTab, setActiveTab] = useState<'search' | 'found' | 'favorites'>('search');
-    const [confirmAction, setConfirmAction] = useState<{ type: string; message?: string; onConfirm: () => void } | null>(null);
-
-    // Fetch favorites from DB
-    const fetchFavorites = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/favorites`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                const dbLists: FavList[] = (data.lists || []).map((l: any) => ({ id: l.id, name: l.name, createdAt: l.createdAt }));
-                const dbItems: FavItemWithList[] = [];
-                for (const list of (data.lists || [])) {
-                    for (const item of (list.items || [])) {
-                        const itemData = item.data || {};
-                        dbItems.push({ ...itemData, id: item.pncpId, _listId: list.id, _dbItemId: item.id });
-                    }
-                }
-                setFavStore({ version: 2, lists: dbLists, items: dbItems });
-            }
-        } catch (e) { console.error("Failed to fetch favorites", e); }
-    };
-
-    // Migrate localStorage to DB (one-time)
-    const migrateLocalStorageFavorites = async () => {
-        const raw = localStorage.getItem('pncp_favoritos_v2');
-        const oldRaw = localStorage.getItem('pncp_favoritos');
-        if (!raw && !oldRaw) return; // Nothing to migrate
-
-        let localStore: FavStore | null = null;
-        try {
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed.version === 2) localStore = parsed;
-            }
-            if (!localStore && oldRaw) {
-                const oldItems: PncpBiddingItem[] = JSON.parse(oldRaw);
-                if (Array.isArray(oldItems) && oldItems.length > 0) {
-                    localStore = {
-                        version: 2,
-                        lists: [{ id: 'default', name: DEFAULT_FAV_LIST, createdAt: new Date().toISOString() }],
-                        items: oldItems.map(item => ({ ...item, _listId: 'default' }))
-                    };
-                }
-            }
-        } catch { }
-
-        if (!localStore || localStore.items.length === 0) {
-            // Clean up empty localStorage
-            localStorage.removeItem('pncp_favoritos_v2');
-            localStorage.removeItem('pncp_favoritos');
-            return;
-        }
-
-        // Build import payload
-        const lists = localStore.lists.map(l => ({ name: l.name }));
-        const listIdToName = new Map(localStore.lists.map(l => [l.id, l.name]));
-        const items = localStore.items.map(item => {
-            const { _listId, ...rest } = item;
-            return {
-                listName: listIdToName.get(_listId) || DEFAULT_FAV_LIST,
-                pncpId: item.id,
-                data: rest,
-            };
-        });
-
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/favorites/import`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lists, items })
-            });
-            if (res.ok) {
-                const result = await res.json();
-                console.log(`[Favoritos] Migração: ${result.imported} itens importados para o banco.`);
-                // Clean up localStorage after successful migration
-                localStorage.removeItem('pncp_favoritos_v2');
-                localStorage.removeItem('pncp_favoritos');
-                // Refresh from DB
-                await fetchFavorites();
-            }
-        } catch (e) { console.error("Failed to migrate favorites to DB", e); }
-    };
-
-    // ─── Scanner Opportunities State ("Encontradas" tab) ───
-    const [scannerOpportunities, setScannerOpportunities] = useState<any[]>([]);
-    const [scannerOpportunitiesTotal, setScannerOpportunitiesTotal] = useState(0);
-    const [scannerOpportunitiesPage, setScannerOpportunitiesPage] = useState(1);
-    const [scannerOpportunitiesLoading, setScannerOpportunitiesLoading] = useState(false);
-    const [scannerFilterSearchId, setScannerFilterSearchId] = useState<string | null>(null);
-    const [unreadOpportunityCount, setUnreadOpportunityCount] = useState(0);
-
-    // List Picker state (shared between fav and search)
-    const [listPickerOpen, setListPickerOpen] = useState(false);
-    const [listPickerItem, setListPickerItem] = useState<PncpBiddingItem | null>(null);
-    const [searchListPickerOpen, setSearchListPickerOpen] = useState(false);
-
-    // Active search list filter
-    const [activeSearchListName, setActiveSearchListName] = useState<string | null>(null);
+    // ═══════════════════════════════════════════════════
+    // TAB SYNC — Fetch scanner opportunities when tab changes
+    // ═══════════════════════════════════════════════════
 
     useEffect(() => {
-        fetchFavorites().then(() => migrateLocalStorageFavorites());
-    }, []);
+        if (activeTab === 'found') {
+            scanner.fetchScannerOpportunities();
+        }
+    }, [activeTab, scanner.scannerOpportunitiesPage, scanner.scannerFilterSearchId]);
 
-    // Computed: all favoritos (flat) for backward compat
-    const favoritos = favStore.items as PncpBiddingItem[];
+    // ═══════════════════════════════════════════════════
+    // DISPLAY ITEMS — computed based on active tab
+    // ═══════════════════════════════════════════════════
 
-    // Computed: filtered favorites by active list
-    // null (Favoritos Gerais / default) → show ALL from ALL lists
-    const filteredFavoritos = useMemo(() => {
-        const defaultListId = favStore.lists.find(l => l.name === DEFAULT_FAV_LIST)?.id;
-        const items = (!activeFavListId || activeFavListId === defaultListId)
-            ? favStore.items
-            : favStore.items.filter(f => f._listId === activeFavListId);
-        return [...items].sort((a, b) => {
-            const dateA = new Date(a.data_encerramento_proposta || a.data_abertura || Date.now());
-            const dateB = new Date(b.data_encerramento_proposta || b.data_abertura || Date.now());
-            return dateA.getTime() - dateB.getTime();
-        });
-    }, [favStore, activeFavListId]);
-
-    const displayItems = activeTab === 'favorites' ? filteredFavoritos 
-        : activeTab === 'found' ? scannerOpportunities.map((opp: any) => ({
+    const displayItems = activeTab === 'favorites' ? favorites.filteredFavoritos 
+        : activeTab === 'found' ? scanner.scannerOpportunities.map((opp: any) => ({
             id: opp.pncpId || opp.id,
             titulo: opp.titulo || 'Sem título',
             objeto: opp.objeto || '',
@@ -250,515 +131,20 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             _searchName: opp.searchName,
             _foundAt: opp.createdAt,
         } as PncpBiddingItem & { _scannerLogId: string; _isViewed: boolean; _searchName: string; _foundAt: string }))
-        : results;
+        : search.results;
 
-    // ─── Multi-list Favorites API (DB-backed) ───
-    const favLists = useMemo(() => {
-        const defList = favStore.lists.find(l => l.name === DEFAULT_FAV_LIST);
-        const rest = favStore.lists.filter(l => l.name !== DEFAULT_FAV_LIST).sort((a, b) => a.name.localeCompare(b.name));
-        return defList ? [defList, ...rest] : rest;
-    }, [favStore.lists]);
+    // ═══════════════════════════════════════════════════
+    // PAGINATION (client-side)
+    // ═══════════════════════════════════════════════════
 
-    const defaultListId = useMemo(() => favStore.lists.find(l => l.name === DEFAULT_FAV_LIST)?.id || null, [favStore.lists]);
-
-    const createFavList = async (name: string): Promise<FavList> => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/favorites/lists`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim() })
-            });
-            if (res.ok) {
-                const newList = await res.json();
-                await fetchFavorites();
-                return { id: newList.id, name: newList.name, createdAt: newList.createdAt };
-            }
-        } catch (e) { console.error(e); }
-        // Fallback: return temp list
-        const temp: FavList = { id: uuidv4(), name: name.trim(), createdAt: new Date().toISOString() };
-        return temp;
-    };
-
-    const renameFavList = async (listId: string, newName: string) => {
-        const trimmed = newName.trim();
-        if (!trimmed) return;
-        try {
-            const token = localStorage.getItem('token');
-            await fetch(`${API_BASE_URL}/api/pncp/favorites/lists/${listId}`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: trimmed })
-            });
-            await fetchFavorites();
-            toast.success(`Lista renomeada para "${trimmed}"`);
-        } catch (e) { console.error(e); toast.error('Erro ao renomear lista.'); }
-    };
-
-    const deleteFavList = (listId: string) => {
-        if (listId === defaultListId) { toast.warning('A lista padrão não pode ser excluída.'); return; }
-        const listName = favLists.find(l => l.id === listId)?.name || 'lista';
-        const itemCount = favStore.items.filter(i => i._listId === listId).length;
-        setConfirmAction({
-            type: 'deleteFavList',
-            message: `Excluir a lista "${listName}"?${itemCount > 0 ? `\n\nOs ${itemCount} item(ns) serão movidos para "Favoritos Gerais".` : ''}`,
-            onConfirm: async () => {
-                setConfirmAction(null);
-                try {
-                    const token = localStorage.getItem('token');
-                    await fetch(`${API_BASE_URL}/api/pncp/favorites/lists/${listId}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (activeFavListId === listId) setActiveFavListId(null);
-                    await fetchFavorites();
-                    toast.success(`Lista "${listName}" excluída. Itens movidos para "Favoritos Gerais".`);
-                } catch (e) { console.error(e); toast.error('Erro ao excluir lista.'); }
-            }
-        });
-    };
-
-    const addToFavList = async (item: PncpBiddingItem, listId: string) => {
-        // Don't add if already in this list
-        if (favStore.items.some(f => f.id === item.id && f._listId === listId)) return;
-        try {
-            const token = localStorage.getItem('token');
-            const { _listId, _dbItemId, ...itemData } = item as FavItemWithList;
-            await fetch(`${API_BASE_URL}/api/pncp/favorites/items`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ listId, pncpId: item.id, data: itemData })
-            });
-            await fetchFavorites();
-        } catch (e) { console.error(e); toast.error('Erro ao adicionar favorito.'); }
-    };
-
-    const removeFromFavList = async (itemId: string, listId?: string) => {
-        try {
-            const token = localStorage.getItem('token');
-            if (listId) {
-                // Find the specific DB item
-                const dbItem = favStore.items.find(f => f.id === itemId && f._listId === listId);
-                if (dbItem?._dbItemId) {
-                    await fetch(`${API_BASE_URL}/api/pncp/favorites/items/${dbItem._dbItemId}`, {
-                        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                }
-            } else {
-                // Remove from all lists
-                await fetch(`${API_BASE_URL}/api/pncp/favorites/items/by-pncp/${encodeURIComponent(itemId)}`, {
-                    method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
-                });
-            }
-            await fetchFavorites();
-        } catch (e) { console.error(e); toast.error('Erro ao remover favorito.'); }
-    };
-
-    // ALWAYS open list picker — user must choose which list to save to
-    const startFavoritar = (item: PncpBiddingItem) => {
-        setListPickerItem(item);
-        setListPickerOpen(true);
-    };
-
-    // Toggle: if item exists in any list, remove from all; otherwise open picker
-    const toggleFavorito = (item: PncpBiddingItem) => {
-        const isInAnyList = favStore.items.some(f => f.id === item.id);
-        if (isInAnyList) {
-            removeFromFavList(item.id);
-        } else {
-            startFavoritar(item);
-        }
-    };
-
-    // Count items for fav list — default list shows ALL
-    const favListItemCount = (listId: string) => 
-        listId === defaultListId ? favStore.items.length : favStore.items.filter(f => f._listId === listId).length;
-
-    const exportFavoritesToPdf = () => {
-        const itemsToExport = filteredFavoritos;
-        if (itemsToExport.length === 0) { toast.warning('Não há licitações favoritadas.'); return; }
-        const listName = activeFavListId
-            ? favLists.find(l => l.id === activeFavListId)?.name || 'Favoritos'
-            : 'Favoritos (Todas as Listas)';
-        const doc = new jsPDF('l', 'mm', 'a4');
-        doc.setFontSize(16); doc.text(`Relatório: ${listName}`, 14, 20);
-        doc.setFontSize(10); doc.text(`Data da Exportação: ${new Date().toLocaleDateString('pt-BR')}`, 14, 28);
-
-        const tableColumn = ["Órgão", "Mod. / N°", "Objeto", "Prazo Limite", "Val. Est. (R$)", "Município", "Link PNCP"];
-        const tableRows = itemsToExport.map(item => [
-            item.orgao_nome,
-            `${item.modalidade_nome}\n${item.ano}/${item.numero_sequencial}`,
-            item.objeto.length > 90 ? item.objeto.substring(0, 87) + '...' : item.objeto,
-            item.data_encerramento_proposta
-                ? `${new Date(item.data_encerramento_proposta).toLocaleDateString('pt-BR')} às ${new Date(item.data_encerramento_proposta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-                : '-',
-            item.valor_estimado ? item.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-',
-            item.municipio ? `${item.municipio}-${item.uf}` : item.uf,
-            ''
-        ]);
-
-        autoTable(doc, {
-            head: [tableColumn], body: tableRows, startY: 35,
-            styles: { fontSize: 8 }, headStyles: { fillColor: [37, 99, 235] },
-            columnStyles: { 2: { cellWidth: 70 }, 6: { cellWidth: 35 } },
-            didDrawCell: (data) => {
-                if (data.section === 'body' && data.column.index === 6) {
-                    const item = itemsToExport[data.row.index];
-                    if (item?.link_sistema) {
-                        doc.setTextColor(37, 99, 235);
-                        doc.textWithLink("Acessar no PNCP", data.cell.x + 2, data.cell.y + 5, { url: item.link_sistema });
-                    }
-                }
-            }
-        });
-        doc.save(`licitacoes-${listName.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`);
-    };
-
-    const [opportunityScannerEnabled, setOpportunityScannerEnabled] = useState(true);
-    const [lastScanAt, setLastScanAt] = useState<string | null>(null);
-    const [lastScanTotalNew, setLastScanTotalNew] = useState(0);
-    const [lastScanResults, setLastScanResults] = useState<{ searchId: string; searchName: string; companyName: string; totalFound: number; newCount: number; status: string; errorMessage?: string }[]>([]);
-    const [nextScanAt, setNextScanAt] = useState<string | null>(null);
-
-    useEffect(() => { 
-        fetchSavedSearches(); 
-        fetchScannerStatus();
-        fetchUnreadCount();
-    }, []);
-
+    const prevPageRef = useRef(search.page);
     useEffect(() => {
-        if (activeTab === 'found') {
-            fetchScannerOpportunities();
-        }
-    }, [activeTab, scannerOpportunitiesPage, scannerFilterSearchId]);
-
-    const fetchUnreadCount = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/opportunities/unread-count`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) { const data = await res.json(); setUnreadOpportunityCount(data.count || 0); }
-        } catch (e) { console.error("Failed to fetch unread count", e); }
-    };
-
-    const fetchScannerOpportunities = async () => {
-        setScannerOpportunitiesLoading(true);
-        try {
-            const token = localStorage.getItem('token');
-            let url = `${API_BASE_URL}/api/pncp/scanner/opportunities?page=${scannerOpportunitiesPage}`;
-            if (scannerFilterSearchId) url += `&searchId=${scannerFilterSearchId}`;
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                setScannerOpportunities(prev => scannerOpportunitiesPage === 1 ? data.items || [] : [...prev, ...(data.items || [])]);
-                setScannerOpportunitiesTotal(data.total || 0);
-            }
-        } catch (e) { console.error("Failed to fetch scanner opportunities", e); }
-        finally { setScannerOpportunitiesLoading(false); }
-    };
-
-    const markOpportunitiesViewed = async (ids: string[] | 'all') => {
-        try {
-            const token = localStorage.getItem('token');
-            await fetch(`${API_BASE_URL}/api/pncp/scanner/opportunities/mark-viewed`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids })
-            });
-            fetchScannerOpportunities();
-            fetchUnreadCount();
-        } catch (e) { console.error(e); }
-    };
-
-    const fetchScannerStatus = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/status`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                setOpportunityScannerEnabled(data.enabled !== false);
-                setLastScanAt(data.lastScanAt || null);
-                setLastScanTotalNew(data.lastScanTotalNew || 0);
-                setLastScanResults(data.lastScanResults || []);
-                setNextScanAt(data.nextScanAt || null);
-            }
-        } catch (e) { console.error("Failed to fetch scanner status", e); }
-    };
-
-    const toggleOpportunityScanner = async (enabled: boolean) => {
-        setOpportunityScannerEnabled(enabled); // optimistic update
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/toggle`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled })
-            });
-            if (res.ok) {
-                toast.success(enabled ? 'Notificações automáticas ativadas!' : 'Notificações automáticas desativadas.');
-            } else {
-                toast.error('Erro ao salvar configuração.');
-                setOpportunityScannerEnabled(!enabled); // revert
-            }
-        } catch (e) {
-            console.error(e);
-            toast.error('Falha de conexão ao salvar configuração.');
-            setOpportunityScannerEnabled(!enabled); // revert
-        }
-    };
-
-    const fetchSavedSearches = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/searches`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) { const data = await res.json(); setSavedSearches(data); }
-        } catch (e) { console.error("Failed to fetch saved searches", e); }
-    };
-
-    const handleSearch = async (e?: React.FormEvent, overrides?: { keywords?: string; status?: string; uf?: string; modalidade?: string; dataInicio?: string; dataFim?: string; esfera?: string; orgao?: string; orgaosLista?: string; excludeKeywords?: string; resetPage?: boolean }) => {
-        if (e) { e.preventDefault(); setPage(1); }
-        setHasSearched(true);
-        setLoading(true);
-        setSearchSlow(false);
-        setSearchSource('');
-        setSearchElapsed(0);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
-
-        const searchParams = {
-            keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
-            uf: overrides?.uf ?? selectedUf, pagina: e || overrides?.resetPage ? 1 : page,
-            modalidade: overrides?.modalidade ?? modalidade,
-            dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
-            dataFim: (overrides?.dataFim ?? dataFim) || undefined,
-            esfera: overrides?.esfera ?? esfera, orgao: overrides?.orgao ?? orgao,
-            orgaosLista: overrides?.orgaosLista ?? orgaosLista,
-            excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
-        };
-
-        try {
-            const token = localStorage.getItem('token');
-            let items: any[] = [];
-            let total = 0;
-            let source: 'local' | 'govbr' = 'local';
-
-            // ══════════════════════════════════════════════════
-            // STRATEGY: ALWAYS LOCAL-FIRST
-            // 1. Try local DB (< 100ms) — works for keywords AND filters
-            // 2. If local returns 0 → fallback to Gov.br (8-25s)
-            // 3. If Gov.br also fails → user sees clear error
-            // ══════════════════════════════════════════════════
-
-            // Step 1: Try local database ALWAYS (even with keywords)
-            try {
-                const localRes = await fetch(`${API_BASE_URL}/api/pncp/search-local`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(searchParams),
-                });
-                if (localRes.ok) {
-                    const localData = await localRes.json();
-                    const localItems = Array.isArray(localData.items) ? localData.items : [];
-                    if (localItems.length > 0) {
-                        items = localItems;
-                        total = localData.total || items.length;
-                        source = 'local';
-                        if (localData.elapsed) setSearchElapsed(localData.elapsed);
-                    }
-                }
-            } catch { /* local failed, will fallback to Gov.br */ }
-
-            // Step 2: ONLY if local returned 0 → try Gov.br
-            if (items.length === 0) {
-                source = 'govbr';
-                try {
-                    const govRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        signal: controller.signal,
-                        body: JSON.stringify(searchParams),
-                    });
-                    if (govRes.ok) {
-                        const govData = await govRes.json();
-                        items = Array.isArray(govData.items) ? govData.items : [];
-                        total = govData.total || items.length;
-                    } else if (govRes.status >= 500) {
-                        await new Promise(r => setTimeout(r, 2000));
-                        const retryRes = await fetch(`${API_BASE_URL}/api/pncp/search`, {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                            body: JSON.stringify(searchParams),
-                        });
-                        if (retryRes.ok) {
-                            const retryData = await retryRes.json();
-                            items = Array.isArray(retryData.items) ? retryData.items : [];
-                            total = retryData.total || items.length;
-                        }
-                    }
-                } catch (govErr: any) {
-                    // Gov.br also failed — show helpful message instead of generic error
-                    if (govErr.name === 'AbortError') {
-                        toast.error('Portal PNCP indisponível. Tente novamente em alguns minutos.');
-                    }
-                }
-            }
-
-            // Apply results
-            setSearchSource(source);
-            setAllResults(items);
-            setTotalResults(total);
-            setResults(items.slice(0, 10));
-
-            // Prefetch items (only needed for Gov.br results, local already has items)
-            if (source === 'govbr' && items.length > 0) {
-                const prefetchCandidates = items.slice(0, 10)
-                    .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
-                    .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
-                if (prefetchCandidates.length > 0) {
-                    fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ processes: prefetchCandidates }),
-                    }).catch(() => {});
-                }
-            }
-        } catch (e: any) {
-            if (e.name === 'AbortError') {
-                toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente ou refine sua busca.');
-            } else {
-                console.error(e);
-                toast.error(e?.message || 'Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');
-            }
-        }
-        finally { clearTimeout(timeoutId); clearTimeout(slowTimer); setLoading(false); setSearchSlow(false); }
-    };
-
-    // ─── Multi-list Saved Searches ───
-    const searchListNames = useMemo(() => {
-        const names = new Set(savedSearches.map(s => s.listName || 'Pesquisas Gerais'));
-        names.add('Pesquisas Gerais');
-        const rest = [...names].filter(n => n !== 'Pesquisas Gerais').sort();
-        return ['Pesquisas Gerais', ...rest];
-    }, [savedSearches]);
-
-    // "Pesquisas Gerais" → show ALL from ALL lists
-    const filteredSavedSearches = useMemo(() => {
-        if (!activeSearchListName || activeSearchListName === 'Pesquisas Gerais') return savedSearches;
-        return savedSearches.filter(s => (s.listName || 'Pesquisas Gerais') === activeSearchListName);
-    }, [savedSearches, activeSearchListName]);
-
-    const handleSaveSearch = async (listName?: string) => {
-        // If no listName was provided (should not happen anymore), fallback
-        const effectiveListName = listName || 'Pesquisas Gerais';
-
-        const name = prompt("Defina um nome para esta pesquisa (ex: Equipamentos TI em SP):");
-        if (!name) return;
-
-        setSaving(true);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/searches`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name, keywords, status, companyProfileId: selectedSearchCompanyId || undefined,
-                    listName: effectiveListName,
-                    states: JSON.stringify({ uf: selectedUf, modalidade, esfera, orgao, orgaosLista, excludeKeywords, dataInicio, dataFim })
-                })
-            });
-            if (res.ok) {
-                fetchSavedSearches();
-                toast.success(`Pesquisa salva em "${effectiveListName}"`);
-            } else { throw new Error("Failed to save"); }
-        } catch (e) { console.error(e); toast.error('Erro ao salvar pesquisa.'); }
-        finally { setSaving(false); }
-    };
-
-    const renameSearchList = async (oldName: string, newName: string) => {
-        const trimmed = newName.trim();
-        if (!trimmed || trimmed === oldName) return;
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/searches/list/rename`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ oldName, newName: trimmed })
-            });
-            if (res.ok) {
-                fetchSavedSearches();
-                if (activeSearchListName === oldName) setActiveSearchListName(trimmed);
-                toast.success(`Lista renomeada para "${trimmed}"`);
-            } else { throw new Error('Failed'); }
-        } catch (e) { console.error(e); toast.error('Erro ao renomear lista.'); }
-    };
-
-    const deleteSearchList = (listName: string) => {
-        if (listName === 'Pesquisas Gerais') { toast.warning('A lista padrão não pode ser excluída.'); return; }
-        const count = savedSearches.filter(s => (s.listName || 'Pesquisas Gerais') === listName).length;
-        setConfirmAction({
-            type: 'deleteSearchList',
-            message: `Excluir a lista "${listName}"?${count > 0 ? `\n\nAs ${count} pesquisa(s) serão movidas para "Pesquisas Gerais".` : ''}`,
-            onConfirm: async () => {
-                setConfirmAction(null);
-                try {
-                    const token = localStorage.getItem('token');
-                    const res = await fetch(`${API_BASE_URL}/api/pncp/searches/list/${encodeURIComponent(listName)}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (res.ok) {
-                        fetchSavedSearches();
-                        if (activeSearchListName === listName) setActiveSearchListName(null);
-                        toast.success(`Lista "${listName}" excluída. Pesquisas movidas para "Pesquisas Gerais".`);
-                    } else { throw new Error('Failed'); }
-                } catch (e) { console.error(e); toast.error('Erro ao excluir lista.'); }
-            }
-        });
-    };
-
-    // ALWAYS open list picker — user must choose which list to save to
-    const startSaveSearch = () => {
-        setSearchListPickerOpen(true);
-    };
-
-    const loadSavedSearch = (search: PncpSavedSearch) => {
-        const searchKeywords = search.keywords || '';
-        const searchStatus = search.status || 'recebendo_proposta';
-        let customState = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '' };
-        try {
-            const parsedStates = JSON.parse(search.states || '{}');
-            if (Array.isArray(parsedStates)) { customState.uf = parsedStates[0] || ''; }
-            else if (typeof parsedStates === 'object' && parsedStates !== null) { customState = { ...customState, ...parsedStates }; }
-        } catch { }
-
-        setKeywords(searchKeywords); setStatus(searchStatus);
-        setSelectedSearchCompanyId(search.companyProfileId || '');
-        setSelectedUf(customState.uf); setModalidade(customState.modalidade);
-        setEsfera(customState.esfera); setOrgao(customState.orgao);
-        setOrgaosLista(customState.orgaosLista); setExcludeKeywords(customState.excludeKeywords);
-        setDataInicio(customState.dataInicio); setDataFim(customState.dataFim);
-        setPage(1);
-        setActiveTab('search');
-
-        handleSearch(undefined, {
-            keywords: searchKeywords, status: searchStatus, uf: customState.uf,
-            modalidade: customState.modalidade, esfera: customState.esfera,
-            orgao: customState.orgao, orgaosLista: customState.orgaosLista,
-            excludeKeywords: customState.excludeKeywords,
-            dataInicio: customState.dataInicio, dataFim: customState.dataFim,
-            resetPage: true
-        });
-    };
-
-    // Local client-side pagination (instant, no API calls)
-    const prevPageRef = useRef(page);
-    useEffect(() => {
-        if (hasSearched && page !== prevPageRef.current) {
-            prevPageRef.current = page;
+        if (search.hasSearched && search.page !== prevPageRef.current) {
+            prevPageRef.current = search.page;
             const perPage = 10;
-            const startIdx = (page - 1) * perPage;
-            const pageItems = allResults.slice(startIdx, startIdx + perPage);
-            setResults(pageItems);
+            const startIdx = (search.page - 1) * perPage;
+            const pageItems = search.allResults.slice(startIdx, startIdx + perPage);
+            search.setResults(pageItems);
             window.scrollTo({ top: 0, behavior: 'smooth' });
             
             // Prefetch items for the new page (warms server cache)
@@ -776,42 +162,62 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 }
             }
         }
-    }, [page, allResults, hasSearched]);
+    }, [search.page, search.allResults, search.hasSearched]);
 
-    const deleteSavedSearch = async (id: string, e?: React.MouseEvent) => {
-        e?.stopPropagation();
-        setConfirmAction({ type: 'deleteSearch', message: 'Excluir esta pesquisa salva?', onConfirm: async () => {
-            setConfirmAction(null);
-            try {
-                const token = localStorage.getItem('token');
-                const res = await fetch(`${API_BASE_URL}/api/pncp/searches/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-                if (res.ok) { fetchSavedSearches(); toast.success('Pesquisa excluída.'); }
-            } catch (e) { console.error(e); }
-        }});
-    };
+    // ═══════════════════════════════════════════════════
+    // LOAD SAVED SEARCH — bridges saved searches → search
+    // ═══════════════════════════════════════════════════
 
-    const [editingSearch, setEditingSearch] = useState<PncpSavedSearch | null>(null);
-
-    const updateSavedSearch = async (id: string, updates: Partial<{name: string; keywords: string; status: string; states: string; listName: string; companyProfileId: string}>) => {
+    const loadSavedSearch = (s: PncpSavedSearch) => {
+        const searchKeywords = s.keywords || '';
+        const searchStatus = s.status || 'recebendo_proposta';
+        let customState = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '' };
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/searches/${id}`, {
-                method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(updates)
-            });
-            if (res.ok) { fetchSavedSearches(); toast.success('Pesquisa atualizada.'); return true; }
-            throw new Error('Failed');
-        } catch (e) { console.error(e); toast.error('Erro ao atualizar pesquisa.'); return false; }
+            const parsedStates = JSON.parse(s.states || '{}');
+            if (Array.isArray(parsedStates)) { customState.uf = parsedStates[0] || ''; }
+            else if (typeof parsedStates === 'object' && parsedStates !== null) { customState = { ...customState, ...parsedStates }; }
+        } catch { }
+
+        search.setKeywords(searchKeywords); search.setStatus(searchStatus);
+        search.setSelectedSearchCompanyId(s.companyProfileId || '');
+        search.setSelectedUf(customState.uf); search.setModalidade(customState.modalidade);
+        search.setEsfera(customState.esfera); search.setOrgao(customState.orgao);
+        search.setOrgaosLista(customState.orgaosLista); search.setExcludeKeywords(customState.excludeKeywords);
+        search.setDataInicio(customState.dataInicio); search.setDataFim(customState.dataFim);
+        search.setPage(1);
+        setActiveTab('search');
+
+        search.handleSearch(undefined, {
+            keywords: searchKeywords, status: searchStatus, uf: customState.uf,
+            modalidade: customState.modalidade, esfera: customState.esfera,
+            orgao: customState.orgao, orgaosLista: customState.orgaosLista,
+            excludeKeywords: customState.excludeKeywords,
+            dataInicio: customState.dataInicio, dataFim: customState.dataFim,
+            resetPage: true
+        });
     };
 
+    // Save search bridge: injects current search state
+    const handleSaveSearch = async (listName?: string) => {
+        savedSearches.handleSaveSearch(listName, {
+            keywords: search.keywords, status: search.status,
+            selectedSearchCompanyId: search.selectedSearchCompanyId,
+            selectedUf: search.selectedUf, modalidade: search.modalidade,
+            esfera: search.esfera, orgao: search.orgao,
+            orgaosLista: search.orgaosLista, excludeKeywords: search.excludeKeywords,
+            dataInicio: search.dataInicio, dataFim: search.dataFim,
+        });
+    };
+
+    // Clear search bridge: also reset tab
     const clearSearch = () => {
-        setKeywords(''); setStatus('recebendo_proposta'); setSelectedUf('');
-        setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');
-        setOrgao(''); setOrgaosLista(''); setExcludeKeywords(''); setDataInicio(''); setDataFim('');
-        setAllResults([]); setResults([]); setTotalResults(0); setPage(1);
+        search.clearSearch();
         setActiveTab('search');
     };
+
+    // ═══════════════════════════════════════════════════
+    // IMPORT TO FUNNEL
+    // ═══════════════════════════════════════════════════
 
     const handleImportToFunnel = (item: PncpBiddingItem, aiData?: { process: Partial<BiddingProcess>; analysis: AiAnalysis }) => {
         if (items) {
@@ -819,10 +225,10 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             if (existingProcess) {
                 const isCaptado = existingProcess.status === 'Captado';
                 const locationStr = isCaptado ? 'na coluna "Captada"' : `na coluna "${existingProcess.status}"`;
-                setConfirmAction({
+                favorites.setConfirmAction({
                     type: 'duplicate',
                     message: `Esta licitação aparentemente já está no seu funil (${locationStr}). Tem certeza que deseja importar novamente e criar uma duplicidade?`,
-                    onConfirm: () => { setConfirmAction(null); doImport(item, aiData); }
+                    onConfirm: () => { favorites.setConfirmAction(null); doImport(item, aiData); }
                 });
                 return;
             }
@@ -835,12 +241,9 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         // 1. SMART PORTAL DETECTION — resolve o portal real de operação
         // ═══════════════════════════════════════════════════════════
         let bestPortalName = "PNCP";
-        // V4.6.1: Check AI-enriched link first (e.g. BLL functional URL from Auto-Enrich),
-        // then fall back to item.link_sistema (PNCP link)
         const aiEnrichedLink = ((aiData?.process as any)?.link_sistema || '').toLowerCase();
         const allLinksForDetection = [aiEnrichedLink, (item.link_sistema || '').toLowerCase()].filter(Boolean).join(' ');
 
-        // Check registered credentials first
         if (companies.length > 0) {
             const allCreds = companies.flatMap(c => c.credentials || []);
             const match = allCreds.find(c => {
@@ -850,7 +253,6 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             if (match) bestPortalName = match.platform;
         }
 
-        // Fallback: infer from link patterns (more comprehensive)
         if (bestPortalName === 'PNCP') {
             if (allLinksForDetection.includes('comprasnet') || allLinksForDetection.includes('cnetmobile') || allLinksForDetection.includes('gov.br/compras')) bestPortalName = "ComprasNet";
             else if (allLinksForDetection.includes('bllcompras') || allLinksForDetection.includes('bll.org')) bestPortalName = "BLL";
@@ -863,8 +265,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             else if (allLinksForDetection.includes('licitamaisbrasil')) bestPortalName = "Licita Mais Brasil";
             else if (allLinksForDetection.includes('compras.gov.br') || allLinksForDetection.includes('pncp.gov.br')) bestPortalName = "Compras.gov.br";
 
-            // State-level override: Ceará (CE) State agencies use ComprasNet for disputes (except Dispensa)
-            if (bestPortalName === 'PNCP' || bestPortalName === 'Compras.gov.br') { // Keep Compras.gov.br mapping or PNCP default
+            if (bestPortalName === 'PNCP' || bestPortalName === 'Compras.gov.br') {
                 const isCE = (item.uf?.toUpperCase() === 'CE');
                 const isStateLevel = (item.esfera_id === 'E');
                 const isDispensa = /dispensa|cota[çc][ãa]o/i.test(item.modalidade_nome || '');
@@ -875,7 +276,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         }
 
         // ═══════════════════════════════════════════════════════════
-        // 2. AI-INFORMED RISK TAG — calcula risco baseado na análise IA
+        // 2. AI-INFORMED RISK TAG
         // ═══════════════════════════════════════════════════════════
         let riskTag: string = aiData?.process?.risk || 'Médio';
         if (aiData?.analysis?.schemaV2) {
@@ -902,17 +303,15 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         }
 
         // ═══════════════════════════════════════════════════════════
-        // 3. SMART TITLE — constrói título enriquecido
+        // 3. SMART TITLE
         // ═══════════════════════════════════════════════════════════
         let title = aiData?.process?.title || item.titulo;
-        // Normalize for comparison: lowercase, remove accents, remove common prefixes
         const normalizeForCompare = (s: string) => s.toLowerCase()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/prefeitura municipal d[eo] /gi, '')
             .replace(/municipio d[eo] /gi, '')
             .replace(/secretaria d[eo] /gi, '')
             .replace(/\s+/g, ' ').trim();
-        // Se o título não inclui referência ao órgão e é curto, enriqueça
         const titleNorm = normalizeForCompare(title || '');
         const orgNorm = normalizeForCompare(item.orgao_nome || '');
         const alreadyHasOrg = titleNorm.includes(orgNorm.slice(0, 10)) || orgNorm.includes(titleNorm.slice(-15));
@@ -923,10 +322,9 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         }
 
         // ═══════════════════════════════════════════════════════════
-        // 4. LINK COMPOSITION — combina todos os links relevantes
+        // 4. LINK COMPOSITION
         // ═══════════════════════════════════════════════════════════
         const links: string[] = [];
-        // AI-inferred link (e.g. cnetmobile via UASG) — highest priority
         const aiLinkSistema = (aiData?.process as any)?.link_sistema as string | undefined;
         if (aiLinkSistema && !links.includes(aiLinkSistema)) links.push(aiLinkSistema);
         if (aiData?.process?.link && !links.includes(aiData.process.link)) links.push(aiData.process.link);
@@ -934,19 +332,13 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         if (item.link_comprasnet && !links.includes(item.link_comprasnet)) links.push(item.link_comprasnet);
 
         // ═══════════════════════════════════════════════════════════
-        // 5. SESSION DATE — prioriza data extraída pela IA (da análise do edital)
+        // 5. SESSION DATE
         // ═══════════════════════════════════════════════════════════
-        // PNCP API fields:
-        //   data_abertura = dataAberturaProposta = início do RECEBIMENTO de propostas (ex: 23/03)
-        //   data_encerramento_proposta = prazo final para enviar propostas (ex: 09/04 17:00)
-        // Nenhum dos dois é a sessão pública. A sessão real vem da IA (timeline.data_sessao).
         let sessionDateISO: string;
         if (aiData?.process?.sessionDate && aiData.process.sessionDate.length > 5) {
-            // AI extracted the actual session date from the edital text
             const parsed = new Date(aiData.process.sessionDate);
             sessionDateISO = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
         } else if (item.data_encerramento_proposta) {
-            // Closest proxy: proposal deadline is usually 1 day before session
             sessionDateISO = new Date(item.data_encerramento_proposta).toISOString();
         } else if (item.data_abertura) {
             sessionDateISO = new Date(item.data_abertura).toISOString();
@@ -955,7 +347,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         }
 
         // ═══════════════════════════════════════════════════════════
-        // 6. SMART REMINDER — auto-configura lembrete 2 dias antes da sessão
+        // 6. SMART REMINDER
         // ═══════════════════════════════════════════════════════════
         let reminderDate: string | undefined;
         let reminderStatus: 'pending' | undefined;
@@ -964,7 +356,6 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         const now = Date.now();
         const twoDaysBefore = sessionMs - (2 * 24 * 60 * 60 * 1000);
         if (twoDaysBefore > now) {
-            // Set reminder at 08:00 two days before the session
             const reminderDt = new Date(twoDaysBefore);
             reminderDt.setHours(8, 0, 0, 0);
             reminderDate = reminderDt.toISOString();
@@ -973,7 +364,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         }
 
         // ═══════════════════════════════════════════════════════════
-        // 7. RICH OBSERVATION — nota de importação com dados completos
+        // 7. RICH OBSERVATION
         // ═══════════════════════════════════════════════════════════
         const obsParts = [`Importado do PNCP`];
         if (item.orgao_nome) obsParts.push(`Órgão: ${item.orgao_nome.toUpperCase()}`);
@@ -984,25 +375,15 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         const observationText = obsParts.join(' | ');
 
         // ═══════════════════════════════════════════════════════════
-        // 8. SUMMARY — prefere AI summary que já vem sanitizado do backend
+        // 8-9. SUMMARY & MODALITY
         // ═══════════════════════════════════════════════════════════
         let summary = aiData?.process?.summary || item.objeto;
-
-        // ═══════════════════════════════════════════════════════════
-        // 9. MODALITY — normaliza para o padrão do dropdown
-        // ═══════════════════════════════════════════════════════════
         let modality = aiData?.process?.modality || item.modalidade_nome || "Não Informado (PNCP)";
-        // Normalize common PNCP modality strings to clean labels
         const modalMap: Record<string, string> = {
-            'pregão - eletrônico': 'Pregão Eletrônico',
-            'pregão eletrônico': 'Pregão Eletrônico',
-            'concorrência - eletrônica': 'Concorrência',
-            'concorrência eletrônica': 'Concorrência',
-            'concorrência': 'Concorrência',
-            'dispensa': 'Dispensa',
-            'dispensa de licitação': 'Dispensa',
-            'inexigibilidade': 'Inexigibilidade',
-            'diálogo competitivo': 'Diálogo Competitivo',
+            'pregão - eletrônico': 'Pregão Eletrônico', 'pregão eletrônico': 'Pregão Eletrônico',
+            'concorrência - eletrônica': 'Concorrência', 'concorrência eletrônica': 'Concorrência',
+            'concorrência': 'Concorrência', 'dispensa': 'Dispensa', 'dispensa de licitação': 'Dispensa',
+            'inexigibilidade': 'Inexigibilidade', 'diálogo competitivo': 'Diálogo Competitivo',
             'leilão - eletrônico': 'Leilão',
         };
         const normalizedMod = modalMap[modality.toLowerCase().trim()];
@@ -1011,25 +392,21 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         // ═══════════════════════════════════════════════════════════
         // BUILD & SET PROCESS
         // ═══════════════════════════════════════════════════════════
-        // Smart portal resolution: bestPortalName from links is specific → wins over generic AI portal
         const genericPortals = ['compras.gov.br', 'pncp', 'não informado', ''];
         const aiPortal = aiData?.process?.portal || '';
         const resolvedPortal = (bestPortalName && !genericPortals.includes(bestPortalName.toLowerCase()))
-            ? bestPortalName  // Link-based detection is specific (e.g. Licita Mais Brasil) → use it
-            : (aiPortal || bestPortalName);  // AI portal or fallback
+            ? bestPortalName
+            : (aiPortal || bestPortalName);
 
         const processData: Partial<BiddingProcess> = {
-            title,
-            summary,
-            portal: resolvedPortal,
-            modality,
+            title, summary, portal: resolvedPortal, modality,
             status: "Captado",
             estimatedValue: aiData?.process?.estimatedValue || item.valor_estimado || 0,
             sessionDate: sessionDateISO,
             link: links.join(', '),
             pncpLink: item.link_sistema,
             risk: riskTag as any,
-            companyProfileId: selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
+            companyProfileId: search.selectedSearchCompanyId || (companies.length > 0 ? companies[0].id : ''),
             ...(reminderDate ? { reminderDate, reminderStatus, reminderType } : {}),
             observations: JSON.stringify([{
                 id: crypto.randomUUID?.() || Date.now().toString(),
@@ -1039,6 +416,10 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         };
         setEditingProcess(processData);
     };
+
+    // ═══════════════════════════════════════════════════
+    // AI ANALYSIS
+    // ═══════════════════════════════════════════════════
 
     const handlePncpAiAnalyze = async (item: PncpBiddingItem) => {
         if (analyzingItemId) return;
@@ -1052,7 +433,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 input: {
                     orgao_cnpj: item.orgao_cnpj, ano: item.ano,
                     numero_sequencial: item.numero_sequencial, link_sistema: item.link_sistema,
-                    _itemData: item // Saved to reconstruct the process later
+                    _itemData: item
                 },
                 targetId: `pncp_${item.id}`,
                 targetTitle: `Análise PNCP: ${item.orgao_nome || item.numero_sequencial}`
@@ -1120,9 +501,9 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 modality: processObj.modality || item.modalidade_nome || '',
                 status: 'Captado', estimatedValue: processObj.estimatedValue || item.valor_estimado || 0,
                 sessionDate: toISOSafe(processObj.sessionDate || item.data_encerramento_proposta || item.data_abertura || ''),
-                link: [processObj.link_sistema, item.link_sistema, item.link_comprasnet].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', '),
+                link: [processObj.link_sistema, item.link_sistema, item.link_comprasnet].filter(Boolean).filter((v: string, i: number, a: string[]) => a.indexOf(v) === i).join(', '),
                 pncpLink: item.link_sistema || '', risk: processObj.risk || 'Médio',
-                companyProfileId: selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
+                companyProfileId: search.selectedSearchCompanyId || '', createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(), observations: '[]'
             } as BiddingProcess;
 
@@ -1141,6 +522,10 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         }
     }, [initialContext]);
 
+    // ═══════════════════════════════════════════════════
+    // FILE UPLOAD (Manual edital)
+    // ═══════════════════════════════════════════════════
+
     const handleAIAssistClick = () => { fileInputRef.current?.click(); };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1150,7 +535,6 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             setIsParsingAI(true);
             const { process: parsedData, analysis } = await aiService.parseEditalPDF(files);
             
-            // Helper to build dates consistently 
             const toISOSafe = (d: string): string => {
                 if (!d) return new Date().toISOString();
                 const parsed = new Date(d);
@@ -1186,7 +570,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 link: parsedData.link || '',
                 pncpLink: '',
                 risk: parsedData.risk || 'Médio',
-                companyProfileId: selectedSearchCompanyId || '',
+                companyProfileId: search.selectedSearchCompanyId || '',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 observations: '[]'
@@ -1204,6 +588,10 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
+
+    // ═══════════════════════════════════════════════════
+    // SAVE PROCESS
+    // ═══════════════════════════════════════════════════
 
     const handleSaveProcess = async (data: Partial<BiddingProcess>, aiData?: any) => {
         try {
@@ -1236,49 +624,31 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         } catch (e: any) { console.error(e); toast.error(`Erro ao importar licitação: ${e.message}`); }
     };
 
-    const activeFilterCount = [
-        modalidade !== 'todas', esfera !== 'todas', orgao !== '',
-        orgaosLista.trim() !== '', excludeKeywords.trim() !== '',
-        dataInicio !== '', dataFim !== '', selectedSearchCompanyId !== ''
-    ].filter(Boolean).length;
-
-    const handleTriggerScan = async () => {
-        setLoading(true);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/scan-opportunities`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                toast.success(data.message || 'Varredura de oportunidades iniciada');
-                // Atualizar status após 30s (tempo suficiente para scan completar)
-                setTimeout(fetchScannerStatus, 30000);
-            } else { throw new Error("Erro na varredura"); }
-        } catch (e: any) {
-            console.error(e);
-            toast.error('Falha ao iniciar varredura de oportunidades.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Helper: buscar resultado da última varredura para uma pesquisa específica
-    const getSearchScanResult = (searchId: string) => {
-        return lastScanResults.find(r => r.searchId === searchId) || null;
-    };
+    // ═══════════════════════════════════════════════════
+    // RETURN — Identical contract to original usePncpPage
+    // ═══════════════════════════════════════════════════
 
     return {
-        // Search state
-        savedSearches, results, loading, searchSlow, saving, showAdvancedFilters, setShowAdvancedFilters,
-        searchSource, searchElapsed,
-        keywords, setKeywords, status, setStatus, selectedUf, setSelectedUf,
-        selectedSearchCompanyId, setSelectedSearchCompanyId,
-        modalidade, setModalidade, esfera, setEsfera, orgao, setOrgao,
-        orgaosLista, setOrgaosLista, excludeKeywords, setExcludeKeywords,
-        dataInicio, setDataInicio, dataFim, setDataFim,
-        page, setPage, totalResults, hasSearched,
+        // Search state (from usePncpSearch)
+        savedSearches: savedSearches.savedSearches,
+        results: search.results, loading: search.loading || scanner.loading,
+        searchSlow: search.searchSlow,
+        saving: savedSearches.saving,
+        showAdvancedFilters: search.showAdvancedFilters, setShowAdvancedFilters: search.setShowAdvancedFilters,
+        searchSource: search.searchSource, searchElapsed: search.searchElapsed,
+        keywords: search.keywords, setKeywords: search.setKeywords,
+        status: search.status, setStatus: search.setStatus,
+        selectedUf: search.selectedUf, setSelectedUf: search.setSelectedUf,
+        selectedSearchCompanyId: search.selectedSearchCompanyId, setSelectedSearchCompanyId: search.setSelectedSearchCompanyId,
+        modalidade: search.modalidade, setModalidade: search.setModalidade,
+        esfera: search.esfera, setEsfera: search.setEsfera,
+        orgao: search.orgao, setOrgao: search.setOrgao,
+        orgaosLista: search.orgaosLista, setOrgaosLista: search.setOrgaosLista,
+        excludeKeywords: search.excludeKeywords, setExcludeKeywords: search.setExcludeKeywords,
+        dataInicio: search.dataInicio, setDataInicio: search.setDataInicio,
+        dataFim: search.dataFim, setDataFim: search.setDataFim,
+        page: search.page, setPage: search.setPage,
+        totalResults: search.totalResults, hasSearched: search.hasSearched,
         // Modal state
         editingProcess, setEditingProcess, fileInputRef, handleAIAssistClick, handleFileUpload, isParsingAI,
         // AI state
@@ -1286,29 +656,53 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         viewingAnalysisProcess, setViewingAnalysisProcess,
         analyzedPncpItem, setAnalyzedPncpItem,
         pendingAiAnalysis, setPendingAiAnalysis,
-        // Multi-list Favoritos
-        favoritos, favLists, favStore, activeFavListId, setActiveFavListId,
-        activeTab, setActiveTab, confirmAction, setConfirmAction,
-        listPickerOpen, setListPickerOpen, listPickerItem, setListPickerItem,
-        createFavList, renameFavList, deleteFavList, addToFavList, removeFromFavList, favListItemCount,
-        // Multi-list Saved Searches
-        searchListNames, filteredSavedSearches, activeSearchListName, setActiveSearchListName,
-        searchListPickerOpen, setSearchListPickerOpen,
-        renameSearchList, deleteSearchList,
+        // Multi-list Favoritos (from usePncpFavorites)
+        favoritos: favorites.favoritos, favLists: favorites.favLists, favStore: favorites.favStore,
+        activeFavListId: favorites.activeFavListId, setActiveFavListId: favorites.setActiveFavListId,
+        activeTab, setActiveTab,
+        confirmAction: favorites.confirmAction, setConfirmAction: favorites.setConfirmAction,
+        listPickerOpen: favorites.listPickerOpen, setListPickerOpen: favorites.setListPickerOpen,
+        listPickerItem: favorites.listPickerItem, setListPickerItem: favorites.setListPickerItem,
+        createFavList: favorites.createFavList, renameFavList: favorites.renameFavList,
+        deleteFavList: favorites.deleteFavList, addToFavList: favorites.addToFavList,
+        removeFromFavList: favorites.removeFromFavList, favListItemCount: favorites.favListItemCount,
+        // Multi-list Saved Searches (from usePncpSavedSearches)
+        searchListNames: savedSearches.searchListNames,
+        filteredSavedSearches: savedSearches.filteredSavedSearches,
+        activeSearchListName: savedSearches.activeSearchListName,
+        setActiveSearchListName: savedSearches.setActiveSearchListName,
+        searchListPickerOpen: savedSearches.searchListPickerOpen,
+        setSearchListPickerOpen: savedSearches.setSearchListPickerOpen,
+        renameSearchList: savedSearches.renameSearchList,
+        deleteSearchList: savedSearches.deleteSearchList,
         // Computed
-        displayItems, activeFilterCount,
+        displayItems, activeFilterCount: search.activeFilterCount,
         // Handlers
-        toggleFavorito, exportFavoritesToPdf,
-        handleSearch, handleSaveSearch, startSaveSearch, loadSavedSearch,
-        deleteSavedSearch, clearSearch, editingSearch, setEditingSearch, updateSavedSearch,
-        handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess, handleTriggerScan,
-        // Global scanner
-        opportunityScannerEnabled, toggleOpportunityScanner,
+        toggleFavorito: favorites.toggleFavorito, exportFavoritesToPdf: favorites.exportFavoritesToPdf,
+        handleSearch: search.handleSearch, handleSaveSearch, startSaveSearch: savedSearches.startSaveSearch,
+        loadSavedSearch,
+        deleteSavedSearch: savedSearches.deleteSavedSearch, clearSearch,
+        editingSearch: savedSearches.editingSearch, setEditingSearch: savedSearches.setEditingSearch,
+        updateSavedSearch: savedSearches.updateSavedSearch,
+        handleImportToFunnel, handlePncpAiAnalyze, handleSaveProcess,
+        handleTriggerScan: scanner.handleTriggerScan,
+        // Global scanner (from usePncpScanner)
+        opportunityScannerEnabled: scanner.opportunityScannerEnabled,
+        toggleOpportunityScanner: scanner.toggleOpportunityScanner,
         // Last scan info
-        lastScanAt, lastScanTotalNew, lastScanResults, nextScanAt, getSearchScanResult,
+        lastScanAt: scanner.lastScanAt, lastScanTotalNew: scanner.lastScanTotalNew,
+        lastScanResults: scanner.lastScanResults, nextScanAt: scanner.nextScanAt,
+        getSearchScanResult: scanner.getSearchScanResult,
         // Scanner Opportunities ("Encontradas" tab)
-        scannerOpportunities, scannerOpportunitiesTotal, scannerOpportunitiesPage, setScannerOpportunitiesPage,
-        scannerOpportunitiesLoading, scannerFilterSearchId, setScannerFilterSearchId,
-        unreadOpportunityCount, markOpportunitiesViewed, fetchScannerOpportunities
+        scannerOpportunities: scanner.scannerOpportunities,
+        scannerOpportunitiesTotal: scanner.scannerOpportunitiesTotal,
+        scannerOpportunitiesPage: scanner.scannerOpportunitiesPage,
+        setScannerOpportunitiesPage: scanner.setScannerOpportunitiesPage,
+        scannerOpportunitiesLoading: scanner.scannerOpportunitiesLoading,
+        scannerFilterSearchId: scanner.scannerFilterSearchId,
+        setScannerFilterSearchId: scanner.setScannerFilterSearchId,
+        unreadOpportunityCount: scanner.unreadOpportunityCount,
+        markOpportunitiesViewed: scanner.markOpportunitiesViewed,
+        fetchScannerOpportunities: scanner.fetchScannerOpportunities,
     };
 }

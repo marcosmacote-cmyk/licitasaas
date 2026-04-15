@@ -1147,16 +1147,20 @@ router.post('/search', authenticateToken, async (req: any, res) => {
 
 router.post('/search-local', authenticateToken, async (req: any, res) => {
     try {
-        const { keywords, status, uf, modalidade, esfera, valorMin, valorMax, pagina = 1, tamanhoPagina = 50 } = req.body;
+        const { keywords, status, uf, modalidade, esfera, valorMin, valorMax, 
+                orgao, orgaosLista, excludeKeywords, dataInicio, dataFim,
+                pagina = 1, tamanhoPagina = 50 } = req.body;
         const startTime = Date.now();
 
         // ══════════════════════════════════════════════════
         // Prisma native queries — no BigInt issues, no raw SQL
+        // Full filter support: keywords, status, uf, modalidade, esfera,
+        // orgao, orgaosLista, excludeKeywords, dataInicio, dataFim
         // ══════════════════════════════════════════════════
 
         const where: any = {};
 
-        // UF filter
+        // ── UF filter ──
         if (uf) {
             const ufs = uf.split(',').map((u: string) => u.trim()).filter(Boolean);
             if (ufs.length === 1) {
@@ -1166,7 +1170,7 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // Status filter — include NULL for 'recebendo_proposta'
+        // ── Status filter — include NULL for 'recebendo_proposta' ──
         if (status) {
             const statusMap: Record<string, string[]> = {
                 'recebendo_proposta': ['Divulgada', 'Aberta'],
@@ -1188,58 +1192,135 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
             }
         }
 
-        // Modalidade filter
-        if (modalidade) {
-            where.modalidade = { contains: modalidade, mode: 'insensitive' };
+        // ── Modalidade filter ──
+        if (modalidade && modalidade !== 'todas') {
+            // Map numeric codes to text labels for local DB
+            const modalidadeMap: Record<string, string> = {
+                '1': 'Pregão', '2': 'Concorrência', '3': 'Concurso',
+                '4': 'Leilão', '5': 'Diálogo Competitivo', '6': 'Dispensa',
+                '7': 'Inexigibilidade', '8': 'Tomada de Preços', '9': 'Convite',
+            };
+            const modalText = modalidadeMap[modalidade] || modalidade;
+            where.modalidade = { contains: modalText, mode: 'insensitive' };
         }
 
-        // Esfera filter
-        if (esfera) {
+        // ── Esfera filter ──
+        if (esfera && esfera !== 'todas') {
             where.esfera = esfera;
         }
 
-        // Valor range filter
+        // ── Valor range filter ──
         if (valorMin || valorMax) {
             where.valorEstimado = {};
             if (valorMin) where.valorEstimado.gte = Number(valorMin);
             if (valorMax) where.valorEstimado.lte = Number(valorMax);
         }
 
-        // Keyword filter — ILIKE on objeto + orgaoNome + unidadeNome
+        // ── Date range filter (publication date) ──
+        if (dataInicio || dataFim) {
+            where.dataPublicacao = {};
+            if (dataInicio) where.dataPublicacao.gte = new Date(dataInicio + 'T00:00:00');
+            if (dataFim) where.dataPublicacao.lte = new Date(dataFim + 'T23:59:59');
+        }
+
+        // ── Órgão filter (single org or comma-separated list) ──
+        // Merge orgao and orgaosLista into a unified list
+        let orgaoNames: string[] = [];
+        if (orgao && orgao.trim()) {
+            if (orgao.includes(',')) {
+                orgaoNames.push(...orgao.split(',').map((s: string) => s.trim()).filter(Boolean));
+            } else {
+                orgaoNames.push(orgao.trim());
+            }
+        }
+        if (orgaosLista && orgaosLista.trim()) {
+            const listNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
+            orgaoNames.push(...listNames);
+        }
+        // Deduplicate
+        orgaoNames = [...new Set(orgaoNames)];
+
+        // Each org name becomes an OR condition against orgaoNome or unidadeNome
+        const orgaoFilters: any[] = [];
+        if (orgaoNames.length > 0) {
+            orgaoFilters.push({
+                OR: orgaoNames.map((name: string) => {
+                    // If it looks like a CNPJ (14 digits), search by cnpjOrgao
+                    const onlyDigits = name.replace(/\D/g, '');
+                    if (onlyDigits.length === 14) {
+                        return { cnpjOrgao: onlyDigits };
+                    }
+                    return {
+                        OR: [
+                            { orgaoNome: { contains: name, mode: 'insensitive' as const } },
+                            { unidadeNome: { contains: name, mode: 'insensitive' as const } },
+                        ]
+                    };
+                })
+            });
+        }
+
+        // ── Keyword filter — ILIKE on objeto + orgaoNome + unidadeNome ──
+        const keywordFilters: any[] = [];
         if (keywords && keywords.trim()) {
-            const rawTerms = keywords.trim().split(/\s+/).filter((t: string) => t.length > 1);
+            // Support comma-separated keywords (same as Gov.br search)
+            const rawTerms = keywords.includes(',')
+                ? keywords.split(',').map((t: string) => t.trim().replace(/^"|"$/g, '')).filter((t: string) => t.length > 1)
+                : keywords.trim().split(/\s+/).filter((t: string) => t.length > 1);
             if (rawTerms.length > 0) {
                 // Each term must match at least one field (AND between terms)
-                const keywordFilters = rawTerms.map((term: string) => ({
-                    OR: [
-                        { objeto: { contains: term, mode: 'insensitive' as const } },
-                        { orgaoNome: { contains: term, mode: 'insensitive' as const } },
-                        { unidadeNome: { contains: term, mode: 'insensitive' as const } },
-                    ]
-                }));
-                // Merge with existing OR (status filter)
-                if (where.OR) {
-                    // Status already has OR — wrap everything in AND
-                    where.AND = [
-                        { OR: where.OR }, // status condition
-                        ...keywordFilters, // keyword conditions
-                    ];
-                    delete where.OR;
-                } else {
-                    where.AND = keywordFilters;
+                for (const term of rawTerms) {
+                    keywordFilters.push({
+                        OR: [
+                            { objeto: { contains: term, mode: 'insensitive' as const } },
+                            { orgaoNome: { contains: term, mode: 'insensitive' as const } },
+                            { unidadeNome: { contains: term, mode: 'insensitive' as const } },
+                        ]
+                    });
                 }
             }
         }
 
-        // Count total
-        const total = await prisma.pncpContratacao.count({ where });
+        // ── Exclude keywords filter — NOT ILIKE ──
+        const excludeFilters: any[] = [];
+        if (excludeKeywords && excludeKeywords.trim()) {
+            const excludeTerms = excludeKeywords.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+            for (const term of excludeTerms) {
+                excludeFilters.push({
+                    NOT: { objeto: { contains: term, mode: 'insensitive' as const } }
+                });
+            }
+        }
+
+        // ── Assemble AND conditions ──
+        // Merge status OR, keyword filters, orgão filters, and exclude filters
+        const andConditions: any[] = [];
+        if (where.OR) {
+            andConditions.push({ OR: where.OR });
+            delete where.OR;
+        }
+        andConditions.push(...keywordFilters);
+        andConditions.push(...orgaoFilters);
+        andConditions.push(...excludeFilters);
+
+        if (andConditions.length > 0) {
+            where.AND = andConditions;
+        }
+
+        // Count total matching
+        const [total, totalLocal] = await Promise.all([
+            prisma.pncpContratacao.count({ where }),
+            prisma.pncpContratacao.count(), // Total in DB regardless of filters
+        ]);
 
         // Fetch page with items
         const skip = (Number(pagina) - 1) * Number(tamanhoPagina);
         const contratacoes = await prisma.pncpContratacao.findMany({
             where,
             include: { itens: { take: 20, orderBy: { numeroItem: 'asc' } } },
-            orderBy: { dataEncerramento: 'asc' },
+            orderBy: [
+                { dataEncerramento: { sort: 'asc', nulls: 'last' } },
+            ],
             skip,
             take: Number(tamanhoPagina),
         });
@@ -1306,9 +1387,20 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
         });
 
         const elapsed = Date.now() - startTime;
-        logger.info(`[PNCP-LOCAL] Search: ${total} results in ${elapsed}ms (keywords="${keywords || ''}" uf="${uf || ''}")`);
+        // Build filter summary for logging
+        const filtersUsed = [
+            keywords ? `kw="${keywords}"` : '',
+            uf ? `uf=${uf}` : '',
+            orgaoNames.length > 0 ? `orgaos=${orgaoNames.length}` : '',
+            excludeKeywords ? `excl="${excludeKeywords}"` : '',
+            modalidade && modalidade !== 'todas' ? `mod=${modalidade}` : '',
+            esfera && esfera !== 'todas' ? `esf=${esfera}` : '',
+            dataInicio ? `from=${dataInicio}` : '',
+            dataFim ? `to=${dataFim}` : '',
+        ].filter(Boolean).join(' ');
+        logger.info(`[PNCP-LOCAL] Search: ${total}/${totalLocal} results in ${elapsed}ms (${filtersUsed || 'no filters'})`);
 
-        res.json({ items, total: Number(total), elapsed, source: 'local' });
+        res.json({ items, total: Number(total), totalLocal: Number(totalLocal), elapsed, source: 'local' });
     } catch (error: any) {
         logger.error("PNCP local search error:", error?.message || error);
         handleApiError(res, error, 'pncp-search-local');

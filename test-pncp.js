@@ -1,24 +1,28 @@
-const axios = require('axios');
-const https = require('https');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
-async function test() {
-    let url = "https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=10&pagina=1&q=obras&status=recebendo_proposta&ufs=CE";
-    const agent = new https.Agent({ rejectUnauthorized: false });
+async function run() {
+    const where = {};
+    where.uf = 'CE';
+    const mapped = ['Divulgada', 'Aberta'];
+    
+    // Exactly what the route does:
+    where.OR = [
+        { situacao: { in: mapped } },
+        { situacao: null },
+    ];
+    
+    console.log("Querying with where:", JSON.stringify(where, null, 2));
+    const count = await prisma.pncpContratacao.count({ where });
+    console.log("Total CE + Abertas:", count);
 
-    try {
-        const response = await axios.get(url, { headers: { 'Accept': 'application/json' }, httpsAgent: agent, timeout: 10000 });
-        const data = response.data;
-        const items = data.items || data.data || [];
-        console.log("Items mapped");
-        const now = Date.now();
-        items.sort((a, b) => {
-            const dateA = new Date(a.data_abertura).getTime();
-            const dateB = new Date(b.data_abertura).getTime();
-            return Math.abs(dateA - now) - Math.abs(dateB - now);
-        });
-        console.log("Sorted");
-    } catch (e) {
-        console.error("Error:", e.message);
-    }
+    const checkNulls = await prisma.pncpContratacao.count({ where: { uf: 'CE' } });
+    console.log("Total CE (any status):", checkNulls);
+
+    const checkNullStatus = await prisma.pncpContratacao.count({ where: { uf: 'CE', situacao: null } });
+    console.log("Total CE with NULL status:", checkNullStatus);
+    
+    const checkDivulgada = await prisma.pncpContratacao.count({ where: { uf: 'CE', situacao: 'Divulgada' } });
+    console.log("Total CE with Divulgada status:", checkDivulgada);
 }
-test();
+run().catch(console.error).finally(() => prisma.$disconnect());

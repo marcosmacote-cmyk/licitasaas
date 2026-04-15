@@ -83,7 +83,11 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<any |
 
 /**
  * Executa uma busca PNCP com os mesmos filtros da pesquisa salva.
- * Agora com paginação completa (até MAX_PAGES_PER_SEARCH páginas) e retry.
+ * ═══════════════════════════════════════════════════════
+ * STRATEGY: LOCAL-FIRST
+ * 1. Query local PostgreSQL (< 100ms, populated by pncp-aggregator)
+ * 2. If local returns 0 → fallback to Gov.br Search API (8-25s)
+ * ═══════════════════════════════════════════════════════
  */
 async function executePncpSearch(search: {
     keywords: string | null;
@@ -93,22 +97,9 @@ async function executePncpSearch(search: {
     const keywords = search.keywords || '';
     const status = search.status || 'recebendo_proposta';
 
-    // Parse keywords (mesma lógica do endpoint /api/pncp/search)
-    let kwList: string[] = [];
-    if (keywords) {
-        if (keywords.includes(',')) {
-            kwList = keywords.split(',')
-                .map(k => k.trim().replace(/^"|"$/g, ''))
-                .filter(k => k.length > 0)
-                .map(k => k.includes(' ') ? `"${k}"` : k);
-        } else {
-            kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
-        }
-    }
-
-    // Parse extra filters from states (stored as JSON string)
+    // ── Parse filters from states (stored as JSON string) ──
     let ufs: string[] = [];
-    let modalidade = ''; let esfera = ''; let orgao = ''; let orgaosLista = ''; let excludeKeywords = ''; let dataInicio = ''; let dataFim = '';
+    let modalidade = ''; let esfera = ''; let orgao = ''; let orgaosLista = ''; let excludeKeywords = '';
 
     if (search.states) {
         try {
@@ -124,12 +115,175 @@ async function executePncpSearch(search: {
                 orgao = parsed.orgao || '';
                 orgaosLista = parsed.orgaosLista || '';
                 excludeKeywords = parsed.excludeKeywords || '';
-                dataInicio = parsed.dataInicio || '';
-                dataFim = parsed.dataFim || '';
             } else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed.split(',');
         } catch {
             if (search.states.includes(',')) ufs = search.states.split(',').map(s => s.trim());
             else if (search.states.length === 2) ufs = [search.states];
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // STEP 1: Try LOCAL database first (< 100ms)
+    // ═══════════════════════════════════════════════════
+    try {
+        const localResults = await queryLocalDatabase(keywords, status, ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords);
+        if (localResults.length > 0) {
+            logger.info(`[OpportunityScanner] ⚡ Local search returned ${localResults.length} results`);
+            return localResults;
+        }
+        logger.info(`[OpportunityScanner] 📭 Local search returned 0 results, falling back to Gov.br API`);
+    } catch (localErr: any) {
+        logger.warn(`[OpportunityScanner] ⚠️ Local search failed: ${localErr.message}, falling back to Gov.br API`);
+    }
+
+    // ═══════════════════════════════════════════════════
+    // STEP 2: FALLBACK — Gov.br Search API (slow, 8-25s)
+    // ═══════════════════════════════════════════════════
+    return await searchGovBrApi(keywords, status, ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords);
+}
+
+/**
+ * Query local PostgreSQL via Prisma — same filters as /search-local endpoint
+ */
+async function queryLocalDatabase(
+    keywords: string, status: string, ufs: string[],
+    modalidade: string, esfera: string, orgao: string,
+    orgaosLista: string, excludeKeywords: string
+): Promise<PncpSearchResult[]> {
+    const { PrismaClient } = await import('@prisma/client');
+    // Reuse the existing prisma instance from the import at top
+    
+    const where: any = {};
+
+    // UF filter
+    if (ufs.length === 1) where.uf = ufs[0];
+    else if (ufs.length > 1) where.uf = { in: ufs };
+
+    // Status filter
+    if (status) {
+        const statusMap: Record<string, string[]> = {
+            'recebendo_proposta': ['Divulgada', 'Aberta'],
+            'encerrada': ['Encerrada'],
+            'suspensa': ['Suspensa'],
+            'revogada': ['Revogada', 'Anulada'],
+        };
+        const mapped = statusMap[status];
+        if (mapped) {
+            if (status === 'recebendo_proposta') {
+                where.OR = [{ situacao: { in: mapped } }, { situacao: null }];
+            } else {
+                where.situacao = { in: mapped };
+            }
+        }
+    }
+
+    // Modalidade filter
+    if (modalidade && modalidade !== 'todas') {
+        const modalidadeMap: Record<string, string> = {
+            '1': 'Pregão', '2': 'Concorrência', '3': 'Concurso',
+            '4': 'Leilão', '5': 'Diálogo Competitivo', '6': 'Dispensa',
+            '7': 'Inexigibilidade', '8': 'Tomada de Preços', '9': 'Convite',
+        };
+        const modalText = modalidadeMap[modalidade] || modalidade;
+        where.modalidade = { contains: modalText, mode: 'insensitive' };
+    }
+
+    // Esfera
+    if (esfera && esfera !== 'todas') where.esfera = esfera;
+
+    // Build AND conditions
+    const andConditions: any[] = [];
+    if (where.OR) { andConditions.push({ OR: where.OR }); delete where.OR; }
+
+    // Keywords
+    if (keywords && keywords.trim()) {
+        const terms = keywords.includes(',')
+            ? keywords.split(',').map(t => t.trim().replace(/^"|"$/g, '')).filter(t => t.length > 1)
+            : keywords.trim().split(/\s+/).filter(t => t.length > 1);
+        for (const term of terms) {
+            andConditions.push({
+                OR: [
+                    { objeto: { contains: term, mode: 'insensitive' as const } },
+                    { orgaoNome: { contains: term, mode: 'insensitive' as const } },
+                    { unidadeNome: { contains: term, mode: 'insensitive' as const } },
+                ]
+            });
+        }
+    }
+
+    // Órgão filter
+    let orgaoNames: string[] = [];
+    if (orgao && orgao.trim()) orgaoNames.push(...(orgao.includes(',') ? orgao.split(',').map(s => s.trim()).filter(Boolean) : [orgao.trim()]));
+    if (orgaosLista) orgaoNames.push(...orgaosLista.split(/[\n,;]+/).map(s => s.trim().replace(/^"|"$/g, '')).filter(s => s.length > 0));
+    orgaoNames = [...new Set(orgaoNames)];
+    if (orgaoNames.length > 0) {
+        andConditions.push({
+            OR: orgaoNames.map(name => {
+                const digits = name.replace(/\D/g, '');
+                if (digits.length === 14) return { cnpjOrgao: digits };
+                return { OR: [
+                    { orgaoNome: { contains: name, mode: 'insensitive' as const } },
+                    { unidadeNome: { contains: name, mode: 'insensitive' as const } },
+                ]};
+            })
+        });
+    }
+
+    // Exclude keywords
+    if (excludeKeywords) {
+        const terms = excludeKeywords.split(',').map(t => t.trim()).filter(Boolean);
+        for (const term of terms) {
+            andConditions.push({ NOT: { objeto: { contains: term, mode: 'insensitive' as const } } });
+        }
+    }
+
+    if (andConditions.length > 0) where.AND = andConditions;
+
+    const contratacoes = await prisma.pncpContratacao.findMany({
+        where,
+        orderBy: [{ dataEncerramento: { sort: 'asc', nulls: 'last' } }],
+        take: 500,
+    });
+
+    return contratacoes.map(c => {
+        const cnpj = c.cnpjOrgao || '';
+        const ano = String(c.anoCompra || '');
+        const nSeq = String(c.sequencialCompra || '');
+        return {
+            id: c.numeroControle || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : String(c.id)),
+            titulo: c.objeto?.substring(0, 120) || `${c.modalidade || 'Licitação'} nº ${nSeq}/${ano}`,
+            objeto: c.objeto || 'Sem objeto',
+            orgao_nome: c.orgaoNome || 'Órgão não informado',
+            uf: c.uf || '--',
+            municipio: c.municipio || '--',
+            valor_estimado: c.valorEstimado ? Number(c.valorEstimado) : 0,
+            data_encerramento_proposta: c.dataEncerramento ? c.dataEncerramento.toISOString() : '',
+            modalidade_nome: c.modalidade || '',
+            link_sistema: (cnpj && ano && nSeq)
+                ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
+                : (c.linkOrigem || c.linkSistema || ''),
+        };
+    });
+}
+
+/**
+ * Fallback: Gov.br Search API (used when local DB has 0 results)
+ */
+async function searchGovBrApi(
+    keywords: string, status: string, ufs: string[],
+    modalidade: string, esfera: string, orgao: string,
+    orgaosLista: string, excludeKeywords: string
+): Promise<PncpSearchResult[]> {
+    // Parse keywords
+    let kwList: string[] = [];
+    if (keywords) {
+        if (keywords.includes(',')) {
+            kwList = keywords.split(',')
+                .map(k => k.trim().replace(/^"|"$/g, ''))
+                .filter(k => k.length > 0)
+                .map(k => k.includes(' ') ? `"${k}"` : k);
+        } else {
+            kwList = [keywords.includes(' ') && !keywords.startsWith('"') ? `"${keywords}"` : keywords];
         }
     }
 
@@ -141,7 +295,7 @@ async function executePncpSearch(search: {
     }
     if (orgaosLista) {
         extractedNames = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim().replace(/^"|"$/g, '')).filter((s: string) => s.length > 0);
-        extractedNames = [...new Set(extractedNames)]; // Remove duplicates
+        extractedNames = [...new Set(extractedNames)];
     }
     const orgaosToIterate = extractedNames.length > 0 ? extractedNames : (orgao ? [orgao] : [null]);
 
@@ -157,8 +311,6 @@ async function executePncpSearch(search: {
         if (status && status !== 'todas') url += `&status=${status}`;
         if (singleUf) url += `&ufs=${singleUf}`;
         if (modalidade && modalidade !== 'todas') url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-        if (dataInicio) url += `&data_inicio=${dataInicio}`;
-        if (dataFim) url += `&data_fim=${dataFim}`;
         if (esfera && esfera !== 'todas') url += `&esferas=${esfera}`;
         return url;
     };
