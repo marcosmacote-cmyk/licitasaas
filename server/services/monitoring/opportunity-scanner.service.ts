@@ -66,6 +66,7 @@ async function executePncpSearch(search: {
     
     let ufs = '';
     let modalidade = ''; let esfera = ''; let orgao = ''; let orgaosLista = ''; let excludeKeywords = '';
+    let dataInicio = ''; let dataFim = '';
 
     if (search.states) {
         try {
@@ -78,6 +79,8 @@ async function executePncpSearch(search: {
                 orgao = parsed.orgao || '';
                 orgaosLista = parsed.orgaosLista || '';
                 excludeKeywords = parsed.excludeKeywords || '';
+                dataInicio = parsed.dataInicio || '';
+                dataFim = parsed.dataFim || '';
             } else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed;
         } catch {
             ufs = search.states;
@@ -88,6 +91,7 @@ async function executePncpSearch(search: {
         keywords: search.keywords || '',
         status: search.status || 'recebendo_proposta',
         uf: ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords,
+        dataInicio, dataFim,
         pagina: 1,
         // Carga máxima permitida por varredura
         tamanhoPagina: 150 
@@ -129,26 +133,28 @@ function formatDate(dateStr: string): string {
 }
 
 /**
- * Verifica se um pncpId já foi notificado para um tenant (usando DB persistente)
+ * Verifica se um pncpId já foi notificado para um tenant e para uma pesquisa específica.
+ * Usando findFirst pois searchId poderia ser nulo no banco antigo, mas não sob a nova regra.
  */
-async function isAlreadyNotified(tenantId: string, pncpId: string): Promise<boolean> {
+async function isAlreadyNotified(tenantId: string, searchId: string, pncpId: string): Promise<boolean> {
     const existing = await prisma.opportunityScannerLog.findUnique({
-        where: { tenantId_pncpId: { tenantId, pncpId } }
+        where: { tenantId_searchId_pncpId: { tenantId, searchId, pncpId } }
     });
     return !!existing;
 }
 
 /**
  * Marca um pncpId como notificado para um tenant e salva dados completos do edital.
+ * searchId e searchName agora são OBRIGATÓRIOS.
  */
-async function markAsNotified(tenantId: string, result: PncpSearchResult, searchId?: string, searchName?: string): Promise<void> {
+async function markAsNotified(tenantId: string, result: PncpSearchResult, searchId: string, searchName: string): Promise<void> {
     try {
         await prisma.opportunityScannerLog.create({
             data: {
                 tenantId,
                 pncpId: result.id,
                 searchId,
-                searchName: searchName || null,
+                searchName,
                 titulo: result.titulo,
                 objeto: result.objeto,
                 orgaoNome: result.orgao_nome,
@@ -368,7 +374,8 @@ export async function runOpportunityScan(targetTenantId?: string) {
                     // Filtrar apenas resultados novos (não notificados anteriormente — via DB)
                     const newResults: PncpSearchResult[] = [];
                     for (const r of results) {
-                        const alreadyNotified = await isAlreadyNotified(tenantId, r.id);
+                        // Passamos o search.id garantindo que a mesma oportunidade não conflita entre diferentes pesquisas
+                        const alreadyNotified = await isAlreadyNotified(tenantId, search.id, r.id);
                         if (!alreadyNotified) {
                             newResults.push(r);
                         }

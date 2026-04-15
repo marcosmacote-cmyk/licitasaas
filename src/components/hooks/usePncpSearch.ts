@@ -107,14 +107,14 @@ export function usePncpSearch() {
                     }
                 }
 
-                setSearchSource(data.source || 'local');
-                if (data.elapsed) setSearchElapsed(data.elapsed);
+                setSearchSource(data.meta?.source || 'local');
+                if (data.meta?.elapsedMs) setSearchElapsed(data.meta.elapsedMs);
                 setAllResults(items);
                 setTotalResults(data.total || items.length);
                 setResults(items.slice(0, 10));
 
                 // Prefetch items (only needed for Gov.br results)
-                if (data.source === 'govbr' && items.length > 0) {
+                if (data.meta?.source === 'govbr' && items.length > 0) {
                     const prefetchCandidates = items.slice(0, 10)
                         .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
                         .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));

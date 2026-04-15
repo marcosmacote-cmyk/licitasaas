@@ -498,17 +498,39 @@ export class PncpSearchService {
         // Tentativa Local
         const localResponse = await this.searchLocal(input);
         
-        // Regra de Fallback: se houver algum resultado local, confiar nele, a não ser que preferLocalIfPartial seja falso
-        if (localResponse.total > 0 && preferLocalIfPartial) {
+        const hasHighRiskFilters = !!(input.keywords || input.orgao || input.orgaosLista || input.dataInicio || input.dataFim);
+        
+        // Se achou no local, mas é uma busca de baixo risco (ex: todos status recebendo_proposta)
+        if (localResponse.total > 0 && !hasHighRiskFilters) {
              return localResponse;
         }
 
-        // Se o local falhar ou não achar nada, ir para govbr
-        logger.warn(`[PncpSearchService] Base local retornou 0 para os filtros, iniciando fallback Gov.br`);
+        // Se tem filtros de risco, a base local será marcada como possivelmente parcial
+        if (localResponse.total > 0 && hasHighRiskFilters) {
+             localResponse.meta.isPartial = true;
+        }
+
+        // Disparar Gov.br se o local zerou, OU se há filtros de risco e precisamos confirmar na fonte
+        const shouldFallbackToRemote = localResponse.total === 0 || hasHighRiskFilters;
+
+        if (!shouldFallbackToRemote) {
+             return localResponse;
+        }
+
+        logger.info(`[PncpSearchService] Disparando fallback Gov.br (Total Local: ${localResponse.total} | Filtros de Risco: ${hasHighRiskFilters})`);
         const remoteResponse = await this.searchGovbr(input);
         
         remoteResponse.meta.localCount = localResponse.total;
         
+        // Se a remota não trouxe nada, mas a local tinha algo (ex: API offline), devolve a local (marcada como parcial)
+        if (remoteResponse.total === 0 && localResponse.total > 0) {
+            localResponse.meta.fallbackUsed = true;
+            if (remoteResponse.meta.errors.length > 0) {
+                 localResponse.meta.errors.push(...remoteResponse.meta.errors);
+            }
+            return localResponse;
+        }
+
         // Se ambos falharem, juntar os erros para observabilidade
         if (remoteResponse.total === 0 && (remoteResponse.meta.errors.length > 0 || localResponse.meta.errors.length > 0)) {
             remoteResponse.meta.errors = [...localResponse.meta.errors, ...remoteResponse.meta.errors];
