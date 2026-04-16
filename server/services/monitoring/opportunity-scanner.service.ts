@@ -519,11 +519,12 @@ export function startOpportunityScanner(intervalHours: number = 4) {
     
     logger.info(`[OpportunityScanner] 🚀 Scanner de Oportunidades PNCP iniciado (intervalo: ${intervalHours}h)`);
 
-    // Primeira execução: aguardar 2 minutos após boot (dar tempo para o sistema estabilizar)
+    // Primeira execução: aguardar 10 minutos após boot
+    // (2 min era muito cedo — o scanner bloqueia o backend por ~54s com ~2700 queries)
     setTimeout(() => {
         logger.info(`[OpportunityScanner] Executando primeira varredura...`);
         runOpportunityScan();
-    }, 2 * 60 * 1000);
+    }, 10 * 60 * 1000);
 
     // Execuções recorrentes
     setInterval(() => {

@@ -491,11 +491,12 @@ async function runOpportunityScan(targetTenantId) {
 function startOpportunityScanner(intervalHours = 4) {
     const intervalMs = intervalHours * 60 * 60 * 1000;
     logger_1.logger.info(`[OpportunityScanner] 🚀 Scanner de Oportunidades PNCP iniciado (intervalo: ${intervalHours}h)`);
-    // Primeira execução: aguardar 2 minutos após boot (dar tempo para o sistema estabilizar)
+    // Primeira execução: aguardar 10 minutos após boot
+    // (2 min era muito cedo — o scanner bloqueia o backend por ~54s com ~2700 queries)
     setTimeout(() => {
         logger_1.logger.info(`[OpportunityScanner] Executando primeira varredura...`);
         runOpportunityScan();
-    }, 2 * 60 * 1000);
+    }, 10 * 60 * 1000);
     // Execuções recorrentes
     setInterval(() => {
         runOpportunityScan();
