@@ -277,9 +277,19 @@ const pncpAnalyze_1 = __importDefault(require("./routes/pncpAnalyze"));
 app.use('/api/pncp', pncpAnalyze_1.default);
 const chatMonitor_1 = __importDefault(require("./routes/chatMonitor"));
 const proposals_1 = __importDefault(require("./routes/proposals"));
-const analysis_1 = __importDefault(require("./routes/analysis"));
+const analysis_1 = __importStar(require("./routes/analysis"));
 app.use('/api/chat-monitor', chatMonitor_1.default);
 app.use('/api/proposals', proposals_1.default); // proposals + dossier
+// Inject dependencies required by analysis routes
+(0, analysis_1.injectAnalysisDeps)({
+    getFileBufferSafe,
+    fetchPdfPartsForProcess,
+    registerSSEClient: backgroundJobService_1.registerSSEClient,
+    removeSSEClient: backgroundJobService_1.removeSSEClient,
+    submitJob: backgroundJobService_1.submitJob,
+    getJob: backgroundJobService_1.getJob,
+    listJobs: backgroundJobService_1.listJobs,
+});
 app.use('/api/analyze-edital', analysis_1.default); // analyze-edital + petitions + jobs + events
 const declarations_1 = __importDefault(require("./routes/declarations"));
 const governance_1 = __importDefault(require("./routes/governance"));

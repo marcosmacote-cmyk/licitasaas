@@ -319,9 +319,20 @@ import pncpAnalyzeRoutes from './routes/pncpAnalyze';
 app.use('/api/pncp', pncpAnalyzeRoutes);
 import chatMonitorRoutes from './routes/chatMonitor';
 import proposalRoutes from './routes/proposals';
-import analysisRoutes from './routes/analysis';
+import analysisRoutes, { injectAnalysisDeps } from './routes/analysis';
 app.use('/api/chat-monitor', chatMonitorRoutes);
 app.use('/api/proposals', proposalRoutes);  // proposals + dossier
+
+// Inject dependencies required by analysis routes
+injectAnalysisDeps({
+    getFileBufferSafe,
+    fetchPdfPartsForProcess,
+    registerSSEClient,
+    removeSSEClient,
+    submitJob,
+    getJob,
+    listJobs,
+});
 app.use('/api/analyze-edital', analysisRoutes);  // analyze-edital + petitions + jobs + events
 import declarationRoutes from './routes/declarations';
 import governanceRoutes from './routes/governance';

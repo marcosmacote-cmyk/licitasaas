@@ -542,6 +542,10 @@ router.get('/items', authenticateToken, async (req: any, res) => {
     }
 });
 
+// Global concurrency limit for background prefetching
+let activePrefetches = 0;
+const MAX_CONCURRENT_PREFETCHES = 15;
+
 /**
  * Batch prefetch endpoint — pre-warms cache for multiple items in parallel.
  * Called by the frontend immediately after search results load.
@@ -554,10 +558,14 @@ router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
             return res.json({ prefetched: 0 });
         }
 
-        // Limit to 5 concurrent prefetches to avoid overwhelming Gov.br
+        if (activePrefetches >= MAX_CONCURRENT_PREFETCHES) {
+            return res.json({ prefetched: 0, status: 'busy_ignored' });
+        }
+
+        // Limit to 10 concurrent prefetches to avoid overwhelming Gov.br
         const toFetch = processes.slice(0, 10).filter((p: any) => {
             if (!p.cnpj || !p.ano || !p.seq) return false;
-            const key = `${String(p.cnpj).replace(/\D/g, '')}-${String(p.ano).replace(/\D/g, '')}-${String(p.seq).replace(/\D/g, '')}`;
+            const key = `${String(p.cnpj).replace(/\\D/g, '')}-${String(p.ano).replace(/\\D/g, '')}-${String(p.seq).replace(/\\D/g, '')}`;
             const cached = pncpItemsCache.get(key);
             return !cached || (Date.now() - cached.timestamp) > PNCP_ITEMS_CACHE_TTL;
         });
@@ -569,18 +577,29 @@ router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
         // Fire-and-forget: don't await — respond immediately
         res.json({ prefetched: toFetch.length, status: 'warming' });
 
-        // Warm cache in background with 500ms stagger between calls
-        for (const proc of toFetch) {
-            const cleanCnpj = String(proc.cnpj).replace(/\D/g, '');
-            const cleanAno = String(proc.ano).replace(/\D/g, '');
-            const cleanSeq = String(proc.seq).replace(/\D/g, '');
-            
-            fetchPncpItems(cleanCnpj, cleanAno, cleanSeq).catch(err => {
-                logger.warn(`[PNCP Prefetch] Failed for ${cleanCnpj}-${cleanAno}-${cleanSeq}: ${err?.message}`);
-            });
-            
-            await new Promise(r => setTimeout(r, 500)); // 500ms stagger
-        }
+        // Run isolated background task
+        (async () => {
+            activePrefetches += toFetch.length;
+            try {
+                // Warm cache in background with 500ms stagger between calls
+                for (const proc of toFetch) {
+                    const cleanCnpj = String(proc.cnpj).replace(/\\D/g, '');
+                    const cleanAno = String(proc.ano).replace(/\\D/g, '');
+                    const cleanSeq = String(proc.seq).replace(/\\D/g, '');
+                    
+                    try {
+                        const { fetchPncpItems } = require('./pncp'); // ensure we call the internal fn, it's defined above
+                        await fetchPncpItems(cleanCnpj, cleanAno, cleanSeq);
+                    } catch (err: any) {
+                        logger.warn(`[PNCP Prefetch] Failed for ${cleanCnpj}-${cleanAno}-${cleanSeq}: ${err?.message}`);
+                    }
+                    
+                    await new Promise(r => setTimeout(r, 800)); // 800ms stagger (calmer)
+                }
+            } finally {
+                activePrefetches = Math.max(0, activePrefetches - toFetch.length);
+            }
+        })();
     } catch (error: any) {
         logger.error('[PNCP Prefetch] Error:', error?.message);
         if (!res.headersSent) res.json({ prefetched: 0, error: error?.message });

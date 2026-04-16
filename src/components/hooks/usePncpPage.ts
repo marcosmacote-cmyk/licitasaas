@@ -139,6 +139,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
 
     const prevPageRef = useRef(search.page);
     useEffect(() => {
+        let timeoutId: any;
         if (search.hasSearched && search.page !== prevPageRef.current) {
             prevPageRef.current = search.page;
             const perPage = 10;
@@ -148,20 +149,27 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             window.scrollTo({ top: 0, behavior: 'smooth' });
             
             // Prefetch items for the new page (warms server cache)
-            const token = localStorage.getItem('token');
-            if (token) {
-                const prefetchPage = pageItems
-                    .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
-                    .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
-                if (prefetchPage.length > 0) {
-                    fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ processes: prefetchPage }),
-                    }).catch(() => {});
+            // Debounced by 600ms to avoid DDoS if user rapidly clicks next page
+            timeoutId = setTimeout(() => {
+                const token = localStorage.getItem('token');
+                if (token) {
+                    const prefetchPage = pageItems
+                        .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
+                        .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
+                    if (prefetchPage.length > 0) {
+                        fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({ processes: prefetchPage }),
+                        }).catch(() => {});
+                    }
                 }
-            }
+            }, 600);
         }
+        
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, [search.page, search.allResults, search.hasSearched]);
 
     // ═══════════════════════════════════════════════════
