@@ -664,13 +664,18 @@ router.post('/search-local', auth_1.authenticateToken, async (req, res) => {
     }
 });
 router.post('/search-hybrid', auth_1.authenticateToken, async (req, res) => {
+    const reqStart = Date.now();
+    logger_1.logger.info(`[SEARCH-HYBRID] >>> REQUEST from user=${req.user?.id?.slice(0, 8)} | uf=${req.body?.uf} | status=${req.body?.status} | keywords=${req.body?.keywords || 'none'}`);
     try {
         const { PncpSearchService } = await Promise.resolve().then(() => __importStar(require('../services/pncp/pncp-search.service')));
-        const result = await PncpSearchService.search(req.body); // Faz a mágica do fallback automaticamente
+        const result = await PncpSearchService.search(req.body);
+        const elapsed = Date.now() - reqStart;
+        logger_1.logger.info(`[SEARCH-HYBRID] <<< RESPONSE ${result.total} items in ${elapsed}ms | uf=${req.body?.uf}`);
         res.json({ items: result.items, total: result.total, totalLocal: result.meta.localCount, elapsed: result.meta.elapsedMs, source: result.meta.source, meta: result.meta });
     }
     catch (error) {
-        logger_1.logger.error("PNCP hybrid search error:", error?.message || error);
+        const elapsed = Date.now() - reqStart;
+        logger_1.logger.error(`[SEARCH-HYBRID] !!! ERROR in ${elapsed}ms: ${error?.message || error}`);
         (0, errorHandler_1.handleApiError)(res, error, 'pncp-search-hybrid');
     }
 });
