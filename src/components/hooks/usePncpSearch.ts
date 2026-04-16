@@ -60,7 +60,6 @@ export function usePncpSearch() {
         setSearchSlow(false);
         setSearchSource('');
         setSearchElapsed(0);
-        // Clear previous results visually so it doesn't look stuck when searching a new UF
         setAllResults([]);
         setResults([]);
         setTotalResults(0);
@@ -70,13 +69,14 @@ export function usePncpSearch() {
         }
         searchControllerRef.current = new AbortController();
 
-        const timeoutId = setTimeout(() => searchControllerRef.current?.abort(), 55000);
-        const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
+        // 10s é mais que suficiente para uma query local (normalmente <1s)
+        const timeoutId = setTimeout(() => searchControllerRef.current?.abort(), 10000);
+        const slowTimer = setTimeout(() => setSearchSlow(true), 3000);
 
         const searchParams = {
             keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
             uf: overrides?.uf ?? selectedUf, pagina: 1,
-            tamanhoPagina: 100, // Paginação client-side — 100 registros por vez
+            tamanhoPagina: 500, // Base local: pega todos de uma vez
             modalidade: overrides?.modalidade ?? modalidade,
             dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
             dataFim: (overrides?.dataFim ?? dataFim) || undefined,
@@ -98,44 +98,24 @@ export function usePncpSearch() {
                 const data = await res.json();
                 const items = Array.isArray(data.items) ? data.items : [];
                 
-                // Tratamento de Erros Semânticos Vindos do Backend
-                if (data.meta) {
-                    if (data.meta.isPartial && data.meta.errors?.length > 0) {
-                        toast.warning(`Sua base local está desatualizada e o Portal Gov.br falhou. Mostrando apenas ${items.length} resultados parciais.\nErro reportado: ${data.meta.errors[0]}`);
-                    } else if (items.length === 0 && data.meta.errors?.length > 0) {
-                        toast.error(`O Portal do Governo não respondeu e sua base local ainda não possui editais com este filtro. Tente novamente mais tarde.`);
-                    }
+                if (items.length === 0 && data.meta?.errors?.length > 0) {
+                    toast.error(`Nenhum edital encontrado para esses filtros. A base está sendo atualizada automaticamente.`);
                 }
 
                 setSearchSource(data.meta?.source || 'local');
                 if (data.meta?.elapsedMs) setSearchElapsed(data.meta.elapsedMs);
                 setAllResults(items);
-                setTotalResults(data.total || items.length);
+                setTotalResults(items.length); // total real = itens retornados (não count do DB)
                 setResults(items.slice(0, 10));
-
-                // Prefetch items (only needed for Gov.br results)
-                if (data.meta?.source === 'govbr' && items.length > 0) {
-                    const prefetchCandidates = items.slice(0, 10)
-                        .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
-                        .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
-                    if (prefetchCandidates.length > 0) {
-                        fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                            body: JSON.stringify({ processes: prefetchCandidates }),
-                        }).catch(() => {});
-                    }
-                }
             } else {
-                 if (res.status !== 504) throw new Error('Falha na requisição de busca');
-                 toast.error('O portal PNCP (Gov.br) está demorando para responder. Tente novamente.');
+                throw new Error(`Erro ${res.status}: falha ao buscar editais`);
             }
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                toast.error('A busca foi cancelada ou o portal PNCP demorou muito para responder.');
+                toast.error('A busca demorou mais que o esperado. Tente novamente.');
             } else {
                 console.error(e);
-                toast.error(e?.message || 'Falha na conexão com o PNCP. Verifique sua internet e tente novamente.');
+                toast.error(e?.message || 'Falha na busca. Verifique sua conexão e tente novamente.');
             }
         }
         finally { clearTimeout(timeoutId); clearTimeout(slowTimer); setLoading(false); setSearchSlow(false); }

@@ -519,54 +519,24 @@ class PncpSearchService {
         }
     }
     /**
-     * Motor de Fusão (Busca Híbrida) — LOCAL-FIRST ABSOLUTO
+     * BUSCA 100% LOCAL — Modelo Conlicitações
      *
      * A base local tem 6000+ contratações sincronizadas pelo pncp-aggregator (Railway).
-     * Prisma ILIKE cobre keywords, orgão, datas com precisão suficiente.
+     * Prisma cobre todos os filtros: UF, status, keywords (ILIKE), modalidade, datas.
      *
-     * Regra: Se local retornou ≥1 resultado → RETORNA IMEDIATAMENTE.
-     * Gov.br é fallback SOMENTE quando local = 0.
+     * Gov.br NÃO é chamado em tempo de busca. Nunca. Zero.
+     * Gov.br é usado EXCLUSIVAMENTE pelo serviço pncp-aggregator (background sync).
      *
-     * Justificativa: Gov.br dá timeout para ~50% das UFs (PE, AM, etc).
-     * Referência competitiva: Conlicitações usa 100% base local (668K registros).
+     * Ref: Conlicitações usa 100% base local (668K registros, resposta em 2s).
      */
-    static async search(input, preferLocalIfPartial = true) {
-        // 1. SEMPRE local primeiro
+    static async search(input) {
         const localResponse = await this.searchLocal(input);
-        // 2. Se local tem resultados → retorna imediatamente, sem tocar Gov.br
-        if (localResponse.total > 0) {
-            logger_1.logger.info(`[PncpSearch] ✅ Local: ${localResponse.total} resultados em ${localResponse.meta.elapsedMs}ms`);
-            return localResponse;
-        }
-        // 2b. Se local FALHOU (total=-1), retornar erro ao invés de ir ao Gov.br
         if (localResponse.total < 0) {
-            logger_1.logger.error(`[PncpSearch] ❌ Local FALHOU — não faz fallback ao Gov.br`);
-            localResponse.total = 0; // normaliza para o frontend
-            return localResponse;
+            // searchLocal teve erro de conexão — normalizar para o frontend
+            localResponse.total = 0;
         }
-        // 3. Local = 0 (sem dados, sem erro) → tentar Gov.br como fallback
-        logger_1.logger.info(`[PncpSearch] Local retornou 0 → disparando Gov.br`);
-        try {
-            // Timeout de segurança: Gov.br NUNCA pode travar o backend por mais de 20s
-            const remoteResponse = await Promise.race([
-                this.searchGovbr(input),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Gov.br timeout (20s)')), 20000))
-            ]);
-            remoteResponse.meta.localCount = 0;
-            remoteResponse.meta.fallbackUsed = true;
-            if (remoteResponse.total === 0 && remoteResponse.meta.errors.length > 0) {
-                localResponse.meta.errors = remoteResponse.meta.errors;
-                localResponse.meta.fallbackUsed = true;
-                return localResponse;
-            }
-            return remoteResponse;
-        }
-        catch (error) {
-            logger_1.logger.error(`[PncpSearch] Gov.br fallback failed: ${error?.message}`);
-            localResponse.meta.errors.push(`Gov.br indisponível: ${error?.message}`);
-            localResponse.meta.fallbackUsed = true;
-            return localResponse;
-        }
+        logger_1.logger.info(`[PncpSearch] ${localResponse.total > 0 ? '✅' : '⚠️'} Local: ${localResponse.total} resultados em ${localResponse.meta.elapsedMs}ms | UF=${input.uf || 'todas'} | keywords=${input.keywords || 'nenhuma'}`);
+        return localResponse;
     }
 }
 exports.PncpSearchService = PncpSearchService;
