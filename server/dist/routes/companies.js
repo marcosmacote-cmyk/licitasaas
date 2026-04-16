@@ -38,12 +38,26 @@ router.put('/companies/:id/proposal-template', auth_1.authenticateToken, async (
         res.status(500).json({ error: 'Erro ao salvar template: ' + error.message });
     }
 });
+// ── Cache per-tenant para GET /companies (30s TTL) ──
+// Este endpoint é chamado a cada ~5-10s pelo frontend.
+// Cada chamada faz: Prisma JOIN + crypto decrypt (sync!) + document status update.
+// Sem cache, as operações crypto bloqueiam o event loop constantemente.
+const companiesCache = new Map();
+const COMPANIES_CACHE_TTL_MS = 30000; // 30 segundos
+function invalidateCompaniesCache(tenantId) {
+    companiesCache.delete(tenantId);
+}
 // List companies
 router.get('/companies', auth_1.authenticateToken, async (req, res) => {
     try {
-        console.log(`[API] Fetching companies for tenant: ${req.user.tenantId}`);
+        const tenantId = req.user.tenantId;
+        // Servir do cache se fresco
+        const cached = companiesCache.get(tenantId);
+        if (cached && (Date.now() - cached.timestamp) < COMPANIES_CACHE_TTL_MS) {
+            return res.json(cached.data);
+        }
         const companies = await prisma_1.default.companyProfile.findMany({
-            where: { tenantId: req.user.tenantId },
+            where: { tenantId },
             include: {
                 documents: {
                     select: {
@@ -65,14 +79,13 @@ router.get('/companies', auth_1.authenticateToken, async (req, res) => {
                 credentials: true
             }
         });
-        console.log(`[API] Found ${companies.length} companies.`);
         // Dynamically compute and update Document statuses based on current date
         const toValido = [];
         const toVencendo = [];
         const toVencido = [];
         try {
             const config = await prisma_1.default.globalConfig.findUnique({
-                where: { tenantId: req.user.tenantId }
+                where: { tenantId }
             });
             const parsedConfig = config ? JSON.parse(config.config) : { defaultAlertDays: 15 };
             const defaultAlertDays = parsedConfig.defaultAlertDays || 15;
@@ -108,9 +121,6 @@ router.get('/companies', auth_1.authenticateToken, async (req, res) => {
                     await prisma_1.default.document.updateMany({ where: { id: { in: toVencendo } }, data: { status: 'Vencendo' } });
                 if (toVencido.length > 0)
                     await prisma_1.default.document.updateMany({ where: { id: { in: toVencido } }, data: { status: 'Vencido' } });
-                if (toValido.length > 0 || toVencendo.length > 0 || toVencido.length > 0) {
-                    console.log(`[API] Auto-updated document statuses on read: Válido(${toValido.length}), Vencendo(${toVencendo.length}), Vencido(${toVencido.length})`);
-                }
             }).catch(e => console.error("Auto DB Update error:", e));
         }
         catch (e) {
@@ -134,6 +144,8 @@ router.get('/companies', auth_1.authenticateToken, async (req, res) => {
                 }
             }
         }
+        // Salvar no cache
+        companiesCache.set(tenantId, { data: companies, timestamp: Date.now() });
         res.json(companies);
     }
     catch (error) {
@@ -186,6 +198,7 @@ router.put('/companies/:id', auth_1.authenticateToken, async (req, res) => {
             data: safeData,
             include: { credentials: true, documents: { select: { id: true, tenantId: true, companyProfileId: true, docType: true, fileUrl: true, uploadDate: true, expirationDate: true, status: true, autoRenew: true, docGroup: true, issuerLink: true, fileName: true, alertDays: true } } }
         });
+        invalidateCompaniesCache(tenantId);
         // Decrypt credentials before sending to client
         if ((0, crypto_1.isEncryptionConfigured)() && updatedCompany.credentials) {
             for (const cred of updatedCompany.credentials) {
@@ -214,6 +227,7 @@ router.post('/companies', auth_1.authenticateToken, async (req, res) => {
         const company = await prisma_1.default.companyProfile.create({
             data: { ...req.body, tenantId }
         });
+        invalidateCompaniesCache(tenantId);
         res.json(company);
     }
     catch (error) {
@@ -228,6 +242,7 @@ router.delete('/companies/:id', auth_1.authenticateToken, async (req, res) => {
         const company = await prisma_1.default.companyProfile.findUnique({ where: { id } });
         if (company && company.tenantId === req.user.tenantId) {
             await prisma_1.default.companyProfile.delete({ where: { id } });
+            invalidateCompaniesCache(company.tenantId);
             res.json({ success: true });
         }
         else {
@@ -254,6 +269,7 @@ router.post('/credentials', auth_1.authenticateToken, async (req, res) => {
         const credential = await prisma_1.default.companyCredential.create({
             data: { ...rest, companyProfileId, login: encLogin, password: encPassword }
         });
+        invalidateCompaniesCache(company.tenantId);
         res.json({ ...credential, login, password });
     }
     catch (error) {
@@ -282,6 +298,7 @@ router.put('/credentials/:id', auth_1.authenticateToken, async (req, res) => {
             where: { id },
             data: updateData
         });
+        invalidateCompaniesCache(credential.company.tenantId);
         if ((0, crypto_1.isEncryptionConfigured)()) {
             if ((0, crypto_1.isEncrypted)(updated.login))
                 updated.login = (0, crypto_1.decryptCredential)(updated.login);
@@ -306,6 +323,7 @@ router.delete('/credentials/:id', auth_1.authenticateToken, async (req, res) => 
             return res.status(403).json({ error: 'Unauthorized to delete this credential' });
         }
         await prisma_1.default.companyCredential.delete({ where: { id } });
+        invalidateCompaniesCache(credential.company.tenantId);
         res.json({ success: true });
     }
     catch (error) {
