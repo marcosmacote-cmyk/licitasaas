@@ -67,16 +67,11 @@ export function usePncpSearch() {
         if (searchControllerRef.current) {
             searchControllerRef.current.abort();
         }
-        searchControllerRef.current = new AbortController();
-
-        // 10s é mais que suficiente para uma query local (normalmente <1s)
-        const timeoutId = setTimeout(() => searchControllerRef.current?.abort(), 10000);
-        const slowTimer = setTimeout(() => setSearchSlow(true), 3000);
 
         const searchParams = {
             keywords: overrides?.keywords ?? keywords, status: overrides?.status ?? status,
             uf: overrides?.uf ?? selectedUf, pagina: 1,
-            tamanhoPagina: 500, // Base local: pega todos de uma vez
+            tamanhoPagina: 500,
             modalidade: overrides?.modalidade ?? modalidade,
             dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
             dataFim: (overrides?.dataFim ?? dataFim) || undefined,
@@ -85,14 +80,30 @@ export function usePncpSearch() {
             excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
         };
 
+        const doFetch = async (): Promise<Response> => {
+            const controller = new AbortController();
+            searchControllerRef.current = controller;
+            const timeout = setTimeout(() => controller.abort(), 60000);
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE_URL}/api/pncp/search-hybrid`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify(searchParams),
+                });
+                clearTimeout(timeout);
+                return res;
+            } catch (err) {
+                clearTimeout(timeout);
+                throw err;
+            }
+        };
+
+        const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
+
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/search-hybrid`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                signal: searchControllerRef.current.signal,
-                body: JSON.stringify(searchParams),
-            });
+            const res = await doFetch();
             
             if (res.ok) {
                 const data = await res.json();
@@ -105,20 +116,20 @@ export function usePncpSearch() {
                 setSearchSource(data.meta?.source || 'local');
                 if (data.meta?.elapsedMs) setSearchElapsed(data.meta.elapsedMs);
                 setAllResults(items);
-                setTotalResults(items.length); // total real = itens retornados (não count do DB)
+                setTotalResults(items.length);
                 setResults(items.slice(0, 10));
             } else {
                 throw new Error(`Erro ${res.status}: falha ao buscar editais`);
             }
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                toast.error('A busca demorou mais que o esperado. Tente novamente.');
+                toast.error('O servidor está processando outras tarefas. Tente novamente em alguns segundos.');
             } else {
                 console.error(e);
                 toast.error(e?.message || 'Falha na busca. Verifique sua conexão e tente novamente.');
             }
         }
-        finally { clearTimeout(timeoutId); clearTimeout(slowTimer); setLoading(false); setSearchSlow(false); }
+        finally { clearTimeout(slowTimer); setLoading(false); setSearchSlow(false); }
     };
 
     const clearSearch = () => {
