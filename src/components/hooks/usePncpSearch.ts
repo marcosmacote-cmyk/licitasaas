@@ -68,18 +68,27 @@ export function usePncpSearch() {
      * Core fetch function — calls the unified /search endpoint
      */
     const doSearchFetch = useCallback(async (params: any): Promise<{ items: PncpBiddingItem[], total: number, source: string, elapsedMs: number }> => {
+        console.log('[SearchV3] doSearchFetch called with params:', JSON.stringify(params));
+
         // Cancel any in-flight request
         if (searchControllerRef.current) {
+            console.log('[SearchV3] Aborting previous request');
             searchControllerRef.current.abort();
         }
 
         const controller = new AbortController();
         searchControllerRef.current = controller;
-        const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout (FTS is fast)
+        const timeout = setTimeout(() => {
+            console.log('[SearchV3] ⏰ 15s timeout reached, aborting');
+            controller.abort();
+        }, 15000);
 
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/search-hybrid`, {
+            const url = `${API_BASE_URL}/api/pncp/search-hybrid`;
+            console.log('[SearchV3] Fetching:', url, '| token:', token ? token.substring(0, 20) + '...' : 'NULL');
+
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 signal: controller.signal,
@@ -87,12 +96,17 @@ export function usePncpSearch() {
             });
             clearTimeout(timeout);
 
+            console.log('[SearchV3] Response status:', res.status, res.statusText);
+
             if (!res.ok) {
+                const errorText = await res.text();
+                console.error('[SearchV3] ❌ HTTP Error:', res.status, errorText);
                 throw new Error(`Erro ${res.status}: falha ao buscar editais`);
             }
 
             const data = await res.json();
             const items = Array.isArray(data.items) ? data.items : [];
+            console.log('[SearchV3] ✅ Response:', { total: data.total, itemsCount: items.length, source: data.source, elapsed: data.elapsed });
 
             return {
                 items,
@@ -100,8 +114,9 @@ export function usePncpSearch() {
                 source: data.meta?.source || data.source || 'local-fts',
                 elapsedMs: data.meta?.elapsedMs || data.elapsed || 0,
             };
-        } catch (err) {
+        } catch (err: any) {
             clearTimeout(timeout);
+            console.error('[SearchV3] ❌ Fetch error:', err?.name, err?.message);
             throw err;
         }
     }, []);
@@ -145,7 +160,10 @@ export function usePncpSearch() {
         const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
 
         try {
+            console.log('[SearchV3] handleSearch → calling doSearchFetch...');
             const data = await doSearchFetch(searchParams);
+
+            console.log('[SearchV3] handleSearch → doSearchFetch returned:', { items: data.items.length, total: data.total, source: data.source, elapsedMs: data.elapsedMs });
 
             if (data.items.length === 0 && data.total === 0) {
                 toast.info('Nenhum edital encontrado para esses filtros.');
@@ -154,13 +172,14 @@ export function usePncpSearch() {
             setSearchSource(data.source as any);
             setSearchElapsed(data.elapsedMs);
             setResults(data.items);
-            setAllResults(data.items); // For backward compat (same as results in v3)
+            setAllResults(data.items);
             setTotalResults(data.total);
+            console.log('[SearchV3] ✅ State updated: results=', data.items.length, 'totalResults=', data.total);
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                // Don't show error for intentional aborts (user changed search)
+                console.warn('[SearchV3] ⚠️ Request was ABORTED (user changed search or timeout)');
             } else {
-                console.error(e);
+                console.error('[SearchV3] ❌ handleSearch error:', e?.name, e?.message, e);
                 toast.error(e?.message || 'Falha na busca. Verifique sua conexão e tente novamente.');
             }
         } finally {
