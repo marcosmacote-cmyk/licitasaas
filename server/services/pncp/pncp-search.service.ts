@@ -79,12 +79,17 @@ export class PncpSearchService {
 
         let orgaoNames: string[] = [];
         if (orgao && orgao.trim()) {
-            if (orgao.includes(',')) orgaoNames.push(...orgao.split(',').map(s => s.trim()).filter(Boolean));
-            else orgaoNames.push(orgao.trim());
+            orgaoNames.push(orgao.trim().replace(/^"|"$/g, ''));
         }
         if (orgaosLista && orgaosLista.trim()) {
             const listNames = orgaosLista.split(/[\n,;]+/).map(s => s.trim().replace(/^"|"$/g, '')).filter((s) => s.length > 0);
             orgaoNames.push(...listNames);
+        }
+        
+        // Prevent event loop blocking / Prisma crash if user pastes 10,000 CNPJs
+        if (orgaoNames.length > 100) {
+            orgaoNames = orgaoNames.slice(0, 100);
+            logger.warn(`[PncpSearch] orgaosLista truncated to 100 items to prevent event loop exhaustion.`);
         }
         orgaoNames = [...new Set(orgaoNames)];
 
@@ -106,9 +111,14 @@ export class PncpSearchService {
 
         const keywordFilters: any[] = [];
         if (keywords && keywords.trim()) {
-            const rawTerms = keywords.includes(',')
+            let rawTerms = keywords.includes(',')
                 ? keywords.split(',').map(t => t.trim().replace(/^"|"$/g, '')).filter(t => t.length > 1)
                 : keywords.trim().split(/\s+/).filter(t => t.length > 1);
+            
+            if (rawTerms.length > 20) {
+                rawTerms = rawTerms.slice(0, 20);
+                logger.warn(`[PncpSearch] keywords truncated to 20 items.`);
+            }
             if (rawTerms.length > 0) {
                 for (const term of rawTerms) {
                     keywordFilters.push({
@@ -124,7 +134,8 @@ export class PncpSearchService {
 
         const excludeFilters: any[] = [];
         if (excludeKeywords && excludeKeywords.trim()) {
-            const excludeTerms = excludeKeywords.split(',').map(t => t.trim()).filter(t => t.length > 0);
+            let excludeTerms = excludeKeywords.split(',').map(t => t.trim()).filter(t => t.length > 0);
+            if (excludeTerms.length > 20) excludeTerms = excludeTerms.slice(0, 20);
             for (const term of excludeTerms) {
                 excludeFilters.push({ NOT: { objeto: { contains: term, mode: 'insensitive' as const } } });
             }

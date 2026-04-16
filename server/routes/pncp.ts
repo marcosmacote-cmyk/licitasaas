@@ -457,7 +457,7 @@ const pncpKeepAliveAgent = new https.Agent({ rejectUnauthorized: false, keepAliv
  * Fetch items for a single process from Gov.br with retry + backoff.
  * Returns the parsed result or throws on complete failure.
  */
-async function fetchPncpItems(cleanCnpj: string, cleanAno: string, cleanSeq: string): Promise<{ items: any[], message?: string }> {
+export async function fetchPncpItems(cleanCnpj: string, cleanAno: string, cleanSeq: string): Promise<{ items: any[], message?: string }> {
     const cacheKey = `${cleanCnpj}-${cleanAno}-${cleanSeq}`;
     const cached = pncpItemsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < PNCP_ITEMS_CACHE_TTL) {
@@ -588,8 +588,13 @@ router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
                     const cleanSeq = String(proc.seq).replace(/\\D/g, '');
                     
                     try {
-                        const { fetchPncpItems } = require('./pncp'); // ensure we call the internal fn, it's defined above
-                        await fetchPncpItems(cleanCnpj, cleanAno, cleanSeq);
+                        // @ts-ignore
+                        const internalModule = await import('./pncp');
+                        if (internalModule.fetchPncpItems) {
+                            await internalModule.fetchPncpItems(cleanCnpj, cleanAno, cleanSeq);
+                        } else {
+                            await fetchPncpItems(cleanCnpj, cleanAno, cleanSeq);
+                        }
                     } catch (err: any) {
                         logger.warn(`[PNCP Prefetch] Failed for ${cleanCnpj}-${cleanAno}-${cleanSeq}: ${err?.message}`);
                     }
@@ -661,9 +666,18 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
 router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     const reqStart = Date.now();
     logger.info(`[SEARCH-HYBRID] >>> REQUEST from user=${req.user?.id?.slice(0,8)} | uf=${req.body?.uf} | status=${req.body?.status} | keywords=${req.body?.keywords || 'none'}`);
-    try {
+        const cacheKey = `${req.user?.tenantId || 'global'}_${JSON.stringify(req.body)}`;
+        const cached = pncpSearchCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < PNCP_SEARCH_CACHE_TTL) {
+            const elapsed = Date.now() - reqStart;
+            logger.info(`[SEARCH-HYBRID] <<< CACHE HIT ${cached.data.total} items in ${elapsed}ms | uf=${req.body?.uf}`);
+            return res.json({ ...cached.data, elapsed: 0, source: 'cache', meta: cached.data.meta });
+        }
+
         const { PncpSearchService } = await import('../services/pncp/pncp-search.service');
         const result = await PncpSearchService.search(req.body);
+        
+        pncpSearchCache.set(cacheKey, { data: result, timestamp: Date.now() });
         const elapsed = Date.now() - reqStart;
         logger.info(`[SEARCH-HYBRID] <<< RESPONSE ${result.total} items in ${elapsed}ms | uf=${req.body?.uf}`);
         res.json({ items: result.items, total: result.total, totalLocal: result.meta.localCount, elapsed: result.meta.elapsedMs, source: result.meta.source, meta: result.meta });
