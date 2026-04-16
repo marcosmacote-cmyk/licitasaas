@@ -43,4 +43,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD wget -qO- http://localhost:3001/health || exit 1
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && if [ \"$PROCESS_ROLE\" = \"worker\" ]; then echo '[Docker] Starting WORKER process...' && node dist/worker.js; else echo '[Docker] Starting API process...' && node dist/index.js; fi"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && if [ -f prisma/migrations/20260416190000_add_fts_search_vector/migration.sql ]; then echo '[Docker] Running FTS migration...' && PGPASSWORD=$(echo $DATABASE_URL | sed 's/.*:\\/\\/[^:]*:\\([^@]*\\)@.*/\\1/') psql $(echo $DATABASE_URL | sed 's/\\?.*//') -f prisma/migrations/20260416190000_add_fts_search_vector/migration.sql 2>&1 || echo '[Docker] FTS migration warning (may already exist)'; fi && if [ \"$PROCESS_ROLE\" = \"worker\" ]; then echo '[Docker] Starting WORKER process...' && node dist/worker.js; else echo '[Docker] Starting API process...' && node dist/index.js; fi"]
