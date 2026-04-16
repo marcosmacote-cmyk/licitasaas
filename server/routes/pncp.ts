@@ -666,6 +666,7 @@ router.post('/search-local', authenticateToken, async (req: any, res) => {
 router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     const reqStart = Date.now();
     logger.info(`[SEARCH-HYBRID] >>> REQUEST from user=${req.user?.id?.slice(0,8)} | uf=${req.body?.uf} | status=${req.body?.status} | keywords=${req.body?.keywords || 'none'}`);
+    try {
         const cacheKey = `${req.user?.tenantId || 'global'}_${JSON.stringify(req.body)}`;
         const cached = pncpSearchCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < PNCP_SEARCH_CACHE_TTL) {
