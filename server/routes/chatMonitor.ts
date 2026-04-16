@@ -904,8 +904,19 @@ router.post('/internal/heartbeat', authenticateWorker, async (req: any, res) => 
 
 // Get ALL monitored processes across ALL tenants (for centralized worker)
 // v3.0: Inclui credenciais do portal vinculado para autenticação dinâmica
+// v3.1: Cache in-memory de 2 minutos para não bloquear o event loop
+let allSessionsCache: { data: any; timestamp: number } | null = null;
+const ALL_SESSIONS_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutos
+
 router.get('/internal/all-sessions', authenticateWorker, async (req: any, res) => {
     try {
+        // Servir do cache se disponível e fresco
+        const now = Date.now();
+        if (allSessionsCache && (now - allSessionsCache.timestamp) < ALL_SESSIONS_CACHE_TTL_MS) {
+            logger.info(`[Worker] Returning ${allSessionsCache.data.length} monitored processes (CACHED, age=${Math.round((now - allSessionsCache.timestamp) / 1000)}s)`);
+            return res.json(allSessionsCache.data);
+        }
+
         const processes = await prisma.biddingProcess.findMany({
             where: {
                 isMonitored: true,
@@ -1008,7 +1019,9 @@ router.get('/internal/all-sessions', authenticateWorker, async (req: any, res) =
             };
         });
 
-        logger.info(`[Worker] Returning ${enriched.length} monitored processes across all tenants (${enriched.filter((p: any) => p.portalCredentials).length} with credentials)`);
+        // Salvar no cache para não bloquear o event loop nas próximas chamadas
+        allSessionsCache = { data: enriched, timestamp: Date.now() };
+        logger.info(`[Worker] Returning ${enriched.length} monitored processes across all tenants (${enriched.filter((p: any) => p.portalCredentials).length} with credentials) — FRESH`);
         res.json(enriched);
     } catch (error: any) {
         logger.error('[Worker /all-sessions] Error:', error.message);
