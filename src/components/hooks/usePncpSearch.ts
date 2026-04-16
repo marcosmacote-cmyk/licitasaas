@@ -63,30 +63,29 @@ export function usePncpSearch() {
 
     // Store last search params for pagination re-fetches
     const lastSearchParamsRef = useRef<any>(null);
+    // Request sequence counter — used to ignore stale responses
+    const requestSeqRef = useRef(0);
 
     /**
      * Core fetch function — calls the unified /search endpoint
+     * IMPORTANT: Does NOT abort previous requests to prevent orphan server connections
+     * that exhaust the database connection pool. Instead uses requestSeq to ignore stale results.
      */
-    const doSearchFetch = useCallback(async (params: any): Promise<{ items: PncpBiddingItem[], total: number, source: string, elapsedMs: number }> => {
-        console.log('[SearchV3] doSearchFetch called with params:', JSON.stringify(params));
-
-        // Cancel any in-flight request
-        if (searchControllerRef.current) {
-            console.log('[SearchV3] Aborting previous request');
-            searchControllerRef.current.abort();
-        }
+    const doSearchFetch = useCallback(async (params: any, seq: number): Promise<{ items: PncpBiddingItem[], total: number, source: string, elapsedMs: number } | null> => {
+        console.log(`[SearchV3] doSearchFetch #${seq} called with params:`, JSON.stringify(params));
 
         const controller = new AbortController();
         searchControllerRef.current = controller;
+        // 8s timeout (server has 3s statement_timeout + overhead)
         const timeout = setTimeout(() => {
-            console.log('[SearchV3] ⏰ 15s timeout reached, aborting');
+            console.log(`[SearchV3] ⏰ #${seq} 8s timeout reached, aborting`);
             controller.abort();
-        }, 15000);
+        }, 8000);
 
         try {
             const token = localStorage.getItem('token');
             const url = `${API_BASE_URL}/api/pncp/search-hybrid`;
-            console.log('[SearchV3] Fetching:', url, '| token:', token ? token.substring(0, 20) + '...' : 'NULL');
+            console.log(`[SearchV3] #${seq} Fetching:`, url);
 
             const res = await fetch(url, {
                 method: 'POST',
@@ -96,17 +95,21 @@ export function usePncpSearch() {
             });
             clearTimeout(timeout);
 
-            console.log('[SearchV3] Response status:', res.status, res.statusText);
+            // If a newer request was fired while we waited, discard this result
+            if (seq !== requestSeqRef.current) {
+                console.log(`[SearchV3] #${seq} discarded (stale — current is #${requestSeqRef.current})`);
+                return null;
+            }
+
+            console.log(`[SearchV3] #${seq} Response status:`, res.status);
 
             if (!res.ok) {
-                const errorText = await res.text();
-                console.error('[SearchV3] ❌ HTTP Error:', res.status, errorText);
                 throw new Error(`Erro ${res.status}: falha ao buscar editais`);
             }
 
             const data = await res.json();
             const items = Array.isArray(data.items) ? data.items : [];
-            console.log('[SearchV3] ✅ Response:', { total: data.total, itemsCount: items.length, source: data.source, elapsed: data.elapsed });
+            console.log(`[SearchV3] #${seq} ✅ Response:`, { total: data.total, itemsCount: items.length, source: data.source, elapsed: data.elapsed });
 
             return {
                 items,
@@ -116,7 +119,7 @@ export function usePncpSearch() {
             };
         } catch (err: any) {
             clearTimeout(timeout);
-            console.error('[SearchV3] ❌ Fetch error:', err?.name, err?.message);
+            console.error(`[SearchV3] #${seq} ❌ Fetch error:`, err?.name, err?.message);
             throw err;
         }
     }, []);
@@ -129,6 +132,9 @@ export function usePncpSearch() {
 
         const targetPage = (overrides?.resetPage || e) ? 1 : page;
         if (overrides?.resetPage || e) setPage(1);
+
+        // Increment request sequence — previous in-flight requests will be ignored
+        const seq = ++requestSeqRef.current;
 
         setHasSearched(true);
         setLoading(true);
@@ -160,10 +166,16 @@ export function usePncpSearch() {
         const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
 
         try {
-            console.log('[SearchV3] handleSearch → calling doSearchFetch...');
-            const data = await doSearchFetch(searchParams);
+            console.log(`[SearchV3] handleSearch #${seq} → calling doSearchFetch...`);
+            const data = await doSearchFetch(searchParams, seq);
 
-            console.log('[SearchV3] handleSearch → doSearchFetch returned:', { items: data.items.length, total: data.total, source: data.source, elapsedMs: data.elapsedMs });
+            // Null means this request was superseded by a newer one
+            if (!data) {
+                console.log(`[SearchV3] #${seq} result discarded (newer search active)`);
+                return;
+            }
+
+            console.log(`[SearchV3] #${seq} → returned:`, { items: data.items.length, total: data.total });
 
             if (data.items.length === 0 && data.total === 0) {
                 toast.info('Nenhum edital encontrado para esses filtros.');
@@ -174,18 +186,21 @@ export function usePncpSearch() {
             setResults(data.items);
             setAllResults(data.items);
             setTotalResults(data.total);
-            console.log('[SearchV3] ✅ State updated: results=', data.items.length, 'totalResults=', data.total);
+            console.log(`[SearchV3] #${seq} ✅ State updated: results=`, data.items.length);
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                console.warn('[SearchV3] ⚠️ Request was ABORTED (user changed search or timeout)');
+                console.warn(`[SearchV3] #${seq} ⚠️ Request timed out`);
             } else {
-                console.error('[SearchV3] ❌ handleSearch error:', e?.name, e?.message, e);
+                console.error(`[SearchV3] #${seq} ❌ Error:`, e?.message);
                 toast.error(e?.message || 'Falha na busca. Verifique sua conexão e tente novamente.');
             }
         } finally {
-            clearTimeout(slowTimer);
-            setLoading(false);
-            setSearchSlow(false);
+            // Only clear loading if this is still the active request
+            if (seq === requestSeqRef.current) {
+                clearTimeout(slowTimer);
+                setLoading(false);
+                setSearchSlow(false);
+            }
         }
     };
 
@@ -195,6 +210,7 @@ export function usePncpSearch() {
     const handlePageChange = async (newPage: number) => {
         if (!lastSearchParamsRef.current || loading) return;
 
+        const seq = ++requestSeqRef.current;
         setPage(newPage);
         setLoading(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -202,7 +218,8 @@ export function usePncpSearch() {
         const params = { ...lastSearchParamsRef.current, pagina: newPage };
 
         try {
-            const data = await doSearchFetch(params);
+            const data = await doSearchFetch(params, seq);
+            if (!data) return; // Stale
             setResults(data.items);
             setAllResults(data.items);
             setTotalResults(data.total);

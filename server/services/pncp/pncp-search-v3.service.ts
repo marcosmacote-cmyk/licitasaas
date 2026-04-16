@@ -234,13 +234,15 @@ export class PncpSearchV3 {
 
             logger.info(`[SearchV3] Query: uf=${input.uf || '*'} status=${input.status || '*'} kw=${input.keywords || '-'} page=${page} | conditions=${conditions.length} params=${params.length}`);
 
-            // Execute both queries in parallel
-            // COUNT uses only WHERE params (no LIMIT/OFFSET)
-            // DATA uses all params (WHERE + LIMIT + OFFSET)
-            const [countResult, rows] = await Promise.all([
-                prisma.$queryRawUnsafe(countSql, ...params.slice(0, countParamCount)) as Promise<any[]>,
-                prisma.$queryRawUnsafe(dataSql, ...params) as Promise<any[]>,
-            ]);
+            // Execute inside a single transaction with statement_timeout to:
+            // 1. Use only 1 connection (not 2 from Promise.all)
+            // 2. Auto-cancel orphan queries if they exceed 3s
+            const [countResult, rows] = await prisma.$transaction(async (tx: any) => {
+                await tx.$queryRawUnsafe('SET LOCAL statement_timeout = \'3000\'');
+                const count = await tx.$queryRawUnsafe(countSql, ...params.slice(0, countParamCount)) as any[];
+                const data = await tx.$queryRawUnsafe(dataSql, ...params) as any[];
+                return [count, data];
+            }, { timeout: QUERY_TIMEOUT_MS }) as [any[], any[]];
 
             const total = countResult[0]?.total || 0;
             const elapsed = Date.now() - start;
