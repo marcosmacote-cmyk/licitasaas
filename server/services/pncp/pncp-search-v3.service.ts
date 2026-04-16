@@ -209,23 +209,22 @@ export class PncpSearchV3 {
         // ── Assembly ──
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        // Execute count and data in parallel within a transaction with timeout
+        // Single query execution — no transaction needed
         try {
-            // countParamCount = number of WHERE params (before LIMIT/OFFSET are added)
-            const countParamCount = params.length;
             const limitParam = `$${paramIdx++}`;
             const offsetParam = `$${paramIdx++}`;
             params.push(pageSize, offset);
 
-            // Build the full queries
-            const countSql = `SELECT COUNT(*)::int as total FROM "PncpContratacao" ${whereClause}`;
+            // Build a SINGLE query with COUNT(*) OVER() to avoid 2 round-trips
+            // This uses exactly 1 connection for 1 query (no transaction needed)
             const dataSql = `
                 SELECT 
                     id, "numeroControle", "cnpjOrgao", "anoCompra", "sequencialCompra",
                     "orgaoNome", "unidadeNome", uf, municipio, esfera,
                     objeto, modalidade, situacao, "valorEstimado", "valorHomologado",
                     srp, "dataPublicacao", "dataAbertura", "dataEncerramento",
-                    "linkSistema", "linkOrigem"
+                    "linkSistema", "linkOrigem",
+                    COUNT(*)::int OVER() as "_totalCount"
                 FROM "PncpContratacao" 
                 ${whereClause}
                 ORDER BY "dataEncerramento" ASC NULLS LAST
@@ -234,17 +233,11 @@ export class PncpSearchV3 {
 
             logger.info(`[SearchV3] Query: uf=${input.uf || '*'} status=${input.status || '*'} kw=${input.keywords || '-'} page=${page} | conditions=${conditions.length} params=${params.length}`);
 
-            // Execute inside a single transaction with statement_timeout to:
-            // 1. Use only 1 connection (not 2 from Promise.all)
-            // 2. Auto-cancel orphan queries if they exceed 3s
-            const [countResult, rows] = await prisma.$transaction(async (tx: any) => {
-                await tx.$queryRawUnsafe('SET LOCAL statement_timeout = \'3000\'');
-                const count = await tx.$queryRawUnsafe(countSql, ...params.slice(0, countParamCount)) as any[];
-                const data = await tx.$queryRawUnsafe(dataSql, ...params) as any[];
-                return [count, data];
-            }, { timeout: QUERY_TIMEOUT_MS }) as [any[], any[]];
+            // Single query, single connection, no transaction
+            const rows = await prisma.$queryRawUnsafe(dataSql, ...params) as any[];
 
-            const total = countResult[0]?.total || 0;
+            // Extract total from first row's window function result (0 if no rows)
+            const total = rows.length > 0 ? (rows[0]._totalCount || 0) : 0;
             const elapsed = Date.now() - start;
 
             // Map to frontend-compatible format
