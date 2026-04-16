@@ -166,7 +166,8 @@ class PncpSearchV3 {
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
         // Execute count and data in parallel within a transaction with timeout
         try {
-            const countParamIdx = paramIdx;
+            // countParamCount = number of WHERE params (before LIMIT/OFFSET are added)
+            const countParamCount = params.length;
             const limitParam = `$${paramIdx++}`;
             const offsetParam = `$${paramIdx++}`;
             params.push(pageSize, offset);
@@ -184,10 +185,12 @@ class PncpSearchV3 {
                 ORDER BY "dataEncerramento" ASC NULLS LAST
                 LIMIT ${limitParam} OFFSET ${offsetParam}
             `;
-            logger_1.logger.info(`[SearchV3] Query: uf=${input.uf || '*'} status=${input.status || '*'} kw=${input.keywords || '-'} page=${page}`);
+            logger_1.logger.info(`[SearchV3] Query: uf=${input.uf || '*'} status=${input.status || '*'} kw=${input.keywords || '-'} page=${page} | conditions=${conditions.length} params=${params.length}`);
             // Execute both queries in parallel
+            // COUNT uses only WHERE params (no LIMIT/OFFSET)
+            // DATA uses all params (WHERE + LIMIT + OFFSET)
             const [countResult, rows] = await Promise.all([
-                prisma_1.default.$queryRawUnsafe(countSql, ...params.slice(0, countParamIdx - 1)),
+                prisma_1.default.$queryRawUnsafe(countSql, ...params.slice(0, countParamCount)),
                 prisma_1.default.$queryRawUnsafe(dataSql, ...params),
             ]);
             const total = countResult[0]?.total || 0;
