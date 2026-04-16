@@ -43,4 +43,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD wget -qO- http://localhost:3001/health || exit 1
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && if [ \"$PROCESS_ROLE\" = \"worker\" ]; then echo '[Docker] Starting WORKER process...' && node dist/worker.js; else echo '[Docker] Starting API process...' && node dist/index.js; fi"]
