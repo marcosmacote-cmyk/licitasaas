@@ -612,80 +612,75 @@ router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
 });
 
 // ══════════════════════════════════════════
-// ── PNCP Search (Extracted from index.ts) ──
+// ── PNCP Search (v3 — Full-Text Search) ──
 // ══════════════════════════════════════════
 
-// The Gov.br search API uses DIFFERENT status values than what our UI sends.
-// Our UI sends: 'recebendo_proposta', 'encerrada', 'suspensa', 'anulada', 'todas'
-// Gov.br expects: 'recebendo_proposta', 'encerradas', 'suspensas', 'anuladas', (omit for all)
-const STATUS_TO_GOVBR: Record<string, string> = {
-    'recebendo_proposta': 'recebendo_proposta',
-    'encerrada': 'encerradas',
-    'suspensa': 'suspensas',
-    'anulada': 'anuladas',
-    'todas': '',  // omit param entirely
-};
-
-// In-memory cache for PNCP search results (avoids repeated slow Gov.br calls)
-const pncpSearchCache = new Map<string, { data: any, timestamp: number }>();
-const PNCP_SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// ── Periodic cache cleanup to prevent memory leaks (P4 fix) ──
-setInterval(() => {
-    const now = Date.now();
-    for (const [key, val] of pncpSearchCache) {
-        if (now - val.timestamp > PNCP_SEARCH_CACHE_TTL * 2) pncpSearchCache.delete(key);
-    }
-    for (const [key, val] of pncpItemsCache) {
-        if (now - val.timestamp > PNCP_ITEMS_CACHE_TTL * 2) pncpItemsCache.delete(key);
-    }
-}, 5 * 60 * 1000); // Every 5 minutes
-
 router.post('/search', authenticateToken, async (req: any, res) => {
+    const reqStart = Date.now();
+    logger.info(`[SEARCH] >>> REQUEST from user=${req.user?.id?.slice(0, 8)} | uf=${req.body?.uf} | status=${req.body?.status} | keywords=${req.body?.keywords || 'none'} | page=${req.body?.pagina || 1}`);
+
+    // Cancel query if client disconnects (prevents pool exhaustion)
+    let cancelled = false;
+    req.on('close', () => { cancelled = true; });
+
     try {
-        const { PncpSearchService } = await import('../services/pncp/pncp-search.service');
-        const result = await PncpSearchService.searchGovbr(req.body);
-        res.json({ items: result.items, total: result.total, meta: result.meta });
+        const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
+        const result = await PncpSearchV3.search(req.body);
+
+        if (cancelled) {
+            logger.info(`[SEARCH] <<< CLIENT DISCONNECTED, discarding ${result.total} results`);
+            return;
+        }
+
+        const elapsed = Date.now() - reqStart;
+        logger.info(`[SEARCH] <<< RESPONSE ${result.total} items (page ${result.page}/${result.totalPages}) in ${elapsed}ms | uf=${req.body?.uf}`);
+
+        res.json({
+            items: result.items,
+            total: result.total,
+            page: result.page,
+            pageSize: result.pageSize,
+            totalPages: result.totalPages,
+            elapsed: result.elapsed,
+            source: result.source,
+            meta: { source: result.source, elapsedMs: result.elapsed, localCount: result.total, errors: [] },
+        });
     } catch (error: any) {
-        logger.error("PNCP search error:", error?.message || error);
+        const elapsed = Date.now() - reqStart;
+        logger.error(`[SEARCH] !!! ERROR in ${elapsed}ms: ${error?.message || error}`);
         handleApiError(res, error, 'pncp-search');
     }
 });
 
-router.post('/search-local', authenticateToken, async (req: any, res) => {
+// Legacy aliases (backward compat — redirect to unified search)
+router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
+    // Forward to the main search handler
+    const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
     try {
-        const { PncpSearchService } = await import('../services/pncp/pncp-search.service');
-        const result = await PncpSearchService.searchLocal(req.body);
-        res.json({ items: result.items, total: result.total, totalLocal: result.meta.localCount, elapsed: result.meta.elapsedMs, source: 'local', meta: result.meta });
+        const result = await PncpSearchV3.search(req.body);
+        res.json({
+            items: result.items, total: result.total,
+            totalLocal: result.total, elapsed: result.elapsed,
+            source: result.source,
+            meta: { source: result.source, elapsedMs: result.elapsed, localCount: result.total, errors: [] },
+        });
     } catch (error: any) {
-        logger.error("PNCP local search error:", error?.message || error);
-        handleApiError(res, error, 'pncp-search-local');
+        handleApiError(res, error, 'pncp-search-hybrid');
     }
 });
 
-router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
-    const reqStart = Date.now();
-    logger.info(`[SEARCH-HYBRID] >>> REQUEST from user=${req.user?.id?.slice(0,8)} | uf=${req.body?.uf} | status=${req.body?.status} | keywords=${req.body?.keywords || 'none'}`);
+router.post('/search-local', authenticateToken, async (req: any, res) => {
+    const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
     try {
-        const cacheKey = `${req.user?.tenantId || 'global'}_${JSON.stringify(req.body)}`;
-        const cached = pncpSearchCache.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < PNCP_SEARCH_CACHE_TTL) {
-            const elapsed = Date.now() - reqStart;
-            logger.info(`[SEARCH-HYBRID] <<< CACHE HIT ${cached.data.total} items in ${elapsed}ms | uf=${req.body?.uf}`);
-            return res.json({ ...cached.data, elapsed: 0, source: 'cache', meta: cached.data.meta });
-        }
-
-        const { PncpSearchService } = await import('../services/pncp/pncp-search.service');
-        const result = await PncpSearchService.search(req.body);
-        
-        pncpSearchCache.set(cacheKey, { data: result, timestamp: Date.now() });
-        const elapsed = Date.now() - reqStart;
-        logger.info(`[SEARCH-HYBRID] <<< RESPONSE ${result.total} items in ${elapsed}ms | uf=${req.body?.uf}`);
-        res.json({ items: result.items, total: result.total, totalLocal: result.meta.localCount, elapsed: result.meta.elapsedMs, source: result.meta.source, meta: result.meta });
+        const result = await PncpSearchV3.search(req.body);
+        res.json({
+            items: result.items, total: result.total,
+            totalLocal: result.total, elapsed: result.elapsed,
+            source: result.source,
+            meta: { source: result.source, elapsedMs: result.elapsed, localCount: result.total, errors: [] },
+        });
     } catch (error: any) {
-        const elapsed = Date.now() - reqStart;
-        logger.error(`[SEARCH-HYBRID] !!! ERROR in ${elapsed}ms: ${error?.message || error}`);
-        handleApiError(res, error, 'pncp-search-hybrid');
+        handleApiError(res, error, 'pncp-search-local');
     }
 });
 

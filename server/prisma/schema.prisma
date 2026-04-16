@@ -593,6 +593,9 @@ model PncpContratacao {
   linkSistema        String?  // URL do edital no PNCP
   linkOrigem         String?  // URL do sistema de origem
 
+  // Full-Text Search vector (maintained by PostgreSQL trigger)
+  searchVector       Unsupported("tsvector")?
+
   // Controle de sync
   syncedAt           DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -606,6 +609,8 @@ model PncpContratacao {
   @@index([dataPublicacao])
   @@index([valorEstimado])
   @@index([cnpjOrgao, anoCompra, sequencialCompra])
+  @@index([uf, situacao])
+  @@index([dataEncerramento])
 }
 
 model PncpItem {

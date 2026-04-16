@@ -134,43 +134,21 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         : search.results;
 
     // ═══════════════════════════════════════════════════
-    // PAGINATION (client-side)
+    // PAGINATION (server-side — v3)
+    // Each page change triggers a new server request.
+    // The server returns only 50 items per page with FTS (<50ms).
     // ═══════════════════════════════════════════════════
 
     const prevPageRef = useRef(search.page);
     useEffect(() => {
-        let timeoutId: any;
         if (search.hasSearched && search.page !== prevPageRef.current) {
             prevPageRef.current = search.page;
-            const perPage = 10;
-            const startIdx = (search.page - 1) * perPage;
-            const pageItems = search.allResults.slice(startIdx, startIdx + perPage);
-            search.setResults(pageItems);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            
-            // Prefetch items for the new page (warms server cache)
-            // Debounced by 600ms to avoid DDoS if user rapidly clicks next page
-            timeoutId = setTimeout(() => {
-                const token = localStorage.getItem('token');
-                if (token) {
-                    const prefetchPage = pageItems
-                        .filter((it: any) => it.orgao_cnpj && it.ano && it.numero_sequencial)
-                        .map((it: any) => ({ cnpj: it.orgao_cnpj, ano: it.ano, seq: it.numero_sequencial }));
-                    if (prefetchPage.length > 0) {
-                        fetch(`${API_BASE_URL}/api/pncp/items/prefetch`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                            body: JSON.stringify({ processes: prefetchPage }),
-                        }).catch(() => {});
-                    }
-                }
-            }, 600);
+            // Delegate to server-side pagination handler
+            if (search.handlePageChange) {
+                search.handlePageChange(search.page);
+            }
         }
-        
-        return () => {
-            if (timeoutId) clearTimeout(timeoutId);
-        };
-    }, [search.page, search.allResults, search.hasSearched]);
+    }, [search.page, search.hasSearched]);
 
     // ═══════════════════════════════════════════════════
     // LOAD SAVED SEARCH — bridges saved searches → search

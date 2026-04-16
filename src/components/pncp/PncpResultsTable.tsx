@@ -418,7 +418,8 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
 
             {/* ═══ Pagination Controls ═══ */}
             {p.activeTab === 'search' && p.hasSearched && p.totalResults > 0 && (() => {
-                const totalPages = Math.ceil(p.totalResults / 10);
+                const pageSize = 50;
+                const totalPages = Math.ceil(p.totalResults / pageSize);
                 return (
                     <div style={{
                         display: 'flex', justifyContent: 'center', alignItems: 'center',
@@ -438,12 +439,11 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             {p.searchSource && (
                                 <span style={{
                                     fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 600,
-                                    background: p.searchSource === 'local' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                                    color: p.searchSource === 'local' ? 'var(--color-success)' : 'var(--color-info)',
+                                    background: 'rgba(16, 185, 129, 0.15)',
+                                    color: 'var(--color-success)',
                                     display: 'inline-flex', alignItems: 'center', gap: '4px',
                                 }}>
-                                    {p.searchSource === 'local' ? '⚡ Base Local' : '🌐 Gov.br'}
-                                    {p.searchSource === 'local' && p.searchElapsed ? ` (${p.searchElapsed}ms)` : ''}
+                                    ⚡ Base Local{p.searchElapsed ? ` (${p.searchElapsed}ms)` : ''}
                                 </span>
                             )}
                         </span>
