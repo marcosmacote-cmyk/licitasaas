@@ -64,6 +64,8 @@ export function usePncpSearch() {
     const controllerRef = useRef<AbortController | null>(null);
     // Mutex: true when a request is in-flight (prevents concurrent requests)
     const busyRef = useRef(false);
+    // Sequence counter — only the LATEST search controls loading state
+    const requestSeqRef = useRef(0);
 
     /**
      * Core fetch — ultra-simple, one request at a time.
@@ -125,6 +127,9 @@ export function usePncpSearch() {
         const targetPage = (overrides?.resetPage || e) ? 1 : page;
         if (overrides?.resetPage || e) setPage(1);
 
+        // Sequence guard: only the latest search can control loading/results
+        const seq = ++requestSeqRef.current;
+
         setHasSearched(true);
         setLoading(true);
         setSearchSlow(false);
@@ -153,6 +158,12 @@ export function usePncpSearch() {
         try {
             const data = await fetchSearch(searchParams);
 
+            // Only apply results if this is still the latest search
+            if (seq !== requestSeqRef.current) {
+                console.log(`[Search] #${seq} result discarded (superseded by #${requestSeqRef.current})`);
+                return;
+            }
+
             if (data.items.length === 0 && data.total === 0) {
                 toast.info('Nenhum edital encontrado para esses filtros.');
             }
@@ -164,19 +175,26 @@ export function usePncpSearch() {
             setTotalResults(data.total);
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                // Silently ignore — user started a new search
-                console.log('[Search] Previous request aborted (new search started)');
-                return; // Don't clear loading — the new search will handle it
+                // Silently ignore — a newer search superseded this one
+                console.log(`[Search] #${seq} aborted (newer search active)`);
+                return;
             }
-            console.error('[Search] ❌', e?.message);
-            toast.error(e?.message || 'Falha na busca. Tente novamente.');
-            setResults([]);
-            setAllResults([]);
-            setTotalResults(0);
+            console.error(`[Search] #${seq} ❌`, e?.message);
+            if (seq === requestSeqRef.current) {
+                toast.error(e?.message || 'Falha na busca. Tente novamente.');
+                setResults([]);
+                setAllResults([]);
+                setTotalResults(0);
+            }
         } finally {
             clearTimeout(slowTimer);
-            setLoading(false);
-            setSearchSlow(false);
+            // CRITICAL: Only the LATEST search can clear loading
+            // Without this guard, an aborted search's finally block
+            // would clear loading for the active search.
+            if (seq === requestSeqRef.current) {
+                setLoading(false);
+                setSearchSlow(false);
+            }
         }
     };
 
