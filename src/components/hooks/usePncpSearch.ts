@@ -93,9 +93,9 @@ export function usePncpSearch() {
 
         try {
             const token = localStorage.getItem('token');
-            console.log(`[Search] → POST /api/pncp/search`, { uf: params.uf, status: params.status, page: params.pagina });
+            console.log(`[Search] → POST /api/pncp/search-hybrid`, { uf: params.uf, status: params.status, page: params.pagina });
 
-            const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {
+            const res = await fetch(`${API_BASE_URL}/api/pncp/search-hybrid`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 signal: controller.signal,

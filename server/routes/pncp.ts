@@ -652,6 +652,28 @@ router.post('/search', authenticateToken, async (req: any, res) => {
     }
 });
 
+// Alias with cancel guard — used by frontend
+router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
+    let cancelled = false;
+    req.on('close', () => { cancelled = true; });
+
+    try {
+        const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
+        const result = await PncpSearchV3.search(req.body);
+
+        if (cancelled) return;
+
+        res.json({
+            items: result.items, total: result.total,
+            totalLocal: result.total, elapsed: result.elapsed,
+            source: result.source,
+            meta: { source: result.source, elapsedMs: result.elapsed, localCount: result.total, errors: [] },
+        });
+    } catch (error: any) {
+        handleApiError(res, error, 'pncp-search-hybrid');
+    }
+});
+
 // ══════════════════════════════════════════
 // ── Sync Health (estado do Aggregator) ──
 // ══════════════════════════════════════════
