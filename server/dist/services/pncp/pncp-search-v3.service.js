@@ -109,7 +109,7 @@ class PncpSearchV3 {
             conditions.push(`"dataPublicacao" <= $${paramIdx++}`);
             params.push(new Date(input.dataFim + 'T23:59:59'));
         }
-        // ── Orgão filter (by CNPJ or name via FTS) ──
+        // ── Orgão filter (by CNPJ or name via ILIKE) ──
         if (input.orgao && input.orgao.trim()) {
             const orgaoClean = input.orgao.trim().replace(/^"|"$/g, '');
             const onlyDigits = orgaoClean.replace(/\D/g, '');
@@ -118,9 +118,9 @@ class PncpSearchV3 {
                 params.push(onlyDigits);
             }
             else {
-                // Use FTS for orgao name search
-                conditions.push(`("searchVector" @@ websearch_to_tsquery('pt_unaccent', $${paramIdx++}))`);
-                params.push(orgaoClean);
+                // Use ILIKE for orgao name search
+                conditions.push(`"orgaoNome" ILIKE $${paramIdx++}`);
+                params.push(`%${orgaoClean}%`);
             }
         }
         // ── OrgaosLista filter (multiple CNPJs or names) ──
@@ -141,10 +141,11 @@ class PncpSearchV3 {
                 params.push(cnpjs);
             }
             if (textNames.length > 0) {
-                // Combine all text names into a single FTS query with OR
-                const ftsQuery = textNames.map(n => `"${n}"`).join(' | ');
-                orgaoOrConditions.push(`("searchVector" @@ to_tsquery('pt_unaccent', $${paramIdx++}))`);
-                params.push(ftsQuery);
+                const textConditions = textNames.map(n => {
+                    params.push(`%${n}%`);
+                    return `"orgaoNome" ILIKE $${paramIdx++}`;
+                });
+                orgaoOrConditions.push(`(${textConditions.join(' OR ')})`);
             }
             if (orgaoOrConditions.length > 0) {
                 conditions.push(`(${orgaoOrConditions.join(' OR ')})`);
