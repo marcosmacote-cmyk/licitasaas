@@ -307,14 +307,45 @@ async function cleanup(): Promise<number> {
 }
 
 /**
+ * RECONCILIATION: Atualiza status de contratações que já passaram da data de encerramento
+ */
+async function reconcileExpiredBiddings(): Promise<number> {
+    const now = new Date();
+    // Atualiza Divulgada/Aberta para Encerrada se a data de encerramento passou (com margem de 2 horas)
+    const cutoff = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+    try {
+        const result = await prisma.pncpContratacao.updateMany({
+            where: {
+                situacao: { in: ['Divulgada', 'Aberta'] },
+                dataEncerramento: { lt: cutoff }
+            },
+            data: {
+                situacao: 'Encerrada',
+                updatedAt: new Date()
+            }
+        });
+
+        if (result.count > 0) {
+            log('INFO', `Reconciliation: updated ${result.count} expired biddings to 'Encerrada'`);
+        }
+        return result.count;
+    } catch (err: any) {
+        log('ERROR', `Reconciliation failed: ${err?.message}`);
+        return 0;
+    }
+}
+
+/**
  * MAIN SYNC CYCLE — chamado pelo cron
  */
-export async function runPncpSync(): Promise<{ synced: number; items: number; cleaned: number }> {
+export async function runPncpSync(): Promise<{ synced: number; items: number; cleaned: number; reconciled: number }> {
     log('INFO', '═══ PNCP Sync cycle starting ═══');
     const start = Date.now();
 
     const synced = await syncIncremental();
     const items = await syncItens(500); // Sync items for 500 contratações per cycle (boosted to catch up)
+    const reconciled = await reconcileExpiredBiddings();
 
     // Cleanup once per day (check if last full sync was > 24h ago)
     let cleaned = 0;
@@ -328,9 +359,9 @@ export async function runPncpSync(): Promise<{ synced: number; items: number; cl
     }
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    log('INFO', `═══ PNCP Sync complete in ${elapsed}s: ${synced} contratações, ${items} items, ${cleaned} cleaned ═══`);
+    log('INFO', `═══ PNCP Sync complete in ${elapsed}s: ${synced} contratações, ${items} items, ${cleaned} cleaned, ${reconciled} reconciled ═══`);
     
-    return { synced, items, cleaned };
+    return { synced, items, cleaned, reconciled };
 }
 
 /**
