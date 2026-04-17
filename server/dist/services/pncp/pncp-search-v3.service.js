@@ -166,29 +166,29 @@ class PncpSearchV3 {
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
         // Single query execution — no transaction needed
         try {
+            const countParamCount = params.length;
             const limitParam = `$${paramIdx++}`;
             const offsetParam = `$${paramIdx++}`;
             params.push(pageSize, offset);
-            // Build a SINGLE query with COUNT(*) OVER() to avoid 2 round-trips
-            // This uses exactly 1 connection for 1 query (no transaction needed)
+            // Two sequential queries (1 connection at a time, no transaction)
+            const countSql = `SELECT COUNT(*)::int as total FROM "PncpContratacao" ${whereClause}`;
             const dataSql = `
                 SELECT 
                     id, "numeroControle", "cnpjOrgao", "anoCompra", "sequencialCompra",
                     "orgaoNome", "unidadeNome", uf, municipio, esfera,
                     objeto, modalidade, situacao, "valorEstimado", "valorHomologado",
                     srp, "dataPublicacao", "dataAbertura", "dataEncerramento",
-                    "linkSistema", "linkOrigem",
-                    COUNT(*)::int OVER() as "_totalCount"
+                    "linkSistema", "linkOrigem"
                 FROM "PncpContratacao" 
                 ${whereClause}
                 ORDER BY "dataEncerramento" ASC NULLS LAST
                 LIMIT ${limitParam} OFFSET ${offsetParam}
             `;
             logger_1.logger.info(`[SearchV3] Query: uf=${input.uf || '*'} status=${input.status || '*'} kw=${input.keywords || '-'} page=${page} | conditions=${conditions.length} params=${params.length}`);
-            // Single query, single connection, no transaction
+            // Execute sequentially — each releases its connection before the next starts
+            const countResult = await prisma_1.default.$queryRawUnsafe(countSql, ...params.slice(0, countParamCount));
             const rows = await prisma_1.default.$queryRawUnsafe(dataSql, ...params);
-            // Extract total from first row's window function result (0 if no rows)
-            const total = rows.length > 0 ? (rows[0]._totalCount || 0) : 0;
+            const total = Number(countResult[0]?.total) || 0;
             const elapsed = Date.now() - start;
             // Map to frontend-compatible format
             const now = Date.now();
