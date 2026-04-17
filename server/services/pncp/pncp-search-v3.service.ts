@@ -193,11 +193,20 @@ export class PncpSearchV3 {
             }
         }
 
-        // ── Keywords (Full-Text Search — the core improvement) ──
+        // ── Keywords (Unaccent + ILIKE for partial matching) ──
         if (input.keywords && input.keywords.trim()) {
-            const kw = input.keywords.trim();
-            conditions.push(`"searchVector" @@ websearch_to_tsquery('pt_unaccent', $${paramIdx++})`);
-            params.push(kw);
+            // Split by comma to support multiple keywords like "Gêneros, Escola"
+            const kws = input.keywords.split(',').map(k => k.trim()).filter(Boolean);
+            
+            if (kws.length > 0) {
+                const kwConditions: string[] = [];
+                for (const kw of kws) {
+                    kwConditions.push(`unaccent("objeto") ILIKE unaccent($${paramIdx++})`);
+                    params.push(`%${kw}%`);
+                }
+                // Use OR if they separated by comma
+                conditions.push(`(${kwConditions.join(' OR ')})`);
+            }
         }
 
         // ── Exclude keywords (negation filter) ──
