@@ -31,23 +31,16 @@ router.get('/', authenticateToken, async (req: any, res) => {
                     select: {
                         id: true,
                         biddingProcessId: true,
-                        requiredDocuments: true,
-                        biddingItems: true,
-                        pricingConsiderations: true,
-                        irregularitiesFlags: true,
                         fullSummary: true,
-                        deadlines: true,
-                        penalties: true,
-                        qualificationRequirements: true,
-                        chatHistory: true,
-                        sourceFileNames: true,
-                        // schemaV2: EXCLUDED — this is the heavy field (~50-100KB per analysis)
-                        promptVersion: true,
-                        modelUsed: true,
-                        pipelineDurationS: true,
                         overallConfidence: true,
                         requiresHumanAudit: true,
                         analyzedAt: true,
+                        modelUsed: true,
+                        sourceFileNames: true,
+                        // EXCLUDED heavy text fields (loaded on-demand when user opens detail):
+                        // requiredDocuments, biddingItems, pricingConsiderations,
+                        // irregularitiesFlags, deadlines, penalties,
+                        // qualificationRequirements, chatHistory, schemaV2
                     }
                 }
             }
