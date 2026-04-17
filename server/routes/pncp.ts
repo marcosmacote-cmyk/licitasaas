@@ -650,6 +650,7 @@ router.post('/search', authenticateToken, async (req: any, res) => {
         logger.error(`[SEARCH] !!! ERROR in ${elapsed}ms: ${error?.message || error}`);
         handleApiError(res, error, 'pncp-search');
     }
+});
 
 // ══════════════════════════════════════════
 // ── Sync Health (estado do Aggregator) ──
