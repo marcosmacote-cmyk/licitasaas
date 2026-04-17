@@ -1,14 +1,13 @@
 /**
- * ═══════════════════════════════════════════════════════
- * usePncpSearch v3 — Server-Side Pagination + FTS
+ * ═══════════════════════════════════════════════════════════
+ * usePncpSearch v4 — Bulletproof Search Hook
  * 
- * KEY CHANGES from v2:
- * - tamanhoPagina: 50 (was 500) — server returns 1 page at a time
- * - Pagination is server-side: each page change triggers a new fetch
- * - Timeout reduced to 15s (FTS responds in <50ms)
- * - AbortController correctly cancels previous request
- * - No more allResults[] with 500 items in RAM
- * ═══════════════════════════════════════════════════════
+ * DESIGN PRINCIPLES:
+ * 1. ONE request at a time — mutex guarantees serialization
+ * 2. AbortController cancels previous BROWSER-SIDE only
+ * 3. No concurrent HTTP connections to search endpoint
+ * 4. Simple, predictable state management
+ * ═══════════════════════════════════════════════════════════
  */
 import { useState, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../../config';
@@ -42,8 +41,6 @@ export function usePncpSearch() {
     const [searchSource, setSearchSource] = useState<'local' | 'govbr' | 'local-fts' | ''>('');
     const [searchElapsed, setSearchElapsed] = useState(0);
 
-    const searchControllerRef = useRef<AbortController | null>(null);
-
     // Form state
     const [keywords, setKeywords] = useState('');
     const [status, setStatus] = useState('recebendo_proposta');
@@ -61,55 +58,51 @@ export function usePncpSearch() {
     const [hasSearched, setHasSearched] = useState(false);
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-    // Store last search params for pagination re-fetches
+    // Last search params for pagination
     const lastSearchParamsRef = useRef<any>(null);
-    // Request sequence counter — used to ignore stale responses
-    const requestSeqRef = useRef(0);
+    // AbortController for the current in-flight request
+    const controllerRef = useRef<AbortController | null>(null);
+    // Mutex: true when a request is in-flight (prevents concurrent requests)
+    const busyRef = useRef(false);
 
     /**
-     * Core fetch function — calls the unified /search endpoint
-     * IMPORTANT: Does NOT abort previous requests to prevent orphan server connections
-     * that exhaust the database connection pool. Instead uses requestSeq to ignore stale results.
+     * Core fetch — ultra-simple, one request at a time.
+     * If a previous request is in-flight, it is ABORTED first.
      */
-    const doSearchFetch = useCallback(async (params: any, seq: number): Promise<{ items: PncpBiddingItem[], total: number, source: string, elapsedMs: number } | null> => {
-        console.log(`[SearchV3] doSearchFetch #${seq} called with params:`, JSON.stringify(params));
+    const fetchSearch = useCallback(async (params: any): Promise<{ items: PncpBiddingItem[], total: number, source: string, elapsedMs: number }> => {
+        // Cancel any previous in-flight request
+        if (controllerRef.current) {
+            controllerRef.current.abort();
+            controllerRef.current = null;
+        }
 
+        // Wait for any previous request to finish aborting (micro-tick)
+        if (busyRef.current) {
+            await new Promise(r => setTimeout(r, 50));
+        }
+
+        busyRef.current = true;
         const controller = new AbortController();
-        searchControllerRef.current = controller;
-        // 8s timeout (server has 3s statement_timeout + overhead)
-        const timeout = setTimeout(() => {
-            console.log(`[SearchV3] ⏰ #${seq} 8s timeout reached, aborting`);
-            controller.abort();
-        }, 8000);
+        controllerRef.current = controller;
 
         try {
             const token = localStorage.getItem('token');
-            const url = `${API_BASE_URL}/api/pncp/search-hybrid`;
-            console.log(`[SearchV3] #${seq} Fetching:`, url);
+            console.log(`[Search] → POST /api/pncp/search-hybrid`, { uf: params.uf, status: params.status, page: params.pagina });
 
-            const res = await fetch(url, {
+            const res = await fetch(`${API_BASE_URL}/api/pncp/search-hybrid`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 signal: controller.signal,
                 body: JSON.stringify(params),
             });
-            clearTimeout(timeout);
-
-            // If a newer request was fired while we waited, discard this result
-            if (seq !== requestSeqRef.current) {
-                console.log(`[SearchV3] #${seq} discarded (stale — current is #${requestSeqRef.current})`);
-                return null;
-            }
-
-            console.log(`[SearchV3] #${seq} Response status:`, res.status);
 
             if (!res.ok) {
-                throw new Error(`Erro ${res.status}: falha ao buscar editais`);
+                throw new Error(`Erro ${res.status}`);
             }
 
             const data = await res.json();
             const items = Array.isArray(data.items) ? data.items : [];
-            console.log(`[SearchV3] #${seq} ✅ Response:`, { total: data.total, itemsCount: items.length, source: data.source, elapsed: data.elapsed });
+            console.log(`[Search] ✅ ${items.length} items, total=${data.total}, ${data.elapsed}ms`);
 
             return {
                 items,
@@ -117,10 +110,9 @@ export function usePncpSearch() {
                 source: data.meta?.source || data.source || 'local-fts',
                 elapsedMs: data.meta?.elapsedMs || data.elapsed || 0,
             };
-        } catch (err: any) {
-            clearTimeout(timeout);
-            console.error(`[SearchV3] #${seq} ❌ Fetch error:`, err?.name, err?.message);
-            throw err;
+        } finally {
+            busyRef.current = false;
+            controllerRef.current = null;
         }
     }, []);
 
@@ -133,17 +125,11 @@ export function usePncpSearch() {
         const targetPage = (overrides?.resetPage || e) ? 1 : page;
         if (overrides?.resetPage || e) setPage(1);
 
-        // Increment request sequence — previous in-flight requests will be ignored
-        const seq = ++requestSeqRef.current;
-
         setHasSearched(true);
         setLoading(true);
         setSearchSlow(false);
         setSearchSource('');
         setSearchElapsed(0);
-        setResults([]);
-        setAllResults([]);
-        setTotalResults(0);
 
         const searchParams = {
             keywords: overrides?.keywords ?? keywords,
@@ -160,22 +146,12 @@ export function usePncpSearch() {
             excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
         };
 
-        // Store for pagination re-use
         lastSearchParamsRef.current = searchParams;
 
         const slowTimer = setTimeout(() => setSearchSlow(true), 5000);
 
         try {
-            console.log(`[SearchV3] handleSearch #${seq} → calling doSearchFetch...`);
-            const data = await doSearchFetch(searchParams, seq);
-
-            // Null means this request was superseded by a newer one
-            if (!data) {
-                console.log(`[SearchV3] #${seq} result discarded (newer search active)`);
-                return;
-            }
-
-            console.log(`[SearchV3] #${seq} → returned:`, { items: data.items.length, total: data.total });
+            const data = await fetchSearch(searchParams);
 
             if (data.items.length === 0 && data.total === 0) {
                 toast.info('Nenhum edital encontrado para esses filtros.');
@@ -186,21 +162,21 @@ export function usePncpSearch() {
             setResults(data.items);
             setAllResults(data.items);
             setTotalResults(data.total);
-            console.log(`[SearchV3] #${seq} ✅ State updated: results=`, data.items.length);
         } catch (e: any) {
             if (e.name === 'AbortError') {
-                console.warn(`[SearchV3] #${seq} ⚠️ Request timed out`);
-            } else {
-                console.error(`[SearchV3] #${seq} ❌ Error:`, e?.message);
-                toast.error(e?.message || 'Falha na busca. Verifique sua conexão e tente novamente.');
+                // Silently ignore — user started a new search
+                console.log('[Search] Previous request aborted (new search started)');
+                return; // Don't clear loading — the new search will handle it
             }
+            console.error('[Search] ❌', e?.message);
+            toast.error(e?.message || 'Falha na busca. Tente novamente.');
+            setResults([]);
+            setAllResults([]);
+            setTotalResults(0);
         } finally {
-            // Only clear loading if this is still the active request
-            if (seq === requestSeqRef.current) {
-                clearTimeout(slowTimer);
-                setLoading(false);
-                setSearchSlow(false);
-            }
+            clearTimeout(slowTimer);
+            setLoading(false);
+            setSearchSlow(false);
         }
     };
 
@@ -210,7 +186,6 @@ export function usePncpSearch() {
     const handlePageChange = async (newPage: number) => {
         if (!lastSearchParamsRef.current || loading) return;
 
-        const seq = ++requestSeqRef.current;
         setPage(newPage);
         setLoading(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -218,8 +193,7 @@ export function usePncpSearch() {
         const params = { ...lastSearchParamsRef.current, pagina: newPage };
 
         try {
-            const data = await doSearchFetch(params, seq);
-            if (!data) return; // Stale
+            const data = await fetchSearch(params);
             setResults(data.items);
             setAllResults(data.items);
             setTotalResults(data.total);
@@ -234,10 +208,11 @@ export function usePncpSearch() {
     };
 
     const clearSearch = () => {
-        if (searchControllerRef.current) {
-            searchControllerRef.current.abort();
-            searchControllerRef.current = null;
+        if (controllerRef.current) {
+            controllerRef.current.abort();
+            controllerRef.current = null;
         }
+        busyRef.current = false;
         lastSearchParamsRef.current = null;
         setKeywords(''); setStatus('recebendo_proposta'); setSelectedUf('');
         setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');

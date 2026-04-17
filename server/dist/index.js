@@ -295,6 +295,13 @@ const declarations_1 = __importDefault(require("./routes/declarations"));
 const governance_1 = __importDefault(require("./routes/governance"));
 app.use('/api', declarations_1.default); // declarations
 app.use('/api', governance_1.default); // ai governance + company + strategy
+// ── Stub endpoints to prevent 404s that hold browser HTTP connections ──
+// These endpoints are called by Dashboard, BiddingPage, and SSE hooks on mount.
+// Without stubs, they return 404 and keep TCP connections in pending/closing state,
+// saturating the browser's per-domain connection limit (6 for HTTP/1.1).
+app.get('/api/documents', auth_1.authenticateToken, (_req, res) => { res.json([]); });
+app.get('/api/jobs', auth_1.authenticateToken, (_req, res) => { res.json([]); });
+app.get('/api/admin/monitoring-audit', auth_1.authenticateToken, (_req, res) => { res.json({ recentAnalyses: [], errorRate: 0, avgLatency: 0 }); });
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/internal/scanner/reset-and-scan', async (req, res) => {
     const secret = req.headers['x-worker-secret'] || req.body?.workerSecret;
