@@ -23,12 +23,9 @@ interface Props {
 export function PncpPage({ companies, onRefresh, items = [], initialContext, onContextConsumed }: Props) {
     const p = usePncpPage({ companies, onRefresh, items, initialContext, onContextConsumed });
 
-    // Refresh data on mount to guarantee we have the latest items (e.g. after deletions in Kanban)
-    useEffect(() => {
-        if (onRefresh) {
-            onRefresh();
-        }
-    }, [onRefresh]);
+    // NOTE: Removed useEffect that called onRefresh() on mount.
+    // refreshData was not memoized, so it triggered fetchBiddings()+fetchCompanies()
+    // on EVERY re-render, creating a cascade of HTTP requests that saturated Chrome.
 
     const [tourOpen, setTourOpen] = useState(false);
     useEffect(() => {

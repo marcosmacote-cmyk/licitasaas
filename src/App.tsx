@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import {
   Briefcase,
   LayoutDashboard,
@@ -248,9 +248,9 @@ function App() {
     return () => { clearInterval(interval); clearInterval(unreadInterval); clearInterval(pncpUnreadInterval); };
   }, [user]);
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     await Promise.all([fetchCompanies(), fetchBiddings()]);
-  };
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
