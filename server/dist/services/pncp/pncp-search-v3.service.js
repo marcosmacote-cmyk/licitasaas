@@ -69,6 +69,10 @@ class PncpSearchV3 {
                     // Include NULL situacao (newly imported records)
                     conditions.push(`("situacao" = ANY($${paramIdx++}) OR "situacao" IS NULL)`);
                     params.push(mapped);
+                    // CRITICAL: Only show biddings with future deadlines.
+                    // The aggregator doesn't re-sync situacao after import,
+                    // so records stay "Divulgada" even after dataEncerramento passes.
+                    conditions.push(`("dataEncerramento" >= NOW() OR "dataEncerramento" IS NULL)`);
                 }
                 else {
                     conditions.push(`"situacao" = ANY($${paramIdx++})`);
