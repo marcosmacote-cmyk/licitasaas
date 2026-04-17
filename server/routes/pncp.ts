@@ -643,17 +643,141 @@ router.post('/search', authenticateToken, async (req: any, res) => {
     }
 });
 
-// Search endpoint used by frontend
+// Search endpoint used by frontend — Hybrid: Gov.br API primary, V3 local fallback
 router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
+    const start = Date.now();
+    const { keywords, status, uf, modalidade, esfera, pagina = 1, tamanhoPagina = 50,
+            dataInicio, dataFim, orgao, orgaosLista, excludeKeywords, valorMin, valorMax } = req.body;
+
+    // Determine if we can use the official API (it only supports recebendo_proposta without keywords/orgao filters)
+    const canUseOfficialApi = (status === 'recebendo_proposta' || !status || status === '')
+        && !orgao && !orgaosLista && !keywords && !excludeKeywords && !valorMin && !valorMax;
+
+    if (canUseOfficialApi) {
+        // ── PRIMARY: Gov.br consulta/v1/contratacoes/proposta ──
+        try {
+            const axios = (await import('axios')).default;
+            const https = (await import('https')).default;
+            const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 5 });
+
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dataFinalParam = dataFim ? dataFim.replace(/-/g, '') : tomorrow.toISOString().split('T')[0].replace(/-/g, '');
+            const dataInicialParam = dataInicio ? dataInicio.replace(/-/g, '') : '';
+            const pageSize = Math.min(Number(tamanhoPagina) || 50, 50);
+            const pageNum = Math.max(1, Number(pagina) || 1);
+            const modalidadeCode = modalidade && modalidade !== 'todas' ? modalidade : '';
+
+            let ufsForApi: string[] = [];
+            if (uf && uf.trim()) ufsForApi = uf.includes(',') ? uf.split(',').map((u: string) => u.trim()).filter(Boolean) : [uf.trim()];
+
+            const fetchPage = async (pg: number, singleUf?: string) => {
+                let url = `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=${dataFinalParam}&pagina=${pg}&tamanhoPagina=${pageSize}`;
+                if (dataInicialParam) url += `&dataInicial=${dataInicialParam}`;
+                if (singleUf) url += `&uf=${singleUf}`;
+                if (modalidadeCode) url += `&codigoModalidadeContratacao=${modalidadeCode}`;
+
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const resp = await axios.get(url, { httpsAgent: agent, timeout: 10000 } as any);
+                        const d = resp.data as any;
+                        return { data: Array.isArray(d?.data) ? d.data : [], totalPages: d?.totalPaginas || 1, totalItems: d?.totalRegistros || 0 };
+                    } catch (err: any) {
+                        if (attempt < 2 && (err?.response?.status >= 500 || err.code === 'ECONNABORTED')) {
+                            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                            continue;
+                        }
+                        throw err;
+                    }
+                }
+                return { data: [], totalPages: 0, totalItems: 0 };
+            };
+
+            let rawItems: any[] = [];
+            let totalRegistros = 0;
+            let totalPages = 0;
+
+            if (ufsForApi.length > 0) {
+                // Fetch the requested page for each UF
+                const results = await Promise.allSettled(ufsForApi.map(singleUf => fetchPage(pageNum, singleUf)));
+                for (const r of results) {
+                    if (r.status === 'fulfilled') {
+                        rawItems.push(...r.value.data);
+                        totalRegistros += r.value.totalItems;
+                        totalPages = Math.max(totalPages, r.value.totalPages);
+                    }
+                }
+            } else {
+                const result = await fetchPage(pageNum);
+                rawItems = result.data;
+                totalRegistros = result.totalItems;
+                totalPages = result.totalPages;
+            }
+
+            // Map to frontend format
+            const seenIds = new Set<string>();
+            const items = rawItems.filter(Boolean).map((item: any) => {
+                const org = item.orgaoEntidade || {};
+                const uni = item.unidadeOrgao || {};
+                const cnpj = org.cnpj || '';
+                const ano = String(item.anoCompra || '');
+                const nSeq = String(item.sequencialCompra || '');
+                const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : Math.random().toString());
+                if (seenIds.has(pncpId)) return null;
+                seenIds.add(pncpId);
+                return {
+                    id: pncpId,
+                    orgao_nome: org.razaoSocial || 'Órgão não informado',
+                    orgao_cnpj: cnpj, ano, numero_sequencial: nSeq,
+                    titulo: item.numeroCompra ? `Compra nº ${item.numeroCompra}/${ano}` : `${item.modalidadeNome || 'Licitação'} nº ${nSeq}/${ano}`,
+                    objeto: item.objetoCompra || 'Sem objeto',
+                    data_publicacao: item.dataPublicacaoPncp || item.dataInclusao || new Date().toISOString(),
+                    data_abertura: item.dataAberturaProposta || '',
+                    data_encerramento_proposta: item.dataEncerramentoProposta || '',
+                    valor_estimado: Number(item.valorTotalEstimado || item.valorTotalHomologado || 0),
+                    uf: uni.ufSigla || '', municipio: uni.nomeMunicipio || '',
+                    modalidade_nome: item.modalidadeNome || '',
+                    link_sistema: (cnpj && ano && nSeq) ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}` : (item.linkSistemaOrigem || ''),
+                    status: item.situacaoCompraNome || 'Aberta',
+                    esfera_id: org.esferaId || '', urgency: 'medium',
+                };
+            }).filter(Boolean);
+
+            // Apply esfera filter client-side (API doesn't support it)
+            let finalItems = items;
+            if (esfera && esfera !== 'todas') {
+                const esferaMap: Record<string, string[]> = { 'F': ['1'], 'E': ['2'], 'M': ['3'], 'D': ['4'] };
+                const allowedIds = esferaMap[esfera] || [esfera];
+                finalItems = items.filter((it: any) => allowedIds.includes(String(it.esfera_id)));
+            }
+
+            const elapsed = Date.now() - start;
+            logger.info(`[SEARCH-HYBRID] Gov.br API: ${finalItems.length} items (total=${totalRegistros}) in ${elapsed}ms | uf=${uf || '*'}`);
+
+            return res.json({
+                items: finalItems, total: totalRegistros,
+                totalLocal: 0, elapsed,
+                source: 'govbr-api',
+                meta: { source: 'govbr-api', elapsedMs: elapsed, localCount: totalRegistros, errors: [] },
+            });
+        } catch (apiError: any) {
+            logger.warn(`[SEARCH-HYBRID] Gov.br API failed, falling back to local: ${apiError?.message}`);
+            // Fall through to local V3
+        }
+    }
+
+    // ── FALLBACK / FILTERED SEARCH: Local V3 ──
     try {
         const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
         const result = await PncpSearchV3.search(req.body);
+        const elapsed = Date.now() - start;
+        logger.info(`[SEARCH-HYBRID] Local V3: ${result.total} items in ${elapsed}ms | uf=${uf || '*'}`);
 
         res.json({
             items: result.items, total: result.total,
-            totalLocal: result.total, elapsed: result.elapsed,
+            totalLocal: result.total, elapsed,
             source: result.source,
-            meta: { source: result.source, elapsedMs: result.elapsed, localCount: result.total, errors: [] },
+            meta: { source: result.source, elapsedMs: elapsed, localCount: result.total, errors: [] },
         });
     } catch (error: any) {
         handleApiError(res, error, 'pncp-search-hybrid');
