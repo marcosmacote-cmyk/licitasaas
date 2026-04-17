@@ -255,24 +255,9 @@ export class PncpSearchV3 {
 
             logger.info(`[SearchV3] Query: uf=${input.uf || '*'} status=${input.status || '*'} kw=${input.keywords || '-'} page=${page} | conditions=${conditions.length} params=${params.length}`);
 
-            // Execute sequentially with enforced timeout to prevent pool exhaustion
-            const withTimeout = <T>(promise: Promise<T>, label: string): Promise<T> => {
-                return Promise.race([
-                    promise,
-                    new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error(`[SearchV3] ${label} timeout after ${QUERY_TIMEOUT_MS}ms`)), QUERY_TIMEOUT_MS)
-                    ),
-                ]);
-            };
-
-            const countResult = await withTimeout(
-                prisma.$queryRawUnsafe(countSql, ...params.slice(0, countParamCount)),
-                'COUNT'
-            ) as any[];
-            const rows = await withTimeout(
-                prisma.$queryRawUnsafe(dataSql, ...params),
-                'SELECT'
-            ) as any[];
+            // Execute sequentially (1 connection at a time, no transaction)
+            const countResult = await prisma.$queryRawUnsafe(countSql, ...params.slice(0, countParamCount)) as any[];
+            const rows = await prisma.$queryRawUnsafe(dataSql, ...params) as any[];
 
             const total = Number(countResult[0]?.total) || 0;
             const elapsed = Date.now() - start;
