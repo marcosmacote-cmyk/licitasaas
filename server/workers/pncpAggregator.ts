@@ -85,7 +85,7 @@ function mapContratacao(item: any): any {
         unidadeNome: unidade.nomeUnidade || item.unidadeNome || null,
         uf: unidade.ufSigla || unidade.uf || item.uf || null,
         municipio: unidade.nomeMunicipio || unidade.municipio || item.municipio || null,
-        esfera: orgao.esferaId || item.esfera || null,
+        esfera: mapEsfera(orgao.esferaId || item.esfera),
         objeto: item.objetoCompra || item.objeto || null,
         modalidade: item.modalidadeNome || item.modalidade || null,
         modalidadeCodigo: item.modalidadeId?.toString() || item.modalidadeCodigo || null,
@@ -111,6 +111,15 @@ function mapSituacao(id: any): string {
         '7': 'Deserta', '8': 'Fracassada',
     };
     return map[String(id)] || String(id);
+}
+
+function mapEsfera(esferaId: any): string | null {
+    if (!esferaId) return null;
+    const map: Record<string, string> = {
+        '1': 'F', '2': 'E', '3': 'M', '4': 'D',
+        'F': 'F', 'E': 'E', 'M': 'M', 'D': 'D',
+    };
+    return map[String(esferaId)] || String(esferaId);
 }
 
 /**

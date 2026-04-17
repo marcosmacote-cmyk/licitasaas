@@ -182,6 +182,34 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                         </div>
 
                         <div>
+                            <label className="form-label">💰 Valor Mínimo (R$)</label>
+                            <input
+                                type="number"
+                                placeholder="Ex: 50000"
+                                value={p.valorMin}
+                                onChange={(e) => p.setValorMin(e.target.value)}
+                                className="form-select"
+                                min="0"
+                                step="1000"
+                                style={{ fontSize: '0.8125rem' }}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="form-label">💰 Valor Máximo (R$)</label>
+                            <input
+                                type="number"
+                                placeholder="Ex: 5000000"
+                                value={p.valorMax}
+                                onChange={(e) => p.setValorMax(e.target.value)}
+                                className="form-select"
+                                min="0"
+                                step="1000"
+                                style={{ fontSize: '0.8125rem' }}
+                            />
+                        </div>
+
+                        <div>
                             <label className="form-label">Vincular à Empresa</label>
                             <select value={p.selectedSearchCompanyId} onChange={(e) => p.setSelectedSearchCompanyId(e.target.value)} className="form-select">
                                 <option value="">(Nenhuma empresa)</option>

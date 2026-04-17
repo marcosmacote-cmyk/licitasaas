@@ -157,7 +157,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     const loadSavedSearch = (s: PncpSavedSearch) => {
         const searchKeywords = s.keywords || '';
         const searchStatus = s.status || 'recebendo_proposta';
-        let customState = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '' };
+        let customState = { uf: '', modalidade: 'todas', esfera: 'todas', orgao: '', orgaosLista: '', excludeKeywords: '', dataInicio: '', dataFim: '', valorMin: '', valorMax: '' };
         try {
             const parsedStates = JSON.parse(s.states || '{}');
             if (Array.isArray(parsedStates)) { customState.uf = parsedStates[0] || ''; }
@@ -170,6 +170,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         search.setEsfera(customState.esfera); search.setOrgao(customState.orgao);
         search.setOrgaosLista(customState.orgaosLista); search.setExcludeKeywords(customState.excludeKeywords);
         search.setDataInicio(customState.dataInicio); search.setDataFim(customState.dataFim);
+        search.setValorMin(customState.valorMin || ''); search.setValorMax(customState.valorMax || '');
         search.setPage(1);
         setActiveTab('search');
 
@@ -179,6 +180,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             orgao: customState.orgao, orgaosLista: customState.orgaosLista,
             excludeKeywords: customState.excludeKeywords,
             dataInicio: customState.dataInicio, dataFim: customState.dataFim,
+            valorMin: customState.valorMin, valorMax: customState.valorMax,
             resetPage: true
         });
     };
@@ -192,6 +194,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
             esfera: search.esfera, orgao: search.orgao,
             orgaosLista: search.orgaosLista, excludeKeywords: search.excludeKeywords,
             dataInicio: search.dataInicio, dataFim: search.dataFim,
+            valorMin: search.valorMin, valorMax: search.valorMax,
         });
     };
 
@@ -633,6 +636,8 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         excludeKeywords: search.excludeKeywords, setExcludeKeywords: search.setExcludeKeywords,
         dataInicio: search.dataInicio, setDataInicio: search.setDataInicio,
         dataFim: search.dataFim, setDataFim: search.setDataFim,
+        valorMin: search.valorMin, setValorMin: search.setValorMin,
+        valorMax: search.valorMax, setValorMax: search.setValorMax,
         page: search.page, setPage: search.setPage,
         totalResults: search.totalResults, hasSearched: search.hasSearched,
         // Modal state

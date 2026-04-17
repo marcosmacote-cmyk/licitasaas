@@ -40,9 +40,9 @@ export function usePncpSavedSearches({ setConfirmAction }: UsePncpSavedSearchesP
         return ['Pesquisas Gerais', ...rest];
     }, [savedSearches]);
 
-    // Filtered by active list: "Pesquisas Gerais" → show ALL
+    // Filtered by active list: null → show ALL, specific list → filter
     const filteredSavedSearches = useMemo(() => {
-        if (!activeSearchListName || activeSearchListName === 'Pesquisas Gerais') return savedSearches;
+        if (!activeSearchListName) return savedSearches;
         return savedSearches.filter(s => (s.listName || 'Pesquisas Gerais') === activeSearchListName);
     }, [savedSearches, activeSearchListName]);
 
@@ -53,6 +53,7 @@ export function usePncpSavedSearches({ setConfirmAction }: UsePncpSavedSearchesP
             selectedUf: string; modalidade: string; esfera: string;
             orgao: string; orgaosLista: string; excludeKeywords: string;
             dataInicio: string; dataFim: string;
+            valorMin: string; valorMax: string;
         }
     ) => {
         const effectiveListName = listName || 'Pesquisas Gerais';
@@ -74,6 +75,7 @@ export function usePncpSavedSearches({ setConfirmAction }: UsePncpSavedSearchesP
                         esfera: searchState.esfera, orgao: searchState.orgao,
                         orgaosLista: searchState.orgaosLista, excludeKeywords: searchState.excludeKeywords,
                         dataInicio: searchState.dataInicio, dataFim: searchState.dataFim,
+                        valorMin: searchState.valorMin, valorMax: searchState.valorMax,
                     })
                 })
             });

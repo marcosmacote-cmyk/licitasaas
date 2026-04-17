@@ -25,6 +25,8 @@ interface SearchOverrides {
     orgao?: string;
     orgaosLista?: string;
     excludeKeywords?: string;
+    valorMin?: string;
+    valorMax?: string;
     resetPage?: boolean;
 }
 
@@ -53,6 +55,8 @@ export function usePncpSearch() {
     const [excludeKeywords, setExcludeKeywords] = useState('');
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
+    const [valorMin, setValorMin] = useState('');
+    const [valorMax, setValorMax] = useState('');
     const [page, setPage] = useState(1);
     const [totalResults, setTotalResults] = useState(0);
     const [hasSearched, setHasSearched] = useState(false);
@@ -89,9 +93,9 @@ export function usePncpSearch() {
 
         try {
             const token = localStorage.getItem('token');
-            console.log(`[Search] → POST /api/pncp/search-hybrid`, { uf: params.uf, status: params.status, page: params.pagina });
+            console.log(`[Search] → POST /api/pncp/search`, { uf: params.uf, status: params.status, page: params.pagina });
 
-            const res = await fetch(`${API_BASE_URL}/api/pncp/search-hybrid`, {
+            const res = await fetch(`${API_BASE_URL}/api/pncp/search`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 signal: controller.signal,
@@ -149,6 +153,8 @@ export function usePncpSearch() {
             orgao: overrides?.orgao ?? orgao,
             orgaosLista: overrides?.orgaosLista ?? orgaosLista,
             excludeKeywords: overrides?.excludeKeywords ?? excludeKeywords,
+            valorMin: (overrides?.valorMin ?? valorMin) ? Number(overrides?.valorMin ?? valorMin) : undefined,
+            valorMax: (overrides?.valorMax ?? valorMax) ? Number(overrides?.valorMax ?? valorMax) : undefined,
         };
 
         lastSearchParamsRef.current = searchParams;
@@ -235,6 +241,7 @@ export function usePncpSearch() {
         setKeywords(''); setStatus('recebendo_proposta'); setSelectedUf('');
         setSelectedSearchCompanyId(''); setModalidade('todas'); setEsfera('todas');
         setOrgao(''); setOrgaosLista(''); setExcludeKeywords(''); setDataInicio(''); setDataFim('');
+        setValorMin(''); setValorMax('');
         setAllResults([]); setResults([]); setTotalResults(0); setPage(1);
         setLoading(false);
         setSearchSlow(false);
@@ -243,7 +250,8 @@ export function usePncpSearch() {
     const activeFilterCount = [
         modalidade !== 'todas', esfera !== 'todas', orgao !== '',
         orgaosLista.trim() !== '', excludeKeywords.trim() !== '',
-        dataInicio !== '', dataFim !== '', selectedSearchCompanyId !== ''
+        dataInicio !== '', dataFim !== '', selectedSearchCompanyId !== '',
+        valorMin !== '', valorMax !== ''
     ].filter(Boolean).length;
 
     return {
@@ -255,6 +263,7 @@ export function usePncpSearch() {
         modalidade, setModalidade, esfera, setEsfera, orgao, setOrgao,
         orgaosLista, setOrgaosLista, excludeKeywords, setExcludeKeywords,
         dataInicio, setDataInicio, dataFim, setDataFim,
+        valorMin, setValorMin, valorMax, setValorMax,
         page, setPage, totalResults, hasSearched,
         showAdvancedFilters, setShowAdvancedFilters,
         activeFilterCount,

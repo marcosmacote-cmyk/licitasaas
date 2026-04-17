@@ -565,7 +565,7 @@ router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
         // Limit to 10 concurrent prefetches to avoid overwhelming Gov.br
         const toFetch = processes.slice(0, 10).filter((p: any) => {
             if (!p.cnpj || !p.ano || !p.seq) return false;
-            const key = `${String(p.cnpj).replace(/\\D/g, '')}-${String(p.ano).replace(/\\D/g, '')}-${String(p.seq).replace(/\\D/g, '')}`;
+            const key = `${String(p.cnpj).replace(/\D/g, '')}-${String(p.ano).replace(/\D/g, '')}-${String(p.seq).replace(/\D/g, '')}`;
             const cached = pncpItemsCache.get(key);
             return !cached || (Date.now() - cached.timestamp) > PNCP_ITEMS_CACHE_TTL;
         });
@@ -583,9 +583,9 @@ router.post('/items/prefetch', authenticateToken, async (req: any, res) => {
             try {
                 // Warm cache in background with 500ms stagger between calls
                 for (const proc of toFetch) {
-                    const cleanCnpj = String(proc.cnpj).replace(/\\D/g, '');
-                    const cleanAno = String(proc.ano).replace(/\\D/g, '');
-                    const cleanSeq = String(proc.seq).replace(/\\D/g, '');
+                    const cleanCnpj = String(proc.cnpj).replace(/\D/g, '');
+                    const cleanAno = String(proc.ano).replace(/\D/g, '');
+                    const cleanSeq = String(proc.seq).replace(/\D/g, '');
                     
                     try {
                         // @ts-ignore
@@ -650,39 +650,6 @@ router.post('/search', authenticateToken, async (req: any, res) => {
         logger.error(`[SEARCH] !!! ERROR in ${elapsed}ms: ${error?.message || error}`);
         handleApiError(res, error, 'pncp-search');
     }
-});
-
-// Legacy aliases (backward compat — redirect to unified search)
-router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
-    // Forward to the main search handler
-    const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
-    try {
-        const result = await PncpSearchV3.search(req.body);
-        res.json({
-            items: result.items, total: result.total,
-            totalLocal: result.total, elapsed: result.elapsed,
-            source: result.source,
-            meta: { source: result.source, elapsedMs: result.elapsed, localCount: result.total, errors: [] },
-        });
-    } catch (error: any) {
-        handleApiError(res, error, 'pncp-search-hybrid');
-    }
-});
-
-router.post('/search-local', authenticateToken, async (req: any, res) => {
-    const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
-    try {
-        const result = await PncpSearchV3.search(req.body);
-        res.json({
-            items: result.items, total: result.total,
-            totalLocal: result.total, elapsed: result.elapsed,
-            source: result.source,
-            meta: { source: result.source, elapsedMs: result.elapsed, localCount: result.total, errors: [] },
-        });
-    } catch (error: any) {
-        handleApiError(res, error, 'pncp-search-local');
-    }
-});
 
 // ══════════════════════════════════════════
 // ── Sync Health (estado do Aggregator) ──

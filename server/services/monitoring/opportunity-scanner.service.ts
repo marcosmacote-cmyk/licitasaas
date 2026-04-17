@@ -53,20 +53,21 @@ interface SearchScanResult {
 }
 
 /**
- * Executa uma busca PNCP utilizando o novo PncpSearchService unificado.
- * Isso garante que o robô obtenha EXATAMENTE os mesmos resultados
- * da tela de Busca, eliminando discrepâncias.
+ * Executa uma busca PNCP utilizando o PncpSearchV3 (SQL raw).
+ * Garante que o robô obtenha EXATAMENTE os mesmos resultados
+ * da tela de Busca, eliminando discrepâncias (V1 → V3 migration).
  */
 async function executePncpSearch(search: {
     keywords: string | null;
     status: string | null;
     states: string | null;
 }): Promise<PncpSearchResult[]> {
-    const { PncpSearchService } = await import('../pncp/pncp-search.service');
+    const { PncpSearchV3 } = await import('../pncp/pncp-search-v3.service');
     
     let ufs = '';
     let modalidade = ''; let esfera = ''; let orgao = ''; let orgaosLista = ''; let excludeKeywords = '';
     let dataInicio = ''; let dataFim = '';
+    let valorMin: number | undefined; let valorMax: number | undefined;
 
     if (search.states) {
         try {
@@ -81,6 +82,8 @@ async function executePncpSearch(search: {
                 excludeKeywords = parsed.excludeKeywords || '';
                 dataInicio = parsed.dataInicio || '';
                 dataFim = parsed.dataFim || '';
+                if (parsed.valorMin) valorMin = Number(parsed.valorMin);
+                if (parsed.valorMax) valorMax = Number(parsed.valorMax);
             } else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed;
         } catch {
             ufs = search.states;
@@ -91,14 +94,14 @@ async function executePncpSearch(search: {
         keywords: search.keywords || '',
         status: search.status || 'recebendo_proposta',
         uf: ufs, modalidade, esfera, orgao, orgaosLista, excludeKeywords,
-        dataInicio, dataFim,
+        dataInicio, dataFim, valorMin, valorMax,
         pagina: 1,
         // Carga máxima permitida por varredura
         tamanhoPagina: 150 
     };
 
-    // A mágica agora mora no Service. O robô sempre usará a base unificada.
-    const result = await PncpSearchService.search(input);
+    // V3 (SQL raw) — mesmo motor usado pela busca do frontend
+    const result = await PncpSearchV3.search(input);
 
     return result.items.map((c: any) => ({
         id: c.id,
