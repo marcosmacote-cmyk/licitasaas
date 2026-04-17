@@ -649,104 +649,121 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     const { keywords, status, uf, modalidade, esfera, pagina = 1, tamanhoPagina = 50,
             dataInicio, dataFim, orgao, orgaosLista, excludeKeywords, valorMin, valorMax } = req.body;
 
-    // Determine if we can use the official API (it only supports recebendo_proposta without keywords/orgao filters)
-    const canUseOfficialApi = (status === 'recebendo_proposta' || !status || status === '')
-        && !orgao && !orgaosLista && !keywords && !excludeKeywords && !valorMin && !valorMax;
+    // Determine if we can use the official API
+    // The Elasticsearch API supports q (keywords/orgao), status, uf, modalidade. 
+    // It does not support valorMin/valorMax natively.
+    const canUseOfficialApi = !valorMin && !valorMax && !excludeKeywords;
 
     if (canUseOfficialApi) {
-        // ── PRIMARY: Gov.br consulta/v1/contratacoes/proposta ──
+        // ── PRIMARY: Gov.br Elasticsearch API (/api/search/) ──
         try {
             const axios = (await import('axios')).default;
             const https = (await import('https')).default;
             const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 5 });
 
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const dataFinalParam = dataFim ? dataFim.replace(/-/g, '') : tomorrow.toISOString().split('T')[0].replace(/-/g, '');
-            const dataInicialParam = dataInicio ? dataInicio.replace(/-/g, '') : '';
-            const pageSize = Math.min(Number(tamanhoPagina) || 50, 50);
+            const pageSize = Math.min(Number(tamanhoPagina) || 50, 100);
             const pageNum = Math.max(1, Number(pagina) || 1);
-            const modalidadeCode = modalidade && modalidade !== 'todas' ? modalidade : '';
+            
+            let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${pageSize}&pagina=${pageNum}`;
+            
+            // Map status
+            if (status) {
+                const STATUS_TO_GOVBR: Record<string, string> = {
+                    'recebendo_proposta': 'recebendo_proposta',
+                    'encerrada': 'encerradas',
+                    'suspensa': 'suspensas',
+                    'anulada': 'anuladas',
+                    'revogada': 'anuladas'
+                };
+                const govStatus = STATUS_TO_GOVBR[status] || status;
+                if (govStatus !== 'todas') url += `&status=${govStatus}`;
+            }
 
-            let ufsForApi: string[] = [];
-            if (uf && uf.trim()) ufsForApi = uf.includes(',') ? uf.split(',').map((u: string) => u.trim()).filter(Boolean) : [uf.trim()];
+            // Map keywords and orgao into the 'q' parameter
+            let qTerms: string[] = [];
+            if (keywords) qTerms.push(...keywords.split(',').map((k: string) => k.trim()).filter(Boolean));
+            if (orgao) qTerms.push(orgao.trim());
+            if (orgaosLista) qTerms.push(...orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean));
+            
+            if (qTerms.length > 0) {
+                url += `&q=${encodeURIComponent(qTerms.join(' '))}`;
+            }
 
-            const fetchPage = async (pg: number, singleUf?: string) => {
-                let url = `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=${dataFinalParam}&pagina=${pg}&tamanhoPagina=${pageSize}`;
-                if (dataInicialParam) url += `&dataInicial=${dataInicialParam}`;
-                if (singleUf) url += `&uf=${singleUf}`;
-                if (modalidadeCode) url += `&codigoModalidadeContratacao=${modalidadeCode}`;
+            if (uf && uf.trim() !== 'todas') {
+                url += `&ufs=${uf.replace(/\s/g, '')}`;
+            }
 
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        const resp = await axios.get(url, { httpsAgent: agent, timeout: 10000 } as any);
-                        const d = resp.data as any;
-                        return { data: Array.isArray(d?.data) ? d.data : [], totalPages: d?.totalPaginas || 1, totalItems: d?.totalRegistros || 0 };
-                    } catch (err: any) {
-                        if (attempt < 2 && (err?.response?.status >= 500 || err.code === 'ECONNABORTED')) {
-                            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
-                            continue;
-                        }
-                        throw err;
-                    }
-                }
-                return { data: [], totalPages: 0, totalItems: 0 };
-            };
+            if (modalidade && modalidade !== 'todas') {
+                url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
+            }
+            
+            if (dataInicio) url += `&data_inicio=${dataInicio.replace(/-/g, '')}`;
+            if (dataFim) url += `&data_fim=${dataFim.replace(/-/g, '')}`;
 
+            // Fetch from API with retry
             let rawItems: any[] = [];
             let totalRegistros = 0;
-            let totalPages = 0;
 
-            if (ufsForApi.length > 0) {
-                // Fetch the requested page for each UF
-                const results = await Promise.allSettled(ufsForApi.map(singleUf => fetchPage(pageNum, singleUf)));
-                for (const r of results) {
-                    if (r.status === 'fulfilled') {
-                        rawItems.push(...r.value.data);
-                        totalRegistros += r.value.totalItems;
-                        totalPages = Math.max(totalPages, r.value.totalPages);
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const resp = await axios.get(url, { httpsAgent: agent, timeout: 15000 } as any);
+                    const d = resp.data as any;
+                    rawItems = Array.isArray(d?.items) ? d.items : [];
+                    totalRegistros = d?.total || d?.totalRegistros || 0;
+                    break;
+                } catch (err: any) {
+                    if (attempt < 2 && (err?.response?.status >= 500 || err.code === 'ECONNABORTED' || err.message.includes('timeout'))) {
+                        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                        continue;
                     }
+                    throw err;
                 }
-            } else {
-                const result = await fetchPage(pageNum);
-                rawItems = result.data;
-                totalRegistros = result.totalItems;
-                totalPages = result.totalPages;
             }
 
             // Map to frontend format
             const seenIds = new Set<string>();
             const items = rawItems.filter(Boolean).map((item: any) => {
-                const org = item.orgaoEntidade || {};
-                const uni = item.unidadeOrgao || {};
-                const cnpj = org.cnpj || '';
-                const ano = String(item.anoCompra || '');
-                const nSeq = String(item.sequencialCompra || '');
-                const pncpId = item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : Math.random().toString());
+                let cnpj = item.orgao_cnpj || item.orgaoEntidade?.cnpj || item.cnpj || '';
+                let ano = item.ano || item.anoCompra || '';
+                let nSeq = item.numero_sequencial || item.sequencialCompra || item.numero_compra || '';
+                
+                if (item.numero_controle_pncp && (!cnpj || !ano || !nSeq)) {
+                    const ctrlMatch = item.numero_controle_pncp.match(/^(\d{11,14})-(\d+)-(\d+)\/(\d{4})$/);
+                    if (ctrlMatch) { if (!cnpj) cnpj = ctrlMatch[1]; if (!nSeq) nSeq = ctrlMatch[3]; if (!ano) ano = ctrlMatch[4]; }
+                }
+                
+                const rawVal = item.valor_estimado ?? item.valor_global ?? item.valorTotalEstimado ?? item.valorTotalHomologado ?? item.valorEstimado ?? 0;
+                const pncpId = item.numero_controle_pncp || item.numeroControlePNCP || (cnpj && ano && nSeq ? `${cnpj}-${ano}-${nSeq}` : null) || item.id || Math.random().toString();
+                
                 if (seenIds.has(pncpId)) return null;
                 seenIds.add(pncpId);
+
                 return {
                     id: pncpId,
-                    orgao_nome: org.razaoSocial || 'Órgão não informado',
-                    orgao_cnpj: cnpj, ano, numero_sequencial: nSeq,
-                    titulo: item.numeroCompra ? `Compra nº ${item.numeroCompra}/${ano}` : `${item.modalidadeNome || 'Licitação'} nº ${nSeq}/${ano}`,
-                    objeto: item.objetoCompra || 'Sem objeto',
-                    data_publicacao: item.dataPublicacaoPncp || item.dataInclusao || new Date().toISOString(),
-                    data_abertura: item.dataAberturaProposta || '',
-                    data_encerramento_proposta: item.dataEncerramentoProposta || '',
-                    valor_estimado: Number(item.valorTotalEstimado || item.valorTotalHomologado || 0),
-                    uf: uni.ufSigla || '', municipio: uni.nomeMunicipio || '',
-                    modalidade_nome: item.modalidadeNome || '',
-                    link_sistema: (cnpj && ano && nSeq) ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}` : (item.linkSistemaOrigem || ''),
-                    status: item.situacaoCompraNome || 'Aberta',
-                    esfera_id: org.esferaId || '', urgency: 'medium',
+                    orgao_nome: item.orgao_nome || item.orgaoEntidade?.razaoSocial || item.nomeOrgao || 'Órgão não informado',
+                    orgao_cnpj: cnpj, 
+                    ano, 
+                    numero_sequencial: nSeq,
+                    titulo: item.title || item.titulo || item.identificador || 'Sem título',
+                    objeto: item.description || item.objetoCompra || item.objeto || item.resumo || 'Sem objeto',
+                    data_publicacao: item.createdAt || item.dataPublicacaoPncp || item.data_publicacao || new Date().toISOString(),
+                    data_abertura: item.dataAberturaProposta || item.data_inicio_vigencia || item.data_abertura || '',
+                    data_encerramento_proposta: item.dataEncerramentoProposta || item.data_fim_vigencia || '',
+                    valor_estimado: Number(rawVal) || 0,
+                    uf: item.uf || item.unidadeOrgao?.ufSigla || item.ufSigla || item.ufNome || '',
+                    municipio: item.municipio_nome || item.unidadeOrgao?.municipioNome || item.municipio || '',
+                    modalidade_nome: item.modalidade_licitacao_nome || item.modalidade_nome || item.modalidadeNome || '',
+                    link_sistema: (cnpj && ano && nSeq) ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}` : (item.linkSistemaOrigem || item.link || ''),
+                    status: item.situacao_nome || item.situacaoCompraNome || item.status || status || '',
+                    esfera_id: item.esfera_id || item.esferaId || item.orgaoEntidade?.esferaId || '',
+                    urgency: 'medium',
                 };
             }).filter(Boolean);
 
-            // Apply esfera filter client-side (API doesn't support it)
+            // Apply esfera filter client-side (API doesn't support it reliably via URL)
             let finalItems = items;
             if (esfera && esfera !== 'todas') {
-                const esferaMap: Record<string, string[]> = { 'F': ['1'], 'E': ['2'], 'M': ['3'], 'D': ['4'] };
+                const esferaMap: Record<string, string[]> = { 'F': ['1', 'F'], 'E': ['2', 'E'], 'M': ['3', 'M'], 'D': ['4', 'D'] };
                 const allowedIds = esferaMap[esfera] || [esfera];
                 finalItems = items.filter((it: any) => allowedIds.includes(String(it.esfera_id)));
             }
