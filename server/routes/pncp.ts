@@ -619,18 +619,9 @@ router.post('/search', authenticateToken, async (req: any, res) => {
     const reqStart = Date.now();
     logger.info(`[SEARCH] >>> REQUEST from user=${req.user?.id?.slice(0, 8)} | uf=${req.body?.uf} | status=${req.body?.status} | keywords=${req.body?.keywords || 'none'} | page=${req.body?.pagina || 1}`);
 
-    // Cancel query if client disconnects (prevents pool exhaustion)
-    let cancelled = false;
-    req.on('close', () => { cancelled = true; });
-
     try {
         const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
         const result = await PncpSearchV3.search(req.body);
-
-        if (cancelled) {
-            logger.info(`[SEARCH] <<< CLIENT DISCONNECTED, discarding ${result.total} results`);
-            return;
-        }
 
         const elapsed = Date.now() - reqStart;
         logger.info(`[SEARCH] <<< RESPONSE ${result.total} items (page ${result.page}/${result.totalPages}) in ${elapsed}ms | uf=${req.body?.uf}`);
@@ -652,16 +643,11 @@ router.post('/search', authenticateToken, async (req: any, res) => {
     }
 });
 
-// Alias with cancel guard — used by frontend
+// Search endpoint used by frontend
 router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
-    let cancelled = false;
-    req.on('close', () => { cancelled = true; });
-
     try {
         const { PncpSearchV3 } = await import('../services/pncp/pncp-search-v3.service');
         const result = await PncpSearchV3.search(req.body);
-
-        if (cancelled) return;
 
         res.json({
             items: result.items, total: result.total,
