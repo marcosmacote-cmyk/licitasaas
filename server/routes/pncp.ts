@@ -772,7 +772,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
             if (itemsToHydrate.length > 0) {
                 try {
-                    const prisma = (await import('../../lib/prisma')).default;
+                    const prisma = (await import('../lib/prisma')).default;
                     const ids = itemsToHydrate.map((it: any) => it.id);
                     
                     // 1. Check local DB first (fastest)
@@ -780,7 +780,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                         where: { numeroControle: { in: ids } },
                         select: { numeroControle: true, valorEstimado: true }
                     });
-                    const valMap = new Map(localData.map(d => [d.numeroControle, d.valorEstimado]));
+                    const valMap = new Map(localData.map((d: any) => [d.numeroControle, d.valorEstimado]));
                     
                     let stillMissing: any[] = [];
                     itemsToHydrate.forEach((it: any) => {
