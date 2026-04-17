@@ -71,33 +71,33 @@ async function fetchWithRetry(url: string, retries = 3, delayMs = 2000): Promise
 function mapContratacao(item: any): any {
     const orgao = item.orgaoEntidade || {};
     const unidade = item.unidadeOrgao || {};
-    const cnpj = orgao.cnpj || item.cnpjOrgao || '';
+    const cnpj = orgao.cnpj || item.cnpjOrgao || item.orgao_cnpj || '';
     const ano = item.anoCompra || item.ano || 0;
     const seq = item.sequencialCompra || item.numeroSequencial || item.numero_sequencial || 0;
-    const numeroControle = item.numeroControlePNCP || `${cnpj}-1-${seq}/${ano}`;
+    const numeroControle = item.numeroControlePNCP || item.numero_controle_pncp || `${cnpj}-1-${seq}/${ano}`;
 
     return {
         numeroControle,
         cnpjOrgao: cnpj,
         anoCompra: Number(ano),
         sequencialCompra: Number(seq),
-        orgaoNome: orgao.razaoSocial || item.orgaoNome || null,
-        unidadeNome: unidade.nomeUnidade || item.unidadeNome || null,
+        orgaoNome: orgao.razaoSocial || item.orgaoNome || item.orgao_nome || null,
+        unidadeNome: unidade.nomeUnidade || item.unidadeNome || item.unidade_nome || null,
         uf: unidade.ufSigla || unidade.uf || item.uf || null,
-        municipio: unidade.nomeMunicipio || unidade.municipio || item.municipio || null,
-        esfera: mapEsfera(orgao.esferaId || item.esfera),
-        objeto: item.objetoCompra || item.objeto || null,
-        modalidade: item.modalidadeNome || item.modalidade || null,
-        modalidadeCodigo: item.modalidadeId?.toString() || item.modalidadeCodigo || null,
-        situacao: item.situacaoCompraId ? mapSituacao(item.situacaoCompraId) : (item.situacao || null),
-        valorEstimado: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+        municipio: unidade.nomeMunicipio || unidade.municipio || item.municipio || item.municipio_nome || null,
+        esfera: mapEsfera(orgao.esferaId || item.esfera || item.esfera_id),
+        objeto: item.objetoCompra || item.objeto || item.description || null,
+        modalidade: item.modalidadeNome || item.modalidade || item.modalidade_licitacao_nome || null,
+        modalidadeCodigo: item.modalidadeId?.toString() || item.modalidadeCodigo || item.modalidade_licitacao_id || null,
+        situacao: item.situacaoCompraId ? mapSituacao(item.situacaoCompraId) : (item.situacao || item.situacao_nome || null),
+        valorEstimado: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : (item.valor_global ? Number(item.valor_global) : null),
         valorHomologado: item.valorTotalHomologado ? Number(item.valorTotalHomologado) : null,
         srp: item.srp === true || item.srp === 'Sim',
         modoDisputa: item.modoDisputaNome || item.modoDisputa || null,
         numeroCompra: item.numeroCompra || null,
-        dataPublicacao: item.dataPublicacaoPncp ? new Date(item.dataPublicacaoPncp) : null,
-        dataAbertura: item.dataAberturaProposta ? new Date(item.dataAberturaProposta) : null,
-        dataEncerramento: item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta) : null,
+        dataPublicacao: item.dataPublicacaoPncp ? new Date(item.dataPublicacaoPncp) : (item.data_publicacao_pncp ? new Date(item.data_publicacao_pncp) : (item.createdAt ? new Date(item.createdAt) : null)),
+        dataAbertura: item.dataAberturaProposta ? new Date(item.dataAberturaProposta) : (item.data_inicio_vigencia ? new Date(item.data_inicio_vigencia) : null),
+        dataEncerramento: item.dataEncerramentoProposta ? new Date(item.dataEncerramentoProposta) : (item.data_fim_vigencia ? new Date(item.data_fim_vigencia) : null),
         dataInclusao: item.dataInclusao ? new Date(item.dataInclusao) : null,
         linkSistema: item.linkSistemaOrigem || null,
         linkOrigem: numeroControle ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}` : null,
@@ -170,23 +170,23 @@ async function syncIncremental(): Promise<number> {
 
         log('INFO', `Sync incremental via /contratacoes/proposta (dataFinal=${dataFinal})`);
 
-        // Fetch per UF for better coverage (same strategy as working search)
+        // Fetch per UF for better coverage using Elasticsearch API
         for (const uf of BRAZILIAN_UFS) {
             try {
-                const url = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataFinal}&uf=${uf}&pagina=1&tamanhoPagina=50`;
+                const url = `${PNCP_SEARCH}/?tipos_documento=edital&ordenacao=-data&status=recebendo_proposta&ufs=${uf}&pagina=1&tam_pagina=100`;
                 const data = await fetchWithRetry(url, 2, 2000);
-                const items = data?.data || [];
+                const items = data?.items || [];
                 
                 if (items.length === 0) continue;
 
-                // Fetch additional pages (up to 5 pages per UF = 250 items)
+                // Fetch additional pages (up to 5 pages per UF = 500 items max per UF)
                 let allItems = [...items];
-                const totalPages = Math.min(data?.totalPaginas || 1, 20);
+                const totalPages = Math.min(data?.totalPaginas || (data?.total ? Math.ceil(data.total/100) : 1), 5);
                 for (let p = 2; p <= totalPages; p++) {
                     try {
-                        const pageUrl = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataFinal}&uf=${uf}&pagina=${p}&tamanhoPagina=50`;
+                        const pageUrl = `${PNCP_SEARCH}/?tipos_documento=edital&ordenacao=-data&status=recebendo_proposta&ufs=${uf}&pagina=${p}&tam_pagina=100`;
                         const pageData = await fetchWithRetry(pageUrl, 1, 2000);
-                        if (pageData?.data?.length > 0) allItems.push(...pageData.data);
+                        if (pageData?.items?.length > 0) allItems.push(...pageData.items);
                     } catch { break; }
                     await new Promise(r => setTimeout(r, 300));
                 }
