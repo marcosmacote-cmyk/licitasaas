@@ -48,7 +48,7 @@ export interface SearchResult {
 
 const MAX_PAGE_SIZE = 50;
 const DEFAULT_PAGE_SIZE = 50;
-const QUERY_TIMEOUT_MS = 5000;
+const QUERY_TIMEOUT_MS = 30000;
 
 const MODALIDADE_MAP: Record<string, string> = {
     '1': 'Pregão', '2': 'Concorrência', '3': 'Concurso',
