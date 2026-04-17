@@ -193,7 +193,7 @@ export class PncpSearchV3 {
             }
         }
 
-        // ── Keywords (Unaccent + ILIKE for partial matching) ──
+        // ── Keywords (ILIKE for partial matching) ──
         if (input.keywords && input.keywords.trim()) {
             // Split by comma to support multiple keywords like "Gêneros, Escola"
             const kws = input.keywords.split(',').map(k => k.trim()).filter(Boolean);
@@ -201,7 +201,7 @@ export class PncpSearchV3 {
             if (kws.length > 0) {
                 const kwConditions: string[] = [];
                 for (const kw of kws) {
-                    kwConditions.push(`unaccent("objeto") ILIKE unaccent($${paramIdx++})`);
+                    kwConditions.push(`"objeto" ILIKE $${paramIdx++}`);
                     params.push(`%${kw}%`);
                 }
                 // Use OR if they separated by comma
