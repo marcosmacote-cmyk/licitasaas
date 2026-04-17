@@ -17,11 +17,29 @@ const errorHandler_1 = require("../middlewares/errorHandler");
 const biddingHelpers_1 = require("../lib/biddingHelpers");
 const router = express_1.default.Router();
 // ── GET /biddings — List all biddings for tenant ──
+// NOTE: Previously used `include: { aiAnalysis: true }` which returned 7+ MB
+// of JSON, causing Chrome HTTP/2 ERR_HTTP2_PROTOCOL_ERROR. Now we select
+// only the fields the frontend actually needs from aiAnalysis.
 router.get('/', auth_1.authenticateToken, async (req, res) => {
     try {
         const biddings = await prisma_1.default.biddingProcess.findMany({
             where: { tenantId: req.user.tenantId },
-            include: { aiAnalysis: true }
+            include: {
+                aiAnalysis: {
+                    select: {
+                        id: true,
+                        biddingProcessId: true,
+                        risk: true,
+                        riskScore: true,
+                        summary: true,
+                        recommendation: true,
+                        hasEdital: true,
+                        analysisDate: true,
+                        modelUsed: true,
+                        // Exclude heavy fields: schemaV2, rawResponse, fullText
+                    }
+                }
+            }
         });
         res.json(biddings);
     }
