@@ -652,7 +652,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
     // Determine if we can use the official API
     // The Elasticsearch API supports q (keywords/orgao), status, uf, modalidade. 
     // It does not support valorMin/valorMax natively.
-    const canUseOfficialApi = !valorMin && !valorMax && !excludeKeywords;
+    const canUseOfficialApi = !valorMin && !valorMax;
 
     if (canUseOfficialApi) {
         // ── PRIMARY: Gov.br Elasticsearch API (/api/search/) ──
@@ -679,14 +679,35 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 if (govStatus !== 'todas') url += `&status=${govStatus}`;
             }
 
-            // Map keywords and orgao into the 'q' parameter
-            let qTerms: string[] = [];
-            if (keywords) qTerms.push(...keywords.split(',').map((k: string) => k.trim()).filter(Boolean));
-            if (orgao) qTerms.push(orgao.trim());
-            if (orgaosLista) qTerms.push(...orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean));
+            // Map keywords and orgao into the 'q' parameter using Elasticsearch syntax
+            let queryParts: string[] = [];
             
-            if (qTerms.length > 0) {
-                url += `&q=${encodeURIComponent(qTerms.join(' '))}`;
+            if (keywords) {
+                const kws = keywords.split(',').map((k: string) => k.trim()).filter(Boolean);
+                if (kws.length > 0) {
+                    queryParts.push('(' + kws.map((k: string) => `"${k}"`).join(' OR ') + ')');
+                }
+            }
+            
+            if (excludeKeywords) {
+                const exKws = excludeKeywords.split(',').map((k: string) => k.trim()).filter(Boolean);
+                if (exKws.length > 0) {
+                    queryParts.push('NOT (' + exKws.map((k: string) => `"${k}"`).join(' OR ') + ')');
+                }
+            }
+
+            let orgaoParts: string[] = [];
+            if (orgao) orgaoParts.push(`"${orgao.trim()}"`);
+            if (orgaosLista) {
+                const ol = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+                if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
+            }
+            if (orgaoParts.length > 0) {
+                queryParts.push('(' + orgaoParts.join(' OR ') + ')');
+            }
+            
+            if (queryParts.length > 0) {
+                url += `&q=${encodeURIComponent(queryParts.join(' AND '))}`;
             }
 
             if (uf && uf.trim() !== 'todas') {
