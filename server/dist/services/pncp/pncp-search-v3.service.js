@@ -151,14 +151,22 @@ class PncpSearchV3 {
                 conditions.push(`(${orgaoOrConditions.join(' OR ')})`);
             }
         }
-        // ── Keywords (ILIKE for partial matching) ──
+        // ── Keywords (ILIKE for partial matching on Objeto OR Item Descricao) ──
         if (input.keywords && input.keywords.trim()) {
             // Split by comma to support multiple keywords like "Gêneros, Escola"
             const kws = input.keywords.split(',').map(k => k.trim()).filter(Boolean);
             if (kws.length > 0) {
                 const kwConditions = [];
                 for (const kw of kws) {
-                    kwConditions.push(`"objeto" ILIKE $${paramIdx++}`);
+                    const paramStr = `$${paramIdx++}`;
+                    kwConditions.push(`(
+                        "objeto" ILIKE ${paramStr}
+                        OR EXISTS (
+                            SELECT 1 FROM "PncpItem" pi 
+                            WHERE pi."contratacaoId" = "PncpContratacao".id 
+                            AND pi.descricao ILIKE ${paramStr}
+                        )
+                    )`);
                     params.push(`%${kw}%`);
                 }
                 // Use OR if they separated by comma
