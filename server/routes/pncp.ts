@@ -768,6 +768,60 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 finalItems = items.filter((it: any) => allowedIds.includes(String(it.esfera_id)));
             }
 
+            // ── HYDRATION: Fetch missing values ──
+            const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
+            if (itemsToHydrate.length > 0) {
+                try {
+                    const prisma = (await import('../../lib/prisma')).default;
+                    const ids = itemsToHydrate.map((it: any) => it.id);
+                    
+                    // 1. Check local DB first (fastest)
+                    const localData = await prisma.pncpContratacao.findMany({
+                        where: { numeroControle: { in: ids } },
+                        select: { numeroControle: true, valorEstimado: true }
+                    });
+                    const valMap = new Map(localData.map(d => [d.numeroControle, d.valorEstimado]));
+                    
+                    let stillMissing: any[] = [];
+                    itemsToHydrate.forEach((it: any) => {
+                        if (valMap.has(it.id) && valMap.get(it.id) != null && Number(valMap.get(it.id)) > 0) {
+                            it.valor_estimado = Number(valMap.get(it.id));
+                        } else {
+                            stillMissing.push(it);
+                        }
+                    });
+
+                    // 2. Fetch remainder from Gov.br API
+                    if (stillMissing.length > 0) {
+                        const hydrateResults = await Promise.allSettled(stillMissing.map((it: any) => 
+                            axios.get(`https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`, 
+                            { httpsAgent: agent, timeout: 3500 } as any)
+                        ));
+                        hydrateResults.forEach((r, idx) => {
+                            if (r.status === 'fulfilled') {
+                                const val = (r.value.data as any)?.valorTotalEstimado ?? (r.value.data as any)?.valorTotalHomologado ?? null;
+                                if (val != null && Number(val) > 0) stillMissing[idx].valor_estimado = Number(val);
+                            }
+                        });
+                    }
+                } catch (hydrateErr: any) {
+                    logger.warn(`[SEARCH-HYBRID] Value hydration failed: ${hydrateErr.message}`);
+                }
+            }
+
+            // ── SORTING: Closest deadlines first ──
+            finalItems.sort((a: any, b: any) => {
+                const dateA = a.data_encerramento_proposta || a.data_abertura || '9999-12-31';
+                const dateB = b.data_encerramento_proposta || b.data_abertura || '9999-12-31';
+                const tA = new Date(dateA).getTime();
+                const tB = new Date(dateB).getTime();
+                if (status === 'recebendo_proposta' || !status || status === '') {
+                    return tA - tB; // Ascending: deadlines closest to today appear first
+                } else {
+                    return tB - tA; // Descending: for other statuses
+                }
+            });
+
             const elapsed = Date.now() - start;
             logger.info(`[SEARCH-HYBRID] Gov.br API: ${finalItems.length} items (total=${totalRegistros}) in ${elapsed}ms | uf=${uf || '*'}`);
 
