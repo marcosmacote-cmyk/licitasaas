@@ -20,15 +20,21 @@ function RotatingLoadingMessage({ isFoundTab }: { isFoundTab: boolean }) {
     
     React.useEffect(() => {
         if (isFoundTab) return;
-        const interval = setInterval(() => {
+        
+        if (index >= LOADING_PHRASES.length - 1) {
+            return; // Stop at the last phrase
+        }
+
+        const timer = setTimeout(() => {
             setFade(false);
             setTimeout(() => {
-                setIndex((prev) => (prev + 1) % LOADING_PHRASES.length);
+                setIndex((prev) => prev + 1);
                 setFade(true);
             }, 300);
         }, 2800);
-        return () => clearInterval(interval);
-    }, [isFoundTab]);
+        
+        return () => clearTimeout(timer);
+    }, [index, isFoundTab]);
 
     if (isFoundTab) return <span>Carregando oportunidades...</span>;
     
