@@ -290,7 +290,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
 
     // ═══ Shared Row Renderer (used by both Scanner groups and Search/Favorites flat lists) ═══
     const renderItemRow = (item: any, isFavorito: boolean, isOnKanban: boolean, isUnviewed: boolean, searchName: string | null, foundAt: string | null) => (
-        <React.Fragment key={item.id}>
+        <React.Fragment key={item._scannerLogId || item.id}>
         <tr style={{ 
             transition: 'background 0.15s',
             borderLeft: isUnviewed ? '3px solid var(--color-primary)' : 'none',
@@ -419,7 +419,16 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             opacity: (p.analyzingItemId && p.analyzingItemId !== item.id) ? 0.5 : 1,
                             boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)', transition: 'var(--transition-fast)'
                         }}
-                        onClick={() => p.handlePncpAiAnalyze(item)} disabled={!!p.analyzingItemId}
+                        onClick={() => {
+                            const parts = extractPncpParts(item);
+                            p.handlePncpAiAnalyze({
+                                ...item,
+                                orgao_cnpj: parts?.cnpj || item.orgao_cnpj,
+                                ano: parts?.ano || item.ano,
+                                numero_sequencial: parts?.seq || item.numero_sequencial
+                            });
+                        }}
+                        disabled={!!p.analyzingItemId}
                         title="Analisar edital com IA (busca PDFs do PNCP automaticamente)"
                     >
                         {p.analyzingItemId === item.id ? (<><Loader2 size={14} className="spinner" /> Enviando...</>) : (<><Brain size={14} /> Analisar com IA</>)}
