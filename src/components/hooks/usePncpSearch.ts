@@ -65,6 +65,7 @@ export function usePncpSearch() {
 
     // Last search params for pagination
     const lastSearchParamsRef = useRef<any>(null);
+    const apiPageRef = useRef<number>(1);
     // AbortController for the current in-flight request
     const controllerRef = useRef<AbortController | null>(null);
     // Mutex: true when a request is in-flight (prevents concurrent requests)
@@ -140,6 +141,10 @@ export function usePncpSearch() {
         setSearchSlow(false);
         setSearchSource('');
         setSearchElapsed(0);
+        
+        if (targetPage === 1) {
+            apiPageRef.current = 1;
+        }
 
         const searchParams = {
             keywords: overrides?.keywords ?? keywords,
@@ -236,7 +241,8 @@ export function usePncpSearch() {
 
         // We need to fetch the next API chunk
         setLoading(true);
-        const apiPageToFetch = Math.floor(currentCachedItems / API_PAGE_SIZE) + 1;
+        apiPageRef.current += 1;
+        const apiPageToFetch = apiPageRef.current;
         const params = { ...lastSearchParamsRef.current, pagina: apiPageToFetch, tamanhoPagina: API_PAGE_SIZE };
 
         try {

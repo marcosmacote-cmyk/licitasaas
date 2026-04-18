@@ -801,6 +801,25 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 });
             }
 
+            if (orgao || orgaosLista) {
+                const ol1 = (orgao || '').split(/[\n,;]+/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                const ol2 = (orgaosLista || '').split(/[\n,;]+/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                const allOrgaos = [...ol1, ...ol2];
+                if (allOrgaos.length > 0) {
+                    finalItems = finalItems.filter((it: any) => {
+                        const nome = (it.orgao_nome || '').toLowerCase();
+                        const cnpj = (it.orgao_cnpj || '').replace(/[^\d]/g, '');
+                        const mun = (it.municipio || '').toLowerCase();
+                        return allOrgaos.some(o => {
+                            if (o.match(/^\d+$/)) {
+                                return cnpj.includes(o.replace(/[^\d]/g, ''));
+                            }
+                            return nome.includes(o) || mun.includes(o);
+                        });
+                    });
+                }
+            }
+
             // ── HYDRATION: Fetch missing values ──
             const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
             if (itemsToHydrate.length > 0) {
