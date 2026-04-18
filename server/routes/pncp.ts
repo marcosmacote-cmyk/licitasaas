@@ -651,9 +651,9 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
 
     // Determine if we can use the official API
     // The API only reliably filters: status (recebendo_proposta/encerradas), uf, keywords (q).
-    // It does NOT filter: valorMin/valorMax, modalidade, suspensas/anuladas.
+    // All other filters (modalidade, orgao, valor, excludeKeywords) are enforced locally.
     const statusSupportsApi = !status || status === 'recebendo_proposta' || status === 'encerrada' || status === 'todas';
-    const canUseOfficialApi = !valorMin && !valorMax && statusSupportsApi;
+    const canUseOfficialApi = statusSupportsApi;
 
     if (canUseOfficialApi) {
         // ── PRIMARY: Gov.br Elasticsearch API (/api/search/) ──
@@ -827,6 +827,28 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 }
             }
 
+            // ── EXCLUDE KEYWORDS: Local enforcement (API NOT is unreliable) ──
+            if (excludeKeywords) {
+                const exKws = excludeKeywords.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+                if (exKws.length > 0) {
+                    finalItems = finalItems.filter((it: any) => {
+                        const text = ((it.objeto || '') + ' ' + (it.titulo || '')).toLowerCase();
+                        return !exKws.some(ex => text.includes(ex));
+                    });
+                }
+            }
+
+            // ── VALUE RANGE: Local enforcement ──
+            if (valorMin || valorMax) {
+                const min = valorMin ? Number(valorMin) : 0;
+                const max = valorMax ? Number(valorMax) : Infinity;
+                finalItems = finalItems.filter((it: any) => {
+                    const val = Number(it.valor_estimado) || 0;
+                    if (val === 0) return true; // Don't exclude items with unknown values
+                    return val >= min && val <= max;
+                });
+            }
+
             // ── HYDRATION: Fetch missing values ──
             const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
             if (itemsToHydrate.length > 0) {
@@ -919,6 +941,8 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             const hasLocalFilters = (modalidade && modalidade !== 'todas') || 
                                     (esfera && esfera !== 'todas') || 
                                     (orgao || orgaosLista) || 
+                                    excludeKeywords ||
+                                    valorMin || valorMax ||
                                     dataInicio || dataFim;
             const effectiveTotal = hasLocalFilters ? finalItems.length : totalRegistros;
 
