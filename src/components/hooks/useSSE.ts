@@ -136,6 +136,11 @@ export async function submitBackgroundJob(params: {
     });
 
     if (!res.ok) {
+        // Handle HTML error pages (e.g., Railway 502/503)
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            throw new Error(`Servidor temporariamente indisponível (${res.status}). Aguarde o deploy finalizar e tente novamente.`);
+        }
         const err = await res.json();
         throw new Error(err.error || 'Failed to submit job');
     }
