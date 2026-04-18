@@ -650,9 +650,10 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             dataInicio, dataFim, orgao, orgaosLista, excludeKeywords, valorMin, valorMax } = req.body;
 
     // Determine if we can use the official API
-    // The Elasticsearch API supports q (keywords/orgao), status, uf, modalidade. 
-    // It does not support valorMin/valorMax natively.
-    const canUseOfficialApi = !valorMin && !valorMax;
+    // The API only reliably filters: status (recebendo_proposta/encerradas), uf, keywords (q).
+    // It does NOT filter: valorMin/valorMax, modalidade, suspensas/anuladas.
+    const statusSupportsApi = !status || status === 'recebendo_proposta' || status === 'encerrada' || status === 'todas';
+    const canUseOfficialApi = !valorMin && !valorMax && statusSupportsApi;
 
     if (canUseOfficialApi) {
         // ── PRIMARY: Gov.br Elasticsearch API (/api/search/) ──
@@ -666,17 +667,14 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             
             let url = `https://pncp.gov.br/api/search/?tipos_documento=edital&ordenacao=-data&tam_pagina=${pageSize}&pagina=${pageNum}`;
             
-            // Map status
+            // Only send status to API for reliably supported values
             if (status) {
                 const STATUS_TO_GOVBR: Record<string, string> = {
                     'recebendo_proposta': 'recebendo_proposta',
                     'encerrada': 'encerradas',
-                    'suspensa': 'suspensas',
-                    'anulada': 'anuladas',
-                    'revogada': 'anuladas'
                 };
-                const govStatus = STATUS_TO_GOVBR[status] || status;
-                if (govStatus !== 'todas') url += `&status=${govStatus}`;
+                const govStatus = STATUS_TO_GOVBR[status];
+                if (govStatus) url += `&status=${govStatus}`;
             }
 
             // Map keywords and orgao into the 'q' parameter using Elasticsearch syntax
@@ -717,9 +715,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 url += `&ufs=${uf.replace(/\s/g, '')}`;
             }
 
-            if (modalidade && modalidade !== 'todas') {
-                url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
-            }
+            // NOTE: modalidades_licitacao param is IGNORED by the API — filtering done locally
             
             // Fetch from API with retry
             let rawItems: any[] = [];
@@ -781,12 +777,32 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 };
             }).filter(Boolean);
 
-            // Apply client-side filters (esfera, data limite)
+            // Apply client-side filters (esfera, modalidade, data limite, orgao)
             let finalItems = items;
             if (esfera && esfera !== 'todas') {
-                const esferaMap: Record<string, string[]> = { 'F': ['1', 'F'], 'E': ['2', 'E'], 'M': ['3', 'M'], 'D': ['4', 'D'] };
+                const esferaMap: Record<string, string[]> = { 'F': ['1', 'F', 'E'], 'E': ['2', 'E'], 'M': ['3', 'M'], 'D': ['4', 'D'] };
                 const allowedIds = esferaMap[esfera] || [esfera];
                 finalItems = finalItems.filter((it: any) => allowedIds.includes(String(it.esfera_id)));
+            }
+
+            // ── MODALIDADE: Filter locally by name (API ignores modalidade param) ──
+            if (modalidade && modalidade !== 'todas') {
+                const MODALIDADE_NAMES: Record<string, string[]> = {
+                    '1': ['pregão', 'pregao'],
+                    '2': ['concorrência', 'concorrencia'],
+                    '3': ['concurso'],
+                    '4': ['leilão', 'leilao'],
+                    '5': ['diálogo', 'dialogo'],
+                    '6': ['dispensa'],
+                    '7': ['inexigibilidade'],
+                };
+                const targetNames = MODALIDADE_NAMES[modalidade] || [];
+                if (targetNames.length > 0) {
+                    finalItems = finalItems.filter((it: any) => {
+                        const modNome = (it.modalidade_nome || '').toLowerCase();
+                        return targetNames.some(t => modNome.includes(t));
+                    });
+                }
             }
 
             if (dataInicio || dataFim) {
@@ -907,11 +923,19 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             const elapsed = Date.now() - start;
             logger.info(`[SEARCH-HYBRID] Gov.br API: ${finalItems.length} items (total=${totalRegistros}) in ${elapsed}ms | uf=${uf || '*'}`);
 
+            // If local filters were applied, the total from the API no longer represents reality.
+            // Use the filtered count as the total for proper frontend pagination.
+            const hasLocalFilters = (modalidade && modalidade !== 'todas') || 
+                                    (esfera && esfera !== 'todas') || 
+                                    (orgao || orgaosLista) || 
+                                    dataInicio || dataFim;
+            const effectiveTotal = hasLocalFilters ? finalItems.length : totalRegistros;
+
             return res.json({
-                items: finalItems, total: totalRegistros,
+                items: finalItems, total: effectiveTotal,
                 totalLocal: 0, elapsed,
                 source: 'govbr-api',
-                meta: { source: 'govbr-api', elapsedMs: elapsed, localCount: totalRegistros, errors: [] },
+                meta: { source: 'govbr-api', elapsedMs: elapsed, localCount: effectiveTotal, errors: [] },
             });
         } catch (apiError: any) {
             logger.warn(`[SEARCH-HYBRID] Gov.br API failed, falling back to local: ${apiError?.message}`);
