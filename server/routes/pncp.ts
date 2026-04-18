@@ -818,12 +818,42 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                             axios.get(`https://pncp.gov.br/api/consulta/v1/orgaos/${it.orgao_cnpj}/compras/${it.ano}/${it.numero_sequencial}`, 
                             { httpsAgent: agent, timeout: 3500 } as any)
                         ));
+                        
+                        const needItemFetch: any[] = [];
                         hydrateResults.forEach((r, idx) => {
                             if (r.status === 'fulfilled') {
                                 const val = (r.value.data as any)?.valorTotalEstimado ?? (r.value.data as any)?.valorTotalHomologado ?? null;
-                                if (val != null && Number(val) > 0) stillMissing[idx].valor_estimado = Number(val);
+                                if (val != null && Number(val) > 0) {
+                                    stillMissing[idx].valor_estimado = Number(val);
+                                } else {
+                                    needItemFetch.push(stillMissing[idx]);
+                                }
+                            } else {
+                                needItemFetch.push(stillMissing[idx]);
                             }
                         });
+
+                        // 3. Fallback: Fetch items if the global value is still 0
+                        if (needItemFetch.length > 0) {
+                            const itemFetchResults = await Promise.allSettled(needItemFetch.map((it: any) => 
+                                fetchPncpItems(it.orgao_cnpj, String(it.ano), String(it.numero_sequencial))
+                            ));
+                            
+                            itemFetchResults.forEach((r, idx) => {
+                                if (r.status === 'fulfilled') {
+                                    const itemsArray = r.value?.items || [];
+                                    needItemFetch[idx].itens_preview = itemsArray;
+
+                                    const sum = itemsArray.reduce((acc: number, item: any) => {
+                                        return acc + (Number(item.totalValue) || 0);
+                                    }, 0);
+
+                                    if (sum > 0) {
+                                        needItemFetch[idx].valor_estimado = sum;
+                                    }
+                                }
+                            });
+                        }
                     }
                 } catch (hydrateErr: any) {
                     logger.warn(`[SEARCH-HYBRID] Value hydration failed: ${hydrateErr.message}`);
