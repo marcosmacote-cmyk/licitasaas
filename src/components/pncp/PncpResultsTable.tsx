@@ -125,12 +125,13 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
     const [itemError, setItemError] = useState('');
     const [slowLoad, setSlowLoad] = useState(false);
 
-    // ── Date groups: collapse/expand + pagination per group ──
-    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+    // ── Date groups: expand/collapse + pagination per group ──
+    // Start ALL collapsed (empty set = nothing expanded)
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [groupVisibleCounts, setGroupVisibleCounts] = useState<Record<string, number>>({});
 
     const toggleGroupCollapse = useCallback((dateKey: string) => {
-        setCollapsedGroups(prev => {
+        setExpandedGroups(prev => {
             const next = new Set(prev);
             if (next.has(dateKey)) next.delete(dateKey);
             else next.add(dateKey);
@@ -532,10 +533,10 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                     ) : p.activeTab === 'found' && dateGroups.length > 0 ? (
                         /* ═══ Scanner: Date-Grouped Rendering ═══ */
                         dateGroups.flatMap((group) => {
-                            const isCollapsed = collapsedGroups.has(group.dateKey);
+                            const isExpanded = expandedGroups.has(group.dateKey);
                             const visibleCount = groupVisibleCounts[group.dateKey] || ITEMS_PER_DATE_GROUP;
-                            const visibleItems = isCollapsed ? [] : group.items.slice(0, visibleCount);
-                            const hasMore = !isCollapsed && group.items.length > visibleCount;
+                            const visibleItems = isExpanded ? group.items.slice(0, visibleCount) : [];
+                            const hasMore = isExpanded && group.items.length > visibleCount;
                             const hiddenCount = group.items.length - visibleCount;
 
                             const headerRow = (
@@ -591,10 +592,10 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                                 height: '1px',
                                                 background: 'linear-gradient(90deg, var(--color-border), transparent)',
                                             }} />
-                                            {isCollapsed ? (
-                                                <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)', transition: 'transform 0.2s' }} />
-                                            ) : (
+                                            {isExpanded ? (
                                                 <ChevronUp size={16} style={{ color: 'var(--color-text-tertiary)', transition: 'transform 0.2s' }} />
+                                            ) : (
+                                                <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)', transition: 'transform 0.2s' }} />
                                             )}
                                         </div>
                                     </td>

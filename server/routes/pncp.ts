@@ -195,11 +195,19 @@ router.get('/scanner/opportunities', authenticateToken, async (req: any, res) =>
     try {
         const tenantId = req.user.tenantId;
         const searchId = req.query.searchId as string | undefined;
+        const filterDate = req.query.date as string | undefined; // YYYY-MM-DD
         const page = parseInt(req.query.page as string) || 1;
         const pageSize = 50;
 
         const where: any = { tenantId };
         if (searchId) where.searchId = searchId;
+        if (filterDate) {
+            const dayStart = new Date(filterDate + 'T00:00:00.000Z');
+            const dayEnd = new Date(filterDate + 'T23:59:59.999Z');
+            if (!isNaN(dayStart.getTime())) {
+                where.createdAt = { gte: dayStart, lte: dayEnd };
+            }
+        }
 
         const [items, total] = await Promise.all([
             prisma.opportunityScannerLog.findMany({

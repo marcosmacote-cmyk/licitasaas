@@ -34,6 +34,7 @@ export function usePncpScanner() {
     const [scannerOpportunitiesPage, setScannerOpportunitiesPage] = useState(1);
     const [scannerOpportunitiesLoading, setScannerOpportunitiesLoading] = useState(false);
     const [scannerFilterSearchId, setScannerFilterSearchId] = useState<string | null>(null);
+    const [scannerFilterDate, setScannerFilterDate] = useState<string | null>(null);
     const [unreadOpportunityCount, setUnreadOpportunityCount] = useState(0);
     const [loading, setLoading] = useState(false);
 
@@ -66,6 +67,7 @@ export function usePncpScanner() {
             const token = localStorage.getItem('token');
             let url = `${API_BASE_URL}/api/pncp/scanner/opportunities?page=${scannerOpportunitiesPage}`;
             if (scannerFilterSearchId) url += `&searchId=${scannerFilterSearchId}`;
+            if (scannerFilterDate) url += `&date=${scannerFilterDate}`;
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
                 const data = await res.json();
@@ -149,6 +151,7 @@ export function usePncpScanner() {
         // Scanner Opportunities ("Encontradas" tab)
         scannerOpportunities, scannerOpportunitiesTotal, scannerOpportunitiesPage, setScannerOpportunitiesPage,
         scannerOpportunitiesLoading, scannerFilterSearchId, setScannerFilterSearchId,
+        scannerFilterDate, setScannerFilterDate,
         unreadOpportunityCount, markOpportunitiesViewed, fetchScannerOpportunities,
         handleTriggerScan, loading: loading,
     };

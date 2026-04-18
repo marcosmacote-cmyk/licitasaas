@@ -108,7 +108,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         if (activeTab === 'found') {
             scanner.fetchScannerOpportunities();
         }
-    }, [activeTab, scanner.scannerOpportunitiesPage, scanner.scannerFilterSearchId]);
+    }, [activeTab, scanner.scannerOpportunitiesPage, scanner.scannerFilterSearchId, scanner.scannerFilterDate]);
 
     // ═══════════════════════════════════════════════════
     // DISPLAY ITEMS — computed based on active tab
@@ -695,6 +695,8 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         scannerOpportunitiesLoading: scanner.scannerOpportunitiesLoading,
         scannerFilterSearchId: scanner.scannerFilterSearchId,
         setScannerFilterSearchId: scanner.setScannerFilterSearchId,
+        scannerFilterDate: scanner.scannerFilterDate,
+        setScannerFilterDate: scanner.setScannerFilterDate,
         unreadOpportunityCount: scanner.unreadOpportunityCount,
         markOpportunitiesViewed: scanner.markOpportunitiesViewed,
         fetchScannerOpportunities: scanner.fetchScannerOpportunities,
