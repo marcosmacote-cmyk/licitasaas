@@ -691,9 +691,24 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             // The API's NOT operator is unreliable and interfered with keyword OR queries.
             // Exclusion is enforced 100% locally (see below).
 
-            // NOTE: Orgao names are NOT sent to the API q param.
-            // The API's full-text search matches orgao text against the objeto/description too,
-            // which causes false AND restrictions with keywords. Orgao is filtered locally instead.
+            // Orgao names: Send to API q param ONLY when no keywords are specified.
+            // When keywords ARE present, mixing orgao with AND restricts results incorrectly.
+            // When keywords are EMPTY, we MUST send orgao to q so the API returns relevant items
+            // (otherwise we get 100 random items and local filtering finds almost nothing).
+            if (!keywords || keywords.trim() === '') {
+                let orgaoParts: string[] = [];
+                if (orgao) {
+                    const ol = orgao.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+                    if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
+                }
+                if (orgaosLista) {
+                    const ol = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+                    if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
+                }
+                if (orgaoParts.length > 0) {
+                    queryParts.push('(' + orgaoParts.join(' OR ') + ')');
+                }
+            }
             
             if (queryParts.length > 0) {
                 url += `&q=${encodeURIComponent(queryParts.join(' AND '))}`;
