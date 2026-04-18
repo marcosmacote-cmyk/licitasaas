@@ -176,12 +176,12 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                         </div>
 
                         <div>
-                            <label className="form-label">Publicado a partir de</label>
+                            <label className="form-label">Prazo Limite Inicial</label>
                             <input type="date" value={p.dataInicio} onChange={(e) => p.setDataInicio(e.target.value)} className="form-select" />
                         </div>
 
                         <div>
-                            <label className="form-label">Publicado até</label>
+                            <label className="form-label">Prazo Limite Final</label>
                             <input type="date" value={p.dataFim} onChange={(e) => p.setDataFim(e.target.value)} className="form-select" />
                         </div>
 

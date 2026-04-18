@@ -697,7 +697,10 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
             }
 
             let orgaoParts: string[] = [];
-            if (orgao) orgaoParts.push(`"${orgao.trim()}"`);
+            if (orgao) {
+                const ol = orgao.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+                if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
+            }
             if (orgaosLista) {
                 const ol = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
                 if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
@@ -718,9 +721,6 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 url += `&modalidades_licitacao=${encodeURIComponent(modalidade)}`;
             }
             
-            if (dataInicio) url += `&data_inicio=${dataInicio.replace(/-/g, '')}`;
-            if (dataFim) url += `&data_fim=${dataFim.replace(/-/g, '')}`;
-
             // Fetch from API with retry
             let rawItems: any[] = [];
             let totalRegistros = 0;
@@ -781,12 +781,24 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 };
             }).filter(Boolean);
 
-            // Apply esfera filter client-side (API doesn't support it reliably via URL)
+            // Apply client-side filters (esfera, data limite)
             let finalItems = items;
             if (esfera && esfera !== 'todas') {
                 const esferaMap: Record<string, string[]> = { 'F': ['1', 'F'], 'E': ['2', 'E'], 'M': ['3', 'M'], 'D': ['4', 'D'] };
                 const allowedIds = esferaMap[esfera] || [esfera];
-                finalItems = items.filter((it: any) => allowedIds.includes(String(it.esfera_id)));
+                finalItems = finalItems.filter((it: any) => allowedIds.includes(String(it.esfera_id)));
+            }
+
+            if (dataInicio || dataFim) {
+                const filterStart = dataInicio ? new Date(dataInicio + 'T00:00:00-03:00').getTime() : 0;
+                const filterEnd = dataFim ? new Date(dataFim + 'T23:59:59-03:00').getTime() : Infinity;
+                
+                finalItems = finalItems.filter((it: any) => {
+                    const deadlineStr = it.data_encerramento_proposta || it.data_abertura;
+                    if (!deadlineStr) return true;
+                    const t = new Date(deadlineStr).getTime();
+                    return t >= filterStart && t <= filterEnd;
+                });
             }
 
             // ── HYDRATION: Fetch missing values ──
