@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { normalizeModality } from '../../utils/normalizeModality';
 import type { PncpChildProps } from './types';
 import { API_BASE_URL } from '../../config';
@@ -49,12 +49,68 @@ function RotatingLoadingMessage({ isFoundTab }: { isFoundTab: boolean }) {
     );
 }
 
+/**
+ * Formats a date string into a human-readable Brazilian Portuguese label.
+ * Today → "Hoje, 18 de Abril"
+ * Yesterday → "Ontem, 17 de Abril"
+ * This week → "Terça-feira, 15 de Abril"
+ * Older → "10 de Abril de 2026"
+ */
+function formatDateGroupLabel(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((today.getTime() - itemDate.getTime()) / 86400000);
+    
+    const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const dayOfMonth = date.getDate();
+    const monthName = months[date.getMonth()];
+    const year = date.getFullYear();
+    
+    if (diffDays === 0) return `Hoje, ${dayOfMonth} de ${monthName}`;
+    if (diffDays === 1) return `Ontem, ${dayOfMonth} de ${monthName}`;
+    if (diffDays <= 6) {
+        const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        return `${weekdays[date.getDay()]}, ${dayOfMonth} de ${monthName}`;
+    }
+    return `${dayOfMonth} de ${monthName} de ${year}`;
+}
+
+/** Returns a YYYY-MM-DD key for date grouping */
+function toDateKey(dateStr: string): string {
+    try {
+        const d = new Date(dateStr);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    } catch {
+        return 'unknown';
+    }
+}
+
 export function PncpResultsTable({ p, items }: PncpChildProps) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
     const [itemDetails, setItemDetails] = useState<any[] | null>(null);
     const [loadingItems, setLoadingItems] = useState(false);
     const [itemError, setItemError] = useState('');
     const [slowLoad, setSlowLoad] = useState(false);
+
+    // ── Date grouping for Scanner tab ──
+    // Pre-compute which items start a new date group (for injecting header rows)
+    const dateGroupStarts = useMemo(() => {
+        if (p.activeTab !== 'found') return new Set<string>();
+        const starts = new Set<string>();
+        let lastDateKey = '';
+        for (const item of p.displayItems) {
+            const foundAt = (item as any)._foundAt;
+            if (!foundAt) continue;
+            const key = toDateKey(foundAt);
+            if (key !== lastDateKey) {
+                starts.add(item.id);
+                lastDateKey = key;
+            }
+        }
+        return starts;
+    }, [p.displayItems, p.activeTab]);
 
     const toggleItems = async (item: any) => {
         if (expandedItemId === item.id) {
@@ -204,14 +260,54 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             </td>
                         </tr>
                     ) : (
-                        p.displayItems.map((item) => {
+                        p.displayItems.flatMap((item) => {
                             const isFavorito = p.favoritos.some(f => f.id === item.id);
                             const isOnKanban = items.some(proc => proc.link && item.link_sistema && proc.link.includes(item.link_sistema));
                             const isUnviewed = p.activeTab === 'found' && (item as any)._isViewed === false;
                             const searchName = p.activeTab === 'found' ? (item as any)._searchName : null;
                             const foundAt = p.activeTab === 'found' ? (item as any)._foundAt : null;
 
-                            return (
+                            // ── Date Group Header (Scanner tab only) ──
+                            const dateHeader = (p.activeTab === 'found' && dateGroupStarts.has(item.id) && foundAt) ? (
+                                <tr key={`date-group-${item.id}`} style={{ background: 'none' }}>
+                                    <td colSpan={6} style={{ padding: '0' }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            padding: '14px 24px 10px',
+                                            borderTop: dateGroupStarts.size > 1 ? '1px solid var(--color-border)' : 'none',
+                                        }}>
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                padding: '5px 14px',
+                                                background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(99, 102, 241, 0.06))',
+                                                borderRadius: 'var(--radius-lg)',
+                                                border: '1px solid rgba(37, 99, 235, 0.15)',
+                                            }}>
+                                                <Calendar size={14} style={{ color: 'var(--color-primary)', opacity: 0.8 }} />
+                                                <span style={{
+                                                    fontSize: '0.8125rem',
+                                                    fontWeight: 600,
+                                                    color: 'var(--color-primary)',
+                                                    letterSpacing: '0.01em',
+                                                }}>
+                                                    {formatDateGroupLabel(foundAt)}
+                                                </span>
+                                            </div>
+                                            <div style={{
+                                                flex: 1,
+                                                height: '1px',
+                                                background: 'linear-gradient(90deg, var(--color-border), transparent)',
+                                            }} />
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : null;
+
+                            const rowElements = (
                                 <React.Fragment key={item.id}>
                                 <tr style={{ 
                                     transition: 'background 0.15s',
@@ -300,9 +396,22 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                     </td>
                                     <td style={{ fontWeight: 700, verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                                         {(() => {
-                                            const computedVal = item.valor_estimado || 
-                                                (expandedItemId === item.id && itemDetails ? itemDetails.reduce((acc, it) => acc + (Number(it.totalValue) || (Number(it.unitValue) * Number(it.quantity)) || 0), 0) : 0) || 
-                                                ((item as any).itens_preview ? (item as any).itens_preview.reduce((acc: number, it: any) => acc + (Number(it.valorTotal) || Number(it.totalValue) || (Number(it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0) * Number(it.quantidade || it.quantity || 1)) || 0), 0) : 0);
+                                            // Cascading fallback: try all possible value field names from different sources
+                                            const directVal = Number(item.valor_estimado) || 
+                                                Number((item as any).valorEstimado) ||
+                                                Number((item as any).valor_global) ||
+                                                Number((item as any).valorTotalEstimado) ||
+                                                Number((item as any).valorTotalHomologado) || 0;
+                                            
+                                            const expandedVal = (expandedItemId === item.id && itemDetails) 
+                                                ? itemDetails.reduce((acc, it) => acc + (Number(it.totalValue) || (Number(it.unitValue) * Number(it.quantity)) || 0), 0) 
+                                                : 0;
+                                            
+                                            const previewVal = (item as any).itens_preview?.length > 0
+                                                ? (item as any).itens_preview.reduce((acc: number, it: any) => acc + (Number(it.valorTotal) || Number(it.totalValue) || (Number(it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0) * Number(it.quantidade || it.quantity || 1)) || 0), 0) 
+                                                : 0;
+                                            
+                                            const computedVal = directVal || expandedVal || previewVal;
                                             
                                             return computedVal ? (
                                                 <span style={{ color: 'var(--color-success)' }}>
@@ -457,7 +566,10 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                         </td>
                                     </tr>
                                 )}
-                                </React.Fragment>)
+                                </React.Fragment>);
+
+                            // flatMap: return array — dateHeader (if any) + row elements
+                            return dateHeader ? [dateHeader, rowElements] : [rowElements];
                         })
                     )}
                 </tbody>

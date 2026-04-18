@@ -33,6 +33,9 @@ interface PncpSearchResult {
     titulo: string;
     objeto: string;
     orgao_nome: string;
+    orgao_cnpj: string;
+    ano: string;
+    numero_sequencial: string;
     uf: string;
     municipio: string;
     valor_estimado: number;
@@ -108,6 +111,9 @@ async function executePncpSearch(search: {
         titulo: c.titulo,
         objeto: c.objeto,
         orgao_nome: c.orgao_nome,
+        orgao_cnpj: c.orgao_cnpj || '',
+        ano: c.ano || '',
+        numero_sequencial: c.numero_sequencial || '',
         uf: c.uf,
         municipio: c.municipio,
         valor_estimado: c.valor_estimado,
@@ -161,6 +167,9 @@ async function markAsNotified(tenantId: string, result: PncpSearchResult, search
                 titulo: result.titulo,
                 objeto: result.objeto,
                 orgaoNome: result.orgao_nome,
+                orgaoCnpj: result.orgao_cnpj || null,
+                anoCompra: result.ano || null,
+                sequencialCompra: result.numero_sequencial || null,
                 uf: result.uf,
                 municipio: result.municipio,
                 valorEstimado: result.valor_estimado || null,

@@ -230,6 +230,9 @@ model OpportunityScannerLog {
   titulo                   String?
   objeto                   String? @db.Text
   orgaoNome                String?
+  orgaoCnpj                String? // CNPJ do órgão — necessário para consultar itens no Gov.br
+  anoCompra                String? // Ano da compra — necessário para consultar itens
+  sequencialCompra         String? // Sequencial — necessário para consultar itens
   uf                       String?
   municipio                String?
   valorEstimado            Float?

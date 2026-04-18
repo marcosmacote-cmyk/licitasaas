@@ -212,6 +212,9 @@ router.get('/scanner/opportunities', authenticateToken, async (req: any, res) =>
                     titulo: true,
                     objeto: true,
                     orgaoNome: true,
+                    orgaoCnpj: true,
+                    anoCompra: true,
+                    sequencialCompra: true,
                     uf: true,
                     municipio: true,
                     valorEstimado: true,
@@ -222,8 +225,8 @@ router.get('/scanner/opportunities', authenticateToken, async (req: any, res) =>
                     createdAt: true,
                 },
                 orderBy: [
+                    { createdAt: 'desc' },
                     { dataEncerramentoProposta: { sort: 'asc', nulls: 'last' } },
-                    { createdAt: 'desc' }
                 ],
                 skip: (page - 1) * pageSize,
                 take: pageSize,
