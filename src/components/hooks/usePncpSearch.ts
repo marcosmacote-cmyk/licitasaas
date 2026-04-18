@@ -31,6 +31,7 @@ interface SearchOverrides {
 }
 
 const PAGE_SIZE = 10;
+const API_PAGE_SIZE = 100;
 
 export function usePncpSearch() {
     const toast = useToast();
@@ -144,8 +145,8 @@ export function usePncpSearch() {
             keywords: overrides?.keywords ?? keywords,
             status: overrides?.status ?? status,
             uf: overrides?.uf ?? selectedUf,
-            pagina: targetPage,
-            tamanhoPagina: PAGE_SIZE,
+            pagina: 1,
+            tamanhoPagina: API_PAGE_SIZE,
             modalidade: overrides?.modalidade ?? modalidade,
             dataInicio: (overrides?.dataInicio ?? dataInicio) || undefined,
             dataFim: (overrides?.dataFim ?? dataFim) || undefined,
@@ -176,9 +177,21 @@ export function usePncpSearch() {
 
             setSearchSource(data.source as any);
             setSearchElapsed(data.elapsedMs);
-            setResults(data.items);
-            setAllResults(data.items);
+            
+            // Sort by deadline
+            const sorted = data.items.sort((a: any, b: any) => {
+                const dateA = a.data_encerramento_proposta || a.data_abertura || '9999-12-31';
+                const dateB = b.data_encerramento_proposta || b.data_abertura || '9999-12-31';
+                const tA = new Date(dateA).getTime();
+                const tB = new Date(dateB).getTime();
+                const st = searchParams.status || '';
+                if (st === 'recebendo_proposta' || !st || st === '') return tA - tB;
+                return tB - tA;
+            });
+
+            setAllResults(sorted);
             setTotalResults(data.total);
+            setResults(sorted.slice(0, PAGE_SIZE));
         } catch (e: any) {
             if (e.name === 'AbortError') {
                 // Silently ignore — a newer search superseded this one
@@ -204,24 +217,50 @@ export function usePncpSearch() {
         }
     };
 
-    /**
-     * Page change handler — fetches new page from server
-     */
     const handlePageChange = async (newPage: number) => {
         if (!lastSearchParamsRef.current || loading) return;
 
         setPage(newPage);
-        setLoading(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
-        const params = { ...lastSearchParamsRef.current, pagina: newPage };
+        const requiredTotalItems = newPage * PAGE_SIZE;
+        const currentCachedItems = allResults.length;
+
+        // Do we have enough items in cache? Or have we reached the end?
+        if (requiredTotalItems <= currentCachedItems || currentCachedItems >= totalResults) {
+            // Yes! Just slice the cache instantly.
+            const start = (newPage - 1) * PAGE_SIZE;
+            setResults(allResults.slice(start, start + PAGE_SIZE));
+            return;
+        }
+
+        // We need to fetch the next API chunk
+        setLoading(true);
+        const apiPageToFetch = Math.floor(currentCachedItems / API_PAGE_SIZE) + 1;
+        const params = { ...lastSearchParamsRef.current, pagina: apiPageToFetch, tamanhoPagina: API_PAGE_SIZE };
 
         try {
             const data = await fetchSearch(params);
-            setResults(data.items);
-            setAllResults(data.items);
-            setTotalResults(data.total);
-            setSearchElapsed(data.elapsedMs);
+            
+            // Merge with existing cache
+            const accumulated = [...allResults, ...data.items];
+            
+            // Re-sort the entire cache so the absolute closest ones from both chunks appear first
+            accumulated.sort((a: any, b: any) => {
+                const dateA = a.data_encerramento_proposta || a.data_abertura || '9999-12-31';
+                const dateB = b.data_encerramento_proposta || b.data_abertura || '9999-12-31';
+                const tA = new Date(dateA).getTime();
+                const tB = new Date(dateB).getTime();
+                const st = params.status || '';
+                if (st === 'recebendo_proposta' || !st || st === '') return tA - tB;
+                return tB - tA;
+            });
+
+            setAllResults(accumulated);
+            setTotalResults(data.total); // Update total just in case
+            
+            const start = (newPage - 1) * PAGE_SIZE;
+            setResults(accumulated.slice(start, start + PAGE_SIZE));
         } catch (e: any) {
             if (e.name !== 'AbortError') {
                 toast.error('Erro ao carregar página. Tente novamente.');

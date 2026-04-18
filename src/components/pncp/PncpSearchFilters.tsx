@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Save, Loader2, X, ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { Search, Save, Loader2, X, ChevronDown, ChevronUp, Filter, Ban, CircleDollarSign } from 'lucide-react';
 import { TooltipHelp } from '../ui';
 import { UFS, ESFERAS, MODALIDADES, STATUS_OPTIONS } from '../hooks/usePncpPage';
 import type { PncpChildProps } from './types';
@@ -156,7 +156,9 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                         </div>
 
                         <div style={{ gridColumn: '1 / -1' }}>
-                            <label className="form-label" style={{ color: 'var(--color-danger)' }}>🚫 Excluir palavras-chave do objeto</label>
+                            <label className="form-label" style={{ color: 'var(--color-danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Ban size={15} /> Excluir palavras-chave do objeto
+                            </label>
                             <input
                                 type="text"
                                 placeholder="Ex.: aquisição, materiais, fornecimento, luminária (separe por vírgula)"
@@ -184,7 +186,9 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                         </div>
 
                         <div>
-                            <label className="form-label">💰 Valor Mínimo (R$)</label>
+                            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <CircleDollarSign size={15} style={{ color: 'var(--color-success)' }} /> Valor Mínimo (R$)
+                            </label>
                             <input
                                 type="number"
                                 placeholder="Ex: 50000"
@@ -198,7 +202,9 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                         </div>
 
                         <div>
-                            <label className="form-label">💰 Valor Máximo (R$)</label>
+                            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <CircleDollarSign size={15} style={{ color: 'var(--color-success)' }} /> Valor Máximo (R$)
+                            </label>
                             <input
                                 type="number"
                                 placeholder="Ex: 5000000"
