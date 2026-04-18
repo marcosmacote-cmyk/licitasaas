@@ -438,13 +438,13 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     const handleLoadPncpJobResult = async (jobId: string) => {
         try {
             const token = localStorage.getItem('token');
-            const jobRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
+            const jobRes = await fetch(`${API_BASE_URL}/api/analyze-edital/jobs/${jobId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!jobRes.ok) throw new Error('Falha ao carregar tarefa');
             const jobData = await jobRes.json();
             
-            const resRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/result`, {
+            const resRes = await fetch(`${API_BASE_URL}/api/analyze-edital/jobs/${jobId}/result`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!resRes.ok) throw new Error('Falha ao buscar resultado');

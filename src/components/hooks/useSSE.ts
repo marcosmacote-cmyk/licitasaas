@@ -126,7 +126,7 @@ export async function submitBackgroundJob(params: {
     targetTitle?: string;
 }): Promise<{ jobId: string }> {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API_BASE_URL}/api/jobs/submit`, {
+    const res = await fetch(`${API_BASE_URL}/api/analyze-edital/jobs/submit`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -153,7 +153,7 @@ export async function submitBackgroundJob(params: {
  */
 export async function fetchJobResult(jobId: string): Promise<any> {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/result`, {
+    const res = await fetch(`${API_BASE_URL}/api/analyze-edital/jobs/${jobId}/result`, {
         headers: { 'Authorization': `Bearer ${token}` },
     });
 
@@ -171,7 +171,7 @@ export async function fetchJobResult(jobId: string): Promise<any> {
  */
 export async function fetchJobList(): Promise<any[]> {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API_BASE_URL}/api/jobs`, {
+    const res = await fetch(`${API_BASE_URL}/api/analyze-edital/jobs`, {
         headers: { 'Authorization': `Bearer ${token}` },
     });
 
