@@ -103,14 +103,16 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                 {p.showAdvancedFilters && (
                     <div style={{
                         marginTop: 'var(--space-4)',
-                        padding: 'var(--space-5)',
-                        background: 'var(--color-bg-base)',
-                        borderRadius: 'var(--radius-md)',
+                        padding: 'var(--space-6)',
+                        background: 'linear-gradient(to bottom, rgba(255,255,255,0.03), rgba(255,255,255,0.01))',
+                        backdropFilter: 'blur(8px)',
+                        borderRadius: 'var(--radius-xl)',
                         border: '1px solid var(--color-border)',
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                        gap: 'var(--space-4)',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                        gap: 'var(--space-5)',
                         animation: 'slideDown 0.2s ease-out',
+                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
                     }}>
                         <div>
                             <label className="form-label">Modalidade</label>
@@ -131,7 +133,7 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                             <input type="text" placeholder="Ex: Comando da Marinha" value={p.orgao} onChange={(e) => p.setOrgao(e.target.value)} className="form-select" />
                         </div>
 
-                        <div className="col-span-full">
+                        <div style={{ gridColumn: '1 / -1' }}>
                             <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                 Lista de Nomes ou CNPJs de Órgãos (Busca Múltipla Rápida)
                                 <TooltipHelp text="Essa ferramenta permite buscar em Lote. Cole dezenas de CNPJs ou nomes (ex: secretarias, prefeituras) e faremos o raio-x completo de todos de uma só vez!" />
@@ -153,7 +155,7 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                             </div>
                         </div>
 
-                        <div className="col-span-full">
+                        <div style={{ gridColumn: '1 / -1' }}>
                             <label className="form-label" style={{ color: 'var(--color-danger)' }}>🚫 Excluir palavras-chave do objeto</label>
                             <input
                                 type="text"
@@ -191,7 +193,7 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                                 className="form-select"
                                 min="0"
                                 step="1000"
-                                style={{ fontSize: '0.8125rem' }}
+                                style={{ fontSize: '0.875rem' }}
                             />
                         </div>
 
@@ -205,7 +207,7 @@ export function PncpSearchFilters({ p, companies }: PncpChildProps) {
                                 className="form-select"
                                 min="0"
                                 step="1000"
-                                style={{ fontSize: '0.8125rem' }}
+                                style={{ fontSize: '0.875rem' }}
                             />
                         </div>
 

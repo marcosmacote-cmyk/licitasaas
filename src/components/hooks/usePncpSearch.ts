@@ -30,7 +30,7 @@ interface SearchOverrides {
     resetPage?: boolean;
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10;
 
 export function usePncpSearch() {
     const toast = useToast();

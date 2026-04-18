@@ -134,11 +134,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             <td colSpan={6} style={{ textAlign: 'center', padding: '60px' }}>
                                 <Loader2 size={32} className="spinner" style={{ margin: '0 auto', color: 'var(--color-primary)' }} />
                                 <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
-                                    {p.activeTab === 'found' ? 'Carregando oportunidades...' : (
-                                        p.searchSlow 
-                                            ? 'A busca está demorando um pouco mais que o normal (Processando milhares de registros locais)...'
-                                            : 'Consultando Banco de Licitações...'
-                                    )}
+                                    {p.activeTab === 'found' ? 'Carregando oportunidades...' : 'Consultando Banco de Licitações...'}
                                 </div>
                             </td>
                         </tr>
@@ -258,13 +254,19 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                         )}
                                     </td>
                                     <td style={{ fontWeight: 700, verticalAlign: 'top', paddingTop: '16px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                                        {item.valor_estimado ? (
-                                            <span style={{ color: 'var(--color-success)' }}>
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.valor_estimado)}
-                                            </span>
-                                        ) : (
-                                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>N/D</span>
-                                        )}
+                                        {(() => {
+                                            const computedVal = item.valor_estimado || 
+                                                (expandedItemId === item.id && itemDetails ? itemDetails.reduce((acc, it) => acc + (Number(it.totalValue) || (Number(it.unitValue) * Number(it.quantity)) || 0), 0) : 0) || 
+                                                (item.itens_preview ? item.itens_preview.reduce((acc: number, it: any) => acc + (Number(it.valorTotal) || Number(it.totalValue) || (Number(it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0) * Number(it.quantidade || it.quantity || 1)) || 0), 0) : 0);
+                                            
+                                            return computedVal ? (
+                                                <span style={{ color: 'var(--color-success)' }}>
+                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(computedVal)}
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>N/D</span>
+                                            );
+                                        })()}
                                     </td>
                                     <td style={{ paddingRight: '24px', verticalAlign: 'top', paddingTop: '14px', textAlign: 'right' }}>
                                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
@@ -418,7 +420,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
 
             {/* ═══ Pagination Controls ═══ */}
             {p.activeTab === 'search' && p.hasSearched && p.totalResults > 0 && (() => {
-                const pageSize = 50;
+                const pageSize = 10;
                 const totalPages = Math.ceil(p.totalResults / pageSize);
                 return (
                     <div style={{
@@ -436,16 +438,6 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                         </button>
                         <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
                             Página {p.page} de {totalPages} — {p.totalResults} resultados
-                            {p.searchSource && (
-                                <span style={{
-                                    fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', fontWeight: 600,
-                                    background: 'rgba(16, 185, 129, 0.15)',
-                                    color: 'var(--color-success)',
-                                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                }}>
-                                    ⚡ Base Local{p.searchElapsed ? ` (${p.searchElapsed}ms)` : ''}
-                                </span>
-                            )}
                         </span>
                         <button
                             className="btn btn-ghost"
