@@ -833,7 +833,7 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 if (exKws.length > 0) {
                     finalItems = finalItems.filter((it: any) => {
                         const text = ((it.objeto || '') + ' ' + (it.titulo || '')).toLowerCase();
-                        return !exKws.some(ex => text.includes(ex));
+                        return !exKws.some((ex: string) => text.includes(ex));
                     });
                 }
             }
