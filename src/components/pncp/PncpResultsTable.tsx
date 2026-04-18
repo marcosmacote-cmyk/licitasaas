@@ -257,7 +257,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                         {(() => {
                                             const computedVal = item.valor_estimado || 
                                                 (expandedItemId === item.id && itemDetails ? itemDetails.reduce((acc, it) => acc + (Number(it.totalValue) || (Number(it.unitValue) * Number(it.quantity)) || 0), 0) : 0) || 
-                                                (item.itens_preview ? item.itens_preview.reduce((acc: number, it: any) => acc + (Number(it.valorTotal) || Number(it.totalValue) || (Number(it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0) * Number(it.quantidade || it.quantity || 1)) || 0), 0) : 0);
+                                                ((item as any).itens_preview ? (item as any).itens_preview.reduce((acc: number, it: any) => acc + (Number(it.valorTotal) || Number(it.totalValue) || (Number(it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0) * Number(it.quantidade || it.quantity || 1)) || 0), 0) : 0);
                                             
                                             return computedVal ? (
                                                 <span style={{ color: 'var(--color-success)' }}>
