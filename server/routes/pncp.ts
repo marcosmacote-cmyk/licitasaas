@@ -687,12 +687,9 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 }
             }
             
-            if (excludeKeywords) {
-                const exKws = excludeKeywords.split(',').map((k: string) => k.trim()).filter(Boolean);
-                if (exKws.length > 0) {
-                    queryParts.push('NOT (' + exKws.map((k: string) => `"${k}"`).join(' OR ') + ')');
-                }
-            }
+            // NOTE: excludeKeywords are NOT sent to the API q param.
+            // The API's NOT operator is unreliable and interfered with keyword OR queries.
+            // Exclusion is enforced 100% locally (see below).
 
             // NOTE: Orgao names are NOT sent to the API q param.
             // The API's full-text search matches orgao text against the objeto/description too,
@@ -827,12 +824,13 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 }
             }
 
-            // ── EXCLUDE KEYWORDS: Local enforcement (API NOT is unreliable) ──
+            // ── EXCLUDE KEYWORDS: Local enforcement with accent-insensitive matching ──
             if (excludeKeywords) {
-                const exKws = excludeKeywords.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+                const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                const exKws = excludeKeywords.split(',').map((k: string) => normalize(k.trim())).filter(Boolean);
                 if (exKws.length > 0) {
                     finalItems = finalItems.filter((it: any) => {
-                        const text = ((it.objeto || '') + ' ' + (it.titulo || '')).toLowerCase();
+                        const text = normalize((it.objeto || '') + ' ' + (it.titulo || ''));
                         return !exKws.some((ex: string) => text.includes(ex));
                     });
                 }
