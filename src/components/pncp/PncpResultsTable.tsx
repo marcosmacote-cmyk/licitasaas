@@ -4,6 +4,45 @@ import { normalizeModality } from '../../utils/normalizeModality';
 import type { PncpChildProps } from './types';
 import { API_BASE_URL } from '../../config';
 
+const LOADING_PHRASES = [
+    'Consultando Banco de Licitações...',
+    'Aplicando cruzamento de filtros avançados...',
+    'Buscando os editais mais aderentes...',
+    'Calculando estimativas financeiras em tempo real...',
+    'Sincronizando com a base oficial do PNCP...',
+    'Organizando prazos e modalidades...',
+    'Quase lá! Montando os resultados da busca...'
+];
+
+function RotatingLoadingMessage({ isFoundTab }: { isFoundTab: boolean }) {
+    const [index, setIndex] = React.useState(0);
+    const [fade, setFade] = React.useState(true);
+    
+    React.useEffect(() => {
+        if (isFoundTab) return;
+        const interval = setInterval(() => {
+            setFade(false);
+            setTimeout(() => {
+                setIndex((prev) => (prev + 1) % LOADING_PHRASES.length);
+                setFade(true);
+            }, 300);
+        }, 2800);
+        return () => clearInterval(interval);
+    }, [isFoundTab]);
+
+    if (isFoundTab) return <span>Carregando oportunidades...</span>;
+    
+    return (
+        <span style={{ 
+            transition: 'opacity 0.3s ease',
+            opacity: fade ? 1 : 0,
+            display: 'inline-block' 
+        }}>
+            {LOADING_PHRASES[index]}
+        </span>
+    );
+}
+
 export function PncpResultsTable({ p, items }: PncpChildProps) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
     const [itemDetails, setItemDetails] = useState<any[] | null>(null);
@@ -134,7 +173,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             <td colSpan={6} style={{ textAlign: 'center', padding: '60px' }}>
                                 <Loader2 size={32} className="spinner" style={{ margin: '0 auto', color: 'var(--color-primary)' }} />
                                 <div style={{ marginTop: '12px', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
-                                    {p.activeTab === 'found' ? 'Carregando oportunidades...' : 'Consultando Banco de Licitações...'}
+                                    <RotatingLoadingMessage isFoundTab={p.activeTab === 'found'} />
                                 </div>
                             </td>
                         </tr>
