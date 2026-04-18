@@ -694,18 +694,9 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 }
             }
 
-            let orgaoParts: string[] = [];
-            if (orgao) {
-                const ol = orgao.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
-                if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
-            }
-            if (orgaosLista) {
-                const ol = orgaosLista.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
-                if (ol.length > 0) orgaoParts.push(...ol.map((o: string) => `"${o}"`));
-            }
-            if (orgaoParts.length > 0) {
-                queryParts.push('(' + orgaoParts.join(' OR ') + ')');
-            }
+            // NOTE: Orgao names are NOT sent to the API q param.
+            // The API's full-text search matches orgao text against the objeto/description too,
+            // which causes false AND restrictions with keywords. Orgao is filtered locally instead.
             
             if (queryParts.length > 0) {
                 url += `&q=${encodeURIComponent(queryParts.join(' AND '))}`;
