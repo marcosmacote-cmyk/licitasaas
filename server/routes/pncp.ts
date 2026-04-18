@@ -836,16 +836,8 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 }
             }
 
-            // ── VALUE RANGE: Local enforcement ──
-            if (valorMin || valorMax) {
-                const min = valorMin ? Number(valorMin) : 0;
-                const max = valorMax ? Number(valorMax) : Infinity;
-                finalItems = finalItems.filter((it: any) => {
-                    const val = Number(it.valor_estimado) || 0;
-                    if (val === 0) return true; // Don't exclude items with unknown values
-                    return val >= min && val <= max;
-                });
-            }
+
+            // NOTE: Value range filter is applied AFTER hydration (below)
 
             // ── HYDRATION: Fetch missing values ──
             const itemsToHydrate = finalItems.filter((it: any) => !it.valor_estimado || it.valor_estimado === 0);
@@ -916,6 +908,17 @@ router.post('/search-hybrid', authenticateToken, async (req: any, res) => {
                 } catch (hydrateErr: any) {
                     logger.warn(`[SEARCH-HYBRID] Value hydration failed: ${hydrateErr.message}`);
                 }
+            }
+
+            // ── VALUE RANGE: Applied AFTER hydration so real values are available ──
+            if (valorMin || valorMax) {
+                const min = valorMin ? Number(valorMin) : 0;
+                const max = valorMax ? Number(valorMax) : Infinity;
+                finalItems = finalItems.filter((it: any) => {
+                    const val = Number(it.valor_estimado) || 0;
+                    if (val === 0) return true; // Keep items whose value couldn't be determined
+                    return val >= min && val <= max;
+                });
             }
 
             // ── SORTING: Closest deadlines first ──
