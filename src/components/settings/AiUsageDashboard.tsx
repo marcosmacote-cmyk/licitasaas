@@ -366,12 +366,12 @@ export function AiUsageDashboard() {
                                         borderRadius: 'var(--radius-md)',
                                         fontSize: 'var(--text-sm)',
                                     }}
-                                    formatter={(value?: number, name?: string) => {
+                                    formatter={((value?: number, name?: string) => {
                                         const v = value ?? 0;
                                         if (name === 'tokens') return [fmtTokens(v), 'Tokens'];
                                         if (name === 'calls') return [v, 'Chamadas'];
                                         return [v, name || ''];
-                                    }}
+                                    }) as any}
                                     labelFormatter={(l) => `${l}`}
                                 />
                                 <Bar dataKey="tokens" fill="var(--color-ai)" radius={[3, 3, 0, 0]} opacity={0.85} />
@@ -419,7 +419,7 @@ export function AiUsageDashboard() {
                                                 borderRadius: 'var(--radius-md)',
                                                 fontSize: 'var(--text-xs)',
                                             }}
-                                            formatter={(value?: number) => [fmtTokens(value ?? 0), 'Tokens']}
+                                            formatter={((value?: number) => [fmtTokens(value ?? 0), 'Tokens']) as any}
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>

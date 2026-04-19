@@ -351,7 +351,7 @@ function DrillDownView({ data, period, setPeriod, loading, onBack, onRefresh }: 
                                 <XAxis dataKey="label" interval={period <= 7 ? 0 : period <= 15 ? 1 : 'preserveStartEnd'} tick={{ fill: 'var(--color-text-tertiary)', fontSize: 10 }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fill: 'var(--color-text-tertiary)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={fmt} />
                                 <Tooltip contentStyle={{ backgroundColor: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', borderRadius: 8, fontSize: 12 }}
-                                    formatter={(v?: number, n?: string) => n === 'tokens' ? [fmt(v ?? 0), 'Tokens'] : [v, n || '']} />
+                                    formatter={((v?: number, n?: string) => n === 'tokens' ? [fmt(v ?? 0), 'Tokens'] : [v, n || '']) as any} />
                                 <Bar dataKey="tokens" fill="var(--color-ai)" radius={[3, 3, 0, 0]} opacity={0.85} />
                             </BarChart>
                         </ResponsiveContainer>
@@ -371,7 +371,7 @@ function DrillDownView({ data, period, setPeriod, loading, onBack, onRefresh }: 
                                             {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
                                         </Pie>
                                         <Tooltip contentStyle={{ backgroundColor: 'var(--color-bg-surface)', borderColor: 'var(--color-border)', borderRadius: 8, fontSize: 11 }}
-                                            formatter={(v?: number) => [fmt(v ?? 0), 'Tokens']} />
+                                            formatter={((v?: number) => [fmt(v ?? 0), 'Tokens']) as any} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
