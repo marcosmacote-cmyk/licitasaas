@@ -149,12 +149,28 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         logger.info(`[PNCP-AI] Fetching attachments: ${arquivosUrl}`);
 
         let arquivos: any[] = [];
-        try {
-            const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 10000 } as any);
-            arquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
-            logger.info(`[PNCP-AI] Found ${arquivos.length} attachments`);
-        } catch (e: any) {
-            logger.warn(`[PNCP-AI] Failed to fetch attachments: ${e.message}`);
+        let fetchError: string | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const arquivosRes = await axios.get(arquivosUrl, { httpsAgent: agent, timeout: 25000 } as any);
+                arquivos = Array.isArray(arquivosRes.data) ? arquivosRes.data : [];
+                logger.info(`[PNCP-AI] Found ${arquivos.length} attachments (attempt ${attempt + 1})`);
+                fetchError = null;
+                break;
+            } catch (e: any) {
+                fetchError = e.message || 'Erro desconhecido';
+                const status = e?.response?.status;
+                logger.warn(`[PNCP-AI] Attempt ${attempt + 1}/3 failed to fetch attachments (HTTP ${status || 'N/A'}): ${fetchError}`);
+                // Don't retry on 404 (edital doesn't exist) or 400 (bad params)
+                if (status === 404 || status === 400) break;
+                if (attempt < 2) await new Promise(r => setTimeout(r, 1500 * Math.pow(2, attempt)));
+            }
+        }
+        if (arquivos.length === 0 && fetchError) {
+            return sendError(
+                'Não foi possível acessar os documentos deste edital no PNCP.',
+                `A API do PNCP retornou erro: ${fetchError}. URL: ${arquivosUrl}`
+            );
         }
 
         // 2. Sort to prioritize: Edital (tipoDocumentoId=2) > Termo de Referência (4) > Others
@@ -612,9 +628,10 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         }
 
         if (pdfParts.length === 0) {
+            const discardInfo = discardedFiles.length > 0 ? ` ${discardedFiles.length} excluído(s) por filtro inteligente.` : '';
             return sendError(
-                'Nenhum arquivo PDF encontrado para este edital no PNCP.',
-                `Encontramos ${arquivos.length} arquivo(s) mas nenhum era PDF ou ZIP com PDFs.`
+                'Nenhum arquivo PDF utilizável encontrado para este edital no PNCP.',
+                `Encontramos ${arquivos.length} arquivo(s) na API, ${filteredArquivos.length} passou(aram) no filtro, mas nenhum download resultou em PDF válido.${discardInfo}`
             );
         }
 
