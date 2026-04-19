@@ -110,23 +110,32 @@ describe('useAiChat', () => {
         });
 
         it('deve setar isSending durante envio', async () => {
-            let resolveChat: (v: string) => void;
+            let resolveChat!: (v: string) => void;
             (aiService.chatWithEdital as ReturnType<typeof vi.fn>).mockReturnValueOnce(
                 new Promise(resolve => { resolveChat = resolve; })
             );
 
             const { result } = renderUseAiChat();
-            act(() => result.current.setInputText('Pergunta'));
 
-            // Start sending (don't await)
-            const sendPromise = act(async () => result.current.handleSendMessage());
+            // Set input text first
+            await act(async () => {
+                result.current.setInputText('Pergunta');
+            });
+
+            // Start sending
+            let sendPromise: Promise<void>;
+            await act(async () => {
+                sendPromise = result.current.handleSendMessage();
+            });
 
             // Should be sending now
             expect(result.current.isSending).toBe(true);
 
-            // Resolve
-            await act(async () => resolveChat!('Resposta'));
-            await sendPromise;
+            // Resolve the chat
+            await act(async () => {
+                resolveChat('Resposta');
+                await sendPromise!;
+            });
 
             expect(result.current.isSending).toBe(false);
         });
@@ -135,8 +144,12 @@ describe('useAiChat', () => {
             (aiService.chatWithEdital as ReturnType<typeof vi.fn>).mockResolvedValueOnce('OK');
 
             const { result } = renderUseAiChat();
-            act(() => result.current.setInputText('Pergunta'));
-            await act(async () => result.current.handleSendMessage());
+            await act(async () => {
+                result.current.setInputText('Pergunta');
+            });
+            await act(async () => {
+                await result.current.handleSendMessage();
+            });
 
             expect(result.current.inputText).toBe('');
         });
@@ -145,8 +158,12 @@ describe('useAiChat', () => {
             (aiService.chatWithEdital as ReturnType<typeof vi.fn>).mockResolvedValueOnce('Resposta');
 
             const { result } = renderUseAiChat();
-            act(() => result.current.setInputText('Pergunta'));
-            await act(async () => result.current.handleSendMessage());
+            await act(async () => {
+                result.current.setInputText('Pergunta');
+            });
+            await act(async () => {
+                await result.current.handleSendMessage();
+            });
 
             await waitFor(() => {
                 expect(axios.post).toHaveBeenCalledWith(
@@ -164,8 +181,12 @@ describe('useAiChat', () => {
             (aiService.chatWithEdital as ReturnType<typeof vi.fn>).mockResolvedValueOnce('OK');
 
             const { result } = renderUseAiChat();
-            act(() => result.current.setInputText('Test'));
-            await act(async () => result.current.handleSendMessage());
+            await act(async () => {
+                result.current.setInputText('Test');
+            });
+            await act(async () => {
+                await result.current.handleSendMessage();
+            });
 
             await waitFor(() => {
                 expect(onUpdate).toHaveBeenCalled();
@@ -181,13 +202,17 @@ describe('useAiChat', () => {
             (aiService.chatWithEdital as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Timeout'));
 
             const { result } = renderUseAiChat();
-            act(() => result.current.setInputText('Pergunta'));
-            await act(async () => result.current.handleSendMessage());
+            await act(async () => {
+                result.current.setInputText('Pergunta');
+            });
+            await act(async () => {
+                await result.current.handleSendMessage();
+            });
 
             await waitFor(() => {
                 const lastMsg = result.current.messages[result.current.messages.length - 1];
                 expect(lastMsg.role).toBe('model');
-                expect(lastMsg.text).toContain('Erro');
+                expect(lastMsg.text).toContain('Falha');
             });
         });
 
@@ -195,8 +220,12 @@ describe('useAiChat', () => {
             (aiService.chatWithEdital as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Error'));
 
             const { result } = renderUseAiChat();
-            act(() => result.current.setInputText('Test'));
-            await act(async () => result.current.handleSendMessage());
+            await act(async () => {
+                result.current.setInputText('Test');
+            });
+            await act(async () => {
+                await result.current.handleSendMessage();
+            });
 
             expect(result.current.isSending).toBe(false);
         });

@@ -134,5 +134,13 @@ export function mockFetchNetworkError() {
 export function resetMocks() {
     vi.clearAllMocks();
     (global.fetch as ReturnType<typeof vi.fn>).mockReset();
+    // Restore a safe default so hooks that call fetch() in useEffect don't crash
+    // with "Cannot read properties of undefined (reading 'then')"
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([]),
+        text: () => Promise.resolve('[]'),
+    });
     Object.values(mockToast).forEach(fn => fn.mockClear());
 }

@@ -1,11 +1,12 @@
 {
   "name": "magnetic-cluster",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vitest run && tsc -b && vite build && tsx scripts/health-check.ts",
+    "health": "tsx scripts/health-check.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useProposal } from '../useProposal';
-import { createBidding, createCompany, createProposal, createProposalItem, mockFetchSuccess, mockFetchError, resetMocks, mockToast } from '../../../test/helpers';
-
+import { createBidding, createCompany, createProposal, createProposalItem, mockFetchSuccess, mockFetchError, resetMocks } from '../../../test/helpers';
 
 // Mock export services
 vi.mock('../../proposals/engine', () => ({
@@ -11,14 +10,48 @@ vi.mock('../../proposals/engine', () => ({
         totalPrice: item.unitCost * item.quantity * (1 + bdi / 100) * (1 - discount / 100),
     })),
     calculateTotals: vi.fn((items: any[]) => ({
-        subtotal: items.reduce((sum: number, it: any) => sum + it.totalPrice, 0),
-        total: items.reduce((sum: number, it: any) => sum + it.totalPrice, 0),
+        subtotal: items.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0),
+        total: items.reduce((sum: number, it: any) => sum + (it.totalPrice || 0), 0),
     })),
+    calculateAdjustedItem: vi.fn(() => ({ adjustedUnitPrice: 0, adjustedTotalPrice: 0 })),
+    calculateAdjustedTotals: vi.fn(() => ({ subtotal: 0, total: 0 })),
 }));
 
 vi.mock('../../proposals/exportServices', () => ({
     exportExcelProposal: vi.fn(),
     generateProposalPdf: vi.fn(),
+}));
+
+// Mock useSSE (background jobs)
+vi.mock('../useSSE', () => ({
+    submitBackgroundJob: vi.fn().mockResolvedValue({ jobId: 'test-job' }),
+    fetchJobResult: vi.fn().mockResolvedValue({}),
+    useSSE: vi.fn(),
+}));
+
+// Mock governance — allow production-proposal for stages used in tests
+vi.mock('../../../governance', () => ({
+    resolveStage: vi.fn((status: string) => status),
+    isModuleAllowed: vi.fn((stage: string, _substage: string, module: string) => {
+        // Preparando Documentação + Preparando Proposta allow production-proposal
+        if (module === 'production-proposal') {
+            return ['Preparando Documentação', 'Preparando Proposta', 'Aprovado para Participação'].includes(stage);
+        }
+        return true;
+    }),
+}));
+
+// Track toast calls
+const toastMock = {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+};
+
+vi.mock('../../ui', () => ({
+    useToast: () => toastMock,
+    ToastProvider: ({ children }: any) => children,
 }));
 
 describe('useProposal', () => {
@@ -33,6 +66,7 @@ describe('useProposal', () => {
 
     beforeEach(() => {
         resetMocks();
+        Object.values(toastMock).forEach(fn => fn.mockClear());
     });
 
     const renderUseProposal = () => renderHook(() => useProposal({ biddings, companies }));
@@ -117,7 +151,7 @@ describe('useProposal', () => {
         it('deve alertar quando bidding/company não selecionados', async () => {
             const { result } = renderUseProposal();
             await act(async () => result.current.handleCreateProposal());
-            expect(mockToast.warning).toHaveBeenCalledWith(expect.stringContaining('Selecione'));
+            expect(toastMock.warning).toHaveBeenCalledWith(expect.stringContaining('Selecione'));
         });
 
         it('deve criar proposta via API com dados corretos', async () => {
@@ -165,12 +199,12 @@ describe('useProposal', () => {
             expect(result.current.items[0].description).toBe('Serviço X');
         });
 
-        it('handleDeleteItem deve remover item temporário imediatamente', () => {
+        it('handleDeleteItem deve remover item temporário imediatamente', async () => {
             const { result } = renderUseProposal();
             act(() => result.current.handleAddItem());
             const itemId = result.current.items[0].id;
 
-            act(() => result.current.handleDeleteItem(itemId));
+            await act(async () => result.current.handleDeleteItem(itemId));
             expect(result.current.items).toHaveLength(0);
         });
 
@@ -183,7 +217,7 @@ describe('useProposal', () => {
 
             await waitFor(() => expect(result.current.items.length).toBeGreaterThan(0));
 
-            act(() => result.current.handleDeleteItem('item-real'));
+            await act(async () => result.current.handleDeleteItem('item-real'));
             expect(result.current.confirmDeleteItemId).toBe('item-real');
         });
     });
@@ -220,7 +254,17 @@ describe('useProposal', () => {
             await waitFor(() => expect(result.current.proposal).not.toBeNull());
             (global.fetch as ReturnType<typeof vi.fn>).mockClear();
             mockFetchSuccess({});
-            mockFetchSuccess([proposal]);
+            // loadProposals is called again after save
+            (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+                ok: true, status: 200,
+                json: () => Promise.resolve({}),
+                text: () => Promise.resolve('{}'),
+            });
+            (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+                ok: true, status: 200,
+                json: () => Promise.resolve([proposal]),
+                text: () => Promise.resolve('[]'),
+            });
 
             await act(async () => result.current.handleSaveConfig());
 

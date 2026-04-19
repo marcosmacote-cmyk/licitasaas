@@ -41,3 +41,4 @@ local-watcher/test-pub*
 server/.tmp-backups/
 pncp-aggregator/node_modules/
 pncp-aggregator/dist/
+.health-report.json

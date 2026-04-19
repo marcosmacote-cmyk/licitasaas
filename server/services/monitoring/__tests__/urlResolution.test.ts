@@ -1,4 +1,3 @@
-import { logger } from '../../../lib/logger';
 /**
  * ══════════════════════════════════════════════════════════════════
  *  URL Resolution Test Suite — Verifica links funcionais por plataforma
@@ -6,14 +5,8 @@ import { logger } from '../../../lib/logger';
  *
  *  Testa se o AutoEnrich e o import de processos geram links que
  *  o monitor de chat consegue usar (com param1, certame, sessionId, etc.)
- *
- *  Uso:
- *    npx tsx server/services/monitoring/__tests__/urlResolution.test.ts
- *
- *  Exit codes:
- *    0 = todos os cenários passaram
- *    1 = algum cenário falhou
  */
+import { describe, it, expect } from 'vitest';
 
 // ── Definição de Link Funcional por Plataforma ──
 
@@ -200,112 +193,68 @@ function shouldAutoEnrichRun(link: string): { shouldRun: boolean; reason: string
     return { shouldRun: false, reason: 'Link já funcional — não precisa enriquecer' };
 }
 
-// ── Runner ──
+// ── Test Suite ──
 
-interface TestResult {
-    scenario: string;
-    pass: boolean;
-    detail: string;
-}
+describe('URL Resolution', () => {
+    describe('Links funcionais devem ser aceitos', () => {
+        for (const spec of PLATFORM_SPECS) {
+            for (const goodLink of spec.goodExamples) {
+                it(`${spec.platform}: aceita ${goodLink.slice(0, 60)}...`, () => {
+                    const err = validateLink(goodLink, spec.platform);
+                    expect(err).toBeNull();
+                });
+            }
+        }
+    });
 
-function runTests(): TestResult[] {
-    const results: TestResult[] = [];
+    describe('Links genéricos devem ser rejeitados', () => {
+        for (const spec of PLATFORM_SPECS) {
+            for (const badLink of spec.badExamples) {
+                it(`${spec.platform}: rejeita ${badLink.slice(0, 60)}...`, () => {
+                    const err = validateLink(badLink, spec.platform);
+                    expect(err).not.toBeNull();
+                });
+            }
+        }
+    });
 
-    // ── CENÁRIO 1: Links bons devem ser aceitos ──
-    for (const spec of PLATFORM_SPECS) {
-        for (const goodLink of spec.goodExamples) {
-            const err = validateLink(goodLink, spec.platform);
-            results.push({
-                scenario: `${spec.platform}: link funcional aceito`,
-                pass: err === null,
-                detail: err || `✅ ${goodLink.slice(0, 60)}...`,
+    describe('AutoEnrich', () => {
+        const autoEnrichCases = [
+            {
+                name: 'BLL genérico + PNCP → deve rodar',
+                link: 'https://bllcompras.com/Home/PublicAccess, https://pncp.gov.br/app/editais/12345/2026/12',
+                expectRun: true,
+            },
+            {
+                name: 'M2A vitrine pública + PNCP → deve rodar',
+                link: 'https://compras.m2atecnologia.com.br/processos/publicacao/abc123/nome-processo, https://pncp.gov.br/app/editais/12345/2026/12',
+                expectRun: true,
+            },
+            {
+                name: 'BLL funcional + PNCP → não precisa enriquecer',
+                link: 'https://bllcompras.com/Process/ProcessView?param1=[gkz]abc, https://pncp.gov.br/app/editais/12345/2026/12',
+                expectRun: false,
+            },
+            {
+                name: 'Só PNCP sem plataforma → deve enriquecer',
+                link: 'https://pncp.gov.br/app/editais/12345/2026/12',
+                expectRun: true,
+            },
+            {
+                name: 'ComprasNet cnetmobile + PNCP → não precisa',
+                link: 'https://cnetmobile.estaleiro.serpro.gov.br/compras/001234, https://pncp.gov.br/app/editais/12345/2026/12',
+                expectRun: false,
+            },
+        ];
+
+        for (const tc of autoEnrichCases) {
+            it(tc.name, () => {
+                const { shouldRun } = shouldAutoEnrichRun(tc.link);
+                expect(shouldRun).toBe(tc.expectRun);
             });
         }
-    }
-
-    // ── CENÁRIO 2: Links genéricos devem ser rejeitados ──
-    for (const spec of PLATFORM_SPECS) {
-        for (const badLink of spec.badExamples) {
-            const err = validateLink(badLink, spec.platform);
-            results.push({
-                scenario: `${spec.platform}: link genérico rejeitado`,
-                pass: err !== null, // Deve FALHAR validação (= erro não é null)
-                detail: err ? `✅ Rejeitado: ${err}` : `❌ Link genérico aceito como funcional: ${badLink}`,
-            });
-        }
-    }
-
-    // ── CENÁRIO 3: AutoEnrich deve rodar para links genéricos ──
-    const autoEnrichCases = [
-        {
-            name: 'BLL genérico + PNCP',
-            link: 'https://bllcompras.com/Home/PublicAccess, https://pncp.gov.br/app/editais/12345/2026/12',
-            expectRun: true,
-        },
-        {
-            name: 'M2A vitrine pública + PNCP',
-            link: 'https://compras.m2atecnologia.com.br/processos/publicacao/abc123/nome-processo, https://pncp.gov.br/app/editais/12345/2026/12',
-            expectRun: true,
-        },
-        {
-            name: 'BLL funcional + PNCP (não precisa enriquecer)',
-            link: 'https://bllcompras.com/Process/ProcessView?param1=[gkz]abc, https://pncp.gov.br/app/editais/12345/2026/12',
-            expectRun: false,
-        },
-        {
-            name: 'Só PNCP sem plataforma (deve enriquecer)',
-            link: 'https://pncp.gov.br/app/editais/12345/2026/12',
-            expectRun: true,
-        },
-        {
-            name: 'ComprasNet cnetmobile + PNCP (não precisa)',
-            link: 'https://cnetmobile.estaleiro.serpro.gov.br/compras/001234, https://pncp.gov.br/app/editais/12345/2026/12',
-            expectRun: false,
-        },
-    ];
-
-    for (const tc of autoEnrichCases) {
-        const { shouldRun, reason } = shouldAutoEnrichRun(tc.link);
-        results.push({
-            scenario: `AutoEnrich: ${tc.name}`,
-            pass: shouldRun === tc.expectRun,
-            detail: shouldRun === tc.expectRun
-                ? `✅ ${shouldRun ? 'Roda' : 'Não roda'} — ${reason}`
-                : `❌ Esperado ${tc.expectRun ? 'RODAR' : 'NÃO rodar'}, mas ${shouldRun ? 'RODOU' : 'NÃO rodou'} — ${reason}`,
-        });
-    }
-
-    return results;
-}
-
-// ── Output ──
-
-logger.info(`\n${'═'.repeat(60)}`);
-logger.info(`🔗  URL RESOLUTION TEST SUITE`);
-logger.info(`${'═'.repeat(60)}\n`);
-
-const results = runTests();
-const passed = results.filter(r => r.pass);
-const failed = results.filter(r => !r.pass);
-
-for (const r of results) {
-    const icon = r.pass ? '✅' : '❌';
-    logger.info(`${icon} ${r.scenario}`);
-    if (!r.pass) {
-        logger.info(`   └→ ${r.detail}`);
-    }
-}
-
-logger.info(`\n${'═'.repeat(60)}`);
-logger.info(`TOTAL: ${results.length} tests | ✅ ${passed.length} passed | ❌ ${failed.length} failed`);
-
-if (failed.length > 0) {
-    logger.info(`\n🚨 ${failed.length} TESTE(S) FALHARAM — verificar links e AutoEnrich`);
-    process.exit(1);
-} else {
-    logger.info(`\n✅ TODOS OS TESTES PASSARAM`);
-    process.exit(0);
-}
+    });
+});
 
 // Export for use in other scripts
 export { validateLink, shouldAutoEnrichRun, PLATFORM_SPECS };

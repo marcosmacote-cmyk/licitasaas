@@ -20,14 +20,9 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { BatchPlatformMonitor } from './services/monitoring/batch-platform-monitor.service';
-import { PCPMonitor } from './services/monitoring/pcp-monitor.service';
-import { LicitanetMonitor } from './services/monitoring/licitanet-monitor.service';
-import { LicitaMaisBrasilMonitor } from './services/monitoring/licitamaisbrasil-monitor.service';
-import { IngestService } from './services/monitoring/ingest.service';
+import { startAllPollers } from './services/monitoring/pollers';
 import { startOpportunityScanner } from './services/monitoring/opportunity-scanner.service';
 import { runPncpSync, getPncpAggregatorStats } from './workers/pncpAggregator';
-import { decryptCredential, isEncrypted, isEncryptionConfigured } from './lib/crypto';
 import { logger } from './lib/logger';
 
 // ── Environment ──
@@ -42,11 +37,22 @@ const HEALTH_PORT = parseInt(process.env.WORKER_HEALTH_PORT || '3002', 10);
 let isHealthy = true;
 let lastCycleAt: Date | null = null;
 
+// ── Per-poller health tracking (Watchdog) ──
+const pollerLastSuccess = new Map<string, Date>();
+
 const healthServer = http.createServer((req, res) => {
     if (req.url === '/health' || req.url === '/') {
         const staleThresholdMs = 10 * 60 * 1000; // 10 minutes
         const isStale = lastCycleAt && (Date.now() - lastCycleAt.getTime()) > staleThresholdMs;
         
+        // Check individual poller health
+        const pollerHealth: Record<string, string> = {};
+        for (const [name, lastAt] of pollerLastSuccess) {
+            const ageMs = Date.now() - lastAt.getTime();
+            const isPollerStale = ageMs > 5 * 60 * 1000; // 5 minutes stale threshold
+            pollerHealth[name] = isPollerStale ? `stale (${Math.round(ageMs / 1000)}s ago)` : 'ok';
+        }
+
         if (isHealthy && !isStale) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -54,6 +60,7 @@ const healthServer = http.createServer((req, res) => {
                 role: 'worker',
                 lastCycleAt: lastCycleAt?.toISOString() || null,
                 uptime: process.uptime(),
+                pollers: pollerHealth,
             }));
         } else {
             res.writeHead(503, { 'Content-Type': 'application/json' });
@@ -61,6 +68,7 @@ const healthServer = http.createServer((req, res) => {
                 status: 'unhealthy',
                 reason: isStale ? 'stale_cycle' : 'error',
                 lastCycleAt: lastCycleAt?.toISOString() || null,
+                pollers: pollerHealth,
             }));
         }
     } else {
@@ -68,329 +76,6 @@ const healthServer = http.createServer((req, res) => {
         res.end();
     }
 });
-
-// ══════════════════════════════════════════════════════════════════
-// ── One-time Tasks ──
-// ══════════════════════════════════════════════════════════════════
-
-async function runComprasNetBackfill() {
-    try {
-        const processes = await prisma.biddingProcess.findMany({
-            where: {
-                link: { contains: 'pncp.gov.br/app/editais' },
-                NOT: { link: { contains: 'cnetmobile' } }
-            },
-            select: { id: true, link: true, isMonitored: true }
-        });
-
-        if (processes.length === 0) {
-            logger.info('[Backfill] All processes already have ComprasNet links or no PNCP links found.');
-            return;
-        }
-
-        logger.info(`[Backfill] Found ${processes.length} processes with PNCP links missing ComprasNet. Fetching...`);
-        let updated = 0;
-
-        for (const proc of processes) {
-            try {
-                const match = (proc.link || '').match(/editais\/(\d+)\/(\d+)\/(\d+)/);
-                if (!match) continue;
-
-                const [, cnpj, ano, seq] = match;
-                const apiUrl = `https://pncp.gov.br/api/consulta/v1/orgaos/${cnpj}/compras/${ano}/${seq}`;
-                const res = await fetch(apiUrl);
-                if (!res.ok) continue;
-
-                const data = await res.json();
-                const comprasNetLink = data.linkSistemaOrigem;
-
-                if (comprasNetLink && (comprasNetLink.includes('cnetmobile') || comprasNetLink.includes('comprasnet'))) {
-                    const newLink = `${proc.link}, ${comprasNetLink}`;
-                    await prisma.biddingProcess.update({
-                        where: { id: proc.id },
-                        data: {
-                            link: newLink,
-                            isMonitored: true
-                        }
-                    });
-                    updated++;
-                    logger.info(`[Backfill] ✅ Updated process ${proc.id.slice(0, 8)} with ComprasNet link`);
-                }
-
-                await new Promise(r => setTimeout(r, 500));
-            } catch (e) {
-                // Skip individual failures silently
-            }
-        }
-
-        logger.info(`[Backfill] Done. Updated ${updated}/${processes.length} processes with ComprasNet links.`);
-    } catch (e) {
-        logger.error('[Backfill] Error:', e);
-    }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// ── Pollers (extracted from server/index.ts app.listen) ──
-// ══════════════════════════════════════════════════════════════════
-
-// ── Batch Platforms (BLL + BNC) ──
-const BATCH_POLL_INTERVAL_MS = 60_000;
-
-async function pollBatchProcesses() {
-    try {
-        const batchProcesses = await prisma.biddingProcess.findMany({
-            where: {
-                isMonitored: true,
-                OR: [
-                    { link: { contains: 'bllcompras' } },
-                    { link: { contains: 'bnccompras' } },
-                ],
-            },
-            select: { id: true, tenantId: true, title: true, link: true },
-        });
-
-        if (batchProcesses.length === 0) return;
-
-        let totalNew = 0;
-        let totalAlerts = 0;
-
-        for (const proc of batchProcesses) {
-            try {
-                if (!proc.link) continue;
-                const platform = BatchPlatformMonitor.detectPlatform(proc.link);
-                if (!platform) continue;
-                const param1 = BatchPlatformMonitor.extractParam1(proc.link);
-                if (!param1) continue;
-
-                // CORRIGIDO: fetchAllMessages captura processo + TODOS os lotes
-                const messages = await BatchPlatformMonitor.fetchAllMessages(param1, platform);
-                if (messages.length === 0) continue;
-
-                const result = await IngestService.ingestMessages(prisma, {
-                    processId: proc.id,
-                    tenantId: proc.tenantId,
-                    // CORRIGIDO: propagar itemRef, eventCategory e captureSource individuais
-                    messages: messages.map((m: any) => ({
-                        messageId: m.messageId,
-                        content: m.content,
-                        authorType: m.authorType,
-                        timestamp: m.timestamp || null,
-                        itemRef: m.itemRef || null,
-                        eventCategory: m.eventCategory || null,
-                        captureSource: m.captureSource || platform.captureSource,
-                    })),
-                    captureSource: platform.captureSource,
-                });
-
-                if (result.created > 0) {
-                    logger.info(`[${platform.label} Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
-                    totalNew += result.created;
-                    totalAlerts += result.alerts;
-                }
-
-                await new Promise(r => setTimeout(r, 1000));
-            } catch (err: any) {
-                logger.warn(`[Batch Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
-            }
-        }
-
-        if (totalNew > 0) {
-            logger.info(`[Batch Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${batchProcesses.length} processos`);
-        }
-        lastCycleAt = new Date();
-    } catch (error: any) {
-        logger.error('[Batch Poll] Erro no ciclo:', error.message);
-    }
-}
-
-// ── Portal de Compras Públicas (PCP) ──
-const PCP_POLL_INTERVAL_MS = 90_000;
-
-async function pollPCPProcesses() {
-    try {
-        const pcpProcesses = await prisma.biddingProcess.findMany({
-            where: {
-                isMonitored: true,
-                link: { contains: 'portaldecompraspublicas' },
-            },
-            select: { id: true, tenantId: true, title: true, link: true },
-        });
-
-        if (pcpProcesses.length === 0) return;
-
-        let totalNew = 0;
-        let totalAlerts = 0;
-
-        for (const proc of pcpProcesses) {
-            try {
-                if (!proc.link) continue;
-                const pcpUrl = PCPMonitor.extractPCPUrl(proc.link);
-                if (!pcpUrl) continue;
-
-                const messages = await PCPMonitor.fetchMessages(pcpUrl);
-                if (messages.length === 0) continue;
-
-                const result = await IngestService.ingestMessages(prisma, {
-                    processId: proc.id,
-                    tenantId: proc.tenantId,
-                    messages: messages.map((m: any) => ({
-                        messageId: m.messageId,
-                        content: m.content,
-                        authorType: m.authorType,
-                        timestamp: m.timestamp || null,
-                        itemRef: m.itemRef || null,
-                        eventCategory: m.eventCategory || null,
-                        captureSource: m.captureSource || 'pcp-api',
-                    })),
-                    captureSource: 'pcp-api',
-                });
-
-                if (result.created > 0) {
-                    logger.info(`[PCP Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
-                    totalNew += result.created;
-                    totalAlerts += result.alerts;
-                }
-
-                await new Promise(r => setTimeout(r, 2000));
-            } catch (err: any) {
-                logger.warn(`[PCP Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
-            }
-        }
-
-        if (totalNew > 0) {
-            logger.info(`[PCP Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${pcpProcesses.length} processos`);
-        }
-        lastCycleAt = new Date();
-    } catch (error: any) {
-        logger.error('[PCP Poll] Erro no ciclo:', error.message);
-    }
-}
-
-// ── Licitanet ──
-const LICITANET_POLL_INTERVAL_MS = 90_000;
-
-async function pollLicitanetProcesses() {
-    try {
-        const licitanetProcesses = await prisma.biddingProcess.findMany({
-            where: {
-                isMonitored: true,
-                link: { contains: 'licitanet.com.br' },
-            },
-            select: { id: true, tenantId: true, title: true, link: true },
-        });
-
-        if (licitanetProcesses.length === 0) return;
-
-        let totalNew = 0;
-        let totalAlerts = 0;
-
-        for (const proc of licitanetProcesses) {
-            try {
-                if (!proc.link) continue;
-                const licitanetUrl = LicitanetMonitor.extractLicitanetUrl(proc.link);
-                if (!licitanetUrl) continue;
-
-                const messages = await LicitanetMonitor.fetchMessages(licitanetUrl);
-                if (messages.length === 0) continue;
-
-                const result = await IngestService.ingestMessages(prisma, {
-                    processId: proc.id,
-                    tenantId: proc.tenantId,
-                    messages: messages.map((m: any) => ({
-                        messageId: m.messageId,
-                        content: m.content,
-                        authorType: m.authorType,
-                        timestamp: m.timestamp || null,
-                        itemRef: m.itemRef || null,
-                        eventCategory: m.eventCategory || null,
-                        captureSource: m.captureSource || 'licitanet-api',
-                    })),
-                    captureSource: 'licitanet-api',
-                });
-
-                if (result.created > 0) {
-                    logger.info(`[Licitanet Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
-                    totalNew += result.created;
-                    totalAlerts += result.alerts;
-                }
-
-                await new Promise(r => setTimeout(r, 1000));
-            } catch (err: any) {
-                logger.warn(`[Licitanet Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
-            }
-        }
-
-        if (totalNew > 0) {
-            logger.info(`[Licitanet Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${licitanetProcesses.length} processos`);
-        }
-        lastCycleAt = new Date();
-    } catch (error: any) {
-        logger.error('[Licitanet Poll] Erro no ciclo:', error.message);
-    }
-}
-
-// ── Licita Mais Brasil ──
-const LMB_POLL_INTERVAL_MS = 90_000;
-
-async function pollLMBProcesses() {
-    try {
-        const lmbProcesses = await prisma.biddingProcess.findMany({
-            where: {
-                isMonitored: true,
-                link: { contains: 'licitamaisbrasil.com.br' },
-            },
-            select: { id: true, tenantId: true, title: true, link: true },
-        });
-
-        if (lmbProcesses.length === 0) return;
-
-        let totalNew = 0;
-        let totalAlerts = 0;
-
-        for (const proc of lmbProcesses) {
-            try {
-                if (!proc.link) continue;
-                const lmbUrl = LicitaMaisBrasilMonitor.extractLMBUrl(proc.link);
-                if (!lmbUrl) continue;
-
-                const messages = await LicitaMaisBrasilMonitor.fetchMessages(lmbUrl);
-                if (messages.length === 0) continue;
-
-                const result = await IngestService.ingestMessages(prisma, {
-                    processId: proc.id,
-                    tenantId: proc.tenantId,
-                    messages: messages.map((m: any) => ({
-                        messageId: m.messageId,
-                        content: m.content,
-                        authorType: m.authorType,
-                        timestamp: m.timestamp || null,
-                        itemRef: m.itemRef || null,
-                        eventCategory: m.eventCategory || null,
-                        captureSource: m.captureSource || 'licitamaisbrasil-api',
-                    })),
-                    captureSource: 'licitamaisbrasil-api',
-                });
-
-                if (result.created > 0) {
-                    logger.info(`[LMB Poll] 📨 ${result.created} nova(s) msg(s) para ${proc.title?.substring(0, 40)} (${result.alerts} alertas)`);
-                    totalNew += result.created;
-                    totalAlerts += result.alerts;
-                }
-
-                await new Promise(r => setTimeout(r, 1500));
-            } catch (err: any) {
-                logger.warn(`[LMB Poll] Erro no processo ${proc.id.substring(0, 8)}:`, err.message);
-            }
-        }
-
-        if (totalNew > 0) {
-            logger.info(`[LMB Poll] ✅ Ciclo: ${totalNew} mensagens novas, ${totalAlerts} alertas de ${lmbProcesses.length} processos`);
-        }
-        lastCycleAt = new Date();
-    } catch (error: any) {
-        logger.error('[LMB Poll] Erro no ciclo:', error.message);
-    }
-}
 
 // ══════════════════════════════════════════════════════════════════
 // ── Daily Backup Scheduler ──
@@ -427,6 +112,43 @@ function scheduleBackup() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ── Watchdog: Monitor poller health ──
+// ══════════════════════════════════════════════════════════════════
+
+function startWatchdog() {
+    const WATCHDOG_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    const STALE_THRESHOLD_MS = 10 * 60 * 1000;  // 10 minutes
+
+    setTimeout(() => {
+        logger.info('[Watchdog] 🐕 Worker watchdog started (interval: 5 min)');
+        
+        setInterval(() => {
+            const now = Date.now();
+            const stalePollers: string[] = [];
+
+            for (const [name, lastAt] of pollerLastSuccess) {
+                const ageMs = now - lastAt.getTime();
+                if (ageMs > STALE_THRESHOLD_MS) {
+                    stalePollers.push(`${name} (${Math.round(ageMs / 60000)}min ago)`);
+                }
+            }
+
+            if (stalePollers.length > 0) {
+                logger.warn(`[Watchdog] ⚠️ Stale pollers detected: ${stalePollers.join(', ')}`);
+            }
+
+            // Log memory usage periodically
+            const mem = process.memoryUsage();
+            const heapMB = Math.round(mem.heapUsed / 1048576);
+            const rssMB = Math.round(mem.rss / 1048576);
+            if (heapMB > 300) {
+                logger.warn(`[Watchdog] ⚠️ High memory: heap=${heapMB}MB, rss=${rssMB}MB`);
+            }
+        }, WATCHDOG_INTERVAL_MS);
+    }, 3 * 60 * 1000); // Start 3 min after boot
+}
+
+// ══════════════════════════════════════════════════════════════════
 // ── Main: Start all workers ──
 // ══════════════════════════════════════════════════════════════════
 
@@ -453,33 +175,15 @@ async function main() {
         logger.info(`[Worker] 🏥 Health check listening on port ${HEALTH_PORT}`);
     });
 
-    // Run one-time backfill
-    runComprasNetBackfill();
-
-    // Start pollers with staggered delays to avoid thundering herd
-    setTimeout(() => {
-        logger.info(`[Batch Poll] 🚀 Monitor BLL+BNC iniciado (intervalo: ${BATCH_POLL_INTERVAL_MS / 1000}s)`);
-        pollBatchProcesses();
-        setInterval(pollBatchProcesses, BATCH_POLL_INTERVAL_MS);
-    }, 10_000); // 10s after boot
-
-    setTimeout(() => {
-        logger.info(`[PCP Poll] 🚀 Monitor Portal de Compras Públicas iniciado (intervalo: ${PCP_POLL_INTERVAL_MS / 1000}s)`);
-        pollPCPProcesses();
-        setInterval(pollPCPProcesses, PCP_POLL_INTERVAL_MS);
-    }, 25_000); // 25s after boot
-
-    setTimeout(() => {
-        logger.info(`[Licitanet Poll] 🚀 Monitor Licitanet iniciado (intervalo: ${LICITANET_POLL_INTERVAL_MS / 1000}s)`);
-        pollLicitanetProcesses();
-        setInterval(pollLicitanetProcesses, LICITANET_POLL_INTERVAL_MS);
-    }, 40_000); // 40s after boot
-
-    setTimeout(() => {
-        logger.info(`[LMB Poll] 🚀 Monitor Licita Mais Brasil iniciado (intervalo: ${LMB_POLL_INTERVAL_MS / 1000}s)`);
-        pollLMBProcesses();
-        setInterval(pollLMBProcesses, LMB_POLL_INTERVAL_MS);
-    }, 55_000); // 55s after boot
+    // Start all chat monitoring pollers (shared module)
+    startAllPollers({
+        prisma,
+        onCycleSuccess: (pollerName) => {
+            lastCycleAt = new Date();
+            pollerLastSuccess.set(pollerName, new Date());
+        },
+        delays: [10_000, 25_000, 40_000, 55_000],
+    });
 
     // ── PNCP Aggregator: sincroniza base local a cada 15 minutos ──
     setTimeout(async () => {
@@ -502,6 +206,9 @@ async function main() {
 
     // ── Daily Automated Backup (3:00 AM UTC) ──
     scheduleBackup();
+
+    // ── Watchdog: Monitor poller health ──
+    startWatchdog();
 
     logger.info('[Worker] 🚀 All monitors scheduled. Worker is running.');
 }

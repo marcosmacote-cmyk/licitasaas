@@ -39,16 +39,9 @@ import { createOrUpdateProfile, getProfile, getAllProfiles, createEmptyProfile, 
 import { matchCompanyToEdital, calculateParticipationScore, generateActionPlan } from "../services/ai/strategy/participationEngine";
 import { buildHybridContext } from "../services/ai/strategy/companyAwareContext";
 import { generateCompanyInsights, recordMatchHistory } from "../services/ai/strategy/companyLearningInsights";
-import { pncpMonitor } from "../services/monitoring/pncp-monitor.service";
 import { recordAnalysisTelemetry, getPipelineHealth, classifySafetyNets } from "../services/ai/telemetry/analysisTelemetry";
 import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "../services/monitoring/alertTaxonomy";
 import { NotificationService } from "../services/monitoring/notification.service";
-import { startOpportunityScanner } from "../services/monitoring/opportunity-scanner.service";
-import { BatchPlatformMonitor } from "../services/monitoring/batch-platform-monitor.service";
-import { PCPMonitor } from "../services/monitoring/pcp-monitor.service";
-import { LicitanetMonitor } from "../services/monitoring/licitanet-monitor.service";
-import { LicitaMaisBrasilMonitor } from "../services/monitoring/licitamaisbrasil-monitor.service";
-import { IngestService } from "../services/monitoring/ingest.service";
 import { submitJob, getJob, listJobs, registerSSEClient, removeSSEClient, updateJobProgress, completeJob, failJob } from "../services/backgroundJobService";
 import { registerJobHandler, startJobWorker } from "../services/backgroundJobWorker";
 import { handleApiError } from "../middlewares/errorHandler";
