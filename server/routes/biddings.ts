@@ -51,6 +51,24 @@ router.get('/', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ── GET /biddings/:id — Get a single bidding with full AI Analysis ──
+router.get('/:id', authenticateToken, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const bidding = await prisma.biddingProcess.findUnique({
+            where: { id, tenantId: req.user.tenantId },
+            include: { aiAnalysis: true }
+        });
+        
+        if (!bidding) {
+            return res.status(404).json({ error: 'Processo não encontrado.' });
+        }
+        res.json(bidding);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch bidding' });
+    }
+});
+
 // ── POST /biddings — Create new bidding ──
 router.post('/', authenticateToken, async (req: any, res) => {
     try {

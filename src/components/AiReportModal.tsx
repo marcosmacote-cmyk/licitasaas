@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { ScanSearch, FileCheck, X, MessageSquare, Plus, FileDown, ArrowLeft } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { ScanSearch, FileCheck, X, MessageSquare, Plus, FileDown, ArrowLeft, Loader2 } from 'lucide-react';
 import type { AiAnalysis } from '../types';
 import { useAiChat } from './hooks/useAiChat';
 import { useAiReport } from './hooks/useAiReport';
@@ -8,6 +8,7 @@ import { EducationalPopover } from './ui';
 import type { ReportPdfData } from './report/AiReportPdfExporter';
 import { AiReportTabAnalytics } from './report/AiReportTabAnalytics';
 import { AiReportTabChat } from './report/AiReportTabChat';
+import { API_BASE_URL } from '../config/api';
 
 interface Props {
     analysis: AiAnalysis;
@@ -18,8 +19,31 @@ interface Props {
     onBackToHub?: () => void;
 }
 
-export function AiReportModal({ analysis, process, onClose, onUpdate, onImport, onBackToHub }: Props) {
+export function AiReportModal({ analysis: initialAnalysis, process, onClose, onUpdate, onImport, onBackToHub }: Props) {
     const [activeTab, setActiveTab] = useState<'report' | 'chat'>('report');
+    const [analysis, setAnalysis] = useState<AiAnalysis>(initialAnalysis);
+    const [loadingFull, setLoadingFull] = useState(!initialAnalysis.schemaV2);
+
+    useEffect(() => {
+        const processId = process?.id || initialAnalysis.biddingProcessId;
+        if (!initialAnalysis.schemaV2 && processId) {
+            setLoadingFull(true);
+            fetch(`${API_BASE_URL}/api/biddings/${processId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.aiAnalysis) {
+                    setAnalysis(data.aiAnalysis);
+                }
+                setLoadingFull(false);
+            })
+            .catch(err => {
+                console.error('Failed to load full analysis', err);
+                setLoadingFull(false);
+            });
+        }
+    }, [initialAnalysis, process?.id]);
 
     const chat = useAiChat({ analysis, process, onUpdate });
     const report = useAiReport({ analysis, process });
@@ -179,7 +203,13 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport, 
                 </div>
 
                 {/* Content Area */}
-                <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', position: 'relative' }}>
+                    {loadingFull ? (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-surface)', zIndex: 10 }}>
+                            <Loader2 size={48} color="var(--color-primary)" style={{ animation: 'spin 1s linear infinite' }} />
+                            <p style={{ marginTop: 'var(--space-4)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>Carregando dados detalhados...</p>
+                        </div>
+                    ) : null}
                     {activeTab === 'report' ? 
                         <AiReportTabAnalytics report={report} process={process} analysis={analysis} /> 
                         : 
@@ -235,6 +265,7 @@ export function AiReportModal({ analysis, process, onClose, onUpdate, onImport, 
             <style>{`
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                 @keyframes slideUp { from { transform: translateY(30px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+                @keyframes spin { 100% { transform: rotate(360deg); } }
                 .quick-reply-btn { padding: var(--space-3) var(--space-5); border-radius: var(--radius-lg); background: var(--color-bg-surface); border: 1px solid var(--color-border); color: var(--color-text-secondary); font-size: 0.875rem; cursor: pointer; transition: var(--transition-fast); }
                 .quick-reply-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
             `}</style>
