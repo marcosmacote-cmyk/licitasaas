@@ -56,9 +56,83 @@ interface SearchScanResult {
 }
 
 /**
+ * Fallback: busca diretamente na API PNCP Search (Elasticsearch) quando
+ * a base local está vazia ou desatualizada. Garante que o scanner funcione
+ * mesmo quando o worker/aggregator está offline.
+ */
+async function searchPncpApiDirect(search: {
+    keywords: string | null;
+    status: string | null;
+    states: string | null;
+}): Promise<PncpSearchResult[]> {
+    let ufs = '';
+    if (search.states) {
+        try {
+            const parsed = JSON.parse(search.states);
+            if (Array.isArray(parsed)) ufs = parsed.join(',');
+            else if (typeof parsed === 'object' && parsed.uf) ufs = parsed.uf;
+            else if (typeof parsed === 'string' && parsed.length > 0) ufs = parsed;
+        } catch { ufs = search.states || ''; }
+    }
+
+    const params = new URLSearchParams();
+    params.set('tipos_documento', 'edital');
+    params.set('ordenacao', '-data');
+    params.set('pagina', '1');
+    params.set('tam_pagina', '100');
+
+    // Map status to PNCP API parameter
+    const statusStr = search.status || 'recebendo_proposta';
+    if (statusStr === 'recebendo_proposta') params.set('status', 'recebendo_proposta');
+    else if (statusStr === 'encerrada') params.set('status', 'encerrada');
+
+    if (ufs) params.set('ufs', ufs);
+    if (search.keywords) params.set('q', search.keywords);
+
+    const url = `https://pncp.gov.br/api/search/?${params.toString()}`;
+    logger.info(`[OpportunityScanner] 🌐 Fallback API: ${url.substring(0, 120)}`);
+
+    const resp = await axios.get(url, { httpsAgent: agent, timeout: 15000 });
+    const items = resp.data?.items || [];
+
+    return items
+        .filter((item: any) => {
+            // Apply keyword filter (API "q" param is fuzzy — verify locally)
+            if (search.keywords) {
+                const kws = search.keywords.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+                const text = `${item.description || ''} ${item.title || ''}`.toLowerCase();
+                return kws.some((kw: string) => text.includes(kw));
+            }
+            return true;
+        })
+        .map((item: any): PncpSearchResult => {
+            const cnpj = item.orgao_cnpj || '';
+            const ano = item.ano || '';
+            const nSeq = item.numero_sequencial || '';
+            return {
+                id: item.numero_controle_pncp || `${cnpj}-${ano}-${nSeq}`,
+                titulo: (item.title || item.description || '').substring(0, 120),
+                objeto: item.description || '',
+                orgao_nome: item.orgao_nome || '',
+                orgao_cnpj: cnpj,
+                ano,
+                numero_sequencial: nSeq,
+                uf: item.uf || '',
+                municipio: item.municipio_nome || '',
+                valor_estimado: item.valor_global ? Number(item.valor_global) : 0,
+                data_encerramento_proposta: item.data_fim_vigencia || '',
+                modalidade_nome: item.modalidade_licitacao_nome || '',
+                link_sistema: cnpj && ano && nSeq
+                    ? `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${nSeq}`
+                    : (item.item_url ? `https://pncp.gov.br${item.item_url}` : ''),
+            };
+        });
+}
+
+/**
  * Executa uma busca PNCP utilizando o PncpSearchV3 (SQL raw).
- * Garante que o robô obtenha EXATAMENTE os mesmos resultados
- * da tela de Busca, eliminando discrepâncias (V1 → V3 migration).
+ * Se a base local retorna 0 resultados, faz fallback para a API PNCP
+ * para garantir que o scanner funcione mesmo com o aggregator offline.
  */
 async function executePncpSearch(search: {
     keywords: string | null;
@@ -105,6 +179,17 @@ async function executePncpSearch(search: {
 
     // V3 (SQL raw) — mesmo motor usado pela busca do frontend
     const result = await PncpSearchV3.search(input);
+
+    // ── Fallback: se a base local está vazia, buscar direto na API PNCP ──
+    if (result.items.length === 0) {
+        logger.info(`[OpportunityScanner] ⚠️ Base local vazia para keywords="${search.keywords}", tentando API PNCP direta...`);
+        try {
+            return await searchPncpApiDirect(search);
+        } catch (err: any) {
+            logger.warn(`[OpportunityScanner] API fallback failed: ${err.message}`);
+            return [];
+        }
+    }
 
     return result.items.map((c: any) => ({
         id: c.id,

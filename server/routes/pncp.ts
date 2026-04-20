@@ -1034,6 +1034,38 @@ router.get('/sync-health', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ── Force reset stuck aggregator sync ──
+router.post('/sync-reset', authenticateToken, async (req: any, res) => {
+    try {
+        // Only allow admin users
+        if (req.user?.role !== 'admin' && req.user?.role !== 'ADMIN' && req.user?.role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        await prisma.pncpSyncState.update({
+            where: { id: 'singleton' },
+            data: { isRunning: false, lastError: null }
+        });
+
+        logger.info(`[PNCP] 🔓 Sync lock released by admin ${req.user?.email}`);
+
+        // Optionally trigger immediate sync
+        if (req.body?.triggerSync) {
+            try {
+                const { runPncpSync } = await import('../workers/pncpAggregator');
+                runPncpSync().catch((err: any) => logger.error('[PNCP] Triggered sync error:', err.message));
+                return res.json({ success: true, message: 'Sync lock released and sync triggered. Check /sync-health in ~5 min.' });
+            } catch {
+                return res.json({ success: true, message: 'Sync lock released. Sync will resume on next scheduled cycle.' });
+            }
+        }
+
+        res.json({ success: true, message: 'Sync lock released. Next scheduled sync will proceed normally.' });
+    } catch (error: any) {
+        res.status(500).json({ error: error?.message || 'Failed to reset sync state' });
+    }
+});
+
 // ══════════════════════════════════════════
 // ── DEBUG: Contagem por UF (temporário) ──
 // ══════════════════════════════════════════

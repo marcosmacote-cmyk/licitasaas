@@ -153,8 +153,19 @@ async function syncIncremental(): Promise<number> {
     }
 
     if (state.isRunning) {
-        log('WARN', 'Sync already running, skipping');
-        return 0;
+        // Auto-reset if stuck for more than 30 minutes (crash protection)
+        const stuckMs = Date.now() - state.lastSyncAt.getTime();
+        const STUCK_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+        if (stuckMs > STUCK_THRESHOLD_MS) {
+            log('WARN', `Sync was stuck for ${Math.round(stuckMs / 60000)}min — force-resetting isRunning flag`);
+            await prisma.pncpSyncState.update({
+                where: { id: 'singleton' },
+                data: { isRunning: false }
+            });
+        } else {
+            log('WARN', 'Sync already running, skipping');
+            return 0;
+        }
     }
 
     await prisma.pncpSyncState.update({
