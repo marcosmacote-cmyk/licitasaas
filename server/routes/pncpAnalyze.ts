@@ -347,6 +347,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             return archivePriorityScore(nameA) - archivePriorityScore(nameB);
         });
 
+        const downloadErrors: string[] = [];
         let dlIndex = 0;
         for (const arq of filteredArquivos) {
             const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
@@ -362,7 +363,11 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                     httpsAgent: agent,
                     timeout: 90000,
                     responseType: 'arraybuffer',
-                    maxRedirects: 5
+                    maxRedirects: 5,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'application/pdf,application/zip,application/x-rar-compressed,*/*'
+                    }
                 } as any);
 
                 const buffer = Buffer.from(fileRes.data as ArrayBuffer);
@@ -624,14 +629,17 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                 }
             } catch (dlErr: any) {
                 logger.warn(`[PNCP-AI] Failed to download ${fileName}: ${dlErr.message}`);
+                const status = dlErr?.response?.status ? `HTTP ${dlErr.response.status}` : dlErr.code || 'Erro de rede';
+                downloadErrors.push(`Falha ao baixar ${fileName}: ${status} - ${dlErr.message}`);
             }
         }
 
         if (pdfParts.length === 0) {
             const discardInfo = discardedFiles.length > 0 ? ` ${discardedFiles.length} excluído(s) por filtro inteligente.` : '';
+            const errList = downloadErrors.length > 0 ? ` Problemas de rede/bloqueio: ${downloadErrors.join(' | ')}` : '';
             return sendError(
                 'Nenhum arquivo PDF utilizável encontrado para este edital no PNCP.',
-                `Encontramos ${arquivos.length} arquivo(s) na API, ${filteredArquivos.length} passou(aram) no filtro, mas nenhum download resultou em PDF válido.${discardInfo}`
+                `Encontramos ${arquivos.length} arquivo(s) na API, ${filteredArquivos.length} passou(aram) no filtro, mas nenhum download resultou em PDF válido.${discardInfo}${errList}`
             );
         }
 
