@@ -92,8 +92,9 @@ async function searchPncpApiDirect(search: {
     const url = `https://pncp.gov.br/api/search/?${params.toString()}`;
     logger.info(`[OpportunityScanner] 🌐 Fallback API: ${url.substring(0, 120)}`);
 
-    const resp = await axios.get(url, { httpsAgent: agent, timeout: 15000 });
-    const items = resp.data?.items || [];
+    const resp = await axios.get(url, { timeout: 15000 });
+    const data = resp.data as any;
+    const items = data?.items || [];
 
     return items
         .filter((item: any) => {
