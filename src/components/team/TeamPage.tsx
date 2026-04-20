@@ -157,7 +157,7 @@ export function TeamPage() {
         } catch { }
     };
 
-    if (currentUser.role !== 'admin' && currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'admin' && currentUser.role !== 'ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
         return (
             <div className="flex-center" style={{ height: '70vh', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 <ShieldAlert size={48} color="var(--color-danger)" />
@@ -222,7 +222,7 @@ export function TeamPage() {
                                                 </div>
                                             </td>
                                             <td style={{ padding: 'var(--space-4) var(--space-6)' }}>
-                                                {(member.role === 'ADMIN' || member.role === 'admin') ? (
+                                                {(member.role === 'ADMIN' || member.role === 'admin' || member.role === 'SUPER_ADMIN') ? (
                                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 12, background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
                                                         <Shield size={12} /> Admin
                                                     </span>
