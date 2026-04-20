@@ -224,6 +224,40 @@ app.get('/uploads/:filename', async (req, res, next) => {
     }
 });
 
+// ── Supabase URL Proxy (migration safety net) ──
+// When the DB has old supabase.co URLs, the frontend requests go through this proxy.
+// The storageService (in RAILWAY mode) fetches from Supabase, caches locally, and serves.
+app.get('/api/storage-proxy', async (req, res) => {
+    try {
+        const url = req.query.url as string;
+        if (!url || !url.startsWith('http')) {
+            return res.status(400).json({ error: 'Missing or invalid url parameter' });
+        }
+
+        const buffer = await storageService.getFileBuffer(url);
+
+        // Determine content type from extension
+        const ext = path.extname(url.split('?')[0]).toLowerCase();
+        const contentTypes: Record<string, string> = {
+            '.pdf': 'application/pdf',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        };
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+
+        res.set('Content-Type', contentType);
+        res.set('Content-Length', String(buffer.length));
+        res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24h
+        res.send(buffer);
+    } catch (err: any) {
+        logger.warn(`[Storage Proxy] Failed: ${err.message}`);
+        res.status(404).json({ error: 'File not found' });
+    }
+});
+
 // Fallback static serving (still good for files that ARE there)
 app.use('/uploads', express.static(uploadDir));
 
