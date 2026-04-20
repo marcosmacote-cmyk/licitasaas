@@ -1358,7 +1358,11 @@ router.post('/chat', authenticateToken, aiLimiter, async (req: any, res) => {
     try {
         const traceLog = (msg: string) => {
             const timestamp = new Date().toISOString();
-            fs.appendFileSync(path.join(uploadDir, 'chat-trace.log'), `[${timestamp}] ${msg}\n`);
+            try {
+                const logDir = uploadDir || '/tmp';
+                if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+                fs.appendFileSync(path.join(logDir, 'chat-trace.log'), `[${timestamp}] ${msg}\n`);
+            } catch { /* file logging is non-critical */ }
             logger.info(msg);
         };
 

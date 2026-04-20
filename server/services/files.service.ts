@@ -2,10 +2,21 @@ import path from 'path';
 import fs from 'fs';
 
 // Resolve server root (handles both ts-node and compiled dist/)
-const SERVER_ROOT = __dirname.endsWith('dist') ? path.resolve(__dirname, '../..') : path.resolve(__dirname, '..');
+// In production: __dirname = /app/server/dist/services → SERVER_ROOT = /app/server
+// In dev (ts-node): __dirname = /path/server/services → SERVER_ROOT = /path/server
+const pathParts = __dirname.split(path.sep);
+const distIndex = pathParts.lastIndexOf('dist');
+const SERVER_ROOT = distIndex >= 0
+    ? pathParts.slice(0, distIndex).join(path.sep) || '/'
+    : path.resolve(__dirname, '..');
 
 // Setup uploads directory for Mock Bucket
 export const uploadDir = path.join(SERVER_ROOT, 'uploads');
+
+// Auto-initialize on import to prevent ENOENT crashes in any consumer
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 export const initStoragePaths = () => {
     if (!fs.existsSync(uploadDir)) {
