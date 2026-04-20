@@ -167,7 +167,7 @@ describe('useAiChat', () => {
 
             await waitFor(() => {
                 expect(axios.post).toHaveBeenCalledWith(
-                    expect.stringContaining('/api/analysis'),
+                    expect.stringContaining('/api/analyze-edital/analysis'),
                     expect.objectContaining({
                         biddingProcessId: 'bid-1',
                         chatHistory: expect.any(String),
