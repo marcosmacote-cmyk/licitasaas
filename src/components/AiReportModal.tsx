@@ -8,7 +8,7 @@ import { EducationalPopover } from './ui';
 import type { ReportPdfData } from './report/AiReportPdfExporter';
 import { AiReportTabAnalytics } from './report/AiReportTabAnalytics';
 import { AiReportTabChat } from './report/AiReportTabChat';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL } from '../config';
 
 interface Props {
     analysis: AiAnalysis;
