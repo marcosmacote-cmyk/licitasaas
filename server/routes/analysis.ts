@@ -1532,8 +1532,12 @@ ${analysisContext}
 
         res.json({ text: chatResult.text });
     } catch (error: any) {
-        logger.error("AI Chat Error:", error?.message || error);
-        res.status(500).json({ error: 'Failed to answer via AI chat' });
+        const errMsg = error?.message || String(error);
+        logger.error("AI Chat Error:", errMsg);
+        logger.error("AI Chat Stack:", error?.stack || 'no stack');
+        // Return detailed error for diagnosis (truncated for security)
+        const safeMsg = errMsg.length > 200 ? errMsg.substring(0, 200) + '...' : errMsg;
+        res.status(500).json({ error: `Failed to answer via AI chat`, detail: safeMsg });
     }
 });
 
