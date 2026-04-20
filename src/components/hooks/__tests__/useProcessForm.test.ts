@@ -293,10 +293,10 @@ describe('useProcessForm', () => {
             expect(result.current.nextStep.label).toBe('Anexar Edital');
         });
 
-        it('deve recomendar "Analisar com LicitIA" para Captado com PDF sem análise', () => {
+        it('deve recomendar "Mover para Análise" para Captado com PDF sem análise', () => {
             const bidding = createBidding({ id: 'b1', status: 'Captado', link: '/uploads/edital.pdf', aiAnalysis: null });
             const { result } = renderForm(bidding);
-            expect(result.current.nextStep.label).toBe('Analisar com LicitIA');
+            expect(result.current.nextStep.label).toBe('Mover para Análise');
         });
     });
 
