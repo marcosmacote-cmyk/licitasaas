@@ -6,6 +6,7 @@ import type { BiddingProcess, CompanyProfile, ObservationLog } from '../types';
 import { RiskIndicator } from './ui';
 import { normalizeModality, normalizeTitle } from '../utils/normalizeModality';
 import { Skeleton } from './ui/Skeleton';
+import { isModuleAllowed, resolveStage } from '../governance';
 
 interface CardFieldConfig {
     key: string;
@@ -190,7 +191,7 @@ export function KanbanItemVisual({ item, isOverlay, hasAnalysis, companies, onVi
                                     </button>
                                 );
                             })()}
-                            {hasAnalysis && (
+                            {hasAnalysis && isModuleAllowed(resolveStage(item.status), item.substage, 'intelligence') && (
                                 <button
                                     className="icon-btn"
                                     style={{ padding: '4px', cursor: 'pointer', color: 'var(--color-ai)', background: 'var(--color-ai-bg)' }}

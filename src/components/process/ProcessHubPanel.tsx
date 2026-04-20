@@ -218,7 +218,8 @@ export function ProcessHubPanel({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
 
                     {/* LicitIA */}
-                    <div style={{
+                    {isModuleAllowed(stage, substage, 'intelligence') && (
+                        <div style={{
                         padding: 'var(--space-3) var(--space-4)',
                         borderRadius: 'var(--radius-lg)',
                         background: ai ? 'var(--color-ai-bg)' : 'var(--color-bg-body)',
@@ -286,7 +287,7 @@ export function ProcessHubPanel({
                                     : 'Anexe o edital (PDF) na aba Dados do Processo.'}
                             </p>
                         )}
-                    </div>
+                    </div>)}
 
                     {/* Ações rápidas — lista compacta */}
                     <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-body)', border: '1px solid var(--color-border)', flex: 1 }}>
