@@ -351,7 +351,10 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         let dlIndex = 0;
         for (const arq of filteredArquivos) {
             const pdfPartsFull = pdfParts.length >= MAX_PDF_PARTS;
-            const fileUrl = arq.url || arq.uri || '';
+            let fileUrl = arq.url || arq.uri || '';
+            if (fileUrl.includes('pncp-api/v1')) {
+                fileUrl = fileUrl.replace('pncp-api/v1', 'api/pncp/v1');
+            }
             const fileName = arq.titulo || arq.nomeArquivo || arq.nome || 'arquivo';
             if (!fileUrl || !arq.statusAtivo) continue;
 
