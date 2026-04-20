@@ -75,7 +75,7 @@ export function useAiChat({ analysis, process, onUpdate }: UseAiChatParams) {
 
                 if (process?.id && process.id !== 'pncp-temp') {
                     const { biddingProcessId: _bId, ...analysisData } = analysis as any;
-                    await axios.post(`${API_BASE_URL}/api/analysis`, {
+                    await axios.post(`${API_BASE_URL}/api/analyze-edital/analysis`, {
                         biddingProcessId: process.id,
                         ...analysisData,
                         sourceFileNames: analysis.sourceFileNames,

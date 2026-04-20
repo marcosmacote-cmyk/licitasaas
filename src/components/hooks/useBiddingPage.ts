@@ -474,7 +474,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                 const finalAnalysisPayload = aiData || pendingAnalysis;
                 if (finalAnalysisPayload) {
                     const finalAnalysis = { ...finalAnalysisPayload, biddingProcessId: editingProcess.id };
-                    fetch(`${API_BASE_URL}/api/analysis`, {
+                    fetch(`${API_BASE_URL}/api/analyze-edital/analysis`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                         body: JSON.stringify(finalAnalysis)
                     }).then((res) => { if (res.ok) setItems(prev => prev.map(p => p.id === editingProcess.id ? { ...p, aiAnalysis: finalAnalysis } : p)); }).catch(console.error);
@@ -492,7 +492,7 @@ export function useBiddingPage({ items, setItems, companies, initialFilter, onFi
                 const finalAnalysisPayload = aiData || pendingAnalysis;
                 if (finalAnalysisPayload) {
                     const finalAnalysis = { ...finalAnalysisPayload, biddingProcessId: newProcess.id };
-                    fetch(`${API_BASE_URL}/api/analysis`, {
+                    fetch(`${API_BASE_URL}/api/analyze-edital/analysis`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                         body: JSON.stringify(finalAnalysis)
                     }).then((res) => { if (res.ok) setItems(prev => prev.map(p => p.id === newProcess.id ? { ...p, aiAnalysis: finalAnalysis } : p)); }).catch(console.error);

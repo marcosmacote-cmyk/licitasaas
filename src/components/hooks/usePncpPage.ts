@@ -598,7 +598,7 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
                 const savedProcess = await res.json();
                 const analysisToSave = aiData || pendingAiAnalysis;
                 if (analysisToSave) {
-                    await fetch(`${API_BASE_URL}/api/analysis`, {
+                    await fetch(`${API_BASE_URL}/api/analyze-edital/analysis`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({ ...analysisToSave, biddingProcessId: savedProcess.id })
