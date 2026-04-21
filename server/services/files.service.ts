@@ -11,7 +11,7 @@ const SERVER_ROOT = distIndex >= 0
     : path.resolve(__dirname, '..');
 
 // Setup uploads directory for Mock Bucket
-export const uploadDir = path.join(SERVER_ROOT, 'uploads');
+export const uploadDir = process.env.NODE_ENV === 'production' ? '/app/uploads' : path.join(SERVER_ROOT, 'uploads');
 
 // Auto-initialize on import to prevent ENOENT crashes in any consumer
 if (!fs.existsSync(uploadDir)) {

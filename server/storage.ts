@@ -29,7 +29,7 @@ export interface StorageService {
 
 function getUploadDir(): string {
     const serverRoot = __dirname.endsWith('dist') ? path.resolve(__dirname, '..') : __dirname;
-    const dir = path.join(serverRoot, 'uploads');
+    const dir = process.env.NODE_ENV === 'production' ? '/app/uploads' : path.join(serverRoot, 'uploads');
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }

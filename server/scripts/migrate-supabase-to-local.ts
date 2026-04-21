@@ -40,7 +40,7 @@ const BUCKET_NAME = process.env.SUPABASE_BUCKET || 'documents';
 const DRY_RUN = process.argv.includes('--dry-run');
 const REWRITE_URLS = process.argv.includes('--rewrite');
 
-const uploadDir = path.join(SERVER_ROOT, 'uploads');
+const uploadDir = process.env.NODE_ENV === 'production' ? '/app/uploads' : path.join(SERVER_ROOT, 'uploads');
 
 interface MigrationResult {
     total: number;

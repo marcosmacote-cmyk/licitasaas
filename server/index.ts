@@ -175,7 +175,7 @@ async function getFileBufferSafe(fileNameOrUrl: string, tenantId?: string): Prom
 }
 
 // Setup uploads directory for Mock Bucket
-const uploadDir = path.join(SERVER_ROOT, 'uploads');
+const uploadDir = process.env.NODE_ENV === 'production' ? '/app/uploads' : path.join(SERVER_ROOT, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
