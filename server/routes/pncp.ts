@@ -196,38 +196,42 @@ router.get('/scanner/opportunities/summary', authenticateToken, async (req: any,
         const tenantId = req.user.tenantId;
         const searchId = req.query.searchId as string | undefined;
 
-        let query = `
-            SELECT 
-                DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo') as date,
-                COUNT(*)::int as count,
-                COUNT(*) FILTER (WHERE "isViewed" = false)::int as unread
-            FROM "OpportunityScannerLog"
-            WHERE "tenantId" = $1
-        `;
-        const params: any[] = [tenantId];
-        
-        if (searchId) {
-            query += ` AND "searchId" = $2`;
-            params.push(searchId);
-        }
-        
-        query += ` GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo') ORDER BY date DESC`;
+        const where: any = { tenantId };
+        if (searchId) where.searchId = searchId;
 
-        const groups: any[] = await (prisma as any).$queryRawUnsafe(query, ...params);
-        
-        // Also get the overall total
-        const total = groups.reduce((acc, g) => acc + g.count, 0);
-        const totalUnread = groups.reduce((acc, g) => acc + g.unread, 0);
-
-        res.json({ 
-            groups: groups.map(g => ({
-                date: typeof g.date === 'string' ? g.date : new Date(g.date).toISOString().split('T')[0],
-                count: g.count,
-                unread: g.unread,
-            })),
-            total,
-            totalUnread,
+        // Fetch only the minimal fields needed for grouping
+        const allLogs = await prisma.opportunityScannerLog.findMany({
+            where,
+            select: { createdAt: true, isViewed: true },
+            orderBy: { createdAt: 'desc' },
         });
+
+        // Group by date (using America/Sao_Paulo timezone via UTC-3 offset)
+        const groupMap = new Map<string, { count: number; unread: number }>();
+        for (const log of allLogs) {
+            // Apply BRT offset (UTC-3) to get the correct local date
+            const utcDate = new Date(log.createdAt);
+            const brtDate = new Date(utcDate.getTime() - 3 * 60 * 60 * 1000);
+            const dateKey = brtDate.toISOString().split('T')[0]; // YYYY-MM-DD
+            
+            const existing = groupMap.get(dateKey);
+            if (existing) {
+                existing.count++;
+                if (!log.isViewed) existing.unread++;
+            } else {
+                groupMap.set(dateKey, { count: 1, unread: log.isViewed ? 0 : 1 });
+            }
+        }
+
+        // Convert to sorted array
+        const groups = Array.from(groupMap.entries())
+            .sort((a, b) => b[0].localeCompare(a[0])) // desc by date
+            .map(([date, { count, unread }]) => ({ date, count, unread }));
+
+        const total = allLogs.length;
+        const totalUnread = allLogs.filter(l => !l.isViewed).length;
+
+        res.json({ groups, total, totalUnread });
     } catch (error) {
         logger.error("Scanner summary error:", error);
         res.status(500).json({ error: 'Failed to get scanner summary' });
@@ -246,8 +250,9 @@ router.get('/scanner/opportunities', authenticateToken, async (req: any, res) =>
         const where: any = { tenantId };
         if (searchId) where.searchId = searchId;
         if (filterDate) {
-            const dayStart = new Date(filterDate + 'T00:00:00.000Z');
-            const dayEnd = new Date(filterDate + 'T23:59:59.999Z');
+            // Use BRT (UTC-3) boundaries to match summary endpoint grouping
+            const dayStart = new Date(filterDate + 'T03:00:00.000Z'); // midnight BRT = 03:00 UTC
+            const dayEnd = new Date(new Date(filterDate + 'T03:00:00.000Z').getTime() + 24 * 60 * 60 * 1000 - 1);
             if (!isNaN(dayStart.getTime())) {
                 where.createdAt = { gte: dayStart, lte: dayEnd };
             }
