@@ -524,7 +524,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                 </div>
                             </td>
                         </tr>
-                    ) : p.displayItems.length === 0 ? (
+                    ) : (p.activeTab !== 'found' && p.displayItems.length === 0) || (p.activeTab === 'found' && (!p.dateSummary || p.dateSummary.length === 0)) ? (
                         <tr>
                             <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
                                 {p.activeTab === 'favorites' ? <Star size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
@@ -695,23 +695,14 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
 
                             return [headerRow, ...(loadingRow ? [loadingRow] : []), ...itemRows, ...(showMoreRow ? [showMoreRow] : [])];
                         })
-                    ) : p.activeTab === 'found' ? (
-                        /* ═══ Scanner: No results or loading ═══ */
-                        <tr>
-                            <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
-                                <Bell size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                <div style={{ fontSize: '1rem', fontWeight: 500 }}>Nenhuma oportunidade encontrada pelo scanner</div>
-                                <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>Ative o scanner e aguarde a próxima varredura automática.</div>
-                            </td>
-                        </tr>
-                    ) : (
+                    ) : p.activeTab !== 'found' ? (
                         /* ═══ Search + Favorites: Flat Rendering ═══ */
                         p.displayItems.map((item) => {
                             const isFavorito = p.favoritos.some(f => f.id === item.id);
                             const isOnKanban = items.some(proc => proc.link && item.link_sistema && proc.link.includes(item.link_sistema));
                             return renderItemRow(item, isFavorito, isOnKanban, false, null, null);
                         })
-                    )}
+                    ) : null}
                 </tbody>
             </table>
 
