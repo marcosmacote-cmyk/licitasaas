@@ -332,6 +332,7 @@ app.get('/api/debug-uploads', (req, res) => {
 app.get('/api/debug-recovery', async (req, res) => {
     try {
         const recover = req.query.recover === 'true';
+        const cleanup = req.query.cleanup === 'true';
         
         // Find all documents with /uploads/ URLs
         const docs = await prisma.document.findMany({
@@ -341,8 +342,9 @@ app.get('/api/debug-recovery', async (req, res) => {
         
         const onDisk: string[] = [];
         const missingWithContent: string[] = [];
-        const missingNoContent: string[] = [];
+        const missingNoContent: { id: string; fname: string }[] = [];
         let recovered = 0;
+        let cleaned = 0;
         
         for (const doc of docs) {
             const fname = path.basename(doc.fileUrl);
@@ -358,8 +360,16 @@ app.get('/api/debug-recovery', async (req, res) => {
                     logger.info(`[Recovery] ✅ Restored from DB: ${fname} (${Math.round(doc.fileContent.length / 1024)}KB)`);
                 }
             } else {
-                missingNoContent.push(fname);
+                missingNoContent.push({ id: doc.id, fname });
             }
+        }
+        
+        // Cleanup: delete orphaned records (no file on disk, no fileContent in DB)
+        if (cleanup && missingNoContent.length > 0) {
+            const ids = missingNoContent.map(m => m.id);
+            const result = await prisma.document.deleteMany({ where: { id: { in: ids } } });
+            cleaned = result.count;
+            logger.info(`[Cleanup] 🗑️ Deleted ${cleaned} orphaned document records`);
         }
         
         // Check TechnicalCertificate - just count missing (no fileContent column on this model)
@@ -384,7 +394,8 @@ app.get('/api/debug-recovery', async (req, res) => {
             missingNoContent: missingNoContent.length,
             certsMissing,
             recovered: recover ? recovered : 'add ?recover=true to restore',
-            missingFiles: missingNoContent.slice(0, 20), // Show first 20
+            cleaned: cleanup ? cleaned : 'add ?cleanup=true to delete orphans',
+            missingFiles: missingNoContent.map(m => m.fname).slice(0, 20),
         });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
