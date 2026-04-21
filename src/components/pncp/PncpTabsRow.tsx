@@ -147,7 +147,7 @@ export function PncpTabsRow({ p }: PncpChildProps) {
                             {/* Filter by saved search */}
                             <select
                                 value={p.scannerFilterSearchId || ''}
-                                onChange={(e) => { p.setScannerFilterSearchId(e.target.value || null); p.setScannerOpportunitiesPage(1); }}
+                                onChange={(e) => p.setScannerFilterSearchId(e.target.value || null)}
                                 style={{
                                     padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
                                     border: '1px solid var(--color-border)', background: 'var(--color-bg-surface)',
@@ -159,36 +159,6 @@ export function PncpTabsRow({ p }: PncpChildProps) {
                                     <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
                             </select>
-                            {/* Filter by date */}
-                            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                                <input
-                                    type="date"
-                                    value={p.scannerFilterDate || ''}
-                                    onChange={(e) => { p.setScannerFilterDate(e.target.value || null); p.setScannerOpportunitiesPage(1); }}
-                                    style={{
-                                        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
-                                        border: `1px solid ${p.scannerFilterDate ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                                        background: p.scannerFilterDate ? 'rgba(37, 99, 235, 0.04)' : 'var(--color-bg-surface)',
-                                        color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)',
-                                        cursor: 'pointer', minWidth: '150px',
-                                    }}
-                                    title="Filtrar por data da varredura"
-                                />
-                                {p.scannerFilterDate && (
-                                    <button
-                                        onClick={() => { p.setScannerFilterDate(null); p.setScannerOpportunitiesPage(1); }}
-                                        style={{
-                                            position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
-                                            background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)',
-                                            borderRadius: '50%', width: '18px', height: '18px',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            cursor: 'pointer', fontSize: '11px', color: 'var(--color-text-tertiary)',
-                                            lineHeight: 1, padding: 0,
-                                        }}
-                                        title="Limpar filtro de data"
-                                    >✕</button>
-                                )}
-                            </div>
                             {p.unreadOpportunityCount > 0 && (
                                 <button
                                     className="btn btn-ghost"

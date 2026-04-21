@@ -190,6 +190,50 @@ router.post('/scan-opportunities', authenticateToken, async (req: any, res) => {
     }
 });
 
+// ── Summary of scanner-found opportunities grouped by date ──
+router.get('/scanner/opportunities/summary', authenticateToken, async (req: any, res) => {
+    try {
+        const tenantId = req.user.tenantId;
+        const searchId = req.query.searchId as string | undefined;
+
+        let query = `
+            SELECT 
+                DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo') as date,
+                COUNT(*)::int as count,
+                COUNT(*) FILTER (WHERE "isViewed" = false)::int as unread
+            FROM "OpportunityScannerLog"
+            WHERE "tenantId" = $1
+        `;
+        const params: any[] = [tenantId];
+        
+        if (searchId) {
+            query += ` AND "searchId" = $2`;
+            params.push(searchId);
+        }
+        
+        query += ` GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo') ORDER BY date DESC`;
+
+        const groups: any[] = await (prisma as any).$queryRawUnsafe(query, ...params);
+        
+        // Also get the overall total
+        const total = groups.reduce((acc, g) => acc + g.count, 0);
+        const totalUnread = groups.reduce((acc, g) => acc + g.unread, 0);
+
+        res.json({ 
+            groups: groups.map(g => ({
+                date: typeof g.date === 'string' ? g.date : new Date(g.date).toISOString().split('T')[0],
+                count: g.count,
+                unread: g.unread,
+            })),
+            total,
+            totalUnread,
+        });
+    } catch (error) {
+        logger.error("Scanner summary error:", error);
+        res.status(500).json({ error: 'Failed to get scanner summary' });
+    }
+});
+
 // ── List scanner-found opportunities ──
 router.get('/scanner/opportunities', authenticateToken, async (req: any, res) => {
     try {

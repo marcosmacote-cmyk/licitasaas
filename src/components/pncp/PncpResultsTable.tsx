@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Loader2, Star, Bell, Search, MapPin, ExternalLink, Brain, Trash2, CheckCircle2, List, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { normalizeModality } from '../../utils/normalizeModality';
 import type { PncpChildProps } from './types';
@@ -125,66 +125,62 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
     const [itemError, setItemError] = useState('');
     const [slowLoad, setSlowLoad] = useState(false);
 
-    // ── Date groups: expand/collapse + pagination per group ──
-    // Start ALL collapsed (empty set = nothing expanded)
+    // ── Date groups: expand/collapse + visible count per group ──
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [groupVisibleCounts, setGroupVisibleCounts] = useState<Record<string, number>>({});
-
-    // Reset expansion state when scanner data changes (page navigation)
-    React.useEffect(() => {
-        setExpandedGroups(new Set());
-        setGroupVisibleCounts({});
-        setExpandedItemId(null);
-        setItemDetails(null);
-        setItemError('');
-    }, [p.scannerOpportunitiesPage]);
 
     const toggleGroupCollapse = useCallback((dateKey: string) => {
         setExpandedGroups(prev => {
             const next = new Set(prev);
-            if (next.has(dateKey)) next.delete(dateKey);
-            else next.add(dateKey);
+            if (next.has(dateKey)) {
+                next.delete(dateKey);
+            } else {
+                next.add(dateKey);
+                // Fetch items for this date if not already loaded
+                if (!p.dateItems?.[dateKey] && p.fetchDateItems) {
+                    p.fetchDateItems(dateKey);
+                }
+            }
             return next;
         });
-    }, []);
+    }, [p.dateItems, p.fetchDateItems]);
 
     const showMoreInGroup = useCallback((dateKey: string) => {
-        setGroupVisibleCounts(prev => ({
-            ...prev,
-            [dateKey]: (prev[dateKey] || ITEMS_PER_DATE_GROUP) + ITEMS_PER_DATE_GROUP,
-        }));
-    }, []);
-
-    // ── Date grouping for Scanner tab ──
-    // Build structured date groups: { dateKey, label, items[], foundAt }
-    const dateGroups = useMemo(() => {
-        if (p.activeTab !== 'found') return [];
-        const groups: { dateKey: string; label: string; items: any[]; foundAt: string }[] = [];
-        let currentGroup: typeof groups[0] | null = null;
-        
-        for (const item of p.displayItems) {
-            const foundAt = (item as any)._foundAt;
-            if (!foundAt) {
-                // Items without date go to a generic group
-                if (!currentGroup) {
-                    currentGroup = { dateKey: 'unknown', label: 'Sem data', items: [], foundAt: '' };
-                    groups.push(currentGroup);
-                }
-                currentGroup.items.push(item);
-                continue;
+        setGroupVisibleCounts(prev => {
+            const currentVisible = prev[dateKey] || ITEMS_PER_DATE_GROUP;
+            const loadedItems = p.dateItems?.[dateKey]?.length || 0;
+            const newVisible = currentVisible + ITEMS_PER_DATE_GROUP;
+            // If we need more items than loaded, fetch next page
+            if (newVisible > loadedItems && p.fetchDateItems) {
+                p.fetchDateItems(dateKey, true);
             }
-            const key = toDateKey(foundAt);
-            if (!currentGroup || currentGroup.dateKey !== key) {
-                currentGroup = { dateKey: key, label: formatDateGroupLabel(foundAt), items: [], foundAt };
-                groups.push(currentGroup);
-            }
-            currentGroup.items.push(item);
-        }
-        return groups;
-    }, [p.displayItems, p.activeTab]);
+            return { ...prev, [dateKey]: newVisible };
+        });
+    }, [p.dateItems, p.fetchDateItems]);
 
-    // Legacy compat: still need dateGroupStarts for non-found tabs
-    const dateGroupStarts = useMemo(() => new Set<string>(), []);
+    /**
+     * Map a scanner log item (from /scanner/opportunities) to the display format.
+     * This was previously done in usePncpPage but now happens here since items are lazy-loaded.
+     */
+    const mapScannerItem = useCallback((opp: any) => ({
+        id: opp.pncpId || opp.id,
+        titulo: opp.titulo || 'Sem título',
+        objeto: opp.objeto || '',
+        orgao_nome: opp.orgaoNome || '',
+        orgao_cnpj: opp.orgaoCnpj || '',
+        ano: opp.anoCompra || '',
+        numero_sequencial: opp.sequencialCompra || '',
+        uf: opp.uf || '--',
+        municipio: opp.municipio || '--',
+        valor_estimado: opp.valorEstimado || 0,
+        data_encerramento_proposta: opp.dataEncerramentoProposta || '',
+        modalidade_nome: opp.modalidadeNome || '',
+        link_sistema: opp.linkSistema || '',
+        _scannerLogId: opp.id,
+        _isViewed: opp.isViewed,
+        _searchName: opp.searchName,
+        _foundAt: opp.createdAt,
+    }), []);
 
     const toggleItems = async (item: any) => {
         if (expandedItemId === item.id) {
@@ -548,20 +544,28 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                 </div>
                             </td>
                         </tr>
-                    ) : p.activeTab === 'found' && dateGroups.length > 0 ? (
-                        /* ═══ Scanner: Date-Grouped Rendering ═══ */
-                        dateGroups.flatMap((group) => {
-                            const isExpanded = expandedGroups.has(group.dateKey);
-                            const visibleCount = groupVisibleCounts[group.dateKey] || ITEMS_PER_DATE_GROUP;
-                            const visibleItems = isExpanded ? group.items.slice(0, visibleCount) : [];
-                            const hasMore = isExpanded && group.items.length > visibleCount;
-                            const hiddenCount = group.items.length - visibleCount;
+                    ) : p.activeTab === 'found' && p.dateSummary && p.dateSummary.length > 0 ? (
+                        /* ═══ Scanner: Summary-based Date Cards (all dates visible) ═══ */
+                        p.dateSummary.flatMap((group: any) => {
+                            const dateKey = group.date;
+                            const isExpanded = expandedGroups.has(dateKey);
+                            const rawItems = p.dateItems?.[dateKey] || [];
+                            const mappedItems = rawItems.map(mapScannerItem);
+                            const isLoadingDate = p.dateItemsLoading?.[dateKey] || false;
+                            const visibleCount = groupVisibleCounts[dateKey] || ITEMS_PER_DATE_GROUP;
+                            const visibleItems = isExpanded ? mappedItems.slice(0, visibleCount) : [];
+                            const totalForDate = group.count;
+                            const loadedCount = mappedItems.length;
+                            const hasMoreToShow = isExpanded && loadedCount > visibleCount;
+                            const hasMoreToLoad = isExpanded && loadedCount < totalForDate;
+                            const hiddenLoaded = loadedCount - visibleCount;
+                            const label = formatDateGroupLabel(dateKey + 'T12:00:00');
 
                             const headerRow = (
-                                <tr key={`dg-${group.dateKey}`} style={{ background: 'none' }}>
+                                <tr key={`dg-${dateKey}`} style={{ background: 'none' }}>
                                     <td colSpan={6} style={{ padding: '0' }}>
                                         <div 
-                                            onClick={() => toggleGroupCollapse(group.dateKey)}
+                                            onClick={() => toggleGroupCollapse(dateKey)}
                                             style={{
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -591,7 +595,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                                     color: 'var(--color-primary)',
                                                     letterSpacing: '0.01em',
                                                 }}>
-                                                    {group.label}
+                                                    {label}
                                                 </span>
                                             </div>
                                             <span style={{
@@ -603,8 +607,22 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                                 borderRadius: '12px',
                                                 border: '1px solid var(--color-border)',
                                             }}>
-                                                {group.items.length} {group.items.length === 1 ? 'edital' : 'editais'}
+                                                {totalForDate} {totalForDate === 1 ? 'edital' : 'editais'}
                                             </span>
+                                            {group.unread > 0 && (
+                                                <span style={{
+                                                    fontSize: '0.625rem',
+                                                    fontWeight: 700,
+                                                    color: '#fff',
+                                                    background: 'var(--color-danger)',
+                                                    padding: '1px 8px',
+                                                    borderRadius: '9px',
+                                                    minWidth: '18px',
+                                                    textAlign: 'center',
+                                                }}>
+                                                    {group.unread} novo{group.unread !== 1 ? 's' : ''}
+                                                </span>
+                                            )}
                                             <div style={{
                                                 flex: 1,
                                                 height: '1px',
@@ -620,21 +638,32 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                 </tr>
                             );
 
+                            // Loading state for this date
+                            const loadingRow = isExpanded && isLoadingDate && loadedCount === 0 ? (
+                                <tr key={`loading-${dateKey}`} style={{ background: 'none' }}>
+                                    <td colSpan={6} style={{ textAlign: 'center', padding: '30px' }}>
+                                        <Loader2 size={20} className="spinner" style={{ margin: '0 auto 8px', color: 'var(--color-primary)' }} />
+                                        <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-tertiary)' }}>Carregando editais...</div>
+                                    </td>
+                                </tr>
+                            ) : null;
+
                             const itemRows = visibleItems.flatMap((item: any) => {
                                 const isFavorito = p.favoritos.some(f => f.id === item.id);
                                 const isOnKanban = items.some(proc => proc.link && item.link_sistema && proc.link.includes(item.link_sistema));
                                 const isUnviewed = (item as any)._isViewed === false;
                                 const searchName = (item as any)._searchName || null;
                                 const foundAt = (item as any)._foundAt || null;
-
                                 return [renderItemRow(item, isFavorito, isOnKanban, isUnviewed, searchName, foundAt)];
                             });
 
-                            const showMoreRow = hasMore ? (
-                                <tr key={`more-${group.dateKey}`} style={{ background: 'none' }}>
+                            // "Ver mais" button — shows when there are more items to show (loaded or to load)
+                            const showMoreRow = (hasMoreToShow || hasMoreToLoad) && isExpanded ? (
+                                <tr key={`more-${dateKey}`} style={{ background: 'none' }}>
                                     <td colSpan={6} style={{ padding: '0', textAlign: 'center' }}>
                                         <button
-                                            onClick={() => showMoreInGroup(group.dateKey)}
+                                            onClick={() => showMoreInGroup(dateKey)}
+                                            disabled={isLoadingDate}
                                             style={{
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
@@ -647,31 +676,40 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                                 background: 'rgba(37, 99, 235, 0.05)',
                                                 border: '1px solid rgba(37, 99, 235, 0.15)',
                                                 borderRadius: 'var(--radius-lg)',
-                                                cursor: 'pointer',
+                                                cursor: isLoadingDate ? 'wait' : 'pointer',
                                                 transition: 'all 0.15s',
+                                                opacity: isLoadingDate ? 0.6 : 1,
                                             }}
-                                            onMouseEnter={(e: any) => { e.currentTarget.style.background = 'rgba(37, 99, 235, 0.1)'; e.currentTarget.style.borderColor = 'rgba(37, 99, 235, 0.3)'; }}
+                                            onMouseEnter={(e: any) => { if (!isLoadingDate) { e.currentTarget.style.background = 'rgba(37, 99, 235, 0.1)'; e.currentTarget.style.borderColor = 'rgba(37, 99, 235, 0.3)'; }}}
                                             onMouseLeave={(e: any) => { e.currentTarget.style.background = 'rgba(37, 99, 235, 0.05)'; e.currentTarget.style.borderColor = 'rgba(37, 99, 235, 0.15)'; }}
                                         >
-                                            <ChevronDown size={14} />
-                                            Ver mais {Math.min(hiddenCount, ITEMS_PER_DATE_GROUP)} de {hiddenCount} restante{hiddenCount !== 1 ? 's' : ''}
+                                            {isLoadingDate ? (
+                                                <><Loader2 size={14} className="spinner" /> Carregando...</>
+                                            ) : (
+                                                <><ChevronDown size={14} /> Ver mais {Math.min(hasMoreToShow ? hiddenLoaded : totalForDate - visibleCount, ITEMS_PER_DATE_GROUP)} de {totalForDate - visibleCount} restante{(totalForDate - visibleCount) !== 1 ? 's' : ''}</>
+                                            )}
                                         </button>
                                     </td>
                                 </tr>
                             ) : null;
 
-                            return [headerRow, ...itemRows, ...(showMoreRow ? [showMoreRow] : [])];
+                            return [headerRow, ...(loadingRow ? [loadingRow] : []), ...itemRows, ...(showMoreRow ? [showMoreRow] : [])];
                         })
+                    ) : p.activeTab === 'found' ? (
+                        /* ═══ Scanner: No results or loading ═══ */
+                        <tr>
+                            <td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: 'var(--color-text-tertiary)' }}>
+                                <Bell size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                                <div style={{ fontSize: '1rem', fontWeight: 500 }}>Nenhuma oportunidade encontrada pelo scanner</div>
+                                <div style={{ fontSize: '0.8125rem', marginTop: '4px' }}>Ative o scanner e aguarde a próxima varredura automática.</div>
+                            </td>
+                        </tr>
                     ) : (
                         /* ═══ Search + Favorites: Flat Rendering ═══ */
                         p.displayItems.map((item) => {
                             const isFavorito = p.favoritos.some(f => f.id === item.id);
                             const isOnKanban = items.some(proc => proc.link && item.link_sistema && proc.link.includes(item.link_sistema));
-                            const isUnviewed = p.activeTab === 'found' && (item as any)._isViewed === false;
-                            const searchName = p.activeTab === 'found' ? (item as any)._searchName : null;
-                            const foundAt = p.activeTab === 'found' ? (item as any)._foundAt : null;
-
-                            return renderItemRow(item, isFavorito, isOnKanban, isUnviewed, searchName, foundAt);
+                            return renderItemRow(item, isFavorito, isOnKanban, false, null, null);
                         })
                     )}
                 </tbody>
@@ -710,36 +748,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                 );
             })()}
 
-            {p.activeTab === 'found' && p.scannerOpportunitiesTotal > 0 && (() => {
-                const totalPages = Math.ceil(p.scannerOpportunitiesTotal / 50);
-                return (
-                    <div style={{
-                        display: 'flex', justifyContent: 'center', alignItems: 'center',
-                        gap: 'var(--space-4)', padding: 'var(--space-5)',
-                        borderTop: '1px solid var(--color-border)',
-                    }}>
-                        <button
-                            className="btn btn-ghost"
-                            disabled={p.scannerOpportunitiesPage <= 1 || p.scannerOpportunitiesLoading}
-                            onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage - 1)}
-                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '0.875rem' }}
-                        >
-                            <ChevronLeft size={16} /> Anterior
-                        </button>
-                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                            Página {p.scannerOpportunitiesPage} de {totalPages}
-                        </span>
-                        <button
-                            className="btn btn-ghost"
-                            disabled={p.scannerOpportunitiesPage >= totalPages || p.scannerOpportunitiesLoading}
-                            onClick={() => p.setScannerOpportunitiesPage(p.scannerOpportunitiesPage + 1)}
-                            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 16px', fontSize: '0.875rem' }}
-                        >
-                            Próxima <ChevronRight size={16} />
-                        </button>
-                    </div>
-                );
-            })()}
+            {/* Paginator removed for 'found' tab — date cards handle pagination internally */}
         </div>
     );
 }

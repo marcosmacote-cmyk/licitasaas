@@ -101,39 +101,21 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // ═══════════════════════════════════════════════════
-    // TAB SYNC — Fetch scanner opportunities when tab changes
+    // TAB SYNC — Fetch scanner summary when tab changes
     // ═══════════════════════════════════════════════════
 
     useEffect(() => {
         if (activeTab === 'found') {
-            scanner.fetchScannerOpportunities();
+            scanner.fetchScannerSummary();
         }
-    }, [activeTab, scanner.scannerOpportunitiesPage, scanner.scannerFilterSearchId, scanner.scannerFilterDate]);
+    }, [activeTab, scanner.scannerFilterSearchId]);
 
     // ═══════════════════════════════════════════════════
     // DISPLAY ITEMS — computed based on active tab
     // ═══════════════════════════════════════════════════
 
     const displayItems = activeTab === 'favorites' ? favorites.filteredFavoritos 
-        : activeTab === 'found' ? scanner.scannerOpportunities.map((opp: any) => ({
-            id: opp.pncpId || opp.id,
-            titulo: opp.titulo || 'Sem título',
-            objeto: opp.objeto || '',
-            orgao_nome: opp.orgaoNome || '',
-            orgao_cnpj: opp.orgaoCnpj || '',
-            ano: opp.anoCompra || '',
-            numero_sequencial: opp.sequencialCompra || '',
-            uf: opp.uf || '--',
-            municipio: opp.municipio || '--',
-            valor_estimado: opp.valorEstimado || 0,
-            data_encerramento_proposta: opp.dataEncerramentoProposta || '',
-            modalidade_nome: opp.modalidadeNome || '',
-            link_sistema: opp.linkSistema || '',
-            _scannerLogId: opp.id,
-            _isViewed: opp.isViewed,
-            _searchName: opp.searchName,
-            _foundAt: opp.createdAt,
-        } as PncpBiddingItem & { _scannerLogId: string; _isViewed: boolean; _searchName: string; _foundAt: string }))
+        : activeTab === 'found' ? [] as any[] // Items are loaded per-date in PncpResultsTable
         : search.results;
 
     // ═══════════════════════════════════════════════════
@@ -687,18 +669,17 @@ export function usePncpPage({ companies, onRefresh, items = [], initialContext, 
         lastScanAt: scanner.lastScanAt, lastScanTotalNew: scanner.lastScanTotalNew,
         lastScanResults: scanner.lastScanResults, nextScanAt: scanner.nextScanAt,
         getSearchScanResult: scanner.getSearchScanResult,
-        // Scanner Opportunities ("Encontradas" tab)
-        scannerOpportunities: scanner.scannerOpportunities,
+        // Scanner Opportunities ("Encontradas" tab) — summary + lazy-load
+        dateSummary: scanner.dateSummary,
+        fetchScannerSummary: scanner.fetchScannerSummary,
         scannerOpportunitiesTotal: scanner.scannerOpportunitiesTotal,
-        scannerOpportunitiesPage: scanner.scannerOpportunitiesPage,
-        setScannerOpportunitiesPage: scanner.setScannerOpportunitiesPage,
         scannerOpportunitiesLoading: scanner.scannerOpportunitiesLoading,
+        dateItems: scanner.dateItems,
+        dateItemsLoading: scanner.dateItemsLoading,
+        fetchDateItems: scanner.fetchDateItems,
         scannerFilterSearchId: scanner.scannerFilterSearchId,
         setScannerFilterSearchId: scanner.setScannerFilterSearchId,
-        scannerFilterDate: scanner.scannerFilterDate,
-        setScannerFilterDate: scanner.setScannerFilterDate,
         unreadOpportunityCount: scanner.unreadOpportunityCount,
         markOpportunitiesViewed: scanner.markOpportunitiesViewed,
-        fetchScannerOpportunities: scanner.fetchScannerOpportunities,
     };
 }

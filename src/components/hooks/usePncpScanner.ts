@@ -1,10 +1,14 @@
 /**
  * ═══════════════════════════════════════════════════════
  * usePncpScanner — Scanner de Oportunidades Automático
- * Extracted from usePncpPage.ts (Fase 1 Refatoração)
+ * 
+ * V2: Arquitetura de "summary + lazy-load por data"
+ * - Carrega sumário de TODAS as datas de uma vez (~1KB)
+ * - Itens são carregados sob demanda ao expandir cada card
+ * - Remove paginação global (era "Página X de Y")
  * ═══════════════════════════════════════════════════════
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../../config';
 import { useToast } from '../ui';
 
@@ -18,6 +22,12 @@ interface ScanResult {
     errorMessage?: string;
 }
 
+export interface DateGroupSummary {
+    date: string;      // YYYY-MM-DD
+    count: number;      // total items
+    unread: number;     // unread items
+}
+
 export function usePncpScanner() {
     const toast = useToast();
 
@@ -28,15 +38,23 @@ export function usePncpScanner() {
     const [lastScanResults, setLastScanResults] = useState<ScanResult[]>([]);
     const [nextScanAt, setNextScanAt] = useState<string | null>(null);
 
-    // Scanner Opportunities ("Encontradas" tab)
-    const [scannerOpportunities, setScannerOpportunities] = useState<any[]>([]);
+    // ═══ Summary: all date groups (lightweight) ═══
+    const [dateSummary, setDateSummary] = useState<DateGroupSummary[]>([]);
     const [scannerOpportunitiesTotal, setScannerOpportunitiesTotal] = useState(0);
-    const [scannerOpportunitiesPage, setScannerOpportunitiesPage] = useState(1);
-    const [scannerOpportunitiesLoading, setScannerOpportunitiesLoading] = useState(false);
-    const [scannerFilterSearchId, setScannerFilterSearchId] = useState<string | null>(null);
-    const [scannerFilterDate, setScannerFilterDate] = useState<string | null>(null);
     const [unreadOpportunityCount, setUnreadOpportunityCount] = useState(0);
+    const [summaryLoading, setSummaryLoading] = useState(false);
+
+    // ═══ Per-date items (lazy-loaded on expand) ═══
+    const [dateItems, setDateItems] = useState<Record<string, any[]>>({});
+    const [dateItemsLoading, setDateItemsLoading] = useState<Record<string, boolean>>({});
+
+    // Filter
+    const [scannerFilterSearchId, setScannerFilterSearchId] = useState<string | null>(null);
+
     const [loading, setLoading] = useState(false);
+
+    // ── Backward compat aliases (kept to avoid breaking return contract) ──
+    const scannerOpportunitiesLoading = summaryLoading;
 
     const fetchScannerStatus = async () => {
         try {
@@ -53,30 +71,54 @@ export function usePncpScanner() {
         } catch (e) { console.error("Failed to fetch scanner status", e); }
     };
 
-    const fetchUnreadCount = async () => {
+    /**
+     * Fetch the lightweight summary of all dates + counts.
+     * This replaces the old paginated opportunities fetch.
+     */
+    const fetchScannerSummary = useCallback(async () => {
+        setSummaryLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/api/pncp/scanner/opportunities/unread-count`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) { const data = await res.json(); setUnreadOpportunityCount(data.count || 0); }
-        } catch (e) { console.error("Failed to fetch unread count", e); }
-    };
-
-    const fetchScannerOpportunities = async () => {
-        setScannerOpportunitiesLoading(true);
-        try {
-            const token = localStorage.getItem('token');
-            let url = `${API_BASE_URL}/api/pncp/scanner/opportunities?page=${scannerOpportunitiesPage}`;
-            if (scannerFilterSearchId) url += `&searchId=${scannerFilterSearchId}`;
-            if (scannerFilterDate) url += `&date=${scannerFilterDate}`;
+            let url = `${API_BASE_URL}/api/pncp/scanner/opportunities/summary`;
+            if (scannerFilterSearchId) url += `?searchId=${scannerFilterSearchId}`;
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
                 const data = await res.json();
-                setScannerOpportunities(data.items || []);
+                setDateSummary(data.groups || []);
                 setScannerOpportunitiesTotal(data.total || 0);
+                setUnreadOpportunityCount(data.totalUnread || 0);
             }
-        } catch (e) { console.error("Failed to fetch scanner opportunities", e); }
-        finally { setScannerOpportunitiesLoading(false); }
-    };
+        } catch (e) { console.error("Failed to fetch scanner summary", e); }
+        finally { setSummaryLoading(false); }
+    }, [scannerFilterSearchId]);
+
+    /**
+     * Fetch items for a specific date. Called when user expands a date card.
+     * Uses the existing /scanner/opportunities endpoint with date filter.
+     * Loads 50 items per call (matching the existing pageSize).
+     */
+    const fetchDateItems = useCallback(async (date: string, append = false) => {
+        setDateItemsLoading(prev => ({ ...prev, [date]: true }));
+        try {
+            const token = localStorage.getItem('token');
+            const currentItems = append ? (dateItems[date] || []) : [];
+            const page = append ? Math.floor(currentItems.length / 50) + 1 : 1;
+            
+            let url = `${API_BASE_URL}/api/pncp/scanner/opportunities?date=${date}&page=${page}`;
+            if (scannerFilterSearchId) url += `&searchId=${scannerFilterSearchId}`;
+            
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                const newItems = data.items || [];
+                setDateItems(prev => ({
+                    ...prev,
+                    [date]: append ? [...currentItems, ...newItems] : newItems,
+                }));
+            }
+        } catch (e) { console.error(`Failed to fetch items for date ${date}`, e); }
+        finally { setDateItemsLoading(prev => ({ ...prev, [date]: false })); }
+    }, [scannerFilterSearchId, dateItems]);
 
     const markOpportunitiesViewed = async (ids: string[] | 'all') => {
         try {
@@ -86,8 +128,12 @@ export function usePncpScanner() {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ids })
             });
-            fetchScannerOpportunities();
-            fetchUnreadCount();
+            // Refresh summary + any loaded date items
+            fetchScannerSummary();
+            // Reload expanded dates
+            for (const date of Object.keys(dateItems)) {
+                fetchDateItems(date);
+            }
         } catch (e) { console.error(e); }
     };
 
@@ -138,9 +184,13 @@ export function usePncpScanner() {
         return lastScanResults.find(r => r.searchId === searchId) || null;
     };
 
+    // Reset dateItems when filter changes
+    useEffect(() => {
+        setDateItems({});
+    }, [scannerFilterSearchId]);
+
     useEffect(() => {
         fetchScannerStatus();
-        fetchUnreadCount();
     }, []);
 
     return {
@@ -148,11 +198,17 @@ export function usePncpScanner() {
         opportunityScannerEnabled, toggleOpportunityScanner,
         // Last scan info
         lastScanAt, lastScanTotalNew, lastScanResults, nextScanAt, getSearchScanResult,
-        // Scanner Opportunities ("Encontradas" tab)
-        scannerOpportunities, scannerOpportunitiesTotal, scannerOpportunitiesPage, setScannerOpportunitiesPage,
-        scannerOpportunitiesLoading, scannerFilterSearchId, setScannerFilterSearchId,
-        scannerFilterDate, setScannerFilterDate,
-        unreadOpportunityCount, markOpportunitiesViewed, fetchScannerOpportunities,
-        handleTriggerScan, loading: loading,
+        // Summary (replaces paginated opportunities)
+        dateSummary, fetchScannerSummary,
+        scannerOpportunitiesTotal,
+        scannerOpportunitiesLoading: summaryLoading,
+        // Per-date items (lazy-loaded)
+        dateItems, dateItemsLoading, fetchDateItems,
+        // Filter
+        scannerFilterSearchId, setScannerFilterSearchId,
+        // Unread
+        unreadOpportunityCount, markOpportunitiesViewed,
+        // Trigger
+        handleTriggerScan, loading,
     };
 }
