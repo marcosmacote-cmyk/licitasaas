@@ -328,6 +328,75 @@ app.get('/api/debug-uploads', (req, res) => {
     }
 });
 
+// Recovery endpoint: finds docs missing from disk and recovers from DB fileContent
+app.get('/api/debug-recovery', async (req, res) => {
+    try {
+        const recover = req.query.recover === 'true';
+        
+        // Find all documents with /uploads/ URLs
+        const docs = await prisma.document.findMany({
+            where: { fileUrl: { startsWith: '/uploads/' } },
+            select: { id: true, fileUrl: true, fileName: true, fileContent: true }
+        });
+        
+        const onDisk: string[] = [];
+        const missingWithContent: string[] = [];
+        const missingNoContent: string[] = [];
+        let recovered = 0;
+        
+        for (const doc of docs) {
+            const fname = path.basename(doc.fileUrl);
+            const filePath = path.join(uploadDir, fname);
+            
+            if (fs.existsSync(filePath)) {
+                onDisk.push(fname);
+            } else if (doc.fileContent && doc.fileContent.length > 0) {
+                missingWithContent.push(fname);
+                if (recover) {
+                    fs.writeFileSync(filePath, doc.fileContent);
+                    recovered++;
+                    logger.info(`[Recovery] ✅ Restored from DB: ${fname} (${Math.round(doc.fileContent.length / 1024)}KB)`);
+                }
+            } else {
+                missingNoContent.push(fname);
+            }
+        }
+        
+        // Also check TechnicalCertificate
+        const certs = await prisma.technicalCertificate.findMany({
+            where: { fileUrl: { startsWith: '/uploads/' } },
+            select: { id: true, fileUrl: true, fileContent: true }
+        });
+        
+        let certsMissing = 0;
+        for (const cert of certs) {
+            const fname = path.basename(cert.fileUrl);
+            const filePath = path.join(uploadDir, fname);
+            if (!fs.existsSync(filePath)) {
+                if ((cert as any).fileContent && (cert as any).fileContent.length > 0) {
+                    certsMissing++;
+                    if (recover) {
+                        fs.writeFileSync(filePath, (cert as any).fileContent);
+                        recovered++;
+                    }
+                }
+            }
+        }
+        
+        res.json({
+            totalDocs: docs.length,
+            onDisk: onDisk.length,
+            missingWithContent: missingWithContent.length,
+            missingNoContent: missingNoContent.length,
+            certsMissing,
+            recovered: recover ? recovered : 'add ?recover=true to restore',
+            missingFiles: missingNoContent.slice(0, 20), // Show first 20
+        });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Admin Management (Tenants, Quotas, Global Health, etc.)
 app.use('/api/admin', adminRoutes);
 
