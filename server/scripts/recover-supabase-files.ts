@@ -59,6 +59,10 @@ async function recoverTable(
     let skipped = 0;
     let failed = 0;
 
+    // Cache root folders to try as fallback
+    const { data: rootItems } = await supabase.storage.from(BUCKET_NAME).list('', { limit: 100 });
+    const rootFolders = rootItems?.filter((i: any) => !i.id && !i.name.includes('.'))?.map((i: any) => i.name) || [];
+
     for (const record of records) {
         const fileName = path.basename(record.fileUrl);
         const localPath = path.join(uploadDir, fileName);
@@ -68,12 +72,35 @@ async function recoverTable(
             continue;
         }
 
-        // Try with tenantId prefix first (standard for SupabaseStorageService)
-        let success = await downloadFromSupabase(supabase, `${record.tenantId}/${fileName}`, localPath);
+        let success = false;
+
+        // Strategy 1: If fileName has tenantId_ prefix, it might actually be tenantId/ in Supabase
+        if (record.tenantId && fileName.startsWith(record.tenantId + '_')) {
+            const reconstructed = fileName.replace(record.tenantId + '_', record.tenantId + '/');
+            success = await downloadFromSupabase(supabase, reconstructed, localPath);
+        }
+
+        // Strategy 2: Standard tenantId/fileName
+        if (!success && record.tenantId) {
+            success = await downloadFromSupabase(supabase, `${record.tenantId}/${fileName}`, localPath);
+        }
         
-        // If failed, try without prefix
+        // Strategy 3: Flat fileName
         if (!success) {
             success = await downloadFromSupabase(supabase, fileName, localPath);
+        }
+
+        // Strategy 4: Try all known root folders
+        if (!success) {
+            for (const folder of rootFolders) {
+                success = await downloadFromSupabase(supabase, `${folder}/${fileName}`, localPath);
+                if (success) break;
+                
+                // Strategy 5: What if the DB stripped the tenant_ prefix but it exists in bucket?
+                const fileWithTenant = `${folder}_${fileName}`;
+                success = await downloadFromSupabase(supabase, `${folder}/${fileWithTenant}`, localPath);
+                if (success) break;
+            }
         }
 
         if (success) {
@@ -83,7 +110,7 @@ async function recoverTable(
             failed++;
             log(`  ❌ Failed: ${fileName}`);
         }
-        await new Promise(r => setTimeout(r, 100)); // Rate limit
+        await new Promise(r => setTimeout(r, 50)); // Rate limit
     }
     
     log(`Result for ${tableName}: ${recovered} recovered, ${skipped} skipped, ${failed} failed.`);
