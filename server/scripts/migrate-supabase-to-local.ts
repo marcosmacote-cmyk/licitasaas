@@ -4,20 +4,21 @@
  * LicitaSaaS — Supabase → Local Migration Script
  * ═══════════════════════════════════════════════════════════
  *
- * Downloads all files referenced in the database from Supabase Storage
- * and saves them to the local /uploads directory. Updates database URLs
- * to point to local paths.
+ * Lists ALL files in the Supabase bucket and downloads them to
+ * the local /app/uploads volume, preserving directory structure.
+ * Optionally rewrites database URLs to point to local paths.
  *
  * Usage:
- *   npx tsx server/scripts/migrate-supabase-to-local.ts
- *   npx tsx server/scripts/migrate-supabase-to-local.ts --dry-run   # Preview only
- *   npx tsx server/scripts/migrate-supabase-to-local.ts --rewrite   # Also rewrite DB URLs
+ *   npx tsx scripts/migrate-supabase-to-local.ts
+ *   npx tsx scripts/migrate-supabase-to-local.ts --dry-run   # Preview only
+ *   npx tsx scripts/migrate-supabase-to-local.ts --rewrite   # Also rewrite DB URLs
  *
  * Safety:
  *   - Files are NOT deleted from Supabase (manual cleanup after verification)
  *   - DB URL rewriting is opt-in (--rewrite flag)
  *   - Each file is verified after download (size check)
  *   - Existing local files are skipped (idempotent)
+ *   - Bucket listing is fully paginated (handles >100 files)
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -26,13 +27,13 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 
-// Load env
+// ── Environment setup ──────────────────────────────────────
+
 const SERVER_ROOT = __dirname.endsWith('dist/scripts')
     ? path.resolve(__dirname, '../..')
     : path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(SERVER_ROOT, '.env'), override: false });
 
-const prisma = new PrismaClient();
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const BUCKET_NAME = process.env.SUPABASE_BUCKET || 'documents';
@@ -40,7 +41,17 @@ const BUCKET_NAME = process.env.SUPABASE_BUCKET || 'documents';
 const DRY_RUN = process.argv.includes('--dry-run');
 const REWRITE_URLS = process.argv.includes('--rewrite');
 
-const uploadDir = path.join(SERVER_ROOT, 'uploads');
+// Railway volume mount point — falls back to server/uploads for local dev
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(SERVER_ROOT, 'uploads');
+
+// ── Types ──────────────────────────────────────────────────
+
+interface BucketFile {
+    /** Full path within the bucket, e.g. "tenantId/uuid.pdf" */
+    remotePath: string;
+    /** Size in bytes as reported by Supabase (may be 0 for folders) */
+    size: number;
+}
 
 interface MigrationResult {
     total: number;
@@ -48,205 +59,338 @@ interface MigrationResult {
     skipped: number;
     failed: number;
     rewritten: number;
-    errors: string[];
+    errors: Array<{ path: string; reason: string }>;
 }
 
-function log(msg: string) {
+// ── Logging ────────────────────────────────────────────────
+
+function log(msg: string): void {
     console.log(`[Migration ${new Date().toISOString().slice(11, 19)}] ${msg}`);
 }
 
-function isSupabaseUrl(url: string): boolean {
-    return url?.includes('supabase.co') || url?.includes('supabase.in') || false;
+function logError(msg: string): void {
+    console.error(`[Migration ${new Date().toISOString().slice(11, 19)}] ${msg}`);
 }
 
-function extractSupabasePath(url: string): string {
-    const parts = url.split(`${BUCKET_NAME}/`);
-    if (parts.length > 1) {
-        return decodeURIComponent(parts[1].split('?')[0]);
+// ── Bucket listing (paginated, recursive) ─────────────────
+
+/**
+ * Recursively lists all files in a Supabase Storage bucket folder.
+ * Supabase returns at most 100 items per call, so we paginate with offset.
+ */
+async function listBucketFiles(
+    supabase: ReturnType<typeof createClient>,
+    prefix: string = ''
+): Promise<BucketFile[]> {
+    const PAGE_SIZE = 100;
+    const files: BucketFile[] = [];
+    let offset = 0;
+
+    while (true) {
+        const { data, error } = await supabase.storage
+            .from(BUCKET_NAME)
+            .list(prefix, {
+                limit: PAGE_SIZE,
+                offset,
+                sortBy: { column: 'name', order: 'asc' },
+            });
+
+        if (error) {
+            throw new Error(`Failed to list bucket "${BUCKET_NAME}" at prefix "${prefix}": ${error.message}`);
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const item of data) {
+            const itemPath = prefix ? `${prefix}/${item.name}` : item.name;
+
+            if (item.id === null || item.metadata === null) {
+                // Supabase represents folders as items with null id/metadata
+                log(`  📁 Entering folder: ${itemPath}`);
+                const nested = await listBucketFiles(supabase, itemPath);
+                files.push(...nested);
+            } else {
+                files.push({
+                    remotePath: itemPath,
+                    size: (item.metadata as any)?.size ?? 0,
+                });
+            }
+        }
+
+        if (data.length < PAGE_SIZE) break; // Last page
+        offset += PAGE_SIZE;
     }
+
+    return files;
+}
+
+// ── Download ───────────────────────────────────────────────
+
+/**
+ * Downloads a single file from Supabase and writes it to localPath.
+ * Returns true on success, false if the file was not found (404).
+ * Throws on unexpected errors.
+ */
+async function downloadFile(
+    supabase: ReturnType<typeof createClient>,
+    remotePath: string,
+    localPath: string
+): Promise<boolean> {
+    const { data, error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .download(remotePath);
+
+    if (error) {
+        const status = (error as any).statusCode ?? (error as any).status;
+        if (status === 404 || error.message?.toLowerCase().includes('not found')) {
+            return false;
+        }
+        throw new Error(error.message);
+    }
+
+    if (!data) return false;
+
+    const arrayBuffer = await data.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if (buffer.length === 0) {
+        throw new Error('Supabase returned an empty file body');
+    }
+
+    // Ensure parent directory exists (preserves bucket directory structure)
+    const parentDir = path.dirname(localPath);
+    if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+    }
+
+    fs.writeFileSync(localPath, buffer);
+
+    // Integrity check: written size must match downloaded size
+    const writtenSize = fs.statSync(localPath).size;
+    if (writtenSize !== buffer.length) {
+        fs.unlinkSync(localPath); // Remove corrupt file
+        throw new Error(`Size mismatch after write: expected ${buffer.length}B, got ${writtenSize}B`);
+    }
+
+    return true;
+}
+
+// ── Database URL rewriting ─────────────────────────────────
+
+/**
+ * Builds the local URL for a given remote bucket path.
+ * Preserves the directory structure under /uploads/.
+ */
+function toLocalUrl(remotePath: string): string {
+    return `/uploads/${remotePath}`;
+}
+
+/**
+ * Checks whether a URL points to Supabase Storage.
+ */
+function isSupabaseUrl(url: string): boolean {
+    return Boolean(url?.includes('supabase.co') || url?.includes('supabase.in'));
+}
+
+/**
+ * Extracts the bucket-relative path from a full Supabase public URL.
+ * e.g. "https://xxx.supabase.co/storage/v1/object/public/documents/tenantId/file.pdf"
+ *   → "tenantId/file.pdf"
+ */
+function extractRemotePath(url: string): string {
+    const marker = `${BUCKET_NAME}/`;
+    const idx = url.indexOf(marker);
+    if (idx !== -1) {
+        return decodeURIComponent(url.slice(idx + marker.length).split('?')[0]);
+    }
+    // Fallback: use just the filename
     return path.basename(url.split('?')[0]);
 }
 
-function extractFileName(url: string): string {
-    if (!url) return '';
-    const clean = url.split('?')[0];
-    if (clean.startsWith('http')) {
-        return path.basename(new URL(clean).pathname);
-    }
-    return path.basename(clean);
-}
-
-async function downloadFromSupabase(supabase: any, remotePath: string, localPath: string): Promise<boolean> {
-    try {
-        const { data, error } = await supabase.storage
-            .from(BUCKET_NAME)
-            .download(remotePath);
-
-        if (error) {
-            if ((error as any).statusCode === 404 || error.message?.includes('not found')) {
-                return false; // File doesn't exist on Supabase
-            }
-            throw error;
-        }
-
-        if (!data) return false;
-
-        const arrayBuffer = await data.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        if (buffer.length === 0) {
-            log(`  ⚠️ Empty file from Supabase: ${remotePath}`);
-            return false;
-        }
-
-        fs.writeFileSync(localPath, buffer);
-
-        // Verify
-        const stats = fs.statSync(localPath);
-        if (stats.size !== buffer.length) {
-            log(`  ❌ Size mismatch: expected ${buffer.length}, got ${stats.size}`);
-            return false;
-        }
-
-        return true;
-    } catch (err: any) {
-        log(`  ❌ Download error: ${err.message}`);
-        return false;
-    }
-}
-
-async function migrateTable(
-    supabase: any,
-    tableName: string,
-    records: { id: string; fileUrl: string }[],
-    updateFn: (id: string, newUrl: string) => Promise<void>,
+/**
+ * Rewrites all Supabase fileUrls in the Document and TechnicalCertificate
+ * tables to their corresponding local /uploads/ paths.
+ */
+async function rewriteDatabaseUrls(
+    prisma: PrismaClient,
     result: MigrationResult
-) {
-    log(`\n📋 ${tableName}: ${records.length} records with Supabase URLs`);
+): Promise<void> {
+    log('\n🔄 Rewriting database URLs...');
 
-    for (const record of records) {
-        result.total++;
-        const fileName = extractFileName(record.fileUrl);
-        const localPath = path.join(uploadDir, fileName);
-        const newUrl = `/uploads/${fileName}`;
+    // ── Documents ──
+    const docs = await prisma.document.findMany({
+        where: { fileUrl: { contains: 'supabase' } },
+        select: { id: true, fileUrl: true },
+    });
 
-        // Skip if already exists locally
-        if (fs.existsSync(localPath)) {
-            result.skipped++;
-            if (REWRITE_URLS && !DRY_RUN) {
-                await updateFn(record.id, newUrl);
-                result.rewritten++;
-            }
-            continue;
+    for (const doc of docs) {
+        const remotePath = extractRemotePath(doc.fileUrl);
+        const newUrl = toLocalUrl(remotePath);
+        try {
+            await prisma.document.update({ where: { id: doc.id }, data: { fileUrl: newUrl } });
+            result.rewritten++;
+        } catch (err: any) {
+            logError(`  ❌ DB update failed for Document ${doc.id}: ${err.message}`);
         }
-
-        if (DRY_RUN) {
-            log(`  [DRY] Would download: ${fileName}`);
-            result.skipped++;
-            continue;
-        }
-
-        // Download from Supabase
-        const remotePath = extractSupabasePath(record.fileUrl);
-        const success = await downloadFromSupabase(supabase, remotePath, localPath);
-
-        if (success) {
-            result.downloaded++;
-            const sizeKB = Math.round(fs.statSync(localPath).size / 1024);
-            log(`  ✅ ${fileName} (${sizeKB}KB)`);
-
-            if (REWRITE_URLS) {
-                await updateFn(record.id, newUrl);
-                result.rewritten++;
-            }
-        } else {
-            result.failed++;
-            result.errors.push(`${tableName}/${record.id}: ${fileName}`);
-            log(`  ❌ Failed: ${fileName}`);
-        }
-
-        // Rate limit: 200ms between downloads
-        await new Promise(r => setTimeout(r, 200));
     }
+
+    // ── TechnicalCertificates ──
+    const certs = await prisma.technicalCertificate.findMany({
+        where: { fileUrl: { contains: 'supabase' } },
+        select: { id: true, fileUrl: true },
+    });
+
+    for (const cert of certs) {
+        const remotePath = extractRemotePath(cert.fileUrl);
+        const newUrl = toLocalUrl(remotePath);
+        try {
+            await prisma.technicalCertificate.update({ where: { id: cert.id }, data: { fileUrl: newUrl } });
+            result.rewritten++;
+        } catch (err: any) {
+            logError(`  ❌ DB update failed for TechnicalCertificate ${cert.id}: ${err.message}`);
+        }
+    }
+
+    log(`  ✅ Rewrote ${result.rewritten} database URL(s)`);
 }
 
+// ── Main ───────────────────────────────────────────────────
 
-async function main() {
-    log('═══════════════════════════════════════');
-    log('  LicitaSaaS — Supabase → Local Migration');
-    log('═══════════════════════════════════════');
-    log(`  Mode: ${DRY_RUN ? '🔍 DRY RUN (preview only)' : '🚀 LIVE'}`);
-    log(`  URL Rewrite: ${REWRITE_URLS ? '✅ Enabled' : '❌ Disabled (add --rewrite)'}`);
-    log(`  Upload Dir: ${uploadDir}`);
-    log('═══════════════════════════════════════\n');
+async function main(): Promise<void> {
+    log('═══════════════════════════════════════════════════');
+    log('  LicitaSaaS — Supabase → Local Storage Migration');
+    log('═══════════════════════════════════════════════════');
+    log(`  Bucket:      ${BUCKET_NAME}`);
+    log(`  Upload dir:  ${UPLOAD_DIR}`);
+    log(`  Mode:        ${DRY_RUN ? '🔍 DRY RUN (no files written)' : '🚀 LIVE'}`);
+    log(`  URL rewrite: ${REWRITE_URLS ? '✅ Enabled (--rewrite)' : '❌ Disabled'}`);
+    log('═══════════════════════════════════════════════════\n');
 
-    // Validate
+    // ── Validate environment ──
     if (!SUPABASE_URL || !SUPABASE_KEY) {
-        log('❌ SUPABASE_URL and SUPABASE_KEY required');
+        logError('❌ SUPABASE_URL and SUPABASE_KEY environment variables are required.');
         process.exit(1);
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const prisma = new PrismaClient();
 
-    // Ensure upload dir exists
-    if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
+    // Ensure the upload directory exists
+    if (!DRY_RUN && !fs.existsSync(UPLOAD_DIR)) {
+        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+        log(`📁 Created upload directory: ${UPLOAD_DIR}`);
     }
 
     const result: MigrationResult = {
-        total: 0, downloaded: 0, skipped: 0, failed: 0, rewritten: 0, errors: []
+        total: 0,
+        downloaded: 0,
+        skipped: 0,
+        failed: 0,
+        rewritten: 0,
+        errors: [],
     };
 
-    // ── 1. Documents table ──
-    const docs = await prisma.document.findMany({
-        where: { fileUrl: { contains: 'supabase' } },
-        select: { id: true, fileUrl: true }
-    });
+    // ── Step 1: List all files in the bucket ──
+    log('📋 Listing all files in Supabase bucket...');
+    let bucketFiles: BucketFile[];
+    try {
+        bucketFiles = await listBucketFiles(supabase);
+    } catch (err: any) {
+        logError(`❌ Failed to list bucket: ${err.message}`);
+        await prisma.$disconnect();
+        process.exit(1);
+    }
 
-    await migrateTable(supabase, 'Document', docs, async (id, newUrl) => {
-        await prisma.document.update({ where: { id }, data: { fileUrl: newUrl } });
-    }, result);
+    log(`📦 Found ${bucketFiles.length} file(s) in bucket "${BUCKET_NAME}"\n`);
 
-    // ── 2. TechnicalCertificate table ──
-    const certs = await prisma.technicalCertificate.findMany({
-        where: { fileUrl: { contains: 'supabase' } },
-        select: { id: true, fileUrl: true }
-    });
+    if (bucketFiles.length === 0) {
+        log('ℹ️  Bucket is empty — nothing to migrate.');
+        await prisma.$disconnect();
+        log('\nMigration completed successfully');
+        return;
+    }
 
-    await migrateTable(supabase, 'TechnicalCertificate', certs, async (id, newUrl) => {
-        await prisma.technicalCertificate.update({ where: { id }, data: { fileUrl: newUrl } });
-    }, result);
+    // ── Step 2: Download each file ──
+    for (const file of bucketFiles) {
+        result.total++;
+        const localPath = path.join(UPLOAD_DIR, file.remotePath);
+        const sizeLabel = file.size > 0 ? `${Math.round(file.size / 1024)}KB` : 'unknown size';
+
+        // Skip files that already exist locally (idempotent)
+        if (fs.existsSync(localPath)) {
+            log(`  ⏭️  Skipping (already exists): ${file.remotePath}`);
+            result.skipped++;
+            continue;
+        }
+
+        if (DRY_RUN) {
+            log(`  [DRY] Would download: ${file.remotePath} (${sizeLabel})`);
+            result.skipped++;
+            continue;
+        }
+
+        try {
+            log(`  ⬇️  Downloading: ${file.remotePath} (${sizeLabel})`);
+            const found = await downloadFile(supabase, file.remotePath, localPath);
+
+            if (!found) {
+                logError(`  ⚠️  Not found on Supabase (404): ${file.remotePath}`);
+                result.failed++;
+                result.errors.push({ path: file.remotePath, reason: 'Not found on Supabase (404)' });
+            } else {
+                const actualKB = Math.round(fs.statSync(localPath).size / 1024);
+                log(`  ✅ Saved: ${file.remotePath} (${actualKB}KB)`);
+                result.downloaded++;
+            }
+        } catch (err: any) {
+            logError(`  ❌ Error downloading ${file.remotePath}: ${err.message}`);
+            result.failed++;
+            result.errors.push({ path: file.remotePath, reason: err.message });
+        }
+
+        // Polite rate-limiting: 150ms between requests to avoid hammering the API
+        await new Promise(r => setTimeout(r, 150));
+    }
+
+    // ── Step 3: Rewrite database URLs (opt-in) ──
+    if (REWRITE_URLS && !DRY_RUN) {
+        await rewriteDatabaseUrls(prisma, result);
+    }
+
+    await prisma.$disconnect();
 
     // ── Summary ──
-    log('\n═══════════════════════════════════════');
+    log('\n═══════════════════════════════════════════════════');
     log('  Migration Summary');
-    log('═══════════════════════════════════════');
-    log(`  Total files:     ${result.total}`);
-    log(`  Downloaded:      ${result.downloaded}`);
-    log(`  Skipped (local): ${result.skipped}`);
-    log(`  Failed:          ${result.failed}`);
-    log(`  URLs rewritten:  ${result.rewritten}`);
+    log('═══════════════════════════════════════════════════');
+    log(`  Total files in bucket : ${result.total}`);
+    log(`  Downloaded            : ${result.downloaded}`);
+    log(`  Skipped (exist local) : ${result.skipped}`);
+    log(`  Failed                : ${result.failed}`);
+    if (REWRITE_URLS) {
+        log(`  DB URLs rewritten     : ${result.rewritten}`);
+    }
 
     if (result.errors.length > 0) {
         log('\n  ❌ Failed files:');
-        result.errors.forEach(e => log(`    - ${e}`));
+        result.errors.forEach(e => log(`    • ${e.path} — ${e.reason}`));
     }
 
-    if (result.failed === 0) {
-        log('\n  ✅ Migration completed successfully!');
-        if (!REWRITE_URLS && result.total > 0) {
-            log('  💡 Run with --rewrite to update database URLs');
+    log('═══════════════════════════════════════════════════');
+
+    if (result.failed > 0) {
+        log(`\n  ⚠️  ${result.failed} file(s) failed. Re-run the script to retry.`);
+        if (!REWRITE_URLS && result.downloaded > 0) {
+            log('  💡 Add --rewrite to update database URLs once all files are migrated.');
         }
-    } else {
-        log(`\n  ⚠️ ${result.failed} files failed. Re-run to retry.`);
+        // Exit with non-zero so CI/deployment pipelines can detect partial failures
+        process.exit(1);
     }
 
-    log('═══════════════════════════════════════\n');
-
-    await prisma.$disconnect();
+    log('\nMigration completed successfully');
 }
 
 main().catch(err => {
-    console.error('Migration failed:', err);
+    logError(`Fatal error: ${err.message ?? err}`);
     process.exit(1);
 });
