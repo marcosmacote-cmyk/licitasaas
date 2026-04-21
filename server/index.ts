@@ -362,10 +362,10 @@ app.get('/api/debug-recovery', async (req, res) => {
             }
         }
         
-        // Also check TechnicalCertificate
+        // Check TechnicalCertificate - just count missing (no fileContent column on this model)
         const certs = await prisma.technicalCertificate.findMany({
             where: { fileUrl: { startsWith: '/uploads/' } },
-            select: { id: true, fileUrl: true, fileContent: true }
+            select: { id: true, fileUrl: true }
         });
         
         let certsMissing = 0;
@@ -373,13 +373,7 @@ app.get('/api/debug-recovery', async (req, res) => {
             const fname = path.basename(cert.fileUrl);
             const filePath = path.join(uploadDir, fname);
             if (!fs.existsSync(filePath)) {
-                if ((cert as any).fileContent && (cert as any).fileContent.length > 0) {
-                    certsMissing++;
-                    if (recover) {
-                        fs.writeFileSync(filePath, (cert as any).fileContent);
-                        recovered++;
-                    }
-                }
+                certsMissing++;
             }
         }
         
