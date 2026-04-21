@@ -42,3 +42,7 @@ server/.tmp-backups/
 pncp-aggregator/node_modules/
 pncp-aggregator/dist/
 .health-report.json
+server/diagnose_bucket.cjs
+server/list_supabase.cjs
+server/scripts/deep-supabase-scan.ts
+server/search_cert.cjs

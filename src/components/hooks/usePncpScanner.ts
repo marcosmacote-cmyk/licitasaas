@@ -71,7 +71,7 @@ export function usePncpScanner() {
             const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
                 const data = await res.json();
-                setScannerOpportunities(prev => scannerOpportunitiesPage === 1 ? data.items || [] : [...prev, ...(data.items || [])]);
+                setScannerOpportunities(data.items || []);
                 setScannerOpportunitiesTotal(data.total || 0);
             }
         } catch (e) { console.error("Failed to fetch scanner opportunities", e); }

@@ -192,7 +192,7 @@ async function executePncpSearch(search: {
         }
     }
 
-    return result.items.map((c: any) => ({
+    const localResults = result.items.map((c: any) => ({
         id: c.id,
         titulo: c.titulo,
         objeto: c.objeto,
@@ -207,6 +207,31 @@ async function executePncpSearch(search: {
         modalidade_nome: c.modalidade_nome,
         link_sistema: c.link_sistema
     }));
+
+    // ── Enriquecimento: buscar também na API PNCP para capturar editais publicados hoje ──
+    // Isso garante que mesmo com o aggregator atrasado, editais do dia sejam encontrados.
+    try {
+        const apiResults = await searchPncpApiDirect(search);
+        if (apiResults.length > 0) {
+            const existingIds = new Set(localResults.map(r => r.id));
+            let addedFromApi = 0;
+            for (const apiItem of apiResults) {
+                if (!existingIds.has(apiItem.id)) {
+                    localResults.push(apiItem);
+                    existingIds.add(apiItem.id);
+                    addedFromApi++;
+                }
+            }
+            if (addedFromApi > 0) {
+                logger.info(`[OpportunityScanner] 🔗 Enriquecido com ${addedFromApi} editais da API PNCP (não estavam na base local)`);
+            }
+        }
+    } catch (err: any) {
+        // API enrichment is best-effort — don't fail the scan
+        logger.warn(`[OpportunityScanner] API enrichment failed (non-fatal): ${err.message}`);
+    }
+
+    return localResults;
 }
 
 /**

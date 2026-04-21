@@ -130,6 +130,15 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [groupVisibleCounts, setGroupVisibleCounts] = useState<Record<string, number>>({});
 
+    // Reset expansion state when scanner data changes (page navigation)
+    React.useEffect(() => {
+        setExpandedGroups(new Set());
+        setGroupVisibleCounts({});
+        setExpandedItemId(null);
+        setItemDetails(null);
+        setItemError('');
+    }, [p.scannerOpportunitiesPage]);
+
     const toggleGroupCollapse = useCallback((dateKey: string) => {
         setExpandedGroups(prev => {
             const next = new Set(prev);
