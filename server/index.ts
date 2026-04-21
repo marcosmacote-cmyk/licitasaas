@@ -964,14 +964,31 @@ app.listen(PORT, async () => {
 // ── Opportunity Scanner: Auto-scan saved PNCP searches every 4 hours ──
 if (PROCESS_ROLE !== 'api') {
     startOpportunityScanner(4);
-    // ── PNCP Aggregator DESATIVADO do processo principal ──
-    // O Railway tem um serviço dedicado "pncp-aggregator" que faz essa sincronização.
-    // Rodar o aggregator INLINE no API server causava:
-    //   1. Connection pool exhaustion (Prisma) — matando searchLocal()
-    //   2. HTTP socket contention (axios → pncp.gov.br) — atrasando searchGovbr()
-    //   3. Event loop blocking — degradando todas as rotas da API
-    // Ref: sessão de debugging 2026-04-15
-    logger.info('[PNCP-AGG] ⏸️ Aggregator inline DESATIVADO — syncronizado pelo serviço dedicado pncp-aggregator no Railway');
+    
+    // ── PNCP Aggregator: sincroniza base local a cada 20 minutos ──
+    // Re-ativado inline pois o serviço dedicado pncp-aggregator foi removido.
+    // Intervalo de 20min (vs 15min do worker) para reduzir carga no processo API.
+    setTimeout(async () => {
+        try {
+            const { runPncpSync, getPncpAggregatorStats } = await import('./workers/pncpAggregator');
+            logger.info('[PNCP-AGG] 🚀 Aggregator inline iniciado (intervalo: 20min)');
+            try {
+                await runPncpSync();
+                const stats = await getPncpAggregatorStats();
+                logger.info(`[PNCP-AGG] ✅ Primeira sync: ${stats.totalContratacoes} contratações, ${stats.totalAbertos} abertas`);
+            } catch (e: any) {
+                logger.error('[PNCP-AGG] ❌ Primeira sync falhou:', e.message);
+            }
+            setInterval(async () => {
+                try {
+                    const { runPncpSync } = await import('./workers/pncpAggregator');
+                    await runPncpSync();
+                } catch (e: any) { logger.error('[PNCP-AGG] sync error:', e.message); }
+            }, 20 * 60_000); // 20 minutos
+        } catch (e: any) {
+            logger.error('[PNCP-AGG] ❌ Falha ao carregar módulo aggregator:', e.message);
+        }
+    }, 120_000); // 2 min após boot (depois dos pollers)
 } else {
     logger.info('[Server] Opportunity Scanner disabled (PROCESS_ROLE=api)');
 }
