@@ -6,12 +6,13 @@ WORKDIR /app
 RUN apk add --no-cache openssl ghostscript graphicsmagick poppler-utils
 
 # Build Backend
+# --ignore-scripts: Zerox postinstall uses apt-get/brew (incompatible with Alpine apk);
+# system deps already installed above. We run prisma generate manually after.
 WORKDIR /app/backend
 COPY server/package.json server/package-lock.json* ./
 COPY server/prisma ./prisma
-RUN npm install
+RUN npm install --ignore-scripts && npx prisma generate
 COPY server/ ./
-RUN npx prisma generate
 RUN npx tsc
 
 # Build Frontend
