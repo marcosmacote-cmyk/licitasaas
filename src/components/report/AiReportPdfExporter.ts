@@ -388,6 +388,18 @@ function buildReportHtml(data: ReportPdfData): string {
             body { font-size: 9pt; }
             .page { padding: 0; max-width: none; }
             @page { size: A4 portrait; margin: 12mm 10mm; }
+            
+            /* Ensure header is visible when background is removed by the printer */
+            .report-header {
+                background: none !important;
+                color: var(--text) !important;
+                padding: 10px 0 20px 0 !important;
+            }
+            .report-header::before { display: none !important; }
+            .report-header .brand { color: var(--text-muted) !important; }
+            .report-header .title { color: var(--text) !important; }
+            .report-header .subtitle { color: var(--text-secondary) !important; max-width: 100% !important; }
+            .report-header .confidence-badge .label { color: var(--text-muted) !important; }
         }
     </style>
 </head>
