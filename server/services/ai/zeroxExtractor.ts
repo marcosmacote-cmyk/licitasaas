@@ -31,22 +31,28 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-// ── Zerox import (lazy — fails gracefully if not installed) ──
-// We import lazily because Zerox depends on system binaries (ghostscript, graphicsmagick)
-// that may not be present in all environments.
+// ── Zerox import (eager at module load for diagnostics) ──
+// We try require() first (CommonJS), then dynamic import (ESM fallback).
 let zeroxFn: ((args: any) => Promise<any>) | null = null;
+let zeroxLoadError: string | null = null;
 
-async function ensureZeroxLoaded(): Promise<boolean> {
-    if (zeroxFn) return true;
-    try {
-        const mod = await import('zerox');
-        zeroxFn = mod.zerox;
-        logger.info('[ZeroxExtractor] ✅ Zerox library loaded successfully');
-        return true;
-    } catch (err: any) {
-        logger.warn(`[ZeroxExtractor] ⚠️ Zerox not available: ${err.message}. V3 pipeline disabled.`);
-        return false;
+// Attempt to load immediately at module init for early diagnostics
+try {
+    const mod = require('zerox');
+    zeroxFn = mod.zerox;
+    if (zeroxFn) {
+        logger.info('[ZeroxExtractor] ✅ Zerox library loaded successfully (require)');
+    } else {
+        zeroxLoadError = 'zerox module loaded but .zerox function not found';
+        logger.warn(`[ZeroxExtractor] ⚠️ ${zeroxLoadError}`);
     }
+} catch (err: any) {
+    zeroxLoadError = err.message;
+    logger.warn(`[ZeroxExtractor] ⚠️ Zerox not available: ${err.message}. V3 pipeline disabled.`);
+}
+
+function isZeroxLoaded(): boolean {
+    return zeroxFn !== null;
 }
 
 // ── In-Memory Markdown Cache (keyed by PDF content hash) ──
@@ -149,16 +155,17 @@ export interface ZeroxConfig {
  * Call this before attempting extraction to provide graceful degradation.
  */
 export async function isZeroxAvailable(): Promise<boolean> {
-    const loaded = await ensureZeroxLoaded();
-    if (!loaded) return false;
+    if (!isZeroxLoaded()) {
+        logger.info(`[ZeroxExtractor] ❌ Zerox NOT available (load error: ${zeroxLoadError || 'unknown'})`);
+        return false;
+    }
 
-    // Check for system dependencies (ghostscript, graphicsmagick)
-    // We can't easily check this without trying, so we just verify the module loaded
     const hasApiKey = !!(process.env.GEMINI_API_KEY);
     if (!hasApiKey) {
         logger.warn('[ZeroxExtractor] No GEMINI_API_KEY — Zerox cannot use Gemini Vision');
+        return false;
     }
-    return loaded && hasApiKey;
+    return true;
 }
 
 /**
@@ -191,8 +198,7 @@ export async function extractMarkdownFromPdf(
     }
 
     // 2. Ensure Zerox is loaded
-    const available = await ensureZeroxLoaded();
-    if (!available) {
+    if (!isZeroxLoaded()) {
         logger.warn(`[ZeroxExtractor] Zerox not available for "${fileName}" — returning null for fallback`);
         return null;
     }
