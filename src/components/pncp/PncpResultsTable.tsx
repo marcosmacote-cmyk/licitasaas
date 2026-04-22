@@ -119,6 +119,7 @@ const ITEMS_PER_DATE_GROUP = 10;
 export function PncpResultsTable({ p, items }: PncpChildProps) {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
     const [itemDetails, setItemDetails] = useState<any[] | null>(null);
+    const [cachedItemDetails, setCachedItemDetails] = useState<Record<string, any[]>>({});
     const [loadingItems, setLoadingItems] = useState(false);
     const [itemError, setItemError] = useState('');
     const [slowLoad, setSlowLoad] = useState(false);
@@ -204,6 +205,17 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
         item.ano = parts.ano;
         item.numero_sequencial = parts.seq;
 
+        // Check cache first
+        if (cachedItemDetails[item.id]) {
+            setItemDetails(cachedItemDetails[item.id]);
+            // If in the found tab and not viewed, mark viewed
+            if (p.activeTab === 'found' && item._scannerLogId && item._isViewed === false && (p as any).markItemViewed) {
+                (p as any).markItemViewed(item._scannerLogId);
+                item._isViewed = true;
+            }
+            return;
+        }
+
         setLoadingItems(true);
 
         // Show "slow" message after 3 seconds
@@ -218,14 +230,22 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
 
             // Step 0: Check if result already has items from local search
             if (item.itens_preview && item.itens_preview.length > 0) {
-                setItemDetails(item.itens_preview.map((it: any) => ({
+                const mappedPreview = item.itens_preview.map((it: any) => ({
                     itemNumber: it.numero || it.numeroItem || it.itemNumber,
                     description: it.descricao || it.description || '',
                     quantity: it.quantidade || it.quantity,
                     unit: it.unidade || it.unidadeMedida || it.unit || '',
                     unitValue: it.valorUnitario || it.valorUnitarioEstimado || it.unitValue || 0,
                     totalValue: it.valorTotal || it.totalValue || 0,
-                })));
+                }));
+                setItemDetails(mappedPreview);
+                setCachedItemDetails(prev => ({ ...prev, [item.id]: mappedPreview }));
+
+                if (p.activeTab === 'found' && item._scannerLogId && item._isViewed === false && (p as any).markItemViewed) {
+                    (p as any).markItemViewed(item._scannerLogId);
+                    item._isViewed = true;
+                }
+                
                 return;
             }
 
@@ -238,14 +258,22 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                     const localData = await localRes.json();
                     if (Array.isArray(localData) && localData.length > 0) {
                         // Normalize field names to match table renderer
-                        setItemDetails(localData.map((it: any) => ({
+                        const mappedItems = localData.map((it: any) => ({
                             itemNumber: it.numeroItem || it.itemNumber,
                             description: it.descricao || it.description || '',
                             quantity: it.quantidade || it.quantity,
                             unit: it.unidadeMedida || it.unit || '',
                             unitValue: it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0,
                             totalValue: it.valorTotal || it.totalValue || 0,
-                        })));
+                        }));
+                        setItemDetails(mappedItems);
+                        setCachedItemDetails(prev => ({ ...prev, [item.id]: mappedItems }));
+
+                        if (p.activeTab === 'found' && item._scannerLogId && item._isViewed === false && (p as any).markItemViewed) {
+                            (p as any).markItemViewed(item._scannerLogId);
+                            item._isViewed = true;
+                        }
+                        
                         return;
                     }
                 }
@@ -269,9 +297,17 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                         setItemError(lastError);
                         return;
                     }
-                    setItemDetails(data.items || []);
+                    const itemsToSet = data.items || [];
+                    setItemDetails(itemsToSet);
+                    setCachedItemDetails(prev => ({ ...prev, [item.id]: itemsToSet }));
+
+                    if (p.activeTab === 'found' && item._scannerLogId && item._isViewed === false && (p as any).markItemViewed) {
+                        (p as any).markItemViewed(item._scannerLogId);
+                        item._isViewed = true;
+                    }
+                    
                     if (data.message) setItemError(data.message);
-                    else if (data.items?.length === 0) setItemError('Nenhum item cadastrado no PNCP para este processo');
+                    else if (itemsToSet.length === 0) setItemError('Nenhum item cadastrado no PNCP para este processo');
                     return;
                 } catch (fetchErr: any) {
                     lastError = fetchErr?.message || 'Falha de conexão';
@@ -374,8 +410,9 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                         Number((item as any).valor_global) ||
                         Number((item as any).valorTotalEstimado) ||
                         Number((item as any).valorTotalHomologado) || 0;
-                    const expandedVal = (expandedItemId === item.id && itemDetails) 
-                        ? itemDetails.reduce((acc, it) => acc + (Number(it.totalValue) || (Number(it.unitValue) * Number(it.quantity)) || 0), 0) : 0;
+                    const cachedDetails = cachedItemDetails[item.id] || (expandedItemId === item.id ? itemDetails : null);
+                    const expandedVal = cachedDetails 
+                        ? cachedDetails.reduce((acc, it) => acc + (Number(it.totalValue) || (Number(it.unitValue) * Number(it.quantity)) || 0), 0) : 0;
                     const previewVal = (item as any).itens_preview?.length > 0
                         ? (item as any).itens_preview.reduce((acc: number, it: any) => acc + (Number(it.valorTotal) || Number(it.totalValue) || (Number(it.valorUnitarioEstimado || it.valorUnitario || it.unitValue || 0) * Number(it.quantidade || it.quantity || 1)) || 0), 0) : 0;
                     const computedVal = directVal || expandedVal || previewVal;
