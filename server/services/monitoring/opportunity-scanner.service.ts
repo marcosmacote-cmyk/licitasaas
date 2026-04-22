@@ -269,6 +269,25 @@ async function isAlreadyNotified(tenantId: string, searchId: string, pncpId: str
  */
 async function markAsNotified(tenantId: string, result: PncpSearchResult, searchId: string, searchName: string): Promise<void> {
     try {
+        let computedValue = result.valor_estimado || 0;
+
+        // Auto-fetch value if missing from PNCP search index
+        if (!computedValue && result.orgao_cnpj && result.ano && result.numero_sequencial) {
+            try {
+                const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${result.orgao_cnpj}/compras/${result.ano}/${result.numero_sequencial}/itens?pagina=1&tamanhoPagina=100`;
+                const resp = await axios.get(itemsUrl, { timeout: 5000 });
+                const items = resp.data?.data || resp.data?.items || resp.data || [];
+                if (Array.isArray(items)) {
+                    computedValue = items.reduce((acc: number, it: any) => {
+                        return acc + (Number(it.valorTotal) || ((Number(it.quantidade) || 0) * (Number(it.valorUnitarioEstimado || it.valorUnitarioHomologado) || 0)) || 0);
+                    }, 0);
+                    if (computedValue > 0) result.valor_estimado = computedValue;
+                }
+            } catch (err) {
+                // Ignore errors and proceed with 0
+            }
+        }
+
         await prisma.opportunityScannerLog.create({
             data: {
                 tenantId,
@@ -283,7 +302,7 @@ async function markAsNotified(tenantId: string, result: PncpSearchResult, search
                 sequencialCompra: result.numero_sequencial || null,
                 uf: result.uf,
                 municipio: result.municipio,
-                valorEstimado: result.valor_estimado || null,
+                valorEstimado: computedValue || null,
                 dataEncerramentoProposta: result.data_encerramento_proposta || null,
                 modalidadeNome: result.modalidade_nome || null,
                 linkSistema: result.link_sistema || null,
