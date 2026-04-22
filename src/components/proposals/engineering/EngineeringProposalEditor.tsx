@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3 } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
 import { CurvaAbcPanel } from './CurvaAbcPanel';
+import { CronogramaPanel } from './CronogramaPanel';
 
 interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
@@ -35,7 +36,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [compositionItem, setCompositionItem] = useState<EngItem | null>(null);
 
     // Active tab
-    const [activeTab, setActiveTab] = useState<'planilha' | 'curva_abc'>('planilha');
+    const [activeTab, setActiveTab] = useState<'planilha' | 'curva_abc' | 'cronograma'>('planilha');
 
     const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
     const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
@@ -154,6 +155,31 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         setBdiConfig(prev => ({ ...prev, tcu: { ...prev.tcu, [field]: val } }));
     };
 
+    // Excel Export (CSV with BOM for Excel compatibility)
+    const handleExportExcel = () => {
+        const BOM = '\uFEFF';
+        const sep = ';';
+        const header = ['Item', 'Base', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Custo Unitário (S/ BDI)', 'Preço Unitário (C/ BDI)', 'Total (C/ BDI)'];
+        const rows = items.map(it => [
+            it.itemNumber, it.sourceName, it.code, `"${it.description.replace(/"/g, '""')}"`,
+            it.unit, it.quantity.toString().replace('.', ','),
+            it.unitCost.toFixed(2).replace('.', ','),
+            it.unitPrice.toFixed(2).replace('.', ','),
+            it.totalPrice.toFixed(2).replace('.', ','),
+        ]);
+        rows.push([]);
+        rows.push(['', '', '', '', '', '', 'Subtotal (S/ BDI)', '', items.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2).replace('.', ',')]);
+        rows.push(['', '', '', '', '', '', `BDI (${bdiConfig.mode})`, `${effectiveBdi.toFixed(2)}%`, '']);
+        rows.push(['', '', '', '', '', '', 'TOTAL GLOBAL', '', items.reduce((s, i) => s + i.totalPrice, 0).toFixed(2).replace('.', ',')]);
+
+        const csv = BOM + [header.join(sep), ...rows.map(r => r.join(sep))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `planilha_orcamentaria_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click(); URL.revokeObjectURL(url);
+    };
+
     const inputStyle = (w: string = '100%'): React.CSSProperties => ({
         width: w, padding: '4px 8px', fontSize: '0.8rem', border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-base)', height: 30,
@@ -181,6 +207,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
                         {isExtracting ? 'Extraindo...' : 'Extrair via IA'}
                     </button>
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExportExcel}>
+                        <Download size={14} /> Exportar Excel
+                    </button>
                     <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleSave} disabled={isSaving}>
                         {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
                         {isSaving ? 'Salvando...' : 'Salvar Planilha'}
@@ -193,6 +222,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 {[
                     { key: 'planilha' as const, label: 'Planilha Orçamentária', icon: TableProperties },
                     { key: 'curva_abc' as const, label: 'Curva ABC', icon: BarChart3 },
+                    { key: 'cronograma' as const, label: 'Cronograma', icon: Calendar },
                 ].map(tab => (
                     <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
                         flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
@@ -210,6 +240,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             {/* Tab Content: Curva ABC */}
             {activeTab === 'curva_abc' && (
                 <CurvaAbcPanel items={items} />
+            )}
+
+            {/* Tab Content: Cronograma */}
+            {activeTab === 'cronograma' && (
+                <CronogramaPanel items={items} />
             )}
 
             {/* Tab Content: Planilha */}
