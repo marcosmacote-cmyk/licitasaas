@@ -207,12 +207,13 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 ))}
             </div>
 
-            {/* Tab Content */}
-            {activeTab === 'curva_abc' ? (
+            {/* Tab Content: Curva ABC */}
+            {activeTab === 'curva_abc' && (
                 <CurvaAbcPanel items={items} />
-            ) : (
+            )}
 
-            /* Main Grid */}
+            {/* Tab Content: Planilha */}
+            {activeTab === 'planilha' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 'var(--space-4)' }}>
 
                 {/* Table */}
@@ -372,6 +373,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     </div>
                 </div>
             </div>
+            )}
 
             {/* Search Modal */}
             {showSearch && (
@@ -415,8 +417,6 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     </div>
                 </div>
             )}
-
-            )} {/* End of planilha tab conditional */}
 
             {/* Composition Drawer */}
             {compositionItem && (
