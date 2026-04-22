@@ -17,51 +17,6 @@ import https from 'https';
 
 const router = express.Router();
 
-router.get('/fix-values', async (req, res) => {
-    try {
-        const logs = await prisma.opportunityScannerLog.findMany({
-            where: { valorEstimado: null },
-            take: 200,
-            orderBy: { createdAt: 'desc' }
-        });
-
-        let updatedCount = 0;
-        const results = [];
-
-        for (const log of logs) {
-            if (!log.orgaoCnpj || !log.anoCompra || !log.sequencialCompra) continue;
-            try {
-                const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${log.orgaoCnpj}/compras/${log.anoCompra}/${log.sequencialCompra}/itens?pagina=1&tamanhoPagina=100`;
-                const resp = await axios.get(itemsUrl, { timeout: 5000 });
-                const responseData = resp.data as any;
-                const items = responseData?.data || responseData?.items || responseData || [];
-                
-                if (Array.isArray(items)) {
-                    const computedValue = items.reduce((acc: number, it: any) => {
-                        return acc + (Number(it.valorTotal) || ((Number(it.quantidade) || 0) * (Number(it.valorUnitarioEstimado || it.valorUnitarioHomologado) || 0)) || 0);
-                    }, 0);
-
-                    if (computedValue > 0) {
-                        await prisma.opportunityScannerLog.update({
-                            where: { id: log.id },
-                            data: { valorEstimado: computedValue }
-                        });
-                        updatedCount++;
-                        results.push(`Updated ${log.pncpId} -> R$ ${computedValue}`);
-                    }
-                }
-            } catch (err: any) {
-                results.push(`Failed ${log.pncpId}: ${err.message}`);
-            }
-            await new Promise(resolve => setTimeout(resolve, 300));
-        }
-
-        res.json({ message: `Updated ${updatedCount} logs`, results });
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // ══════════════════════════════════════════
 // ── Saved Searches CRUD ──
 // ══════════════════════════════════════════
