@@ -64,16 +64,14 @@ function formatDateGroupLabel(dateStr: string): string {
     const diffDays = Math.floor((today.getTime() - itemDate.getTime()) / 86400000);
     
     const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const dayOfMonth = date.getDate();
+    const dayOfMonth = date.getDate().toString().padStart(2, '0');
     const monthName = months[date.getMonth()];
     const year = date.getFullYear();
     
     if (diffDays === 0) return `Hoje, ${dayOfMonth} de ${monthName}`;
     if (diffDays === 1) return `Ontem, ${dayOfMonth} de ${monthName}`;
-    if (diffDays <= 6) {
-        const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-        return `${weekdays[date.getDay()]}, ${dayOfMonth} de ${monthName}`;
-    }
+    
+    // Default to the full date for symmetry (DD de MMMM de YYYY)
     return `${dayOfMonth} de ${monthName} de ${year}`;
 }
 
@@ -386,7 +384,10 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(computedVal)}
                         </span>
                     ) : (
-                        <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>N/D</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>Valor não</span>
+                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: '0.8125rem' }}>informado</span>
+                        </div>
                     );
                 })()}
             </td>
@@ -587,6 +588,8 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                                 background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(99, 102, 241, 0.06))',
                                                 borderRadius: 'var(--radius-lg)',
                                                 border: '1px solid rgba(37, 99, 235, 0.15)',
+                                                width: '160px',
+                                                justifyContent: 'center',
                                             }}>
                                                 <Calendar size={14} style={{ color: 'var(--color-primary)', opacity: 0.8 }} />
                                                 <span style={{
@@ -594,6 +597,7 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                                     fontWeight: 600,
                                                     color: 'var(--color-primary)',
                                                     letterSpacing: '0.01em',
+                                                    whiteSpace: 'nowrap'
                                                 }}>
                                                     {label}
                                                 </span>
@@ -603,26 +607,30 @@ export function PncpResultsTable({ p, items }: PncpChildProps) {
                                                 fontWeight: 600,
                                                 color: 'var(--color-text-tertiary)',
                                                 background: 'var(--color-bg-base)',
-                                                padding: '2px 10px',
+                                                padding: '4px 10px',
                                                 borderRadius: '12px',
                                                 border: '1px solid var(--color-border)',
+                                                minWidth: '80px',
+                                                textAlign: 'center'
                                             }}>
                                                 {totalForDate} {totalForDate === 1 ? 'edital' : 'editais'}
                                             </span>
-                                            {group.unread > 0 && (
-                                                <span style={{
-                                                    fontSize: '0.625rem',
-                                                    fontWeight: 700,
-                                                    color: '#fff',
-                                                    background: 'var(--color-danger)',
-                                                    padding: '1px 8px',
-                                                    borderRadius: '9px',
-                                                    minWidth: '18px',
-                                                    textAlign: 'center',
-                                                }}>
-                                                    {group.unread} novo{group.unread !== 1 ? 's' : ''}
-                                                </span>
-                                            )}
+                                            <div style={{ width: '60px', display: 'flex', alignItems: 'center' }}>
+                                                {group.unread > 0 && (
+                                                    <span style={{
+                                                        fontSize: '0.625rem',
+                                                        fontWeight: 700,
+                                                        color: '#fff',
+                                                        background: 'var(--color-danger)',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '9px',
+                                                        textAlign: 'center',
+                                                        whiteSpace: 'nowrap'
+                                                    }}>
+                                                        {group.unread} novo{group.unread !== 1 ? 's' : ''}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div style={{
                                                 flex: 1,
                                                 height: '1px',
