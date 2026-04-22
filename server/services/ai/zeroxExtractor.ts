@@ -212,7 +212,9 @@ export async function extractMarkdownFromPdf(
     // 3. Write PDF to temp file (Zerox requires file path, not buffer)
     const tempDir = getTempDir();
     const safeName = fileName.replace(/[^a-z0-9._-]/gi, '_');
-    const tempPath = path.join(tempDir, `zerox_${Date.now()}_${safeName}`);
+    // Zerox requires .pdf extension — PNCP filenames like "EDITAL" have no extension
+    const ensuredName = safeName.endsWith('.pdf') ? safeName : `${safeName}.pdf`;
+    const tempPath = path.join(tempDir, `zerox_${Date.now()}_${ensuredName}`);
 
     try {
         fs.writeFileSync(tempPath, pdfBuffer);
