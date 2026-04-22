@@ -121,7 +121,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                 <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)' }}>
                                     <FileText size={11} /> Motor de Proposta (Tipo)
                                 </label>
-                                <select value={p.objectType} onChange={e => p.setObjectType(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }} disabled={!!p.proposal}>
+                                <select value={p.objectType} onChange={e => p.setObjectType(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }}>
                                     <option value="AQUISICAO">Aquisição / Bens / Serviços Comuns</option>
                                     <option value="ENGENHARIA">Obras e Serviços de Engenharia</option>
                                     <option value="TERCEIRIZACAO" disabled>Terceirização de Mão de Obra (Em Breve)</option>
