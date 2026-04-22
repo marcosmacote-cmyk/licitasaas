@@ -2,16 +2,16 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies (openssl for Prisma, ghostscript+graphicsmagick for Zerox PDF extraction)
-RUN apk add --no-cache openssl ghostscript graphicsmagick
+# Install build dependencies (openssl for Prisma, ghostscript+graphicsmagick+poppler for Zerox)
+RUN apk add --no-cache openssl ghostscript graphicsmagick poppler-utils
 
 # Build Backend
-# --ignore-scripts: Zerox postinstall tries brew/apt (fails on Alpine); deps already installed via apk
 WORKDIR /app/backend
 COPY server/package.json server/package-lock.json* ./
 COPY server/prisma ./prisma
-RUN npm install --ignore-scripts && npx prisma generate
+RUN npm install
 COPY server/ ./
+RUN npx prisma generate
 RUN npx tsc
 
 # Build Frontend
@@ -25,8 +25,8 @@ RUN npm run build
 # Final Stage
 FROM node:20-alpine
 WORKDIR /app/server
-# ghostscript + graphicsmagick: required by Zerox for PDF→image conversion
-RUN apk add --no-cache openssl postgresql16-client ghostscript graphicsmagick
+# ghostscript + graphicsmagick + poppler: required by Zerox for PDF→image conversion
+RUN apk add --no-cache openssl postgresql16-client ghostscript graphicsmagick poppler-utils
 
 COPY --from=builder /app/backend/package.json ./
 COPY --from=builder /app/backend/node_modules ./node_modules
