@@ -76,6 +76,7 @@ import companiesRoutes from './routes/companies';
 import documentsRoutes from './routes/documents';
 import biddingsRoutes from './routes/biddings';
 import pncpRoutes from './routes/pncp';
+import engineeringRoutes from './routes/engineering';
 import {
     normalizeModality, normalizePortal, hasMonitorableDomain,
     detectPlatformFromLink, sanitizeBiddingData,
@@ -425,6 +426,7 @@ import proposalRoutes from './routes/proposals';
 import analysisRoutes, { injectAnalysisDeps } from './routes/analysis';
 app.use('/api/chat-monitor', chatMonitorRoutes);
 app.use('/api/proposals', proposalRoutes);  // proposals + dossier
+app.use('/api/engineering', authenticateToken, engineeringRoutes);
 
 // Inject dependencies required by analysis routes
 injectAnalysisDeps({

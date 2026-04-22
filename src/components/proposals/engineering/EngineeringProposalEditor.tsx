@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
     Calculator, Plus, Save, Trash2, Cpu, 
     ChevronDown, Settings2, Download, TableProperties, CheckCircle2
@@ -17,6 +17,24 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         { id: '2', item: '1.2', code: '74209/1', source: 'SINAPI', desc: 'Pintura Látex Acrílica Duas Demãos', unit: 'M2', qty: 150.5, cost: 12.80 },
         { id: '3', item: '2.1', code: 'PR001', source: 'PRÓPRIA', desc: 'Limpeza Final da Obra', unit: 'CJ', qty: 1, cost: 1500.00 },
     ]);
+
+    const [bases, setBases] = useState<any[]>([]);
+    const [selectedBaseId, setSelectedBaseId] = useState<string>('');
+
+    useEffect(() => {
+        // Fetch bases on mount
+        fetch('/api/engineering/bases', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                setBases(data);
+                if (data.length > 0) setSelectedBaseId(data[0].id);
+            }
+        })
+        .catch(console.error);
+    }, []);
 
     const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const subtotal = items.reduce((acc, curr) => acc + (curr.qty * curr.cost), 0);
@@ -38,7 +56,20 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     </div>
                     <div>
                         <h3 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 700 }}>Planilha Orçamentária de Engenharia</h3>
-                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Múltiplas bases (SINAPI, SEINFRA) e BDI Acoplado</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Base Principal:</span>
+                            <select 
+                                className="form-select" 
+                                style={{ padding: '2px 8px', fontSize: '0.75rem', height: 'auto', width: 'auto' }}
+                                value={selectedBaseId}
+                                onChange={e => setSelectedBaseId(e.target.value)}
+                            >
+                                {bases.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name} {b.uf} ({b.version})</option>
+                                ))}
+                                {bases.length === 0 && <option value="">Carregando bases...</option>}
+                            </select>
+                        </div>
                     </div>
                 </div>
                 
