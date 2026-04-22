@@ -222,6 +222,19 @@ export async function extractMarkdownFromPdf(
 
         const startTime = Date.now();
 
+        // V5.0: Adaptive concurrency to prevent 503 cascades
+        // Large PDFs (>20 pages) with concurrency=5 overwhelm the Gemini Vision API
+        // causing massive retry loops (104s+ for a 41-page doc in production).
+        // Solution: reduce concurrency for larger documents.
+        const estimatedPages = Math.ceil(pdfBuffer.length / 35000); // ~35KB per page average
+        let effectiveConcurrency = config?.concurrency || 5;
+        if (estimatedPages > 30) {
+            effectiveConcurrency = 2;
+        } else if (estimatedPages > 20) {
+            effectiveConcurrency = 3;
+        }
+        logger.info(`[ZeroxExtractor] ⚙️ Concurrency: ${effectiveConcurrency} (estimated ~${estimatedPages} pages)`);
+
         // 4. Call Zerox with Gemini Vision
         const zeroxResult = await zeroxFn!({
             filePath: tempPath,
@@ -230,7 +243,7 @@ export async function extractMarkdownFromPdf(
             credentials: {
                 apiKey,
             },
-            concurrency: config?.concurrency || 5,
+            concurrency: effectiveConcurrency,
             maintainFormat: config?.maintainFormat || false,
             cleanup: true,
             llmParams: {
