@@ -78,14 +78,29 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
 // Extrai itens de engenharia de um texto de edital/projeto básico
 router.post('/ai-populate', async (req: any, res: any) => {
     try {
-        const { textChunk } = req.body;
+        const { textChunk, biddingId } = req.body;
         
-        if (!textChunk) {
-            return res.status(400).json({ error: 'Falta o texto do documento (textChunk)' });
+        let extractionText = textChunk;
+
+        if (biddingId) {
+            // Fetch text from bidding AiAnalysis
+            const bidding = await prisma.biddingProcess.findUnique({
+                where: { id: biddingId },
+                include: { aiAnalysis: true }
+            });
+            if (bidding?.aiAnalysis?.biddingItems) {
+                extractionText = bidding.aiAnalysis.biddingItems;
+            } else if (bidding?.aiAnalysis?.requiredDocuments) {
+                extractionText = bidding.aiAnalysis.requiredDocuments;
+            }
+        }
+
+        if (!extractionText) {
+            return res.status(400).json({ error: 'Falta o texto do documento (biddingId sem análise ou textChunk vazio)' });
         }
 
         const prompt = ENGINEERING_PROPOSAL_SYSTEM_PROMPT;
-        const userInput = ENGINEERING_PROPOSAL_USER_INSTRUCTION + "\n\nTEXTO DO EDITAL/PROJETO:\n" + textChunk;
+        const userInput = ENGINEERING_PROPOSAL_USER_INSTRUCTION + "\n\nTEXTO DO EDITAL/PROJETO:\n" + extractionText;
 
         // Calling Gemini using the generalized retry service
         const rawResponse = await callGeminiWithRetry(prompt, userInput, 0.2); // Low temp for precision
@@ -94,6 +109,18 @@ router.post('/ai-populate', async (req: any, res: any) => {
         // Return parsed items, falling back to empty array if something fails
         const items = extractedData?.engineeringItems || [];
         
+        // Auto-lookup for prices
+        for (const item of items) {
+            if (item.code && item.code !== 'N/A') {
+                const dbItem = await prisma.engineeringItem.findFirst({
+                    where: { code: item.code }
+                });
+                if (dbItem) {
+                    item.unitCost = Number(dbItem.unitPriceDesonerado) || Number(dbItem.unitPriceNaoDesonerado) || 0;
+                }
+            }
+        }
+
         res.json({ items });
 
     } catch (e: any) {

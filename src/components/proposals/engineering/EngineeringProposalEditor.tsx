@@ -20,6 +20,12 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     const [bases, setBases] = useState<any[]>([]);
     const [selectedBaseId, setSelectedBaseId] = useState<string>('');
+    const [isExtracting, setIsExtracting] = useState(false);
+
+    const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
 
     useEffect(() => {
         // Fetch bases on mount
@@ -36,9 +42,85 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
         .catch(console.error);
     }, []);
 
+    const handleExtractAI = async () => {
+        setIsExtracting(true);
+        try {
+            const res = await fetch('/api/engineering/ai-populate', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}` 
+                },
+                body: JSON.stringify({ biddingId })
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Erro na extração');
+            }
+
+            const data = await res.json();
+            if (data.items && data.items.length > 0) {
+                // Map the AI extracted items to our grid format
+                const newItems = data.items.map((aiItem: any, index: number) => ({
+                    id: `ai-${Date.now()}-${index}`,
+                    item: aiItem.item || String(index + 1),
+                    code: aiItem.code || 'N/A',
+                    source: aiItem.sourceName || 'PROPRIA',
+                    desc: aiItem.description || '',
+                    unit: aiItem.unit || 'UN',
+                    qty: Number(aiItem.quantity) || 1,
+                    cost: Number(aiItem.unitCost) || 0
+                }));
+                setItems(prev => [...prev, ...newItems]);
+                alert(`Sucesso! ${newItems.length} itens extraídos da IA.`);
+            } else {
+                alert('A IA não encontrou itens orçamentários.');
+            }
+        } catch (e: any) {
+            console.error(e);
+            alert('Falha na extração AI: ' + e.message);
+        } finally {
+            setIsExtracting(false);
+        }
+    };
+
     const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const subtotal = items.reduce((acc, curr) => acc + (curr.qty * curr.cost), 0);
     const total = subtotal * (1 + (bdiValue / 100));
+
+    const handleSearch = async () => {
+        if (!selectedBaseId || !searchQuery) return;
+        setIsSearching(true);
+        try {
+            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const data = await res.json();
+            setSearchResults(data.items || []);
+        } catch (e) {
+            console.error('Busca falhou', e);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleAddItem = (dbItem: any) => {
+        const selectedBase = bases.find(b => b.id === selectedBaseId);
+        setItems(prev => [...prev, {
+            id: `manual-${Date.now()}`,
+            item: String(prev.length + 1),
+            code: dbItem.code,
+            source: selectedBase?.name || 'OFICIAL',
+            desc: dbItem.description,
+            unit: dbItem.unit,
+            qty: 1,
+            cost: Number(dbItem.unitPriceDesonerado) || Number(dbItem.unitPriceNaoDesonerado) || 0
+        }]);
+        setIsSearchModalOpen(false);
+        setSearchQuery('');
+        setSearchResults([]);
+    };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
@@ -74,8 +156,14 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 </div>
                 
                 <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Cpu size={14} color="var(--color-ai)" /> Extrair PDF via IA
+                    <button 
+                        className="btn btn-outline" 
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={handleExtractAI}
+                        disabled={isExtracting}
+                    >
+                        <Cpu size={14} color="var(--color-ai)" /> 
+                        {isExtracting ? 'Extraindo...' : 'Extrair PDF via IA'}
                     </button>
                     <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Save size={14} /> Salvar Planilha
@@ -126,7 +214,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                     <td style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>{formatCurrency(it.cost)}</td>
                                     <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--color-primary)' }}>{formatCurrency(unitPrice)}</td>
                                     <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                                        <button className="prop-icon-btn"><Trash2 size={14} color="var(--color-danger)"/></button>
+                                        <button className="prop-icon-btn" onClick={() => setItems(items.filter(i => i.id !== it.id))}><Trash2 size={14} color="var(--color-danger)"/></button>
                                     </td>
                                 </tr>
                                 )
@@ -134,7 +222,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         </tbody>
                     </table>
                     <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)' }}>
-                        <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button 
+                            className="btn btn-outline" 
+                            style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }}
+                            onClick={() => setIsSearchModalOpen(true)}
+                        >
                             <Plus size={14} /> Adicionar Serviço
                         </button>
                     </div>
@@ -235,6 +327,74 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
                 </div>
             </div>
+
+            {/* ── Manual Search Modal ── */}
+            {isSearchModalOpen && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000,
+                    background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <div style={{
+                        background: 'var(--color-bg-surface)', padding: '24px', borderRadius: '12px',
+                        width: '800px', maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: '16px',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ margin: 0 }}>Adicionar Insumo/Serviço</h3>
+                            <button onClick={() => setIsSearchModalOpen(false)} style={{ background: 'transparent', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>&times;</button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <input 
+                                type="text" className="form-input" placeholder="Buscar por código ou descrição (ex: Argamassa, 74209)" 
+                                value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                style={{ flex: 1 }}
+                            />
+                            <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching || !selectedBaseId}>
+                                {isSearching ? 'Buscando...' : 'Buscar'}
+                            </button>
+                        </div>
+
+                        {!selectedBaseId && <div style={{ color: 'var(--color-danger)' }}>Selecione uma Base Principal primeiro.</div>}
+
+                        <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                <thead>
+                                    <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
+                                        <th style={{ padding: '8px', textAlign: 'left' }}>Código</th>
+                                        <th style={{ padding: '8px', textAlign: 'left' }}>Descrição</th>
+                                        <th style={{ padding: '8px', textAlign: 'center' }}>Unid.</th>
+                                        <th style={{ padding: '8px', textAlign: 'right' }}>Preço</th>
+                                        <th style={{ padding: '8px', textAlign: 'center' }}>Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {searchResults.map(res => (
+                                        <tr key={res.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            <td style={{ padding: '8px' }}><strong>{res.code}</strong></td>
+                                            <td style={{ padding: '8px' }}>{res.description}</td>
+                                            <td style={{ padding: '8px', textAlign: 'center' }}>{res.unit}</td>
+                                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>
+                                                {formatCurrency(Number(res.unitPriceDesonerado) || Number(res.unitPriceNaoDesonerado) || 0)}
+                                            </td>
+                                            <td style={{ padding: '8px', textAlign: 'center' }}>
+                                                <button 
+                                                    className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }}
+                                                    onClick={() => handleAddItem(res)}
+                                                >Adicionar</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {searchResults.length === 0 && !isSearching && searchQuery && (
+                                        <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>Nenhum insumo encontrado.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
