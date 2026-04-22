@@ -14,7 +14,6 @@ router.get('/bases', async (req: any, res: any) => {
         const tenantId = req.user?.tenantId; // Supondo auth middleware
         const bases = await prisma.engineeringDatabase.findMany({
             where: {
-                isActive: true,
                 OR: [
                     { type: 'OFICIAL' },
                     { tenantId: tenantId }
@@ -116,7 +115,7 @@ router.post('/ai-populate', async (req: any, res: any) => {
                     where: { code: item.code }
                 });
                 if (dbItem) {
-                    item.unitCost = Number(dbItem.unitPriceDesonerado) || Number(dbItem.unitPriceNaoDesonerado) || 0;
+                    item.unitCost = Number(dbItem.price) || 0;
                 }
             }
         }

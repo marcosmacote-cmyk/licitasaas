@@ -115,7 +115,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
             desc: dbItem.description,
             unit: dbItem.unit,
             qty: 1,
-            cost: Number(dbItem.unitPriceDesonerado) || Number(dbItem.unitPriceNaoDesonerado) || 0
+            cost: Number(dbItem.price) || 0
         }]);
         setIsSearchModalOpen(false);
         setSearchQuery('');
@@ -376,7 +376,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                             <td style={{ padding: '8px' }}>{res.description}</td>
                                             <td style={{ padding: '8px', textAlign: 'center' }}>{res.unit}</td>
                                             <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>
-                                                {formatCurrency(Number(res.unitPriceDesonerado) || Number(res.unitPriceNaoDesonerado) || 0)}
+                                                {formatCurrency(Number(res.price) || 0)}
                                             </td>
                                             <td style={{ padding: '8px', textAlign: 'center' }}>
                                                 <button 
