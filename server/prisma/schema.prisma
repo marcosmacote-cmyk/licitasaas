@@ -311,10 +311,14 @@ model PriceProposal {
   adjustedTotalValue    Float?
   adjustedLetterContent String?
 
-  items          ProposalItem[]
-  biddingProcess BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
-  company        CompanyProfile @relation(fields: [companyProfileId], references: [id])
-  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  // ── BDI TCU Config (JSON) ──
+  bdiConfig             Json?  // {ac, s, g, r, df, l, i, mode: 'SIMPLIFICADO'|'TCU'}
+
+  items                 ProposalItem[]
+  engineeringItems      EngineeringProposalItem[]
+  biddingProcess        BiddingProcess @relation(fields: [biddingProcessId], references: [id], onDelete: Cascade)
+  company               CompanyProfile @relation(fields: [companyProfileId], references: [id])
+  tenant                Tenant         @relation(fields: [tenantId], references: [id])
 }
 
 model ProposalItem {
@@ -649,6 +653,29 @@ model PncpSyncState {
 // ═══════════════════════════════════════════════════════════
 // ── Módulo de Obras e Serviços de Engenharia ──
 // ═══════════════════════════════════════════════════════════
+
+model EngineeringProposalItem {
+  id              String   @id @default(uuid())
+  proposalId      String
+  
+  itemNumber      String   // "1.1", "1.2", "2.1" — hierarquia
+  code            String?  // Código oficial: "74209/1", "C0054"
+  sourceName      String   @default("PROPRIA") // SINAPI, SEINFRA, SICRO, ORSE, PROPRIA
+  description     String   @db.Text
+  unit            String   @default("UN")
+  quantity        Float    @default(1)
+  unitCost        Float    @default(0) // Custo sem BDI
+  unitPrice       Float    @default(0) // Preço com BDI aplicado
+  totalPrice      Float    @default(0) // quantity * unitPrice
+  sortOrder       Int      @default(0)
+  
+  proposal        PriceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([proposalId])
+}
 
 model EngineeringDatabase {
   id          String   @id @default(uuid())

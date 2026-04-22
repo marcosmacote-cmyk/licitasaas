@@ -8,11 +8,13 @@ import { GoogleGenAI } from '@google/genai';
 const router = Router();
 const prisma = new PrismaClient();
 
+// ═══════════════════════════════════════════════════════════
 // GET /api/engineering/bases
 // Listar todas as tabelas oficiais e as próprias do Tenant
+// ═══════════════════════════════════════════════════════════
 router.get('/bases', async (req: any, res: any) => {
     try {
-        const tenantId = req.user?.tenantId; // Supondo auth middleware
+        const tenantId = req.user?.tenantId;
         const bases = await prisma.engineeringDatabase.findMany({
             where: {
                 OR: [
@@ -32,8 +34,10 @@ router.get('/bases', async (req: any, res: any) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════
 // GET /api/engineering/bases/:id/items
-// Buscar/Paginador de itens dentro de uma base (Busca por Código ou Descrição)
+// Buscar/Paginador de itens dentro de uma base
+// ═══════════════════════════════════════════════════════════
 router.get('/bases/:id/items', async (req: any, res: any) => {
     try {
         const databaseId = req.params.id;
@@ -74,8 +78,111 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════
+// CRUD — Engineering Proposal Items (linked to PriceProposal)
+// ═══════════════════════════════════════════════════════════
+
+// GET /api/engineering/proposals/:id/items — Carregar todos os itens
+router.get('/proposals/:id/items', async (req: any, res: any) => {
+    try {
+        const proposalId = req.params.id;
+        const items = await prisma.engineeringProposalItem.findMany({
+            where: { proposalId },
+            orderBy: { sortOrder: 'asc' }
+        });
+        res.json(items);
+    } catch (e: any) {
+        console.error('Error loading engineering items:', e);
+        res.status(500).json({ error: 'Erro ao carregar itens de engenharia' });
+    }
+});
+
+// POST /api/engineering/proposals/:id/items — Salvar/Sincronizar todos os itens
+router.post('/proposals/:id/items', async (req: any, res: any) => {
+    try {
+        const proposalId = req.params.id;
+        const { items, bdiConfig } = req.body;
+
+        if (!Array.isArray(items)) {
+            return res.status(400).json({ error: 'items deve ser um array' });
+        }
+
+        // Transaction: delete all old items + insert new ones + update BDI config
+        const result = await prisma.$transaction(async (tx) => {
+            // Clear existing items for this proposal
+            await tx.engineeringProposalItem.deleteMany({
+                where: { proposalId }
+            });
+
+            // Insert all items
+            const created = await tx.engineeringProposalItem.createMany({
+                data: items.map((item: any, index: number) => ({
+                    proposalId,
+                    itemNumber: item.itemNumber || String(index + 1),
+                    code: item.code || null,
+                    sourceName: item.sourceName || 'PROPRIA',
+                    description: item.description || '',
+                    unit: item.unit || 'UN',
+                    quantity: Number(item.quantity) || 1,
+                    unitCost: Number(item.unitCost) || 0,
+                    unitPrice: Number(item.unitPrice) || 0,
+                    totalPrice: Number(item.totalPrice) || 0,
+                    sortOrder: index,
+                }))
+            });
+
+            // Calculate and update proposal totals
+            const totalValue = items.reduce((sum: number, it: any) =>
+                sum + (Number(it.totalPrice) || 0), 0
+            );
+
+            await tx.priceProposal.update({
+                where: { id: proposalId },
+                data: {
+                    totalValue,
+                    bdiConfig: bdiConfig || undefined,
+                    bdiPercentage: Number(bdiConfig?.bdiGlobal) || 0,
+                }
+            });
+
+            return { count: created.count, totalValue };
+        });
+
+        // Fetch and return the saved items
+        const savedItems = await prisma.engineeringProposalItem.findMany({
+            where: { proposalId },
+            orderBy: { sortOrder: 'asc' }
+        });
+
+        res.json({
+            items: savedItems,
+            totalValue: result.totalValue,
+            message: `${result.count} itens salvos com sucesso`
+        });
+
+    } catch (e: any) {
+        console.error('Error saving engineering items:', e);
+        res.status(500).json({ error: 'Erro ao salvar itens de engenharia', details: e.message });
+    }
+});
+
+// DELETE /api/engineering/proposals/:id/items/:itemId — Remover um item
+router.delete('/proposals/:id/items/:itemId', async (req: any, res: any) => {
+    try {
+        await prisma.engineeringProposalItem.delete({
+            where: { id: req.params.itemId }
+        });
+        res.json({ ok: true });
+    } catch (e: any) {
+        console.error('Error deleting engineering item:', e);
+        res.status(500).json({ error: 'Erro ao remover item' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
-// Extrai itens de engenharia de um texto de edital/projeto básico
+// Extrai itens de engenharia via IA a partir do edital
+// ═══════════════════════════════════════════════════════════
 router.post('/ai-populate', async (req: any, res: any) => {
     try {
         const { textChunk, biddingId } = req.body;

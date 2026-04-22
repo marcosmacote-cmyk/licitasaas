@@ -1,394 +1,372 @@
-import { useState, useEffect } from 'react';
-import { 
-    Calculator, Plus, Save, Trash2, Cpu, 
-    ChevronDown, Settings2, Download, TableProperties, CheckCircle2
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2 } from 'lucide-react';
+import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 
-interface Props {
-    proposalId: string;
-    biddingId: string;
+interface EngItem {
+    id: string; itemNumber: string; code: string; sourceName: string;
+    description: string; unit: string; quantity: number;
+    unitCost: number; unitPrice: number; totalPrice: number;
 }
 
+interface Props { proposalId: string; biddingId: string; }
+
+const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const token = () => localStorage.getItem('token') || '';
+const hdrs = () => ({ 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' });
+
 export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
-    const [bdiMode, setBdiMode] = useState<'SIMPLIFICADO' | 'TCU'>('SIMPLIFICADO');
-    const [bdiValue, setBdiValue] = useState(25.0);
-    const [items, setItems] = useState([
-        { id: '1', item: '1.1', code: 'C0054', source: 'SEINFRA', desc: 'Alvenaria de Tijolo Cerâmico Furado', unit: 'M2', qty: 150.5, cost: 45.20 },
-        { id: '2', item: '1.2', code: '74209/1', source: 'SINAPI', desc: 'Pintura Látex Acrílica Duas Demãos', unit: 'M2', qty: 150.5, cost: 12.80 },
-        { id: '3', item: '2.1', code: 'PR001', source: 'PRÓPRIA', desc: 'Limpeza Final da Obra', unit: 'CJ', qty: 1, cost: 1500.00 },
-    ]);
-
-    const [bases, setBases] = useState<any[]>([]);
-    const [selectedBaseId, setSelectedBaseId] = useState<string>('');
+    const [items, setItems] = useState<EngItem[]>([]);
+    const [bdiConfig, setBdiConfig] = useState<BdiConfig>({ ...DEFAULT_BDI_CONFIG });
+    const [isSaving, setIsSaving] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
+    const [saveMsg, setSaveMsg] = useState('');
 
-    const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+    // Search modal
+    const [showSearch, setShowSearch] = useState(false);
+    const [bases, setBases] = useState<any[]>([]);
+    const [selectedBaseId, setSelectedBaseId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
 
-    useEffect(() => {
-        // Fetch bases on mount
-        fetch('/api/engineering/bases', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (Array.isArray(data)) {
-                setBases(data);
-                if (data.length > 0) setSelectedBaseId(data[0].id);
-            }
-        })
-        .catch(console.error);
+    const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
+    const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
+    const total = items.reduce((s, it) => s + it.totalPrice, 0);
+
+    // Recalculate all prices when BDI changes
+    const recalcAll = useCallback((its: EngItem[], bdi: number) => {
+        return its.map(it => {
+            const up = applyBdi(it.unitCost, bdi);
+            return { ...it, unitPrice: up, totalPrice: Math.round(it.quantity * up * 100) / 100 };
+        });
     }, []);
 
+    useEffect(() => { setItems(prev => recalcAll(prev, effectiveBdi)); }, [effectiveBdi]);
+
+    // Load items on mount
+    useEffect(() => {
+        fetch(`/api/engineering/proposals/${proposalId}/items`, { headers: hdrs() })
+            .then(r => r.json()).then(data => {
+                if (Array.isArray(data) && data.length > 0) setItems(data);
+            }).catch(console.error);
+
+        fetch('/api/engineering/bases', { headers: hdrs() })
+            .then(r => r.json()).then(data => {
+                if (Array.isArray(data)) { setBases(data); if (data.length > 0) setSelectedBaseId(data[0].id); }
+            }).catch(console.error);
+    }, [proposalId]);
+
+    // Save all items
+    const handleSave = async () => {
+        setIsSaving(true); setSaveMsg('');
+        try {
+            const res = await fetch(`/api/engineering/proposals/${proposalId}/items`, {
+                method: 'POST', headers: hdrs(),
+                body: JSON.stringify({ items, bdiConfig })
+            });
+            if (res.ok) { const d = await res.json(); setSaveMsg(`✅ ${d.message}`); }
+            else { setSaveMsg('❌ Erro ao salvar'); }
+        } catch { setSaveMsg('❌ Erro de rede'); }
+        finally { setIsSaving(false); setTimeout(() => setSaveMsg(''), 4000); }
+    };
+
+    // AI extraction
     const handleExtractAI = async () => {
         setIsExtracting(true);
         try {
             const res = await fetch('/api/engineering/ai-populate', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}` 
-                },
-                body: JSON.stringify({ biddingId })
+                method: 'POST', headers: hdrs(), body: JSON.stringify({ biddingId })
             });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || 'Erro na extração');
-            }
-
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
             const data = await res.json();
-            if (data.items && data.items.length > 0) {
-                // Map the AI extracted items to our grid format
-                const newItems = data.items.map((aiItem: any, index: number) => ({
-                    id: `ai-${Date.now()}-${index}`,
-                    item: aiItem.item || String(index + 1),
-                    code: aiItem.code || 'N/A',
-                    source: aiItem.sourceName || 'PROPRIA',
-                    desc: aiItem.description || '',
-                    unit: aiItem.unit || 'UN',
-                    qty: Number(aiItem.quantity) || 1,
-                    cost: Number(aiItem.unitCost) || 0
+            if (data.items?.length > 0) {
+                const mapped = data.items.map((ai: any, i: number) => ({
+                    id: `ai-${Date.now()}-${i}`, itemNumber: ai.item || String(items.length + i + 1),
+                    code: ai.code || 'N/A', sourceName: ai.sourceName || 'PROPRIA',
+                    description: ai.description || '', unit: ai.unit || 'UN',
+                    quantity: Number(ai.quantity) || 1, unitCost: Number(ai.unitCost) || 0,
+                    unitPrice: applyBdi(Number(ai.unitCost) || 0, effectiveBdi),
+                    totalPrice: Math.round((Number(ai.quantity) || 1) * applyBdi(Number(ai.unitCost) || 0, effectiveBdi) * 100) / 100,
                 }));
-                setItems(prev => [...prev, ...newItems]);
-                alert(`Sucesso! ${newItems.length} itens extraídos da IA.`);
-            } else {
-                alert('A IA não encontrou itens orçamentários.');
-            }
-        } catch (e: any) {
-            console.error(e);
-            alert('Falha na extração AI: ' + e.message);
-        } finally {
-            setIsExtracting(false);
-        }
+                setItems(prev => [...prev, ...mapped]);
+                setSaveMsg(`✅ ${mapped.length} itens extraídos via IA`);
+            } else { setSaveMsg('⚠️ IA não encontrou itens orçamentários'); }
+        } catch (e: any) { setSaveMsg('❌ ' + e.message); }
+        finally { setIsExtracting(false); setTimeout(() => setSaveMsg(''), 5000); }
     };
 
-    const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const subtotal = items.reduce((acc, curr) => acc + (curr.qty * curr.cost), 0);
-    const total = subtotal * (1 + (bdiValue / 100));
+    // Inline edit
+    const updateItem = (id: string, field: keyof EngItem, value: any) => {
+        setItems(prev => prev.map(it => {
+            if (it.id !== id) return it;
+            const updated = { ...it, [field]: value };
+            if (field === 'unitCost' || field === 'quantity') {
+                updated.unitPrice = applyBdi(updated.unitCost, effectiveBdi);
+                updated.totalPrice = Math.round(updated.quantity * updated.unitPrice * 100) / 100;
+            }
+            return updated;
+        }));
+    };
 
+    const removeItem = (id: string) => setItems(prev => prev.filter(it => it.id !== id));
+
+    const addBlankItem = () => {
+        setItems(prev => [...prev, {
+            id: `new-${Date.now()}`, itemNumber: String(prev.length + 1), code: '', sourceName: 'PROPRIA',
+            description: '', unit: 'UN', quantity: 1, unitCost: 0, unitPrice: 0, totalPrice: 0,
+        }]);
+    };
+
+    // Search
     const handleSearch = async () => {
         if (!selectedBaseId || !searchQuery) return;
         setIsSearching(true);
         try {
-            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await fetch(`/api/engineering/bases/${selectedBaseId}/items?q=${encodeURIComponent(searchQuery)}`, { headers: hdrs() });
             const data = await res.json();
             setSearchResults(data.items || []);
-        } catch (e) {
-            console.error('Busca falhou', e);
-        } finally {
-            setIsSearching(false);
-        }
+        } catch { } finally { setIsSearching(false); }
     };
 
-    const handleAddItem = (dbItem: any) => {
-        const selectedBase = bases.find(b => b.id === selectedBaseId);
+    const addFromSearch = (dbItem: any) => {
+        const base = bases.find(b => b.id === selectedBaseId);
+        const cost = Number(dbItem.price) || 0;
         setItems(prev => [...prev, {
-            id: `manual-${Date.now()}`,
-            item: String(prev.length + 1),
-            code: dbItem.code,
-            source: selectedBase?.name || 'OFICIAL',
-            desc: dbItem.description,
-            unit: dbItem.unit,
-            qty: 1,
-            cost: Number(dbItem.price) || 0
+            id: `db-${Date.now()}`, itemNumber: String(prev.length + 1),
+            code: dbItem.code, sourceName: base?.name || 'OFICIAL',
+            description: dbItem.description, unit: dbItem.unit, quantity: 1,
+            unitCost: cost, unitPrice: applyBdi(cost, effectiveBdi),
+            totalPrice: applyBdi(cost, effectiveBdi),
         }]);
-        setIsSearchModalOpen(false);
-        setSearchQuery('');
-        setSearchResults([]);
+        setShowSearch(false); setSearchQuery(''); setSearchResults([]);
     };
+
+    // BDI helpers
+    const updateTcu = (field: keyof BdiTcuParams, val: number) => {
+        setBdiConfig(prev => ({ ...prev, tcu: { ...prev.tcu, [field]: val } }));
+    };
+
+    const inputStyle = (w: string = '100%'): React.CSSProperties => ({
+        width: w, padding: '4px 8px', fontSize: '0.8rem', border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-base)', height: 30,
+    });
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-            
-            {/* ── Action Bar ── */}
-            <div style={{ 
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                padding: 'var(--space-4)', background: 'var(--color-bg-surface)', 
-                borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
-            }}>
+
+            {/* Action Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-4)', background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <div style={{ background: 'var(--color-primary-light)', padding: '8px', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ background: 'var(--color-primary-light)', padding: 8, borderRadius: 'var(--radius-md)' }}>
                         <TableProperties size={18} color="var(--color-primary)" />
                     </div>
                     <div>
                         <h3 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 700 }}>Planilha Orçamentária de Engenharia</h3>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>Base Principal:</span>
-                            <select 
-                                className="form-select" 
-                                style={{ padding: '2px 8px', fontSize: '0.75rem', height: 'auto', width: 'auto' }}
-                                value={selectedBaseId}
-                                onChange={e => setSelectedBaseId(e.target.value)}
-                            >
-                                {bases.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name} {b.uf} ({b.version})</option>
-                                ))}
-                                {bases.length === 0 && <option value="">Carregando bases...</option>}
-                            </select>
-                        </div>
+                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                            {items.length} itens · BDI {effectiveBdi.toFixed(2)}% ({bdiConfig.mode})
+                        </span>
                     </div>
                 </div>
-                
-                <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                    <button 
-                        className="btn btn-outline" 
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                        onClick={handleExtractAI}
-                        disabled={isExtracting}
-                    >
-                        <Cpu size={14} color="var(--color-ai)" /> 
-                        {isExtracting ? 'Extraindo...' : 'Extrair PDF via IA'}
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                    {saveMsg && <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{saveMsg}</span>}
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractAI} disabled={isExtracting}>
+                        {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
+                        {isExtracting ? 'Extraindo...' : 'Extrair via IA'}
                     </button>
-                    <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Save size={14} /> Salvar Planilha
+                    <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleSave} disabled={isSaving}>
+                        {isSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+                        {isSaving ? 'Salvando...' : 'Salvar Planilha'}
                     </button>
                 </div>
             </div>
 
-            {/* ── BDI & Config Panel ── */}
-            <div style={{ 
-                display: 'grid', gridTemplateColumns: '1fr 300px', gap: 'var(--space-4)'
-            }}>
-                {/* Editor Grid */}
-                <div style={{ 
-                    background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', 
-                    border: '1px solid var(--color-border)', overflow: 'hidden'
-                }}>
+            {/* Main Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 'var(--space-4)' }}>
+
+                {/* Table */}
+                <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
                             <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Item</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Base</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Código</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 600, width: '40%' }}>Descrição do Serviço</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Unid.</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Qtd.</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Custo (S/ BDI)</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--color-primary)', fontWeight: 700 }}>Preço (C/ BDI)</th>
-                                <th style={{ padding: '10px 16px', textAlign: 'center' }}></th>
+                                {['Item','Base','Código','Descrição do Serviço','Unid.','Qtd.','Custo (S/ BDI)','Preço (C/ BDI)',''].map((h,i) => (
+                                    <th key={i} style={{ padding: '10px 12px', textAlign: i >= 5 ? 'right' : 'left', color: i === 7 ? 'var(--color-primary)' : 'var(--color-text-secondary)', fontWeight: i === 7 ? 700 : 600, width: i === 3 ? '30%' : undefined }}>{h}</th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {items.map(it => {
-                                const unitPrice = it.cost * (1 + (bdiValue / 100));
-                                return (
+                            {items.map(it => (
                                 <tr key={it.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                    <td style={{ padding: '10px 16px' }}><strong>{it.item}</strong></td>
-                                    <td style={{ padding: '10px 16px' }}>
-                                        <span style={{ 
-                                            background: it.source === 'PRÓPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)',
-                                            color: it.source === 'PRÓPRIA' ? 'var(--color-success)' : 'var(--color-primary)',
-                                            padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700
-                                        }}>{it.source}</span>
+                                    <td style={{ padding: '6px 12px' }}>
+                                        <input value={it.itemNumber} onChange={e => updateItem(it.id, 'itemNumber', e.target.value)} style={{ ...inputStyle('60px'), fontWeight: 700 }} />
                                     </td>
-                                    <td style={{ padding: '10px 16px', color: 'var(--color-text-secondary)' }}>{it.code}</td>
-                                    <td style={{ padding: '10px 16px', fontWeight: 500 }}>{it.desc}</td>
-                                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>{it.unit}</td>
-                                    <td style={{ padding: '10px 16px', textAlign: 'right' }}>{it.qty}</td>
-                                    <td style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>{formatCurrency(it.cost)}</td>
-                                    <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--color-primary)' }}>{formatCurrency(unitPrice)}</td>
-                                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                                        <button className="prop-icon-btn" onClick={() => setItems(items.filter(i => i.id !== it.id))}><Trash2 size={14} color="var(--color-danger)"/></button>
+                                    <td style={{ padding: '6px 8px' }}>
+                                        <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>{it.sourceName}</span>
+                                    </td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                        <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('80px'), color: 'var(--color-text-secondary)' }} />
+                                    </td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                        <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
+                                    </td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                        <input value={it.unit} onChange={e => updateItem(it.id, 'unit', e.target.value)} style={{ ...inputStyle('55px'), textAlign: 'center' }} />
+                                    </td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                        <input type="number" value={it.quantity} onChange={e => updateItem(it.id, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('70px'), textAlign: 'right' }} step="0.01" />
+                                    </td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                        <input type="number" value={it.unitCost} onChange={e => updateItem(it.id, 'unitCost', parseFloat(e.target.value) || 0)} style={{ ...inputStyle('90px'), textAlign: 'right' }} step="0.01" />
+                                    </td>
+                                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: 'var(--color-primary)' }}>{fmt(it.unitPrice)}</td>
+                                    <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                        <button className="prop-icon-btn" onClick={() => removeItem(it.id)}><Trash2 size={14} color="var(--color-danger)" /></button>
                                     </td>
                                 </tr>
-                                )
-                            })}
+                            ))}
+                            {items.length === 0 && (
+                                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                                    Planilha vazia — Use "Extrair via IA" ou adicione itens manualmente
+                                </td></tr>
+                            )}
                         </tbody>
                     </table>
-                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)' }}>
-                        <button 
-                            className="btn btn-outline" 
-                            style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }}
-                            onClick={() => setIsSearchModalOpen(true)}
-                        >
-                            <Plus size={14} /> Adicionar Serviço
+                    <div style={{ padding: 'var(--space-3)', background: 'var(--color-bg-base)', borderTop: '1px solid var(--color-border)', display: 'flex', gap: 8 }}>
+                        <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }} onClick={addBlankItem}>
+                            <Plus size={14} /> Adicionar Item
+                        </button>
+                        <button className="btn btn-outline" style={{ fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowSearch(true)}>
+                            <Search size={14} /> Buscar na Base Oficial
                         </button>
                     </div>
                 </div>
 
-                {/* BDI Panel & Totals */}
+                {/* BDI Panel + Totals */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                    
+
                     {/* BDI Calculator */}
-                    <div style={{ 
-                        background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', 
-                        border: '1px solid var(--color-border)', padding: 'var(--space-4)'
-                    }}>
+                    <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', padding: 'var(--space-4)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
                             <Calculator size={16} color="var(--color-primary)" />
                             <h4 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 600 }}>Cálculo de BDI</h4>
                         </div>
-                        
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: 'var(--space-4)' }}>
-                            <button 
-                                onClick={() => setBdiMode('SIMPLIFICADO')}
-                                style={{ flex: 1, padding: '6px', fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: '1px solid', borderColor: bdiMode === 'SIMPLIFICADO' ? 'var(--color-primary)' : 'var(--color-border)', background: bdiMode === 'SIMPLIFICADO' ? 'var(--color-primary-light)' : 'transparent', color: bdiMode === 'SIMPLIFICADO' ? 'var(--color-primary)' : 'var(--color-text-secondary)' }}
-                            >Simplificado</button>
-                            <button 
-                                onClick={() => setBdiMode('TCU')}
-                                style={{ flex: 1, padding: '6px', fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: '1px solid', borderColor: bdiMode === 'TCU' ? '#B45309' : 'var(--color-border)', background: bdiMode === 'TCU' ? 'rgba(180,83,9,0.08)' : 'transparent', color: bdiMode === 'TCU' ? '#B45309' : 'var(--color-text-secondary)' }}
-                            >Fórmula TCU</button>
+
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 'var(--space-4)' }}>
+                            {(['SIMPLIFICADO', 'TCU'] as const).map(mode => (
+                                <button key={mode} onClick={() => setBdiConfig(prev => ({ ...prev, mode }))} style={{
+                                    flex: 1, padding: 6, fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)',
+                                    border: '1px solid', cursor: 'pointer',
+                                    borderColor: bdiConfig.mode === mode ? (mode === 'TCU' ? '#B45309' : 'var(--color-primary)') : 'var(--color-border)',
+                                    background: bdiConfig.mode === mode ? (mode === 'TCU' ? 'rgba(180,83,9,0.08)' : 'var(--color-primary-light)') : 'transparent',
+                                    color: bdiConfig.mode === mode ? (mode === 'TCU' ? '#B45309' : 'var(--color-primary)') : 'var(--color-text-secondary)',
+                                }}>{mode === 'TCU' ? 'Fórmula TCU' : 'Simplificado'}</button>
+                            ))}
                         </div>
 
-                        {bdiMode === 'SIMPLIFICADO' ? (
+                        {bdiConfig.mode === 'SIMPLIFICADO' ? (
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>BDI Global (%)</label>
-                                <input 
-                                    type="number" className="form-input" value={bdiValue} 
-                                    onChange={(e) => setBdiValue(parseFloat(e.target.value) || 0)} 
-                                    style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)' }}
-                                />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>BDI Global (%)</label>
+                                <input type="number" className="form-input" value={bdiConfig.bdiGlobal}
+                                    onChange={e => setBdiConfig(prev => ({ ...prev, bdiGlobal: parseFloat(e.target.value) || 0 }))}
+                                    style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)' }} step="0.01" />
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                    <div>
-                                        <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Adm. Central (%)</label>
-                                        <input type="number" className="form-input" defaultValue={3.00} style={{ padding: '4px 8px', fontSize: '0.8rem' }}/>
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Seguro/Gar. (%)</label>
-                                        <input type="number" className="form-input" defaultValue={0.80} style={{ padding: '4px 8px', fontSize: '0.8rem' }}/>
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Risco (%)</label>
-                                        <input type="number" className="form-input" defaultValue={0.97} style={{ padding: '4px 8px', fontSize: '0.8rem' }}/>
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Despesas Fin. (%)</label>
-                                        <input type="number" className="form-input" defaultValue={0.59} style={{ padding: '4px 8px', fontSize: '0.8rem' }}/>
-                                    </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    {([
+                                        ['adminCentral', 'Adm. Central (%)'],
+                                        ['seguros', 'Seguros (%)'],
+                                        ['garantias', 'Garantias (%)'],
+                                        ['riscos', 'Riscos (%)'],
+                                    ] as const).map(([key, label]) => (
+                                        <div key={key}>
+                                            <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>{label}</label>
+                                            <input type="number" className="form-input" value={bdiConfig.tcu[key]}
+                                                onChange={e => updateTcu(key, parseFloat(e.target.value) || 0)}
+                                                style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
+                                        </div>
+                                    ))}
                                 </div>
-                                <div style={{ borderTop: '1px dashed var(--color-border)', margin: '8px 0' }} />
+                                <div style={{ borderTop: '1px dashed var(--color-border)', margin: '4px 0' }} />
+                                <div>
+                                    <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Desp. Financeiras (%)</label>
+                                    <input type="number" className="form-input" value={bdiConfig.tcu.despFinanceiras}
+                                        onChange={e => updateTcu('despFinanceiras', parseFloat(e.target.value) || 0)}
+                                        style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
+                                </div>
                                 <div>
                                     <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Lucro (%)</label>
-                                    <input type="number" className="form-input" defaultValue={6.16} style={{ padding: '4px 8px', fontSize: '0.8rem' }}/>
+                                    <input type="number" className="form-input" value={bdiConfig.tcu.lucro}
+                                        onChange={e => updateTcu('lucro', parseFloat(e.target.value) || 0)}
+                                        style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Tributos (PIS/COFINS/ISS) (%)</label>
-                                    <input type="number" className="form-input" defaultValue={5.65} style={{ padding: '4px 8px', fontSize: '0.8rem' }}/>
+                                    <label style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)' }}>Tributos — PIS+COFINS+ISS (%)</label>
+                                    <input type="number" className="form-input" value={bdiConfig.tcu.tributos}
+                                        onChange={e => updateTcu('tributos', parseFloat(e.target.value) || 0)}
+                                        style={{ padding: '4px 8px', fontSize: '0.8rem' }} step="0.01" />
                                 </div>
-                                <div style={{ marginTop: '8px', background: 'rgba(180,83,9,0.08)', padding: '10px', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
-                                    <span style={{ fontSize: '0.7rem', color: '#92400E', fontWeight: 600, display: 'block' }}>BDI CALCULADO</span>
-                                    <span style={{ fontSize: '1.4rem', color: '#B45309', fontWeight: 800 }}>20.34%</span>
+                                <div style={{ marginTop: 4, background: 'rgba(180,83,9,0.08)', padding: 10, borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#92400E', fontWeight: 600, display: 'block' }}>BDI CALCULADO (Acórdão TCU 2622)</span>
+                                    <span style={{ fontSize: '1.4rem', color: '#B45309', fontWeight: 800 }}>{effectiveBdi.toFixed(2)}%</span>
                                 </div>
                             </div>
                         )}
                     </div>
 
                     {/* Totals */}
-                    <div style={{ 
-                        background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', 
-                        border: '1px solid var(--color-border)', overflow: 'hidden'
-                    }}>
+                    <div style={{ background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
                         <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                             <span style={{ color: 'var(--color-text-secondary)' }}>Subtotal (S/ BDI)</span>
-                            <span style={{ fontWeight: 600 }}>{formatCurrency(subtotal)}</span>
+                            <span style={{ fontWeight: 600 }}>{fmt(subtotal)}</span>
                         </div>
                         <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                            <span style={{ color: 'var(--color-text-secondary)' }}>Total BDI ({bdiValue}%)</span>
-                            <span style={{ fontWeight: 600, color: 'var(--color-success)' }}>+ {formatCurrency(total - subtotal)}</span>
+                            <span style={{ color: 'var(--color-text-secondary)' }}>BDI ({effectiveBdi.toFixed(2)}%)</span>
+                            <span style={{ fontWeight: 600, color: 'var(--color-success)' }}>+ {fmt(total - subtotal)}</span>
                         </div>
-                        <div style={{ 
-                            padding: 'var(--space-4)', 
-                            background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
+                        <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(139,92,246,0.05))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Total Global</span>
-                            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)' }}>{formatCurrency(total)}</span>
+                            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)' }}>{fmt(total)}</span>
                         </div>
                     </div>
-
                 </div>
             </div>
 
-            {/* ── Manual Search Modal ── */}
-            {isSearchModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000,
-                    background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                    <div style={{
-                        background: 'var(--color-bg-surface)', padding: '24px', borderRadius: '12px',
-                        width: '800px', maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: '16px',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
-                    }}>
+            {/* Search Modal */}
+            {showSearch && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-surface)', padding: 24, borderRadius: 12, width: 800, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0 }}>Adicionar Insumo/Serviço</h3>
-                            <button onClick={() => setIsSearchModalOpen(false)} style={{ background: 'transparent', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>&times;</button>
+                            <h3 style={{ margin: 0 }}>Buscar Insumo/Serviço na Base Oficial</h3>
+                            <button onClick={() => setShowSearch(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
-                        
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <input 
-                                type="text" className="form-input" placeholder="Buscar por código ou descrição (ex: Argamassa, 74209)" 
-                                value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                                style={{ flex: 1 }}
-                            />
-                            <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching || !selectedBaseId}>
-                                {isSearching ? 'Buscando...' : 'Buscar'}
-                            </button>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <select className="form-select" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)} style={{ width: 200 }}>
+                                {bases.map(b => <option key={b.id} value={b.id}>{b.name} {b.uf || ''}</option>)}
+                                {bases.length === 0 && <option value="">Nenhuma base cadastrada</option>}
+                            </select>
+                            <input type="text" className="form-input" placeholder="Buscar por código ou descrição..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} style={{ flex: 1 }} />
+                            <button className="btn btn-primary" onClick={handleSearch} disabled={isSearching}>{isSearching ? 'Buscando...' : 'Buscar'}</button>
                         </div>
-
-                        {!selectedBaseId && <div style={{ color: 'var(--color-danger)' }}>Selecione uma Base Principal primeiro.</div>}
-
-                        <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                        <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                                <thead>
-                                    <tr style={{ background: 'var(--color-bg-base)', borderBottom: '1px solid var(--color-border)' }}>
-                                        <th style={{ padding: '8px', textAlign: 'left' }}>Código</th>
-                                        <th style={{ padding: '8px', textAlign: 'left' }}>Descrição</th>
-                                        <th style={{ padding: '8px', textAlign: 'center' }}>Unid.</th>
-                                        <th style={{ padding: '8px', textAlign: 'right' }}>Preço</th>
-                                        <th style={{ padding: '8px', textAlign: 'center' }}>Ação</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr style={{ background: 'var(--color-bg-base)' }}>
+                                    {['Código','Descrição','Unid.','Preço',''].map((h,i) => <th key={i} style={{ padding: 8, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</th>)}
+                                </tr></thead>
                                 <tbody>
-                                    {searchResults.map(res => (
-                                        <tr key={res.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                            <td style={{ padding: '8px' }}><strong>{res.code}</strong></td>
-                                            <td style={{ padding: '8px' }}>{res.description}</td>
-                                            <td style={{ padding: '8px', textAlign: 'center' }}>{res.unit}</td>
-                                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>
-                                                {formatCurrency(Number(res.price) || 0)}
-                                            </td>
-                                            <td style={{ padding: '8px', textAlign: 'center' }}>
-                                                <button 
-                                                    className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                                                    onClick={() => handleAddItem(res)}
-                                                >Adicionar</button>
+                                    {searchResults.map(r => (
+                                        <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                            <td style={{ padding: 8 }}><strong>{r.code}</strong></td>
+                                            <td style={{ padding: 8 }}>{r.description}</td>
+                                            <td style={{ padding: 8, textAlign: 'center' }}>{r.unit}</td>
+                                            <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{fmt(Number(r.price) || 0)}</td>
+                                            <td style={{ padding: 8, textAlign: 'center' }}>
+                                                <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => addFromSearch(r)}>Adicionar</button>
                                             </td>
                                         </tr>
                                     ))}
-                                    {searchResults.length === 0 && !isSearching && searchQuery && (
-                                        <tr><td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>Nenhum insumo encontrado.</td></tr>
-                                    )}
+                                    {searchResults.length === 0 && <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                                        {searchQuery ? 'Nenhum resultado encontrado.' : 'Digite uma busca para começar.'}
+                                    </td></tr>}
                                 </tbody>
                             </table>
                         </div>
