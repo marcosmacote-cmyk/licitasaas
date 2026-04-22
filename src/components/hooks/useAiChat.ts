@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '../../config';
 import { aiService } from '../../services/ai';
 import axios from 'axios';
@@ -31,6 +31,25 @@ export function useAiChat({ analysis, process, onUpdate }: UseAiChatParams) {
             return [];
         }
     });
+    
+    // Sync messages if analysis loads asynchronously (e.g. from AiReportModal fetch)
+    useEffect(() => {
+        if (analysis?.chatHistory) {
+            try {
+                const parsed = typeof analysis.chatHistory === 'string'
+                    ? JSON.parse(analysis.chatHistory)
+                    : analysis.chatHistory;
+                // Only sync if our local state is empty and incoming has data, 
+                // OR if incoming is completely different (to prevent overwriting local active chat)
+                if (Array.isArray(parsed) && parsed.length > 0 && messages.length === 0) {
+                    setMessages(parsed);
+                }
+            } catch (e) {
+                console.error("Failed to sync chat history:", e);
+            }
+        }
+    }, [analysis?.chatHistory]);
+
     const [inputText, setInputText] = useState('');
     const [isSending, setIsSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
