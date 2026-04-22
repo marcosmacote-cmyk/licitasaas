@@ -200,6 +200,7 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         const MAX_TOTAL_PDF_SIZE_KB = 15000; // 15MB inline budget — base64 expands to ~20MB which is the REST limit
         let totalPdfSizeAccum = 0;
         const pdfParts: any[] = [];
+        const rawPdfBuffers: Array<{ buffer: Buffer; fileName: string }> = []; // Raw buffers for Zerox (independent of inline/FilesAPI)
         const downloadedFiles: string[] = [];
         const discardedFiles: string[] = [];
 
@@ -448,6 +449,8 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
                     
                     const safeFileName = `pncp_${req.user.tenantId}_${fileName.replace(/[^a-z0-9._-]/gi, '_')}`;
                     fs.writeFileSync(path.join(uploadDir, safeFileName), buffer);
+                    // Always collect raw buffer for Zerox pre-processing (works with both inline AND FilesAPI PDFs)
+                    rawPdfBuffers.push({ buffer, fileName });
 
                     let storageFileName = safeFileName;
                     try {
@@ -698,24 +701,18 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         if (zeroxAvailable) {
             sendProgress(4, 'Pré-processando documentos (OCR)...', 'Convertendo PDFs para texto estruturado');
             try {
-                // Build buffer list from pdfParts that have inlineData
-                const pdfBufferList = pdfParts
-                    .filter((p: any) => p.inlineData?.data)
-                    .map((p: any, idx: number) => ({
-                        buffer: Buffer.from(p.inlineData.data, 'base64'),
-                        fileName: downloadedFiles[idx] || `doc_${idx + 1}.pdf`,
-                    }));
-
-                if (pdfBufferList.length > 0) {
-                    const zeroxResult = await extractMarkdownFromMultiplePdfs(pdfBufferList, {
+                if (rawPdfBuffers.length > 0) {
+                    const zeroxResult = await extractMarkdownFromMultiplePdfs(rawPdfBuffers, {
                         concurrency: 5,
                         temperature: 0.1,
                     });
                     if (zeroxResult && zeroxResult.markdown.length > 200) {
                         zeroxMarkdown = zeroxResult.markdown;
                         zeroxUsed = true;
-                        logger.info(`[PNCP-V2] ✅ Zerox: ${zeroxResult.totalPages} pgs, ${zeroxResult.markdown.length} chars em ${(zeroxResult.totalDurationMs / 1000).toFixed(1)}s (${zeroxResult.documentsProcessed}/${pdfBufferList.length} docs)`);
+                        logger.info(`[PNCP-V2] ✅ Zerox: ${zeroxResult.totalPages} pgs, ${zeroxResult.markdown.length} chars em ${(zeroxResult.totalDurationMs / 1000).toFixed(1)}s (${zeroxResult.documentsProcessed}/${rawPdfBuffers.length} docs)`);
                     }
+                } else {
+                    logger.info(`[PNCP-V2] ⚠️ Zerox: nenhum buffer de PDF disponível para pré-processamento`);
                 }
             } catch (zeroxErr: any) {
                 logger.warn(`[PNCP-V2] ⚠️ Zerox falhou: ${zeroxErr.message} — usando PDF inline`);
