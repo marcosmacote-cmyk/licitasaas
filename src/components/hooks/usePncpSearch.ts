@@ -183,15 +183,14 @@ export function usePncpSearch() {
             setSearchSource(data.source as any);
             setSearchElapsed(data.elapsedMs);
             
-            // Sort by deadline
+            // Sort by deadline (closest to today first)
             const sorted = data.items.sort((a: any, b: any) => {
                 const dateA = a.data_encerramento_proposta || a.data_abertura || '9999-12-31';
                 const dateB = b.data_encerramento_proposta || b.data_abertura || '9999-12-31';
                 const tA = new Date(dateA).getTime();
                 const tB = new Date(dateB).getTime();
-                const st = searchParams.status || '';
-                if (st === 'recebendo_proposta' || !st || st === '') return tA - tB;
-                return tB - tA;
+                const now = Date.now();
+                return Math.abs(tA - now) - Math.abs(tB - now);
             });
 
             setAllResults(sorted);
@@ -257,9 +256,8 @@ export function usePncpSearch() {
                 const dateB = b.data_encerramento_proposta || b.data_abertura || '9999-12-31';
                 const tA = new Date(dateA).getTime();
                 const tB = new Date(dateB).getTime();
-                const st = params.status || '';
-                if (st === 'recebendo_proposta' || !st || st === '') return tA - tB;
-                return tB - tA;
+                const now = Date.now();
+                return Math.abs(tA - now) - Math.abs(tB - now);
             });
 
             setAllResults(accumulated);
