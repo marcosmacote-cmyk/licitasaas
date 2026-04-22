@@ -321,7 +321,7 @@ import { generateTaxonomyPromptBlock, generateObjectTypeReinforcement, ObjectTyp
  *   MINOR = melhoria de prompt que altera qualidade
  *   PATCH = ajuste de formatação ou exemplos
  */
-export const V2_PROMPT_VERSION = 'v4.8.0';
+export const V2_PROMPT_VERSION = 'v5.0.0';
 
 // Pre-generate taxonomy block for all prompts
 const TAXONOMY_BLOCK = generateTaxonomyPromptBlock();
@@ -829,6 +829,43 @@ AUTOCONFERÊNCIA ANTES DE RESPONDER:
 → Há ao menos 1 EV por exigência principal?
 → Quantitativos técnicos estão com valor exato, unidade e fonte?
 → Timeline tem prazo de impugnação e esclarecimento? (OBRIGATÓRIO para Pregão/Concorrência)
+
+═══ EXEMPLO DE SAÍDA CORRETA (REFERÊNCIA — NÃO COPIE, ADAPTE AO EDITAL) ═══
+
+⚠️ Este exemplo mostra o NÍVEL DE GRANULARIDADE esperado. Use como modelo de estrutura, mas EXTRAIA do edital real.
+
+"regularidade_fiscal_trabalhista": [
+  {"requirement_id":"RFT-01","title":"Prova de inscrição no CNPJ","description":"Comprovante de inscrição no Cadastro Nacional da Pessoa Jurídica","source_ref":"Edital, item 8.1.a","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"RFT-02","title":"Inscrição Estadual","description":"Prova de inscrição no cadastro de contribuintes estadual","source_ref":"Edital, item 8.1.b","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"RFT-03","title":"Inscrição Municipal","description":"Prova de inscrição no cadastro de contribuintes municipal","source_ref":"Edital, item 8.1.c","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"RFT-04","title":"CND Federal (RFB/PGFN)","description":"Certidão Conjunta de Débitos relativos a Tributos Federais e à Dívida Ativa da União","source_ref":"Edital, item 8.2.a","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"RFT-05","title":"CND Estadual","description":"Certidão Negativa de Débitos da Fazenda Estadual","source_ref":"Edital, item 8.2.b","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"RFT-06","title":"CND Municipal","description":"Certidão Negativa de Débitos da Fazenda Municipal","source_ref":"Edital, item 8.2.c","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"RFT-07","title":"CRF/FGTS","description":"Certificado de Regularidade do FGTS","source_ref":"Edital, item 8.2.d","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"RFT-08","title":"CNDT","description":"Certidão Negativa de Débitos Trabalhistas","source_ref":"Edital, item 8.2.e","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"}
+],
+"qualificacao_economico_financeira": [
+  {"requirement_id":"QEF-01","title":"Balanço Patrimonial e DRE","description":"Balanço patrimonial e demonstrações contábeis do último exercício social, registrado na Junta Comercial","source_ref":"Edital, item 9.1","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"QEF-02","title":"Índices Contábeis (LG >= 1.0, SG >= 1.0, LC >= 1.0)","description":"Comprovação de boa situação financeira: LG >= 1.0, SG >= 1.0, LC >= 1.0","source_ref":"Edital, item 9.2","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"QEF-03","title":"Certidão Negativa de Falência","description":"Certidão negativa de falência e recuperação judicial, expedida pelo distribuidor da sede","source_ref":"Edital, item 9.3","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"QEF-04","title":"Patrimônio Líquido Mínimo","description":"Patrimônio líquido mínimo de 10% do valor estimado da contratação (R$ 695.409,72)","source_ref":"Edital, item 9.4","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"}
+],
+"economic_financial_analysis": {
+  "exige_balanco": true, "exige_indices": true,
+  "indices_exigidos": [
+    {"indice":"LG","operador":">=","valor_referencia":"1.0","source_ref":"Edital, item 9.2"},
+    {"indice":"SG","operador":">=","valor_referencia":"1.0","source_ref":"Edital, item 9.2"},
+    {"indice":"LC","operador":">=","valor_referencia":"1.0","source_ref":"Edital, item 9.2"}
+  ],
+  "exige_patrimonio_liquido_minimo": true, "patrimonio_liquido_minimo": "R$ 695.409,72 (10% do valor estimado)"
+},
+"qualificacao_tecnica_operacional": [
+  {"requirement_id":"QTO-01","title":"Registro no CREA/CAU (Pessoa Jurídica)","description":"Certidão de registro da empresa no CREA com jurisdição sobre a sede da licitante","source_ref":"Edital, item 10.1.a","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"QTO-02","title":"Atestado: Pavimentação Asfáltica","description":"Atestado de capacidade técnica (empresa) comprovando execução de pavimentação asfáltica — Quantidade mínima exigida: 3.500,00 m² (50% do quantitativo previsto)","source_ref":"Edital, item 10.2.a","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"},
+  {"requirement_id":"QTO-03","title":"Atestado: Drenagem Pluvial","description":"Atestado de capacidade técnica (empresa) comprovando execução de drenagem pluvial — Quantidade mínima exigida: 1.200,00 m (50% do quantitativo previsto)","source_ref":"Edital, item 10.2.b","entry_type":"exigencia_principal","risk_if_missing":"inabilitacao"}
+]
+
+═══ FIM DO EXEMPLO ═══
 
 {domainReinforcement}
 

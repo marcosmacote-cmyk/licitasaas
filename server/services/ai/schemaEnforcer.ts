@@ -29,6 +29,8 @@ export interface EnforcerResult {
     schema: AnalysisSchemaV1;
     corrections: number;
     details: string[];
+    /** V5.0: Count of items injected by safety-nets (used for confidence penalty) */
+    safety_net_count: number;
 }
 
 // ── Mapas Fixos ──
@@ -793,6 +795,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                         risk_if_missing: 'desclassificacao',
                         source_ref: `${typeof paSourceRef === 'string' ? paSourceRef : 'Edital, seção de Proposta'} (safety-net — verificar edital)`,
                         evidence_refs: [],
+                        origin: 'safety_net',
                     },
                     {
                         requirement_id: 'PC-02',
@@ -805,6 +808,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                         risk_if_missing: 'desclassificacao',
                         source_ref: `${typeof paSourceRef === 'string' ? paSourceRef : 'Edital, seção de Proposta'} (safety-net — verificar edital)`,
                         evidence_refs: [],
+                        origin: 'safety_net',
                     },
                 ];
                 correct('PC', '0 itens (vazia)', 'injetado(s): Planilha de Preços + Composição BDI (mínimo obrigatório)');
@@ -1101,6 +1105,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                         risk_if_missing: 'inabilitacao',
                         source_ref: `${rftSourceRef} (safety-net — verificar edital)`,
                         evidence_refs: [],
+                        origin: 'safety_net',
                     });
                 }
                 correct('RFT', `${missingCNDs.length} doc(s) ausente(s)`, `injetado(s): ${missingCNDs.map(c => c.title).join(', ')}`);
@@ -1147,6 +1152,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                         risk_if_missing: 'inabilitacao',
                         source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
                         evidence_refs: [],
+                        origin: 'safety_net',
                     });
                     injected.push('Balanço/DRE');
                 }
@@ -1163,6 +1169,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                         risk_if_missing: 'inabilitacao',
                         source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
                         evidence_refs: [],
+                        origin: 'safety_net',
                     });
                     injected.push('Índices Contábeis');
                 }
@@ -1179,6 +1186,7 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                         risk_if_missing: 'inabilitacao',
                         source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
                         evidence_refs: [],
+                        origin: 'safety_net',
                     });
                     injected.push('Certidão Falência');
                 }
@@ -1208,8 +1216,30 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
                     risk_if_missing: 'inabilitacao',
                     source_ref: `${qefSourceRef} (safety-net — verificar edital)`,
                     evidence_refs: [],
+                    origin: 'safety_net',
                 });
                 correct('QEF', 'Certidão de Falência ausente', 'injetada: Certidão Negativa de Falência/Recuperação Judicial');
+            }
+
+            // V5.0: Sync QEF → indices_exigidos in economic_financial_analysis
+            // When safety-net injected Índices Contábeis, populate indices_exigidos if empty
+            if (schema.economic_financial_analysis) {
+                const indicesExigidos = (schema.economic_financial_analysis as any).indices_exigidos;
+                if (!Array.isArray(indicesExigidos) || indicesExigidos.length === 0) {
+                    // Check if QEF items mention specific indices
+                    const qefFullText = qefItems.map((r: any) => `${r.title || ''} ${r.description || ''}`.toLowerCase()).join(' ');
+                    const hasLG = /liquidez\s+geral|\bLG\b/i.test(qefFullText);
+                    const hasSG = /solv[eê]ncia\s+geral|\bSG\b/i.test(qefFullText);
+                    const hasLC = /liquidez\s+corrente|\bLC\b/i.test(qefFullText);
+                    const inferredIndices: any[] = [];
+                    if (hasLG) inferredIndices.push({ indice: 'LG', formula_ou_descricao: 'Liquidez Geral', operador: '>=', valor_referencia: '1.0', evidence_refs: [] });
+                    if (hasSG) inferredIndices.push({ indice: 'SG', formula_ou_descricao: 'Solvência Geral', operador: '>=', valor_referencia: '1.0', evidence_refs: [] });
+                    if (hasLC) inferredIndices.push({ indice: 'LC', formula_ou_descricao: 'Liquidez Corrente', operador: '>=', valor_referencia: '1.0', evidence_refs: [] });
+                    if (inferredIndices.length > 0) {
+                        (schema.economic_financial_analysis as any).indices_exigidos = inferredIndices;
+                        correct('QEF→indices', `indices_exigidos vazio`, `injetado(s) ${inferredIndices.length} índice(s): ${inferredIndices.map(i => i.indice).join(', ')} (safety-net)`);
+                    }
+                }
             }
         }
     }
@@ -1317,11 +1347,23 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
     }
 
     // ═══════════════════════════════════════════
+    // V5.0: Count safety-net injections across ALL categories
+    // ═══════════════════════════════════════════
+    let safetyNetCount = 0;
+    if (schema.requirements) {
+        for (const catItems of Object.values(schema.requirements)) {
+            if (Array.isArray(catItems)) {
+                safetyNetCount += catItems.filter((r: any) => r.origin === 'safety_net').length;
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════
     // DONE
     // ═══════════════════════════════════════════
 
     if (corrections > 0) {
-        logger.info(`[SchemaEnforcer] ✅ ${corrections} correção(ões) aplicada(s):`);
+        logger.info(`[SchemaEnforcer] ✅ ${corrections} correção(ões) aplicada(s), ${safetyNetCount} itens safety-net:`);
         // Log first 10 details max
         const logDetails = details.slice(0, 10);
         for (const d of logDetails) {
@@ -1334,5 +1376,5 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         logger.info(`[SchemaEnforcer] ✅ Nenhuma correção necessária — schema já padronizado`);
     }
 
-    return { schema, corrections, details };
+    return { schema, corrections, details, safety_net_count: safetyNetCount };
 }

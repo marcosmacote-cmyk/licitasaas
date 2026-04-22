@@ -3,13 +3,14 @@ import { Sentry, sentryErrorHandler, captureError, setSentryUser } from '../lib/
 
 import { robustJsonParse, robustJsonParseDetailed } from "../services/ai/parser.service";
 import { callGeminiWithRetry } from "../services/ai/gemini.service";
-import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_NORMALIZATION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_NORMALIZATION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, buildCategoryNormPrompt, buildCategoryNormUser, MANUAL_EXTRACTION_ADDON } from "../services/ai/prompt.service";
+import { ANALYZE_EDITAL_SYSTEM_PROMPT, USER_ANALYSIS_INSTRUCTION, EXTRACT_CERTIFICATE_SYSTEM_PROMPT, COMPARE_CERTIFICATE_SYSTEM_PROMPT, MASTER_PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION, V2_EXTRACTION_PROMPT, V2_RISK_REVIEW_PROMPT, V2_EXTRACTION_USER_INSTRUCTION, V2_RISK_REVIEW_USER_INSTRUCTION, V2_PROMPT_VERSION, getDomainRoutingInstruction, NORM_CATEGORIES, MANUAL_EXTRACTION_ADDON } from "../services/ai/prompt.service";
 import { AnalysisSchemaV1, createEmptyAnalysisSchema } from "../services/ai/analysis-schema-v1";
 import { fallbackToOpenAi, fallbackToOpenAiV2 } from "../services/ai/openai.service";
 import { indexDocumentChunks, searchSimilarChunks } from "../services/ai/rag.service";
 import { executeRiskRules } from "../services/ai/riskRulesEngine";
 import { evaluateAnalysisQuality, validateAnalysisCompleteness } from "../services/ai/analysisQualityEvaluator";
 import { enforceSchema } from "../services/ai/schemaEnforcer";
+import { validateExtraction, getSurgicalPrompt } from "../services/ai/extractionValidator";
 import { buildModuleContext, ModuleName } from "../services/ai/modules/moduleContextContracts";
 import { CHAT_SYSTEM_PROMPT, CHAT_USER_INSTRUCTION } from "../services/ai/modules/prompts/chatPromptV2";
 import { PETITION_SYSTEM_PROMPT, PETITION_USER_INSTRUCTION as PETITION_V2_USER_INSTRUCTION } from "../services/ai/modules/prompts/petitionPromptV2";
@@ -654,16 +655,14 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // V2 PIPELINE — 3-Stage Analysis (migrated from /api/analyze-edital/v2)
         // ═══════════════════════════════════════════════════════════════════════
         
-        // ── MODEL CONFIGURATION ──
-        // Each pipeline stage uses the optimal model for its task
+        // ── MODEL CONFIGURATION (V5.0 — simplified) ──
+        // V5.0: Only 2 AI stages remain (extraction + risk review)
+        // Normalization is 100% server-side, re-extraction eliminated
         const PIPELINE_MODELS = {
-            extraction: 'gemini-2.5-flash',         // Etapa 1: PDF parsing (multimodal, proven)
-            reExtraction: 'gemini-2.5-flash',       // Re-extraction fallback  
-            normalization: 'gemini-2.5-flash',       // Etapa 2: text-only JSON→JSON — upgraded from flash-lite (QTO/QTP confusion fix)
-            normQtp: 'gemini-2.5-flash',             // Etapa 2 QTP: needs full Flash for Rule 18 (CAT explosion)
-            riskReview: 'gemini-2.5-flash',          // Etapa 3: text-only risk analysis — upgraded from flash-lite (better critical_points)
+            extraction: 'gemini-2.5-flash',         // Etapa 1: PDF parsing (multimodal)
+            riskReview: 'gemini-2.5-flash',          // Etapa 3: text-only risk analysis
         };
-        logger.info(`[PNCP-V2] 🤖 Modelos: E1=${PIPELINE_MODELS.extraction} | E2=${PIPELINE_MODELS.normalization} (QTP=${PIPELINE_MODELS.normQtp}) | E3=${PIPELINE_MODELS.riskReview}`);
+        logger.info(`[PNCP-V2] 🤖 V5.0 Modelos: E1=${PIPELINE_MODELS.extraction} | E3=${PIPELINE_MODELS.riskReview} (norm=server-side, re-extraction=eliminada)`);
 
         sendProgress(3, 'Documentos prontos para análise', `${pdfParts.length} PDFs`);
 
@@ -971,339 +970,218 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             logger.info(`[PNCP-V2] 🎯 Roteamento por tipo: ${detectedObjectType}`);
         }
 
-        // ── CATEGORY GAP DETECTION + TARGETED RE-EXTRACTION (V4.7.0) ──
-        // Reativado com otimização: só dispara quando há truncamento detectado (parseRepairs>0)
-        // OU quando ≥2 categorias críticas estão vazias para o tipo de objeto.
-        // Usa apenas 1-2 PDFs e prompt focado → ~15-25s extra (vs 60s+ na V1).
-        const expectedCategories: Record<string, string[]> = {
-            'obra_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
-            'servico_comum_engenharia': ['qualificacao_tecnica_operacional', 'qualificacao_tecnica_profissional', 'qualificacao_economico_financeira', 'proposta_comercial'],
-            'servico_comum': ['qualificacao_tecnica_operacional', 'qualificacao_economico_financeira', 'proposta_comercial'],
-            'fornecimento': ['qualificacao_economico_financeira', 'proposta_comercial'],
-            'locacao': ['qualificacao_economico_financeira', 'proposta_comercial'],
-            'outro': ['qualificacao_economico_financeira', 'proposta_comercial'],
-        };
-        const objType = detectedObjectType || 'outro';
-        const expected = expectedCategories[objType] || expectedCategories['outro'];
-        const missingCategories = expected.filter(cat => {
-            const items = Array.isArray((extractionJson.requirements as any)?.[cat]) ? (extractionJson.requirements as any)[cat] : [];
-            return items.length === 0;
-        });
+        // ── V5.0 S4: Structural Validation + Surgical Re-Extraction ──
+        // ExtractionValidator detects gaps deterministically. When critical gaps exist
+        // (e.g., QEF/QTO/QTP empty for engineering), a SINGLE focused AI call (~3-5s)
+        // is made with a category-specific prompt. Unlike V4's re-extraction (which used
+        // the same generic prompt that already failed), these surgical prompts are short,
+        // keyword-driven, and tell the AI exactly what section to look for.
+        const validationResult = validateExtraction(extractionJson, detectedObjectType);
+        const extractionGaps = validationResult.gaps;
 
-        // Trigger conditions: (A) JSON was repaired (truncation likely) OR (B) ≥2 critical categories empty
-        const hasTruncationSignal = pipelineHealth.parseRepairs > 0;
-        const hasCriticalGap = missingCategories.length >= 2;
-        // Also check if RFT is suspiciously thin (only CNPJ/IE/IM injected, no CNDs) — sign of truncation
-        const rftOnlyInjected = rftItems.length <= 3 + injectedCount && injectedCount > 0;
-        const shouldReExtract = missingCategories.length > 0 && (hasTruncationSignal || hasCriticalGap || rftOnlyInjected);
+        // Store gaps in metadata for confidence scoring
+        (v2Result.analysis_meta as any).extraction_gaps = extractionGaps;
 
-        if (shouldReExtract) {
-            logger.warn(`[PNCP-V2] 🔍 GAP DETECTADO: ${missingCategories.length} categorias vazias para ${objType}: ${missingCategories.join(', ')} ` +
-                `(truncamento=${hasTruncationSignal}, gap_critico=${hasCriticalGap}, rft_thin=${rftOnlyInjected})`);
-            sendProgress(5, 'Completando categorias faltantes...', `${missingCategories.length} categorias precisam re-extração`);
-            logger.info(`[PNCP-V2] ── Re-extração focada para categorias faltantes...`);
+        if (validationResult.requiresReExtraction && validationResult.reExtractionTargets.length > 0) {
+            sendProgress(5, 'Re-extração cirúrgica de categorias faltantes...', `${validationResult.reExtractionTargets.length} categoria(s)`);
+            const tReExtStart = Date.now();
+            const surgicalTasks = validationResult.reExtractionTargets.slice(0, 3).map(async (category) => {
+                const surgicalPrompt = getSurgicalPrompt(category);
+                if (!surgicalPrompt) return { category, success: false, reason: 'no prompt' };
 
-            const missingCatLabels: Record<string, string> = {
-                'qualificacao_tecnica_operacional': 'Qualificação Técnica Operacional (atestados da empresa, parcelas relevantes, visita técnica)',
-                'qualificacao_tecnica_profissional': 'Qualificação Técnica Profissional (RT, CAT, acervo técnico do profissional)',
-                'qualificacao_economico_financeira': 'Qualificação Econômico-Financeira (balanço, índices contábeis LG/LC/SG/EG, certidão falência, patrimônio/capital social mínimo)',
-                'proposta_comercial': 'Proposta Comercial (envelope de preços, planilha, BDI, validade, formato)',
-                'documentos_complementares': 'Documentos Complementares e Declarações (declarações, procurações, docs auxiliares)',
-                'regularidade_fiscal_trabalhista': 'Regularidade Fiscal e Trabalhista (CND Federal, Estadual, Municipal, FGTS, CNDT)',
-            };
+                try {
+                    const resp = await callGeminiWithRetry(ai.models, {
+                        model: PIPELINE_MODELS.extraction,
+                        contents: [{ role: 'user', parts: [...pdfParts, { text: surgicalPrompt }] }],
+                        config: {
+                            temperature: 0.05,
+                            maxOutputTokens: 8192,
+                            responseMimeType: 'application/json'
+                        }
+                    }, 2, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'surgical-reextraction', category } });
 
-            // Also add RFT to re-extraction if it seems truncated (only injected items, no CNDs)
-            const rftMissingCnds = rftOnlyInjected && !missingCategories.includes('regularidade_fiscal_trabalhista');
-            const effectiveMissingCategories = rftMissingCnds
-                ? [...missingCategories, 'regularidade_fiscal_trabalhista']
-                : missingCategories;
+                    const text = resp.text;
+                    if (!text) return { category, success: false, reason: 'empty response' };
+                    const parsed = robustJsonParseDetailed(text, `Surgical-${category}`);
+                    if (parsed.repaired) pipelineHealth.parseRepairs++;
+                    const data = parsed.data;
 
-            const catDescriptions = effectiveMissingCategories.map(c => `- ${missingCatLabels[c] || c}`).join('\n');
-
-            // Already-captured categories for exclusion instructions
-            const capturedCategories = Object.entries(extractionJson.requirements || {})
-                .filter(([, items]) => Array.isArray(items) && items.length > 0)
-                .map(([cat]) => cat);
-
-            const reExtractionPrompt = `ATENÇÃO: a extração anterior capturou apenas ${extractedReqs} exigências e OMITIU categorias inteiras (provável truncamento de output).
-
-As seguintes categorias estão VAZIAS e precisam ser COMPLETAMENTE extraídas dos documentos:
-${catDescriptions}
-
-Categorias JÁ CAPTURADAS (NÃO re-extraia): ${capturedCategories.join(', ')}
-
-INSTRUÇÕES:
-1. Leia ATENTAMENTE todo o edital e TR/ETP procurando as seções de HABILITAÇÃO, QUALIFICAÇÃO TÉCNICA e REQUISITOS FINANCEIROS.
-2. Extraia TODAS as exigências das categorias faltantes listadas acima.
-3. Para QTO/QTP, transcreva LITERALMENTE cada parcela de maior relevância com quantitativos exatos.
-4. Para QEF, extraia balanço, índices (LG, LC, SG, EG), patrimônio/capital mínimo, certidão de falência.
-5. Para RFT (se listada), extraia TODAS as certidões: CND Federal (Receita + PGFN), Estadual, Municipal, CRF/FGTS, CNDT.
-6. Inclua evidence_registry com ao menos 1 evidência por exigência principal.
-
-${domainReinforcement || ''}
-
-Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "evidence_registry": [...] }`;
-
-            const t15Start = Date.now();
-            try {
-                // Use first 2 PDFs (edital + TR typically) for re-extraction
-                const reExtractionParts = pdfParts.slice(0, Math.min(2, pdfParts.length));
-                const reExtractionResponse = await callGeminiWithRetry(ai.models, {
-                    model: PIPELINE_MODELS.reExtraction,
-                    contents: [{
-                        role: 'user',
-                        parts: [
-                            ...reExtractionParts,
-                            { text: reExtractionPrompt }
-                        ]
-                    }],
-                    config: {
-                        systemInstruction: V2_EXTRACTION_PROMPT,
-                        temperature: 0.05,
-                        maxOutputTokens: 32768,
-                        responseMimeType: 'application/json'
-                    }
-                }, 4, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 're-extraction' } });
-                const reText = reExtractionResponse.text;
-                if (reText) {
-                    const reParseResult = robustJsonParseDetailed(reText, 'PNCP-V2-ReExtraction');
-                    const reData = reParseResult.data;
-                    if (reParseResult.repaired) pipelineHealth.parseRepairs++;
-
-                    // Merge re-extracted categories into the main extraction
-                    let reExtractedCount = 0;
-                    if (reData.requirements) {
-                        for (const [cat, items] of Object.entries(reData.requirements)) {
-                            if (Array.isArray(items) && items.length > 0) {
-                                const existing = Array.isArray((extractionJson.requirements as any)?.[cat]) ? (extractionJson.requirements as any)[cat] : [];
-                                if (existing.length === 0) {
-                                    // Category was completely empty — fill with re-extracted data
-                                    (extractionJson.requirements as any)[cat] = items;
-                                    (v2Result.requirements as any)[cat] = items;
-                                    reExtractedCount += (items as any[]).length;
-                                    logger.info(`[PNCP-V2] ✅ Re-extração ${cat}: +${(items as any[]).length} itens`);
-                                } else if (cat === 'regularidade_fiscal_trabalhista' && rftOnlyInjected) {
-                                    // RFT had only injected items — merge real CNDs from re-extraction
-                                    const newItems = (items as any[]).filter((item: any) => {
-                                        const title = (item.title || '').toLowerCase();
-                                        // Don't duplicate CNPJ/IE/IM already injected
-                                        return !title.includes('cnpj') && !title.includes('inscrição estadual') && !title.includes('inscrição municipal');
-                                    });
-                                    if (newItems.length > 0) {
-                                        existing.push(...newItems);
-                                        (extractionJson.requirements as any).regularidade_fiscal_trabalhista = existing;
-                                        (v2Result.requirements as any).regularidade_fiscal_trabalhista = existing;
-                                        reExtractedCount += newItems.length;
-                                        logger.info(`[PNCP-V2] ✅ Re-extração RFT (CNDs): +${newItems.length} itens adicionais`);
-                                    }
-                                }
-                            }
+                    // Merge surgical results into extractionJson
+                    const catItems = data[category];
+                    if (Array.isArray(catItems) && catItems.length > 0) {
+                        const existingItems = (extractionJson.requirements as any)?.[category] || [];
+                        if (catItems.length > existingItems.length) {
+                            // Surgical extraction found MORE items — replace
+                            (extractionJson.requirements as any)[category] = catItems;
+                            logger.info(`[PNCP-V2] 🔬 Surgical ${category}: ${catItems.length} itens (era ${existingItems.length})`);
                         }
                     }
-                    // Merge evidence_registry
-                    if (reData.evidence_registry && Array.isArray(reData.evidence_registry)) {
-                        extractionJson.evidence_registry = [
-                            ...(extractionJson.evidence_registry || []),
-                            ...reData.evidence_registry
-                        ];
-                        v2Result.evidence_registry = extractionJson.evidence_registry;
+
+                    // Merge indices_exigidos if available
+                    if (category === 'qualificacao_economico_financeira' && Array.isArray(data.indices_exigidos) && data.indices_exigidos.length > 0) {
+                        if (!extractionJson.economic_financial_analysis) extractionJson.economic_financial_analysis = {};
+                        if (!Array.isArray(extractionJson.economic_financial_analysis.indices_exigidos) || extractionJson.economic_financial_analysis.indices_exigidos.length === 0) {
+                            extractionJson.economic_financial_analysis.indices_exigidos = data.indices_exigidos;
+                            logger.info(`[PNCP-V2] 🔬 Surgical QEF: ${data.indices_exigidos.length} índice(s) extraído(s)`);
+                        }
                     }
 
-                    const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
-                    stageTimes.re_extraction = parseFloat(reDuration);
-                    logger.info(`[PNCP-V2] ✅ Re-extração concluída em ${reDuration}s: +${reExtractedCount} exigências, +${(reData.evidence_registry || []).length} evidências`);
-                    if (reExtractedCount > 0) {
-                        v2Result.confidence.warnings.push(`Re-extração recuperou ${reExtractedCount} exigência(s) de ${effectiveMissingCategories.length} categoria(s) truncada(s)`);
+                    // Merge evidence
+                    if (Array.isArray(data.evidence_registry)) {
+                        extractionJson.evidence_registry = [...(extractionJson.evidence_registry || []), ...data.evidence_registry];
                     }
+
+                    return { category, success: true, items: catItems?.length || 0 };
+                } catch (err: any) {
+                    logger.warn(`[PNCP-V2] ⚠️ Surgical ${category} falhou: ${err.message}`);
+                    return { category, success: false, reason: err.message };
                 }
-            } catch (reErr: any) {
-                const reDuration = ((Date.now() - t15Start) / 1000).toFixed(1);
-                logger.warn(`[PNCP-V2] ⚠️ Re-extração falhou em ${reDuration}s: ${reErr.message}. Continuando com dados parciais.`);
-                v2Result.confidence.warnings.push(`Re-extração de categorias faltantes falhou: ${reErr.message}`);
-                pipelineHealth.fallbacksUsed++;
-            }
-        } else if (missingCategories.length > 0) {
-            logger.info(`[PNCP-V2] ℹ️ ${missingCategories.length} categorias vazias (${missingCategories.join(', ')}) — sem sinal de truncamento, mantendo extração original`);
+            });
+
+            const surgicalResults = await Promise.allSettled(surgicalTasks);
+            const successCount = surgicalResults.filter(r => r.status === 'fulfilled' && (r.value as any)?.success).length;
+            stageTimes.surgical_reextraction = (Date.now() - tReExtStart) / 1000;
+            logger.info(`[PNCP-V2] 🔬 Re-extração cirúrgica em ${stageTimes.surgical_reextraction.toFixed(1)}s — ${successCount}/${validationResult.reExtractionTargets.length} categorias recuperadas`);
+
+            // Re-validate after surgical extraction
+            const postSurgicalValidation = validateExtraction(extractionJson, detectedObjectType);
+            (v2Result.analysis_meta as any).post_surgical_gaps = postSurgicalValidation.gaps.length;
+        } else if (extractionGaps.length > 0) {
+            logger.info(`[PNCP-V2] 📋 ${extractionGaps.length} gap(s) detectado(s) — sem re-extração necessária (SchemaEnforcer cuidará)`);
+            v2Result.confidence.warnings.push(`Extração omitiu dados em ${extractionGaps.length} ponto(s) — dados complementados automaticamente`);
         }
 
-        // ── Stages 2+3: Normalization + Risk Review (PARALLEL — text-only, no PDFs) ──
-        sendProgress(6, 'Normalizando exigências e avaliando riscos...', 'Etapas 2+3/3 em paralelo');
-        logger.info(`[PNCP-V2] ── Etapas 2+3/3: Normalização + Risco (paralelo)...`);
+        // ── V5.0: Stage 2 (Server-Side Norm) → Stage 3 (Risk Review, SEQUENTIAL) ──
+        // V4.x ran normalization AI calls + risk review in parallel, but risk review
+        // received '{}' for normalization data. V5.0 makes ALL normalization server-side
+        // (<100ms) and runs risk review AFTER, so it gets real normalized data.
+        sendProgress(6, 'Normalizando exigências...', 'Etapa 2/3 — normalização server-side');
+        logger.info(`[PNCP-V2] ── Etapa 2/3: Normalização 100% server-side (V5.0)...`);
         let normalizationJson: any = {};
-        const extractionJsonCompact = JSON.stringify(extractionJson);  // Compact — saves ~20-30% tokens
         const t2t3Start = Date.now();
 
-        // Run both stages concurrently
-        const [normSettled, riskSettled, itemsSettled] = await Promise.allSettled([
-            // ── Stage 2: Per-Category Normalization (7 parallel micro-calls) ──
-            (async () => {
-                const t2Start = Date.now();
-                const mergedRequirements: Record<string, any[]> = {};
-                const mergedDocs: any[] = [];
-                let totalNormalized = 0;
-                let categoriesFailed = 0;
-                let categoriesSkipped = 0;
-                let usedFallback = false;
-                let hadRepair = false;
+        // ── Stage 2: ALL-SERVER-SIDE Normalization (V5.0 — zero AI calls) ──
+        const t2Start = Date.now();
+        const mergedRequirements: Record<string, any[]> = {};
+        const mergedDocs: any[] = [];
+        let totalNormalized = 0;
+        let categoriesSkipped = 0;
 
-                // Build parallel tasks for categories that have items
-                const categoryTasks = NORM_CATEGORIES.map(cat => {
-                    const items = Array.isArray((extractionJson.requirements as any)?.[cat.key])
-                        ? (extractionJson.requirements as any)[cat.key]
-                        : [];
+        // Responsible area mapping per category
+        const RESPONSIBLE_AREAS: Record<string, string> = {
+            'habilitacao_juridica': 'juridico',
+            'regularidade_fiscal_trabalhista': 'contabil',
+            'qualificacao_economico_financeira': 'contabil',
+            'qualificacao_tecnica_operacional': 'engenharia',
+            'qualificacao_tecnica_profissional': 'engenharia',
+            'proposta_comercial': 'comercial',
+            'documentos_complementares': 'licitacoes',
+        };
 
-                    if (items.length === 0) {
-                        mergedRequirements[cat.key] = [];
-                        categoriesSkipped++;
-                        return null; // Skip empty categories
-                    }
+        // Risk defaults per category
+        const RISK_DEFAULTS: Record<string, string> = {
+            'habilitacao_juridica': 'inabilitacao',
+            'regularidade_fiscal_trabalhista': 'inabilitacao',
+            'qualificacao_economico_financeira': 'inabilitacao',
+            'qualificacao_tecnica_operacional': 'inabilitacao',
+            'qualificacao_tecnica_profissional': 'inabilitacao',
+            'proposta_comercial': 'desclassificacao',
+            'documentos_complementares': 'inabilitacao',
+        };
 
-                    // ── FAST-PATH: HJ, RFT, QEF — server-side normalization (no AI call) ──
-                    const FAST_NORM_CATEGORIES = ['habilitacao_juridica', 'regularidade_fiscal_trabalhista', 'qualificacao_economico_financeira'];
-                    if (FAST_NORM_CATEGORIES.includes(cat.key)) {
-                        // Deterministic normalization — assign IDs, entry_type, risk_if_missing
-                        const riskDefault = cat.key === 'habilitacao_juridica' ? 'inabilitacao'
-                            : cat.key === 'regularidade_fiscal_trabalhista' ? 'inabilitacao'
-                            : 'inabilitacao';
-                        const normalized = items.map((item: any, idx: number) => ({
-                            ...item,
-                            requirement_id: item.requirement_id || `${cat.prefix}-${String(idx + 1).padStart(2, '0')}`,
-                            entry_type: item.entry_type || 'exigencia_principal',
-                            risk_if_missing: item.risk_if_missing || riskDefault,
-                            applies_to: item.applies_to || 'licitante',
-                            obligation_type: item.obligation_type || 'obrigatoria_universal',
-                            phase: item.phase || 'habilitacao',
-                            source_ref: item.source_ref || 'referência não localizada',
-                        }));
-                        mergedRequirements[cat.key] = normalized;
-                        totalNormalized += normalized.length;
-                        // Generate documents_to_prepare
-                        normalized.filter((n: any) => n.entry_type === 'exigencia_principal').forEach((n: any) => {
-                            mergedDocs.push({
-                                document_name: n.title || n.requirement_id,
-                                category: cat.key,
-                                priority: n.risk_if_missing === 'inabilitacao' ? 'critica' : 'alta',
-                                responsible_area: cat.key === 'regularidade_fiscal_trabalhista' ? 'contabil'
-                                    : cat.key === 'qualificacao_economico_financeira' ? 'contabil'
-                                    : 'juridico',
-                                notes: ''
-                            });
-                        });
-                        logger.info(`[PNCP-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side, 0 API calls)`);
-                        return { cat: cat.key, success: true, fastPath: true };
-                    }
+        // Phase defaults
+        const PHASE_DEFAULTS: Record<string, string> = {
+            'habilitacao_juridica': 'habilitacao',
+            'regularidade_fiscal_trabalhista': 'habilitacao',
+            'qualificacao_economico_financeira': 'habilitacao',
+            'qualificacao_tecnica_operacional': 'habilitacao',
+            'qualificacao_tecnica_profissional': 'habilitacao',
+            'proposta_comercial': 'proposta',
+            'documentos_complementares': 'habilitacao',
+        };
 
-                    // ── AI NORMALIZATION: QTO, QTP, PC, DC (interpretation needed) ──
-                    // QTP uses full Flash model for Rule 18 (CAT explosion) reliability
-                    const normModel = cat.key === 'qualificacao_tecnica_profissional'
-                        ? PIPELINE_MODELS.normQtp
-                        : PIPELINE_MODELS.normalization;
-                    return (async () => {
-                        const systemPrompt = buildCategoryNormPrompt(cat);
-                        const userPrompt = buildCategoryNormUser(cat, items);
+        for (const cat of NORM_CATEGORIES) {
+            const items = Array.isArray((extractionJson.requirements as any)?.[cat.key])
+                ? (extractionJson.requirements as any)[cat.key]
+                : [];
 
-                        try {
-                            const resp = await callGeminiWithRetry(ai.models, {
-                                model: normModel,
-                                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-                                config: {
-                                    systemInstruction: systemPrompt,
-                                    temperature: 0.1,
-                                    maxOutputTokens: 16384,
-                                    responseMimeType: 'application/json'
-                                }
-                            }, 1, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'normalization', category: cat.key } });
+            if (items.length === 0) {
+                mergedRequirements[cat.key] = [];
+                categoriesSkipped++;
+                continue;
+            }
 
-                            const text = resp.text;
-                            if (!text) throw new Error(`${cat.prefix} retornou vazio`);
-                            const parsed = robustJsonParseDetailed(text, `Norm-${cat.prefix}`);
-                            if (parsed.repaired) hadRepair = true;
-                            const data = parsed.data;
+            // V5.0: ALL categories use deterministic server-side normalization
+            const riskDefault = RISK_DEFAULTS[cat.key] || 'inabilitacao';
+            const phaseDefault = PHASE_DEFAULTS[cat.key] || 'habilitacao';
+            const responsibleArea = RESPONSIBLE_AREAS[cat.key] || 'licitacoes';
 
-                            // Validate block schema
-                            if (Array.isArray(data.items) && data.items.length > 0) {
-                                mergedRequirements[cat.key] = data.items;
-                                totalNormalized += data.items.length;
-                            } else {
-                                // Response valid but no items — keep originals
-                                mergedRequirements[cat.key] = items;
-                                totalNormalized += items.length;
-                            }
-                            if (Array.isArray(data.documents_to_prepare)) {
-                                mergedDocs.push(...data.documents_to_prepare);
-                            }
-                            logger.info(`[PNCP-V2] ✅ Norm ${cat.prefix}: ${(data.items || []).length} itens (${normModel})`);
-                            return { cat: cat.key, success: true };
-                        } catch (geminiErr: any) {
-                            // Per-block fallback to OpenAI
-                            logger.warn(`[PNCP-V2] ⚠️ Norm ${cat.prefix} Gemini falhou: ${geminiErr.message}. Fallback OpenAI...`);
-                            usedFallback = true;
-                            try {
-                                const oaiResult = await fallbackToOpenAiV2({
-                                    systemPrompt,
-                                    userPrompt,
-                                    temperature: 0.1,
-                                    stageName: `Norm-${cat.prefix}`
-                                });
-                                if (!oaiResult.text) throw new Error('OpenAI vazio');
-                                const parsed = robustJsonParseDetailed(oaiResult.text, `Norm-${cat.prefix}-OAI`);
-                                if (parsed.repaired) hadRepair = true;
-                                const data = parsed.data;
-                                if (Array.isArray(data.items) && data.items.length > 0) {
-                                    mergedRequirements[cat.key] = data.items;
-                                    totalNormalized += data.items.length;
-                                } else {
-                                    mergedRequirements[cat.key] = items;
-                                    totalNormalized += items.length;
-                                }
-                                if (Array.isArray(data.documents_to_prepare)) {
-                                    mergedDocs.push(...data.documents_to_prepare);
-                                }
-                                logger.info(`[PNCP-V2] ✅ Norm ${cat.prefix} via OpenAI: ${(data.items || []).length} itens`);
-                                return { cat: cat.key, success: true, fallback: true };
-                            } catch (oaiErr: any) {
-                                // Both failed — keep original extraction data
-                                logger.error(`[PNCP-V2] ❌ Norm ${cat.prefix} falhou (ambos): ${oaiErr.message}`);
-                                mergedRequirements[cat.key] = items;
-                                totalNormalized += items.length;
-                                categoriesFailed++;
-                                return { cat: cat.key, success: false };
-                            }
-                        }
-                    })();
-                }).filter(Boolean);
+            const normalized = items.map((item: any, idx: number) => ({
+                ...item,
+                requirement_id: item.requirement_id || `${cat.prefix}-${String(idx + 1).padStart(2, '0')}`,
+                entry_type: item.entry_type || 'exigencia_principal',
+                risk_if_missing: item.risk_if_missing || riskDefault,
+                applies_to: item.applies_to || 'licitante',
+                obligation_type: item.obligation_type || 'obrigatoria_universal',
+                phase: item.phase || phaseDefault,
+                source_ref: item.source_ref || 'referência não localizada',
+            }));
 
-                // Execute all categories in parallel
-                const results = await Promise.allSettled(categoryTasks as Promise<any>[]);
+            mergedRequirements[cat.key] = normalized;
+            totalNormalized += normalized.length;
 
-                stageTimes.normalization = (Date.now() - t2Start) / 1000;
-                const successCount = results.filter(r => r.status === 'fulfilled' && r.value?.success).length;
-                const fastPathCount = results.filter(r => r.status === 'fulfilled' && r.value?.fastPath).length;
-                const aiNormCount = successCount - fastPathCount;
-                logger.info(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ${successCount}/${NORM_CATEGORIES.length - categoriesSkipped} OK (⚡${fastPathCount} fast + 🤖${aiNormCount} AI), ${categoriesFailed} falhas`);
+            // Generate documents_to_prepare for principal requirements
+            normalized.filter((n: any) => n.entry_type === 'exigencia_principal').forEach((n: any) => {
+                mergedDocs.push({
+                    document_name: n.title || n.requirement_id,
+                    category: cat.key,
+                    priority: n.risk_if_missing === 'inabilitacao' || n.risk_if_missing === 'desclassificacao' ? 'critica' : 'alta',
+                    responsible_area: responsibleArea,
+                    notes: ''
+                });
+            });
 
-                // Build merged normalization result
-                const json = {
-                    requirements_normalized: mergedRequirements,
-                    operational_outputs: {
-                        documents_to_prepare: mergedDocs,
-                    },
-                    confidence: {
-                        overall_confidence: categoriesFailed > 2 ? 'baixa' : categoriesFailed > 0 ? 'media' : 'alta',
-                        section_confidence: {} as any,
-                        warnings: categoriesFailed > 0 ? [`${categoriesFailed} categoria(s) não normalizada(s) — dados originais preservados`] : [],
-                    }
-                };
+            logger.info(`[PNCP-V2] ⚡ FastNorm ${cat.prefix}: ${normalized.length} itens (server-side)`);
+        }
 
-                return { json, model: PIPELINE_MODELS.normalization, repaired: hadRepair, fallback: usedFallback };
-            })(),
+        stageTimes.normalization = (Date.now() - t2Start) / 1000;
+        logger.info(`[PNCP-V2] ✅ Etapa 2 em ${stageTimes.normalization.toFixed(1)}s — ${totalNormalized} itens normalizados, ⚡ALL server-side (0 API calls)`);
 
-            // ── Stage 3: Risk Review ──
+        // Build normalization result
+        normalizationJson = {
+            requirements_normalized: mergedRequirements,
+            operational_outputs: {
+                documents_to_prepare: mergedDocs,
+            },
+            confidence: {
+                overall_confidence: 'alta',
+                section_confidence: {} as any,
+                warnings: [],
+            }
+        };
+
+        // Merge normalization into v2Result immediately (so Stage 3 can see it)
+        if (normalizationJson.requirements_normalized) {
+            v2Result.requirements = normalizationJson.requirements_normalized;
+        }
+        if (normalizationJson.operational_outputs) {
+            v2Result.operational_outputs = { ...v2Result.operational_outputs, ...normalizationJson.operational_outputs };
+        }
+        v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
+
+        // ── Stage 3 (Risk Review) + Stage 1.5 (Item Extraction) — PARALLEL ──
+        // V5.0: Risk review now runs AFTER normalization, with REAL normalized data
+        sendProgress(7, 'Avaliando riscos e extraindo itens...', 'Etapas 3/3 + itens em paralelo');
+        const extractionJsonCompact = JSON.stringify(extractionJson);
+        const normalizationJsonCompact = JSON.stringify(normalizationJson);
+
+        const [riskSettled, itemsSettled] = await Promise.allSettled([
+            // ── Stage 3: Risk Review (now with real normalization data) ──
             (async () => {
                 const t3Start = Date.now();
                 const riskUserInstruction = V2_RISK_REVIEW_USER_INSTRUCTION
                     .replace('{extractionJson}', extractionJsonCompact)
-                    .replace('{normalizationJson}', '{}')  // Norm not yet available in parallel, use empty
+                    .replace('{normalizationJson}', normalizationJsonCompact)  // V5.0: REAL data instead of '{}'
                     + (domainReinforcement ? `\n\n${domainReinforcement}` : '');
                 try {
                     const riskResponse = await callGeminiWithRetry(ai.models, {
@@ -1340,7 +1218,7 @@ Retorne JSON com: { "requirements": { ... apenas categorias faltantes ... }, "ev
                 }
             })(),
 
-            // ── Stage 1.5: Parallel Item Extraction (runs concurrently with 2+3) ──
+            // ── Stage 1.5: Parallel Item Extraction (runs concurrently with 3) ──
             // When itens_licitados is empty AND we have planilha-like PDFs in the catalog,
             // download and extract items NOW instead of waiting for ai-populate
             (async () => {
@@ -1442,32 +1320,7 @@ Responda APENAS com JSON array:
             })()
         ]);
 
-        logger.info(`[PNCP-V2] Etapas 2+3 paralelas concluídas em ${((Date.now() - t2t3Start) / 1000).toFixed(1)}s`);
-
-        // Process normalization result
-        if (normSettled.status === 'fulfilled') {
-            normalizationJson = normSettled.value.json;
-            v2Result.analysis_meta.workflow_stage_status.normalization = 'done';
-            modelsUsed.push(normSettled.value.model);
-            if (normSettled.value.repaired) pipelineHealth.parseRepairs++;
-            if (normSettled.value.fallback) pipelineHealth.fallbacksUsed++;
-        } else {
-            logger.error(`[PNCP-V2] ❌ Etapa 2 falhou — continuando sem normalização`);
-            v2Result.analysis_meta.workflow_stage_status.normalization = 'failed';
-            v2Result.confidence.warnings.push(`Etapa 2 (Normalização) falhou: ${normSettled.reason?.message || 'erro desconhecido'}`);
-            stageTimes.normalization = stageTimes.normalization || 0;
-        }
-
-        // Merge normalization
-        if (normalizationJson.requirements_normalized) {
-            v2Result.requirements = normalizationJson.requirements_normalized;
-        }
-        if (normalizationJson.operational_outputs) {
-            v2Result.operational_outputs = { ...v2Result.operational_outputs, ...normalizationJson.operational_outputs };
-        }
-        if (normalizationJson.confidence) {
-            v2Result.confidence = { ...v2Result.confidence, ...normalizationJson.confidence };
-        }
+        logger.info(`[PNCP-V2] Etapas 2+3 concluídas em ${((Date.now() - t2t3Start) / 1000).toFixed(1)}s (norm: server-side <100ms, risk: AI call)`);
 
         // Process risk review result
         if (riskSettled.status === 'fulfilled') {
@@ -1581,15 +1434,17 @@ Responda APENAS com JSON array:
             logger.warn(`[PNCP-V2] Avaliador de qualidade falhou: ${qualErr.message}`);
         }
 
-        // ── Confidence Score V2.5 (calibrado para refletir precisão real) ──
+        // ── Confidence Score V3.0 (V5.0 — penalizes safety-nets and extraction gaps) ──
+        // V2.5 inflated scores by measuring post-safety-net output (97% on poor extraction).
+        // V3.0 penalizes: safety-net injections, category gaps, source_ref monotonicity.
         const stagesDone = Object.values(v2Result.analysis_meta.workflow_stage_status).filter(s => s === 'done').length;
         const stagesTotal = 4;
         const stageScore = (stagesDone / stagesTotal) * 100;
         const qualityScore = qualityReport?.overallScore || 50;
-        // Rebalanceado: stages 30% + validation 25% + quality 25% + bônus excelência 20%
+        // Base: stages 30% + validation 25% + quality 25%
         let combinedScore = Math.round((stageScore * 0.30) + (validation.confidence_score * 0.25) + (qualityScore * 0.25));
 
-        // Traceability assessment: count requirements with valid source_ref
+        // Traceability assessment
         const evidenceCount = v2Result.evidence_registry?.length || 0;
         const allReqArrays = Object.values(v2Result.requirements || {}).flat() as any[];
         const principalReqs = allReqArrays.filter((r: any) => !r.entry_type || r.entry_type === 'exigencia_principal');
@@ -1599,27 +1454,50 @@ Responda APENAS com JSON array:
 
         // Bônus de excelência: análises ricas recebem até 20% extra
         if (requirementCount >= 20 && traceabilityRatio >= 0.7) {
-            combinedScore += 20; // Pipeline maduro com boa extração
+            combinedScore += 20;
         } else if (requirementCount >= 10 && traceabilityRatio >= 0.5) {
             combinedScore += 15;
         } else if (requirementCount >= 5) {
             combinedScore += 10;
         }
 
-        // Traceability penalty (suavizada na V2.5)
+        // V3.0: Safety-net penalty (-5 per injection, max -25)
+        const safetyNetCount = enforceResult.safety_net_count || 0;
+        if (safetyNetCount > 0) {
+            const safetyPenalty = Math.min(safetyNetCount * 5, 25);
+            combinedScore -= safetyPenalty;
+            v2Result.confidence.warnings.push(`${safetyNetCount} exigência(s) injetada(s) por safety-net — dados precisam validação manual`);
+        }
+
+        // V3.0: Extraction gap penalty (from gap detection phase)
+        if (extractionGaps.length > 0) {
+            const criticalGaps = extractionGaps.filter(g => g.severity === 'critical').length;
+            const highGaps = extractionGaps.filter(g => g.severity === 'high').length;
+            const mediumGaps = extractionGaps.filter(g => g.severity === 'medium').length;
+            combinedScore -= (criticalGaps * 15) + (highGaps * 8) + (mediumGaps * 3);
+        }
+
+        // V3.0: Source_ref monotonicity penalty
+        const allRefs = allReqArrays.map((r: any) => r.source_ref).filter((s: any) => s && s !== 'referência não localizada');
+        const uniqueRefs = new Set(allRefs);
+        if (uniqueRefs.size <= 2 && allRefs.length >= 10) {
+            combinedScore -= 15;
+        }
+
+        // Traceability penalty
         if (traceabilityRatio < 0.3 && requirementCount > 5) {
             combinedScore -= 5;
             v2Result.confidence.warnings.push(`Apenas ${Math.round(traceabilityRatio * 100)}% das exigências têm referência documental — rastreabilidade comprometida`);
         }
 
-        // Parse repair penalty (suavizada: 3/reparo, max -10)
+        // Parse repair penalty (3/repair, max -10)
         if (pipelineHealth.parseRepairs > 0) {
             const repairPenalty = Math.min(pipelineHealth.parseRepairs * 3, 10);
             combinedScore -= repairPenalty;
             v2Result.confidence.warnings.push(`${pipelineHealth.parseRepairs} reparos de JSON foram necessários`);
         }
 
-        // Fallback penalty (suavizada: 5/fallback, max -12)
+        // Fallback penalty (5/fallback, max -12)
         if (pipelineHealth.fallbacksUsed > 0) {
             const fallbackPenalty = Math.min(pipelineHealth.fallbacksUsed * 5, 12);
             combinedScore -= fallbackPenalty;
@@ -1632,13 +1510,19 @@ Responda APENAS com JSON array:
             combinedScore -= stagesFailed * 10;
         }
 
-        // Floor: análises com todas as stages concluídas nunca ficam abaixo de 80%
+        // V3.0 Bônus: extração genuinamente rica SEM safety-nets
+        if (safetyNetCount === 0 && requirementCount >= 15) {
+            combinedScore += 10;
+        }
+
+        // V3.0: Floor lowered to 40% (allow honest low scores)
+        // V2.5 used 80% floor which masked poor extractions
         const allStagesOk = stagesFailed === 0 && stagesDone === stagesTotal;
-        const scoreFloor = allStagesOk ? 80 : 5;
+        const scoreFloor = allStagesOk ? 55 : 5;
         combinedScore = Math.max(scoreFloor, Math.min(100, combinedScore));
 
-        // Confidence level V2.5 (flexibilizado — reflete precisão real)
-        if (combinedScore >= 85 && traceabilityRatio >= 0.5) {
+        // Confidence level V3.0
+        if (combinedScore >= 85 && traceabilityRatio >= 0.5 && safetyNetCount <= 2) {
             v2Result.confidence.overall_confidence = 'alta';
         } else if (combinedScore >= 70) {
             v2Result.confidence.overall_confidence = 'alta';
@@ -1654,6 +1538,16 @@ Responda APENAS com JSON array:
             traced_requirements: tracedCount,
             traceability_percentage: Math.round(traceabilityRatio * 100),
             evidence_registry_count: evidenceCount,
+        };
+        // V5.0: extraction_health — factual pipeline performance metrics
+        (v2Result.confidence as any).extraction_health = {
+            total_requirements: requirementCount,
+            extracted_by_ai: requirementCount - safetyNetCount,
+            injected_by_safety_net: safetyNetCount,
+            safety_net_ratio: requirementCount > 0 ? Math.round((safetyNetCount / requirementCount) * 100) : 0,
+            gaps_detected: extractionGaps.length,
+            source_ref_unique_count: uniqueRefs.size,
+            score_version: 'V3.0',
         };
 
         const uniqueModels = [...new Set(modelsUsed)];

@@ -252,9 +252,17 @@ export async function extractMarkdownFromPdf(
             content: p.content || '',
         }));
 
-        // Concatenate all pages with clear separators
+        // Concatenate all pages with structural separators
+        // V5.0: Include section hints so the extraction model can produce granular source_ref
         const fullMarkdown = pages
-            .map((p: any) => `\n--- Página ${p.page} ---\n\n${p.content}`)
+            .map((p: any) => {
+                const content = p.content || '';
+                // Extract first heading or first meaningful line as structural hint
+                const headingMatch = content.match(/^#{1,3}\s+(.{5,80})/m);
+                const firstLine = content.split('\n').find((l: string) => l.trim().length > 10)?.trim().substring(0, 80) || '';
+                const sectionHint = headingMatch ? headingMatch[1].trim() : firstLine;
+                return `\n══ Página ${p.page}${sectionHint ? ` — ${sectionHint}` : ''} ══\n\n${content}`;
+            })
             .join('\n');
 
         const result: ZeroxExtractionResult = {
@@ -323,6 +331,14 @@ export async function extractMarkdownFromMultiplePdfs(
     }>;
 } | null> {
     const totalStart = Date.now();
+    logger.info(`[ZeroxExtractor] 🚀 Processing ${pdfs.length} PDF(s) in PARALLEL...`);
+
+    // V5.0: Parallel processing — all PDFs processed simultaneously
+    // Previously sequential (for...of await), which was 3×15s=45s → now ~15s
+    const settled = await Promise.allSettled(
+        pdfs.map(pdf => extractMarkdownFromPdf(pdf.buffer, pdf.fileName, config))
+    );
+
     const results: Array<{
         fileName: string;
         success: boolean;
@@ -330,30 +346,31 @@ export async function extractMarkdownFromMultiplePdfs(
         durationMs: number;
         fromCache: boolean;
         markdown: string;
-    }> = [];
-
-    for (const pdf of pdfs) {
-        const result = await extractMarkdownFromPdf(pdf.buffer, pdf.fileName, config);
-        if (result) {
-            results.push({
+    }> = settled.map((outcome, idx) => {
+        const pdf = pdfs[idx];
+        if (outcome.status === 'fulfilled' && outcome.value) {
+            return {
                 fileName: pdf.fileName,
                 success: true,
-                pageCount: result.pageCount,
-                durationMs: result.durationMs,
-                fromCache: result.fromCache,
-                markdown: result.markdown,
-            });
+                pageCount: outcome.value.pageCount,
+                durationMs: outcome.value.durationMs,
+                fromCache: outcome.value.fromCache,
+                markdown: outcome.value.markdown,
+            };
         } else {
-            results.push({
+            if (outcome.status === 'rejected') {
+                logger.warn(`[ZeroxExtractor] ⚠️ Parallel extraction failed for "${pdf.fileName}": ${outcome.reason?.message || 'unknown'}`);
+            }
+            return {
                 fileName: pdf.fileName,
                 success: false,
                 pageCount: 0,
                 durationMs: 0,
                 fromCache: false,
                 markdown: '',
-            });
+            };
         }
-    }
+    });
 
     const successResults = results.filter(r => r.success);
     if (successResults.length === 0) {
