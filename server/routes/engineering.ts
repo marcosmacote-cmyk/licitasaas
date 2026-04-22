@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { callGeminiWithRetry } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
+import { GoogleGenAI } from '@google/genai';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -102,7 +103,24 @@ router.post('/ai-populate', async (req: any, res: any) => {
         const userInput = ENGINEERING_PROPOSAL_USER_INSTRUCTION + "\n\nTEXTO DO EDITAL/PROJETO:\n" + extractionText;
 
         // Calling Gemini using the generalized retry service
-        const rawResponse = await callGeminiWithRetry(prompt, userInput, 0.2); // Low temp for precision
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const result = await callGeminiWithRetry(ai.models, {
+            model: 'gemini-2.5-flash',
+            contents: [{
+                role: 'user',
+                parts: [{ text: userInput }]
+            }],
+            config: { 
+                systemInstruction: {
+                    role: 'system',
+                    parts: [{ text: prompt }]
+                },
+                temperature: 0.2, 
+                maxOutputTokens: 65536 
+            }
+        }); 
+
+        const rawResponse = result?.text || '';
         const extractedData = robustJsonParse(rawResponse);
         
         // Return parsed items, falling back to empty array if something fails
