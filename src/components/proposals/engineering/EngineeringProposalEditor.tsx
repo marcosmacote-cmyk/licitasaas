@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3 } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
+import { CurvaAbcPanel } from './CurvaAbcPanel';
 
 interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
@@ -32,6 +33,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // Composition drawer
     const [compositionItem, setCompositionItem] = useState<EngItem | null>(null);
+
+    // Active tab
+    const [activeTab, setActiveTab] = useState<'planilha' | 'curva_abc'>('planilha');
 
     const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
     const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
@@ -184,7 +188,31 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 </div>
             </div>
 
-            {/* Main Grid */}
+            {/* Tab Bar */}
+            <div style={{ display: 'flex', gap: 4, background: 'var(--color-bg-base)', padding: 4, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                {[
+                    { key: 'planilha' as const, label: 'Planilha Orçamentária', icon: TableProperties },
+                    { key: 'curva_abc' as const, label: 'Curva ABC', icon: BarChart3 },
+                ].map(tab => (
+                    <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+                        flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                        background: activeTab === tab.key ? 'var(--color-bg-surface)' : 'transparent',
+                        boxShadow: activeTab === tab.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                        color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                        fontWeight: activeTab === tab.key ? 700 : 500, fontSize: '0.85rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}>
+                        <tab.icon size={15} /> {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'curva_abc' ? (
+                <CurvaAbcPanel items={items} />
+            ) : (
+
+            /* Main Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 'var(--space-4)' }}>
 
                 {/* Table */}
@@ -387,6 +415,8 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                     </div>
                 </div>
             )}
+
+            )} {/* End of planilha tab conditional */}
 
             {/* Composition Drawer */}
             {compositionItem && (
