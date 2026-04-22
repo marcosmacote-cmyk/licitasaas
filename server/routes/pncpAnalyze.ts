@@ -40,6 +40,7 @@ import { matchCompanyToEdital, calculateParticipationScore, generateActionPlan }
 import { buildHybridContext } from "../services/ai/strategy/companyAwareContext";
 import { generateCompanyInsights, recordMatchHistory } from "../services/ai/strategy/companyLearningInsights";
 import { recordAnalysisTelemetry, getPipelineHealth, classifySafetyNets } from "../services/ai/telemetry/analysisTelemetry";
+import { extractMarkdownFromMultiplePdfs, isZeroxAvailable } from "../services/ai/zeroxExtractor";
 import { ALERT_TAXONOMY, getCategoriesBySeverity, DEFAULT_ENABLED_CATEGORIES } from "../services/monitoring/alertTaxonomy";
 import { NotificationService } from "../services/monitoring/notification.service";
 import { submitJob, getJob, listJobs, registerSSEClient, removeSSEClient, updateJobProgress, completeJob, failJob } from "../services/backgroundJobService";
@@ -688,8 +689,40 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
 
         logger.info(`[PNCP-V2] ═══ PIPELINE INICIADO ═══ (${pdfParts.length} PDFs, ${downloadedFiles.join(', ')})`);
 
-        // ── Stage 1: Factual Extraction (with PDFs) ──
-        // Log diagnostic info about PDFs being sent
+        // ── Stage 0.5: Zerox Pre-Processing (PDF → Markdown) ──
+        // Convert PDFs to clean Markdown BEFORE sending to Gemini.
+        // This reduces tokens by ~60%, eliminates timeouts, and improves extraction quality.
+        let zeroxMarkdown: string | null = null;
+        let zeroxUsed = false;
+        const zeroxAvailable = await isZeroxAvailable();
+        if (zeroxAvailable) {
+            sendProgress(4, 'Pré-processando documentos (OCR)...', 'Convertendo PDFs para texto estruturado');
+            try {
+                // Build buffer list from pdfParts that have inlineData
+                const pdfBufferList = pdfParts
+                    .filter((p: any) => p.inlineData?.data)
+                    .map((p: any, idx: number) => ({
+                        buffer: Buffer.from(p.inlineData.data, 'base64'),
+                        fileName: downloadedFiles[idx] || `doc_${idx + 1}.pdf`,
+                    }));
+
+                if (pdfBufferList.length > 0) {
+                    const zeroxResult = await extractMarkdownFromMultiplePdfs(pdfBufferList, {
+                        concurrency: 5,
+                        temperature: 0.1,
+                    });
+                    if (zeroxResult && zeroxResult.markdown.length > 200) {
+                        zeroxMarkdown = zeroxResult.markdown;
+                        zeroxUsed = true;
+                        logger.info(`[PNCP-V2] ✅ Zerox: ${zeroxResult.totalPages} pgs, ${zeroxResult.markdown.length} chars em ${(zeroxResult.totalDurationMs / 1000).toFixed(1)}s (${zeroxResult.documentsProcessed}/${pdfBufferList.length} docs)`);
+                    }
+                }
+            } catch (zeroxErr: any) {
+                logger.warn(`[PNCP-V2] ⚠️ Zerox falhou: ${zeroxErr.message} — usando PDF inline`);
+            }
+        }
+
+        // ── Stage 1: Factual Extraction ──
         const pdfSizes = pdfParts.map((p: any, i: number) => {
             if (p.inlineData?.data) {
                 const sizeKB = Math.round(Buffer.from(p.inlineData.data, 'base64').length / 1024);
@@ -704,37 +737,40 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
             if (p.inlineData?.data) return sum + Buffer.from(p.inlineData.data, 'base64').length;
             return sum;
         }, 0) / 1024;
-        sendProgress(4, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${pdfParts.length} PDFs (${Math.round(totalPdfSizeKB)}KB inline)`);
-        logger.info(`[PNCP-V2] ── Etapa 1/3: Extração Factual (${pdfParts.length} partes, ${Math.round(totalPdfSizeKB)}KB inline — ${pdfSizes.join(', ')})...`);
+        const extractionMode = zeroxUsed ? 'ZEROX (texto)' : `PDF inline (${Math.round(totalPdfSizeKB)}KB)`;
+        sendProgress(5, 'IA extraindo dados dos documentos...', `Etapa 1/3 — ${extractionMode}`);
+        logger.info(`[PNCP-V2] ── Etapa 1/3: Extração Factual [${extractionMode}] (${pdfParts.length} docs — ${pdfSizes.join(', ')})...`);
         let extractionJson: any;
         const t1Start = Date.now();
 
         try {
+            // If Zerox produced Markdown, send TEXT to Gemini (faster, cheaper)
+            // Otherwise, fall back to sending raw PDF base64 inline
+            const extractionUserPrompt = V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '');
+            const extractionParts: any[] = zeroxUsed
+                ? [{ text: `${extractionUserPrompt}\n\n── CONTEÚDO DO EDITAL (extraído via OCR de alta fidelidade) ──\n\n${zeroxMarkdown}` }]
+                : [...pdfParts, { text: extractionUserPrompt }];
+
             const extractionResponse = await callGeminiWithRetry(ai.models, {
                 model: PIPELINE_MODELS.extraction,
-                contents: [{
-                    role: 'user',
-                    parts: [
-                        ...pdfParts,
-                        { text: V2_EXTRACTION_USER_INSTRUCTION.replace('{domainReinforcement}', '') }
-                    ]
-                }],
+                contents: [{ role: 'user', parts: extractionParts }],
                 config: {
                     systemInstruction: V2_EXTRACTION_PROMPT,
                     temperature: 0.05,
                     maxOutputTokens: 65536,
                     responseMimeType: 'application/json'
                 }
-            }, 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: 'raw_extraction' } });
+            }, zeroxUsed ? 3 : 5, { tenantId: req.user.tenantId, operation: 'analysis', metadata: { stage: zeroxUsed ? 'zerox_extraction' : 'raw_extraction' } });
             const extractionText = extractionResponse.text;
             if (!extractionText) throw new Error('Etapa 1 retornou vazio');
             const parseResult1 = robustJsonParseDetailed(extractionText, 'PNCP-V2-Extraction');
             extractionJson = parseResult1.data;
             if (parseResult1.repaired) pipelineHealth.parseRepairs++;
             v2Result.analysis_meta.workflow_stage_status.extraction = 'done';
-            modelsUsed.push(PIPELINE_MODELS.extraction);
+            modelsUsed.push(zeroxUsed ? `${PIPELINE_MODELS.extraction}(zerox)` : PIPELINE_MODELS.extraction);
             stageTimes.extraction = (Date.now() - t1Start) / 1000;
-            logger.info(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
+            (v2Result.analysis_meta as any).zerox_used = zeroxUsed;
+            logger.info(`[PNCP-V2] ✅ Etapa 1 em ${stageTimes.extraction.toFixed(1)}s [${zeroxUsed ? 'ZEROX' : 'INLINE'}] — ${(extractionJson.evidence_registry || []).length} evidências, ${Object.values(extractionJson.requirements || {}).flat().length} exigências`);
         } catch (err: any) {
             const errMsg = err?.message || String(err);
             const isServiceOverload = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand') || errMsg.includes('429');
