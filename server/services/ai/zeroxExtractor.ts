@@ -235,8 +235,11 @@ export async function extractMarkdownFromPdf(
         }
         logger.info(`[ZeroxExtractor] ⚙️ Concurrency: ${effectiveConcurrency} (estimated ~${estimatedPages} pages)`);
 
-        // 4. Call Zerox with Gemini Vision
-        const zeroxResult = await zeroxFn!({
+        // 4. Call Zerox with Gemini Vision + TIMEOUT
+        // V5.1: Hard timeout of 90s. Zerox has internal retries on 503s that can run
+        // indefinitely (285s observed in production). After 90s, fall back to inlineData.
+        const ZEROX_TIMEOUT_MS = 90_000;
+        const zeroxPromise = zeroxFn!({
             filePath: tempPath,
             modelProvider: 'GOOGLE',
             model: config?.model || 'gemini-2.5-flash',
@@ -251,6 +254,15 @@ export async function extractMarkdownFromPdf(
             },
             ...(config?.pagesToConvert !== undefined ? { pagesToConvertAsImages: config.pagesToConvert } : {}),
         });
+
+        const timeoutPromise = new Promise<null>((resolve) => {
+            setTimeout(() => {
+                logger.warn(`[ZeroxExtractor] ⏱️ TIMEOUT after ${ZEROX_TIMEOUT_MS / 1000}s for "${fileName}" — falling back to inlineData`);
+                resolve(null);
+            }, ZEROX_TIMEOUT_MS);
+        });
+
+        const zeroxResult = await Promise.race([zeroxPromise, timeoutPromise]);
 
         const durationMs = Date.now() - startTime;
 

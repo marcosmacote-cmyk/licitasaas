@@ -816,6 +816,63 @@ export function enforceSchema(schema: AnalysisSchemaV1): EnforcerResult {
         }
     }
 
+    // ── PC SANITY CHECK: Reclassify declarations from PC to DC ──
+    // The model frequently puts declarations (ME/EPP, cumprimento, não emprego, reserva
+    // de cargos, cooperativas) in PC when they belong in DC. True PC items are documents
+    // whose absence causes DESCLASSIFICAÇÃO (planilha, BDI, catálogo, cronograma).
+    if (schema.requirements) {
+        const pcItems = (schema.requirements as any).proposta_comercial;
+        if (Array.isArray(pcItems) && pcItems.length > 8) {
+            const declarationPatterns = /declara[çc][ãa]o|cumprimento|n[ãa]o\s+emprego|reserva\s+de\s+cargos|cooperativa|enquadramento|me[\s\/]epp|trabalho\s+degradante|fato\s+impeditivo/i;
+            const toMove: any[] = [];
+            const toKeep: any[] = [];
+
+            for (const item of pcItems) {
+                const text = `${item.title || ''} ${item.description || ''}`;
+                if (declarationPatterns.test(text)) {
+                    toMove.push(item);
+                } else {
+                    toKeep.push(item);
+                }
+            }
+
+            if (toMove.length > 0) {
+                // Move declarations to DC
+                const dcItems = (schema.requirements as any).documentos_complementares || [];
+                // Avoid duplicates — only move if not already in DC
+                const dcText = dcItems.map((r: any) => `${r.title || ''}`.toLowerCase()).join(' ');
+                const actuallyMoved: string[] = [];
+                for (const item of toMove) {
+                    if (!dcText.includes((item.title || '').toLowerCase().substring(0, 20))) {
+                        item.phase = 'habilitacao';
+                        item.risk_if_missing = 'inabilitacao';
+                        dcItems.push(item);
+                        actuallyMoved.push(item.title);
+                    }
+                }
+                (schema.requirements as any).proposta_comercial = toKeep;
+                (schema.requirements as any).documentos_complementares = dcItems;
+
+                // Renumber PC
+                let pcCounter = 1;
+                for (const item of toKeep) {
+                    item.requirement_id = `PC-${String(pcCounter).padStart(2, '0')}`;
+                    pcCounter++;
+                }
+                // Renumber DC
+                let dcCounter = 1;
+                for (const item of dcItems) {
+                    item.requirement_id = `DC-${String(dcCounter).padStart(2, '0')}`;
+                    dcCounter++;
+                }
+
+                if (actuallyMoved.length > 0) {
+                    correct('PC→DC', `${pcItems.length} itens em PC (${actuallyMoved.length} declarações)`, `movido(s): ${actuallyMoved.slice(0, 3).join(', ')}${actuallyMoved.length > 3 ? ` +${actuallyMoved.length - 3}` : ''}`);
+                }
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════
     // NÍVEL 2: Normalização de process_identification
     // ═══════════════════════════════════════════

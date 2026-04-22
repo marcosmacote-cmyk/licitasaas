@@ -26,10 +26,11 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
  */
 const GEMINI_FALLBACK_MODELS: Record<string, string[]> = {
     // gemini-2.0-flash removed: deprecated by Google (404 NOT_FOUND since Apr 2026)
-    // Cascade: primary → 3.1-pro (idle, 1/2k RPM) → 2.5-flash-lite (lightweight)
-    'gemini-2.5-flash': ['gemini-3.1-pro', 'gemini-2.5-flash-lite'],
-    'gemini-2.5-pro': ['gemini-3.1-pro', 'gemini-2.5-flash-lite'],
-    'gemini-2.5-flash-lite': ['gemini-3.1-pro'],
+    // gemini-3.1-pro removed: returns 404 NOT_FOUND (model doesn't exist)
+    // Cascade: primary → 2.5-flash-lite (lightweight, available)
+    'gemini-2.5-flash': ['gemini-2.5-flash-lite'],
+    'gemini-2.5-pro': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+    'gemini-2.5-flash-lite': [],
 };
 
 /** Check if an error indicates 503/UNAVAILABLE/high demand */
