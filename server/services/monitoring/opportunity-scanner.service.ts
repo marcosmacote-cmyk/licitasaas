@@ -276,7 +276,8 @@ async function markAsNotified(tenantId: string, result: PncpSearchResult, search
             try {
                 const itemsUrl = `https://pncp.gov.br/api/pncp/v1/orgaos/${result.orgao_cnpj}/compras/${result.ano}/${result.numero_sequencial}/itens?pagina=1&tamanhoPagina=100`;
                 const resp = await axios.get(itemsUrl, { timeout: 5000 });
-                const items = resp.data?.data || resp.data?.items || resp.data || [];
+                const responseData = resp.data as any;
+                const items = responseData?.data || responseData?.items || responseData || [];
                 if (Array.isArray(items)) {
                     computedValue = items.reduce((acc: number, it: any) => {
                         return acc + (Number(it.valorTotal) || ((Number(it.quantidade) || 0) * (Number(it.valorUnitarioEstimado || it.valorUnitarioHomologado) || 0)) || 0);
