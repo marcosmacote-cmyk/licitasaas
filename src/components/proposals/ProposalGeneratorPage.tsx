@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../ui';
 import { useProposal } from '../hooks/useProposal';
 import { ProposalLetterWizard } from './letter/ProposalLetterWizard';
 import { CompositionTab } from './composition';
+import { EngineeringProposalEditor } from './engineering/EngineeringProposalEditor';
 
 interface Props {
     biddings: BiddingProcess[];
@@ -81,7 +82,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                 {/* Config body */}
                 {p.showConfig && (
                     <div style={{ padding: 'var(--space-5) var(--space-6)' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-4)', alignItems: 'end' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: 'var(--space-4)', alignItems: 'end' }}>
                             {/* Licitação */}
                             <div>
                                 <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)' }}>
@@ -112,6 +113,18 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                                     {companies.map(c => (
                                         <option key={c.id} value={c.id}>{c.razaoSocial} — {c.cnpj}</option>
                                     ))}
+                                </select>
+                            </div>
+
+                            {/* Tipo de Objeto (Motor) */}
+                            <div>
+                                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)' }}>
+                                    <FileText size={11} /> Motor de Proposta (Tipo)
+                                </label>
+                                <select value={p.objectType} onChange={e => p.setObjectType(e.target.value)} className="form-select" style={{ background: 'var(--color-bg-base)' }} disabled={!!p.proposal}>
+                                    <option value="AQUISICAO">Aquisição / Bens / Serviços Comuns</option>
+                                    <option value="ENGENHARIA">Obras e Serviços de Engenharia</option>
+                                    <option value="TERCEIRIZACAO" disabled>Terceirização de Mão de Obra (Em Breve)</option>
                                 </select>
                             </div>
 
@@ -186,7 +199,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
             )}
 
             {/* ── TABS ── */}
-            {p.proposal && (
+            {p.proposal && p.objectType === 'AQUISICAO' && (
                 <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '2px solid var(--color-border)', marginBottom: '4px' }}>
                     <button onClick={() => p.setActiveTab('items')} className={`tab-btn${p.activeTab === 'items' ? ' active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-5)', borderBottomWidth: '3px', transform: 'translateY(2px)' }}>
@@ -204,7 +217,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
             )}
 
             {/* ── Items Tab ── */}
-            {p.activeTab === 'items' && (p.proposal || p.items.length > 0) && (
+            {p.activeTab === 'items' && (p.proposal || p.items.length > 0) && p.objectType === 'AQUISICAO' && (
                 <div className="card p-6">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                         <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -631,7 +644,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
             )}
 
             {/* ── Letter Tab (Wizard V2) ── */}
-            {p.activeTab === 'letter' && p.proposal && p.selectedBidding && p.selectedCompany && (
+            {p.activeTab === 'letter' && p.proposal && p.selectedBidding && p.selectedCompany && p.objectType === 'AQUISICAO' && (
                 <ProposalLetterWizard
                     bidding={p.selectedBidding}
                     company={p.selectedCompany}
@@ -685,7 +698,7 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
             )}
 
             {/* ── Composition Tab ── */}
-            {p.activeTab === 'composition' && p.proposal && (
+            {p.activeTab === 'composition' && p.proposal && p.objectType === 'AQUISICAO' && (
                 <CompositionTab
                     items={p.items}
                     bdi={p.bdi}
@@ -696,6 +709,14 @@ export function ProposalGeneratorPage({ biddings, companies, initialBiddingId }:
                     adjustedEnabled={p.adjustedEnabled}
                     adjustedBdi={p.adjustedBdi}
                     adjustedDiscount={p.adjustedDiscount}
+                />
+            )}
+
+            {/* ── ENGINEERING MOTOR ── */}
+            {p.proposal && p.objectType === 'ENGENHARIA' && (
+                <EngineeringProposalEditor 
+                    proposalId={p.proposal.id} 
+                    biddingId={p.selectedBiddingId} 
                 />
             )}
 

@@ -287,6 +287,7 @@ model PriceProposal {
   companyProfileId  String
   version           Int      @default(1)
   status            String   @default("Rascunho")
+  objectType        String   @default("AQUISICAO") // AQUISICAO, ENGENHARIA, TERCEIRIZACAO
   bdiPercentage     Float    @default(0)
   taxPercentage     Float    @default(0)
   socialCharges     Float    @default(0)
@@ -645,3 +646,82 @@ model PncpSyncState {
   updatedAt       DateTime @updatedAt
 }
 
+// ═══════════════════════════════════════════════════════════
+// ── Módulo de Obras e Serviços de Engenharia ──
+// ═══════════════════════════════════════════════════════════
+
+model EngineeringDatabase {
+  id          String   @id @default(uuid())
+  tenantId    String?  // Null if official global database (SINAPI, SEINFRA, ORSE)
+  name        String   // "SINAPI", "SEINFRA", "Minha Construtora"
+  uf          String?  // "CE", "SP", etc
+  version     String?  // "2026-04", "028.1"
+  type        String   @default("OFICIAL") // OFICIAL, PROPRIA
+  
+  items         EngineeringItem[]
+  compositions  EngineeringComposition[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([type])
+}
+
+model EngineeringItem {
+  id              String   @id @default(uuid())
+  databaseId      String
+  
+  code            String   // "00001", "I1234"
+  description     String   @db.Text
+  unit            String   // "KG", "H", "M3"
+  price           Float    // Unit price without BDI
+  type            String   @default("MATERIAL") // MATERIAL, MAO_DE_OBRA, EQUIPAMENTO, SERVICO
+  
+  database        EngineeringDatabase @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  compositionRefs EngineeringCompositionItem[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([databaseId, code])
+}
+
+model EngineeringComposition {
+  id              String   @id @default(uuid())
+  databaseId      String
+  
+  code            String   // "C0010"
+  description     String   @db.Text
+  unit            String   // "M2", "M3", "UN"
+  totalPrice      Float    // Calculated total price without BDI
+  
+  database        EngineeringDatabase @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  items           EngineeringCompositionItem[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([databaseId, code])
+}
+
+model EngineeringCompositionItem {
+  id              String   @id @default(uuid())
+  compositionId   String
+  
+  // A composition item can be a basic item (material/labor) OR another composition (auxiliary)
+  itemId          String?
+  auxiliaryCompositionId String? 
+  
+  coefficient     Float    // Quantity of the item required for 1 unit of the composition
+  price           Float    // Snapshot of the price at the time of creation (price * coefficient)
+
+  composition     EngineeringComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  item            EngineeringItem? @relation(fields: [itemId], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([compositionId])
+  @@index([itemId])
+}

@@ -34,6 +34,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
     const [isBulkEditing, setIsBulkEditing] = useState(false);
     const [showConfig, setShowConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
+    const [objectType, setObjectType] = useState('AQUISICAO'); // AQUISICAO, ENGENHARIA, TERCEIRIZACAO
 
     // ── Cenário Proposta Ajustada ──
     const [adjustedEnabled, setAdjustedEnabled] = useState(false);
@@ -172,6 +173,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     setDiscount(latest.taxPercentage || 0);
                     setRoundingMode(latest.socialCharges === 1 ? 'TRUNCATE' : 'ROUND');
                     setValidityDays(latest.validityDays || 60);
+                    setObjectType(latest.objectType || 'AQUISICAO');
                     if (latest.companyProfileId) setSelectedCompanyId(latest.companyProfileId);
                     setLetterContent(latest.letterContent || '');
                     setHeaderImage(latest.headerImage || '');
@@ -211,6 +213,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     footerImage: selectedCompany?.defaultProposalFooter || '',
                     headerImageHeight: selectedCompany?.defaultProposalHeaderHeight || 80,
                     footerImageHeight: selectedCompany?.defaultProposalFooterHeight || 60,
+                    objectType,
                 }),
             });
             if (res.ok) {
@@ -667,7 +670,8 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
                     footerImage,
                     headerImageHeight,
                     footerImageHeight,
-                    signatureMode
+                    signatureMode,
+                    objectType
                 }),
             });
             await loadProposals();
@@ -768,6 +772,7 @@ export function useProposal({ biddings, companies, initialBiddingId }: UsePropos
         saveMessage,
         activeTab, setActiveTab,
         letterContent, setLetterContent,
+        objectType, setObjectType,
         // Config
         headerImage, setHeaderImage,
         footerImage, setFooterImage,
