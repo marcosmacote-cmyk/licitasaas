@@ -386,5 +386,164 @@ router.post('/seed', async (req: any, res: any) => {
     }
 });
 
-export default router;
+// ═══════════════════════════════════════════════════════════
+// POST /api/engineering/bases/import — Importar planilha Excel oficial
+// Aceita SINAPI, SEINFRA, SICRO, ORSE ou qualquer planilha com
+// colunas: Código, Descrição, Unidade, Preço
+// ═══════════════════════════════════════════════════════════
+import multer from 'multer';
+import * as XLSX from 'xlsx';
 
+const xlsUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB
+
+router.post('/bases/import', xlsUpload.single('file'), async (req: any, res: any) => {
+    try {
+        if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acesso restrito a administradores' });
+        }
+
+        if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+        const { baseName, uf, version } = req.body;
+        if (!baseName) return res.status(400).json({ error: 'baseName é obrigatório (ex: SINAPI, SEINFRA)' });
+
+        console.log(`[Eng Import] Parsing ${req.file.originalname} (${(req.file.size / 1024).toFixed(0)} KB)...`);
+
+        // Parse Excel
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const allItems: { code: string; description: string; unit: string; price: number; type: string }[] = [];
+
+        // Process each sheet
+        for (const sheetName of workbook.SheetNames) {
+            const sheet = workbook.Sheets[sheetName];
+            const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            if (rows.length < 2) continue;
+
+            // Smart column detection: find header row
+            let headerRowIdx = -1;
+            let colMap: Record<string, number> = {};
+
+            for (let i = 0; i < Math.min(rows.length, 15); i++) {
+                const row = rows[i].map((c: any) => String(c).trim().toUpperCase());
+                const codeIdx = row.findIndex((c: string) => c.includes('CODIGO') || c.includes('CÓDIGO') || c === 'COD' || c === 'CÓDIGO SINAPI' || c === 'CÓDIGO SEINFRA');
+                const descIdx = row.findIndex((c: string) => c.includes('DESCRI') || c.includes('DESCRIÇÃO') || c.includes('DESCRIÇÃO DO INSUMO') || c.includes('DESCRIÇÃO DO SERVIÇO'));
+                const unitIdx = row.findIndex((c: string) => c.includes('UNID') || c === 'UN' || c === 'UND' || c.includes('UNIDADE'));
+                const priceIdx = row.findIndex((c: string) => c.includes('PRECO') || c.includes('PREÇO') || c.includes('CUSTO') || c.includes('VALOR') || c.includes('PREÇO UNITÁRIO') || c.includes('MEDIANA'));
+
+                if (codeIdx >= 0 && descIdx >= 0 && priceIdx >= 0) {
+                    headerRowIdx = i;
+                    colMap = { code: codeIdx, desc: descIdx, unit: unitIdx >= 0 ? unitIdx : -1, price: priceIdx };
+                    break;
+                }
+            }
+
+            if (headerRowIdx < 0) {
+                console.log(`[Eng Import] Sheet "${sheetName}": header não encontrado, pulando...`);
+                continue;
+            }
+
+            console.log(`[Eng Import] Sheet "${sheetName}": header na linha ${headerRowIdx + 1}, ${rows.length - headerRowIdx - 1} data rows`);
+
+            // Parse data rows
+            for (let i = headerRowIdx + 1; i < rows.length; i++) {
+                const row = rows[i];
+                const code = String(row[colMap.code] ?? '').trim();
+                const desc = String(row[colMap.desc] ?? '').trim();
+                const unit = colMap.unit >= 0 ? String(row[colMap.unit] ?? '').trim().toUpperCase() : 'UN';
+                const rawPrice = row[colMap.price];
+
+                if (!code || !desc || code.length < 2) continue;
+
+                // Parse price (handles "1.234,56" and "1234.56" formats)
+                let price = 0;
+                if (typeof rawPrice === 'number') {
+                    price = rawPrice;
+                } else if (rawPrice) {
+                    const cleaned = String(rawPrice).replace(/[^\d.,\-]/g, '');
+                    // Brazilian format: 1.234,56 → detect by comma before end
+                    if (cleaned.includes(',') && (!cleaned.includes('.') || cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.'))) {
+                        price = parseFloat(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
+                    } else {
+                        price = parseFloat(cleaned.replace(/,/g, '')) || 0;
+                    }
+                }
+
+                if (price <= 0) continue;
+
+                // Infer type from description or unit
+                let type = 'SERVICO';
+                const descUpper = desc.toUpperCase();
+                if (['H', 'HORA', 'MES', 'DIA'].includes(unit) && (descUpper.includes('PEDREIRO') || descUpper.includes('SERVENTE') || descUpper.includes('MESTRE') || descUpper.includes('ELETRICISTA') || descUpper.includes('ENCANADOR') || descUpper.includes('PINTOR') || descUpper.includes('CARPINTEIRO') || descUpper.includes('ARMADOR') || descUpper.includes('SOLDADOR'))) {
+                    type = 'MAO_DE_OBRA';
+                } else if (['KG', 'L', 'M', 'UN', 'M2', 'M3', 'SC', 'PCT', 'PC', 'GL', 'LT', 'TN', 'CJ'].includes(unit) && price < 500 && !descUpper.includes('INSTALACAO') && !descUpper.includes('ASSENTAMENTO') && !descUpper.includes('EXECUCAO')) {
+                    type = 'MATERIAL';
+                } else if (descUpper.includes('BETONEIRA') || descUpper.includes('CAMINHAO') || descUpper.includes('RETROESCAVADEIRA') || descUpper.includes('COMPACTADOR') || descUpper.includes('GUINDASTE') || descUpper.includes('VIBRADOR')) {
+                    type = 'EQUIPAMENTO';
+                }
+
+                allItems.push({ code, description: desc, unit: unit || 'UN', price, type });
+            }
+        }
+
+        if (allItems.length === 0) {
+            return res.status(400).json({ error: 'Nenhum item válido encontrado na planilha. Verifique se há colunas de Código, Descrição e Preço.' });
+        }
+
+        console.log(`[Eng Import] Total de ${allItems.length} itens válidos extraídos. Inserindo no banco...`);
+
+        // Upsert database
+        let db = await prisma.engineeringDatabase.findFirst({
+            where: { name: baseName.toUpperCase(), uf: uf?.toUpperCase() || null, type: 'OFICIAL' }
+        });
+
+        if (db) {
+            await prisma.engineeringItem.deleteMany({ where: { databaseId: db.id } });
+            await prisma.engineeringDatabase.update({ where: { id: db.id }, data: { version: version || new Date().toISOString().substring(0, 7) } });
+            console.log(`[Eng Import] Base existente "${db.name} ${db.uf}" limpa e atualizada.`);
+        } else {
+            db = await prisma.engineeringDatabase.create({
+                data: { name: baseName.toUpperCase(), uf: uf?.toUpperCase() || null, version: version || new Date().toISOString().substring(0, 7), type: 'OFICIAL' }
+            });
+            console.log(`[Eng Import] Nova base "${db.name} ${db.uf}" criada.`);
+        }
+
+        // Bulk insert in batches of 1000
+        const BATCH = 1000;
+        let inserted = 0;
+        for (let i = 0; i < allItems.length; i += BATCH) {
+            const batch = allItems.slice(i, i + BATCH);
+            const result = await prisma.engineeringItem.createMany({
+                data: batch.map(it => ({ databaseId: db!.id, ...it })),
+                skipDuplicates: true,
+            });
+            inserted += result.count;
+            if (i + BATCH < allItems.length) {
+                console.log(`[Eng Import] Batch ${Math.floor(i / BATCH) + 1}: ${result.count} inseridos (${inserted}/${allItems.length})...`);
+            }
+        }
+
+        const stats = {
+            MATERIAL: allItems.filter(i => i.type === 'MATERIAL').length,
+            MAO_DE_OBRA: allItems.filter(i => i.type === 'MAO_DE_OBRA').length,
+            EQUIPAMENTO: allItems.filter(i => i.type === 'EQUIPAMENTO').length,
+            SERVICO: allItems.filter(i => i.type === 'SERVICO').length,
+        };
+
+        console.log(`[Eng Import] ✅ Concluído! ${inserted} itens na base "${db.name} ${db.uf}".`);
+
+        res.json({
+            message: `Importação concluída: ${inserted} itens na base ${db.name} ${db.uf || ''}`,
+            databaseId: db.id,
+            totalParsed: allItems.length,
+            totalInserted: inserted,
+            breakdown: stats,
+            sheets: workbook.SheetNames,
+        });
+
+    } catch (e: any) {
+        console.error('[Eng Import] Error:', e);
+        res.status(500).json({ error: 'Erro na importação', details: e.message });
+    }
+});
+
+export default router;
