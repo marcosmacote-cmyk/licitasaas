@@ -6,12 +6,12 @@ WORKDIR /app
 RUN apk add --no-cache openssl ghostscript graphicsmagick
 
 # Build Backend
+# --ignore-scripts: Zerox postinstall tries brew/apt (fails on Alpine); deps already installed via apk
 WORKDIR /app/backend
 COPY server/package.json server/package-lock.json* ./
 COPY server/prisma ./prisma
-RUN npm install
+RUN npm install --ignore-scripts && npx prisma generate
 COPY server/ ./
-RUN npx prisma generate
 RUN npx tsc
 
 # Build Frontend
