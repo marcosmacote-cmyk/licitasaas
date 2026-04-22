@@ -79,6 +79,102 @@ router.get('/bases/:id/items', async (req: any, res: any) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// GET /api/engineering/compositions/:code
+// Busca composição por código com drill-down completo de insumos
+// ═══════════════════════════════════════════════════════════
+router.get('/compositions/:code', async (req: any, res: any) => {
+    try {
+        const code = req.params.code;
+        const databaseId = req.query.databaseId as string || undefined;
+
+        const where: any = { code };
+        if (databaseId) where.databaseId = databaseId;
+
+        const composition = await prisma.engineeringComposition.findFirst({
+            where,
+            include: {
+                items: {
+                    include: {
+                        item: true // includes the linked EngineeringItem (material/labor)
+                    },
+                    orderBy: { createdAt: 'asc' }
+                },
+                database: { select: { name: true, uf: true } }
+            }
+        });
+
+        if (!composition) {
+            return res.status(404).json({ error: 'Composição não encontrada', code });
+        }
+
+        // Enrich with auxiliary compositions if any
+        const enrichedItems = await Promise.all(composition.items.map(async (ci: any) => {
+            if (ci.auxiliaryCompositionId) {
+                const aux = await prisma.engineeringComposition.findUnique({
+                    where: { id: ci.auxiliaryCompositionId },
+                    include: { items: { include: { item: true } } }
+                });
+                return { ...ci, auxiliaryComposition: aux };
+            }
+            return ci;
+        }));
+
+        // Group by type for nice display
+        const groups: Record<string, any[]> = { MATERIAL: [], MAO_DE_OBRA: [], EQUIPAMENTO: [], AUXILIAR: [] };
+        for (const ci of enrichedItems) {
+            if (ci.auxiliaryComposition) {
+                groups.AUXILIAR.push(ci);
+            } else if (ci.item) {
+                const type = ci.item.type || 'MATERIAL';
+                if (!groups[type]) groups[type] = [];
+                groups[type].push(ci);
+            }
+        }
+
+        res.json({
+            ...composition,
+            items: enrichedItems,
+            groups,
+            totalDirect: enrichedItems.reduce((s: number, ci: any) => s + (ci.price || 0), 0),
+        });
+
+    } catch (e: any) {
+        console.error('Error fetching composition:', e);
+        res.status(500).json({ error: 'Erro ao buscar composição' });
+    }
+});
+
+// GET /api/engineering/compositions — Listar composições por database
+router.get('/compositions', async (req: any, res: any) => {
+    try {
+        const databaseId = req.query.databaseId as string;
+        const q = req.query.q as string || '';
+        const limit = parseInt(req.query.limit as string) || 50;
+
+        const where: any = {};
+        if (databaseId) where.databaseId = databaseId;
+        if (q) {
+            where.OR = [
+                { code: { contains: q, mode: 'insensitive' } },
+                { description: { contains: q, mode: 'insensitive' } }
+            ];
+        }
+
+        const compositions = await prisma.engineeringComposition.findMany({
+            where,
+            take: limit,
+            orderBy: { code: 'asc' },
+            include: { _count: { select: { items: true } } }
+        });
+
+        res.json(compositions);
+    } catch (e: any) {
+        console.error('Error listing compositions:', e);
+        res.status(500).json({ error: 'Erro ao listar composições' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
 // CRUD — Engineering Proposal Items (linked to PriceProposal)
 // ═══════════════════════════════════════════════════════════
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2 } from 'lucide-react';
+import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
+import { CompositionDrawer } from './CompositionDrawer';
 
 interface EngItem {
     id: string; itemNumber: string; code: string; sourceName: string;
@@ -28,6 +29,9 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+
+    // Composition drawer
+    const [compositionItem, setCompositionItem] = useState<EngItem | null>(null);
 
     const effectiveBdi = bdiConfig.mode === 'TCU' ? calculateBdiTCU(bdiConfig.tcu) : bdiConfig.bdiGlobal;
     const subtotal = items.reduce((s, it) => s + it.quantity * it.unitCost, 0);
@@ -203,7 +207,17 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         <span style={{ background: it.sourceName === 'PROPRIA' ? 'var(--color-success-light)' : 'rgba(37,99,235,0.08)', color: it.sourceName === 'PROPRIA' ? 'var(--color-success)' : 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>{it.sourceName}</span>
                                     </td>
                                     <td style={{ padding: '6px 8px' }}>
-                                        <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('80px'), color: 'var(--color-text-secondary)' }} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('65px'), color: 'var(--color-text-secondary)' }} />
+                                            {it.code && it.code !== 'N/A' && (
+                                                <button title="Ver composição" onClick={() => setCompositionItem(it)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5 }}
+                                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
+                                                >
+                                                    <Layers size={13} color="var(--color-primary)" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                     <td style={{ padding: '6px 8px' }}>
                                         <input value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} style={{ ...inputStyle(), fontWeight: 500 }} />
@@ -372,6 +386,15 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Composition Drawer */}
+            {compositionItem && (
+                <CompositionDrawer
+                    code={compositionItem.code}
+                    description={compositionItem.description}
+                    onClose={() => setCompositionItem(null)}
+                />
             )}
         </div>
     );
