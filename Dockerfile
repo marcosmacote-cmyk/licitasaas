@@ -2,8 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache openssl
+# Install build dependencies (openssl for Prisma, ghostscript+graphicsmagick for Zerox PDF extraction)
+RUN apk add --no-cache openssl ghostscript graphicsmagick
 
 # Build Backend
 WORKDIR /app/backend
@@ -25,7 +25,8 @@ RUN npm run build
 # Final Stage
 FROM node:20-alpine
 WORKDIR /app/server
-RUN apk add --no-cache openssl postgresql16-client
+# ghostscript + graphicsmagick: required by Zerox for PDF→image conversion
+RUN apk add --no-cache openssl postgresql16-client ghostscript graphicsmagick
 
 COPY --from=builder /app/backend/package.json ./
 COPY --from=builder /app/backend/node_modules ./node_modules

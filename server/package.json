@@ -38,7 +38,8 @@
     "qrcode": "^1.5.3",
     "resend": "^6.9.4",
     "speakeasy": "^2.0.0",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "zerox": "^1.1.20"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

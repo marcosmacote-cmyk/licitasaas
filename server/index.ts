@@ -437,6 +437,12 @@ injectAnalysisDeps({
     listJobs,
 });
 app.use('/api/analyze-edital', analysisRoutes);  // analyze-edital + petitions + jobs + events
+
+// V3 Pipeline — Zerox-enhanced analysis (parallel to V2)
+import analysisV3Routes, { injectV3Deps } from './routes/analysisV3';
+injectV3Deps({ getFileBufferSafe });
+app.use('/api/analyze-edital', analysisV3Routes);  // v3 + v3/status
+
 import declarationRoutes from './routes/declarations';
 import governanceRoutes from './routes/governance';
 app.use('/api', declarationRoutes);  // declarations
