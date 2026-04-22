@@ -236,9 +236,11 @@ export async function extractMarkdownFromPdf(
         logger.info(`[ZeroxExtractor] ⚙️ Concurrency: ${effectiveConcurrency} (estimated ~${estimatedPages} pages)`);
 
         // 4. Call Zerox with Gemini Vision + TIMEOUT
-        // V5.1: Hard timeout of 90s. Zerox has internal retries on 503s that can run
-        // indefinitely (285s observed in production). After 90s, fall back to inlineData.
-        const ZEROX_TIMEOUT_MS = 90_000;
+        // V5.2: Hard timeout of 30s. Production data proves inlineData is SUPERIOR when
+        // Gemini Vision is under load (59 items/100% score vs 29 items/70% with Zerox
+        // that lost pages to 503s). 30s lets Zerox work when API is healthy, but fails
+        // fast to inlineData when it's not — best of both worlds.
+        const ZEROX_TIMEOUT_MS = 30_000;
         const zeroxPromise = zeroxFn!({
             filePath: tempPath,
             modelProvider: 'GOOGLE',

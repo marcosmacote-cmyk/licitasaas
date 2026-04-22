@@ -696,7 +696,12 @@ router.post('/analyze', authenticateToken, aiLimiter, async (req: any, res) => {
         // This reduces tokens by ~60%, eliminates timeouts, and improves extraction quality.
         let zeroxMarkdown: string | null = null;
         let zeroxUsed = false;
-        const zeroxAvailable = await isZeroxAvailable();
+        // V5.3: ZEROX KILL SWITCH
+        // Production data shows inlineData is vastly superior to Zerox.
+        // Zerox (Test 1 & 2): 159s-285s, 29-34 items, 70% score.
+        // inlineData (Test 3): 207s (incl 90s timeout wait), 59 items, 100% score.
+        // Disabling Zerox forces the pipeline to use the inlineData path instantly.
+        const zeroxAvailable = false;
         if (zeroxAvailable) {
             sendProgress(4, 'Pré-processando documentos (OCR)...', 'Convertendo PDFs para texto estruturado');
             try {
