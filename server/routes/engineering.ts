@@ -4,7 +4,7 @@ import { callGeminiWithRetry } from '../services/ai/gemini.service';
 import { robustJsonParse } from '../services/ai/parser.service';
 import { ENGINEERING_PROPOSAL_SYSTEM_PROMPT, ENGINEERING_PROPOSAL_USER_INSTRUCTION } from '../services/ai/modules/prompts/engineeringPromptV1';
 import { GoogleGenAI } from '@google/genai';
-import { scrapeSeinfraCompositions } from '../services/engineering/seinfra-scraper';
+import { downloadAndParseSeinfra } from '../services/engineering/seinfra-scraper';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -749,18 +749,16 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
             return res.status(403).json({ error: 'Acesso restrito a administradores' });
         }
 
-        console.log('[SEINFRA Scraper] 🚀 Iniciando scrape do SIPROCE...');
+        console.log('[SEINFRA Import] 🚀 Iniciando download dos Excel oficiais do SIPROCE...');
 
-        // Phase 1: Scrape all compositions from SIPROCE
-        const { compositions, errors } = await scrapeSeinfraCompositions((p) => {
-            console.log(`[SEINFRA Scraper] ${p.phase} [${p.current}/${p.total}] ${p.message}`);
-        });
+        // Phase 1: Download and parse Excel files
+        const { insumos, compositions, errors } = await downloadAndParseSeinfra();
 
-        console.log(`[SEINFRA Scraper] ✅ Scrape concluído: ${compositions.length} composições, ${errors.length} erros`);
+        console.log(`[SEINFRA Import] ✅ Parse concluído: ${insumos.length} insumos, ${compositions.length} composições`);
 
-        if (compositions.length === 0) {
+        if (insumos.length === 0 && compositions.length === 0) {
             return res.json({
-                message: 'Scrape concluído mas nenhuma composição encontrada. Verifique se o portal SIPROCE está acessível.',
+                message: 'Download concluído mas nenhum dado encontrado. Verifique se o portal SIPROCE está acessível.',
                 errors: errors.slice(0, 20),
             });
         }
@@ -780,9 +778,39 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
             });
         }
 
-        // Phase 3: Upsert compositions into database
+        // Phase 3: Upsert insumos (materials, labor, equipment)
+        let insertedInsumos = 0;
+        for (const insumo of insumos) {
+            try {
+                await prisma.engineeringItem.upsert({
+                    where: { databaseId_code: { databaseId: db.id, code: insumo.code } },
+                    create: {
+                        databaseId: db.id,
+                        code: insumo.code,
+                        description: insumo.description,
+                        unit: insumo.unit,
+                        price: insumo.price,
+                        type: insumo.type,
+                    },
+                    update: {
+                        description: insumo.description,
+                        unit: insumo.unit,
+                        price: insumo.price,
+                        type: insumo.type,
+                    },
+                });
+                insertedInsumos++;
+            } catch (e: any) {
+                if (!e.message.includes('Unique constraint')) {
+                    errors.push(`Insumo ${insumo.code}: ${e.message}`);
+                }
+            }
+        }
+        console.log(`[SEINFRA Import] 📦 ${insertedInsumos} insumos importados`);
+
+        // Phase 4: Upsert compositions and their items
         let insertedComps = 0;
-        let insertedItems = 0;
+        let insertedCompItems = 0;
 
         for (const comp of compositions) {
             try {
@@ -803,62 +831,41 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
                     },
                 });
 
-                // Delete existing items and re-insert
+                // Delete existing composition items and re-insert
                 await prisma.engineeringCompositionItem.deleteMany({
                     where: { compositionId: dbComp.id }
                 });
 
-                // Also upsert each insumo as EngineeringItem
+                // Link composition items
                 for (const item of comp.items) {
-                    // Ensure the insumo exists in the items table
-                    if (item.type !== 'COMPOSICAO_AUXILIAR') {
-                        await prisma.engineeringItem.upsert({
-                            where: { databaseId_code: { databaseId: db.id, code: item.insumoCode } },
-                            create: {
-                                databaseId: db.id,
-                                code: item.insumoCode,
-                                description: item.description,
-                                unit: item.unit,
-                                price: item.unitPrice,
-                                type: item.type,
-                            },
-                            update: {
-                                description: item.description,
-                                unit: item.unit,
-                                price: item.unitPrice,
-                                type: item.type,
-                            },
-                        });
-                    }
-
-                    // Find the item or auxiliary composition reference
                     let itemId: string | null = null;
                     let auxCompId: string | null = null;
 
-                    if (item.type === 'COMPOSICAO_AUXILIAR') {
+                    if (item.isComposition) {
+                        // This is an auxiliary composition (C-code referencing another C-code)
                         const auxComp = await prisma.engineeringComposition.findFirst({
                             where: { databaseId: db.id, code: item.insumoCode }
                         });
                         auxCompId = auxComp?.id || null;
                     } else {
+                        // This is a basic insumo (I-code or numeric)
                         const dbItem = await prisma.engineeringItem.findFirst({
                             where: { databaseId: db.id, code: item.insumoCode }
                         });
                         itemId = dbItem?.id || null;
                     }
 
-                    if (itemId || auxCompId) {
-                        await prisma.engineeringCompositionItem.create({
-                            data: {
-                                compositionId: dbComp.id,
-                                itemId,
-                                auxiliaryCompositionId: auxCompId,
-                                coefficient: item.coefficient,
-                                price: item.totalPrice,
-                            },
-                        });
-                        insertedItems++;
-                    }
+                    // Create composition item even without a linked record (will show description)
+                    await prisma.engineeringCompositionItem.create({
+                        data: {
+                            compositionId: dbComp.id,
+                            itemId,
+                            auxiliaryCompositionId: auxCompId,
+                            coefficient: item.coefficient,
+                            price: item.totalPrice,
+                        },
+                    });
+                    insertedCompItems++;
                 }
 
                 insertedComps++;
@@ -867,19 +874,19 @@ router.post('/bases/scrape-seinfra', async (req: any, res: any) => {
             }
         }
 
-        console.log(`[SEINFRA Scraper] 🏁 Import concluído: ${insertedComps} composições, ${insertedItems} itens`);
+        console.log(`[SEINFRA Import] 🏁 Import concluído: ${insertedInsumos} insumos, ${insertedComps} composições, ${insertedCompItems} itens`);
 
         res.json({
-            message: `SEINFRA-CE: ${insertedComps} composições e ${insertedItems} itens importados com sucesso`,
+            message: `SEINFRA-CE V028: ${insertedInsumos} insumos + ${insertedComps} composições (${insertedCompItems} itens) importados`,
             databaseId: db.id,
-            scraped: compositions.length,
-            inserted: { compositions: insertedComps, items: insertedItems },
+            parsed: { insumos: insumos.length, compositions: compositions.length },
+            inserted: { insumos: insertedInsumos, compositions: insertedComps, compositionItems: insertedCompItems },
             errors: errors.slice(0, 20),
         });
 
     } catch (e: any) {
-        console.error('[SEINFRA Scraper] Fatal:', e);
-        res.status(500).json({ error: 'Erro no scrape SEINFRA', details: e.message });
+        console.error('[SEINFRA Import] Fatal:', e);
+        res.status(500).json({ error: 'Erro na importação SEINFRA', details: e.message });
     }
 });
 
