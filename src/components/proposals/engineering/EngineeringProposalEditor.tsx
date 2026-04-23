@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Calculator, Plus, Save, Trash2, Cpu, TableProperties, Download, Search, X, Loader2, Layers, BarChart3, Calendar, Package } from 'lucide-react';
 import { calculateBdiTCU, applyBdi, DEFAULT_BDI_CONFIG, TCU_REFERENCE_RANGES, type BdiConfig, type BdiTcuParams } from './bdiEngine';
 import { CompositionDrawer } from './CompositionDrawer';
+import { CompositionEditor } from './CompositionEditor';
 import { CurvaAbcPanel } from './CurvaAbcPanel';
 import { CronogramaPanel } from './CronogramaPanel';
 import { InsumoHub } from './InsumoHub';
@@ -35,6 +36,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
 
     // Composition drawer
     const [compositionItem, setCompositionItem] = useState<EngItem | null>(null);
+    const [compositionEditorIndex, setCompositionEditorIndex] = useState<number | null>(null);
 
     // Active tab
     const [activeTab, setActiveTab] = useState<'planilha' | 'hub_insumos' | 'curva_abc' | 'cronograma'>('planilha');
@@ -204,6 +206,11 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                     {saveMsg && <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{saveMsg}</span>}
+                    <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                        onClick={() => items.length > 0 && setCompositionEditorIndex(0)}
+                        disabled={items.length === 0}>
+                        <Layers size={14} color="var(--color-primary)" /> Editar Composições
+                    </button>
                     <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleExtractAI} disabled={isExtracting}>
                         {isExtracting ? <Loader2 size={14} className="spin" /> : <Cpu size={14} color="var(--color-ai)" />}
                         {isExtracting ? 'Extraindo...' : 'Extrair via IA'}
@@ -281,7 +288,7 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                             <input value={it.code} onChange={e => updateItem(it.id, 'code', e.target.value)} style={{ ...inputStyle('65px'), color: 'var(--color-text-secondary)' }} />
                                             {it.code && it.code !== 'N/A' && (
-                                                <button title="Ver composição" onClick={() => setCompositionItem(it)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5 }}
+                                                <button title="Editar composição (full-page)" onClick={() => setCompositionEditorIndex(items.indexOf(it))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: 0.5 }}
                                                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
                                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
                                                 >
@@ -460,12 +467,21 @@ export function EngineeringProposalEditor({ proposalId, biddingId }: Props) {
                 </div>
             )}
 
-            {/* Composition Drawer */}
-            {compositionItem && (
+            {/* Composition Drawer (single item) */}
+            {compositionItem && compositionEditorIndex === null && (
                 <CompositionDrawer
                     code={compositionItem.code}
                     description={compositionItem.description}
                     onClose={() => setCompositionItem(null)}
+                />
+            )}
+
+            {/* Full-Page Composition Editor (with navigation) */}
+            {compositionEditorIndex !== null && (
+                <CompositionEditor
+                    items={items}
+                    initialIndex={compositionEditorIndex}
+                    onClose={() => setCompositionEditorIndex(null)}
                 />
             )}
         </div>
