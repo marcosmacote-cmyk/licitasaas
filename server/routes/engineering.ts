@@ -278,6 +278,7 @@ router.delete('/proposals/:id/items/:itemId', async (req: any, res: any) => {
 // ═══════════════════════════════════════════════════════════
 // POST /api/engineering/ai-populate
 // Extrai itens de engenharia via IA a partir do edital
+// Pipeline: V2 itens_licitados → AI extraction (fallback)
 // ═══════════════════════════════════════════════════════════
 router.post('/ai-populate', async (req: any, res: any) => {
     try {
@@ -286,26 +287,48 @@ router.post('/ai-populate', async (req: any, res: any) => {
         let extractionText = textChunk;
 
         if (biddingId) {
-            // Fetch text from bidding AiAnalysis
             const bidding = await prisma.biddingProcess.findUnique({
                 where: { id: biddingId },
                 include: { aiAnalysis: true }
             });
+
+            // ═══════════════════════════════════════════════════
+            // PASSO 1: Tentar usar itens_licitados do V2 (JÁ extraídos pela análise PNCP)
+            // Isso evita chamar a IA novamente e usa dados estruturados com códigos
+            // ═══════════════════════════════════════════════════
+            const schemaV2 = bidding?.aiAnalysis?.schemaV2 as any;
+            const itensV2 = schemaV2?.proposal_analysis?.itens_licitados;
+            
+            if (Array.isArray(itensV2) && itensV2.length > 1) {
+                console.log(`[Engineering AI-Populate] 🎯 Usando ${itensV2.length} itens de itens_licitados V2`);
+                
+                const items = await mapV2ToEngineering(itensV2);
+                return res.json({ items, source: 'v2_itens_licitados', count: items.length });
+            }
+
+            // ═══════════════════════════════════════════════════
+            // PASSO 2: Fallback — usar texto completo para AI extraction
+            // Preferência: biddingItems (texto detalhado) > requiredDocuments
+            // ═══════════════════════════════════════════════════
             if (bidding?.aiAnalysis?.biddingItems) {
                 extractionText = bidding.aiAnalysis.biddingItems;
             } else if (bidding?.aiAnalysis?.requiredDocuments) {
                 extractionText = bidding.aiAnalysis.requiredDocuments;
             }
+
+            console.log(`[Engineering AI-Populate] ⚠️ V2 itens_licitados insuficiente (${itensV2?.length || 0}), usando fallback IA com texto de ${extractionText?.length || 0} chars`);
         }
 
         if (!extractionText) {
             return res.status(400).json({ error: 'Falta o texto do documento (biddingId sem análise ou textChunk vazio)' });
         }
 
+        // ═══════════════════════════════════════════════════
+        // PASSO 3: AI Extraction (Gemini) — fallback quando V2 não tem itens
+        // ═══════════════════════════════════════════════════
         const prompt = ENGINEERING_PROPOSAL_SYSTEM_PROMPT;
         const userInput = ENGINEERING_PROPOSAL_USER_INSTRUCTION + "\n\nTEXTO DO EDITAL/PROJETO:\n" + extractionText;
 
-        // Calling Gemini using the generalized retry service
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const result = await callGeminiWithRetry(ai.models, {
             model: 'gemini-2.5-flash',
@@ -326,28 +349,101 @@ router.post('/ai-populate', async (req: any, res: any) => {
         const rawResponse = result?.text || '';
         const extractedData = robustJsonParse(rawResponse);
         
-        // Return parsed items, falling back to empty array if something fails
         const items = extractedData?.engineeringItems || [];
         
-        // Auto-lookup for prices
-        for (const item of items) {
-            if (item.code && item.code !== 'N/A') {
-                const dbItem = await prisma.engineeringItem.findFirst({
-                    where: { code: item.code }
-                });
-                if (dbItem) {
-                    item.unitCost = Number(dbItem.price) || 0;
-                }
-            }
-        }
+        // Auto-lookup for prices against registered databases
+        await enrichWithOfficialPrices(items);
 
-        res.json({ items });
+        res.json({ items, source: 'ai_extraction', count: items.length });
 
     } catch (e: any) {
         console.error('Error in AI engineering extraction:', e);
         res.status(500).json({ error: 'Falha ao extrair itens via Inteligência Artificial', details: e.message });
     }
 });
+
+/**
+ * Mapeia itens_licitados do V2 para formato de engenharia
+ * e faz auto-match contra as bases oficiais cadastradas (SINAPI/SEINFRA)
+ */
+async function mapV2ToEngineering(itensV2: any[]): Promise<any[]> {
+    const items = itensV2.map((item: any) => {
+        // Priority 1: Use V2's explicit sourceCode/sourceBase (new fields from enriched prompt)
+        let sourceName = item.sourceBase || '';
+        let code = item.sourceCode || '';
+        
+        // Priority 2: Detect from description/itemNumber if V2 didn't provide
+        if (!code) {
+            const detected = detectSourceAndCode(item.description, item.itemNumber);
+            sourceName = detected.sourceName;
+            code = detected.code;
+        } else if (!sourceName) {
+            sourceName = code.match(/^[CI]\d/i) ? 'SEINFRA' : 'SINAPI';
+        }
+
+        return {
+            item: item.itemNumber || '',
+            sourceName,
+            code,
+            description: item.description || '',
+            unit: item.unit || 'UN',
+            quantity: item.quantity || 1,
+            unitCost: item.referencePrice || 0,
+        };
+    });
+
+    // Enrich with official database prices
+    await enrichWithOfficialPrices(items);
+    
+    return items;
+}
+
+/**
+ * Detecta a base oficial (SINAPI, SEINFRA, ORSE, SICRO) e o código
+ * a partir da descrição ou número do item
+ */
+function detectSourceAndCode(description: string, itemNumber?: string): { sourceName: string; code: string } {
+    const desc = (description || '').toUpperCase();
+    
+    // Pattern: "SINAPI 74209/1" or "SINAPI: 74209"
+    const sinapiMatch = desc.match(/SINAPI[\s:.-]*(\d{4,6}(?:\/\d+)?)/i);
+    if (sinapiMatch) return { sourceName: 'SINAPI', code: sinapiMatch[1] };
+    
+    // Pattern: "SEINFRA C0054" or "COD: C1614"
+    const seinfraMatch = desc.match(/(?:SEINFRA[\s:.-]*)?([CI]\d{3,5})/i);
+    if (seinfraMatch) return { sourceName: 'SEINFRA', code: seinfraMatch[1].toUpperCase() };
+    
+    // Pattern: "ORSE 1234" or "SICRO 1234"
+    const orseMatch = desc.match(/(?:ORSE|SICRO)[\s:.-]*(\d{3,6})/i);
+    if (orseMatch) return { sourceName: orseMatch[0].split(/[\s:.-]/)[0].toUpperCase(), code: orseMatch[1] };
+
+    // If itemNumber has a code-like pattern (e.g., C0054)
+    if (itemNumber && /^[CI]\d{3,5}$/i.test(itemNumber.trim())) {
+        return { sourceName: 'SEINFRA', code: itemNumber.trim().toUpperCase() };
+    }
+
+    return { sourceName: 'PROPRIA', code: itemNumber || 'N/A' };
+}
+
+/**
+ * Enriquece itens com preços da base oficial cadastrada
+ * Busca por código exato no EngineeringItem
+ */
+async function enrichWithOfficialPrices(items: any[]): Promise<void> {
+    for (const item of items) {
+        if (item.code && item.code !== 'N/A') {
+            const dbItem = await prisma.engineeringItem.findFirst({
+                where: { code: { equals: item.code, mode: 'insensitive' } }
+            });
+            if (dbItem) {
+                item.unitCost = Number(dbItem.price) || item.unitCost || 0;
+                item.sourceName = item.sourceName || dbItem.type || 'SINAPI';
+                if (!item.unit || item.unit === 'UN') item.unit = dbItem.unit || item.unit;
+                console.log(`[Engineering Match] ✅ ${item.code} → ${dbItem.description?.substring(0, 50)} = R$ ${dbItem.price}`);
+            }
+        }
+    }
+}
 
 // ═══════════════════════════════════════════════════════════
 // POST /api/engineering/seed — Seed de bases oficiais (admin-only)
